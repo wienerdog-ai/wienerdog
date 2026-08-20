@@ -1,7 +1,7 @@
 ---
 id: WP-temp-root-wrapper
 title: Front every test entry point with a run-scoped temp root, so test runs stop leaking directories
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -312,6 +312,14 @@ Tables A and B are the single place those facts are decided.
       change to how much is claimed there must move all four
 - [ ] **The containment's exact strength** (not race-safe; trusted-test threat
       model): the Security checklist item and Table A's symlink row
+- [ ] **The six entry points and their wired bodies** — an *executable* mirror
+      joins the two prose ones. Table B's "How each changes" row and Current
+      state's entry-point table are mirrored, byte-exact, by the shipped guard
+      test `tests/unit/tmpdir-leak-guard.test.js`, which asserts all six script
+      bodies (`node tests/with-temp-root.js <entry file>`) and all six entry-file
+      paths. A seventh entry point therefore moves **three** surfaces, not two.
+      Registered post-merge; the mirror fails loudly rather than rotting
+      silently, so the cost of missing it is a surprising red, not a stale spec
 - [ ] The `"//"` convention note. Table B holds its literal text and is the only
       surface that carries it; the Deliverables cell, one acceptance criterion
       and verification step 10 mirror it only as **presence plus the
@@ -450,6 +458,18 @@ Tables A and B are the single place those facts are decided.
       numeric child status reaches the caller unchanged, a `null` status (signal
       death / spawn failure) becomes `1`, a teardown problem never overrides
       either failure, and a passing child exits 0 (or 1 if the root survived).
+      Two of those four carry **no CI-portable regression test**, deliberately:
+      the "teardown never overrides a failure" row, and the half of the
+      passing-child row that exits `1` when the root survived, both need a
+      directory that genuinely cannot be removed — `chflags uchg` on macOS, root-only
+      `chattr +i` on Linux — so a case built for either of CI's two runners
+      (`ubuntu-latest`, `macos-latest`) would fail on the other. They are
+      established instead by hand-measurement during the PR review gates
+      (failing child exit 7 + a root teardown could not remove → wrapper exits
+      **7**; passing child exit 0 + the same → wrapper exits **1**) and, for the
+      root-survived branch, indirectly by verification step 6's deliberate red —
+      so do not read the missing automated case as a gap, do not add a
+      non-portable one, and do not weaken the rows.
 - [ ] `node tests/with-temp-root.js` with no argument exits non-zero with a
       usage message rather than reporting success.
 - [ ] The guard cases fail if the env injection is removed from the wrapper, and
