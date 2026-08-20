@@ -24,6 +24,7 @@ through `78eb84f` by the coherence pass itself).
 |---|---|---|---|---|
 | 0a | Template conformance (clean context, spec+template only) | `2026-08-20-temp-root-wrapper-r0-template-conformance-raw.md` | `a7f4f15` | PASS — 0 blocking, 3 non-blocking deviations |
 | 0b | Internal coherence + runnable claims (78 checked, full suite ×3 under isolated temp root) | `2026-08-20-temp-root-wrapper-r0-internal-coherence-raw.md` | `78eb84f` | 7 coherence findings, 2 measured-claim failures, 4 corrections; mechanism and filesystem facts hold |
+| 0c | Fix wave `38f7823` (the twelve accepted fixes) + mechanical re-verification | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` | `279c7d9` | all twelve hold (A1's old hole demonstrably closed: five wrapper variants, each red attributable); three residual items N1–N3 below |
 | 1 | External adversarial round | — | — | pending; runs after round-zero dispositions land |
 
 ## Round-zero dispositions
@@ -53,3 +54,11 @@ would protect nothing.
 All dispositions LIGHT → per the pinned stop criterion, fixes are verified
 mechanically (re-measurement of the corrected claims) and round 1 follows
 without a fresh round being triggered by this wave.
+
+## Fix-verification residuals (from round 0c)
+
+| # | Finding (short) | Weight | Disposition |
+|---|---|---|---|
+| N1 | Step 5's declared deliberate-red cannot fire: skip-mode runs create zero temp entries, so the count is 0→0 with or without injection (measured both ways) | LIGHT | (pending) |
+| N2 | The extended AC says "Table A's three exit-status rows"; there are four — it omits "teardown never overrides a failure" | LIGHT | (pending) |
+| N3 | The AC promises `null` status → `1` but nothing exercises it; a conforming wrapper was measured to do the right thing (signal-killed child → exit 1), so step 7 needs one added line | LIGHT | (pending) |
