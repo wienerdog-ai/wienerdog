@@ -1,7 +1,7 @@
 ---
 id: WP-dream-baseline-delta-primitive
 title: Add a baseline-capture and delta primitive, git-free and consumed by nothing yet
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
