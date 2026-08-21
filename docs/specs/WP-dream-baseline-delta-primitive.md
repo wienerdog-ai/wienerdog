@@ -14,9 +14,11 @@ epic: audit-2026-07-29
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-**Dispatch precondition.** This spec is written against `main` @
-`e648284046dc86ac4bf8cb1cdf3a985134485393` (`e648284`), = `origin/main` at
-authoring time. Before dispatch, re-run every `file:line` citation and every
+**Dispatch precondition.** This spec is written against the tree at
+`e648284046dc86ac4bf8cb1cdf3a985134485393` (`e648284`), which was `main` and
+`origin/main` at authoring time. `main` has since advanced with a docs-only process
+landing that does not touch any file this spec cites; re-verify against whatever the
+implementer's `main` actually is, and do not assume the two are still equal. Before dispatch, re-run every `file:line` citation and every
 measurement below against the tree the implementer will find
 (`docs/specs/README.md` → Dispatch-time re-verification). A citation that does not
 resolve blocks the dispatch. **Range citations are checked at BOTH ends** — that a
@@ -118,11 +120,11 @@ package inherits this contract unchanged.
 | Fact / rule | Value |
 |-------------|-------|
 | What a baseline holds | `{files, anomalies, include}`: `files` maps relative path → the file's exact **bytes**; `anomalies` is what the capture walk refused to treat as a regular file (row below); `include` is the scope predicate the capture ran under, or a sentinel meaning "everything". Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
-| **Scope travels with the baseline** | `computeDelta` re-applies `baseline.include` and does NOT take a filter of its own. Without this, a path absent from `files` is ambiguous — excluded at capture, or genuinely new — and the primitive would report a pre-existing excluded file as `added`, which is exactly the false accusation the completeness rule exists to prevent. Carrying the predicate rather than re-passing it also makes a mismatched-scope call structurally impossible, instead of merely forbidden |
+| **Scope travels with the baseline** | `computeDelta` re-applies `baseline.include` and does NOT take a filter of its own. Without this, a path absent from `files` is ambiguous — excluded at capture, or genuinely new — and the primitive would report a pre-existing excluded file as `added`, which is exactly the false accusation the completeness rule exists to prevent. Carrying the predicate rather than re-passing it removes one failure mode — a caller cannot hand the second walk a DIFFERENT function. It does **not** make scope mismatch impossible, and this contract does not claim it does: measured, one and the same function object can answer `false` at capture and `true` at delta by reading mutable closure state, and the excluded pre-existing file is then reported `added` anyway. **Named caller invariant, since it cannot be enforced from inside:** `include` must be a pure function of the path — same input, same answer, for the lifetime of the baseline. A caller that violates it gets the false attribution, and an acceptance case pins whatever the chosen behaviour is |
 | Path shape | relative to `rootDir`, POSIX separators (`/`) on every platform — the same shape `git status` yields, so the successor's registry and prefix tests keep working unchanged |
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
 | Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
-| **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW`, the descriptor is `fstat`ed to confirm it is a regular file, and the bytes are read **from that descriptor**. A path that becomes a symlink between enumeration and open throws or is recorded as an anomaly — it never yields bytes. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
+| **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW`, the descriptor is `fstat`ed to confirm it is a regular file, **the descriptor's `(dev, ino)` is revalidated against the pair captured when the walk classified that path**, and only then are the bytes read from that descriptor. A path that becomes a symlink between enumeration and open, or whose identity no longer matches, throws or is recorded as an anomaly — it never yields bytes. **The revalidation is not belt-and-braces: `O_NOFOLLOW` constrains only the FINAL component.** Measured: replacing an intermediate DIRECTORY with a symlink to an outside directory lets `O_NOFOLLOW` open the outside leaf and `fstat` accept it as a regular file, returning external bytes — and the `(dev, ino)` comparison is what catches it (`devInoMatches: false` in that reproduction). This is exactly the discipline the cited precedent already applies. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
 | Containment | every path the walk visits resolves inside `rootDir`. A `..` segment cannot occur (paths are built from directory entries), and the no-follow rule is what keeps that true |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
 | Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
@@ -137,7 +139,7 @@ package inherits this contract unchanged.
 | `status` | `added` (absent from the baseline) \| `modified` (present in both, bytes differ) \| `deleted` (in the baseline, absent now). A path whose bytes are unchanged produces **no record** |
 | `baselineBytes` | the captured bytes; `null` iff `status === 'added'` |
 | `afterBytes` | the current bytes; `null` iff `status === 'deleted'` |
-| `binary` | true when `afterBytes` is unscannable text. Must agree with git's own signal on the whole acceptance corpus (Table C); where agreement cannot be shown it must be **more** conservative, never less, and each such input is named in the PR. Erring toward `binary` fails closed, because a consumer withholds what it cannot scan |
+| `binary` | **a verdict about the PAIR, not about `afterBytes` alone.** Measured: git answers `-\t-` when EITHER side is binary — binary-before/text-after, text-before/binary-after, and a binary deletion against `/dev/null` all return it. Defining this field from the after content alone therefore could not equal the reference judgment for the mandatory `modified` and `deleted` categories, and Tables B and C would demand different things for the same corpus member. It must agree with the reference judgment (Table C) on the whole corpus; where agreement cannot be shown it must be **more** conservative, never less, and each such input is named in the PR. Erring toward `binary` fails closed, because a consumer withholds what it cannot scan |
 | `addedLineNumbers` | 1-based line numbers **in `afterBytes`** that this delta adds. `[]` when `status === 'deleted'` or `binary` is true; every line when `status === 'added'` and not binary. Lines are LF-delimited and a trailing newline does not create a final empty line — a CR is ordinary content, exactly as git's diff treats it |
 | Not a field | anything derivable. `isNew` is `status === 'added'` and the scan text is `afterBytes`' lines at `addedLineNumbers` joined with LF — both are the consumer's one-line derivations, and neither is stored. **The predecessor carried a derived `isNew` as if it were a fact, and that naming is what let an index question and a content question be confused for one** |
 
@@ -155,10 +157,27 @@ when invoked:
 - **outside any repository** — the invoking process's CWD must not be inside one.
   Measured: a CWD inside a repo applies that repo's `.gitattributes` even to operands
   that live OUTSIDE the repo, so `--no-index` alone does not isolate;
-- with **no system config** (`GIT_CONFIG_NOSYSTEM=1`) and **no global config**
-  (`GIT_CONFIG_GLOBAL=/dev/null`);
+- in a **sanitized environment**: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_COUNT=0`, `GIT_ATTR_NOSYSTEM=1`, and `HOME` **and** `XDG_CONFIG_HOME`
+  both pointed at empty directories the test creates;
 - with **`--no-ext-diff`**;
 - over two plain files, via `--no-index`.
+
+**The environment list above is NOT the guarantee — the control below is.** Measured:
+config-file switches alone do not isolate git. With `GIT_CONFIG_NOSYSTEM=1` and
+`GIT_CONFIG_GLOBAL=/dev/null` set exactly as ruled, plain ASCII still flips from
+`1\t1` to `-\t-` through **`XDG_CONFIG_HOME/git/attributes`** and, independently,
+through **`GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_0=core.attributesFile`**. Adding
+`GIT_ATTR_NOSYSTEM=1` alone does not close either; overriding `HOME` alone does not
+close either; only the full set above does. And even the full set flips again if one
+of its own values is pointed at a hostile directory — so the guarantee is not the
+flag, it is where the flag points.
+
+That is the **fourth** hidden-influence channel this program has failed to enumerate
+(after the self-hiding `.gitignore`, the fake `.git` marker, and `diff.external`):
+0 for 4. Enumeration is therefore the wrong shape for this contract. **The test MUST
+carry a hostile-environment control** that arms both known channels and asserts the
+judgment does not move; a longer list without that control is another guess.
 
 Under exactly those conditions git yields the bounded-prefix byte heuristic and
 nothing else — measured identical to the in-repo staged form (`NUL@100` → `-\t-`,
@@ -171,7 +190,9 @@ non-repository directory is ignored.
 | `addedLineNumbers`, **when `binary === false`** | equals what today's `addedLineNumbersFromDiff` (`src/core/dream/validate.js:752-764`) derives from the reference judgment's `-U0` hunk headers for the same pair |
 | Derived scan text, **when `binary === false`** | byte-identical to today's `+`-line join (`src/core/dream/validate.js:1258-1262`) |
 | Records classified `binary` | exempt from the two rows above by construction (Table B fixes `addedLineNumbers` to `[]`), because a consumer withholds what it cannot scan. This is what makes the conservative exception coherent instead of self-contradicting |
-| Corpus | at minimum: added, modified, deleted, empty file, empty→content, binary, a NUL beyond git's prefix window, CRLF content, content with no trailing newline, a file whose only change is appended lines, one whose change is interior, and a directory containing a `.gitattributes` that WOULD flip the judgment if a repository were in scope |
+| Corpus | at minimum: added, modified, deleted, empty file, empty→content, binary, CRLF content, content with no trailing newline, a file whose only change is appended lines, one whose change is interior, a directory containing a `.gitattributes` that WOULD flip the judgment if a repository were in scope, and the two boundary cases below |
+| **Boundary fixtures (F5)** | one NUL just inside git's prefix window and one just outside it. Measured on git 2.50.1: `NUL@7999` → `-\t-`, `NUL@8000` → `1\t0`, so the window is exactly 8000 bytes **today**. Do NOT hardcode 8000 as the contract: the fixtures are located by a bounded search against the REFERENCE JUDGMENT itself, so the test follows git if git moves the boundary. A single far-beyond fixture is insufficient — it passes an implementation using any shorter cutoff |
+| **Hostile-environment control (F1)** | a mandatory case that arms both measured channels — a `git/attributes` file under a hostile `XDG_CONFIG_HOME`, and `GIT_CONFIG_COUNT`/`core.attributesFile` — and asserts the reference judgment is unchanged. It must be shown RED without the sanitation and GREEN with it, or it proves nothing |
 
 ### Mirrored Surface Checklist
 
@@ -266,13 +287,27 @@ non-repository directory is ignored.
       **pre-existing excluded** file produces no record, a **newly created excluded**
       file produces no record, and a **newly created included** file is reported
       `added`. No excluded pre-existing file is ever reported `added`.
-- [ ] **The no-follow guarantee holds across the classify/read gap**, not merely for
-      symlinks that already existed when the walk arrived: substituting a symlink
-      between classification and read yields a throw or an anomaly, never the target's
-      bytes, and never bytes from outside `rootDir`. A test that only places symlinks
-      up front does not discriminate this and does not satisfy the criterion.
+- [ ] **The no-follow guarantee holds across the classify/read gap** — for the LEAF
+      *and* for an INTERMEDIATE directory component. Substituting a symlink at either
+      position between classification and read yields a throw or an anomaly, never the
+      target's bytes, and never bytes from outside `rootDir`. A test that only places
+      symlinks up front, or that only substitutes the leaf, does not discriminate this
+      and does not satisfy the criterion: measured, leaf-only `O_NOFOLLOW` passes the
+      leaf case while an intermediate-directory swap still returns external bytes.
+- [ ] A stateful `include` — one function object answering differently on the two
+      walks — produces the behaviour Table A's caller invariant names, and that
+      behaviour is pinned by a test rather than assumed.
+- [ ] The **hostile-environment control** is present and both-directions proven: with
+      the sanitation it leaves the reference judgment unchanged, and without it the
+      armed channels move the judgment. A control that is green either way proves
+      nothing.
+- [ ] The boundary fixtures locate git's prefix window by search against the reference
+      judgment and the module agrees on both sides of it — an implementation using a
+      shorter cutoff fails.
 - [ ] **The git-agreement differential (Table C).** Over the whole corpus, this
-      module's `binary` equals the **reference judgment**'s `--numstat` signal (Table C
+      module's `binary` equals the **reference judgment**'s pairwise `--numstat` signal
+      — pairwise, so a binary BEFORE side counts even when the after side is text
+      (Table C
       — no repository in scope, no system or global config, `--no-ext-diff`) or is
       conservatively `true` with each divergent input named in the PR; and for every
       member where `binary === false`, its `addedLineNumbers` equal

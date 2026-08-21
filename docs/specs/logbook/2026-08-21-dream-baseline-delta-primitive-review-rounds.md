@@ -36,6 +36,7 @@ there counts as reviewed here.
 | 0a | Template conformance (clean context, two inputs, no external reviewer) | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-r0-template-conformance-raw.md` | CONFORMANT — 0 blocking, 4 non-blocking |
 | 0b | Internal coherence + runnable criteria | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-r0-internal-coherence-raw.md` | 5 findings, all fixed |
 | 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-1-raw.md` | **NO-SHIP** — 4 findings, all confirmed; 2 folded, 2 PARKED |
+| 2 | External adversarial (design), gptsol, fresh round after the ruling | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-2-raw.md` | **NO-SHIP** — 1 FIXED, 2 PARTIAL, 1 NOT FIXED, 5 fresh findings; all folded, none parked |
 
 ## Round 0 dispositions
 
@@ -150,3 +151,54 @@ neutral-CWD requirement is the guarantee and the repo's current cleanliness is n
 
 **Next: round 2, a full fresh external round. The contract question is closed, so
 there is no moving target.**
+
+## Round 2 dispositions — all five folded, none parked
+
+All confirmed independently; two reproduced from scratch rather than read. **None
+required a freshness, locking or stability mechanism**, so under the parking rule none
+was owner-level. One of them, however, EXTENDS an owner-ruled contract and is flagged
+as such below.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | The ruled isolation set does not isolate: under the exact ruled switches, plain ASCII flips to binary through `XDG_CONFIG_HOME/git/attributes` and independently through `GIT_CONFIG_COUNT`/`core.attributesFile` | **FOLDED — and the shape changed, not just the list.** See below |
+| 2 | `binary` was defined from `afterBytes`, but git's verdict is PAIRWISE (binary-before/text-after, text-before/binary-after, and binary deletion all return `-\t-`), so Tables B and C demanded different things for the mandatory `modified` and `deleted` categories | **FOLDED.** `binary` is now a verdict about the pair, with the measurement in the row |
+| 3 | Leaf-only `O_NOFOLLOW` does not establish containment — an intermediate DIRECTORY swapped for a symlink lets the leaf open cleanly and return external bytes | **FOLDED.** The contract now carries the precedent's FULL discipline: `O_NOFOLLOW` + `fstat` + **`(dev, ino)` revalidation** against the pair captured at enumeration. Measured: the `(dev, ino)` mismatch is exactly what catches the ancestor swap. I had cited `applyModeSecure` as precedent in round 1 and carried only half of what it does |
+| 4 | Carrying the callback does not preserve its meaning — one function object can answer `false` at capture and `true` at delta | **FOLDED.** The "structurally impossible" claim is withdrawn. What carrying it actually removes is one failure mode (a different function on the second walk); the rest is now a NAMED caller invariant — `include` must be a pure function of the path — with an acceptance case pinning the behaviour when it is violated |
+| 5 | The prefix boundary was never in the contract, so a shorter cutoff passes the corpus | **FOLDED.** Measured exactly: `NUL@7999` → binary, `NUL@8000` → text, so the window is 8000 **today**. Deliberately NOT hardcoded: the fixtures are located by bounded search against the reference judgment, so the test follows git if git moves |
+
+### Finding 1 in detail — why the fix is a change of shape
+
+The owner's ruling named the isolation conditions explicitly, and the measurement says
+that enumeration is **incomplete**. Worse, the reviewer's own recommended remedy is
+also incomplete when measured: adding `GIT_ATTR_NOSYSTEM=1` does not close the XDG
+channel, and overriding `HOME` does not close it either — each was recommended for
+precisely the channel it fails to close. A complete sanitation does exist (`HOME` and
+`XDG_CONFIG_HOME` at empty dirs, `GIT_CONFIG_NOSYSTEM=1`,
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_COUNT=0`, `GIT_ATTR_NOSYSTEM=1`), but even
+it flips back if one of its own values points at a hostile directory: **the guarantee
+is not the flag, it is where the flag points.**
+
+That is the **fourth** hidden-influence channel this program has failed to enumerate,
+after the self-hiding `.gitignore`, the fake `.git` marker and `diff.external`. **0 for
+4.** A fifth list would be a fifth guess. So the corpus gains a **mandatory
+hostile-environment control** that arms both known channels and asserts the judgment
+does not move, required to be shown RED without the sanitation and GREEN with it. The
+environment list stays in the spec as the recipe; the control is what makes it a
+guarantee.
+
+**FLAGGED FOR THE OWNER, not parked:** this extends the ruled definition rather than
+overriding it — the ruling's intent was "git as a pure function over bytes", and the
+measurement shows the named switches do not deliver that intent. Serving the intent is
+why it was folded rather than returned. If the owner reads the extension as a change
+to the ruling itself, it is one edit to undo.
+
+### Base-tree note
+
+`main` advanced to `a1b473c` mid-round with a docs-only process landing that ratified
+four method rules from this arc; `origin/main` is still `e648284` and the landing
+touches no file this spec cites. This branch remains based on `e648284`. The spec's
+dispatch precondition now says so instead of asserting `main == origin/main`.
+
+**Next: round 3, a full fresh external round** — five findings landed, three of them
+changing what the implementer builds.
