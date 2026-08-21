@@ -39,6 +39,7 @@ there counts as reviewed here.
 | 2 | External adversarial (design), gptsol, fresh round after the ruling | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-2-raw.md` | **NO-SHIP** — 1 FIXED, 2 PARTIAL, 1 NOT FIXED, 5 fresh findings; all folded, none parked |
 | 3 | External adversarial (design), gptsol, fresh round after the framing flip | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-3-raw.md` | **NO-SHIP** — 3 FIXED, 1 PARTIAL, 1 NOT FIXED, 4 fresh findings; 3 folded, 1 PARKED |
 | 4 | External adversarial (design), gptsol, the closing round required by weighted closure | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-4-raw.md` | **NO-SHIP** — 2 FIXED, 2 PARTIAL, 3 fresh findings (the FIRST type (a) in this package); all 3 folded |
+| 5 | External adversarial (design), gptsol, owner-ruled after round 4 | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-5-raw.md` | **NO-SHIP** — all 4 round-4 fixes FIXED; 2 fresh findings; 1 folded, 1 PARKED (type (a), fourth containment-family, REPEAT-KIND) |
 
 ## Round 0 dispositions
 
@@ -468,3 +469,68 @@ verification. But the owner should see the shape of what remains: **rounds 3 and
 produced four (b) findings and one (a)**, the (a) is folded, and the surface is frozen.
 If he judges the remaining risk acceptable and closes 1a on the current text, that is a
 legitimate owner act on a named residual — it is simply not a call the rule lets me make.
+
+## Round 5 dispositions — one folded, one PARKED, and Routed came back empty
+
+**All four round-4 fixes verified FIXED**, including the mirror registration: the
+reviewer swept every containment mirror and confirmed no unqualified whole-path claim
+survives. Routed was explicitly empty for the fourth consecutive round.
+
+| # | Finding | Class | Disposition |
+|---|---|---|---|
+| 2 | Invalid UTF-8 without a NUL is TEXT to git (`1\t0`), its raw diff retains `0xff`, and a `utf8` decode makes it U+FFFD — so a decoding helper can claim byte identity while having replaced bytes. The production helper already decodes as `utf8` (`validate.js:68-73`) | (b) | **FOLDED.** Table C gains a byte-preserving-output row and one non-NUL invalid-UTF-8 corpus member — an extension of an existing criterion, within the frozen surface |
+| 1 | **Leaf no-follow is not enforceable on win32**, so the containment contract is platform-conditional and never said so. Measured: the real flag gives `ELOOP`, the zero-valued fallback reads the outside bytes | **(a)** | **PARKED — fourth containment-family finding, REPEAT-KIND fired** |
+
+### The parked question — and the repo has already answered it once
+
+`O_NOFOLLOW` does not exist on win32. Where it is absent the leaf-symlink refusal
+degrades to the pre-open `lstat` alone, and a symlink swapped in after that check is
+followed. This spec specified `O_NOFOLLOW` unconditionally and stated no platform
+condition, while `CLAUDE.md` puts the package on plain Node ≥ 18 with no platform
+restriction.
+
+**`src/core/vault-snapshot.js:48-57` already ruled this exact question**, in terms
+worth quoting because they are also the recommendation: *"NEITHER CONSTANT EXISTS
+EVERYWHERE (win32 has no `O_NOFOLLOW`). The fallback is an explicit branch that NAMES
+what is lost, deliberately not the `fs.constants.X || 0` idiom, which makes a missing
+flag look like a present one: where `O_NOFOLLOW` is absent the leaf-symlink refusal is
+the pre-open `lstat` alone, so a symlink swapped in after that check IS followed — a
+named residual, not an accident."*
+
+**Recommendation, NOT applied:** adopt that shape — an explicit platform branch naming
+what is lost, never the `|| 0` idiom, with the Windows residual named beside the
+ancestor one. It is not a new design; it is the one this repo already made for the
+identical question. It is parked rather than folded because it makes a security
+guarantee platform-conditional, which is the class parked twice before, and because it
+is type (a) on the fourth containment-family finding — the exact condition REPEAT-KIND
+names.
+
+### A precedent that has now been wrong three times in the detail inherited
+
+This spec cites `src/core/private-fs.js` as its walk precedent. It has been wrong in
+the inherited detail **three times**: the half-carried `applyModeSecure` (round 3),
+`listNames` swallowing `readdirSync` failures (round 4), and now the
+`fs.constants.O_NOFOLLOW || 0` idiom at `:683` — which `vault-snapshot.js` explicitly
+warns against, in this same repository. `manifest.js:746` uses it too.
+
+**The repo is internally inconsistent on this, and citing one file three times picked
+the wrong side each time.** The sibling lesson already logged — *a precedent can be
+worth citing for its shape and still be wrong in a detail you inherit* — gains a
+sharper form: **when a repository disagrees with itself, citing a precedent is choosing
+a side, and the choice needs its own justification.** For no-follow specifically,
+`vault-snapshot.js` is the file that has thought about it hardest.
+
+### Where the loop stands
+
+Five rounds, thirteen findings: **eleven type (b), two type (a)**. The reviewer was
+told it could state plainly that no type (a) could be constructed; it constructed one,
+so the honest reading is that the loop is not yet exhausted. Round 5's own fixes are
+one (b) fold — LIGHT — so weighted closure does not itself demand round 6; but the
+parked (a) is unresolved, and 1a cannot be Ready while a type (a) finding stands
+undispositioned.
+
+**Sent to the advisor before folding**, as undertaken, because it changes what 1b can
+guarantee: the workspace's containment inherits the platform condition, the two
+handed-over hypotheses become MORE load-bearing on Windows where the mechanism protects
+less, and the charter should cite `vault-snapshot.js` rather than `private-fs.js` if it
+needs a walk precedent.
