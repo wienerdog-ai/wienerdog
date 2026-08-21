@@ -92,7 +92,8 @@ fix: this package is additive by ruling.
 ### Exact contracts
 
 ```js
-/** Capture a directory's content as an immutable baseline. Pure read.
+/** Capture a directory's content as a baseline. Pure read; the caller must not
+ *  mutate what it gets back (Table A — the representation cannot enforce it).
  *  @param {string} rootDir  absolute path to an existing real directory
  *  @param {(rel:string) => boolean} [include]  optional filter over relative paths;
  *    omitted means every regular file under rootDir
@@ -119,12 +120,13 @@ package inherits this contract unchanged.
 
 | Fact / rule | Value |
 |-------------|-------|
+| **The baseline is caller-immutable by CONTRACT, not by construction** | the returned bytes and containers must not be mutated between capture and delta; if they are, `computeDelta` compares against the caller's edit rather than what was on disk, and the false attribution this module exists to prevent returns without any filesystem race. This is a NAMED caller invariant, like `include`'s purity, because the representation cannot enforce it: measured, `Object.freeze` on a non-empty Buffer THROWS (`TypeError: Cannot freeze array buffer views with elements`) and the bytes stay writable, and a frozen `Map` still accepts `set`. An acceptance case pins the behaviour when the invariant is violated |
 | What a baseline holds | `{files, anomalies, include}`: `files` maps relative path → the file's exact **bytes**; `anomalies` is what the capture walk refused to treat as a regular file (row below); `include` is the scope predicate the capture ran under, or a sentinel meaning "everything". Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
 | **Scope travels with the baseline** | `computeDelta` re-applies `baseline.include` and does NOT take a filter of its own. Without this, a path absent from `files` is ambiguous — excluded at capture, or genuinely new — and the primitive would report a pre-existing excluded file as `added`, which is exactly the false accusation the completeness rule exists to prevent. Carrying the predicate rather than re-passing it removes one failure mode — a caller cannot hand the second walk a DIFFERENT function. It does **not** make scope mismatch impossible, and this contract does not claim it does: measured, one and the same function object can answer `false` at capture and `true` at delta by reading mutable closure state, and the excluded pre-existing file is then reported `added` anyway. **Named caller invariant, since it cannot be enforced from inside:** `include` must be a pure function of the path — same input, same answer, for the lifetime of the baseline. A caller that violates it gets the false attribution, and an acceptance case pins whatever the chosen behaviour is |
 | Path shape | relative to `rootDir`, POSIX separators (`/`) on every platform — the same shape `git status` yields, so the successor's registry and prefix tests keep working unchanged |
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
 | Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
-| **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW`, the descriptor is `fstat`ed to confirm it is a regular file, **the descriptor's `(dev, ino)` is revalidated against the pair captured when the walk classified that path**, and only then are the bytes read from that descriptor. A path that becomes a symlink between enumeration and open, or whose identity no longer matches, throws or is recorded as an anomaly — it never yields bytes. **The revalidation is not belt-and-braces: `O_NOFOLLOW` constrains only the FINAL component.** Measured: replacing an intermediate DIRECTORY with a symlink to an outside directory lets `O_NOFOLLOW` open the outside leaf and `fstat` accept it as a regular file, returning external bytes — and the `(dev, ino)` comparison is what catches it (`devInoMatches: false` in that reproduction). This is exactly the discipline the cited precedent already applies. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
+| **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW` **and `O_NONBLOCK`**, the descriptor is `fstat`ed to confirm it is a regular file, **the descriptor's `(dev, ino)` is revalidated against the pair captured when the walk classified that path**, and only then are the bytes read from that descriptor. A path that becomes a symlink between enumeration and open, or whose identity no longer matches, throws or is recorded as an anomaly — it never yields bytes. **The revalidation is not belt-and-braces: `O_NOFOLLOW` constrains only the FINAL component.** Measured: replacing an intermediate DIRECTORY with a symlink to an outside directory lets `O_NOFOLLOW` open the outside leaf and `fstat` accept it as a regular file, returning external bytes — and the `(dev, ino)` comparison is what catches it (`devInoMatches: false` in that reproduction). This is exactly the discipline the cited precedent already applies. **`O_NONBLOCK` is load-bearing, not hygiene:** `O_NOFOLLOW` refuses a final symlink but not a FIFO, and a regular file replaced by a FIFO in the classify/open gap makes a blocking open wait forever — measured, it never returns and never reaches `fstat`, so neither the anomaly path nor the throw is ever taken and the run HANGS instead of failing loudly. With `O_NONBLOCK` the open returns and `fstat` reports the FIFO, which the regular-file check then rejects. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
 | Containment | every path the walk visits resolves inside `rootDir`. A `..` segment cannot occur (paths are built from directory entries), and the no-follow rule is what keeps that true |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
 | Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
@@ -160,6 +162,13 @@ when invoked:
 - in a **CONSTRUCTED environment, not a sanitized one** — see the row below. Git is
   spawned with an environment the test BUILDS (nothing inherited), in which every
   config and attribute root points at a directory this run created empty;
+- as a **verified absolute executable**, never as the name `git` resolved through a
+  PATH. A constructed environment must still carry a PATH, and that PATH is a channel:
+  measured, `env -i` with empty `HOME`/`XDG_CONFIG_HOME` and `GIT_CONFIG_NOSYSTEM=1`
+  still returned a forged `-\t-` when a directory holding an executable named `git`
+  came first on PATH. The repo already solves exactly this for its product git calls
+  (`src/core/dream/validate.js:67` spawns through `spawnPinnedSync`, a pinned absolute
+  realpath), and the reference helper takes the same discipline;
 - with **`--no-ext-diff`**;
 - over two plain files, via `--no-index`.
 
@@ -190,11 +199,15 @@ Measured, with BOTH hostile channels armed in the parent environment:
 
 The third row is the load-bearing one: it never names the injection variables, and
 they still cannot arrive, because the child's environment was **built rather than
-filtered**. So the guarantee decomposes into two constructed halves — every channel
-arriving *through the environment* is closed by building the environment; every
-channel arriving *through a file under a config or attribute root* is closed by
-pointing those roots at directories this run created empty. The fourth row names what
-neither half covers: **the guarantee is not the flag, it is where the flag points.**
+filtered**. So the guarantee decomposes into **three** constructed things: the environment, the
+config/attribute roots, and the executable. Each closes every channel arriving through
+ITS OWN class, named or not — and that quantifier is the whole claim. **It is NOT a
+claim that every channel is closed.** An earlier draft of this row said "named or not"
+without naming the classes, and the executable channel walked straight through the
+gap: it is neither an environment variable nor a file under a controlled root, so no
+amount of constructing those two could reach it. Constructing closes exactly the
+classes you construct. The fourth row of the table names what none of the three
+covers: **the guarantee is not the flag, it is where the flag points.**
 
 The switch list stays in this spec as the RECIPE. The constructed environment and the
 constructed roots are the GUARANTEE. **The hostile-environment control in the corpus
@@ -214,7 +227,7 @@ non-repository directory is ignored.
 | Records classified `binary` | exempt from the two rows above by construction (Table B fixes `addedLineNumbers` to `[]`), because a consumer withholds what it cannot scan. This is what makes the conservative exception coherent instead of self-contradicting |
 | Corpus | at minimum: added, modified, deleted, empty file, empty→content, binary, CRLF content, content with no trailing newline, a file whose only change is appended lines, one whose change is interior, a directory containing a `.gitattributes` that WOULD flip the judgment if a repository were in scope, and the two boundary cases below |
 | **Boundary fixtures (F5)** | one NUL just inside git's prefix window and one just outside it. Measured on git 2.50.1: `NUL@7999` → `-\t-`, `NUL@8000` → `1\t0`, so the window is exactly 8000 bytes **today**. Do NOT hardcode 8000 as the contract: the fixtures are located by a bounded search against the REFERENCE JUDGMENT itself, so the test follows git if git moves the boundary. A single far-beyond fixture is insufficient — it passes an implementation using any shorter cutoff |
-| **Hostile-environment control (F1)** | a mandatory case that arms both measured channels — a `git/attributes` file under a hostile `XDG_CONFIG_HOME`, and `GIT_CONFIG_COUNT`/`core.attributesFile` — and asserts the reference judgment is unchanged. It must be shown RED without the sanitation and GREEN with it, or it proves nothing |
+| **Hostile-environment control** | a mandatory case that arms every measured channel — a `git/attributes` file under a hostile `XDG_CONFIG_HOME`, `GIT_CONFIG_COUNT`/`core.attributesFile`, **and a directory holding a forged executable named `git` placed first on PATH** — and asserts the reference judgment is unchanged. Each arm must be shown RED without its construction and GREEN with it, or it proves nothing. The PATH arm is not optional: it is the channel that survived the first two constructions |
 
 ### Mirrored Surface Checklist
 
@@ -319,10 +332,17 @@ non-repository directory is ignored.
 - [ ] A stateful `include` — one function object answering differently on the two
       walks — produces the behaviour Table A's caller invariant names, and that
       behaviour is pinned by a test rather than assumed.
-- [ ] The **hostile-environment control** is present and both-directions proven: with
-      the sanitation it leaves the reference judgment unchanged, and without it the
-      armed channels move the judgment. A control that is green either way proves
-      nothing.
+- [ ] The **hostile-environment control** is present and both-directions proven for
+      **each** armed channel — hostile `XDG_CONFIG_HOME` attributes, `GIT_CONFIG_COUNT`
+      injection, **and a forged `git` first on PATH**: with its construction the
+      reference judgment is unchanged, without it the channel moves the judgment. A
+      control that is green either way proves nothing, and one that omits the PATH arm
+      omits the channel that survived the other two constructions.
+- [ ] A regular file replaced by a **FIFO** between classification and open completes
+      in bounded time with a throw or an anomaly, and never hangs. A test whose
+      timeout is the only thing that ends the run does not satisfy this.
+- [ ] Mutating the returned baseline between capture and delta produces the behaviour
+      Table A's caller invariant names, pinned by a test rather than assumed.
 - [ ] The boundary fixtures locate git's prefix window by search against the reference
       judgment and the module agrees on both sides of it — an implementation using a
       shorter cutoff fails.

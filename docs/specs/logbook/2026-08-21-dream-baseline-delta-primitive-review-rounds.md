@@ -37,6 +37,7 @@ there counts as reviewed here.
 | 0b | Internal coherence + runnable criteria | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-r0-internal-coherence-raw.md` | 5 findings, all fixed |
 | 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-1-raw.md` | **NO-SHIP** — 4 findings, all confirmed; 2 folded, 2 PARKED |
 | 2 | External adversarial (design), gptsol, fresh round after the ruling | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-2-raw.md` | **NO-SHIP** — 1 FIXED, 2 PARTIAL, 1 NOT FIXED, 5 fresh findings; all folded, none parked |
+| 3 | External adversarial (design), gptsol, fresh round after the framing flip | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-3-raw.md` | **NO-SHIP** — 3 FIXED, 1 PARTIAL, 1 NOT FIXED, 4 fresh findings; 3 folded, 1 PARKED |
 
 ## Round 0 dispositions
 
@@ -247,3 +248,64 @@ every defense the precedent applies appears in the text that cites it.
 
 **Round 3 is green-lit** and dispatches next: full fresh external round, no pending
 owner decision.
+
+## Round 3 dispositions — three folded, one PARKED
+
+All four confirmed by independent reproduction. Round-2 findings 2, 4 and 5 verified
+FIXED by the reviewer; finding 1 PARTIAL and finding 3 NOT FIXED, both for reasons
+below. The Routed section came back explicitly empty for the third consecutive round.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | **A forged `git` first on PATH defeats the constructed environment.** Measured: `env -i`, empty `HOME`/`XDG_CONFIG_HOME`, `GIT_CONFIG_NOSYSTEM=1` — and a hostile PATH still returned a forged `-\t-` where the trusted absolute binary returned `1\t1` | **FOLDED.** The reference judgment now requires a verified ABSOLUTE executable, never the name `git` resolved through PATH, and the hostile control gains a PATH arm. In-repo precedent: the product's own git calls already go through `spawnPinnedSync` with a pinned absolute realpath (`validate.js:67`) for exactly this reason |
+| 3 | **A FIFO substituted in the classify/open gap hangs the open forever.** `O_NOFOLLOW` refuses a final symlink, not a FIFO. Measured harder than reported: without `O_NONBLOCK` the open never returned and hung the measuring shell for a full two-minute timeout, never reaching `fstat`, so neither the anomaly path nor the throw was ever taken | **FOLDED.** `O_NONBLOCK` added to the untrusted open, then `fstat` rejects the non-regular kind. Measured with it: the open returns and reports `isFIFO: true` |
+| 4 | **"Immutable baseline" is not achievable as written.** Measured: `Object.freeze` on a non-empty Buffer throws `TypeError: Cannot freeze array buffer views with elements` and the bytes stay writable (`Xriginal`); a frozen `Map` still accepts `set` | **FOLDED.** The word is withdrawn. Non-mutation becomes a NAMED caller invariant with an acceptance case — the same shape round 2 used for `include`'s purity, and for the same reason: the representation cannot enforce it, so claiming it would be a second false guarantee |
+| 2 | **`(dev, ino)` revalidation does not close ancestor relocation.** Move the already-classified DIRECTORY outside the root and symlink its old location to it: the leaf is the same object, so identity matches. Measured: `openedRegular: true`, `devInoMatches: true`, `resolvedInsideRoot: false`. No inode reuse, no bind mount, no case-insensitive filesystem — an ordinary rename plus a symlink | **PARKED — owner question below** |
+
+### The parked question — a containment guarantee this package cannot deliver
+
+Table A claims every path the walk visits resolves inside `rootDir`, and the security
+checklist leans on it. **That claim is false against an active ancestor swap, and
+portable Node cannot make it true:** closing it properly needs per-component `openat`
+from a verified parent descriptor, which Node's `fs` does not expose, and a native
+module is barred by the zero-dependency rule.
+
+This is the SECOND round in which the containment contract has failed, and the pattern
+is the same both times: each fix closed the case that was demonstrated and left the
+class open. Leaf `O_NOFOLLOW` closed leaf substitution; `(dev, ino)` closed
+different-inode ancestor swaps; neither closes same-inode ancestor relocation. Folding
+a third narrow fix would repeat the shape.
+
+**Recommendation, NOT applied — two parts:**
+
+1. **Add a realpath containment check** as defense in depth. Measured, it does catch
+   the demonstrated attack: after the swap, `realpathSync` on the leaf resolves outside
+   the root (`insideRoot: false`). It is still racy — the swap can happen after the
+   check — so it is a narrowing of the window, not a closure of the class, and must be
+   described that way.
+2. **Withdraw the universal claim** and state what is actually guaranteed: no symlink
+   is followed at the leaf, leaf identity is revalidated, and the resolved path is
+   verified under the root — with the residual NAMED: an ancestor relocated between
+   enumeration and open, leaf identity preserved, is not detectable without per-component
+   `openat`. Then make it a successor obligation, like the attribute one: **the successor
+   must show its writer cannot rename directories or create symlinks** in the workspace.
+
+I have deliberately not leaned on that last point to weaken this package's claim now.
+The successor's brain has `Read`/`Write`/`Edit`/`Glob`/`Grep` and no `Bash`, so it
+plausibly cannot perform the relocation at all — but borrowing a defense from a
+consumer that does not exist yet is exactly the pattern this project rejects, and it is
+1b's to prove, not mine to assume.
+
+**Why parked rather than folded:** it narrows a security guarantee the owner has seen,
+which is the same boundary that sent the `.gitattributes` equivalence question up in
+round 1. Consistency, not caution for its own sake.
+
+### A correction to this spec's own overreach, folded with finding 1
+
+The constructed-environment framing said the two constructed halves close every channel
+"named or not". Finding 1 walked straight through that: an executable identity is
+neither an environment variable nor a file under a controlled root. The claim is now
+quantified over the classes actually constructed — environment, roots, **executable** —
+and states explicitly that it is NOT a claim that every channel is closed.
+**Constructing closes exactly the classes you construct.** That is the honest form of
+the answer to 0-for-4, and the channel count is now 0 for 5.
