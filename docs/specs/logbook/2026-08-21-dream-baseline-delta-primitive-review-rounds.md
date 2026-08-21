@@ -103,3 +103,50 @@ verified independently at all.
 owner rules on the parked pair.** Weighted closure would otherwise call for a fresh
 round, and running one against a spec with a known-open contract question would spend
 it on a moving target.
+
+## The parked pair — OWNER-RULED 2026-08-21, folded at this commit
+
+The owner's own question opened a **third path** neither the advisor nor I had
+considered: we stopped using git as a source of STATE, but that does not forbid using
+it as a **pure function** — hand it bytes, ask for its judgment. Git as a blindable
+state oracle and git as a pure function over bytes we supply are different things, and
+both of our framings had collapsed them.
+
+**RULING.** The product code stays git-free — a ~10-line byte check — and the
+"spawns nothing" contract stands. The TEST proves equivalence by calling git in
+isolation, which replaces the vague phrase "git's default content heuristic" with a
+precise, testable definition: *the judgment git gives when run with no repository in
+scope, no system or global config, and no external diff.* Table C takes that
+definition verbatim, switches included. The conservative-binary exception stands; the
+exact `addedLineNumbers`/scan-text obligations are conditioned on `binary === false`;
+attribute sensitivity becomes a named successor obligation.
+
+**Why the product code may not spawn git** (the owner's reasoning, recorded): it would
+re-open the class direction (A) exists to escape — git configuration as a hidden
+influence channel — and this program's record at enumerating that class is **0 for 3**
+(the self-hiding `.gitignore`, the fake `.git` marker, `diff.external`). Three times it
+believed the list was complete. A ten-line byte check has no channel; the residual
+risk of git changing its heuristic is caught RED by the equivalence test, bounded and
+loud.
+
+### Re-measured before folding — two results the relayed version did not carry
+
+The ruling arrived with four supporting measurements. I re-ran all four rather than
+inherit them, and two came out differently in ways that change the contract text.
+
+| Claim as relayed | Measured here | Consequence |
+|---|---|---|
+| `--no-index` escapes `.gitattributes` | **Only if the CWD is outside a repository.** With a CWD inside a repo, that repo's attributes are applied even to operands living OUTSIDE it (`-\t-` vs `1\t1` for the same two files). A `.gitattributes` merely PRESENT in a non-repository directory is correctly ignored | The isolation property is about the **invoking CWD**, not about where the operands sit. Table C now says so, and an acceptance criterion states that a test running from this checkout would measure the wrong thing |
+| `diff.external` fires on `--no-index` and is silenced by the guards | **Half right, and the half that is wrong is the one that matters.** It fires on the TEXTUAL `git diff --no-index` shape from a hostile global config in a clean directory (reproduced; `--no-ext-diff` silences it), but on `--numstat` it does not fire **at all**, guards or no guards — that path never invokes the external driver | The external-diff guard is load-bearing for the **`-U0` added-lines** invocation, not for the binary one. Read the other way round, someone could guard only the numstat call and leave the hijackable shape open. Recorded in Implementation notes; both invocations carry the full guard set anyway |
+
+The other two reproduced exactly: `--no-index --numstat` outside a repo yields the
+bounded-prefix heuristic identical to the staged form (`NUL@100` → `-\t-`,
+`NUL@9000` → `1\t0`), and the cost is ~6.4 ms per judgment (200 runs in 1.28 s).
+
+Also confirmed and deliberately NOT relied upon: this repository carries no root
+`.gitattributes` today (`git check-attr diff -- README.md` → unspecified). Leaning on
+that would be a borrowed defense of exactly the kind this project rejects, so the
+neutral-CWD requirement is the guarantee and the repo's current cleanliness is not.
+
+**Next: round 2, a full fresh external round. The contract question is closed, so
+there is no moving target.**

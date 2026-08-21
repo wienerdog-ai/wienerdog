@@ -147,12 +147,31 @@ The primitive replaces evidence that git produces today, so its equivalence to g
 the contract, not an implementation detail. The differential is a test-side use of git
 against a repository the test builds; the module itself contains no git.
 
+**THE REFERENCE JUDGMENT — this definition IS the standard, not a description of
+one.** Git is used here as a **pure function over bytes the test hands it**, never as
+a source of state. The reference judgment for a before/after pair is what git returns
+when invoked:
+
+- **outside any repository** — the invoking process's CWD must not be inside one.
+  Measured: a CWD inside a repo applies that repo's `.gitattributes` even to operands
+  that live OUTSIDE the repo, so `--no-index` alone does not isolate;
+- with **no system config** (`GIT_CONFIG_NOSYSTEM=1`) and **no global config**
+  (`GIT_CONFIG_GLOBAL=/dev/null`);
+- with **`--no-ext-diff`**;
+- over two plain files, via `--no-index`.
+
+Under exactly those conditions git yields the bounded-prefix byte heuristic and
+nothing else — measured identical to the in-repo staged form (`NUL@100` → `-\t-`,
+`NUL@9000` → `1\t0`), and a `.gitattributes` file merely PRESENT in a
+non-repository directory is ignored.
+
 | Obligation | Reference |
 |------------|-----------|
-| `addedLineNumbers` | equals what today's `addedLineNumbersFromDiff` (`src/core/dream/validate.js:752-764`) derives from `git diff --cached -U0` hunk headers for the same before/after pair |
-| Derived scan text | byte-identical to today's `+`-line join (`src/core/dream/validate.js:1258-1262`) |
-| `binary` | equals git's `--numstat` signal — the `-\t-\t` form the validator tests at `src/core/dream/validate.js:1245-1246` |
-| Corpus | at minimum: added, modified, deleted, empty file, empty→content, binary, a NUL beyond git's prefix window, CRLF content, content with no trailing newline, a file whose only change is appended lines, and one whose change is interior |
+| `binary` | equals the reference judgment's `--numstat` signal — the `-\t-\t` form the validator tests at `src/core/dream/validate.js:1245-1246` |
+| `addedLineNumbers`, **when `binary === false`** | equals what today's `addedLineNumbersFromDiff` (`src/core/dream/validate.js:752-764`) derives from the reference judgment's `-U0` hunk headers for the same pair |
+| Derived scan text, **when `binary === false`** | byte-identical to today's `+`-line join (`src/core/dream/validate.js:1258-1262`) |
+| Records classified `binary` | exempt from the two rows above by construction (Table B fixes `addedLineNumbers` to `[]`), because a consumer withholds what it cannot scan. This is what makes the conservative exception coherent instead of self-contradicting |
+| Corpus | at minimum: added, modified, deleted, empty file, empty→content, binary, a NUL beyond git's prefix window, CRLF content, content with no trailing newline, a file whose only change is appended lines, one whose change is interior, and a directory containing a `.gitattributes` that WOULD flip the judgment if a repository were in scope |
 
 ### Mirrored Surface Checklist
 
@@ -162,7 +181,8 @@ against a repository the test builds; the module itself contains no git.
       round-trip and the classify/read-gap discriminator
 - [ ] Verification steps (the no-child-process assertion mirrors Table A's git-free scope row and the Deliverables note)
 - [ ] Current-state description (the two neighbouring patterns and why the hash-only shape is insufficient)
-- [ ] Implementation notes: the binary-prefix trap and the ordering rationale
+- [ ] Implementation notes: the binary-prefix trap, the guard-asymmetry measurement,
+      the neutral-CWD requirement, and the ordering rationale
 - [ ] Out of scope: everything the successor owns
 
 ## Implementation notes & constraints
@@ -171,7 +191,15 @@ against a repository the test builds; the module itself contains no git.
   ADR-0004: the module starts nothing and holds nothing beyond its call.
 - **This module must not import or spawn git, and must not spawn anything.** That is
   what makes it additive and independently verifiable, and it is asserted mechanically
-  below.
+  below. The division is deliberate and owner-ruled: **the product code is a ~10-line
+  byte check** (a NUL within git's bounded prefix window), while **the TEST proves its
+  equivalence by calling git as a pure function** under Table C's isolation. Spawning
+  git from the product code would re-open the very class direction (A) exists to
+  escape — git configuration as a hidden influence channel — and this program's record
+  at enumerating that class is 0 for 3 (the self-hiding `.gitignore`, the fake `.git`
+  marker, `diff.external`): three times it believed the list was complete. A ten-line
+  byte check has no channel. The residual risk — git changing its heuristic — is
+  caught RED by the equivalence test, which is bounded and loud.
 - **The binary-prefix trap, measured on git 2.50.1 at the pin.** Git's binary test
   inspects a bounded prefix, not the whole file: a file with a NUL at byte 100 stages
   as `-\t-\t` (binary), and the same file with the NUL at byte 9000 stages as `1\t0`
@@ -183,6 +211,21 @@ against a repository the test builds; the module itself contains no git.
   test that places symlinks before the walk starts and still follows one substituted
   in between. Bind both to the same descriptor; `src/core/private-fs.js:687-751` (`applyModeSecure`) is
   the in-repo precedent.
+- **Which isolation switch guards which shape — measured, because the answer is not
+  uniform.** `diff.external` from a hostile GLOBAL config DOES fire on the textual
+  `git diff --no-index` shape, in a clean directory, with no repository anywhere
+  (reproduced; `--no-ext-diff` silences it). It does NOT fire on `--numstat` at all,
+  with or without guards — that path never invokes the external driver. So the
+  external-diff guard is load-bearing for the **`-U0` added-lines** invocation, not
+  for the binary one. Apply the full guard set to BOTH invocations regardless:
+  uniform is cheaper than remembering which shape needs what, and the shape that
+  needs it is the one that is easy to forget.
+- **Do not rely on this repository having no `.gitattributes` today.** It does not
+  (`git check-attr diff -- README.md` → unspecified), but leaning on that would be a
+  borrowed defense of exactly the kind this project rejects. The neutral-CWD
+  requirement is the guarantee; the repo's current cleanliness is not.
+- Cost of the reference judgment, measured: ~6.4 ms per invocation (200 runs in
+  1.28 s). Test-side only, and irrelevant at that scale.
 - Sorted output is not cosmetic: it is what lets a consumer's report and a test's
   expectation be compared byte-for-byte without re-sorting at every call site.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
@@ -229,11 +272,16 @@ against a repository the test builds; the module itself contains no git.
       bytes, and never bytes from outside `rootDir`. A test that only places symlinks
       up front does not discriminate this and does not satisfy the criterion.
 - [ ] **The git-agreement differential (Table C).** Over the whole corpus, this
-      module's `addedLineNumbers` equal `addedLineNumbersFromDiff`'s output on the
-      corresponding `git diff --cached -U0`, and its `binary` equals git's `--numstat`
-      signal — or is conservatively `true`, with each divergent input named in the PR.
-      The derived scan text is byte-identical to the `+`-line join for every member.
-      **The corpus is built and diffed by the test; the module is not given git.**
+      module's `binary` equals the **reference judgment**'s `--numstat` signal (Table C
+      — no repository in scope, no system or global config, `--no-ext-diff`) or is
+      conservatively `true` with each divergent input named in the PR; and for every
+      member where `binary === false`, its `addedLineNumbers` equal
+      `addedLineNumbersFromDiff`'s output on that judgment's `-U0` hunk headers and the
+      derived scan text is byte-identical to the `+`-line join.
+      **The corpus is built and judged by the test; the module is never given git.**
+      The test's own git invocations run from a CWD outside any repository — a CWD
+      inside one applies that repo's attributes even to operands outside it, so a test
+      that runs from this checkout would be measuring the wrong thing.
 - [ ] `src/core/dream/delta.js` neither requires `node:child_process` nor spawns any
       process.
 - [ ] Idempotence: `N/A — this WP ships no command and writes nothing outside the
@@ -272,6 +320,14 @@ test "$(git diff --name-only --diff-filter=M main -- src tests | wc -l)" -eq 0
   workspace, swapping the four gates' decision inputs there, the promotion policy, and
   the `change.untracked` fact map. The superseded predecessor's Tables C, D and E are
   that package's inheritance, to be recomputed there, not carried here.
+- **Repository attribute sensitivity, named as the successor's obligation.** Git's
+  judgment changes when a repository is in scope: `.gitattributes` overrides the byte
+  heuristic in both directions (reproduced — `*.forced-binary` makes plain ASCII
+  binary, `*.forced-text` makes an early-NUL file text). This package escapes that by
+  construction, since its reference judgment is taken with no repository in scope. The
+  SUCCESSOR must show that repository attributes cannot alter the relevant paths in
+  its workspace, or handle it there. Not this package's to solve, and stated so it
+  cannot arrive later as an acceptance criterion.
 - **Any freshness, locking or generation mechanism.** Table A's no-freshness-claim row
   is deliberate; adding a check here would rebuild the failure the predecessor was
   superseded for.
