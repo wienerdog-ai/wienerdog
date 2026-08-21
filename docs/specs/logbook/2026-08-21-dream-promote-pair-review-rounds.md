@@ -136,3 +136,74 @@ Fix commit: applied in the commit that carries this update.
 **Round 1 does not close the loop.** Per the stop criterion, the next external
 round runs on the fixed specs; the family (vault-write-bypasses-promotion) took
 its FIRST landing here — a second lands the split seam on the owner's table.
+
+### Round 2 — 2026-08-22 — reviewer: Codex (gpt-5.6-sol), external
+
+**Does NOT close. 9 capability findings, 0 questions — and the FAMILY LANDS A
+SECOND TIME, so the stop criterion fires: this round returns to the owner as a
+ruling request with the split seam itself on the table.** All nine re-verified
+here against the code before dispositioning; all nine hold. Two are BLOCKERS
+against round 1's own fixes, and one is a defect this author INTRODUCED in the
+round-1 fix pass.
+
+**The two blockers, both against round 1's applied ruling:**
+
+- **F1' — the EXDEV placement, as specified, cannot run on a default install.**
+  Measured: `vault`, `state`, `core` and `tmpdir` are all `dev=16777230` on the
+  primary platform — one device. `createWorkspace` would fail closed on every
+  dream run. Provisioning a dedicated volume or tmpfs has no deliverable
+  surface and contradicts Part i's "spawns nothing at all" and ADR-0004's
+  files-only rule. **The owner's F1 ruling is sound as a MECHANISM (cross-device
+  hardlinks do fail `EXDEV`) and unimplementable as a PLACEMENT within this
+  package's boundary.**
+- **F2' — the unconditional reap verdict cannot be "just surfaced" on win32.**
+  Measured (`src/core/reap.js:25-33`, `:503-519`): `taskkill /PID <dead-pid> /T
+  /F` fails once the leader has exited, so the verdict is `{reaped:false}` on a
+  NORMAL Windows run — Table G would refuse every such run — and the primitive
+  states it gives "NO leaderless-member guarantee" there, so it cannot supply
+  the "verifiably empty" verdict the row demands. `src/core/reap.js` is in
+  neither half's Deliverables.
+
+**The author's own injected defect (F6', fixed immediately — it does not touch
+the seam question):** round 1's F9 text said a transcript whose note was
+"withheld or redacted" does not advance. Canonical semantics are the opposite
+for redactions (`validate.js:1065-1072`: redacted files "consumed their
+transcripts normally and MUST NOT defer"). Left standing it would re-do
+consumed work and mint a second quarantine artifact every redacted run.
+Corrected in Table G, the contract and the criterion; the field is renamed
+`reverts` → `withheld`, since promotion never wrote the bytes.
+
+**The other six, HELD pending the ruling:** F3' binary `.md` passes the new EP2
+gate unscanned (`delta.js:517-520` returns no line numbers for binary; today's
+`validate.js:1239-1255` withholds it explicitly) and C3 promotes it raw —
+a regression against shipped behaviour. F4' a PRE-EXISTING vault symlink
+(`01-Projects/alias -> ../reports/dreams`, or `-> ../.claude`) makes a lexically
+admitted path resolve into a denied destination; C9 validates the lexical delta
+path while containment only asks "inside the vault". F5' the dream commit stages
+working-tree bytes, so a user save landing between publish and `git add` enters
+the commit ungated — later and distinct from the accepted F4 residual. F7' the
+deny-list is case-sensitive while the primary filesystem is not
+(`agents.override.md` measured resolvable as `AGENTS.override.md`; the repo
+already handles this rule at `validate.js:1083-1086`). F8' `spawnBrain` spreads
+the ambient env (`brain.js:169-173` with `env: process.env`), so an inherited
+`WIENERDOG_VAULT` keeps the vault path in the child env and CLAIM 1's structural
+criterion cannot pass. F9' the publish temp uses a predictable name and a
+following write (the cited precedent, `validate.js:855-863`), so a planted
+symlink at the temp path is overwritten before `rename`; the hardened
+crypto-random `O_EXCL|O_NOFOLLOW` pattern already exists at
+`private-fs.js:259-317`.
+
+**THE DIAGNOSIS THE ESCALATION CARRIES (author's, offered as the ruling's
+input, not as a ruling):** both rounds' family findings share one shape — **the
+promotion boundary is specified in PATHS, while every successful attack reaches
+the vault by IDENTITY.** Round 1's hardlink: two paths, one inode. Round 2's
+F4': one lexical path, another resolved destination. F9': one temp path,
+another object. F5': one approved path, other bytes. F8': the path arrives by
+another route entirely. Each patch so far has added another lexical rule, and
+each round has found the next identity vector. That is the plateau shape this
+program reset itself to escape, and it is why the stop criterion's remedy for a
+repeat family landing is a CONTRACT EXTRACTION or a re-cut seam rather than an
+eleventh rule.
+
+Fix commit for F6' only: applied in the commit that carries this record.
+Everything else: **HELD — owner ruling requested.**

@@ -160,9 +160,13 @@ under "Discovered issues" in the PR body.
  *  @returns {{promoted:string[],
  *             redacted:Array<{rel:string}>,
  *             refused:Array<{rel:string, reason:string}>,
- *             secretDisposition:{reverts:number, redactions:number}}}
+ *             secretDisposition:{withheld:number, redactions:number}}}
  *    secretDisposition is the typed signal the pipeline's transcript-advance
- *    consumes (Table G, F9) — never a parsed refusal reason */
+ *    consumes (Table G, F9) — never a parsed refusal reason. ONLY `withheld`
+ *    defers a transcript; `redactions` is accounting (the sanitized note WAS
+ *    promoted, so its transcript was consumed — `validate.js:1065-1072`).
+ *    Named `withheld`, not `reverts`: promotion never wrote the bytes, so
+ *    there is nothing to revert */
 function promote(o)
 ```
 
@@ -245,7 +249,7 @@ gates stay `reason|null`.
 | The run's workspace lifecycle | `createWorkspace` runs before the brain is spawned (which is what makes the sibling's capture-before-spawn ordering a pipeline fact, not just a module fact); the sibling's transitional call-site argument is replaced by the run's workspace; after the brain, `computeDelta` then `promote`; `destroyWorkspace` on every exit path (exception below). **This is the line where the sibling's CLAIM 1 becomes true of the running product**, and the acceptance criteria re-assert its composed-argv form at pipeline level |
 | **The reap precondition** | `computeDelta` runs on the workspace only after the brain's process group is **verifiably** empty. `runBrainWithWatchdog` (`cli/dream.js:137`) computes a reap verdict at `:272` — `reapGroupFn(...)` returning `{reaped:true}` — and today consumes it only to gate the pidfile unlink, never surfacing it to its caller. **Measured caveat (round 1, F6): that verdict is computed INSIDE `if (pidfile)` (`:256`), and `pidfile` is `null` on a tokenless manual `wienerdog dream` (`:149-152`) — so on a standalone success the verdict is not merely discarded, it is ABSENT.** This package therefore requires an **unconditional post-settle reap verdict** — computed on every run, tokenized scheduler run and tokenless manual run alike — surfaced to the caller, and it **refuses the run fail-closed** on anything but a verified reap, rather than walking a workspace a surviving process can still mutate. A missing verdict is treated as unverified (fail-closed), never as success. This converts the dependency's explicitly-unverified hypothesis (2) into an enforced precondition (sibling Table F), and it is what keeps a live actor from mutating the workspace during the walk |
 | **The unknown-command non-vacuity signal (F2)** | today the "the brain did not run — the CLI rejected the trigger prompt" abort keys off vault-cleanliness (`cli/dream.js:237`, `assertCleanTree`), sound only because the tree was asserted clean immediately before spawn — the premise `precommitSessionEdits` supplied (Table E) and this package removes. Under this package the brain writes the WORKSPACE, so the non-vacuity evidence moves there: a genuine rejection produced an EMPTY workspace delta (the brain did no work), so the abort keys off `sawUnknownCommand` AND an empty `computeDelta` result, never off the vault. A run that emitted the marker but DID write the workspace proceeds into promotion, exactly as today's guard let a writing run proceed into validation. The vault's cleanliness is no longer evidence of anything the brain did |
-| **The pipeline consumes EP2's disposition (F9)** | `promote()` returns a typed EP2 disposition summary (contract), and the pipeline's transcript-advance consumes it the way today's `secretReverts` signal does (`cli/dream.js:568-596`): a transcript whose only note was withheld or redacted for a secret is NOT marked processed, so it regenerates next run rather than being silently lost. The pipeline reads the typed field, never a human-readable refusal reason — parsing prose would be an undocumented security interface. A refusal for a NON-secret reason (allowlist, conflict) advances the transcript normally; only the EP2 dispositions defer it |
+| **The pipeline consumes EP2's disposition (F9)** | `promote()` returns a typed EP2 disposition summary (contract), and the pipeline's transcript-advance consumes it the way today's `secretReverts` signal does (`cli/dream.js:568-596`): a transcript whose only note was **WITHHELD** for a secret is NOT marked processed, so it regenerates next run rather than being silently lost. **A REDACTED note does NOT defer** — measured canonical semantics (`validate.js:1065-1072`: redacted files "consumed their transcripts normally and MUST NOT defer, which is why they are counted separately and never enter `reverted[]`"): the sanitized note WAS promoted, so its transcript was consumed and regenerating it would re-do consumed work and mint a second quarantine artifact. `redactions` is an accounting and reporting field, never a deferral trigger. The pipeline reads the typed fields, never a human-readable refusal reason — parsing prose would be an undocumented security interface. A refusal for a NON-secret reason (allowlist, conflict) advances the transcript normally |
 | Teardown wiring | the workspace is removed on every exit path — success, refusal, brain failure, timeout — **with one named exception: a run that refused because the reap was not verified does NOT tear down.** Removing a tree a surviving process may still be writing is not a cleanup, and the row above is the whole reason that state is distinguishable. Teardown never touches the vault. A workspace left behind by that refusal, or by a crash, is the residue-lifecycle successor's subject, not this package's |
 | **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:535` and `:550`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone, a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: **the package's intent brief (a war-room record kept outside this repo) routed the abort paths to the residue-lifecycle successor, and this row is narrower than that** — it changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject |
 
@@ -376,11 +380,14 @@ gates stay `reason|null`.
       candidate is promoted, the unredacted copy is preserved to quarantine, the
       path is recorded `redacted`, and `secretDisposition.redactions` counts it
       separately from a hard refusal.
-- [ ] **The pipeline defers a secret-withheld transcript (F9).** A fresh
-      transcript whose only note EP2 withholds or redacts is NOT marked
-      processed — it regenerates on the next run; asserted through
-      `secretDisposition`, never a parsed reason. A non-secret refusal advances
-      the transcript.
+- [ ] **The pipeline defers a secret-WITHHELD transcript, and only that (F9).**
+      A fresh transcript whose only note EP2 withholds is NOT marked processed —
+      it regenerates on the next run. A transcript whose only note was REDACTED
+      **IS** marked processed (the sanitized note was promoted, so the
+      transcript was consumed) — asserted as its own case, because inverting it
+      re-does consumed work and mints a second quarantine artifact. Both
+      asserted through `secretDisposition`, never a parsed reason. A non-secret
+      refusal advances the transcript.
 - [ ] **The unknown-command non-vacuity signal (F2).** A run whose brain emits
       the unknown-command marker and writes NOTHING to the workspace aborts as
       "brain did not run" and advances no transcript ledger; a run that emits
