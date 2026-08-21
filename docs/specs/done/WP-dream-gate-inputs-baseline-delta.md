@@ -1,7 +1,7 @@
 ---
 id: WP-dream-gate-inputs-baseline-delta
 title: Feed the dream's four gates from a captured pre-brain baseline, not vault git state
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: []
@@ -10,6 +10,39 @@ epic: audit-2026-07-29
 ---
 
 # WP-dream-gate-inputs-baseline-delta: gate inputs move to a captured baseline
+
+> **SUPERSEDED 2026-08-21 by owner ruling — replaced by TWO successors.**
+> This design is recorded, not shipped. It swapped the four gates' decision inputs
+> onto a captured baseline **while the brain still wrote to the live vault**, and two
+> external adversarial rounds measured that this cannot be behaviour-preserving: every
+> live read it replaced (`git status` at classification time, `diff --cached` read
+> after `git add -A`, `assertCleanTree` immediately before use) was also a FRESHNESS
+> check, and a snapshot structurally cannot carry liveness. Round 2 reproduced a late
+> write reaching the commit with no gate having seen it — a regression, not
+> preservation. The root cause of the failed repair is recorded honestly: the ruled
+> HEAD-identity invariant could not close the hole **by construction**, because
+> `change.untracked` is an INDEX fact (`changedPaths` sets `untracked: code === '??'`,
+> `src/core/dream/validate.js:1031`) and a HEAD pin cannot constrain the index.
+>
+> **Successors:**
+> 1. `docs/specs/WP-dream-baseline-delta-primitive.md` — the capture and delta
+>    primitive alone, additive, consumed by nothing.
+> 2. **WP-dream-workspace-write-target-and-gates** (not yet written) — moves the
+>    brain's write target into the system-built workspace AND swaps the gates there,
+>    where the workspace makes the snapshot authoritative by construction (the brain
+>    is the only writer; there is no concurrent user to race), so no generation
+>    invariant is needed at all.
+>
+> **What successor 2 inherits from this document, recomputed, not copied:** Table C's
+> per-gate substitution map; Table D's seven-site `change.untracked` map — exhaustive
+> against the tree, but its safety argument must be re-derived on the INDEX fact, not
+> on HEAD; Table E's per-substitution discriminators — with its EP2 row split, since
+> it still bundles four independent replacements (path list, `binary`,
+> `addedLineNumbers`, scan text) under one discriminator, and its two `isNew` sites
+> under another. Everything below is a point-in-time record and is never edited again.
+>
+> **Why:** `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-review-rounds.md`
+> (rounds 0-2) and the round-2 raw output beside it.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
