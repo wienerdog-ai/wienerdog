@@ -87,9 +87,22 @@ component chain against concurrent replacement — `delta.js:22-40` (owner-ruled
 2026-08-21) says it "cannot close that class without per-component `openat`,
 which no `fs` API exposes", and hands its caller a checkable ordering
 obligation instead. Rows H3 and H4 inherit that shape: they narrow and they
-DETECT, and each says which. This family discharges the obligation by ordering
-— every vault write happens after a verified reap, with no live actor holding
-vault write access.
+DETECT, and each says which.
+
+**The obligation is NOT discharged, and an earlier draft of this spec claimed it
+was (round 4, corrected here).** The claim was that ordering discharges it —
+that after the brain's process group is reaped no live actor holds vault write
+access. Measured, that is false: the reap is scoped to the brain's process group
+(`cli/dream.js:254-280`), and the run lock excludes another dream process, not
+an editor. **The user's own editor is a live vault writer throughout, and the
+whole three-way compare exists because it is** — a spec cannot rely on the
+user's concurrency in one table and deny it in another. The truthful narrower
+statement: the reap removes the BRAIN as a concurrent writer, and says nothing
+about the user's editor or a file synchroniser. **So the component-swap race is
+a family-level NAMED RESIDUAL, unclosed**, in the same class the delta
+primitive already carries — bounded by requiring physical access to the user's
+own account, which is not a boundary this project's threat model claims to
+hold.
 
 ## Current state
 
@@ -174,7 +187,7 @@ inherits this contract as its only write path.
 |---|---|---|
 | H1 | **Decide on the RESOLVED path, not the given one** | `rel` is first segment-validated (no segment equal to `.` or `..`, none containing a separator, none empty). The target's parent directory is then resolved (`realpath`), the resolved absolute path is expressed relative to the vault's own resolved root, and **`admit` is called with THAT** — so a caller's policy judges where the write actually lands. Measured motivation: a pre-existing vault symlink makes an admitted lexical path resolve into a denied directory, and the repo's existing containment check (`validate.js:624-650`) cannot see it because the resolved target is still inside the vault |
 | H2 | **Containment is necessary but never sufficient** | the resolved path must remain inside the vault's resolved root — and passing that check decides nothing on its own; H1's `admit` on the resolved path is what admits. **No surface may describe containment as the barrier**: it rejects escapes from the vault, not writes into a denied part of it |
-| H3 | **No component may be a symlink — and the swap race is NAMED, not claimed closed** | the parent chain from the vault root down to the target's directory is walked with `lstat`, and any symlink component fails the write closed with a reason. A symlink AT the target itself is likewise refused: promotion replaces a note, never whatever a note points at. **What this does NOT establish, per the ruling this repo already made on exactly this class** (`delta.js:22-40`, owner-ruled 2026-08-21): a component observed as a real directory and REPLACED between the walk and the open is followed, and **portable Node cannot close that without per-component `openat`, which no `fs` API exposes.** `O_NOFOLLOW` protects the final component only. Measured in round 3: after an `lstat` saw a real directory, swapping it for a directory symlink let an `O_EXCL\|O_NOFOLLOW` temp open write through it. So this row NARROWS the window and states the residual; the same caller obligation the delta primitive names applies here — for the duration of the call, no untrusted actor may replace an ancestor of the target. **Under this family that obligation is discharged by ordering: promotion runs after a verified reap, with no live actor holding vault write access** (`WP-dream-promote-in-workspace`, Table G). Another `realpath` before the open would only narrow the same race and must not be described as closing it |
+| H3 | **No component may be a symlink — and the swap race is NAMED, not claimed closed** | the parent chain from the vault root down to the target's directory is walked with `lstat`, and any symlink component fails the write closed with a reason. A symlink AT the target itself is likewise refused: promotion replaces a note, never whatever a note points at. **What this does NOT establish, per the ruling this repo already made on exactly this class** (`delta.js:22-40`, owner-ruled 2026-08-21): a component observed as a real directory and REPLACED between the walk and the open is followed, and **portable Node cannot close that without per-component `openat`, which no `fs` API exposes.** `O_NOFOLLOW` protects the final component only. Measured in round 3: after an `lstat` saw a real directory, swapping it for a directory symlink let an `O_EXCL\|O_NOFOLLOW` temp open write through it. So this row NARROWS the window and states the residual; the same caller obligation the delta primitive names applies here — for the duration of the call, no untrusted actor may replace an ancestor of the target. **That obligation is NOT discharged by this family, and the Context says why (round 4): the reap removes the BRAIN, not the user's editor, which this very design expects to be writing the vault concurrently.** It is carried as an unclosed named residual. Another `realpath` before the open would only narrow the same race and must not be described as closing it |
 | H4 | **The temp is created, never opened — and its identity is carried through the publish** | crypto-random basename in the target's own directory, `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`. **A predictable name with a following write is the measured defect this row exists to prevent** (`validate.js:855-863`): a symlink planted at that path is followed, and the victim is overwritten before any `rename`. Round 3 confirmed the crypto-random `O_EXCL` create defeats a PRE-planted symlink — and found the residual the repo's own precedent already names (`private-fs.js:270-277`): after the create, a concurrent same-owner process can unlink the entry and plant another object at that name, so the `rename` moves the SUBSTITUTED object. "Pure Node cannot prevent this (no directory-relative rename), but this DETECTS it" — and this primitive adopts that precedent verbatim in shape: capture the opened fd's `(dev, ino)` via `fstat`, write and set the mode ON THE FD (never a post-write path-following `chmod`), and after the `rename` `lstat` the target — a symlink or a `(dev, ino)` mismatch means substitution and **throws**. **Detection, not prevention, and this row says so.** A substitution detected after the rename is the one case where H7's leaves-nothing-behind property cannot hold: the throw is loud precisely because the state is already wrong |
 | H5 | **Publish is `rename`, after a conditional re-read — NARROWED, not closed** | when `expect` is given, the target is re-read immediately before the `rename` and compared byte-for-byte; a difference abandons the write and returns `{written:false}`. When `expect` is absent the target must not exist. **The residual is stated because POSIX offers no content-conditional replace:** a save landing between the re-read and the `rename` is still lost. The repo's precedent (`validate.js:884-890`) has exactly this window and shipped with it; this row narrows the same window and does not claim to close it |
 | H6 | **The published BYTES are returned, so the caller never re-reads the path** | on success the return carries `bytes` — the exact buffer published — plus `sha256` over it. Measured motivation: staging that reads the working tree (`validate.js:1412`, `git add -A`) commits whatever the file holds at staging time, so a save between publish and stage enters the commit ungated. **Three identities are distinct and this row keeps them apart (round 3, F5):** the content digest `sha256`; the filesystem object identity `(dev, ino)` that H4 verifies; and the repository-native blob id, which the caller obtains from the returned BYTES (`git hash-object -w --stdin` under its own constructed git environment) — measured, this repo's object format is `sha1`, so for `abc\n` the blob id is `8baef1b4…` while the raw sha256 is `edeaaff3…`. **`sha256` is a verification digest and is NOT a stageable object id.** This module does not stage and runs no git; the consumer's spec owns the staging call |
@@ -227,8 +240,10 @@ inherits this contract as its only write path.
 - [ ] Named residual: the compare→publish window is narrowed, not closed (H5).
 - [ ] Named residual, inherited from the ruling at `delta.js:22-40`: a parent
       component replaced between the walk and the open is followed, and
-      portable Node cannot close that class (H3). Discharged by ORDERING at the
-      family level — every vault write runs after a verified reap.
+      portable Node cannot close that class (H3). **NOT discharged by ordering**
+      — the reap removes the brain, not the user's editor, which the design
+      explicitly expects to be writing the vault concurrently. Carried as an
+      unclosed family residual.
 - [ ] Named residual: a temp substituted after creation is DETECTED via the
       opened descriptor's `(dev, ino)`, not prevented (H4).
 - [ ] Named residual: `O_NOFOLLOW`'s absence on win32 moves the weight onto the

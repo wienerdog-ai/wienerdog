@@ -394,3 +394,100 @@ harness is a broken product, not a fence. And a new note's mode is now stated
 Fix commit: applied in the commit that carries this update.
 
 **Round 4 is owed** on the same grounds as round 3 was.
+
+### Round 4 — 2026-08-22 — reviewer: Codex (gpt-5.6-sol), external
+
+**Does NOT close. 9 findings + 1 question — and the count went UP: 10 → 9 → 6 →
+9. That reversal is the round's most important output and it goes to the owner
+with the findings.** All verified; all hold. Two blockers, both this author's
+design errors. One falsehood in a security argument, fixed on the spot. And
+**five findings that exist BECAUSE the specs crossed from contract into
+implementation** — which is a diagnosis about the spec, not about the reviewer.
+
+**Fixed immediately (a false claim may not stand while a ruling is pending):**
+
+- **F3'' — the ordering discharge was FALSE, and this author wrote it.** Rounds
+  3's fix claimed the component-swap residual was discharged "by ordering —
+  every vault write runs after a verified reap, with no live actor holding vault
+  write access". Measured: the reap is scoped to the BRAIN's process group
+  (`cli/dream.js:254-280`) and the run lock excludes another dream process, not
+  an editor. **The user's editor is a live vault writer throughout — the entire
+  three-way compare exists because it is.** A spec cannot rely on the user's
+  concurrency in Table C and deny it in Table H. Corrected in both surfaces: the
+  reap removes the brain and says nothing about the user's editor, so the
+  component-swap race is an **unclosed family-level named residual**. The
+  suspicion was raised in the round's own brief and confirmed — which is the
+  cheap way to find this class, and the reason to keep asking reviewers to
+  attack a specific claim rather than only to look around.
+
+**Contract-level and genuine — HELD for the ruling below:**
+
+- **F1'' [BLOCKER] — decide-then-write cannot be implemented through the current
+  API.** Table E requires every path's outcome decided before ANY vault byte is
+  written; C9's admission now happens on the RESOLVED path, which only
+  `writeIntoVault` can compute — and that same call publishes. So either a
+  refusal is discovered after an earlier path was already written, or the
+  "pure decision" phase writes. H9 sharpens it: a missing parent cannot be
+  resolved until H9 creates it, and a later refusal leaves the chain behind.
+  The family needs a prepare/commit split, or the all-path atomicity claim must
+  narrow. **This is a seam defect created by the round-2 extraction** — the
+  extraction was right and its API was drawn one call too coarse.
+- **F2'' [BLOCKER] — the "code-owned report" design destroys content the shipped
+  product produces.** Measured: `skills/wienerdog-dream/SKILL.md:409-425`
+  REQUIRES the brain to write the report, including a `## Gated out (and why)`
+  section listing every candidate it did NOT write and why — candidate-level
+  accounting that **no filesystem outcome can reconstruct**, because those
+  candidates never became files. Today's code appends its enforcement section to
+  the brain's body (`validate.js:1374-1408`). The specs' report row instead
+  composes the report from promotion records and denies brain content under
+  `reports_dir`, silently discarding the accounting. **And the fix needs
+  `SKILL.md`, which is outside all three packages' boundaries** — Part i's Out
+  of scope keeps it out deliberately, because editing it churns the WP-129
+  vendored-skill digest. Owner scope call.
+- **F4'' — the report's `expect` and its same-day second run are undefined.**
+  Two runs on one date share `<reports_dir>/<date>.md`; H5 with no `expect`
+  requires the target to be absent, so the second run's report refuses, and any
+  append-based workaround re-opens the symlink-following defect F3' closed.
+  Follows from F2'' and is held with it.
+
+**Five findings that the SPEC created by over-specifying — the remedy is to CUT,
+not to patch:**
+
+F5'' the cited `private-fs` precedent swallows a post-rename `lstat` failure
+("best-effort detection — do not fail a legit write", `:354-370`), so "adopts
+that precedent verbatim in shape" imported a fail-open. F6'' `git hash-object -w`
+from M2's neutral cwd exits 128 — measured — because nothing binds it to a
+repository. F7'' `update-index --cacheinfo` needs an index MODE, unspecified,
+and the repo has nine `100755` entries. F8'' H9 and H10's mode rules are
+mutually unsatisfiable — measured, `mkdir 0755` under umask `0077` yields `0700`
+and `open 0644` yields `0600`, so "match the vault root" and "never wider than
+umask" cannot both hold. F9'' H7 forbids the throw H4 requires.
+
+**Every one of those five is a mechanism detail, and the authoring runbook
+already rules on whether a spec states mechanism:** *"A spec states the contract
+and stops there … never how. Test designs, fixture shapes, mutation lists and
+code structure belong to the implementer … **A spec that prescribes the tests
+has taken the implementer's job and doubled the surface that can rot.**"* By
+writing `lstat`-failure semantics, git flag mechanics, `cacheinfo` modes and
+umask arithmetic into contract tables, this author manufactured five surfaces
+for a reviewer to find contradictions in — and a sixth round would find the
+next five. **The count going 6 → 9 is that mechanism at work, not new risk
+appearing in the design.**
+
+**THE CONVERGENCE SIGNAL, stated for the owner.** This program reset itself
+because a review loop plateaued at 6–9 findings per round and never reached
+zero (24 → 15 → 16 → 9 → 10 → 6 → 9 → 7 → 9 → 4 → 6 → 7). This loop now reads
+10 → 9 → 6 → 9. **It is the same curve.** The stop criterion's remedy for a
+repeated contract family is extraction, and extraction has already been spent
+once — correctly, and it worked for what it addressed. The remaining divergence
+is not a design problem that another extraction fixes; it is a spec that
+prescribes mechanism. Recommended to the owner, and NOT applied unilaterally:
+cut rows H3–H10 back to observable properties with the mechanism left to the
+implementer, fix F1''/F2''/F4'' as contract defects, and re-run one round on the
+cut text. If that round still returns mechanism findings, the loop is telling us
+something about the size of the artifact rather than about its content.
+
+Fix commit for F3'' only: applied in the commit that carries this record.
+Everything else: **HELD — owner ruling requested**, on two questions: the
+`SKILL.md` scope for the report, and whether to CUT the mechanism-level rows
+rather than patch them.
