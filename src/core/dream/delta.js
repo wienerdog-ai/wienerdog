@@ -4,8 +4,9 @@
  * Baseline capture and delta — the git-free primitive (WP-dream-baseline-delta-primitive).
  *
  * WHAT THIS IS. `captureBaseline` records the exact bytes of every regular file
- * under a directory; `computeDelta` differences that recording against the SAME
- * directory as it stands at call time. The pair exists so a consumer can say
+ * under a directory — every file the CALLER'S optional scope predicate admits,
+ * which is all of them when none is supplied; `computeDelta` differences that
+ * recording against the SAME directory as it stands at call time. The pair exists so a consumer can say
  * which bytes appeared, changed or vanished between two moments, and attribute
  * them, without asking git anything.
  *
@@ -151,9 +152,11 @@ function entryKind(st) {
  *    (dev, ino) matches, and the bytes are read.
  *  - `O_NONBLOCK` is load-bearing independently. `O_NOFOLLOW` refuses a final
  *    symlink but not a FIFO, and a BLOCKING open of a FIFO with no writer waits
- *    forever: measured, it never returns and never reaches `fstat`, so the run
- *    HANGS instead of failing loudly. With the flag the open returns at once and
- *    `fstat` reports the FIFO, which this function then refuses.
+ *    forever: measured directly rather than inherited — a child opening a FIFO
+ *    `O_RDONLY` with no writer was still blocked when killed at four seconds,
+ *    having produced nothing, so the run HANGS instead of failing loudly. With
+ *    the flag the open returns at once (0 ms) and `fstat` reports the FIFO,
+ *    which this function then refuses.
  *  - the `fstat` regular-file check and the (dev, ino) comparison catch what
  *    `O_NOFOLLOW` cannot — notably an INTERMEDIATE directory component swapped
  *    between enumeration and open, which redirects the open to another inode.
@@ -206,26 +209,39 @@ function readRegularFileSecure(abs, expectedDev, expectedIno, rel) {
 }
 
 /**
- * Reject a root that is not a real, in-place directory before walking it.
+ * Normalise the root and reject one that is not a real, in-place directory
+ * before walking it. Returns the NORMALISED path, which is what the walk must
+ * use.
+ *
  * A SYMLINKED root is refused rather than followed: `rootDir` is documented as
  * an existing real directory, and following it would silently relocate the whole
  * walk. (An unreadable-but-real root is not rejected here — it fails loudly at
  * the first `readdirSync`, which is the same outcome by a clearer route.)
- * @param {string} rootDir
+ *
+ * THE NORMALISATION IS LOAD-BEARING, not tidiness. POSIX makes a TRAILING
+ * SEPARATOR force directory resolution, so `lstat` follows it: measured,
+ * `lstat(link)` reports a symlink while `lstat(link + '/')` reports a directory,
+ * and without `path.resolve` here one trailing slash walked straight into the
+ * symlink's target. The refusal above was therefore false as stated — a review
+ * round found it — and `path.resolve` strips the separator so the `lstat` that
+ * follows classifies the entry itself.
+ * @param {string} rootDir @returns {string} the normalised absolute root
  */
 function assertRealDirectory(rootDir) {
   if (typeof rootDir !== 'string' || rootDir === '' || !path.isAbsolute(rootDir)) {
     throw new WienerdogError('dream delta: rootDir must be an absolute path');
   }
+  const root = path.resolve(rootDir);
   let st;
   try {
-    st = fs.lstatSync(rootDir);
+    st = fs.lstatSync(root);
   } catch (err) {
     throw new WienerdogError(`dream delta: cannot read the root directory (${(err && err.code) || 'lstat failed'})`);
   }
   if (!st.isDirectory()) {
     throw new WienerdogError('dream delta: rootDir is not a real directory');
   }
+  return root;
 }
 
 /**
@@ -367,30 +383,41 @@ function isBinaryPair(before, after) {
  *    to what git reports. The differential test proves it and goes red if it
  *    stops being true.
  *
- *  - NOT A SUPERSET of git's line numbers, and no implementation of this shape
- *    could be. Counterexample, measured on git 2.50.1: before `"a\na\n"`,
+ *  - NOT A SUPERSET of git's line numbers. Counterexample, measured on git 2.50.1: before `"a\na\n"`,
  *    after `"b\na\na\nb\na\n"` — git reports lines [1, 4, 5]; this returns
  *    [1, 2, 3, 4] and OMITS line 5. Where duplicate lines admit two equally
  *    minimal alignments, neither answer contains the other, so "superset of
- *    git" is not a property any single alignment can promise — git's own answer
- *    is not maximal either. The claim is dead; it is recorded here rather than
- *    quietly deleted, so the successor does not re-derive it.
+ *    git" is not a property THIS alignment can promise — git's own answer is not
+ *    maximal either. Stated exactly, because a first attempt at this very
+ *    sentence overshot and a reviewer corrected it: a universal superset IS
+ *    trivially reachable, by reporting every after-line. What is unreachable is
+ *    a superset that is ALSO corpus-exact, which is what the obligation asks
+ *    for. The claim is dead; it is recorded here rather than quietly deleted, so
+ *    the successor does not re-derive it.
  *
- *  - CONTENT-SAFE, which is the property that actually protects the consumer
- *    and IS provable. An after-line is omitted only when it byte-equals the
+ *  - CONTENT-SAFE — the property that actually protects the consumer, and the
+ *    one that IS provable. An after-line is omitted only when it byte-equals the
  *    before-line the trim paired it with, so every line carrying content ABSENT
  *    from the baseline is reported. A secret the writer introduced is scanned; a
  *    line whose exact bytes already existed before the writer ran is not — and
  *    that is correct, because that content is not the writer's to answer for.
  *    True by construction, and verified exhaustively against git over a
  *    two-letter alphabet rather than asserted.
+ *    **SCOPE, because the unqualified sentence would overclaim:** this is a
+ *    property of THIS FUNCTION, which `computeDelta` consults only when
+ *    `binary === false`. A record classified `binary` carries `[]` whatever its
+ *    content, by Table B — a consumer withholds what it cannot scan, so the
+ *    whole note is held rather than scanned line by line. Content safety is
+ *    therefore the guarantee for scannable records, not for every record.
  *
  * Whether a consumer needs the line-number superset is a CONTRACT question, not
- * a loop-body question, and it belongs to the successor spec. Git's hunk
- * placement is heuristic (the indent heuristic shifts boundaries inside runs of
- * similar lines), so universal equality is unreachable for any pure-Node
- * implementation; the counterexample above shows universal superset is
- * unreachable too.
+ * a loop-body question, and it belongs to the successor spec. On the difficulty,
+ * stated without inflation: git's hunk placement is heuristic (the indent
+ * heuristic shifts boundaries inside runs of similar lines), so universal
+ * equality is out of reach for anything short of REIMPLEMENTING git's own diff
+ * — which is possible in pure Node and simply not this package's job. That is a
+ * cost claim, not an impossibility claim, and an earlier draft wrote it as the
+ * latter.
  *
  * @param {Buffer|null} before @param {Buffer} after @returns {number[]}
  */
@@ -431,12 +458,12 @@ function addedLineNumbers(before, after) {
  *   any depth, or an unreadable file. There is no partial baseline.
  */
 function captureBaseline(rootDir, include) {
-  assertRealDirectory(rootDir);
+  const root = assertRealDirectory(rootDir);
   if (include !== undefined && typeof include !== 'function') {
     throw new WienerdogError('dream delta: include must be a function when supplied');
   }
   const scope = include === undefined ? INCLUDE_ALL : include;
-  const { files, anomalies } = walk(rootDir, scope);
+  const { files, anomalies } = walk(root, scope);
   // Scope travels WITH the baseline. Without it a path absent from `files` is
   // ambiguous — excluded at capture, or genuinely new — and the primitive would
   // report a pre-existing excluded file as `added`.
@@ -460,7 +487,7 @@ function captureBaseline(rootDir, include) {
  *   normal case; any other read failure throws.
  */
 function computeDelta(rootDir, baseline) {
-  assertRealDirectory(rootDir);
+  const root = assertRealDirectory(rootDir);
   if (!baseline || typeof baseline !== 'object' || !(baseline.files instanceof Map)) {
     throw new WienerdogError('dream delta: baseline must be a value returned by captureBaseline()');
   }
@@ -469,7 +496,7 @@ function computeDelta(rootDir, baseline) {
     throw new WienerdogError('dream delta: baseline.include must be a function or the INCLUDE_ALL sentinel');
   }
 
-  const now = walk(rootDir, scope);
+  const now = walk(root, scope);
   const rels = [...new Set([...baseline.files.keys(), ...now.files.keys()])].sort(byteCompare);
 
   /** @type {DeltaRecord[]} */

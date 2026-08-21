@@ -30,9 +30,13 @@
  *
  * That guarantee decomposes into THREE constructed things — the environment, the
  * roots, and the executable — and the third is weaker than the other two.
- * Absolute verified invocation prevents PATH SELECTION of an impostor; it does
- * not construct the executable's BYTES. The claim made here is exactly that
- * much, no more.
+ * Resolving from FIXED locations (see `WELL_KNOWN_GIT`) is what prevents PATH
+ * SELECTION of an impostor; an earlier version merely FILTERED a PATH hit, which
+ * a review round showed is not the same thing. Even so, nothing here constructs
+ * or freezes the executable's BYTES, and a PATH fallback re-opens selection
+ * where no fixed location verifies. The claim made here is exactly that much,
+ * no more, and `gitProvenance` is asserted so the weaker case cannot pass
+ * unremarked.
  *
  * `hostile-environment control` below is the PROOF rather than the claim: each
  * armed channel is shown RED without its construction and GREEN with it. A
@@ -614,29 +618,65 @@ function verifySpawnable(realpath) {
 }
 
 /**
- * Resolve `git` to a VERIFIED ABSOLUTE REALPATH, once. Every invocation below
- * uses that path; the NAME `git` is never handed to a spawn except in the
- * hostile-PATH control, where being fooled is the point.
+ * Well-known absolute locations for git, tried IN THIS ORDER before the
+ * inherited PATH is consulted at all. This is the difference between filtering
+ * a PATH hit and not letting PATH choose: a round-2 review placed a shim in a
+ * user-owned mode-0700 directory ahead of `/usr/bin`, and it passed every
+ * structural check while taking all 502 oracle invocations. Structural
+ * verification says a candidate is ACCEPTABLE; it never says it is the INTENDED
+ * installation, and the two were being conflated.
  *
- * THE RESIDUAL, STATED RATHER THAN GLOSSED — the PR review gate found the
- * earlier version of this helper too generous and it was right. Resolution
- * necessarily starts from the INHERITED PATH (there is no portable alternative;
- * hardcoding `/usr/bin/git` is not one), so converting the hit to an absolute
- * realpath does not undo the fact that PATH chose it. `verifySpawnable` closes
- * the case that is actually defensible — an impostor in a directory the test
- * user does not own or that anyone can write to. It does NOT close the case of
- * an impostor the TEST USER planted in their own PATH directory, and nothing
- * test-side can: an attacker with that ability can edit this file. So the
- * guarantee is bounded exactly as the spec bounds the executable leg of the
- * construction — weaker than the environment and the roots, and this comment
- * says so instead of implying parity.
- * @returns {{path: string, why: string[]}} the resolved path plus every
- *   candidate that was REJECTED and why, so a rejection is never silent
+ * These are fixed paths, so PATH ORDER cannot steer the choice — which is
+ * exactly the channel Table C names. It is NOT a claim that the binary sitting
+ * at a well-known path is genuine git: nothing test-side can establish that, and
+ * the spec already bounds the executable leg the same way.
+ */
+const WELL_KNOWN_GIT =
+  process.platform === 'win32'
+    ? ['C:\\Program Files\\Git\\cmd\\git.exe', 'C:\\Program Files\\Git\\bin\\git.exe']
+    : ['/usr/bin/git', '/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git'];
+
+/**
+ * Resolve `git` to a VERIFIED ABSOLUTE REALPATH, once, and report HOW it was
+ * found. Every invocation below uses that path; the NAME `git` is never handed
+ * to a spawn except in the hostile-PATH control, where being fooled is the point.
+ *
+ * Two stages, and the order is the whole point:
+ *  1. the fixed locations above, so PATH ORDER cannot select the oracle;
+ *  2. only if none of them verifies, a PATH scan — recorded as such, never
+ *     silently substituted, because a PATH-resolved oracle is a weaker oracle
+ *     and a reader is entitled to know which one ran.
+ *
+ * THE RESIDUAL, BOUNDED HONESTLY. This closes PATH SELECTION *where stage 1
+ * succeeds*, and the returned provenance says whether it did. It does not
+ * establish executable IDENTITY: a rewritten binary at a well-known path is
+ * accepted, exactly as the spec says of its own cited precedent. And where stage
+ * 2 is reached, PATH selection is back — which is why stage 2 is reported rather
+ * than treated as equivalent.
+ * @returns {{path: string, provenance: 'well-known'|'path-fallback'|'none',
+ *            rejected: string[]}}
  */
 function resolveVerifiedGit() {
-  const exts = process.platform === 'win32' ? ['.exe', '.cmd'] : [''];
   /** @type {string[]} */
   const rejected = [];
+  for (const candidate of WELL_KNOWN_GIT) {
+    let st;
+    try {
+      st = fs.statSync(candidate);
+    } catch {
+      continue;
+    }
+    if (!st.isFile()) continue;
+    const real = fs.realpathSync(candidate);
+    const verdict = verifySpawnable(real);
+    if (!verdict.ok) {
+      rejected.push(`well-known ${candidate}: ${verdict.why}`);
+      continue;
+    }
+    return { path: real, provenance: 'well-known', rejected };
+  }
+
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd'] : [''];
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
     for (const ext of exts) {
@@ -652,16 +692,18 @@ function resolveVerifiedGit() {
       const real = fs.realpathSync(candidate);
       const verdict = verifySpawnable(real);
       if (!verdict.ok) {
-        // A PATH hit that fails verification is walked PAST, loudly — never
-        // silently accepted and never silently skipped.
-        rejected.push(verdict.why);
+        rejected.push(`PATH ${candidate}: ${verdict.why}`);
         continue;
       }
-      return { path: real, why: rejected };
+      return { path: real, provenance: 'path-fallback', rejected };
     }
   }
-  return { path: '', why: rejected };
+  return { path: '', provenance: 'none', rejected };
 }
+
+/** Resolution provenance, kept module-level so a test can assert it rather than
+ *  letting a weaker oracle pass unremarked. */
+let gitProvenance = null;
 
 /** @type {{git:string, env:Record<string,string>, cwd:string, hostileXdg:string, hostileAttrFile:string, forgedDir:string}|null} */
 let REF = null;
@@ -672,15 +714,19 @@ function ref() {
 
   const resolved = resolveVerifiedGit();
   const git = resolved.path;
+  gitProvenance = resolved;
   // Deliberately a FAILURE, not a skip: git is already a hard dependency of this
   // project (src/core/dream/validate.js spawns it), and a silently skipped
   // differential is the one outcome this obligation cannot tolerate. Any
   // rejected candidate is named in the failure so a verification refusal never
-  // looks like an absent binary.
+  // looks like an absent binary. A rejection on the SUCCESS path is not covered
+  // here — it is asserted by the provenance test at the end of this file,
+  // because a fallback that quietly absorbs a rejection normalises a
+  // contaminated PATH, which is the opposite of reporting it.
   assert.ok(
     git,
     `git must resolve to a VERIFIED absolute executable to run the differential${
-      resolved.why.length ? ` (rejected: ${resolved.why.join('; ')})` : ''
+      resolved.rejected.length ? ` (rejected: ${resolved.rejected.join('; ')})` : ''
     }`
   );
   const version = spawnSync(git, ['--version'], { encoding: 'utf8' });
@@ -836,6 +882,19 @@ function referenceJudgment(before, after, opts = {}) {
   const binary = /^-\t-\t/.test(numstat.stdout.toString('utf8'));
 
   const diff = spawn(['-U0']);
+  // THE SECOND SPAWN NEEDS THE SAME GUARD, and it did not have one. Measured by
+  // the round-2 gate with a proxy that delegated `--numstat` to real git and
+  // exited 2 for `-U0`: the failed process's empty stdout reads as "no added
+  // lines, no added bytes", which is indistinguishable from the honest answer
+  // for the `deleted` and `becomes empty` corpus members — so those members
+  // would have passed vacuously. Guarding one of two spawns is guarding neither.
+  if (!opts.command || opts.command === r.git) {
+    assert.ok(
+      diff.status === 0 || diff.status === 1,
+      `the reference -U0 diff must actually run git (status=${diff.status}, ` +
+        `error=${diff.error ? diff.error.code : 'none'})`
+    );
+  }
   return {
     binary,
     // Decoding for the HUNK HEADER parse only, and safe: 0x0a never occurs
@@ -844,7 +903,6 @@ function referenceJudgment(before, after, opts = {}) {
     // from the raw bytes just below, never from this string.
     addedLineNumbers: addedLineNumbersFromDiff(diff.stdout.toString('utf8')),
     addedTextBytes: plusLineJoinBytes(diff.stdout),
-    numstatStatus: numstat.status,
   };
 }
 
@@ -1056,6 +1114,13 @@ test('dream-delta: CONTENT SAFETY — exhaustively against git, no line carrying
   // carries content the baseline already held — that is the guarantee a secret
   // scan rests on: content the writer introduced is always scanned. (2) The
   // module never omits a line whose content is new.
+  //
+  // SCOPE: both statements are about SCANNABLE records. A record classified
+  // `binary` carries no line numbers at all, by Table B, and the consumer
+  // withholds the whole note rather than scanning it line by line — so content
+  // safety is the guarantee for records a scan can read, not for every record.
+  // Every member of this sweep is text, so the distinction never arises inside
+  // it; it is written down because the unqualified sentence would overclaim.
   /** @param {number} n @returns {Buffer[]} every sequence of n lines over {a, b} */
   const seqs = (n) => {
     if (n === 0) return [EMPTY];
@@ -1121,5 +1186,74 @@ test('dream-delta: CONTENT SAFETY — exhaustively against git, no line carrying
   // NON-VACUITY, both directions: the sweep must contain real non-superset
   // cases, or it would be proving content-safety on a corpus where the dead
   // superset claim happened to hold and nobody would learn anything.
-  assert.ok(nonSuperset > 0, 'the sweep must contain pairs where the module is not a superset of git');
+  // Measured margin: 2 non-superset pairs. Pinned at the measured value rather
+  // than at `> 0`, so a change that silently narrows the sweep's reach — a
+  // shorter alphabet, a smaller bound — is caught instead of still passing on
+  // one surviving pair. The proof of content safety is by CONSTRUCTION (see
+  // delta.js); this sweep is corroboration, which is why it is not widened
+  // further for its own sake.
+  assert.ok(
+    nonSuperset >= 2,
+    `the sweep must keep reaching pairs where the module is not a superset of git (reached ${nonSuperset})`
+  );
+});
+
+test('dream-delta: the git oracle comes from a FIXED location, and a rejected candidate is never silently normalised away', () => {
+  ref(); // resolution happens once, inside; this asserts what it chose
+  assert.ok(gitProvenance, 'ref() must record how the oracle was resolved');
+
+  // PATH ORDER MUST NOT BE ABLE TO SELECT THE ORACLE. Round 2 measured a shim in
+  // a user-owned mode-0700 directory ahead of /usr/bin passing every structural
+  // check and taking all 502 oracle invocations — structural acceptability is
+  // not identity. Trying fixed locations first is what closes that channel.
+  assert.equal(
+    gitProvenance.provenance,
+    'well-known',
+    `the oracle was resolved by ${gitProvenance.provenance}; a PATH-resolved oracle is a WEAKER oracle and this ` +
+      'assertion exists so that never passes unremarked'
+  );
+
+  // A rejection absorbed by a successful fallback is a silent normalisation of a
+  // contaminated PATH. The resolver records every rejection; this is what makes
+  // "never silent" true rather than merely claimed.
+  assert.deepEqual(
+    gitProvenance.rejected,
+    [],
+    `a git candidate was rejected and the run continued anyway: ${gitProvenance.rejected.join('; ')}`
+  );
+});
+
+test('dream-delta: a symlinked root is refused even when it carries a TRAILING SEPARATOR', {
+  skip: POSIX ? false : 'POSIX only',
+}, () => {
+  // POSIX makes a trailing separator force directory resolution, so `lstat`
+  // follows it. Measured before the fix: captureBaseline(link) threw, and
+  // captureBaseline(link + '/') walked the symlink's TARGET and returned its
+  // bytes — so the refusal this module advertises was false for one character.
+  const target = tmp('sep-target');
+  fs.writeFileSync(path.join(target, 'target.txt'), B('BEYOND-THE-LINK\n'));
+  const holder = tmp('sep-holder');
+  const link = path.join(holder, 'link');
+  fs.symlinkSync(target, link);
+
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'precondition: the entry itself is a symlink');
+  assert.equal(
+    fs.lstatSync(link + path.sep).isDirectory(),
+    true,
+    'precondition: with a trailing separator lstat FOLLOWS — this is the whole trap'
+  );
+
+  const emptyBaseline = { files: new Map(), anomalies: [], include: INCLUDE_ALL };
+  for (const candidate of [link, link + path.sep, `${link}${path.sep}${path.sep}`]) {
+    const refuses = (err) => err instanceof WienerdogError && /rootDir is not a real directory/.test(err.message);
+    assert.throws(() => captureBaseline(candidate), refuses, `captureBaseline must refuse ${JSON.stringify(candidate)}`);
+    assert.throws(() => computeDelta(candidate, emptyBaseline), refuses, `computeDelta must refuse ${JSON.stringify(candidate)}`);
+  }
+
+  // And the target's bytes are not reachable through the refused root by any of
+  // those spellings — asserted, because the point of the refusal is the bytes.
+  const real = tmp('sep-real');
+  fs.writeFileSync(path.join(real, 'ok.txt'), B('inside\n'));
+  const captured = captureBaseline(real + path.sep);
+  assert.deepEqual([...captured.files.keys()], ['ok.txt'], 'a REAL directory still works with a trailing separator');
 });
