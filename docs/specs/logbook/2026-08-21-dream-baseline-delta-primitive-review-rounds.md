@@ -41,6 +41,7 @@ there counts as reviewed here.
 | 4 | External adversarial (design), gptsol, the closing round required by weighted closure | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-4-raw.md` | **NO-SHIP** — 2 FIXED, 2 PARTIAL, 3 fresh findings (the FIRST type (a) in this package); all 3 folded |
 | 5 | External adversarial (design), gptsol, owner-ruled after round 4 | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-5-raw.md` | **NO-SHIP** — all 4 round-4 fixes FIXED; 2 fresh findings; 1 folded, 1 PARKED (type (a), fourth containment-family, REPEAT-KIND) |
 | 6 | External adversarial (design), gptsol, the round weighted closure required | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-6-raw.md` | **NO-SHIP** — byte-preservation FIXED, **platform ruling NOT FIXED**; 1 fresh type (a); nothing folded, PARKED as a design question |
+| 7 | External adversarial (design), gptsol, the REMOVAL-verification round | (raw in the agent transcript; findings and measurements reproduced below) | **NO-SHIP** — removal correct on 3 of 5 checks; 2 fresh findings, **both (b)**, both folded; **no type (a) could be constructed** |
 
 ## Round 0 dispositions
 
@@ -791,3 +792,49 @@ sense the advisor asked for — the containment disclaimer is what 1b will cite,
 7 cannot restore a claim the owner has removed. It can only find the removal incomplete
 or over-reaching, which would change wording rather than the contract 1b inherits. The
 1b charter may be dispatched against this text.
+
+## Round 7 — the first round where NO type (a) could be constructed
+
+The dispatch inverted the hunt, because the change under review DELETED safety language
+rather than adding it, and six rounds had trained the opposite reflex. Both findings
+landed exactly on the two risks that inversion predicted, and **the reviewer stated
+plainly that it could not construct a type (a) finding** — the closure signal the owner
+asked for two rounds ago.
+
+Removal executed correctly on three of five checks: nothing claims containment, there is
+no removal debris, and all ten citations resolve at both ends. The two that failed:
+
+| # | Finding | Class | Disposition |
+|---|---|---|---|
+| 1 | **The hand-off was not dischargeable.** "Establish containment" restates the goal; the only concrete mirror said the tree must not be mutated *under* it — which does not cover the ROOT ENTRY itself or any ancestor. Reproduced: moving the root directory out of its parent and symlinking the old root path to it changes NOTHING beneath the tree, yet `devInoMatches: true`, bytes are read, and `realpathInsideOriginalLexicalRoot: false` | (b) | **FOLDED.** The obligation is now a checkable invariant over the whole resolution chain — prevent replacement of the root entry or any ancestor used to reach an enumerated path, or supply a platform mechanism binding returned objects beneath the root — with the measurement in place, because the narrow reading is the tempting one |
+| 2 | **My removal under-claimed a real property.** `O_NOFOLLOW` was reclassified as accuracy hygiene, but on platforms that supply it, it atomically refuses a FINAL-COMPONENT symlink — and `(dev, ino)` cannot reproduce that, because a symlink to the SAME relocated inode passes the identity check. Reproduced: with the flag `ELOOP`; without it, opened, regular, identity matched, bytes read. No criterion would have failed if an implementer silently dropped the flag | (b) | **FOLDED.** Table A states the bounded property exactly — final-component refusal where the platform supplies it, explicitly not whole-path containment — and the existing accuracy criterion is EXTENDED with the same-inode discriminator, naming the product behaviour it guards |
+
+**Finding 2 is mine, and it is the inverse of every prior error in this package.** Six
+rounds removed over-claims; my removal then went one row too far and dropped a real if
+narrow defense into a category that made it optional. The failure mode did not repeat —
+it flipped. That is worth recording precisely, because "we always over-claim" would have
+been the wrong lesson to carry into a removal.
+
+### Ready judgment — round 8 is required, and the owner has a defensible off-ramp
+
+**My verdict: NOT Ready.** Finding 2's fix requires the implementer to retain `O_NOFOLLOW`
+and prove it with a discriminator — `src/` behaviour and an acceptance obligation, so
+HEAVY by the rule's test. Finding 1 changes what a consuming model observes and acts on,
+which the HEAVY definition names explicitly; where it is arguable, the rule says *when in
+doubt, HEAVY*. **HEAVY fixes land, then a full fresh external round.**
+
+**But the owner now has the signal he asked for, and the alternative reading is
+legitimate — it is his call, not mine.** For the first time a reviewer, explicitly
+permitted to say so, reported that **no type (a) finding could be constructed**: the
+remaining defects change what the spec CLAIMS, not what an attacker can do. The rule's
+own closure clause — *"the loop is DONE when a round finds nothing about the product;
+machinery findings at that point are fixed or accepted as named residuals"* — can
+reasonably be read as reached, if "about the product" means capability rather than
+wording. I do not read it that way, because finding 2 concerns what the implementation
+must retain; but I would not call the other reading loose, and unlike the three previous
+times I declined to soften this rule, here the softer reading rests on a measured result
+rather than on convenience.
+
+**Trajectory, for weighing that choice:** findings per round 4 → 3 → 2 → 1 → 2, all
+recent ones type (b), the surface frozen throughout, and the spec now 473 lines after
+peaking at 478. The supply is not refilling.
