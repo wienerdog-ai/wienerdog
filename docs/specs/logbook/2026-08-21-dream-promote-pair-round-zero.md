@@ -87,5 +87,8 @@ halves resolves with matching content; no contradictions; letter-space and
 frontmatter dependencies coherent. The completeness inventory lives in the
 round's raw output (war-room side); this file records the verdicts.
 
-Round zero closes GREEN after fixes. Next: owner review; `Ready` flips are the
-owner's, Part i first.
+Round zero closes GREEN after fixes. Next: the external adversarial review
+rounds run on the Draft specs on this branch (round counter from 1, stop
+criterion pinned in the review-rounds entry BEFORE the first round — the 1a
+precedent); `Ready` comes after that loop closes and is the owner's flip,
+Part i first; the two PR review gates then run on each PR's diff.
