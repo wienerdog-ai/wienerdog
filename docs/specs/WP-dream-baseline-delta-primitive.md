@@ -397,6 +397,21 @@ test "$(git diff --name-only --diff-filter=M main -- src tests | wc -l)" -eq 0
   workspace, swapping the four gates' decision inputs there, the promotion policy, and
   the `change.untracked` fact map. The superseded predecessor's Tables C, D and E are
   that package's inheritance, to be recomputed there, not carried here.
+- **The containment residual's real exposure, named as the successor's obligation and
+  passed forward as a HYPOTHESIS TO TEST, not as an assumption.** An ancestor directory
+  relocated between enumeration and open — leaf identity preserved — is not detectable
+  from portable Node (see Table A's containment row and its named residual). Two
+  observations are handed to the successor **unverified, precisely because relying on
+  either here would be a borrowed defense from a consumer that does not yet exist**:
+  (1) the successor's writer is a headless brain whose tools are `Read`/`Write`/`Edit`/
+  `Glob`/`Grep` with no `Bash`, so it may be unable to rename a directory or create a
+  symlink at all — but tool capability is a fast-moving harness implementation detail,
+  not a contract, and this repository already carries one stale version pin for exactly
+  that reason; (2) under direction (A) the capture runs BEFORE the brain is spawned, so
+  during capture the brain is not an actor — that one is an ordering property of the
+  design rather than a borrowed defense, and is the stronger of the two. **The
+  successor must MEASURE both and state the residual's actual exposure**; neither is
+  credit this package may draw on, and neither should have to be rediscovered.
 - **Repository attribute sensitivity, named as the successor's obligation.** Git's
   judgment changes when a repository is in scope: `.gitattributes` overrides the byte
   heuristic in both directions (reproduced — `*.forced-binary` makes plain ASCII

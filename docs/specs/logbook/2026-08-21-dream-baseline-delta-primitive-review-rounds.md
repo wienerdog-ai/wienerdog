@@ -309,3 +309,41 @@ quantified over the classes actually constructed — environment, roots, **execu
 and states explicitly that it is NOT a claim that every channel is closed.
 **Constructing closes exactly the classes you construct.** That is the honest form of
 the answer to 0-for-4, and the channel count is now 0 for 5.
+
+## Post-round-3 amendment — the residual is handed forward, not merely withheld
+
+The advisor confirmed all four findings and both the park and the scruple, adding one
+correction I have folded: **do not just omit the tool-capability observation — pass it
+forward as a named hypothesis the successor must TEST.** The difference between
+"withheld" and "handed forward" is whether 1b has to rediscover it.
+
+Two observations now travel to the successor, explicitly unverified:
+
+1. The successor's writer is a headless brain with `Read`/`Write`/`Edit`/`Glob`/`Grep`
+   and no `Bash`, so it may be unable to rename a directory or create a symlink at all.
+   **Weak**, and deliberately labelled so: tool capability is a fast-moving harness
+   implementation detail rather than a contract, and this repository already carries a
+   stale version pin for exactly that reason.
+2. Under direction (A) the capture runs BEFORE the brain is spawned, so during capture
+   the brain is not an actor. **Stronger** — that is an ordering property of the design,
+   not a borrowed defense.
+
+Neither is credit this package may draw on; both must be measured by 1b, which then
+states the residual's actual exposure.
+
+**Two process notes the advisor added, recorded because they explain the stop.**
+
+The park was not a judgment call. The **repeat-kind rule landed on `main` earlier the
+same day** requires that two consecutive rounds finding the same KIND of defect become
+a design question, never another textual patch — and containment failed in exactly that
+shape twice: round 2's leaf-only `O_NOFOLLOW` versus the intermediate-directory swap,
+round 3's `(dev, ino)` versus same-inode relocation. Each fix closed the demonstrated
+case and left the class open. Stopping was mandatory, and it is the first time one of
+this arc's own ratified rules bound a decision back on us.
+
+And a pattern worth naming: **this is the FOURTH universal withdrawn inside this one
+package** — "every channel closed", "structurally impossible" scope, "immutable"
+baseline, and now containment. The first two were caught by reviewers; the last two I
+caught while folding. That direction of travel is the point: the spec now states what
+it can enforce and names what it cannot, which is what it should have said the first
+time.
