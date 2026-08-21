@@ -47,6 +47,14 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   ADR, a code-level nit raised against a spec contract — is dropped, or
   routed to the artifact that owns that level. It is never folded into the
   higher document.
+- **Diff size does not measure contract impact (a park sub-case).** A finding
+  whose only honest fix re-imports a property the package was deliberately
+  re-cut to exclude is not a routine fix, however small the patch looks — it is
+  a contract change, and a contract change is the owner's act. Park it rather
+  than folding it. (Measured: on a package re-cut to make no freshness claim,
+  every honest fix for a baseline defect — two-pass stability check, lock,
+  re-read-and-compare — was a freshness mechanism, each a few lines, each
+  quietly rebuilding the absence that was the point.)
 - Every solution starts with the value question: what does fixing this
   protect or earn in the product, and is that worth the fix plus the
   maintenance it creates? "Not worth solving" is a legitimate
@@ -122,6 +130,12 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   WRONG tree — a number from the wrong base looks like evidence and
   is not. Runnable means runnable now, on the pinned base, with what
   the spec itself provides.
+- A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must
+  begin and end where its construct does. Reading verifies that the named line
+  resolves; it never notices a range that ends inside the next declaration's
+  JSDoc, so this one is a check, not an attention problem. (Measured: the same
+  drift returned in three consecutive drafts of one package; applied to its
+  successor's first draft it caught three more, one wrong at both ends.)
 
 ### Weighted closure
 
@@ -263,6 +277,15 @@ every backend.
   `memory/research/`, `userreports/`). On round ≥ 2, list the prior
   findings and ask the reviewer to verify each is genuinely fixed, not
   re-worded.
+- Where a ruling makes a whole class of finding inapplicable — a package that by
+  ruling has no consumer, so it owes no locking, re-validation or generation
+  invariant — the focus text states that boundary in the reviewer's own terms
+  BEFORE the vendored prompt, and instructs the reviewer to file disagreement as
+  a scope objection in the routed section instead of counting it toward the
+  verdict. Pre-empting a category error costs nothing; routing it afterwards
+  costs the round it already consumed. (Measured: stated up front, the routed
+  section came back empty and the reviewer confirmed it had counted no such
+  finding toward the verdict.)
 - PR review input: the PR branch's diff against its merge base with
   `main`; no focus text.
 - The report states what was EXECUTED, not only what was read: did the
