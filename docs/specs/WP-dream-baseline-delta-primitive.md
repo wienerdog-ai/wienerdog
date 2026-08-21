@@ -157,27 +157,49 @@ when invoked:
 - **outside any repository** — the invoking process's CWD must not be inside one.
   Measured: a CWD inside a repo applies that repo's `.gitattributes` even to operands
   that live OUTSIDE the repo, so `--no-index` alone does not isolate;
-- in a **sanitized environment**: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
-  `GIT_CONFIG_COUNT=0`, `GIT_ATTR_NOSYSTEM=1`, and `HOME` **and** `XDG_CONFIG_HOME`
-  both pointed at empty directories the test creates;
+- in a **CONSTRUCTED environment, not a sanitized one** — see the row below. Git is
+  spawned with an environment the test BUILDS (nothing inherited), in which every
+  config and attribute root points at a directory this run created empty;
 - with **`--no-ext-diff`**;
 - over two plain files, via `--no-index`.
 
-**The environment list above is NOT the guarantee — the control below is.** Measured:
-config-file switches alone do not isolate git. With `GIT_CONFIG_NOSYSTEM=1` and
+**CONSTRUCT THE ENVIRONMENT; DO NOT SANITIZE IT.** A blocklist of channels to disable
+is the wrong shape here, and the measurements say so twice over.
+
+First, the ruled switches do not isolate. With `GIT_CONFIG_NOSYSTEM=1` and
 `GIT_CONFIG_GLOBAL=/dev/null` set exactly as ruled, plain ASCII still flips from
 `1\t1` to `-\t-` through **`XDG_CONFIG_HOME/git/attributes`** and, independently,
 through **`GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_0=core.attributesFile`**. Adding
-`GIT_ATTR_NOSYSTEM=1` alone does not close either; overriding `HOME` alone does not
-close either; only the full set above does. And even the full set flips again if one
-of its own values is pointed at a hostile directory — so the guarantee is not the
-flag, it is where the flag points.
+`GIT_ATTR_NOSYSTEM=1` alone closes neither; overriding `HOME` alone closes neither —
+each fails on the channel it looks like it should cover. That is the **fourth**
+hidden-influence channel this program has failed to enumerate, after the self-hiding
+`.gitignore`, the fake `.git` marker and `diff.external`: **0 for 4.** A fifth list
+would be a fifth guess.
 
-That is the **fourth** hidden-influence channel this program has failed to enumerate
-(after the self-hiding `.gitignore`, the fake `.git` marker, and `diff.external`):
-0 for 4. Enumeration is therefore the wrong shape for this contract. **The test MUST
-carry a hostile-environment control** that arms both known channels and asserts the
-judgment does not move; a longer list without that control is another guess.
+Second, and this is the shape that works — it is the same logic that makes direction
+(A) work at all, applied one level down. **A constructed thing's contents are known
+by construction, so channels nobody enumerated are closed without being named.**
+Measured, with BOTH hostile channels armed in the parent environment:
+
+| Invocation | Result |
+|---|---|
+| inherited environment, ruled switches only | `-\t-` — contaminated |
+| inherit, then subtract the full blocklist | `1\t1` — works, but only because the list happened to be complete |
+| **environment BUILT from nothing (`env -i`), roots pointed at empty dirs, `GIT_CONFIG_*` never even mentioned** | **`1\t1`** — the injection variables cannot reach git at all |
+| constructed environment, but one root pointed at a hostile directory | `-\t-` — the honest residual |
+
+The third row is the load-bearing one: it never names the injection variables, and
+they still cannot arrive, because the child's environment was **built rather than
+filtered**. So the guarantee decomposes into two constructed halves — every channel
+arriving *through the environment* is closed by building the environment; every
+channel arriving *through a file under a config or attribute root* is closed by
+pointing those roots at directories this run created empty. The fourth row names what
+neither half covers: **the guarantee is not the flag, it is where the flag points.**
+
+The switch list stays in this spec as the RECIPE. The constructed environment and the
+constructed roots are the GUARANTEE. **The hostile-environment control in the corpus
+is the PROOF** — required RED without the construction and GREEN with it; without it,
+all of this is still just a claim.
 
 Under exactly those conditions git yields the bounded-prefix byte heuristic and
 nothing else — measured identical to the in-repo staged form (`NUL@100` → `-\t-`,

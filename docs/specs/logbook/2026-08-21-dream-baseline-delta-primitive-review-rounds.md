@@ -202,3 +202,48 @@ dispatch precondition now says so instead of asserting `main == origin/main`.
 
 **Next: round 3, a full fresh external round** — five findings landed, three of them
 changing what the implementer builds.
+
+## Post-round-2 amendment — the framing flipped, and the flip was measured
+
+The advisor confirmed every round-2 measurement and ruled that finding 1 does **not**
+need the owner's signature, on a precise boundary worth recording: **the owner ruled a
+PROPERTY** — "the judgment git gives with no repository in scope, no system or global
+config, no external diff" — while the **switch list was the advisor's own measurement
+implementing that property**, and it was incomplete. Repairing a measurement so the
+ruled property actually holds SERVES the ruling; it does not amend it. Not a contract
+change, so the parking rule does not reach it.
+
+The advisor also asked for a reframing — blocklist to constructed environment — on the
+grounds that it is direction (A)'s own logic one level down. I folded it, but only
+after measuring it, and **it is stronger than the request**: the request covered the
+config/attribute ROOTS, and `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0` is not a root, so
+that half would have stayed a blocklist item.
+
+Measured with both hostile channels armed in the parent environment:
+
+| Invocation | Result |
+|---|---|
+| inherited env, ruled switches only | `-\t-` |
+| inherit, then subtract the full blocklist | `1\t1` |
+| **`env -i`, roots at empty dirs, `GIT_CONFIG_*` never mentioned** | **`1\t1`** |
+| constructed env, one root pointed at a hostile directory | `-\t-` |
+
+The third row carries the argument: the injection variables are armed and cannot
+arrive, because the child's environment was **built rather than filtered** — closing a
+channel without naming it, which is the only answer to 0-for-4 that is not a fifth
+guess. The fourth row is the honest residual.
+
+So the guarantee now decomposes into two constructed halves — build the environment,
+and point every config/attribute root at a directory this run created empty — with the
+switch list demoted to a recipe and the hostile-environment control kept as the proof.
+
+**A shared miss, recorded because it is more useful than a solo one.** In round 1 the
+advisor CONFIRMED the `applyModeSecure` precedent for the no-follow fold, and neither
+of us noticed the spec carried only half of it: the `(dev, ino)` revalidation was
+missing, which is precisely what catches the intermediate-directory swap round 2 then
+found. The advisor verified that the precedent EXISTED; nobody verified that the spec
+had taken all of it. **Citing a precedent is not carrying it** — the check is whether
+every defense the precedent applies appears in the text that cites it.
+
+**Round 3 is green-lit** and dispatches next: full fresh external round, no pending
+owner decision.
