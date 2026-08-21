@@ -41,7 +41,7 @@ there counts as reviewed here.
 | 4 | External adversarial (design), gptsol, the closing round required by weighted closure | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-4-raw.md` | **NO-SHIP** — 2 FIXED, 2 PARTIAL, 3 fresh findings (the FIRST type (a) in this package); all 3 folded |
 | 5 | External adversarial (design), gptsol, owner-ruled after round 4 | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-5-raw.md` | **NO-SHIP** — all 4 round-4 fixes FIXED; 2 fresh findings; 1 folded, 1 PARKED (type (a), fourth containment-family, REPEAT-KIND) |
 | 6 | External adversarial (design), gptsol, the round weighted closure required | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-6-raw.md` | **NO-SHIP** — byte-preservation FIXED, **platform ruling NOT FIXED**; 1 fresh type (a); nothing folded, PARKED as a design question |
-| 7 | External adversarial (design), gptsol, the REMOVAL-verification round | (raw in the agent transcript; findings and measurements reproduced below) | **NO-SHIP** — removal correct on 3 of 5 checks; 2 fresh findings, **both (b)**, both folded; **no type (a) could be constructed** |
+| 7 | External adversarial (design), gptsol, the REMOVAL-verification round | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-7-raw.md` | **NO-SHIP** — removal correct on 3 of 5 checks; 2 fresh findings, **both (b)**, both folded; **no type (a) could be constructed** |
 
 ## Round 0 dispositions
 
