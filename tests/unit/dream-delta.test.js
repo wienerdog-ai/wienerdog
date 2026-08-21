@@ -469,7 +469,9 @@ test('dream-delta: O_NOFOLLOW refuses a SAME-INODE final-component symlink subst
   const root = tmp('nofollow');
   const abs = put(root, 'f.txt', B('followed content\n'));
   const originalStat = fs.lstatSync(abs);
-  const relocated = path.join(path.dirname(root), `relocated-${path.basename(root)}.txt`);
+  // Its own scoped directory, NOT the shared temp root: run directly (rather
+  // than through tests/with-temp-root.js) this file would otherwise leak it.
+  const relocated = path.join(tmp('nofollow-relocated'), 'relocated.txt');
 
   let swapped = false;
   const include = (rel) => {
@@ -543,7 +545,7 @@ try {
   if (run.stdout === 'MKFIFO-FAILED') return;
   assert.match(
     run.stdout,
-    /^THREW:WienerdogError:dream delta: f\.txt was a regular file when enumerated and is a fifo when opened:\d+$/,
+    /^THREW:WienerdogError:dream delta: f\.txt was a regular file when enumerated and is not one when opened \(kind: fifo\):\d+$/,
     `expected a bounded refusal, got: ${run.stdout}`
   );
   assert.ok(elapsed < 15000, `the probe took ${elapsed}ms; a blocking open would never have returned at all`);
@@ -566,13 +568,75 @@ test('dream-delta: src/core/dream/delta.js neither requires Node’s process-spa
 // ===========================================================================
 
 /**
+ * Verify a realpath is a safe executable to spawn, with the checks
+ * `src/core/exec-identity.js`'s `verifyExecutable` applies to this project's
+ * product git calls. Reimplemented here rather than imported because that
+ * module exports only `spawnPinnedSync`/`spawnPinned` (and those want a pins
+ * file and a paths object, which a unit test has no business building) — and
+ * this package may not add an export to an existing file.
+ *
+ * The checks that matter, and why each one is not decoration: a regular file
+ * with an execute bit; owned by the current user or by root; and NO ancestor
+ * directory up to `/` that is group- or other-writable unless root owns it.
+ * The last is the one that catches a real scenario — a `git` planted in a
+ * world-writable directory that happens to sit early on PATH.
+ * @param {string} realpath @returns {{ok: true} | {ok: false, why: string}}
+ */
+function verifySpawnable(realpath) {
+  let st;
+  try {
+    st = fs.statSync(realpath);
+  } catch (err) {
+    return { ok: false, why: `cannot stat ${realpath}: ${err.message}` };
+  }
+  if (!st.isFile()) return { ok: false, why: `${realpath} is not a regular file` };
+  if (process.platform === 'win32') return { ok: true }; // no POSIX mode/owner semantics
+  if ((st.mode & 0o111) === 0) return { ok: false, why: `${realpath} has no execute bit` };
+  const uid = typeof process.getuid === 'function' ? process.getuid() : 0;
+  if (st.uid !== uid && st.uid !== 0) {
+    return { ok: false, why: `${realpath} is owned by uid ${st.uid}, not ${uid} or root` };
+  }
+  for (let dir = path.dirname(realpath); ; ) {
+    let ds;
+    try {
+      ds = fs.statSync(dir);
+    } catch (err) {
+      return { ok: false, why: `cannot stat ancestor ${dir}: ${err.message}` };
+    }
+    if ((ds.mode & 0o022) !== 0 && ds.uid !== 0) {
+      return { ok: false, why: `ancestor ${dir} is group/other-writable and not root-owned` };
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return { ok: true };
+}
+
+/**
  * Resolve `git` to a VERIFIED ABSOLUTE REALPATH, once. Every invocation below
- * uses this path; the NAME `git` is never handed to a spawn except in the
+ * uses that path; the NAME `git` is never handed to a spawn except in the
  * hostile-PATH control, where being fooled is the point.
- * @returns {string|null}
+ *
+ * THE RESIDUAL, STATED RATHER THAN GLOSSED — the PR review gate found the
+ * earlier version of this helper too generous and it was right. Resolution
+ * necessarily starts from the INHERITED PATH (there is no portable alternative;
+ * hardcoding `/usr/bin/git` is not one), so converting the hit to an absolute
+ * realpath does not undo the fact that PATH chose it. `verifySpawnable` closes
+ * the case that is actually defensible — an impostor in a directory the test
+ * user does not own or that anyone can write to. It does NOT close the case of
+ * an impostor the TEST USER planted in their own PATH directory, and nothing
+ * test-side can: an attacker with that ability can edit this file. So the
+ * guarantee is bounded exactly as the spec bounds the executable leg of the
+ * construction — weaker than the environment and the roots, and this comment
+ * says so instead of implying parity.
+ * @returns {{path: string, why: string[]}} the resolved path plus every
+ *   candidate that was REJECTED and why, so a rejection is never silent
  */
 function resolveVerifiedGit() {
   const exts = process.platform === 'win32' ? ['.exe', '.cmd'] : [''];
+  /** @type {string[]} */
+  const rejected = [];
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
     for (const ext of exts) {
@@ -585,10 +649,18 @@ function resolveVerifiedGit() {
       }
       if (!st.isFile()) continue;
       if (process.platform !== 'win32' && (st.mode & 0o111) === 0) continue;
-      return fs.realpathSync(candidate);
+      const real = fs.realpathSync(candidate);
+      const verdict = verifySpawnable(real);
+      if (!verdict.ok) {
+        // A PATH hit that fails verification is walked PAST, loudly — never
+        // silently accepted and never silently skipped.
+        rejected.push(verdict.why);
+        continue;
+      }
+      return { path: real, why: rejected };
     }
   }
-  return null;
+  return { path: '', why: rejected };
 }
 
 /** @type {{git:string, env:Record<string,string>, cwd:string, hostileXdg:string, hostileAttrFile:string, forgedDir:string}|null} */
@@ -598,11 +670,19 @@ let REF = null;
 function ref() {
   if (REF) return REF;
 
-  const git = resolveVerifiedGit();
+  const resolved = resolveVerifiedGit();
+  const git = resolved.path;
   // Deliberately a FAILURE, not a skip: git is already a hard dependency of this
   // project (src/core/dream/validate.js spawns it), and a silently skipped
-  // differential is the one outcome this obligation cannot tolerate.
-  assert.ok(git, 'git must be resolvable to a verified absolute executable to run the differential');
+  // differential is the one outcome this obligation cannot tolerate. Any
+  // rejected candidate is named in the failure so a verification refusal never
+  // looks like an absent binary.
+  assert.ok(
+    git,
+    `git must resolve to a VERIFIED absolute executable to run the differential${
+      resolved.why.length ? ` (rejected: ${resolved.why.join('; ')})` : ''
+    }`
+  );
   const version = spawnSync(git, ['--version'], { encoding: 'utf8' });
   assert.match(String(version.stdout), /^git version /, 'the resolved executable must answer as git');
 
@@ -705,7 +785,6 @@ function loadAddedLineNumbersFromDiff() {
   assert.ok(end !== -1, 'could not find the end of addedLineNumbersFromDiff');
   const source = src.slice(start, end + 3);
   assert.ok(!source.includes('require('), 'the extracted function must be self-contained');
-  // eslint-disable-next-line no-new-func
   const fn = new Function(`${source}\nreturn addedLineNumbersFromDiff;`)();
   assert.deepEqual(fn('@@ -2,0 +3,2 @@ b\n'), [3, 4], 'extraction self-check');
   assert.deepEqual(fn('@@ -1 +1 @@\n'), [1], 'extraction self-check');
@@ -735,6 +814,22 @@ function referenceJudgment(before, after, opts = {}) {
   const spawn = (args) => spawnSync(command, ['diff', '--no-index', '--no-ext-diff', ...args, '--', a, b], { env, cwd: r.cwd });
 
   const numstat = spawn(['--numstat', '-z']);
+  // THE ORACLE MUST HAVE RUN. `binary` is computed from stdout, and a git that
+  // never executed yields empty stdout — which reads as `false`, identical to a
+  // healthy "this is text". Measured: a broken executable gives status=null,
+  // ENOENT, empty stdout, binary=false. Without this guard every GREEN arm of
+  // the hostile-environment control below would pass on a dead oracle, which is
+  // the same class of defect as a verification gate that cannot go red.
+  // `--no-index` exits 0 when the operands match and 1 when they differ;
+  // anything else — including the forged-PATH arm's own exit code — is checked
+  // by the caller that armed it, so only the unforged path is asserted here.
+  if (!opts.command || opts.command === r.git) {
+    assert.ok(
+      numstat.status === 0 || numstat.status === 1,
+      `the reference judgment must actually run git (status=${numstat.status}, ` +
+        `error=${numstat.error ? numstat.error.code : 'none'})`
+    );
+  }
   // `--numstat -z` is the production shape, and `/^-\t-\t/` is the production
   // test (src/core/dream/validate.js). Kept identical so the differential
   // measures the same signal the validator reads today.
@@ -923,21 +1018,108 @@ test('dream-delta: a .gitattributes that WOULD flip the judgment inside a reposi
   assert.match(staged, /^-\t-\t/, 'the SAME attributes file DOES flip the judgment once a repository is in scope');
 });
 
-test('dream-delta: where the module diverges from git it reports a strict SUPERSET of git’s added lines, never a subset', () => {
-  // NOT a corpus member, and named in the PR as a known divergence. Two separate
-  // changes with an unchanged line between them: git places two hunks, the
-  // module's prefix/suffix trim spans both and includes the untouched interior
-  // line. More lines reach a secret scan, never fewer — fail-closed.
-  const before = B('a\nb\nc\nd\ne\n');
-  const after = B('a\nX\nc\nY\ne\n');
+test('dream-delta: the module is NOT a superset of git’s added lines — the counterexample is pinned, not papered over', () => {
+  // An earlier version of this package claimed a strict superset and the PR
+  // review gate refuted it. The refutation is kept as a test so the claim cannot
+  // come back: where duplicate lines admit two equally minimal alignments,
+  // neither answer contains the other.
+  const before = B('a\na\n');
+  const after = B('b\na\na\nb\na\n');
 
   const record = moduleRecord(before, after);
   const judgment = referenceJudgment(before, after);
 
-  assert.deepEqual(judgment.addedLineNumbers, [2, 4], 'git reports only the two changed lines');
-  assert.deepEqual(record.addedLineNumbers, [2, 3, 4], 'the module additionally includes the unchanged interior line');
-  for (const n of judgment.addedLineNumbers) {
-    assert.ok(record.addedLineNumbers.includes(n), `line ${n} must not be dropped`);
+  assert.deepEqual(judgment.addedLineNumbers, [1, 4, 5], 'git aligns the two before-lines with after lines 2 and 3');
+  assert.deepEqual(record.addedLineNumbers, [1, 2, 3, 4], 'the trim aligns the last before-line with after line 5');
+  assert.ok(
+    !judgment.addedLineNumbers.every((n) => record.addedLineNumbers.includes(n)),
+    'this pair is the live refutation of the superset claim; if it ever starts holding, the claim needs re-deriving, not re-asserting'
+  );
+
+  // What IS true, and what the consumer is actually protected by: the omitted
+  // line carries no content the baseline did not already have.
+  const omitted = judgment.addedLineNumbers.filter((n) => !record.addedLineNumbers.includes(n));
+  assert.deepEqual(omitted, [5]);
+  const beforeLines = lineRecords(before).map((l) => l.toString('hex'));
+  for (const n of omitted) {
+    const line = lineRecords(after)[n - 1];
+    assert.ok(beforeLines.includes(line.toString('hex')), `omitted line ${n} must carry content the baseline already had`);
   }
-  assert.ok(record.addedLineNumbers.length > judgment.addedLineNumbers.length, 'the divergence is in the safe direction');
+});
+
+test('dream-delta: CONTENT SAFETY — exhaustively against git, no line carrying content absent from the baseline is ever omitted', () => {
+  // The provable property, verified rather than argued. Alphabet {a, b}, every
+  // before and after of 0..3 lines: 225 pairs, each judged by the REFERENCE
+  // JUDGMENT and by the module, with the module driven through its public API.
+  //
+  // Two things are asserted per pair. (1) Every git-added line the module omits
+  // carries content the baseline already held — that is the guarantee a secret
+  // scan rests on: content the writer introduced is always scanned. (2) The
+  // module never omits a line whose content is new.
+  /** @param {number} n @returns {Buffer[]} every sequence of n lines over {a, b} */
+  const seqs = (n) => {
+    if (n === 0) return [EMPTY];
+    /** @type {Buffer[]} */
+    const out = [];
+    for (let mask = 0; mask < 1 << n; mask += 1) {
+      let text = '';
+      for (let i = 0; i < n; i += 1) text += (mask >> i) & 1 ? 'b\n' : 'a\n';
+      out.push(B(text));
+    }
+    return out;
+  };
+  /** @type {Buffer[]} */
+  const corpus = [];
+  for (let n = 0; n <= 3; n += 1) corpus.push(...seqs(n));
+
+  // One reused directory: 225 mkdtemp calls would dominate the runtime and add
+  // nothing, since each pair is independent and the file is rewritten in place.
+  const root = tmp('content-safety');
+  const abs = path.join(root, 'f.dat');
+
+  let pairs = 0;
+  let nonSuperset = 0;
+  for (const before of corpus) {
+    for (const after of corpus) {
+      if (before.equals(after)) continue; // no record, nothing to judge
+      pairs += 1;
+
+      fs.writeFileSync(abs, before);
+      const baseline = captureBaseline(root);
+      fs.writeFileSync(abs, after);
+      const records = computeDelta(root, baseline).records;
+      assert.equal(records.length, 1);
+      const mine = records[0].addedLineNumbers;
+
+      const theirs = referenceJudgment(before, after).addedLineNumbers;
+      const afterLines = lineRecords(after);
+      const beforeHexes = lineRecords(before).map((l) => l.toString('hex'));
+
+      const omitted = theirs.filter((n) => !mine.includes(n));
+      if (omitted.length) nonSuperset += 1;
+      for (const n of omitted) {
+        assert.ok(
+          beforeHexes.includes(afterLines[n - 1].toString('hex')),
+          `before=${JSON.stringify(before.toString())} after=${JSON.stringify(after.toString())}: ` +
+            `git added line ${n} and the module omitted it, and its content is NOT in the baseline — ` +
+            'this is a fail-OPEN hole, not a conservative divergence'
+        );
+      }
+      // The same guarantee stated from the module's side: every line the module
+      // omits — whether or not git named it — carries known-old content.
+      for (let n = 1; n <= afterLines.length; n += 1) {
+        if (mine.includes(n)) continue;
+        assert.ok(
+          beforeHexes.includes(afterLines[n - 1].toString('hex')),
+          `the module omitted line ${n} whose content is absent from the baseline`
+        );
+      }
+    }
+  }
+
+  assert.ok(pairs > 200, `the sweep must actually cover the space (covered ${pairs} pairs)`);
+  // NON-VACUITY, both directions: the sweep must contain real non-superset
+  // cases, or it would be proving content-safety on a corpus where the dead
+  // superset claim happened to hold and nobody would learn anything.
+  assert.ok(nonSuperset > 0, 'the sweep must contain pairs where the module is not a superset of git');
 });

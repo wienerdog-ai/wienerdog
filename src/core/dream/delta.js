@@ -27,9 +27,16 @@
  *     ITSELF, or any ancestor or directory entry used to reach an enumerated
  *     path — not merely entries BENEATH the tree — or (ii) supply a platform
  *     mechanism that demonstrably binds every returned object beneath the
- *     intended root. Guarding only the subtree is NOT sufficient: moving the
- *     root directory out of its parent and symlinking the old root path to it
- *     changes nothing beneath the tree, yet every check below still passes.
+ *     intended root. Guarding only the subtree is NOT sufficient — the root
+ *     entry and every ancestor used to reach an enumerated path are part of the
+ *     resolution chain — and the residual is precise: `assertRealDirectory`
+ *     refuses a root that is ALREADY a symlink when the call begins, but the
+ *     root and every intermediate directory are then re-opened BY PATH
+ *     (`readdirSync`), so an ancestor replaced DURING the call is followed and
+ *     no check here can see it. Measured: `readdirSync` on a symlink-to-directory
+ *     follows it, while `lstat` on the same path reports a symlink — that gap
+ *     between classifying a directory and enumerating it is the whole exposure,
+ *     and portable Node cannot close it without per-component `openat`.
  *     The accuracy mechanisms in `readRegularFileSecure` are cheap hygiene and
  *     are explicitly NOT offered as a defense to rely on.
  *
@@ -119,6 +126,7 @@ function byteCompare(a, b) {
  * @param {import('fs').Stats} st @returns {string}
  */
 function entryKind(st) {
+  if (st.isDirectory()) return 'directory';
   if (st.isSymbolicLink()) return 'symlink';
   if (st.isFIFO()) return 'fifo';
   if (st.isSocket()) return 'socket';
@@ -178,8 +186,10 @@ function readRegularFileSecure(abs, expectedDev, expectedIno, rel) {
   try {
     const st = fs.fstatSync(fd);
     if (!st.isFile()) {
+      // The kind is appended parenthetically rather than inlined after an
+      // article: the set is open-ended, so "a ${kind}" cannot be kept grammatical.
       throw new WienerdogError(
-        `dream delta: ${rel} was a regular file when enumerated and is a ${entryKind(st)} when opened`
+        `dream delta: ${rel} was a regular file when enumerated and is not one when opened (kind: ${entryKind(st)})`
       );
     }
     if (st.dev !== expectedDev || st.ino !== expectedIno) {
@@ -347,23 +357,40 @@ function isBinaryPair(before, after) {
  *
  * The algorithm is: drop the common leading records, drop the common trailing
  * records, and report everything left in `after`. That is deliberately NOT a
- * full Myers diff, and the trade is stated rather than hidden:
+ * full Myers diff. Three claims, and the middle one is stated this bluntly
+ * because an earlier version of this comment made the opposite claim and the PR
+ * review gate measured it FALSE:
  *
- *  - On every shape the equivalence corpus mandates — added, deleted, empty,
- *    empty-to-content, CRLF, missing trailing newline, appended lines, an
- *    interior change, and a duplicated block — it is measured EQUAL to what git
- *    reports. The differential test proves that, and goes red if it stops being
- *    true.
- *  - Where it diverges (two or more separate changes with unchanged lines
- *    between them) it reports a strict SUPERSET of git's answer: the unchanged
- *    interior lines are included too. That direction is fail-closed for the
- *    consumer this exists for — a secret scan reads MORE lines, never fewer —
- *    and it is proved as a superset by a test rather than assumed.
+ *  - CORPUS-EXACT. On every shape the equivalence corpus mandates — added,
+ *    deleted, empty, empty-to-content, CRLF, missing trailing newline, appended
+ *    lines, an interior change, and a duplicated block — this is measured EQUAL
+ *    to what git reports. The differential test proves it and goes red if it
+ *    stops being true.
  *
- * The honest reason not to chase exact equality everywhere: git's hunk placement
- * is heuristic (the indent heuristic shifts boundaries inside runs of similar
- * lines), so no pure-Node reimplementation reaches universal agreement anyway.
- * Corpus-exact plus provably-conservative is a claim that can be kept.
+ *  - NOT A SUPERSET of git's line numbers, and no implementation of this shape
+ *    could be. Counterexample, measured on git 2.50.1: before `"a\na\n"`,
+ *    after `"b\na\na\nb\na\n"` — git reports lines [1, 4, 5]; this returns
+ *    [1, 2, 3, 4] and OMITS line 5. Where duplicate lines admit two equally
+ *    minimal alignments, neither answer contains the other, so "superset of
+ *    git" is not a property any single alignment can promise — git's own answer
+ *    is not maximal either. The claim is dead; it is recorded here rather than
+ *    quietly deleted, so the successor does not re-derive it.
+ *
+ *  - CONTENT-SAFE, which is the property that actually protects the consumer
+ *    and IS provable. An after-line is omitted only when it byte-equals the
+ *    before-line the trim paired it with, so every line carrying content ABSENT
+ *    from the baseline is reported. A secret the writer introduced is scanned; a
+ *    line whose exact bytes already existed before the writer ran is not — and
+ *    that is correct, because that content is not the writer's to answer for.
+ *    True by construction, and verified exhaustively against git over a
+ *    two-letter alphabet rather than asserted.
+ *
+ * Whether a consumer needs the line-number superset is a CONTRACT question, not
+ * a loop-body question, and it belongs to the successor spec. Git's hunk
+ * placement is heuristic (the indent heuristic shifts boundaries inside runs of
+ * similar lines), so universal equality is unreachable for any pure-Node
+ * implementation; the counterexample above shows universal superset is
+ * unreachable too.
  *
  * @param {Buffer|null} before @param {Buffer} after @returns {number[]}
  */
