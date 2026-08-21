@@ -534,3 +534,53 @@ guarantee: the workspace's containment inherits the platform condition, the two
 handed-over hypotheses become MORE load-bearing on Windows where the mechanism protects
 less, and the charter should cite `vault-snapshot.js` rather than `private-fs.js` if it
 needs a walk precedent.
+
+## Round 5 amendment — my park report was over-stated, and the finding's CLASS changes
+
+The advisor corrected my park report, I measured the correction, and the measurement
+went further than either of us had it. **The correction matters because it changes the
+finding's classification, and therefore what the owner is deciding.**
+
+**What I reported:** on win32 the leaf case is open — external bytes enter.
+**What the advisor corrected:** the two `|| 0` sites do not degrade silently; both NAME
+realpath-canonical containment as the win32 bound (`src/core/private-fs.js:680-683`,
+`src/core/manifest.js:743-746` — verified verbatim), and 1a already carries a realpath
+verification, so the leaf falls back to the same racy check that covers the ancestor.
+**What the measurement shows:** it does not even fall that far. With the flag forced to
+0, the open follows the symlink — and the **`(dev, ino)` revalidation refuses it at
+`fstat`, before any byte is read**, because a symlink to a different file has a
+different identity. Measured: `openSucceeded: true`, `devInoMatchesEnumerated: false`,
+refusal before the read; control on an untouched leaf matched and read correctly.
+
+So what the missing flag actually costs is **WHEN the refusal happens** — `fstat` rather
+than `open` — leaving the process briefly holding a descriptor on an out-of-tree object
+it never reads. The residual that survives is inode reuse, which exists on every
+platform.
+
+**The consequence for the park.** The reviewer's finding is still true about the
+MECHANISM: the spec named a flag that does not exist on win32 and stated no platform
+condition. But it is **not** true that the attacker gains a capability, because a
+different named element of the same contract refuses the substitution. **The
+classification drops from (a) to (b)** — the guarantee's wording is wrong, not its
+effect. That is a materially different decision: a (b) can close as a named residual,
+which an (a) cannot.
+
+**How I got it wrong, and it is the same family this arc has been logging.** The
+reviewer measured the OPEN mechanism in isolation — flag present versus absent — and I
+carried its conclusion into a park report without asking what the **full contract** does
+with that open. The contract does not read at open; it fstats and revalidates first. A
+true measurement of one element, cited for a conclusion about the whole. That is the
+family, again, in my own park report — and this time it would have gone to the owner as
+an (a), which is the second time this family has reached him.
+
+The park still stands and still needs his ruling: the platform condition must be stated
+rather than implied, and the recommendation is unchanged — adopt `vault-snapshot.js`'s
+explicit-branch shape rather than the `|| 0` idiom. What changes is that he is ruling on
+a wording defect with a named residual, not on an open capability.
+
+**One claim of mine also needs withdrawing:** I wrote that "the repo disagrees with
+itself" on no-follow. It disagrees in IDIOM — an explicit branch versus `|| 0` — but
+both sites consciously name what carries the weight on win32. The idiom criticism stands
+(a missing flag should not look like a present one); the "disagrees with itself" framing
+was too strong, and the three-times-wrong-precedent lesson keeps its narrower form:
+`private-fs.js` was wrong in the details inherited, not incoherent about the substance.
