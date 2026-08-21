@@ -72,31 +72,31 @@ is HEAD (one revision) plus the index; no gate consumes commit history.
 - `changedPaths` (`:1020-1021`) runs `git status --porcelain -z -uall` and is the
   classification loop's only candidate source. It has exactly **one caller**
   (`:1145`) and is not exported.
-- The loop (`:1144-1209`) checks containment (`resolveContainment`, `:1146-1153`),
+- The loop (`:1144-1209`) checks containment (`resolveContainment`, `:1147-1153`),
   then routes to the ledger validator, the Tier-3 block, or a catch-all keep
   (`:1208`).
 - **Tier-3 floor** — `tier3Decision` (`:208-238`): reads the worktree file
-  (`:210`) and nothing else; **zero git calls inside the function**. Its git
+  (`:211`) and nothing else; **zero git calls inside the function**. Its git
   dependence is entirely its caller's: the candidate list and `revertPath`.
 - **Skill-body guard** — `skillBodyViolation` (`:320-415`): worktree bytes
-  (`:348`), `git show HEAD:<rel>` (`:340`), `git show HEAD:<dir>/LEARNINGS.md`
+  (`:350`), `git show HEAD:<rel>` (`:340`), `git show HEAD:<dir>/LEARNINGS.md`
   (`:398`), `change.untracked` (`:333`), and the ownership registry
   (`:337`; `state/skill-registry.json` via `readRegistry`, **not git**, keyed by
   vault-relative path).
 - **Ledger validator** — `ledgerViolation` (`:516-615`): the sibling `SKILL.md`
-  (`:524`), the ledger (`:539`), `git show HEAD:<rel>` (`:555`), and this run's
-  extracts (`:1136-1143` — not git, already baseline-verified by Step 1's
-  `hashScratch`/`scratchIntact`). `change.untracked` (`:553`) does not merely pick
+  (`:526`), the ledger (`:539`), `git show HEAD:<rel>` (`:555`), and this run's
+  extracts (`:1136-1142` — not git, already baseline-verified by Step 1's
+  `hashScratch`/`scratchIntact`). `change.untracked` (`:554`) does not merely pick
   a revert shape here: it **gates whether the append-only family (c)–(g) runs at
   all**.
 - **EP2 secret gate** — Step 3 (`:1211-1345`). Its decision inputs are
   `git diff --cached --name-status -z` (`:1232`, the file list),
   `git diff --cached --numstat -z` (`:1245`, git's own binary signal `-\t-\t`),
   and `git diff --cached -U0` (`:1257`, the added lines), whose hunk headers
-  `addedLineNumbersFromDiff` (`:752-765`) parses into 1-based new-file line
+  `addedLineNumbersFromDiff` (`:752-764`) parses into 1-based new-file line
   numbers. Its **enforcement** half — the tracked test (`:1296`), the two revert
-  shapes (`:1325`, `:1329-1331`), `quarantinePreserve`, the abort path
-  (`:1302-1323`) and `scrubAddedLines`' index surgery (`:867`, `:874`, `:878`) —
+  shapes (`:1325`, `:1327-1331`), `quarantinePreserve`, the abort path
+  (`:1298-1323`) and `scrubAddedLines`' index surgery (`:867`, `:874`, `:878`) —
   is a separate concern and is **not touched by this WP**.
 - `src/cli/dream.js`: `hashScratch` (`:44-56`) baselines the scratch inputs at
   `:489`; `precommitSessionEdits` + `assertCleanTree` run at `:493-494`; the brain
@@ -106,7 +106,12 @@ is HEAD (one revision) plus the index; no gate consumes commit history.
   `validateAndCommit` through `tempVault()` / `writeVault()` / `run()`
   (`:39-63`, `:468-469`); `tests/integration/dream.test.js` (1495 lines) drives the
   whole pipeline with `tests/fixtures/dream/fake-brain.js` via
-  `WIENERDOG_DREAM_CMD` — **no real brain is spawned by any test**.
+  `WIENERDOG_DREAM_CMD`. **Nothing `npm test` runs spawns a real brain** — it is
+  `node --test` over the `*.test.js` files (`tests/run.js`), and the harnesses that
+  do spawn a real `claude` (`tests/scenarios/rubric.js`,
+  `tests/scenarios/negative/run-negative.js`, the two broker harnesses) run only
+  under the separate `npm run scenarios` script and are not in this WP's
+  verification steps.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -119,8 +124,8 @@ is HEAD (one revision) plus the index; no gate consumes commit history.
 | modify | src/cli/dream.js | capture the baseline between `assertCleanTree` and the brain spawn; pass it to `validateAndCommit` (Table A) |
 | modify | src/core/dream/validate.js | substitute the four gates' decision inputs per Table C; the EP2 enforcement half stays byte-unchanged |
 | create | tests/unit/dream-delta.test.js | the primitive's own coverage, including the git-agreement differential (Table B) |
-| modify | tests/unit/dream-validate.test.js | the divergence proof and the gate coverage (the implementer designs the cases) |
-| modify | tests/integration/dream.test.js | only if the pipeline change requires it; no behaviour change may be asserted |
+| modify | tests/unit/dream-validate.test.js | the divergence proof and the gate coverage (the implementer designs the cases); threading `vaultBaseline` through the existing `run()` helper is wiring, not an assertion edit |
+| modify | tests/integration/dream.test.js | wiring only, and only if the pipeline change requires it — no existing assertion may be edited and no behaviour change asserted |
 
 ### Exact contracts
 
@@ -158,7 +163,7 @@ inherits this primitive unchanged.
 | Where it is held | **in memory**, for the lifetime of one `runDream` call. It is never written to disk in this WP: capture and consumption are the same process (`dream.js:558`), so no storage, no teardown, no `private-fs.js` interaction, and no new path under `state/` exists |
 | When it is captured | exactly once, **after** `assertCleanTree` (`dream.js:494`) and **before** the brain spawn. Not earlier: the pre-commit step is what makes the captured bytes equal HEAD, which is the property that makes this WP behaviour-preserving |
 | Ignored content | excluded, matching today's blind spot exactly — `changedPaths` passes no `--ignored` (`validate.js:1021`), so no gate has ever seen an ignored path. This WP does not widen that; widening it is a product decision belonging elsewhere |
-| Symlinks | enumeration never follows a symlink out of the vault; a symlinked entry is recorded as the link, not its target. The existing containment check (`validate.js:1146-1153`) is unchanged and now consumes the delta's path list |
+| Symlinks | enumeration never follows a symlink out of the vault; a symlinked entry is recorded as the link, not its target. The existing containment check (`validate.js:1147-1153`) is unchanged and now consumes the delta's path list |
 | Failure | an unreadable vault at capture time fails the run **loudly** before the brain spawns; the dream does not proceed with a partial baseline. No silent degradation to a git-derived baseline is permitted — that would restore the very dependency this WP removes |
 | Resource bound | capture size ≈ the vault's non-ignored content, held once in memory. Named residual: a very large vault makes this proportionally expensive; the second (A) package already owns a copy-in I/O-cost measurement and inherits this question with it |
 | Absent baseline | `validateAndCommit` called without `vaultBaseline` is a test-only path. It must **fail closed or be explicitly refused** — never fall back to reading HEAD. Whichever the implementer picks is recorded under "Decisions made" |
@@ -170,12 +175,12 @@ the brain. This is the single canonical description of what the gates consume.
 
 | Fact / rule | Value |
 |-------------|-------|
-| `rel` | vault-relative path, POSIX separators — the same string shape today's `changedPaths` yields, because `registry.skills[rel]` (`validate.js:337`, `:521`) and every layout prefix test are keyed by it |
+| `rel` | vault-relative path, POSIX separators — the same string shape today's `changedPaths` yields, because `registry.skills[rel]` (`validate.js:337`, `:522`) and every layout prefix test are keyed by it |
 | `status` | `added` (no baseline entry) \| `modified` \| `deleted` (no after content) |
 | `baselineBytes` | the captured bytes; `null` iff `status === 'added'` |
 | `afterBytes` | the current bytes; `null` iff `status === 'deleted'` |
 | `binary` | true when the after content is unscannable. Must agree with today's git signal (`--numstat` reporting `-\t-\t`, `validate.js:1245-1246`) on every input the acceptance corpus exercises; where agreement cannot be shown it must be **more** conservative, never less — an unscannable file is withheld, so erring toward `binary` fails closed |
-| `addedLineNumbers` | 1-based line numbers **in the after content** that this delta adds — the same set today's `addedLineNumbersFromDiff` (`validate.js:752-765`) derives from `git diff --cached -U0`'s hunk headers. `[]` when `status === 'deleted'`; every line when `status === 'added'` |
+| `addedLineNumbers` | 1-based line numbers **in the after content** that this delta adds — the same set today's `addedLineNumbersFromDiff` (`validate.js:752-764`) derives from `git diff --cached -U0`'s hunk headers. `[]` when `status === 'deleted'`; every line when `status === 'added'` |
 | Scan text | derived, not stored: the after content's lines at `addedLineNumbers`, joined with LF — byte-identical to today's `+`-line join (`validate.js:1258-1262`). The two must not both be carried; one fact, one owner |
 | `isNew` | `status === 'added'` — the **decision-side** replacement for `change.untracked`. It is NOT the same fact: `untracked` is git's index state, `isNew` is "absent from the baseline". They coincide in production and diverge in the discriminator fixture (Table C, last row) |
 | Not in the record | anything no gate consumes. A field with no named consumer in Table C is cut |
@@ -187,11 +192,11 @@ deliberately left alone.
 
 | Gate | Today's decision input | After this WP | Untouched |
 |------|------------------------|---------------|-----------|
-| Candidate list + containment (`:1144-1153`) | `changedPaths` → `git status --porcelain -z -uall` (`:1021`) | the delta's path list (Table B). `changedPaths` loses its only caller | `resolveContainment` and its revert, unchanged |
-| **Tier-3 floor** (`tier3Decision`, `:208-238`) | worktree bytes only; no git inside | `afterBytes` from the record — no filesystem read of its own | the floor constants, the reason strings, the A0 identity freeze (`:1174-1184`), the ordering behind the skill-body guard (`:1191-1193`) |
+| Candidate list + containment (`:1145-1153`) | `changedPaths` → `git status --porcelain -z -uall` (`:1021`) | the delta's path list (Table B). `changedPaths` loses its only caller | `resolveContainment` and its revert, unchanged |
+| **Tier-3 floor** (`tier3Decision`, `:208-238`) | worktree bytes only; no git inside | `afterBytes` from the record — no filesystem read of its own | the floor constants, the reason strings, the A0 identity freeze (`:1175-1184`), the ordering behind the skill-body guard (`:1185-1187`) |
 | **Skill-body guard** (`skillBodyViolation`, `:320-415`) | `git show HEAD:<rel>` (`:340`); `git show HEAD:<dir>/LEARNINGS.md` (`:398`); `change.untracked` (`:333`) | the record's `baselineBytes`; **the baseline bytes of the sibling ledger**; `isNew` | the ownership registry, every reason string, the promotion allowlist, the ≥ 3 distinct-Claude-session rule |
-| **Ledger validator** (`ledgerViolation`, `:516-615`) | `git show HEAD:<rel>` (`:555`); `change.untracked` gating the append-only family (`:553`) | `baselineBytes`; `isNew` gating the same family, with the same fail-closed behaviour when a baseline version exists but cannot be parsed | the extract binding (h), the schema checks, the sibling-`SKILL.md` read (which is after-content by design, both today and after) |
-| **EP2 secret gate — decision half** (`:1232`, `:1245`, `:1257`) | three `git diff --cached` calls | the record's path list, `binary`, `addedLineNumbers` and derived scan text | **the entire enforcement half**: `git add -A` (`:1223`), the tracked test (`:1296`), both revert shapes, `quarantinePreserve`, the abort path (`:1302-1323`), `pruneRedactedOriginals`, and `scrubAddedLines` (`:821-903`) including its index surgery — byte-unchanged |
+| **Ledger validator** (`ledgerViolation`, `:516-615`) | `git show HEAD:<rel>` (`:555`); `change.untracked` gating the append-only family (`:554`) | `baselineBytes`; `isNew` gating the same family, with the same fail-closed behaviour when a baseline version exists but cannot be parsed | the extract binding (h), the schema checks, the sibling-`SKILL.md` read (which is after-content by design, both today and after) |
+| **EP2 secret gate — decision half** (`:1232`, `:1245`, `:1257`) | three `git diff --cached` calls | the record's path list, `binary`, `addedLineNumbers` and derived scan text | **the entire enforcement half**: `git add -A` (`:1223`), the tracked test (`:1296`), both revert shapes, `quarantinePreserve`, the abort path (`:1298-1323`), `pruneRedactedOriginals`, and `scrubAddedLines` (`:821-903`) including its index surgery — byte-unchanged |
 | **The inherited subtlety** (ADR-0020) | HEAD structurally forbids self-authorisation | the skill-body guard's ledger input is the **baseline** ledger, never the after content. `skills/wienerdog-dream/SKILL.md:352-353` requires the authorising learning to have recurred across **prior** dreams, "not counting a bump you are making this same run"; reading the after-content ledger would let one run bump a counter and authorise a body rewrite against it in the same pass | — |
 | **Enforcement restores to HEAD, decisions follow the baseline** | the two are the same thing | they remain distinct concerns: this WP changes **what the gates decide on**, not **what enforcement restores to**. `revertPath` still runs `git checkout HEAD -- <path>` (`:665`). In production the two coincide; in the discriminator fixture they do not, and the criteria there assert the **decision**, never the restore target | `revertPath`, unchanged |
 
@@ -241,7 +246,7 @@ deliberately left alone.
       **attacker-influenceable paths** (the brain's writes are untrusted by
       definition — threat class T2, a steered dream) and those `rel` strings flow
       into filesystem reads. Containment is by the existing check
-      (`validate.js:1146-1153`), which now consumes the delta's list, plus Table A's
+      (`validate.js:1147-1153`), which now consumes the delta's list, plus Table A's
       no-follow enumeration rule. No `rel` reaches a shell command: every git call
       in this file goes through `git()` (`:67`) with an argv array, never a shell.
 - [ ] The surface this WP actually touches is **the four gates' evidence source**.
