@@ -36,3 +36,71 @@ this branch; `Ready` comes after the loop closes.
 
 <!-- Round N: date, reviewer, findings count by severity, dispositions,
      commit that applies the fixes. -->
+
+### Round 1 — 2026-08-21 — reviewer: Codex (gpt-5.6-sol), external
+
+**Does NOT close.** 10 capability findings constructed, 0 questions. The
+reviewer's negative controls held (the six re-target sites, the git-free walk
+vs `.gitignore`, `git merge-file` conflict-in-place, `precommitSessionEdits` /
+`restoreVaultToHead` behaviour, the Part i transitional line, the byte-identical
+src/ tree). Five load-bearing claims re-verified here against the code before
+dispositioning: F2 (`cli/dream.js:237` clean-tree guard for the unknown-command
+path, comment relies on the pre-spawn clean assert), F6 (reap verdict sits
+inside `if (pidfile)`, `pidfile` null on tokenless runs — `:149-152`, `:256`,
+`:272`), F1 (`delta.js` `lstat`s and treats a hardlink as a regular file, no
+`nlink` check), F5 (`adapters/codex.js:24-76` handles `AGENTS.override.md` as a
+real shadowing convention), F10 (`layout.js` imposes no cross-key distinctness).
+All confirmed.
+
+**FAMILY LANDING (per the stop criterion):** the round lands on the package's
+characteristic family — a vault write that bypasses the promotion decision —
+via F1, F3, F5, F10. This is the FIRST landing; a second lands the split seam
+on the owner's table.
+
+**Dispositions:**
+
+Owner-ruling required (escalated; fixes held until ruled — they reshape the
+mechanical ones):
+- **F1 — hardlink through the Codex workspace shell writes the vault inode
+  DURING the run.** Neither reap nor promotion sees it (damage precedes
+  classification). Not closable by promotion-side text alone. Candidate cures
+  are structural (Part i): place the workspace on a different filesystem from
+  the vault so `ln` across it fails `EXDEV`; or a Codex-arm containment change;
+  or accept as a named residual. Owner call.
+- **F4 — a concurrent user secret enters the dream commit via a clean C6
+  merge, past the pre-merge EP2 scan.** The spec's stated rationale for
+  pre-merge scanning ("scanning merged would force discarding the user edit")
+  is false — C7 already leaves the user's live version on refusal. Owner call
+  on EP2's scope: scan brain-added bytes only (status quo, accepts the hole) vs
+  scan every newly-durable byte in the staged candidate (refuses a note for the
+  user's own secret) vs stage only brain-attributable bytes.
+
+In-scope spec fixes (Part ii unless noted; applied after the two rulings, since
+F1 may move Table A and F4 reshapes F7/F9):
+- **F5** — C9 deny-list extended to current instruction-file shapes and control
+  namespaces (`CLAUDE.local.md`, `AGENTS.override.md`, any `.md` under
+  `.claude/`/`.codex/`), and Part i copy-in exclusions matched; M7 criterion
+  broadened past the two exact basenames.
+- **F6** — Table G requires an UNCONDITIONAL post-settle reap verdict covering
+  tokenless manual runs; acceptance tests both run types.
+- **F7** — EP2 gate gains an outcome taxonomy (redact → sanitized candidate
+  bytes + artifact + separate counter) per binding ADR-0034, replacing the
+  `reason|null` shape for that gate.
+- **F9** — `promote()` return gains a typed EP2 disposition summary; Table G
+  states how the pipeline's transcript-deferral consumes it (today's
+  `secretReverts` signal, `cli/dream.js:568-596`).
+- **F2** — Part ii replaces the removed clean-tree non-vacuity signal (the
+  unknown-command guard, `cli/dream.js:237`) with workspace/brain evidence.
+- **F10** — C9 gains an explicit `reports_dir` negative check; layout overlap
+  semantics named (Part i or a noted layout obligation).
+- **F3** — the compare→promote window relabelled "narrowed", not "closed", with
+  the residual stated (matches the cited precedent's real TOCTOU).
+- **F8** — the atomicity claim narrowed to DECISION atomicity; partial-publish
+  recovery routed to the residue-lifecycle successor, or a publish-failure
+  acceptance arm added.
+
+Editorial (fold into the fix commit): "rejects `/` before any path is joined" →
+"rejects separators within each validated segment"; "closed" → "narrowed" for
+the millisecond race wherever it appears.
+
+Fix commit: PENDING — awaiting owner rulings on F1 and F4.
