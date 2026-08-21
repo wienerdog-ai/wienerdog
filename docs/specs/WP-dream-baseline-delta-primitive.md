@@ -94,12 +94,14 @@ fix: this package is additive by ruling.
  *  @param {string} rootDir  absolute path to an existing real directory
  *  @param {(rel:string) => boolean} [include]  optional filter over relative paths;
  *    omitted means every regular file under rootDir
- *  @returns {Baseline} — `{files, anomalies}`, Table A; throws WienerdogError on an
- *    unreadable root or file */
+ *  @returns {Baseline} — `{files, anomalies, include}`, Table A; throws
+ *    WienerdogError on an unreadable root or file */
 function captureBaseline(rootDir, include)
 
 /** Difference the SAME root, as it stands at call time, against a baseline.
  *  Makes no freshness claim (Table A).
+ *  Re-applies the baseline's OWN scope predicate — it is not a parameter here, so a
+ *  caller cannot pass a mismatched one (Table A).
  *  @param {string} rootDir @param {Baseline} baseline
  *  @returns {{records: DeltaRecord[], anomalies: Array<{rel:string, kind:string}>}} */
 function computeDelta(rootDir, baseline)
@@ -115,10 +117,12 @@ package inherits this contract unchanged.
 
 | Fact / rule | Value |
 |-------------|-------|
-| What a baseline holds | `{files, anomalies}`: `files` maps relative path → the file's exact **bytes**; `anomalies` is what the capture walk refused to treat as a regular file (row below). Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
+| What a baseline holds | `{files, anomalies, include}`: `files` maps relative path → the file's exact **bytes**; `anomalies` is what the capture walk refused to treat as a regular file (row below); `include` is the scope predicate the capture ran under, or a sentinel meaning "everything". Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
+| **Scope travels with the baseline** | `computeDelta` re-applies `baseline.include` and does NOT take a filter of its own. Without this, a path absent from `files` is ambiguous — excluded at capture, or genuinely new — and the primitive would report a pre-existing excluded file as `added`, which is exactly the false accusation the completeness rule exists to prevent. Carrying the predicate rather than re-passing it also makes a mismatched-scope call structurally impossible, instead of merely forbidden |
 | Path shape | relative to `rootDir`, POSIX separators (`/`) on every platform — the same shape `git status` yields, so the successor's registry and prefix tests keep working unchanged |
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
 | Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
+| **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW`, the descriptor is `fstat`ed to confirm it is a regular file, and the bytes are read **from that descriptor**. A path that becomes a symlink between enumeration and open throws or is recorded as an anomaly — it never yields bytes. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
 | Containment | every path the walk visits resolves inside `rootDir`. A `..` segment cannot occur (paths are built from directory entries), and the no-follow rule is what keeps that true |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
 | Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
@@ -154,7 +158,8 @@ against a repository the test builds; the module itself contains no git.
 
 - [ ] Deliverables-table cells (the `delta.js` row cites Tables A and B; the test row cites Table C)
 - [ ] `### Exact contracts`' two signatures and the `anomalies` return
-- [ ] Acceptance criteria that assert Tables A, B and C
+- [ ] Acceptance criteria that assert Tables A, B and C — including the scope
+      round-trip and the classify/read-gap discriminator
 - [ ] Verification steps (the no-child-process assertion mirrors Table A's git-free scope row and the Deliverables note)
 - [ ] Current-state description (the two neighbouring patterns and why the hash-only shape is insufficient)
 - [ ] Implementation notes: the binary-prefix trap and the ordering rationale
@@ -173,6 +178,11 @@ against a repository the test builds; the module itself contains no git.
   (text). A naive "any NUL anywhere" predicate therefore disagrees with git on the
   second file. That direction is fail-closed and permitted by Table B, but measure it
   rather than discover it in review.
+- **The no-follow rule is a per-read property, not a per-walk one.** The obvious
+  shape — `lstatSync(path)` to classify, `readFileSync(path)` to read — passes every
+  test that places symlinks before the walk starts and still follows one substituted
+  in between. Bind both to the same descriptor; `src/core/private-fs.js:687-751` (`applyModeSecure`) is
+  the in-repo precedent.
 - Sorted output is not cosmetic: it is what lets a consumer's report and a test's
   expectation be compared byte-for-byte without re-sorting at every call site.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
@@ -209,6 +219,15 @@ against a repository the test builds; the module itself contains no git.
       output.
 - [ ] Capture throws `WienerdogError` on an unreadable root and on an unreadable file;
       no partial baseline is ever returned.
+- [ ] Scope survives the round trip: with an `include` that excludes some paths, a
+      **pre-existing excluded** file produces no record, a **newly created excluded**
+      file produces no record, and a **newly created included** file is reported
+      `added`. No excluded pre-existing file is ever reported `added`.
+- [ ] **The no-follow guarantee holds across the classify/read gap**, not merely for
+      symlinks that already existed when the walk arrived: substituting a symlink
+      between classification and read yields a throw or an anomaly, never the target's
+      bytes, and never bytes from outside `rootDir`. A test that only places symlinks
+      up front does not discriminate this and does not satisfy the criterion.
 - [ ] **The git-agreement differential (Table C).** Over the whole corpus, this
       module's `addedLineNumbers` equal `addedLineNumbersFromDiff`'s output on the
       corresponding `git diff --cached -U0`, and its `binary` equals git's `--numstat`

@@ -35,7 +35,7 @@ there counts as reviewed here.
 |---|---|---|---|
 | 0a | Template conformance (clean context, two inputs, no external reviewer) | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-r0-template-conformance-raw.md` | CONFORMANT — 0 blocking, 4 non-blocking |
 | 0b | Internal coherence + runnable criteria | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-r0-internal-coherence-raw.md` | 5 findings, all fixed |
-| 1 | External adversarial (design) | — | NOT YET RUN |
+| 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-1-raw.md` | **NO-SHIP** — 4 findings, all confirmed; 2 folded, 2 PARKED |
 
 ## Round 0 dispositions
 
@@ -61,3 +61,45 @@ two.
 
 **Weighted closure:** two HEAVY findings landed, so the next step is a full fresh
 external adversarial round, not a mechanical re-check.
+
+## Round 1 dispositions
+
+All four findings CONFIRMED on the tree; F3 and F4 reproduced independently rather
+than read. The Routed section came back explicitly empty — the category-error guard
+placed BEFORE the vendored prompt did its job, and no round was spent on a
+freshness objection this package cannot own.
+
+Triage follows the rule agreed with the advisor and sharpened here: *a fix reachable
+only by adding a freshness, locking or stability mechanism is PARKED regardless of how
+small the diff looks, because the diff size does not measure the contract impact.*
+
+| # | Finding | Disposition | Why this bucket |
+|---|---|---|---|
+| 1 | The scope predicate is lost between `captureBaseline` and `computeDelta`, so an excluded pre-existing file can be reported `added` | **FOLDED** | Routine information-loss defect in the API. Fixed by making the baseline carry its own `include` and having `computeDelta` re-apply it — chosen over re-passing the filter, because carrying it makes a mismatched-scope call **structurally impossible** rather than merely forbidden. Three acceptance cases added |
+| 4 | `lstat`-then-read-by-name follows a symlink substituted in the gap, capturing bytes from outside `rootDir` under an internal path | **FOLDED** | Routine, and NOT a freshness mechanism: it makes a guarantee the spec ALREADY claimed actually hold, for a single read, and the repo already applies the discipline (`src/core/private-fs.js:687-751`, `applyModeSecure` — `O_NOFOLLOW` open, `fstat`, revalidate). Table A gains the bound-object row; an acceptance criterion adds the substitution discriminator and states that up-front symlinks do not satisfy it |
+| 2 | The permitted conservative-`binary` result contradicts Table C's unconditional line-equivalence obligation, on the very fixture the corpus mandates | **PARKED (coupled to 3)** | Not routine: resolving it requires deciding what the primitive is equivalent TO, and the answer depends on finding 3 |
+| 3 | Git's binary signal is repository-configuration-sensitive — `.gitattributes` overrides the byte heuristic in **both** directions (reproduced) — so a git-free module cannot reproduce it from bytes alone | **PARKED** | **Table C's central obligation is unachievable as written.** This is the advisor's "structurally impossible git-free" bucket: not a corpus gap, and not fixable without either dragging git semantics back into a deliberately git-free module or weakening an obligation the owner has already seen |
+
+### The parked pair, stated as one question for the owner
+
+**What exactly is this primitive equivalent to?** Table C currently says "git's
+signal", and finding 3 proves no git-free module can meet that, because the signal
+depends on repository configuration the module cannot see.
+
+**Recommendation, not applied:** narrow Table C to git's **default content
+heuristic** (bytes only, bounded prefix), keep the conservative-binary exception, and
+**condition the exact `addedLineNumbers` and scan-text obligations on
+`binary === false`** — conservative-binary records exempt, because a consumer
+withholds what it cannot scan. The attribute sensitivity then becomes a NAMED
+successor obligation: the successor must show that repository attributes cannot alter
+the relevant paths in its workspace, or handle it there.
+
+**Why not the alternative:** requiring exact reproduction of git's predicate would
+mean reading `.gitattributes` and implementing git's attribute resolution — putting
+git semantics back inside the module whose git-freedom is the reason it can be
+verified independently at all.
+
+**Status: folded findings landed; the package does not advance to round 2 until the
+owner rules on the parked pair.** Weighted closure would otherwise call for a fresh
+round, and running one against a spec with a known-open contract question would spend
+it on a moving target.
