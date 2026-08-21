@@ -40,6 +40,7 @@ there counts as reviewed here.
 | 3 | External adversarial (design), gptsol, fresh round after the framing flip | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-3-raw.md` | **NO-SHIP** — 3 FIXED, 1 PARTIAL, 1 NOT FIXED, 4 fresh findings; 3 folded, 1 PARKED |
 | 4 | External adversarial (design), gptsol, the closing round required by weighted closure | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-4-raw.md` | **NO-SHIP** — 2 FIXED, 2 PARTIAL, 3 fresh findings (the FIRST type (a) in this package); all 3 folded |
 | 5 | External adversarial (design), gptsol, owner-ruled after round 4 | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-5-raw.md` | **NO-SHIP** — all 4 round-4 fixes FIXED; 2 fresh findings; 1 folded, 1 PARKED (type (a), fourth containment-family, REPEAT-KIND) |
+| 6 | External adversarial (design), gptsol, the round weighted closure required | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-6-raw.md` | **NO-SHIP** — byte-preservation FIXED, **platform ruling NOT FIXED**; 1 fresh type (a); nothing folded, PARKED as a design question |
 
 ## Round 0 dispositions
 
@@ -640,3 +641,61 @@ exactly that twice.
 **If the owner judges the remaining risk not worth one more round and closes 1a on the
 current text, that is a legitimate owner act on a named residual.** It is simply not a
 call the rule lets me make, and I have declined to read the rule loosely twice already.
+
+## Round 6 — the platform ruling is NOT FIXED, and the fault is mine
+
+**Nothing was folded.** This is the fifth containment-family finding, so REPEAT-KIND
+makes it a design question; and it invalidates an owner ruling made on a basis I
+supplied, so it goes back to him rather than into the text.
+
+**The finding.** On the no-`O_NOFOLLOW` branch, an attacker moves the CLASSIFIED LEAF
+ITSELF outside the root and puts a symlink at its old path. The opened object is then
+the same inode that was classified, so `(dev, ino)` matches. Reproduced independently:
+`openSucceeded: true`, `isRegularFile: true`, `devInoMatchesEnumerated: true`,
+`realpathNowResolvesInsideRoot: false`, bytes read from outside the root. **Every check
+the contract specifies passes.** No inode reuse. The only thing catching it is the
+realpath check, which this spec itself calls racy and explicitly not a guarantee — and
+the reviewer raced both orderings.
+
+**My round-5 measurement was wrong, and the way it was wrong is the point.** I replaced
+the leaf with a symlink to a DIFFERENT file while testing the NO-FLAG branch — two facts
+moved at once — and concluded that `(dev, ino)` always refuses, hence "no capability is
+gained on win32". That evidence reaches only different-inode substitution. *If my
+conclusion were false, would that measurement have shown it?* No. It could not have.
+
+**The classification reverts (b) → (a), and that reverses my own argument.** I made the
+case that the downgrade mattered precisely because a (b) can close as a named residual
+and an (a) cannot. On the corrected classification the fourth containment finding did
+NOT legitimately close, and the platform ruling rests on a false premise. Sent to the
+advisor immediately, before writing any of this, with a request to put it in front of
+the owner before anything else moves.
+
+**Surfaces now known false**, several of which I wrote: the "no capability is gained"
+sentence in the security checklist, the unconditional leaf-no-follow phrasing at the
+symlink and containment rows, `(dev, ino)` refusing before any read, and the
+classify/read-gap acceptance contract. They are left standing deliberately — correcting
+them would pre-empt the design decision that is now the owner's.
+
+**The choice, as the reviewer frames it and I agree:** accept and name the win32
+same-inode leaf-relocation residual, stripping every "no capability gained" and
+unconditional leaf-no-follow claim from all registered mirrors; or bind traversal to
+verified directory descriptors via per-component `openat`, which needs native support
+and collides with the zero-dependency rule. The product behaviour to be guarded is
+stated exactly: **a classified leaf relocated outside the root must not contribute bytes
+under the original internal path.**
+
+### Two things this round settles about the loop itself
+
+**Seventh instance of the family, and the worst.** The first six cost rounds, an
+advisor's audit, and the owner's review attention. This one cost an owner RULING made on
+a false premise. The escalation is monotonic and it is worth stating plainly: the family
+does not decay as we get better at the subject matter.
+
+**And the newly landed rule did work — with a caveat I insist on keeping attached.** I
+argued before this round that a clean round 6 must not be read as "the rule works". This
+round is not clean: the rule was cited BY NAME to diagnose a real defect in a real
+measurement, in its first round in force, and the diagnosis is correct. That is a
+stronger data point than anything we had. But the reviewer was TOLD about the rule in my
+dispatch, so it is salience-assisted rather than a cold catch — the first honest test
+remains a fresh solo session with the runbook and neither salience nor a peer. Evidence
+with the qualification attached; never vindication.
