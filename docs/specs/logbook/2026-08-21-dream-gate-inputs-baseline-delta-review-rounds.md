@@ -48,6 +48,7 @@ credit. Anything from those rounds that still applies must be re-found here.
 | 0a | Template conformance (clean context, two inputs, no external reviewer) | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-r0-template-conformance-raw.md` | this commit | CONFORMANT — 0 blocking, 3 non-blocking |
 | 0b | Internal coherence + runnable criteria | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-r0-internal-coherence-raw.md` | this commit | 15 findings, all fixed |
 | 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-round-1-raw.md` | this commit | **NO-SHIP** — 3 findings in scope (2 HEAVY), 1 routed |
+| 2 | External adversarial (design), gptsol, English-pinned, fresh round after the HEAVY fixes | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-round-2-raw.md` | this commit | **NO-SHIP** — F1 NOT FIXED, three PARTIAL, 4 new findings; **the armed family escalation FIRED** |
 
 ## Round 0 dispositions
 
@@ -139,3 +140,67 @@ behaviourally, inside the frozen three-assertion surface.
 check and its abort). `size: M` stands, with less margin than before; the named
 seam if a later round pushes it over is unchanged — (i) capture + primitive + its
 own tests, (ii) the gate swaps and the divergence proof.
+
+## Round 2 — THE ARMED ESCALATION FIRED. Returned to the owner as a ruling request
+
+Nothing was fixed in response to this round, deliberately. The stop criterion armed
+after round 1 says: if a fresh round run AFTER the root fix lands again in the
+preservation/visibility family — realised here as "silently weakened gate" — that is
+evidence the seam itself needs re-cutting, and it returns as an owner ruling, on the
+measured failure of invariant enforcement rather than on suspicion. **That condition
+is met, measurably.**
+
+### Why the root fix failed — one line, and it is a category error, not a wording one
+
+The ruled invariant pinned **HEAD**. The fact it had to constrain is
+`change.untracked`, which `changedPaths` derives as `code === '??'` from
+`git status --porcelain -z -uall` (`validate.js:1021`, `:1031`). That is a fact about
+the **index**, not about HEAD. A file staged after capture leaves HEAD untouched, so
+the drift check passes while `isNew` (true) and `untracked` (false) disagree — and
+the skill-body guard skips where it today reverts. **A HEAD pin cannot constrain an
+index fact.** Route (a) was folded exactly as ruled; the ruling's mechanism was
+insufficient by construction.
+
+### The shape all three in-scope findings share — this is the round's real result
+
+Each one replaces a **live read** with a **snapshot**, and every live read being
+replaced was also, incidentally, a **freshness** check:
+
+| Live read removed | What it also told the caller |
+|---|---|
+| `git status` at classification time | what is true NOW, not at capture |
+| `diff --cached` read AFTER `git add -A` (`:1223`) | the bytes about to be committed, not the bytes seen earlier |
+| `assertCleanTree` immediately before use | the tree is clean NOW |
+
+A snapshot structurally cannot carry liveness. So the substitution does not merely
+change the evidence source — it **removes a property the pipeline silently relied
+on**. Finding 3 is the sharpest consequence: Step 5's `git add -A` (`:1412`) is
+untouched by design, so a write landing after `computeDelta` is committed with no
+gate having seen it. Today EP2 would see it. That is a **regression**, which
+disproves the package's behaviour-preservation claim outright.
+
+### What that means for the seam
+
+"Swap the gates' inputs while the brain still writes to the live vault" cannot be a
+behaviour-preserving refactor, because the live vault is exactly what makes liveness
+necessary. Recovering it requires a generation invariant (HEAD + index + worktree)
+re-verified before classification AND before commit, plus binding the committed bytes
+to the classified generation — roughly three more mechanisms on a package already at
+the top of `M`, which bursts it to `L` and forces a split. The split is the seam
+re-cut under another name.
+
+### Also open, not decisive, fixable under any option
+
+- **F1b PARTIAL** — Table D is exhaustive (seven of seven, re-measured) but its
+  safety argument rests on the false HEAD claim.
+- **F2 PARTIAL** — Table E's EP2 row still bundles four independent replacements
+  (path list, `binary`, `addedLineNumbers`, scan text) under one discriminator, and
+  the two `isNew` sites are bundled in one row. Still per gate-family, not per
+  substitution.
+- **F4 / citation class, THIRD occurrence** — `precommitSessionEdits` `:122-137` not
+  `:122-144`; the test helpers run to `:64` not `:63`. Round zero verifies that a
+  claim's NAMED LINE resolves and has never verified that a RANGE ends where its
+  construct ends. A candidate round-zero improvement, recorded for the owner rather
+  than fixed inside this package.
+
+**Status: the package does not advance until the owner rules on the seam.**
