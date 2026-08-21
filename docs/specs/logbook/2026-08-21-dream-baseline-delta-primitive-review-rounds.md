@@ -38,6 +38,7 @@ there counts as reviewed here.
 | 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-1-raw.md` | **NO-SHIP** — 4 findings, all confirmed; 2 folded, 2 PARKED |
 | 2 | External adversarial (design), gptsol, fresh round after the ruling | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-2-raw.md` | **NO-SHIP** — 1 FIXED, 2 PARTIAL, 1 NOT FIXED, 5 fresh findings; all folded, none parked |
 | 3 | External adversarial (design), gptsol, fresh round after the framing flip | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-3-raw.md` | **NO-SHIP** — 3 FIXED, 1 PARTIAL, 1 NOT FIXED, 4 fresh findings; 3 folded, 1 PARKED |
+| 4 | External adversarial (design), gptsol, the closing round required by weighted closure | `docs/specs/logbook/2026-08-21-dream-baseline-delta-primitive-round-4-raw.md` | **NO-SHIP** — 2 FIXED, 2 PARTIAL, 3 fresh findings (the FIRST type (a) in this package); all 3 folded |
 
 ## Round 0 dispositions
 
@@ -402,3 +403,68 @@ move as asking a claim to name its mechanism.
 **Second time an arc-ratified rule has bound this session's decision**, after the
 repeat-kind rule forced the round-3 park. Recorded as the rule deciding, not as
 judgment agreeing with it.
+
+## Round 4 dispositions — three folded, and the first type (a) finding
+
+The owner's audit test was carried in the dispatch as a **required per-finding
+classification**, and it earned its place immediately: two findings are type (b) —
+the guarantee is over-stated — and **one is type (a): the spec would fail to prevent
+something real.** That is the first type (a) in four rounds, and it is the answer to
+"is the remaining risk in what the thing does, or in what it says about itself".
+
+| # | Finding | Class | Disposition |
+|---|---|---|---|
+| 3 | **Nested-directory enumeration failure was not fail-closed.** The spec named an unreadable ROOT and an unreadable FILE and never an unenumerable DIRECTORY (`:101`, `:133`, `:320`) | **(a)** | **FOLDED.** Capture now throws on a directory that cannot be enumerated at any depth, and the existing unreadable-capture criterion is EXTENDED rather than a new one added — within the frozen surface, as the reviewer itself insisted |
+| 2 | **"Constructed executable" overstated absolute-path verification.** It prevents PATH SELECTION; it does not construct or freeze executable BYTES | (b) | **FOLDED** by narrowing the claim, not by adding a control — the reviewer explicitly said not to add one. Measured against the precedent: `spawnPinnedSync` fails closed on a forged `git` earlier in PATH and ACCEPTS rewritten content at the same verified absolute path |
+| 1 | **The withdrawn containment universal was re-asserted in two mirrors** — the symlink row still said "never followed", the security checklist still said "no-follow rule" | (b) | **FOLDED as the circuit-breaker's prescribed action.** See below |
+| — | Citation `validate.js:67` was one line early (`:68` is the `spawnPinnedSync` call) — a line I added in round 3 | (b) | **FOLDED** |
+
+### Why finding 1 was folded and not parked — departing from a flag I placed myself
+
+The dispatch told the reviewer that a third containment-family finding is a REPEAT-KIND
+design question, and the reviewer duly flagged it as one. The burden is therefore on me
+to justify not parking it, and here it is.
+
+**Rounds 2 and 3 found MECHANISM failures** — leaf `O_NOFOLLOW` insufficient, then
+`(dev, ino)` insufficient. **Round 4 found a MIRROR failure:** the canonical containment
+row is honest and correct; two surfaces that mirror it still stated the withdrawn
+universal, and the **Mirrored Surface Checklist contained zero containment entries** —
+nothing bound them to it.
+
+ADR-0031's loop circuit-breaker prescribes exactly this case, in its own words: two
+consecutive rounds on the same contract family → *"pull that contract into one canonical
+reference table and register its mirrored surfaces per ADR-0031's Mirrored Surface
+Checklist, then resume the loop."* The canonical table already exists. The registration
+never happened. And the DESIGN decision the reviewer asks to be resolved — leaf
+no-follow plus a named residual, everywhere — **is the one the owner already ruled**.
+Applying an existing ruling to every mirror is execution, not a new design question.
+
+So: all four mirrors now state leaf no-follow plus the named ancestor residual, and the
+containment mirrors are registered in the checklist so this cannot recur silently. A
+sweep confirms no unqualified whole-path claim survives anywhere in the document.
+
+### A precedent that has now imported two defects
+
+`listNames` (`src/core/private-fs.js:382-390`) swallows a `readdirSync` failure and
+returns `[]`. Finding 3 arrives through the very idiom this spec cites as its walk
+precedent — the **second** time citing `private-fs.js` has imported a defect, after the
+half-carried `applyModeSecure` in round 3. The lesson already logged ("citing a
+precedent is not carrying it") has a sibling worth naming: **a precedent can be worth
+citing for its shape and still be wrong in a detail you are inheriting.** Both times the
+defect was in what the precedent does on the FAILURE path.
+
+### The loop is not done, and round 5 is required
+
+Finding 3 is type (a) and changes what the implementer builds, so it is HEAVY by the
+rule's own test. `docs/runbooks/codex-review.md`: *"HEAVY: fixes land, then a full fresh
+external round"*, and *"the loop is DONE when a round finds nothing about the product."*
+Round 4 found product defects. **Round 5 is required.**
+
+**The tension with ruling 2 is real and is the owner's to resolve, not mine.** Ruling 2
+wants 1a closed and 1b brought forward; the rule says 1a is not Ready until a round comes
+back clean. I am not going to read the rule loosely to reach the ruled outcome faster —
+that is the same move I declined when the advisor framed the round-4 obligation as
+verification. But the owner should see the shape of what remains: **rounds 3 and 4
+produced four (b) findings and one (a)**, the (a) is folded, and the surface is frozen.
+If he judges the remaining risk acceptable and closes 1a on the current text, that is a
+legitimate owner act on a named residual — it is simply not a call the rule lets me make.

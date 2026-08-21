@@ -98,7 +98,8 @@ fix: this package is additive by ruling.
  *  @param {(rel:string) => boolean} [include]  optional filter over relative paths;
  *    omitted means every regular file under rootDir
  *  @returns {Baseline} — `{files, anomalies, include}`, Table A; throws
- *    WienerdogError on an unreadable root or file */
+ *    WienerdogError on an unreadable root, an unenumerable directory at any depth,
+ *    or an unreadable file */
 function captureBaseline(rootDir, include)
 
 /** Difference the SAME root, as it stands at call time, against a baseline.
@@ -125,12 +126,12 @@ package inherits this contract unchanged.
 | **Scope travels with the baseline** | `computeDelta` re-applies `baseline.include` and does NOT take a filter of its own. Without this, a path absent from `files` is ambiguous — excluded at capture, or genuinely new — and the primitive would report a pre-existing excluded file as `added`, which is exactly the false accusation the completeness rule exists to prevent. Carrying the predicate rather than re-passing it removes one failure mode — a caller cannot hand the second walk a DIFFERENT function. It does **not** make scope mismatch impossible, and this contract does not claim it does: measured, one and the same function object can answer `false` at capture and `true` at delta by reading mutable closure state, and the excluded pre-existing file is then reported `added` anyway. **Named caller invariant, since it cannot be enforced from inside:** `include` must be a pure function of the path — same input, same answer, for the lifetime of the baseline. A caller that violates it gets the false attribution, and an acceptance case pins whatever the chosen behaviour is |
 | Path shape | relative to `rootDir`, POSIX separators (`/`) on every platform — the same shape `git status` yields, so the successor's registry and prefix tests keep working unchanged |
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
-| Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
+| Symlinks and other non-regular entries | **never followed at the LEAF, and never captured** (the ancestor residual is in the containment row below — this row is not a whole-path guarantee). A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
 | **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW` **and `O_NONBLOCK`**, the descriptor is `fstat`ed to confirm it is a regular file, **the descriptor's `(dev, ino)` is revalidated against the pair captured when the walk classified that path**, and only then are the bytes read from that descriptor. A path that becomes a symlink between enumeration and open, or whose identity no longer matches, throws or is recorded as an anomaly — it never yields bytes. **The revalidation is not belt-and-braces: `O_NOFOLLOW` constrains only the FINAL component.** Measured: replacing an intermediate DIRECTORY with a symlink to an outside directory lets `O_NOFOLLOW` open the outside leaf and `fstat` accept it as a regular file, returning external bytes — and the `(dev, ino)` comparison is what catches it (`devInoMatches: false` in that reproduction). This is exactly the discipline the cited precedent already applies. **`O_NONBLOCK` is load-bearing, not hygiene:** `O_NOFOLLOW` refuses a final symlink but not a FIFO, and a regular file replaced by a FIFO in the classify/open gap makes a blocking open wait forever — measured, it never returns and never reaches `fstat`, so neither the anomaly path nor the throw is ever taken and the run HANGS instead of failing loudly. With `O_NONBLOCK` the open returns and `fstat` reports the FIFO, which the regular-file check then rejects. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
 | **Containment — what is guaranteed, and what is NOT** | guaranteed: no symlink is followed at the leaf (`O_NOFOLLOW`), the opened descriptor's `(dev, ino)` matches the pair captured at enumeration, and the resolved path is verified under the root. **NAMED RESIDUAL, owner-ruled 2026-08-21:** an ancestor DIRECTORY relocated between enumeration and open, with the leaf's identity preserved, is **not** detectable here. Measured — move the classified directory out of the root and symlink its old location to it, and every check above still passes (`openedRegular: true`, `devInoMatches: true`) while the bytes come from outside. Closing that class needs per-component `openat` from a verified parent descriptor, which Node's `fs` does not expose, and a native module is barred by the zero-dependency rule. The realpath verification narrows the window and **does not close the class** — it can itself be raced — and is stated that way deliberately: it is defense in depth, not a guarantee. This row replaces an earlier universal claim that every visited path resolves inside `rootDir`, which was false |
-| Containment (the walk's own construction) | paths are built only from directory entries, never from file content, so no `..` or absolute segment can be introduced; the no-follow rule is what keeps that true |
+| Containment (the walk's own construction) | paths are built only from directory entries, never from file content, so no `..` or absolute segment can be introduced; the LEAF no-follow rule keeps that true for the final component, and the containment row above owns what happens above it |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
-| Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
+| Failure at capture | an unreadable root, **a directory that cannot be ENUMERATED at any depth**, or a file that cannot be read, throws `WienerdogError`. The directory case is called out because the cited walk idiom gets it wrong: `listNames` (`src/core/private-fs.js:382-390`) swallows a `readdirSync` failure and returns `[]`, so an implementer following it would silently omit every file beneath an unreadable nested directory — measured, `readdirSync` on a mode-`000` nested directory fails `EACCES` — and each of those pre-existing files is then reported `added` once the directory becomes readable. That is precisely the false attribution this module exists to prevent, arriving through its own precedent. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
 | Failure at delta time | a file present in the baseline and gone now is `deleted` — that is the normal case. Any other read failure throws |
 | **No freshness claim** | `computeDelta` describes `rootDir` **at the moment it read it**, and nothing more. It does not lock, re-check, or promise that the answer still holds when the caller acts. Consumers that need liveness must obtain it themselves. This row exists because the superseded predecessor assumed the opposite and two adversarial rounds measured the consequence (`docs/specs/done/WP-dream-gate-inputs-baseline-delta.md`, banner) |
 
@@ -168,7 +169,7 @@ when invoked:
   measured, `env -i` with empty `HOME`/`XDG_CONFIG_HOME` and `GIT_CONFIG_NOSYSTEM=1`
   still returned a forged `-\t-` when a directory holding an executable named `git`
   came first on PATH. The repo already solves exactly this for its product git calls
-  (`src/core/dream/validate.js:67` spawns through `spawnPinnedSync`, a pinned absolute
+  (`src/core/dream/validate.js:68` spawns through `spawnPinnedSync`, a pinned absolute
   realpath), and the reference helper takes the same discipline;
 - with **`--no-ext-diff`**;
 - over two plain files, via `--no-index`.
@@ -201,7 +202,15 @@ Measured, with BOTH hostile channels armed in the parent environment:
 The third row is the load-bearing one: it never names the injection variables, and
 they still cannot arrive, because the child's environment was **built rather than
 filtered**. So the guarantee decomposes into **three** constructed things: the environment, the
-config/attribute roots, and the executable. Each closes every channel arriving through
+config/attribute roots, and the executable — and the third is weaker than the other
+two, which this row states rather than glossing. Absolute verified invocation prevents
+PATH SELECTION of an impostor; it does **not** construct or freeze the executable's
+BYTES. Measured against the cited precedent itself: `spawnPinnedSync` fails closed on a
+forged `git` earlier in PATH, and ACCEPTS rewritten content at the same verified
+absolute path, returning forged output. The precedent's own source says so. This
+package's product module never executes git, so that is not a new product primitive —
+it means the differential's oracle is protected from PATH-selected impostors and not
+from all executable-identity influence, and the proof claims exactly that much. Each closes every channel arriving through
 ITS OWN class, named or not — and that quantifier is the whole claim. **It is NOT a
 claim that every channel is closed.** An earlier draft of this row said "named or not"
 without naming the classes, and the executable channel walked straight through the
@@ -240,6 +249,13 @@ non-repository directory is ignored.
 - [ ] Current-state description (the two neighbouring patterns and why the hash-only shape is insufficient)
 - [ ] Implementation notes: the binary-prefix trap, the guard-asymmetry measurement,
       the neutral-CWD requirement, and the ordering rationale
+- [ ] **Containment — every mirror of Table A's containment row**, registered here
+      because two rounds in a row landed on this contract and a third landed on its
+      unregistered mirrors: the `Symlinks and other non-regular entries` row, the
+      Security checklist's containment item, the classify/read-gap acceptance
+      criterion, and the successor handoff in Out of scope. All four state **leaf**
+      no-follow plus the NAMED ancestor residual; none may restate the withdrawn
+      whole-path universal
 - [ ] Out of scope: everything the successor owns
 
 ## Implementation notes & constraints
@@ -293,9 +309,13 @@ non-repository directory is ignored.
 - [ ] The template's untrusted-identifier item applies: the walk enumerates
       **attacker-influenceable paths** — in the successor this module reads a directory
       holding a headless model's output (threat class T2, a steered dream) — and those
-      relative paths flow into filesystem reads. Containment is Table A's no-follow
-      rule plus paths built only from directory entries, never from file content, so no
-      `..` or absolute segment can be introduced. No path reaches a shell: this module
+      relative paths flow into filesystem reads. Containment is Table A's containment
+      row — **leaf** no-follow, `(dev, ino)` revalidation and a racy realpath check —
+      **together with its NAMED residual: an ancestor directory relocated between
+      enumeration and open is not detected.** This checklist states that rather than
+      summarising it away as a whole-path no-follow guarantee. Paths are also built only
+      from directory entries, never from file content, so no `..` or absolute segment
+      can be introduced. No path reaches a shell: this module
       spawns nothing, asserted in the verification steps.
 - [ ] The failure mode that matters is a **silently incomplete baseline**: a file
       omitted at capture is later reported as `added`, which attributes a user's
@@ -317,8 +337,10 @@ non-repository directory is ignored.
       `rootDir` are each reported in `anomalies` with their path, are absent from
       `records` and from any baseline, and their targets' bytes appear nowhere in the
       output.
-- [ ] Capture throws `WienerdogError` on an unreadable root and on an unreadable file;
-      no partial baseline is ever returned.
+- [ ] Capture throws `WienerdogError` on an unreadable root, on an unreadable file,
+      **and on a nested directory that cannot be enumerated**; no partial baseline is
+      ever returned, and no file beneath an unenumerable directory is ever silently
+      omitted.
 - [ ] Scope survives the round trip: with an `include` that excludes some paths, a
       **pre-existing excluded** file produces no record, a **newly created excluded**
       file produces no record, and a **newly created included** file is reported
