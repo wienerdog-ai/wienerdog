@@ -127,7 +127,8 @@ package inherits this contract unchanged.
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
 | Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
 | **Classification and read are bound to ONE opened object** | a path is not `lstat`ed and then read by name. It is opened with `O_NOFOLLOW` **and `O_NONBLOCK`**, the descriptor is `fstat`ed to confirm it is a regular file, **the descriptor's `(dev, ino)` is revalidated against the pair captured when the walk classified that path**, and only then are the bytes read from that descriptor. A path that becomes a symlink between enumeration and open, or whose identity no longer matches, throws or is recorded as an anomaly — it never yields bytes. **The revalidation is not belt-and-braces: `O_NOFOLLOW` constrains only the FINAL component.** Measured: replacing an intermediate DIRECTORY with a symlink to an outside directory lets `O_NOFOLLOW` open the outside leaf and `fstat` accept it as a regular file, returning external bytes — and the `(dev, ino)` comparison is what catches it (`devInoMatches: false` in that reproduction). This is exactly the discipline the cited precedent already applies. **`O_NONBLOCK` is load-bearing, not hygiene:** `O_NOFOLLOW` refuses a final symlink but not a FIFO, and a regular file replaced by a FIFO in the classify/open gap makes a blocking open wait forever — measured, it never returns and never reaches `fstat`, so neither the anomaly path nor the throw is ever taken and the run HANGS instead of failing loudly. With `O_NONBLOCK` the open returns and `fstat` reports the FIFO, which the regular-file check then rejects. Measured: with a plain `lstat`-then-`readFileSync(path)`, substituting a symlink in that gap returns the target's bytes under the internal relative path, while the `O_NOFOLLOW` open refuses with `ELOOP`. The repo already applies this discipline (`src/core/private-fs.js`, the TOCTOU-safe chmod `applyModeSecure` at `:687-751` (JSDoc from `:687`, function `:713-751`), which opens `O_NOFOLLOW`, `fstat`s and revalidates before acting) |
-| Containment | every path the walk visits resolves inside `rootDir`. A `..` segment cannot occur (paths are built from directory entries), and the no-follow rule is what keeps that true |
+| **Containment — what is guaranteed, and what is NOT** | guaranteed: no symlink is followed at the leaf (`O_NOFOLLOW`), the opened descriptor's `(dev, ino)` matches the pair captured at enumeration, and the resolved path is verified under the root. **NAMED RESIDUAL, owner-ruled 2026-08-21:** an ancestor DIRECTORY relocated between enumeration and open, with the leaf's identity preserved, is **not** detectable here. Measured — move the classified directory out of the root and symlink its old location to it, and every check above still passes (`openedRegular: true`, `devInoMatches: true`) while the bytes come from outside. Closing that class needs per-component `openat` from a verified parent descriptor, which Node's `fs` does not expose, and a native module is barred by the zero-dependency rule. The realpath verification narrows the window and **does not close the class** — it can itself be raced — and is stated that way deliberately: it is defense in depth, not a guarantee. This row replaces an earlier universal claim that every visited path resolves inside `rootDir`, which was false |
+| Containment (the walk's own construction) | paths are built only from directory entries, never from file content, so no `..` or absolute segment can be introduced; the no-follow rule is what keeps that true |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
 | Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
 | Failure at delta time | a file present in the baseline and gone now is `deleted` — that is the normal case. Any other read failure throws |
@@ -322,13 +323,18 @@ non-repository directory is ignored.
       **pre-existing excluded** file produces no record, a **newly created excluded**
       file produces no record, and a **newly created included** file is reported
       `added`. No excluded pre-existing file is ever reported `added`.
-- [ ] **The no-follow guarantee holds across the classify/read gap** — for the LEAF
-      *and* for an INTERMEDIATE directory component. Substituting a symlink at either
-      position between classification and read yields a throw or an anomaly, never the
-      target's bytes, and never bytes from outside `rootDir`. A test that only places
-      symlinks up front, or that only substitutes the leaf, does not discriminate this
-      and does not satisfy the criterion: measured, leaf-only `O_NOFOLLOW` passes the
-      leaf case while an intermediate-directory swap still returns external bytes.
+- [ ] **The no-follow guarantee holds across the classify/read gap** for the LEAF, and
+      the realpath verification rejects the demonstrated intermediate-directory
+      relocation. The residual named in Table A is NOT asserted closed: a test claiming
+      to close the ancestor class would be asserting something this package does not
+      deliver. Substituting a symlink at the LEAF between classification and read
+      yields a throw or an anomaly, never the target's bytes; substituting an
+      INTERMEDIATE directory is rejected by the realpath verification in the
+      demonstrated form, and the residual is reported rather than claimed away. A test
+      that only places symlinks up front does not discriminate any of this: measured,
+      leaf-only `O_NOFOLLOW` passes the leaf case while an intermediate-directory swap
+      still returns external bytes, and `(dev, ino)` alone does not catch the
+      same-inode relocation.
 - [ ] A stateful `include` — one function object answering differently on the two
       walks — produces the behaviour Table A's caller invariant names, and that
       behaviour is pinned by a test rather than assumed.

@@ -347,3 +347,58 @@ baseline, and now containment. The first two were caught by reviewers; the last 
 caught while folding. That direction of travel is the point: the spec now states what
 it can enforce and names what it cannot, which is what it should have said the first
 time.
+
+## Owner rulings 2026-08-21 — containment, priority, and the closing-round question
+
+**RULING 1 — containment: the recommendation, as written.** Folded. Table A's
+containment row now states what is guaranteed (leaf `O_NOFOLLOW`, `(dev, ino)`
+revalidation, resolved path verified under the root) and NAMES the residual: an
+ancestor directory relocated between enumeration and open, leaf identity preserved, is
+not detectable without per-component `openat`. The realpath verification is described
+as narrowing the window and explicitly NOT closing the class. The acceptance criterion
+was corrected too — it still carried "never bytes from outside `rootDir`", which the
+narrowing makes false; a criterion asserting the ancestor class closed would assert
+something this package does not deliver.
+
+**RULING 2 — priority: 1a closes with its honest limits; 1b comes forward.** The
+grounds are worth recording, because they are about this package's value, not its
+quality: 1a closes no audit finding by its own spec, and after three rounds and fifteen
+commits the actual closure lives in 1b.
+
+### The closing-round question — my call, by the rule, stated as required
+
+The advisor read the remaining weighted-closure obligation as verification of the
+round-3 fixes rather than another hardening round, and explicitly left the judgment to
+me under the repo rules. I read the rule on `main` (not my older base, and not the
+paraphrase) and **it binds: round 4 runs as a full fresh external round.**
+
+`docs/runbooks/codex-review.md`, Weighted closure: *"HEAVY: fixes land, then a full
+fresh external round"* and *"The loop is DONE when a round finds nothing about the
+product."* Round 3's fixes are HEAVY by the rule's own test — the constructed
+executable, `O_NONBLOCK`, the withdrawn immutability claim and the narrowed containment
+contract each change what the implementer builds — and round 3 found product defects,
+so the loop is not done. There is no reading on which 1a is Ready without one clean
+round.
+
+This does not fight ruling 2; it is how ruling 2 is executed. "Closes with its honest
+limits" and "closes without the closing round" are different things, and the second is
+not available. If round 4 comes back clean, 1a is Ready and 1b starts. If it does not,
+that is information the owner needs BEFORE 1b, since 1b inherits this contract.
+
+What the rule does NOT license is a wider round, and the dispatch says so: the
+machinery surface is frozen (convergence rule — *"verification machinery may GROW only
+to guard a product behavior"*), and the repeat-kind rule makes a third
+containment-family finding a design question returned to the owner, never a fourth
+patch.
+
+**One addition of the owner's, carried into the dispatch prospectively.** The owner's
+audit test — *does this change what the ATTACKER can do, or only what we CLAIM is
+proven?* — is now a required per-finding classification in round 4, rather than
+something applied afterwards. All four withdrawn universals in this package fell on the
+"what we claim is proven" side; making the reviewer classify each finding at the point
+of writing it is cheaper than adjudicating it later, and it is the same generative
+move as asking a claim to name its mechanism.
+
+**Second time an arc-ratified rule has bound this session's decision**, after the
+repeat-kind rule forced the round-3 park. Recorded as the rule deciding, not as
+judgment agreeing with it.
