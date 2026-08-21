@@ -102,12 +102,18 @@ listed and both are re-verified then.
   stage-and-commit (`:1411`, whose `git add -A` is at `:1412` — Table E owns
   that call), Step 6 the skill ownership registry (`:1443`). Table D owns what
   each gate's evidence is today and what it becomes. The compare-then-write
-  guard this package reuses is at `:884-889`.
+  guard this package reuses is at `:884-890` (`readFileSync`+compare at `:889`,
+  `renameSync` at `:890`).
 - `src/cli/dream.js` — `precommitSessionEdits(vaultDir)` at `:493` followed by
-  `assertCleanTree(vaultDir)` at `:494`; `restoreVaultToHead(vaultDir)` at
+  `assertCleanTree(vaultDir)` at `:494`; a SECOND `assertCleanTree(vaultDir)` at
+  `:237` is the unknown-command non-vacuity guard (Table G, F2), a distinct
+  consumer that does not go with the precommit; `restoreVaultToHead(vaultDir)` at
   `:535` (brain failed/timed out) and `:550` (scratch changed mid-run);
   `runBrainWithWatchdog` at `:137`, whose reap verdict is computed at `:272`
-  and **discarded** — the function returns without surfacing it.
+  **inside `if (pidfile)` (`:256`)** and consumed only to gate the pidfile
+  unlink; `pidfile` is `null` on a tokenless manual run (`:149-152`), so the
+  verdict is absent there (Table G, F6). The function surfaces nothing about it
+  to its caller.
 - `src/core/dream/delta.js` — `captureBaseline` and `computeDelta`, git-free,
   spawns nothing. The sibling consumes `captureBaseline`; `computeDelta` is
   consumed by nothing until this WP.
@@ -146,11 +152,17 @@ under "Discovered issues" in the PR body.
  *           imported so `promote.js` does not depend on `validate.js`. Their
  *           inputs differ BY GATE, and Table D owns them: the EP2 secret gate
  *           judges the delta's added lines against the baseline BEFORE the
- *           merge (remedy: withhold + quarantine); the other three judge the
- *           MERGED candidate bytes, and the skill-body guard additionally
- *           takes the BASELINE ledger as its authorizing input. Each returns
- *           a refusal reason or null
- *  @returns {{promoted:string[], refused:Array<{rel:string, reason:string}>}} */
+ *           merge; the other three judge the MERGED candidate bytes, and the
+ *           skill-body guard additionally takes the BASELINE ledger as its
+ *           authorizing input. The three post-merge gates return a refusal
+ *           reason or null; the EP2 gate returns the ADR-0034 taxonomy —
+ *           {ok} | {refuse, reason} | {redact, sanitizedBytes} (Table D)
+ *  @returns {{promoted:string[],
+ *             redacted:Array<{rel:string}>,
+ *             refused:Array<{rel:string, reason:string}>,
+ *             secretDisposition:{reverts:number, redactions:number}}}
+ *    secretDisposition is the typed signal the pipeline's transcript-advance
+ *    consumes (Table G, F9) — never a parsed refusal reason */
 function promote(o)
 ```
 
@@ -181,7 +193,7 @@ condition.
 | C6 | delta status is `modified` and `vault-now` differs from `baseline`, and the three-way merge exits clean | **promote the MERGED bytes** |
 | C7 | delta status is `modified`, `vault-now` differs, and the merge conflicts | **refuse-and-report. The note stays in the USER's live version** |
 | C8 | delta status is `modified` and the path is gone from `vault-now` (the user deleted it during the run) | **refuse-and-report** — modify/delete is a conflict, and the user's deletion wins |
-| C9 | **the promotion allowlist** | a path is admitted when ALL hold: (a) it is under one of the layout's writable tier directories — `identity_dir`, `daily_dir`, `projects_dir`, `skills_dir`, `inbox_dir` (`layout.js:21-29`; `reports_dir` is excluded, and `daily_filename` is not a directory) — or under `02-Areas/` or `03-Resources/`; (b) its final component ends in `.md`; (c) its basename is not `CLAUDE.md` or `AGENTS.md` at any depth. (a) and (b) are a positive allowlist and close the class M7's remediation asks for — a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json` and an Obsidian plugin binary are all outside it without anyone enumerating them. (c) is a **named deny-list and is stated as one: it will not cover the next harness convention.** It exists because (a) and (b) cannot reach an `AGENTS.md` written inside a tier directory |
+| C9 | **the promotion allowlist** | a path is admitted when ALL hold: (a) it is under one of the layout's writable tier directories — `identity_dir`, `daily_dir`, `projects_dir`, `skills_dir`, `inbox_dir` (`layout.js:21-29`; `reports_dir` is excluded, and `daily_filename` is not a directory) — or under `02-Areas/` or `03-Resources/`; **and it is NOT, at any depth, under the layout's `reports_dir` (F10): the exclusion is an explicit negative check, because a pathological but valid layout can set `reports_dir` equal to or beneath a tier directory (`layout.js` enforces no cross-key distinctness), and without the negative check the brain could promote into the code-owned report tree through the overlap;** (b) its final component ends in `.md`; (c) its basename is not one of the current harness instruction-file shapes — `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md` — at any depth, AND no path segment is `.claude` or `.codex`, AND the basename is not `.mcp.json`. (a) and (b) are a positive allowlist and close the class M7's remediation asks for — a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json` and an Obsidian plugin binary are all outside it without anyone enumerating them. (c) is a **named deny-list of the CURRENT conventions (round 1, F5): the product itself already treats `AGENTS.override.md` as a live shadowing convention (`src/adapters/codex.js`), and `CLAUDE.local.md` / recursively-discovered `.claude/**` are current Claude conventions — so `.md` is not a safe content-only extension, and this list is stated as one that will not cover the NEXT convention.** It exists because (a) and (b) cannot reach an instruction file written inside a tier directory |
 | M1 | Merge mechanics | **Merge on a COPY; promote only on a clean merge.** Measured on git 2.50.1: `git merge-file` exits 1 and writes conflict markers **INTO the target** — for a divergent edit and for modify/delete alike — so merging on the user's live note would violate the very guarantee refuse-and-report exists to keep. Clean divergent edits exit 0 with correct merged bytes |
 | M2 | The merge's git invocation | The merge exit code is a security decision (clean → promote), so the invocation takes the dependency's **constructed-environment** discipline verbatim (`WP-dream-baseline-delta-primitive`, Table C): an environment BUILT from nothing rather than filtered, config and attribute roots pointed at directories this run created empty, a cwd outside any repository, and the verified absolute executable via `spawnPinnedSync` (`src/core/exec-identity.js`). **This spec does not restate that recipe — the dependency owns it, and its spec is a Done record on main: `docs/specs/done/WP-dream-baseline-delta-primitive.md`, Table C.** Measured here as corroboration, not as the guarantee: an armed `merge=` driver via `core.attributesFile` does not reach `merge-file`, and a hostile global config did not move an exit code. That enumeration is not trusted — this program's record at enumerating git's influence channels is 0 for 4, which is precisely why the answer is construction rather than a blocklist. **Named residual, inherited:** absolute verified invocation prevents PATH selection of an impostor; it does not freeze the executable's bytes |
 | M3 | Repository attribute sensitivity | **DISCHARGED here, as the dependency required.** The dependency named this as the successor's obligation. Discharged structurally: classification is `computeDelta`, which is git-free and reads no attributes; the workspace contains no `.git` (sibling Table A, Postcondition 1); and the only git this package runs against workspace content is the merge, under the constructed roots above. There is no path by which a repository attribute reaches a promotion decision |
@@ -196,14 +208,23 @@ therefore exactly what would be promoted. The **order inverts** relative to
 today: today the secret gate runs LAST (`:1211`, after Step 2's three); after
 this package it runs FIRST.
 
+The EP2 gate is not a two-value gate. Per binding ADR-0034 its disposition is a
+**taxonomy**, not `reason|null` (round 1, F7): a context-free high-entropy hit
+is REDACTED, not refused — the unredacted copy is preserved to quarantine, the
+added lines are scrubbed, the sanitized candidate is promoted, the redaction is
+reported, and it is counted separately from a hard refusal (`validate.js:1269-1291`
+is the shipped redact arm, `:1064-1072` its separate counters). So EP2 returns
+one of {pass, refuse-with-reason, redact-with-sanitized-bytes}; the other three
+gates stay `reason|null`.
+
 | Gate | Today | Decision input after | Position | Refusal remedy |
 |---|---|---|---|---|
-| EP2 secret gate (ADR-0034) | `validate.js:1211` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | withhold from promotion + preserve to quarantine. **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1324-1364` is its revert core) has no subject and goes. **No line count is stated here**: the figure this row originally carried came from the war-room log (a war-room record kept outside this repo) and was not measured against the tree, and a spec that repeats an unmeasured number lends it authority it never had |
+| EP2 secret gate (ADR-0034) | `validate.js:1211` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | **per ADR-0034's taxonomy:** a hard secret → withhold from promotion + preserve to quarantine; a context-free high-entropy hit → **redact** (scrub the added lines, preserve the unredacted copy to quarantine, promote the sanitized candidate, report it, count it separately). **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1324-1364` is its revert core) has no subject and goes — but the redact DISPOSITION survives, on the promotion side rather than the revert side. **No line count is stated here**: the figure this row originally carried came from the war-room log (a war-room record kept outside this repo) and was not measured against the tree, and a spec that repeats an unmeasured number lends it authority it never had |
 | Skill-body guard (ADR-0020) | `validate.js:1187` `skillBodyViolation` | the merged candidate bytes. **Its authorizing input is the BASELINE ledger, never the post-brain one** — otherwise the brain authorizes its own skill rewrite within a single run | AFTER the merge | refuse-and-report; the note stays in the user's live version |
 | Tier-3 floor | `validate.js:1194` `tier3Decision` | the merged candidate bytes | AFTER the merge | refuse-and-report |
 | Ledger validation | `validate.js:1156` `ledgerViolation` | the merged candidate bytes | AFTER the merge | refuse-and-report |
-| **Why this order, measured both ways** | — | — | — | a secret merged into the candidate bytes can only be remedied by discarding the whole note **along with the user's diverging edits**; and a gate judging pre-merge bytes would not be judging what is promoted. Violating this in either direction is punished by data loss, which is why it is a contract and not an implementation detail |
-| **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically**. The guard authorizes the skill from the ledger and the ledger is validated from the skill, so promoting one while refusing the other leaves the vault inconsistent. Enforced by Table E's decide-then-write ordering |
+| **Why this order** | — | — | — | EP2 runs first and scans the BRAIN's added bytes because those are what the run authored and is responsible for (ADR-0034 is about the AI's accidental persistence); the other three gates run after the merge because a Tier-3/skill/ledger judgment must be made on the MERGED bytes, which are exactly what would be promoted — a gate judging pre-merge bytes would not be judging what is promoted, and that is a data-loss contract, not an implementation detail. **Owner-ruled correction (round 1, F4):** the earlier rationale — "scanning the merged bytes would force discarding the user's diverging edits" — is FALSE, because refuse-and-report (C7) already leaves the user's live version untouched. EP2 is pre-merge and brain-scoped by CHOICE, not by that false necessity, and the consequence is a named residual (Security checklist): a secret the USER writes into their own note during the run rides a clean C6 merge into the dream commit unscanned. That is the user's own content in their own vault — the dream commits it but did not author it — and making the secret gate refuse or redact a user's own note was ruled the worse trade |
+| **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically at the DECISION** (round 1, F8): both outcomes are decided before either is written, so a policy failure on one refuses BOTH — the guard authorizes the skill from the ledger and the ledger is validated from the skill, and promoting one while refusing the other would leave the vault inconsistent. Enforced by Table E's decide-then-write ordering. **This does NOT claim write-atomicity across the two paths**: if the first `rename` succeeds and the second fails (ENOSPC/EIO/kill), the vault holds a half-applied pair. Same-directory `rename` is atomic for ONE path, not across two, and rollback/crash-replay of a partial publish is the residue-lifecycle successor's subject, named in Out of scope — this row claims decision-atomicity and says so |
 | The dream report | `validate.js:1374` — written into the vault, and brain-writable because it lives in the vault | code-written into the **vault**, after promotion. `reports_dir` is excluded from copy-in (sibling Table A), so it is not in the workspace, not in the baseline, and not a promotion candidate | after promotion | N/A — the brain can no longer reach it. **The report bridge dissolves**, confirmed rather than inherited |
 
 ### Table E — the promotion write, and the one new window
@@ -211,10 +232,10 @@ this package it runs FIRST.
 | Fact / rule | Value |
 |-------------|-------|
 | Decide, then write | every path's outcome is decided before **any** vault byte is written. This is what makes Table D's atomicity row enforceable and what keeps a mid-run failure from leaving half a decision applied |
-| **The compare→promote window** | the only genuinely new window this direction introduces, and it is milliseconds against today's minutes-long silent window. Closed by conditional write: the last act before publishing a promoted path is to re-read the vault target and compare it byte-for-byte against the `vault-now` bytes the decision used. On a difference the write is **abandoned** and the path becomes refuse-and-report. The repo already contains exactly this guard to copy — `validate.js:884-889`, whose comment states the same reason ("a mid-dream editor save lands here, and overwriting it would destroy the only copy of what the user actually wrote") |
+| **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed** (round 1, F3), to milliseconds against today's minutes-long silent window. Narrowed by a re-read-and-compare: the last act before publishing a promoted path is to re-read the vault target and compare it byte-for-byte against the `vault-now` bytes the decision used. On a difference the write is **abandoned** and the path becomes refuse-and-report. **The residual, stated because POSIX offers no content-conditional replace:** a user save that lands BETWEEN the compare and the `rename` is still lost — the re-read and the `rename` are two syscalls, not a compare-and-swap. The repo's cited precedent — `validate.js:884-890`, whose comment states the same reason ("a mid-dream editor save lands here, and overwriting it would destroy the only copy of what the user actually wrote") — has exactly this TOCTOU window and shipped with it; this row narrows the same window and does not claim to close it |
 | The publish itself | write to a temporary file beside the target, then `rename` — the same shape as the cited precedent, so the target is never observed half-written |
-| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, or `refused` with a reason. The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
-| `precommitSessionEdits` **does not survive** | measured: its stated job is "so the subsequent dream diff is exactly the brain's writes" (`validate.js:113-115`). Under this package the brain writes nothing in the vault, so there is no such diff, and the three-way compare reads `vault-now` from the **filesystem** rather than from git. What remains is only its cost: it commits the user's in-flight edits under the `wienerdog` identity without asking. It goes, and `assertCleanTree(vaultDir)` (`cli/dream.js:494`) goes with it |
+| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
+| `precommitSessionEdits` **does not survive** | measured: its stated job is "so the subsequent dream diff is exactly the brain's writes" (`validate.js:113-115`). Under this package the brain writes nothing in the vault, so there is no such diff, and the three-way compare reads `vault-now` from the **filesystem** rather than from git. What remains is only its cost: it commits the user's in-flight edits under the `wienerdog` identity without asking. It goes, and the `assertCleanTree(vaultDir)` at `cli/dream.js:494` (its precommit-pairing use) goes with it. **A SECOND consumer of `assertCleanTree` does NOT go and must be re-based — Table G's non-vacuity row owns it:** `cli/dream.js:237` uses vault-cleanliness to tell a genuine brain rejection from a working run, and that signal's premise (the tree was clean immediately before spawn) is exactly what removing the precommit destroys |
 | The dream commit stages **only promoted paths** | consequence of the row above, and not optional: with no pre-commit, `git add -A` (`validate.js:1412`) would sweep the user's uncommitted edits into the dream commit. The commit stages the promoted paths and the code-written report explicitly. ADR-0012's "one dream run = one git commit in the vault" is unchanged — the commit now contains only what the dream promoted, which is strictly closer to what that ADR says |
 
 ### Table G — the pipeline: wiring, the reap precondition, the abort paths
@@ -222,7 +243,9 @@ this package it runs FIRST.
 | Fact / rule | Value |
 |-------------|-------|
 | The run's workspace lifecycle | `createWorkspace` runs before the brain is spawned (which is what makes the sibling's capture-before-spawn ordering a pipeline fact, not just a module fact); the sibling's transitional call-site argument is replaced by the run's workspace; after the brain, `computeDelta` then `promote`; `destroyWorkspace` on every exit path (exception below). **This is the line where the sibling's CLAIM 1 becomes true of the running product**, and the acceptance criteria re-assert its composed-argv form at pipeline level |
-| **The reap precondition** | `computeDelta` runs on the workspace only after the brain's process group is **verifiably** empty. `runBrainWithWatchdog` (`cli/dream.js:137`) already computes that verdict at `:272` — `reapGroupFn(...)` returning `{reaped:true}` — and today consumes it only to gate the pidfile unlink, never surfacing it to its caller; on `{reaped:false}` it retains the pidfile for run-job's backstop and returns anyway. This package surfaces the verdict and **refuses the run fail-closed** on anything but a verified reap, rather than walking a workspace a surviving process can still mutate. This converts the dependency's explicitly-unverified hypothesis (2) into an enforced precondition (sibling Table F), and it is what keeps the Codex arm's in-workspace shell from mattering to the walk |
+| **The reap precondition** | `computeDelta` runs on the workspace only after the brain's process group is **verifiably** empty. `runBrainWithWatchdog` (`cli/dream.js:137`) computes a reap verdict at `:272` — `reapGroupFn(...)` returning `{reaped:true}` — and today consumes it only to gate the pidfile unlink, never surfacing it to its caller. **Measured caveat (round 1, F6): that verdict is computed INSIDE `if (pidfile)` (`:256`), and `pidfile` is `null` on a tokenless manual `wienerdog dream` (`:149-152`) — so on a standalone success the verdict is not merely discarded, it is ABSENT.** This package therefore requires an **unconditional post-settle reap verdict** — computed on every run, tokenized scheduler run and tokenless manual run alike — surfaced to the caller, and it **refuses the run fail-closed** on anything but a verified reap, rather than walking a workspace a surviving process can still mutate. A missing verdict is treated as unverified (fail-closed), never as success. This converts the dependency's explicitly-unverified hypothesis (2) into an enforced precondition (sibling Table F), and it is what keeps a live actor from mutating the workspace during the walk |
+| **The unknown-command non-vacuity signal (F2)** | today the "the brain did not run — the CLI rejected the trigger prompt" abort keys off vault-cleanliness (`cli/dream.js:237`, `assertCleanTree`), sound only because the tree was asserted clean immediately before spawn — the premise `precommitSessionEdits` supplied (Table E) and this package removes. Under this package the brain writes the WORKSPACE, so the non-vacuity evidence moves there: a genuine rejection produced an EMPTY workspace delta (the brain did no work), so the abort keys off `sawUnknownCommand` AND an empty `computeDelta` result, never off the vault. A run that emitted the marker but DID write the workspace proceeds into promotion, exactly as today's guard let a writing run proceed into validation. The vault's cleanliness is no longer evidence of anything the brain did |
+| **The pipeline consumes EP2's disposition (F9)** | `promote()` returns a typed EP2 disposition summary (contract), and the pipeline's transcript-advance consumes it the way today's `secretReverts` signal does (`cli/dream.js:568-596`): a transcript whose only note was withheld or redacted for a secret is NOT marked processed, so it regenerates next run rather than being silently lost. The pipeline reads the typed field, never a human-readable refusal reason — parsing prose would be an undocumented security interface. A refusal for a NON-secret reason (allowlist, conflict) advances the transcript normally; only the EP2 dispositions defer it |
 | Teardown wiring | the workspace is removed on every exit path — success, refusal, brain failure, timeout — **with one named exception: a run that refused because the reap was not verified does NOT tear down.** Removing a tree a surviving process may still be writing is not a cleanup, and the row above is the whole reason that state is distinguishable. Teardown never touches the vault. A workspace left behind by that refusal, or by a crash, is the residue-lifecycle successor's subject, not this package's |
 | **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:535` and `:550`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone, a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: **the package's intent brief (a war-room record kept outside this repo) routed the abort paths to the residue-lifecycle successor, and this row is narrower than that** — it changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject |
 
@@ -246,6 +269,17 @@ this package it runs FIRST.
       without qualification, none may attribute M10's closure to any
       repository-status property (sibling Table F), and none may restate
       Table F's content instead of citing it.**
+- [ ] **The EP2 disposition taxonomy (F7/F9)** — the `promote()` return shape,
+      Table D's EP2 row and its preamble, the promotion-accounting row, Table G's
+      pipeline-consumes-disposition row, and the redact/deferral acceptance
+      criteria. **No surface may reduce EP2 to `reason|null` or drop the
+      `redacted` outcome or `secretDisposition`.**
+- [ ] **The F4 residual, the F3 narrowed window, and the F8 decision-atomicity**
+      — Table D's "Why this order" and atomicity rows, Table E's window row, the
+      Security checklist's F4 residual, Out of scope's partial-publish line, and
+      their acceptance criteria. **No surface may call the window "closed" or
+      claim cross-path write-atomicity, and none may re-assert the withdrawn
+      "scanning merged forces discarding the user edit" rationale.**
 
 ## Implementation notes & constraints
 
@@ -266,9 +300,17 @@ this package it runs FIRST.
 - [ ] The template's untrusted-identifier item applies twice over. Relative
       paths from the workspace walk are attacker-influenceable and flow into
       filesystem writes **into the vault** — the promotion allowlist (Table C9)
-      is anchored per path segment and rejects `/`, `\` and `..` before any path
-      is joined to the vault root, and containment is re-resolved against the
+      validates each path SEGMENT (rejecting a segment of `.`, `..`, or one
+      containing a separator) before any path is joined to the vault root, and
+      containment is re-resolved against the
       vault's realpath at write time, not only at decision time.
+- [ ] **Named residual (round 1, F4): a secret the USER writes into their own
+      note during the run can enter the dream commit.** EP2 scans the brain's
+      added bytes before the merge (Table D); a user credential added to the
+      live note during the run rides a clean C6 merge into the committed bytes
+      unscanned. Owner-ruled acceptable: it is the user's own content in their
+      own vault — the dream commits it but did not author it — and making the
+      secret gate refuse or redact a user's own note was ruled the worse trade.
 - [ ] **The dependency's caller invariant is discharged across the pair, and
       sibling Table F says how.** The invariant, stated so the reader knows
       what is being discharged: no untrusted actor may replace the root entry,
@@ -281,10 +323,11 @@ this package it runs FIRST.
       dependency's constructed-environment discipline (Table C, row M2). Named
       residual, inherited and not closed: executable-identity influence at a
       verified absolute path.
-- [ ] Named residual: on the Codex arm the brain can run shell inside the
-      workspace (sibling Table F). This package does not close that and does
-      not claim to; the reap precondition (Table G) is what keeps it from
-      mattering to the walk.
+- [ ] On the Codex arm the brain can run shell inside the
+      workspace (sibling Table F). Its hardlink-to-the-vault vector is closed
+      structurally by the sibling's different-filesystem placement (`EXDEV`),
+      not by this package; the reap precondition (Table G) closes a DIFFERENT
+      concern — a live actor mutating the workspace during the post-brain walk.
 
 ## Acceptance criteria
 
@@ -307,23 +350,54 @@ this package it runs FIRST.
       (`*`) and a payload file yields a delta record for the payload — the
       classification is unaffected. This is the criterion that pins the closure
       to the git-free walk rather than to the workspace's repository status.
-- [ ] **M7's mechanism.** A brain that writes `<workspace>/CLAUDE.md`,
-      `<workspace>/AGENTS.md`, `<workspace>/01-Projects/x/AGENTS.md`,
-      `<workspace>/.gitignore` and `<workspace>/01-Projects/x/.claude/settings.json`
+- [ ] **M7's mechanism, current conventions (F5).** A brain that writes
+      `<workspace>/CLAUDE.md`, `<workspace>/AGENTS.md`,
+      `<workspace>/01-Projects/x/AGENTS.md`,
+      `<workspace>/01-Projects/x/CLAUDE.local.md`,
+      `<workspace>/01-Projects/x/AGENTS.override.md`,
+      `<workspace>/.gitignore`,
+      `<workspace>/01-Projects/x/.claude/rules/evil.md` and
+      `<workspace>/01-Projects/x/.claude/settings.json`
       promotes **none** of them, each with a recorded reason, and the vault
       contains none of them afterwards.
-- [ ] **The reap precondition.** With the reap verdict forced to
-      `{reaped:false}`, the run refuses fail-closed and no delta walk runs.
-      Proven green on a verified reap. The refusing run does NOT tear down the
-      workspace (Table G's exception); every other exit path does.
+- [ ] **The reports_dir overlap is closed (F10).** With a layout whose
+      `reports_dir` equals or nests under a tier directory, a brain-written
+      `.md` under that overlap is refused (C9's negative check), and the vault's
+      report tree gains no brain content.
+- [ ] **The reap precondition, both run types (F6).** With the reap verdict
+      forced to `{reaped:false}`, the run refuses fail-closed and no delta walk
+      runs. Proven green on a verified reap. Asserted on BOTH a tokenized
+      scheduler run and a tokenless manual run — on the latter, an ABSENT
+      verdict is treated as unverified (refuse), not as success. The refusing
+      run does NOT tear down the workspace (Table G's exception); every other
+      exit path does.
+- [ ] **EP2's redact disposition (F7, ADR-0034).** A brain-added line that
+      triggers only a context-free high-entropy hit is REDACTED: the sanitized
+      candidate is promoted, the unredacted copy is preserved to quarantine, the
+      path is recorded `redacted`, and `secretDisposition.redactions` counts it
+      separately from a hard refusal.
+- [ ] **The pipeline defers a secret-withheld transcript (F9).** A fresh
+      transcript whose only note EP2 withholds or redacts is NOT marked
+      processed — it regenerates on the next run; asserted through
+      `secretDisposition`, never a parsed reason. A non-secret refusal advances
+      the transcript.
+- [ ] **The unknown-command non-vacuity signal (F2).** A run whose brain emits
+      the unknown-command marker and writes NOTHING to the workspace aborts as
+      "brain did not run" and advances no transcript ledger; a run that emits
+      the marker but DID write the workspace proceeds into promotion. The
+      decision keys off the empty workspace delta, not vault cleanliness —
+      asserted with a dirty vault present, which must not change the outcome.
 - [ ] **Table C's decision matrix**, one case per row C1–C8, each asserting both
       the outcome and the vault's resulting bytes.
 - [ ] **The merge never touches the user's live note.** On a conflicting
       three-way state the vault file is byte-identical to its `vault-now`
       version afterwards and contains no conflict marker.
-- [ ] **The compare→promote window.** With the vault target changed between the
-      decision and the write, the write is abandoned and the path is reported
-      refused; the vault keeps the changed bytes.
+- [ ] **The compare→promote window is narrowed (F3).** With the vault target
+      changed between the decision and the re-read, the write is abandoned and
+      the path is reported refused; the vault keeps the changed bytes. The
+      criterion asserts the NARROWED window (a change visible at the re-read),
+      not a closed one — a save landing between the re-read and the `rename` is
+      the stated residual and is not asserted against.
 - [ ] **Gate order and input (Table D).** A secret in the brain's added lines is
       withheld before the merge and never appears in a merged candidate; and a
       Tier-3 / skill-guard / ledger refusal is shown to have judged the
@@ -332,8 +406,11 @@ this package it runs FIRST.
 - [ ] **ADR-0020's authorizing input.** A brain that rewrites both a skill and
       the ledger in the same run is refused, because the guard reads the
       **baseline** ledger.
-- [ ] **Atomicity.** A run where the skill passes and the ledger fails promotes
-      **neither**.
+- [ ] **Atomicity — at the DECISION (F8).** A run where the skill passes and
+      the ledger fails-policy promotes **neither**. The criterion covers the
+      decision, not a mid-write crash: a partial publish (first `rename`
+      succeeds, second fails) is the residue-lifecycle successor's subject
+      (Out of scope) and is not asserted against here.
 - [ ] **The dream commit contains only promoted paths and the report.** With an
       unrelated uncommitted user edit present in the vault, that edit is **not**
       in the dream commit and is **not** lost.
@@ -341,9 +418,9 @@ this package it runs FIRST.
       the workspace and leave the vault byte-identical, including uncommitted
       user edits. Proven RED against the current `restoreVaultToHead` call,
       which destroys them.
-- [ ] **Promotion accounting partitions the delta**: every record is either
-      `promoted` or `refused` with a reason, and the counts sum to the record
-      count.
+- [ ] **Promotion accounting partitions the delta**: every record is exactly
+      one of `promoted`, `redacted`, or `refused` with a reason, and the counts
+      sum to the record count.
 - [ ] **The glossary carries the name.** `docs/GLOSSARY.md` defines
       **promotion** as a canonical name (the grep below is the anchor; the
       wording is the implementer's).
@@ -415,8 +492,10 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   step on audit C3.
 - **The residue-lifecycle successor** (not yet drafted — it has no WP id yet) —
   the journal schema, crash replay,
-  uninstall restore, and a workspace surviving a crash. Table G's abort row is
-  narrower and says so.
+  uninstall restore, a workspace surviving a crash, and **the rollback/replay
+  of a PARTIAL PUBLISH** (first promoted `rename` succeeds, a later one fails —
+  Table D's atomicity row claims decision-atomicity only, F8). Table G's abort
+  row is narrower and says so.
 - **An ADR for the promote-in inversion.** The war-room decision log owns the
   reasoning and this spec cites the rulings; whether the inversion also needs an
   indexed ADR is an owner call, not an implementer's. `docs/adr/0012` is

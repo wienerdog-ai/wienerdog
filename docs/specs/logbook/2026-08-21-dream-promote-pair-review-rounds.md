@@ -103,4 +103,36 @@ Editorial (fold into the fix commit): "rejects `/` before any path is joined" �
 "rejects separators within each validated segment"; "closed" → "narrowed" for
 the millisecond race wherever it appears.
 
-Fix commit: PENDING — awaiting owner rulings on F1 and F4.
+**Owner rulings (2026-08-21):**
+- **F1 → different-filesystem placement (EXDEV).** The workspace sits on a
+  different filesystem from the vault; `createWorkspace` asserts distinct
+  devices before copy-in. A hard link cannot cross a filesystem, so the Codex
+  shell's `ln`-into-workspace vector fails `EXDEV` at creation — closed
+  structurally in Part i, unconditionally and on every platform, not by the
+  reap and not by promotion policy. Cost accepted: cross-device copy has no
+  reflink; the copy-in cost is re-measured against the boundary.
+- **F4 → status quo + named residual.** EP2 stays pre-merge and brain-scoped;
+  a secret the USER writes into their own note during the run can enter the
+  dream commit via a clean C6 merge. Recorded as a named residual (it is the
+  user's own content in their own vault; refusing/redacting a user's own note
+  was ruled the worse trade). The spec's false "scanning merged forces
+  discarding the user edit" rationale is corrected in place.
+
+**All ten applied.** F1 (Part i Table A placement + hardlink-vector row +
+Table F Codex-shell row + contract + acceptance); F5 (C9 deny broadened to
+current instruction-file shapes and control namespaces; Part i baseline
+exclusions matched; M7 criterion widened); F6 (Table G unconditional reap,
+tokenless-run caveat + criterion); F7 (EP2 taxonomy: redact arm, per ADR-0034);
+F9 (`promote()` returns `secretDisposition`; Table G pipeline-consumes row);
+F2 (Table G non-vacuity signal moved to workspace-delta evidence; Table E and
+Current state note the second `assertCleanTree` consumer); F10 (C9 explicit
+`reports_dir` negative check); F3 ("narrowed" not "closed" + stated TOCTOU
+residual); F8 (decision-atomicity only; partial-publish routed to the
+successor). Editorial folded in. New mirror lines registered in both
+checklists.
+
+Fix commit: applied in the commit that carries this update.
+
+**Round 1 does not close the loop.** Per the stop criterion, the next external
+round runs on the fixed specs; the family (vault-write-bypasses-promotion) took
+its FIRST landing here — a second lands the split seam on the owner's table.
