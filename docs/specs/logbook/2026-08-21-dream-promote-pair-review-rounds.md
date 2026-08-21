@@ -273,3 +273,48 @@ re-measuring at a realistic location.
   by RESOLVED destination while the name looked innocent. Our promotion policy
   is still the lexical one. That is the argument for extracting a single
   identity-anchored write contract rather than adding rules.
+
+### Owner rulings on round 2 (2026-08-22) — and the resulting three-package family
+
+- **The seam: CONTRACT EXTRACTION.** A single identity-anchored vault-write
+  primitive, extracted into its own package —
+  `WP-dream-vault-write-primitive` (`size: S`, no dependency, ships consumed by
+  nothing, exactly as the delta primitive did). It owns **Table H**: policy is
+  applied to the RESOLVED path rather than the candidate one (closes F4'), no
+  component of the parent chain may be a symlink, the temp is CREATED with a
+  crypto-random name and `O_EXCL`/`O_NOFOLLOW` rather than opened (closes F9'),
+  the publish is a conditional `rename`, and the returned hash is over the bytes
+  actually published so the caller stages from it (closes F5'). **It owns no
+  policy**: the rules arrive as the caller's injected `admit`. Extraction rather
+  than inlining because Part ii already sits AT the 8-file boundary cap — a
+  module plus its test would have taken it to ten — and because the whole point
+  of the ruling is that the discipline must be arguable in one place and
+  unweakenable from the policy side.
+- **F1's placement rows: WITHDRAWN**, the different-filesystem requirement and
+  everything that traced to it. Part i's Table F now carries the measured
+  sandbox result in their place, with its three bounds, marked defense in depth.
+
+**All of round 2 is now applied.** F1'/F4'/F9'/F5' by the extraction above;
+F3' unscannable content is an EP2 REFUSAL, never a pass (the empty scan a
+binary record yields is not evidence of safety — today's validator withholds it
+explicitly); F7' the deny-list matches CASE-FOLDED on both the baseline and the
+promotion side; F8' the child environment is CONSTRUCTED rather than inherited,
+which makes the re-target a **seven**-site change and is propagated to every
+surface that stated six; F2' the reap precondition is PLATFORM-SCOPED using the
+repo's own scope (`reap.js:25-33`), with the win32 leaderless-member residual
+named and routed to `WP-a10-windows-reap`; F6' was fixed at record time.
+
+**Family shape after the extraction:**
+
+| Package | Owns | Depends on |
+|---|---|---|
+| `WP-dream-workspace-retarget` | workspace, constructed baseline, seven-site re-target — Tables A, B, F | the delta primitive |
+| `WP-dream-vault-write-primitive` | the one vault-write chokepoint — Table H | nothing |
+| `WP-dream-promote-in-workspace` | the decisions and the pipeline — Tables C, D, E, G | both of the above + the delta primitive |
+
+Fix commit: applied in the commit that carries this update.
+
+**Round 3 is owed**, on all three specs: two of them changed substantially and
+one is new, and this program's measured fix-injection rate is why the round
+after a fix pass is not optional — round 2 found a defect this author had
+introduced in round 1's pass.

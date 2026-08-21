@@ -76,7 +76,7 @@ inferred. This WP ships that workspace module and re-targets the brain's spawn
 seam: after it, `spawnBrain` takes a **workspace** as its write target, and —
 given a workspace distinct from the vault — no argv element and no environment
 value handed to either harness carries the vault path. The re-target is a
-change at **six measured sites, not one** (Table B). What this WP does **not**
+change at **seven measured sites, not one** (Table B). What this WP does **not**
 do is flip the running pipeline: promotion does not exist yet, and a dream
 whose brain writes into a workspace nothing promotes would be an inert product.
 The successor builds promotion and re-points the one call site (Table B, last
@@ -86,13 +86,16 @@ unchanged.
 ## Current state
 
 - `src/core/dream/brain.js` — the vault path reaches the brain process through
-  **six** distinct sites, not one: `:57` (prompt text "your only write target"),
+  **seven** distinct sites, not one — six that carry the path explicitly: `:57` (prompt text "your only write target"),
   `:65` (absolute vault-prefixed layout lines), `:98` (`addDirs` — the Claude
   tool roots), `:120` (`--cd vaultDir` — THE Codex write fence, because
   `--add-dir` does not fence `apply_patch`), `:172` (`WIENERDOG_DREAM_VAULT` in
   the child env), `:189` (`cwd = vaultDir` on the Codex path). The Claude path
   already runs from a neutral staging cwd (`:198`, `ensureBrainStaging`). All
-  six derive from the single `vaultDir` option of `spawnBrain`.
+  six derive from the single `vaultDir` option of `spawnBrain`; the seventh is
+  the INHERITED child environment (`:169-173` spreads `...baseEnv`, and
+  `cli/dream.js:144-146` hands it `process.env`), which carries the vault path
+  whenever an ambient variable holds it.
 - `src/cli/dream.js:144-145` — the only production `spawnBrain` call, inside
   `runBrainWithWatchdog` (`:137`); the call opens at `:144` and its write-target
   argument sits at `:145`. This WP touches that one argument and nothing else
@@ -116,7 +119,7 @@ unchanged.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | src/core/dream/workspace.js | build / copy-in / capture / verify / tear down (Table A) |
-| modify | src/core/dream/brain.js | the write-target input becomes the workspace; all six sites (Table B) |
+| modify | src/core/dream/brain.js | the write-target input becomes the workspace; all seven sites, including the constructed child env (Table B) |
 | modify | src/cli/dream.js | ONE transitional argument at the spawn call (`:144-145`) — Table B, last row. Nothing else in this file: the pipeline is the successor's |
 | create | tests/unit/dream-workspace.test.js | Table A + Table B + Table F evidence |
 | modify | docs/GLOSSARY.md | one canonical name: **workspace** |
@@ -129,8 +132,7 @@ under "Discovered issues" in the PR body.
 ```js
 /** Build the run's workspace, copy the vault's readable content into it, and
  *  capture the bytes just written as the run's constructed baseline (Table A).
- *  Asserts the workspace root and the vault root are on DIFFERENT filesystems
- *  (Table A — the EXDEV close for the hardlink vector) and POSTCONDITION 1 (no
+ *  Asserts POSTCONDITION 1 (no
  *  `.git` entry), and refuses a capture that reports anomalies, before
  *  returning; POSTCONDITION 2 is a static property of this module, asserted by
  *  tests rather than checked at runtime.
@@ -146,7 +148,8 @@ function destroyWorkspace(workspaceDir)
 ```
 
 `spawnBrain`'s write-target option is renamed `vaultDir` → `workspaceDir`; its
-other options are unchanged. The six sites of Table B all read that one input.
+other options are unchanged. Six of Table B's sites read that one input; the
+seventh, the child environment, is constructed rather than inherited.
 
 ## Contract reference
 
@@ -161,13 +164,11 @@ this spec's surfaces and the successor's citations.
 | Fact / rule | Value |
 |-------------|-------|
 | Placement | under the canonical core's private state (`paths.state`), one directory per run, created 0700 through the existing private-fs primitives. **Not** under the vault, and the reason is the unconditional one: a workspace inside the vault would put the brain's write root inside the promotion TARGET, so every brain write would land in the vault directly — today's failure with an extra directory. (It would also sit inside a git repository, since the vault is one; that is a second reason and, per Postcondition 2 and Table F, a weaker one — the property it names is not establishable by construction) |
-| **The workspace sits on a DIFFERENT filesystem from the vault** | Owner-ruled (round 1, F1). This is the structural close for the hardlink vector below: a hard link cannot cross a filesystem boundary — `link(2)` returns `EXDEV` — so no matter what the Codex arm's in-workspace shell does, it cannot create a workspace entry that aliases a vault inode. `createWorkspace` **asserts the two roots are on different devices before copy-in** (compare `st_dev` of the workspace root and the vault root) and fails the run closed if they are equal; the workspace is placed on a dedicated volume the installer provisions (or a tmpfs the run creates), never merely a subdirectory of `paths.state` if that shares the vault's device. If the implementer finds `paths.state` and the vault are guaranteed distinct devices already, the assertion still ships — it is the contract, not the deployment detail. The named cost, measured obligation: a cross-device copy has no reflink fast path (Table A, copy-in mechanism already assumes a plain byte copy), so the copy-in cost row's numbers must be re-measured across the device boundary the run actually uses |
 | The depth question, measured and answered | `private-fs.js:671-677` justifies its 64-pass directory-repair cap on the real private tree being SHALLOW ("depth 4"), and aborts fail-closed if the cap is hit. A vault-shaped workspace has arbitrary depth and would invalidate that **justification** without necessarily exceeding the cap. The workspace therefore sits at a fixed shallow path whose own repair is bounded, and **its interior is not subject to the fixed-point repair**: the run creates it, the run owns it, the run removes it. If the implementer finds the repair does walk into it, that is a finding, not a fix |
 | Copy-in scope | **the brain's REAL read/write need — approximately the whole readable vault — NOT the seven `LAYOUT_KEYS`.** Measured: the brain reads across the vault for dedupe (`SKILL.md:52-54`) and writes outside the mapped dirs (`:115-117`). Narrowing to the seven keys silently degrades the product: blind dedupe produces duplicates, and Tier-2 writes land in the void. **Width does not weaken the guarantee, and this row is where that is defended rather than per review round:** the guarantee is that the baseline is KNOWN, not that it is small. A wide baseline is exactly as known as a narrow one, because the system wrote every byte of it |
-| Copy-in exclusions | `.git/` at any depth (Postcondition 1); the layout's `reports_dir` (the dream report stays code-owned — successor Table D); symlinks at any depth — **measured: the dependency's capture does NOT fail on one**, it records a `{rel, kind:'symlink'}` anomaly and returns (`delta.js:104-105` Anomaly typedef, `:131` `entryKind`; its `@throws` at `:457-458` covers only unreadable entries), so the exclusion may not lean on capture failing closed: `createWorkspace` itself treats a non-empty `anomalies` list as a postcondition failure (contract above); and the harness control-file shapes at any depth — the instruction-file basenames `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, and any path with a `.claude` or `.codex` segment, plus `.mcp.json` (the same set the successor's promotion allowlist denies — its Table C9, kept identical so the baseline and the promotion barrier cover the same shapes). **The control-file exclusion is defense in depth on the Claude arm and load-bearing on the Codex arm:** measured in the war-room, the Claude brain does not load an instruction file from an `--add-dir` root (the `--help` "(CLAUDE.md dirs)" text is misleading), while the Codex arm's write root IS its cwd (`brain.js:120`, `:189`), which is where instruction discovery happens. Every exclusion is REPORTED in `skipped`, never silently dropped. Excluding a shape from copy-in keeps it out of the BASELINE; what keeps a brain-CREATED one out of the vault is the successor's promotion allowlist (its Table C) — the two are different barriers at different moments, and neither is a restatement of the other |
-| Copy-in mechanism | a real byte copy. **NEVER a hardlink mirror** — measured: a hardlink alias writes the vault inode, so the brain would be editing the real vault through the mirror, reproducing today's failure with an extra step. And **never a copy-on-write clone here**, because the different-filesystem placement (row above) rules reflink out anyway — a reflink cannot cross devices. Measured on the primary platform (macOS 15 / APFS, Node 24.18) even same-device: `fs.constants.COPYFILE_FICLONE_FORCE` fails **ENOSYS**, and plain `COPYFILE_FICLONE` is indistinguishable in wall-clock from a plain copy (165 ms vs 165 ms for 2 000 files / 7.8 MB). **So no design may depend on copy-on-write: write the plain copy, cross-device** |
-| **The hardlink vector — why the row above is load-bearing** | Measured (round 1, F1) on `codex-cli` under `--sandbox workspace-write`: the brain's in-workspace shell can run `ln <vault-note> <workspace>/alias` and then write `alias`, mutating the vault inode DURING the run — before any classification, and the reap precondition (successor Table G) does not help because the damage precedes the walk. `computeDelta` cannot catch it either: it `lstat`s and treats a hard link as an ordinary regular file (`delta.js`, no `nlink` check). The vault write is therefore prevented at creation time by the cross-device placement (`EXDEV`), not detected after the fact. This is the package's characteristic failure — a vault write that bypasses promotion — and it is closed structurally in Part i, not by promotion-side policy |
-| Copy-in cost, measured | ~85 µs per file, dominated by per-file syscall overhead rather than bytes: 2 000 files / 7.8 MB → ~165 ms; 20 000 files → ~1.7 s. **These numbers are same-device; the different-filesystem placement (F1) means the real copy is cross-device with no reflink, so the implementer re-measures against the boundary the run uses** — still a nightly-job cost this spec specifies no mitigation for. What DOES need a bound is the baseline's memory (row below) |
+| Copy-in exclusions | `.git/` at any depth (Postcondition 1); the layout's `reports_dir` (the dream report stays code-owned — successor Table D); symlinks at any depth — **measured: the dependency's capture does NOT fail on one**, it records a `{rel, kind:'symlink'}` anomaly and returns (`delta.js:104-105` Anomaly typedef, `:131` `entryKind`; its `@throws` at `:457-458` covers only unreadable entries), so the exclusion may not lean on capture failing closed: `createWorkspace` itself treats a non-empty `anomalies` list as a postcondition failure (contract above); and the harness control-file shapes at any depth — the instruction-file basenames `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, and any path with a `.claude` or `.codex` segment, plus `.mcp.json` (the same set the successor's promotion allowlist denies — its Table C9, kept identical so the baseline and the promotion barrier cover the same shapes). **Matched CASE-FOLDED (round 2, F7'):** the primary filesystem is case-insensitive — measured, a file created as `claude.md` answers to `CLAUDE.md` — so a literal comparison lets `agents.override.md` through while the harness still loads it. The repo already reasons this way at `validate.js:1083-1086` ("a case-variant identity dir … is the same inode on a case-insensitive FS"). **The control-file exclusion is defense in depth on the Claude arm and load-bearing on the Codex arm:** measured in the war-room, the Claude brain does not load an instruction file from an `--add-dir` root (the `--help` "(CLAUDE.md dirs)" text is misleading), while the Codex arm's write root IS its cwd (`brain.js:120`, `:189`), which is where instruction discovery happens. Every exclusion is REPORTED in `skipped`, never silently dropped. Excluding a shape from copy-in keeps it out of the BASELINE; what keeps a brain-CREATED one out of the vault is the successor's promotion allowlist (its Table C) — the two are different barriers at different moments, and neither is a restatement of the other |
+| Copy-in mechanism | a real byte copy, or a copy-on-write clone where the platform provides one. **NEVER a hardlink mirror** — a hardlink alias writes the vault inode, so the brain would be editing the real vault through the mirror, reproducing today's failure with an extra step. Measured on the primary platform (macOS / APFS, Node 24.18): `fs.constants.COPYFILE_FICLONE_FORCE` fails **ENOSYS**, and plain `COPYFILE_FICLONE` is indistinguishable in wall-clock from a plain copy (165 ms vs 165 ms for 2 000 files / 7.8 MB). **So copy-on-write is not available through Node's API here, and no design may depend on it** |
+| Copy-in cost, measured | ~85 µs per file, dominated by per-file syscall overhead rather than bytes: 2 000 files / 7.8 MB → ~165 ms; 20 000 files → ~1.7 s. On a nightly job that is not a cost that needs mitigating, and this spec deliberately specifies none. What DOES need a bound is the baseline's memory (row below) |
 | The constructed baseline | `captureBaseline(workspaceDir)` (the dependency's primitive) runs **after** copy-in, inside `createWorkspace`, so the returned baseline describes the finished workspace. It captures the workspace, not the vault: capturing the vault would re-introduce the observed baseline this whole direction exists to escape. The baseline holds **BYTES, not only hashes** — owner-ruled, because the successor's merge (its Table C) needs bytes. `createWorkspace` fails closed on a capture that reports anomalies — the exclusions row above is why that check has teeth. That `createWorkspace` as a whole runs before the brain is spawned is the successor's pipeline ordering (its Table G) |
 | Named residual: baseline memory | the baseline is proportional to the copied vault: ~7.8 MB for 2 000 notes, ~78 MB for 20 000. The dependency named this and handed the scope decision here. **This package sets no cap and states why:** a cap would have to drop files, and a baseline that silently omits a file reports that file as `added` later, which is a false accusation against whoever wrote it. If a real vault is ever measured past the point where this matters, the answer is an on-disk pristine copy, not a partial baseline |
 | **POSTCONDITION 1 — no `.git` object anywhere in the workspace** | asserted by a walk over the finished workspace inside `createWorkspace`, before it returns. Any entry named `.git` — directory, file or symlink — fails the run closed |
@@ -179,7 +180,7 @@ this spec's surfaces and the successor's citations.
 
 **This table IS the first claim's evidence.** The package's intent brief (a
 war-room record kept outside this repo) states the change
-as `brain.js:98`; measured, the vault path reaches the brain through six sites,
+as `brain.js:98`; measured, the vault path reaches the brain through seven sites,
 and two of them are Codex-specific with a different mechanism. A re-target that
 changes only `addDirs` leaves the Codex arm writing the vault.
 
@@ -191,7 +192,8 @@ changes only `addDirs` leaves the Codex arm writing the vault.
 | `brain.js:120` | `--cd vaultDir` | `--cd workspaceDir` | **THE Codex write fence** — `--add-dir` does not fence `apply_patch` (openai/codex#24214). Leaving this is leaving the Codex brain writing the vault |
 | `brain.js:172` | `WIENERDOG_DREAM_VAULT: vaultDir` | the workspace path (the env var NAME stays — renaming it churns the WP-026 fake-brain fixtures for no guarantee) | read by the WP-026 mapped fake brain. On the Claude arm the real brain has no Bash to read env (the dream profile); on the Codex arm it CAN run shell and so CAN read env (Table F) — which is exactly why the var is re-pointed for consistency of the fence and no arm may treat it as a control |
 | `brain.js:189` | `cwd = vaultDir` (Codex arm) | `cwd = workspaceDir` | instruction discovery happens at cwd — this is M7's step 3 |
-| **The claim's runnable form** | — | — | for **both** harnesses: build the argv and the child env with a `workspaceDir` DISTINCT from the vault, and assert the vault path (and any element containing it) appears in **no** argv element and **no** env value. A grep over the source is not sufficient — renaming the variable would pass it. The assertion is over the composed values. Measured on the pinned base as a red-side proof that the check discriminates: the composed Codex argv carries the vault path in **two** elements today — the `--cd` operand and the positional prompt |
+| **Site 7 — the INHERITED environment (round 2, F8')** | `spawnBrain` spreads the ambient env (`brain.js:169-173`, `...baseEnv`) and the production call hands it `process.env` (`cli/dream.js:144-146`) | the child env is **CONSTRUCTED** — an allowlist of what the harness actually needs — rather than inherited and then overwritten | Measured: with an ambient `WIENERDOG_VAULT` set, the vault path reaches the child env regardless of what the six named sites do, and the Codex arm's shell can read its own environment. Re-pointing one assigned value cannot establish "no env value carries the vault path"; only construction can. **This makes the re-target a SEVEN-site change** |
+| **The claim's runnable form** | — | — | for **both** harnesses: build the argv and the child env with a `workspaceDir` DISTINCT from the vault, and assert the vault path (and any element containing it) appears in **no** argv element and **no** env value — asserted with a vault-valued ambient variable SET, which is the case site 7 exists for. A grep over the source is not sufficient — renaming the variable would pass it. The assertion is over the composed values. Measured on the pinned base as a red-side proof that the check discriminates: the composed Codex argv carries the vault path in **two** elements today — the `--cd` operand and the positional prompt |
 | **The claim's behavioural form** | — | — | a real `spawnBrain` run against the pinned fake brain that deliberately attempts a vault write, after which the vault is **byte-identical** to its pre-run state. Proven RED by pointing one site back at the vault, one site at a time — six reds, because a single red does not prove the other five sites are covered |
 | **The transitional call site** (`cli/dream.js:144-145`) | `spawnBrain({ vaultDir, ... })` | `spawnBrain({ workspaceDir: vaultDir, ... })` — the vault, passed explicitly as the write target, with a comment naming the successor | keeps the running product byte-identical until the successor builds the workspace in the pipeline and re-points this argument. Re-pointing it HERE, without promotion, would leave the dream writing notes that nothing promotes — an inert product, which is what the stacked split exists to avoid. **CLAIM 1 is therefore a property of the spawn seam in this WP, and becomes a property of the running product in the successor** |
 
@@ -205,12 +207,12 @@ it — the successor never restates it (owner ruling, split logbook entry).**
 
 | Claim | Measured verdict |
 |---|---|
-| **1. The brain's roots become `[workspaceDir, scratchDir]`, and no other path grants the brain vault access** | **Holds, but is a six-site change, not a one-line one** (Table B). `brain.js:98` is one of six sites and the only one the brief names; `:120` and `:189` are the Codex arm, where the mechanism is `--cd`/cwd rather than `--add-dir`. Runnable form: the composed-argv-and-env assertion plus the byte-identity behavioural test, each proven red six times, one site at a time. **Scope note:** this WP proves the property at the spawn seam; the running product acquires it when the successor re-points the transitional call site (Table B, last row) |
+| **1. The brain's roots become `[workspaceDir, scratchDir]`, and no other path grants the brain vault access** | **Holds, but is a SEVEN-site change, not a one-line one** (Table B). `brain.js:98` is one of six sites and the only one the brief names; `:120` and `:189` are the Codex arm, where the mechanism is `--cd`/cwd rather than `--add-dir`. Runnable form: the composed-argv-and-env assertion plus the byte-identity behavioural test, each proven red seven times, one site at a time. **Scope note:** this WP proves the property at the spawn seam; the running product acquires it when the successor re-points the transitional call site (Table B, last row) |
 | **2a. No `.git` object exists in the workspace** | **Holds by construction and is checked** (Postcondition 1) |
 | **2b. "The workspace is not a git repository"** | **Does NOT hold as stated, and no construction of ours can make it hold.** Measured: `git rev-parse --show-toplevel` from a plain directory nested under a repository resolves to that ancestor repository. Whether an ancestor of the private core is a repository is the user's filesystem, not ours. The checkable and true form is Postcondition 2: **no product code runs git with a cwd at or beneath the workspace root** |
 | **What M10's closure actually rests on** | **the git-free classification, not the not-a-repository property.** `computeDelta` is a filesystem walk that never consults git — the dependency asserts this mechanically (its module requires no `child_process`). An ignore file cannot hide a path from a filesystem walk, on any platform, regardless of any ancestor repository. Postcondition 2 is a second, independent barrier whose failure would be bounded to our own git invocations — and across the whole pair there is exactly one, the successor's merge (its Table C, row M2), whose cwd is a constructed neutral directory outside any repository, never the workspace. **The intent brief attributes the closure to the second half; measurement puts it on the first.** Nothing about the closure weakens — it gets stronger, because the load-bearing half is unconditional. Measured on the pinned base, both directions: in one tree holding a self-hiding `.gitignore` (`*`) and a payload under a project dir, `git status --porcelain -z -uall` returns **zero bytes** (M10 reproduced) while `computeDelta` reports the payload `added` |
 | **The containment residual the dependency handed over — hypothesis (1), the brain's tool set** | **FALSE on the Codex arm, and that is a correction to an inherited assumption.** Measured: the code-owned `dream` hermetic runtime profile (ADR-0025) allows `Read`/`Write`/`Edit`/`Glob`/`Grep` and disallows `Bash` (`getProfile('dream')`, `src/core/runtime-profile.js`) — so on the Claude arm the brain has no tool that creates a symlink or renames a directory. But the Codex arm runs `--sandbox workspace-write` (`brain.js:117-118`), which permits shell **inside** the workspace. The dependency called this hypothesis weak because tool capability is a harness detail; measured, it is not merely weak, it is arm-dependent |
-| **The Codex-shell hardlink vector — CLOSED structurally, not by the reap (round 1, F1)** | The Codex arm's in-workspace shell can `ln` a vault note into the workspace and write through it, mutating the vault inode DURING the run — the reap precondition does NOT reach this, because the write precedes the walk, and `computeDelta` does not either, because it treats a hard link as a regular file (no `nlink` check). The close is Table A's different-filesystem placement: a hard link cannot cross a filesystem, so `link()` fails `EXDEV` at creation. This is the path that would otherwise falsify claim 1's "no other path grants vault access", and it is closed at the spawn seam's own construction, unconditionally and on every platform. The reap precondition still owns a DIFFERENT concern — a live actor mutating the workspace during the post-brain walk (row below) |
+| **What the Codex arm's shell can actually reach — MEASURED, and it is not the vault (round 2 correction)** | The concern was that the in-workspace shell could alias a vault inode into the workspace (`ln`) and write through it, mutating the vault DURING the run, where neither the reap precondition nor `computeDelta` would catch it. **Measured and refuted at a realistic vault location** (`codex-cli 0.146.0`, macOS 26.5.2, vault under `$HOME`, product-shaped `codex exec --sandbox workspace-write --cd <workspace>`): the sandbox DENIES hardlinking a vault file into the workspace, hardlinking a workspace file into the vault, direct vault writes, `mv` into the vault, and **writing through a symlink that resolves into the vault** — it denies by RESOLVED destination, not by lexical path. Verified from outside the sandbox: the vault note byte-unchanged, inode unchanged, `nlink=1`. An earlier round measured the opposite because its fake vault sat in `/tmp`, which the sandbox banner lists among its granted roots (`workspace-write [workdir, /tmp, $TMPDIR]`); a probe there reproduced the "success" exactly. **BOUNDS this row may not exceed:** that platform, that harness version, and a vault outside `/tmp`/`$TMPDIR`. It is a HARNESS guarantee — defense in depth, never the primary barrier, which stays "the vault path is not handed to the brain, and promotion is the only writer". A harness that later widens its sandbox weakens this row and nothing else |
 | **The containment residual — hypothesis (2), capture-before-spawn ordering** | **Holds for the pre-brain walks by this WP's construction, and becomes ENFORCED for the post-brain walk in the successor.** Copy-in and `captureBaseline` both run inside `createWorkspace`, before the brain is spawned, so during capture there is no actor. The post-brain `computeDelta` walk is the one the dependency could not speak for; the successor's reap precondition (its Table G) closes it by refusing to walk until the brain's process group is verifiably empty. With no live actor, the residual reduces to statically-planted objects, and a static symlink — to a file or a directory — is surfaced by the dependency's walks as an anomaly, never followed, and appears in no baseline and in no delta record |
 | **The real exposure, stated PER PLATFORM as the dependency required** | the race needs a writer CONCURRENT WITH THE WALK, and the successor's reap precondition removes the only one. The brain is the sole actor with workspace write access — on the Codex arm it can even run shell there (row above) — and it is verifiably dead before the walk begins; what remains would have to be some other process writing inside the 0700 private core, which is not a threat this project's model carries. **This is the whole reason the reap precondition is a contract row (successor Table G) and not a nicety:** without it, the Codex arm's brain is exactly the live actor the dependency's caller invariant forbids. **The platform condition therefore does not bite here**: `O_NOFOLLOW`'s absence on win32 costs WHEN the refusal happens, not whether it happens — the `(dev, ino)` revalidation refuses at `fstat` before any byte is read — and with no live actor there is no window to widen. The surviving residual is inode reuse, which exists on every platform. **No cross-platform guarantee is claimed:** what is claimed is that this package does not depend on the flag |
 | **The precedent for the workspace walk** | `src/core/vault-snapshot.js:45-61`, not `private-fs.js`. The former states the platform question and answers it with an explicit branch that NAMES what is lost, deliberately rejecting the `fs.constants.X \|\| 0` idiom "which makes a missing flag look like a present one". `private-fs.js:683-684` and `manifest.js:746` do use `\|\| 0`, and both consciously name what carries the weight on win32 — **the repo is inconsistent in IDIOM, not in substance**, and no stronger phrasing than that is supported |
@@ -222,8 +224,8 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       `spawnBrain` option rename
 - [ ] Acceptance criteria that assert Tables A, B and F
 - [ ] Verification steps (the assertions mirror Tables A and B)
-- [ ] Current-state description (the six re-target sites, the single call site)
-- [ ] Implementation notes (the six-reds requirement, the CoW measurement)
+- [ ] Current-state description (the seven re-target sites, the single call site)
+- [ ] Implementation notes (the seven-reds requirement, the CoW measurement)
 - [ ] Out of scope (what the successor and the residue-lifecycle package own)
 - [ ] **The package note and the dispatch-precondition block** — the note
       mirrors the pair's table-letter division and the transitional line; the
@@ -237,22 +239,21 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       product's write target.**
 - [ ] **Every surface that describes the brain re-target** — the Context
       paragraph, Table B, Table F, the acceptance criteria and the verification
-      steps. **None may describe it as a one-line change to `addDirs`.**
-- [ ] **The different-filesystem placement (F1) and the hardlink close** —
-      Table A's placement row, its copy-in mechanism row, its cost row, the
-      hardlink-vector row, Table F's Codex-shell row, the `createWorkspace`
-      contract, and the fail-closed / hardlink acceptance criteria. **No
-      surface may attribute the hardlink close to the reap precondition, or
-      state copy-on-write as available.**
+      steps. **None may describe it as a one-line change to `addDirs`, and none may state a site count other than Table B's.**
+- [ ] **What the Codex arm's shell can reach** — Table F's measured row and
+      the Security checklist's Codex residual. **No surface may state the
+      sandbox result without its three bounds (platform, harness version, vault
+      outside `/tmp`/`$TMPDIR`), and none may promote a harness guarantee to
+      the primary barrier.**
 
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types only; no build step
   (CLAUDE.md). ADR-0004: the workspace is files, created and removed within one
   run; nothing outlives the job.
-- **Six reds, not one.** The re-target's negative proof must break one site at a
+- **Seven reds, not one.** The re-target's negative proof must break one site at a
   time. A single red passes with five sites still pointing at the vault, and
-  five of the six are invisible to a test that only checks `addDirs`.
+  six of the seven are invisible to a test that only checks `addDirs`.
 - **Copy-on-write is measured absent through Node's API on the primary
   platform** (Table A). Do not write a fast path that assumes it and a slow path
   that never runs; write the copy, and let `COPYFILE_FICLONE` be a hint the
@@ -282,17 +283,21 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       is no actor to replace a root entry or ancestor during them. The
       post-brain walk and its reap precondition are the successor's. **No
       surface may claim the walk establishes containment.**
-- [ ] Named residual: on the Codex arm the brain can run shell inside the
-      workspace (Table F). This package does not close that and does not claim
-      to; the successor's reap precondition is what keeps it from mattering to
-      the walk.
+- [ ] On the Codex arm the brain can run shell inside the workspace. What that
+      shell can reach is MEASURED in Table F, with its three bounds: on the
+      measured platform and harness version, and for a vault outside the
+      sandbox's granted roots, every route from the workspace into the vault is
+      denied — including through a symlink. **That is a harness guarantee and
+      this package leans on it only as defense in depth.** The successor's reap
+      precondition closes a different concern: a live actor mutating the
+      workspace during the post-brain walk.
 
 ## Acceptance criteria
 
 - [ ] **CLAIM 1 at the spawn seam, structurally.** For both harnesses, with a
       `workspaceDir` distinct from the vault, the composed argv and the composed
       child env contain no element equal to, and no element containing, the
-      vault path. Proven RED **six times** — once per Table B site, re-pointed
+      vault path. Proven RED **seven times** — once per Table B site, re-pointed
       one at a time.
 - [ ] **CLAIM 1 at the spawn seam, behaviourally.** A `spawnBrain` run against a
       fake brain that deliberately attempts a vault write leaves the vault
@@ -311,15 +316,8 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, a
       `.claude`/`.codex` segment, `.mcp.json`) — appears in
       `skipped` with a reason, and nothing else is skipped.
-- [ ] **Fail closed.** A POSTCONDITION 1 failure, a capture that reports any
-      anomaly, or a workspace root on the SAME filesystem as the vault, each
-      makes `createWorkspace` throw; no workspace handle is returned.
-- [ ] **The hardlink vector is closed (F1).** With the workspace on a different
-      filesystem from the vault, an attempt to hard-link a vault path into the
-      workspace fails `EXDEV`; asserted directly (`link()` of a vault entry to a
-      workspace path throws `EXDEV`). Proven RED by placing the workspace on the
-      vault's own filesystem, where the link succeeds and a write through it
-      mutates the vault.
+- [ ] **Fail closed.** A POSTCONDITION 1 failure, or a capture that reports any
+      anomaly, makes `createWorkspace` throw; no workspace handle is returned.
 - [ ] **Teardown.** `destroyWorkspace` removes the tree, is idempotent (second
       call: no-op, no throw), and never touches the vault — the vault is
       byte-identical across create → destroy.
@@ -357,7 +355,7 @@ test -f docs/GLOSSARY.md && grep -q "\*\*workspace\*\*" docs/GLOSSARY.md
   ASSERTION: it exits
   non-zero on failure rather than printing something a reader must judge. Paste
   a real green on the finished state AND a real red from a deliberately broken
-  state — one Table B site re-pointed at the vault (six times, one site each);
+  state — one Table B site re-pointed at the vault (seven times, one site each);
   the `.git` exclusion disabled; the glossary entry removed — so a check that
   cannot fail is caught before
   anyone believes it. Verify each **also** goes red when its deliverable is
