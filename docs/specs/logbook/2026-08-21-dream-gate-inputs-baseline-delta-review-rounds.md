@@ -27,6 +27,14 @@ credit. Anything from those rounds that still applies must be re-found here.
 - **Surface frozen:** the three new assertions in Verification steps are the entire
   machinery budget. No new source-level greps; the discrimination requirement is
   carried by the behavioural divergence proof, which does not grow.
+- **ARMED 2026-08-21 by owner ruling, for the NEXT round.** The family criterion did
+  not fire on round 1 — it is written for two consecutive rounds, and, more to the
+  point, both HEAVY findings share ONE root (an asserted equivalence) which the
+  ruled HEAD invariant closes. So the seam is NOT re-cut now. But: **if a fresh
+  round, run AFTER the root fix, lands again in the preservation/visibility family
+  — which in this package is realised as the "silently weakened gate" — that is
+  evidence the seam itself needs re-cutting, and it returns as an owner ruling.**
+  Not on suspicion: on the measured failure of invariant enforcement.
 - **Scope frozen:** this package is behaviour-preserving. A finding about the
   workspace as the brain's write target, the promotion policy, the EP2 **enforcement**
   half, or any gate's policy values is ROUTED to the second (A) package, never folded
@@ -109,3 +117,25 @@ fixture cannot see. The scope rule held — the reviewer routed correctly and fo
 nothing in — and the citation work is ordinary iteration. The design question is
 whether a package whose central contract is an asserted equivalence can be made
 Ready by tightening it, or whether the seam itself needs re-cutting.
+
+## Round 1 rulings — OWNER-RULED 2026-08-21, all four accepted, folded at this commit
+
+The seam is NOT re-cut. Both HEAVY findings have one root — an equivalence the spec
+asserted instead of enforcing — and ruling 1 closes it.
+
+| # | Ruling | What landed in the spec |
+|---|---|---|
+| 1 | **F1 → route (a).** The baseline carries the expected HEAD identity; a HEAD that moved during the run fails closed, non-destructively. This is a real invariant the second package needs anyway, and it also **improves today's behaviour**: today's silent "revert over the user's in-flight work" becomes an explicit refusal. It is the COMPLETION of the strangler contract, not a patch on it — which is why the seam holds | Table A gains four rows: HEAD identity, the drift check, the non-destructive abort (no `reset --hard`, no `clean`, no `checkout`, nothing removed), and the abort's named residual routed to package 2. `### Exact contracts` and the `validate.js` deliverable cite it; Implementation notes carry why refusing beats restoring |
+| 1b | **F1b → enumerate all seven.** Table C's two-row mapping was the under-specification the finding exploited. Every `change.untracked` consumer is listed with the fact it consumes: `isNew` ("absent from the baseline") or `untracked` ("git index state"). The `:1202` registry-admission site gets its own row — it is the durable-escalation site | **New Table D**, seven rows, exhaustive (`grep -c '.untracked' validate.js` = 7, all seven present). `:1202` admits only on the conjunction `isNew && untracked`, so it can fail only toward "not dream-owned" — a skill absent from the registry can never be autonomously revised |
+| 2 | **F2 → accepted in full.** The discriminator is per SUBSTITUTION, not per gate. HEAD-readers (skill-guard, ledger): baseline-vs-HEAD. Tier-3: live-bytes-vs-`afterBytes`. EP2: the delta. A universal fixture stays structurally blind — every substitution gets its own | Acceptance criterion 1 rewritten as a seven-row discriminator table, each with its own negative. The Tier-3 row states explicitly why baseline-vs-HEAD cannot see that substitution |
+| 3 | **F3 → trivial range fix** | `:320-413`, `:516-613`, re-run on the tree |
+| R1 | **R1 → trivial range fix, and neither prior number was right.** Correct range `:1211-1372` — not the spec's `:1345`, not the reviewer's `:1364` | `:1211-1372`, re-run: `:1372` is Step 3's last line, `:1374` opens Step 4 |
+
+**Machinery budget respected:** no new verification command was added. The HEAD
+invariant, the `:1202` conjunction and the seven discriminators are all proven
+behaviourally, inside the frozen three-assertion surface.
+
+**Size note:** the spec grew 357 → 410 lines and gained one mechanism (the drift
+check and its abort). `size: M` stands, with less margin than before; the named
+seam if a later round pushes it over is unchanged — (i) capture + primitive + its
+own tests, (ii) the gate swaps and the divergence proof.
