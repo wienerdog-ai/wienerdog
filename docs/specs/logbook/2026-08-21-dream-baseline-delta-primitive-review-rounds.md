@@ -699,3 +699,35 @@ stronger data point than anything we had. But the reviewer was TOLD about the ru
 dispatch, so it is salience-assisted rather than a cold catch — the first honest test
 remains a fresh solo session with the runbook and neither salience nor a peer. Evidence
 with the qualification attached; never vindication.
+
+### Correction to the corroboration record — the ruling had ONE measurement, not two
+
+The advisor reproduced the refutation and confirms it. In doing so they disclosed
+something that corrects what the owner was told when he made the platform ruling.
+
+Round 5's downgrade went up as **independently re-measured**. It was not. The advisor
+ran the SAME SHAPE I did — a symlink to a *different* file — so their check inherited my
+measurement's blind spot and could only ever have produced my answer. **An independent
+check that reproduces the original's design is replication, not verification.**
+
+So the ruling rested on **one measurement run twice**, presented as two confirmations.
+That is a factual correction to what the owner believes he has, and it matters more than
+either of our individual errors: two agreeing sessions is exactly the signal a decision
+is supposed to be able to lean on.
+
+**The operational form, which is sharper than the family's general shape:** when
+re-measuring someone else's claim, the question is not *did I get the same answer* but
+**could my test have produced a different one?** If the answer is no, the check adds
+confidence without adding evidence — which is worse than not running it, because the
+confidence is real and the evidence is not.
+
+That is instance eight of the evidence-reach family, and the second in this arc where a
+correctly-executed check said nothing about the conclusion drawn from it. It differs
+from the others in who it deceived: not the person who ran it, but the person who read
+"independently confirmed" and reasonably relied on it.
+
+**Catch-mode note.** Six of the eight instances were caught by a round, salience or a
+peer cross-check. This one was caught by **the round**, which is the first time the loop
+itself found a defect in a measurement that had already passed peer cross-check. Fourth
+distinct catch-mode datum for the owner's file, and the only one so far that survived a
+peer check before being caught.
