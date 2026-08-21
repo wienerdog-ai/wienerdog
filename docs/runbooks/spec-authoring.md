@@ -35,6 +35,15 @@ writing. Read both before drafting.
   into success, so the check reads greenest exactly where the work was never
   done. Guard it (`test -f file && ! grep -q …`) and observe all three states:
   absent → red, compliant → green, violating → red.
+- Evidence establishes a claim only as far as it actually reaches, and the
+  question that catches the gap is asked while WRITING, not afterwards: *if my
+  conclusion were false, would this evidence have shown it?* A measurement that
+  moved two things at once attributes neither. A precedent's existence is not
+  its adoption — the check is whether every defense it applies appears in the
+  text citing it. A design intention in a charter is not a property of the tree.
+  Where the answer is no, either get evidence that reaches or state the smaller
+  claim; the repo already asks this of acceptance criteria, and it is the same
+  question one level up.
 - A fact is stated once, in the surface that owns it; every other
   surface cites the owner instead of restating. A place that keeps
   going stale predicting another surface's content stops predicting
