@@ -731,3 +731,63 @@ peer cross-check. This one was caught by **the round**, which is the first time 
 itself found a defect in a measurement that had already passed peer cross-check. Fourth
 distinct catch-mode datum for the owner's file, and the only one so far that survived a
 peer check before being caught.
+
+## Owner ruling — containment LEAVES this package; and my Ready judgment
+
+**RULING 1.** The containment claim is removed from 1a and becomes the CALLER's
+obligation. Not a sixth attempt, and not a close as a named residual. Grounds, recorded
+because the third is the decisive one and generalises: the family failed five times;
+portable Node cannot close it without an API no `fs` exposes; and **this primitive has
+no consumer, so its exposure cannot be measured at all.** 1a says plainly that
+establishing containment is the caller's; 1b specifies it where the threat is
+measurable, per platform.
+
+Rejected, with reasons worth keeping: a sixth attempt (the rule demands a design
+question, and the language offers no tool); and closing as a named residual (it would
+override the owner's own discipline — an (a) has never been allowed to close that way —
+for the sake of a component that protects nothing).
+
+**This dissolves the fifth park rather than answering it.** The surfaces I deliberately
+left standing because they were false — "no capability is gained", the unconditional
+leaf-no-follow phrasing, the classify/read-gap contract — are not corrected. They are
+REMOVED. The contract no longer promises containment; it hands it over.
+
+**Folded across every surface.** Table A now separates two things that were tangled: the
+accuracy mechanisms (`O_NOFOLLOW` where available, `O_NONBLOCK`, the regular-file
+`fstat`, the `(dev, ino)` comparison) exist so the bytes recorded under `rel` are the
+bytes of the object enumerated at `rel` — and they are explicitly NOT offered as a
+defense. A dedicated row states the disclaimer with the measurement that earned it. The
+security checklist states the fact instead of a guarantee. The acceptance criterion
+asserts the mechanisms' behaviour and explicitly asserts no containment. The Mirrored
+Surface Checklist now registers the DISCLAIMER's mirrors and forbids any surface from
+claiming containment. Out of scope hands the question to 1b with both hypotheses still
+marked unverified. Swept: no surface claims containment, promises out-of-root exclusion,
+or implies `O_NOFOLLOW` is universal. Spec 466 lines, down from 478.
+
+### Ready judgment — a round 7 is required, for the third time
+
+Weighted closure, `docs/runbooks/codex-review.md` on `main`: *"HEAVY: fixes land, then a
+full fresh external round"*, and *"the loop is DONE when a round finds nothing about the
+product."*
+
+This fold is **HEAVY**. The rule's test is whether the fix changes what the implementer
+builds, and it does — the implementer no longer implements a containment guarantee, the
+acceptance criteria changed, and a security-relevant section of the contract was
+rewritten. Removing a contract is changing it. And round 6 found a product defect, so
+the loop is not done by the second clause either.
+
+**So 1a is NOT Ready, and round 7 runs.** I have now read this rule the strict way three
+times, each time against the faster path, and once against the advisor's own framing.
+The last time I did it, the round caught a false claim of mine that had already reached
+an owner ruling — which is the strongest argument available that the strictness is not
+ceremony.
+
+It is also the fold most in need of a fresh look: it was made at the end of a long arc,
+it REMOVES safety language rather than adding it, and a removal that goes one row too far
+is exactly the defect a reviewer catches and an author does not.
+
+**Text stability signal (for the 1b charter dispatch):** the text is stable NOW in the
+sense the advisor asked for — the containment disclaimer is what 1b will cite, and round
+7 cannot restore a claim the owner has removed. It can only find the removal incomplete
+or over-reaching, which would change wording rather than the contract 1b inherits. The
+1b charter may be dispatched against this text.
