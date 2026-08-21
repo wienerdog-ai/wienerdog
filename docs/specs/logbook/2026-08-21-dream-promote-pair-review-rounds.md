@@ -207,3 +207,69 @@ eleventh rule.
 
 Fix commit for F6' only: applied in the commit that carries this record.
 Everything else: **HELD — owner ruling requested.**
+
+### Author's measurement — round 1's F1 does not reproduce at a realistic vault location
+
+Run 2026-08-22 before the owner re-rules, because F1's severity was the input
+to the ruling that F1' then blocked. **Result: the hardlink vector is ABSENT
+when the vault sits where a real vault sits, and round 1's measurement was
+taken inside the sandbox's own granted area.**
+
+Probe: `codex exec --sandbox workspace-write --cd <ws>` with
+`approval_policy=never`, the product's shape (`brain.js` `buildCodexArgs`);
+`codex-cli 0.146.0`, macOS 26.5.2. Seven operations in ONE script so the raw
+output is the evidence, then the filesystem verified from OUTSIDE the sandbox
+(the agent's own report is not evidence). Vault under `$HOME`, workspace under
+`$HOME`.
+
+| Operation attempted from inside the workspace | Result |
+|---|---|
+| `ln <vault>/note.md ./alias.md` (alias a vault inode into the workspace) | **DENIED** — `Operation not permitted` |
+| write to `./alias.md` | allowed — but `alias.md` is an INDEPENDENT inode (`nlink=1`), a plain workspace file |
+| `ln ./payload.md <vault>/CLAUDE.md` (plant a new vault entry) | **DENIED** |
+| `printf ... > <vault>/direct.md` (direct vault write) | **DENIED** |
+| `mv ./payload.md <vault>/moved.md` | **DENIED** |
+| `ln -s <vault-dir> ./symdir` (symlink INTO the workspace) | allowed |
+| write through `./symdir/sym.md` (resolves into the vault) | **DENIED** — the sandbox denies by RESOLVED destination, not by lexical path |
+
+Verified from outside afterwards: the vault note is byte-unchanged, its inode
+is unchanged, **`nlink=1`** — no link was ever created — and the vault
+directory holds nothing new.
+
+**Why round 1 measured the opposite.** The sandbox banner states its writable
+roots: `workspace-write [workdir, /tmp, $TMPDIR]`. A first probe run with the
+fake vault under `/tmp` reproduced round 1's "success" exactly — all five
+operations succeeded and the vault inode was mutated — because `/tmp` is a
+GRANTED root, not because the fence is weak. Round 1's reported command used a
+relative source (`ln ../live.md linked.md`), which is consistent with the same
+granted-area case. **The measurement was correct about what it measured and
+wrong about what it established** — the same evidence-reach family this arc
+keeps meeting, and this time the author carried it into a ruling without
+re-measuring at a realistic location.
+
+**Consequences, offered to the owner as the ruling's input:**
+
+- Round 1's **F1 falls**, and with it the different-filesystem placement it
+  produced. Round 2's **F1' becomes moot** — there is nothing to implement.
+  Part i's placement row, hardlink-vector row, cost caveat, contract clause,
+  Table F row and the two acceptance criteria all trace to that ruling and
+  should come out together (HELD — the ruling that put them in was the
+  owner's).
+- The Codex-arm write fence gains real, bounded evidence in their place:
+  measured, the sandbox refuses every attempted route from the workspace into
+  a vault outside its granted roots, **including through a symlink**.
+- **Bounds this claim must carry and may not exceed:** macOS 26.5.2 seatbelt,
+  `codex-cli 0.146.0`, and a vault OUTSIDE `/tmp` and `$TMPDIR` (a vault inside
+  them is writable). It is a HARNESS guarantee, so it is defense in depth, not
+  the primary barrier — the primary barrier stays "the vault path is not handed
+  to the brain, and promotion is the only writer".
+- **The family's twice-landed status is UNCHANGED and the escalation stands.**
+  Round 1's landing rests on F5 and F10 (a hostile instruction file, and the
+  report tree, reached THROUGH promotion) independently of F1; round 2's F4',
+  F9' and F5' are promotion-side, in this repo's own process, which no harness
+  sandbox constrains.
+- **The diagnosis is strengthened, not weakened.** The one place in the whole
+  probe that behaved correctly is the row where the OS sandbox denied a write
+  by RESOLVED destination while the name looked innocent. Our promotion policy
+  is still the lexical one. That is the argument for extracting a single
+  identity-anchored write contract rather than adding rules.
