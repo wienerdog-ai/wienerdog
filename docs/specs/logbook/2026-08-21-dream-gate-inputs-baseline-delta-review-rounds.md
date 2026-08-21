@@ -39,7 +39,7 @@ credit. Anything from those rounds that still applies must be re-found here.
 |---|---|---|---|---|
 | 0a | Template conformance (clean context, two inputs, no external reviewer) | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-r0-template-conformance-raw.md` | this commit | CONFORMANT — 0 blocking, 3 non-blocking |
 | 0b | Internal coherence + runnable criteria | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-r0-internal-coherence-raw.md` | this commit | 15 findings, all fixed |
-| 1 | External adversarial (design) | — | — | NOT YET RUN |
+| 1 | External adversarial (design), gptsol, English-pinned | `docs/specs/logbook/2026-08-21-dream-gate-inputs-baseline-delta-round-1-raw.md` | this commit | **NO-SHIP** — 3 findings in scope (2 HEAVY), 1 routed |
 
 ## Round 0 dispositions
 
@@ -76,3 +76,36 @@ forward from an earlier read of the same region.**
 **Weighted closure.** One HEAVY finding (14) landed, so the next step is a full fresh
 external adversarial round (round 1), not a mechanical re-check. All fifteen fixes are
 re-measured against the tree in §5 of the internal-coherence record.
+
+## Round 1 dispositions — PROPOSED, awaiting owner ruling
+
+Backend `gptsol`, read-only verified both sides. The reviewer ran `npm test`
+(2048/2039/0/9, exit 0) and `npm run lint` (exit 0) and reproduced its two
+behavioural claims in throwaway repositories outside the checkout, so this verdict
+is a run, not a reading. Every citation was re-run by the orchestrator before
+anything was acted on; all four findings **CONFIRMED**, and two of them are sharper
+than reported (see the raw record's spot-check).
+
+| # | Finding | Family | Weight | Proposed disposition |
+|---|---|---|---|---|
+| 1 | A user commit landing mid-run breaks baseline == HEAD; `isNew` then diverges from `untracked` and the skill-body guard is SKIPPED where today it reverts | silently weakened gate | **HEAVY** | **Owner ruling requested.** The spec asserts the coincidence rather than enforcing it, and the finding is correct that nothing pins HEAD between `dream.js:494` and `:558`. Two shapes to rule between: (a) capture the expected HEAD identity with the baseline and fail closed — non-destructively — if it moved; (b) narrow the substitution so `isNew` is used ONLY where "absent from the baseline" is the intended question, and every site whose real question is git's index state keeps `untracked`. (b) is smaller and preserves behaviour by construction; (a) buys a genuine invariant the second package will need anyway |
+| 1b | **Orchestrator addition:** `change.untracked` has seven consumers; Table C maps two. The unmapped `:1202` site gates **ownership-registry admission**, so the same race would register the user's own skill as dream-created and authorise every FUTURE dream to revise it | silently weakened gate | **HEAVY** | Folded into the ruling on 1. Whatever shape is chosen, Table C must enumerate **all seven** sites and state, per site, which fact it consumes. The current two-row mapping is the under-specification the finding exploited |
+| 2 | The mandated divergence proof cannot detect an unsubstituted Tier-3 floor: diverging baseline from HEAD only moves the candidate list, and Tier-3's substitution is live-file-bytes → `afterBytes`, which the fixture leaves identical | silently weakened gate | **HEAVY** | **Accept in full.** This is precisely the failure the stop criterion names, and the spec's own proof was blind to it. The criterion must require a discriminator **per named substitution**, not per gate: for Tier-3 a state where `afterBytes` differs from the live file at decision time, with the negative showing that restoring the filesystem read flips the outcome |
+| 3 | `skillBodyViolation` cited `:320-415` (ends `:413`); `ledgerViolation` cited `:516-615` (ends `:613`) — both ranges cross into the next function's JSDoc | citation drift | LIGHT | **Accept.** Correct to `:320-413` and `:516-613`. Round zero fixed twelve citations and these two survived it, because round zero checked the lines a claim NAMES and never checked that a cited RANGE ends where the construct ends. That gap is the lesson, not the two numbers |
+| R1 | Routed: EP2 Step 3 cited `:1211-1345`; the step runs past it | citation drift | LIGHT, routed | **Accept the finding, reject its number.** The reviewer's `:1211-1364` is also short: the loop closes at `:1364` but Step 3 continues to `:1372`. Correct range is `:1211-1372`. Behavioural changes in that tail stay routed to part 2 |
+
+### Family-escalation status — read this before ruling
+
+The pinned family for this package is **"silently weakened gate"**. This round
+landed on it **twice in one round** (findings 1/1b and 2). The criterion as written
+fires on two consecutive ROUNDS, so it has **not** fired — but one round hitting the
+pinned family twice is the signal the criterion exists to catch, and whether that
+should count is an owner call, not the orchestrator's.
+
+What the two have in common is worth stating plainly: both are places where the spec
+asserted an equivalence instead of enforcing or proving one. `isNew ≈ untracked`
+"in production", and "the fixture discriminates" for a gate whose substitution the
+fixture cannot see. The scope rule held — the reviewer routed correctly and folded
+nothing in — and the citation work is ordinary iteration. The design question is
+whether a package whose central contract is an asserted equivalence can be made
+Ready by tightening it, or whether the seam itself needs re-cutting.
