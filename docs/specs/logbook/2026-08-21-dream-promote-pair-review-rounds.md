@@ -318,3 +318,79 @@ Fix commit: applied in the commit that carries this update.
 one is new, and this program's measured fix-injection rate is why the round
 after a fix pass is not optional — round 2 found a defect this author had
 introduced in round 1's pass.
+
+### Round 3 — 2026-08-22 — reviewer: Codex (gpt-5.6-sol), external
+
+**Does NOT close. 6 findings + 2 questions — but the SHAPE changed, and that is
+the result worth reading.** Counts across the arc: 10 → 9 → 6. More important
+than the count: **round 3 found not one instance of "another lexical rule is
+missing".** The extraction did its job — every finding is now either the
+primitive's own contract detail, an author error inside the extraction, or the
+known portable-Node limit — and all of them are in ONE module instead of
+scattered across a policy table.
+
+All six re-verified against the code before dispositioning; all hold.
+
+**Four were this author's errors in the extraction, and are fixed:**
+
+- **F3' — the dream report was left outside the chokepoint.** Measured: the
+  report step does four direct `fs` writes (`validate.js:1374-1408`,
+  `mkdirSync`/`writeFileSync`/`appendFileSync`), and an `appendFileSync` onto a
+  symlinked report path follows it. The spec meanwhile claimed the primitive was
+  "the only way anything writes the vault" — **an unquantified universal, which
+  is exactly what the authoring runbook forbids.** Fixed: the report is composed
+  in full and published through `writeIntoVault` under a CODE-OWNED report
+  policy (C9 denies `reports_dir` and could never authorise it), and the claim
+  is narrowed to vault CONTENT files with the writers enumerated in place.
+- **F4' — a promoted note whose parent directory does not yet exist could not be
+  published.** C3 promotes an added note; `computeDelta` emits no directory
+  records; the primitive required the parent to resolve. Nothing created it —
+  the brain could never open a new project folder again. Fixed by a new row H9:
+  the primitive creates the missing chain segment by segment, `lstat`-verifying
+  each before descending, refusing on any symlink, with modes and
+  refusal-cleanup stated.
+- **F5' — `sha256` is not a stageable object id.** Table E said the index entry
+  is built "from its `sha256`". Measured: this repo's object format is `sha1`,
+  and for `abc\n` the blob id is `8baef1b4…` against a raw digest of
+  `edeaaff3…`. Fixed: the primitive returns the published BYTES, the consumer
+  derives a repository-native blob with `hash-object -w --stdin` under the
+  constructed git environment and stages it with `update-index --cacheinfo`;
+  the digest stays as an independent verification value, and the spec now says
+  so in three places because two of them had merged the identities.
+- **H3/H4's over-claims.** H3 said the `lstat` walk handled "a
+  resolved-then-swapped component"; H4 implied the random `O_EXCL` temp could
+  not be defeated. Both were stronger than portable Node permits.
+
+**Two were the known portable-Node limit, and the repo had ALREADY ruled on the
+class** — the fix is to adopt the ruled shape rather than invent a new one:
+
+- **F1' (parent component swapped between the walk and the open)**:
+  `delta.js:22-40`, owner-ruled 2026-08-21, states it "cannot close that class
+  without per-component `openat`, which no `fs` API exposes" and hands the
+  caller an ordering obligation. H3 now says the same and names the residual;
+  **this family discharges the obligation by ordering — every vault write runs
+  after a verified reap, with no live actor holding vault write access.**
+- **F2' (temp unlinked and replaced after creation)**: `private-fs.js:270-277`
+  already says "pure Node cannot prevent this … but this DETECTS it" and carries
+  the opened fd's `(dev, ino)` to a post-`rename` check. H4 now adopts that
+  verbatim in shape and says **detection, not prevention** — including the one
+  case where H7's leaves-nothing-behind property cannot hold.
+
+**One refinement:** F6' case-folding alone does not close Unicode aliases —
+measured here, macOS enumerates decomposed names while accepting composed ones
+and `nfc.toLowerCase() === nfd.toLowerCase()` is false for the same inode, so a
+composed `projects_dir` and a decomposed `reports_dir` name one directory that
+the positive test admits and the negative test misses. Every comparison now
+normalises to NFC before folding, layout values included.
+
+**Both questions answered rather than parked:** the constructed child env keeps
+a SANITISED `PATH` (dropping it breaks `spawnPinned`'s re-resolution,
+`exec-identity.js:451-472`; copying it verbatim can carry a vault-rooted
+component), with a new criterion that both harnesses must actually START under
+the constructed env — an env that passes the assertion but cannot launch a
+harness is a broken product, not a fence. And a new note's mode is now stated
+(H10).
+
+Fix commit: applied in the commit that carries this update.
+
+**Round 4 is owed** on the same grounds as round 3 was.

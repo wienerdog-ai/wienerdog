@@ -1,6 +1,6 @@
 ---
 id: WP-dream-vault-write-primitive
-title: Add the single identity-anchored primitive through which anything writes the vault
+title: Add the single identity-anchored primitive through which this family writes vault content
 status: Draft
 model: opus
 size: S
@@ -68,9 +68,28 @@ and all three are in code that reads correct:
 
 The repo already contains the hardened shape for the second of these, in a
 different subsystem: `src/core/private-fs.js:259-317` creates temps with a
-crypto-random name and `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`. **This package
-generalises that discipline into one vault-facing primitive and makes it the
-only way anything writes the vault.**
+crypto-random name and `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, **and carries
+the opened descriptor's `(dev, ino)` through to a post-`rename` check** because
+"pure Node cannot prevent" a post-creation substitution (`:270-277`). **This
+package generalises that discipline into one vault-facing primitive and makes
+it the only way this family writes a vault CONTENT file.**
+
+**The enumeration that claim requires** (an unquantified "only way" is a hope,
+not a contract): the vault content writers this family owns are (i) each
+promoted note and (ii) the code-owned dream report. Both go through
+`writeIntoVault`; the report's own policy is the consumer's, not this module's
+(`WP-dream-promote-in-workspace`, Tables D and E). Git's writes to the vault's
+`.git` directory are not content files and are outside this contract.
+
+**What this primitive does NOT establish, stated here because the repo has
+already ruled on this exact class:** portable Node cannot bind a path's
+component chain against concurrent replacement — `delta.js:22-40` (owner-ruled
+2026-08-21) says it "cannot close that class without per-component `openat`,
+which no `fs` API exposes", and hands its caller a checkable ordering
+obligation instead. Rows H3 and H4 inherit that shape: they narrow and they
+DETECT, and each says which. This family discharges the obligation by ordering
+— every vault write happens after a verified reap, with no live actor holding
+vault write access.
 
 ## Current state
 
@@ -114,9 +133,11 @@ under "Discovered issues" in the PR body.
 
 ```js
 /** Write one file into the vault, deciding on the object rather than the name.
- *  The ONLY sanctioned way to write the vault. Never follows a symlink, never
- *  writes outside the admitted region, and never publishes bytes it did not
- *  receive (Table H).
+ *  The ONLY sanctioned way for this family to write a vault CONTENT file —
+ *  promoted notes and the code-owned dream report alike. (Git writes the
+ *  vault's own `.git` internals; that is not a content file and not this
+ *  module's subject.) Refuses a symlink it can see, refuses a destination its
+ *  caller's policy denies, and returns the bytes it published (Table H).
  *  @param {{vaultDir:string, rel:string, bytes:Buffer,
  *           admit:(resolvedRel:string)=>string|null,
  *           expect?:Buffer|null}} o
@@ -128,10 +149,14 @@ under "Discovered issues" in the PR body.
  *            write is abandoned unless the target still holds exactly these at
  *            publish time (absent = the caller asserts the target must not
  *            exist)
- *  @returns {{written:true, sha256:string}
+ *  @returns {{written:true, bytes:Buffer, sha256:string}
  *           |{written:false, reason:string}}
- *    sha256 is over the bytes actually published — the caller stages FROM this,
- *    never from the working tree (Table H, row H6) */
+ *    bytes  the exact buffer published — the caller stages FROM these, never by
+ *           re-reading the path (Table H, row H6)
+ *    sha256 a verification digest over them. NOT a git object id: the caller
+ *           derives the repository-native blob id from `bytes` itself
+ *    throws WienerdogError when the temp was SUBSTITUTED between creation and
+ *    publish (H4) — detection, not prevention, and the state is already wrong */
 function writeIntoVault(o)
 ```
 
@@ -149,10 +174,12 @@ inherits this contract as its only write path.
 |---|---|---|
 | H1 | **Decide on the RESOLVED path, not the given one** | `rel` is first segment-validated (no segment equal to `.` or `..`, none containing a separator, none empty). The target's parent directory is then resolved (`realpath`), the resolved absolute path is expressed relative to the vault's own resolved root, and **`admit` is called with THAT** — so a caller's policy judges where the write actually lands. Measured motivation: a pre-existing vault symlink makes an admitted lexical path resolve into a denied directory, and the repo's existing containment check (`validate.js:624-650`) cannot see it because the resolved target is still inside the vault |
 | H2 | **Containment is necessary but never sufficient** | the resolved path must remain inside the vault's resolved root — and passing that check decides nothing on its own; H1's `admit` on the resolved path is what admits. **No surface may describe containment as the barrier**: it rejects escapes from the vault, not writes into a denied part of it |
-| H3 | **No component may be a symlink at write time** | the parent chain from the vault root down to the target's directory is walked with `lstat`, and any symlink component fails the write closed with a reason — resolving is not enough on its own, because a resolved-then-swapped component is a race. A symlink AT the target itself is likewise refused: promotion replaces a note, never whatever a note points at |
-| H4 | **The temp is created, never opened** | crypto-random basename in the target's own directory, `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, mode taken from the target when it exists. The repo's own hardened shape (`private-fs.js:259-317`) is the model. **A predictable name with a following write is the measured defect this row exists to prevent** (`validate.js:855-863`): a symlink planted at that path is followed, and the victim is overwritten before any `rename` |
+| H3 | **No component may be a symlink — and the swap race is NAMED, not claimed closed** | the parent chain from the vault root down to the target's directory is walked with `lstat`, and any symlink component fails the write closed with a reason. A symlink AT the target itself is likewise refused: promotion replaces a note, never whatever a note points at. **What this does NOT establish, per the ruling this repo already made on exactly this class** (`delta.js:22-40`, owner-ruled 2026-08-21): a component observed as a real directory and REPLACED between the walk and the open is followed, and **portable Node cannot close that without per-component `openat`, which no `fs` API exposes.** `O_NOFOLLOW` protects the final component only. Measured in round 3: after an `lstat` saw a real directory, swapping it for a directory symlink let an `O_EXCL\|O_NOFOLLOW` temp open write through it. So this row NARROWS the window and states the residual; the same caller obligation the delta primitive names applies here — for the duration of the call, no untrusted actor may replace an ancestor of the target. **Under this family that obligation is discharged by ordering: promotion runs after a verified reap, with no live actor holding vault write access** (`WP-dream-promote-in-workspace`, Table G). Another `realpath` before the open would only narrow the same race and must not be described as closing it |
+| H4 | **The temp is created, never opened — and its identity is carried through the publish** | crypto-random basename in the target's own directory, `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`. **A predictable name with a following write is the measured defect this row exists to prevent** (`validate.js:855-863`): a symlink planted at that path is followed, and the victim is overwritten before any `rename`. Round 3 confirmed the crypto-random `O_EXCL` create defeats a PRE-planted symlink — and found the residual the repo's own precedent already names (`private-fs.js:270-277`): after the create, a concurrent same-owner process can unlink the entry and plant another object at that name, so the `rename` moves the SUBSTITUTED object. "Pure Node cannot prevent this (no directory-relative rename), but this DETECTS it" — and this primitive adopts that precedent verbatim in shape: capture the opened fd's `(dev, ino)` via `fstat`, write and set the mode ON THE FD (never a post-write path-following `chmod`), and after the `rename` `lstat` the target — a symlink or a `(dev, ino)` mismatch means substitution and **throws**. **Detection, not prevention, and this row says so.** A substitution detected after the rename is the one case where H7's leaves-nothing-behind property cannot hold: the throw is loud precisely because the state is already wrong |
 | H5 | **Publish is `rename`, after a conditional re-read — NARROWED, not closed** | when `expect` is given, the target is re-read immediately before the `rename` and compared byte-for-byte; a difference abandons the write and returns `{written:false}`. When `expect` is absent the target must not exist. **The residual is stated because POSIX offers no content-conditional replace:** a save landing between the re-read and the `rename` is still lost. The repo's precedent (`validate.js:884-890`) has exactly this window and shipped with it; this row narrows the same window and does not claim to close it |
-| H6 | **The bytes published are the bytes returned** | `sha256` is computed over the buffer actually written, and the caller stages from that hash rather than re-reading the path. Measured motivation: staging that reads the working tree (`validate.js:1412`, `git add -A`) commits whatever the file holds at staging time, so a save between publish and stage enters the commit ungated. **This module does not stage** — it returns the value that makes correct staging possible, and the consumer's spec owns the staging call |
+| H6 | **The published BYTES are returned, so the caller never re-reads the path** | on success the return carries `bytes` — the exact buffer published — plus `sha256` over it. Measured motivation: staging that reads the working tree (`validate.js:1412`, `git add -A`) commits whatever the file holds at staging time, so a save between publish and stage enters the commit ungated. **Three identities are distinct and this row keeps them apart (round 3, F5):** the content digest `sha256`; the filesystem object identity `(dev, ino)` that H4 verifies; and the repository-native blob id, which the caller obtains from the returned BYTES (`git hash-object -w --stdin` under its own constructed git environment) — measured, this repo's object format is `sha1`, so for `abc\n` the blob id is `8baef1b4…` while the raw sha256 is `edeaaff3…`. **`sha256` is a verification digest and is NOT a stageable object id.** This module does not stage and runs no git; the consumer's spec owns the staging call |
+| H9 | **Missing parent directories are created HERE, under the same discipline** | a promoted note may be the first file in a new tier subdirectory (its parent exists in the workspace but not yet in the vault), and no other package may create it — a second vault-write route is exactly what this extraction exists to prevent. `writeIntoVault` therefore creates the missing chain **segment by segment from the vault root down**, each segment `mkdir`-ed and then `lstat`-verified as a real directory before descending, refusing closed on any symlink or non-directory it meets. Directories are created 0700-plus-umask-widened to match the vault's own root mode, so a new folder is no more permissive than the vault. **Cleanup:** a chain created for a write that is then refused is left in place — an empty directory is inert, and removing it would race a concurrent creator; the refusal reason names it. The H3 residual applies to these segments unchanged |
+| H10 | **A newly created note's mode** | when the target exists, the temp takes the target's mode (H4). When it does NOT exist, the new file is created **0600-plus-the-vault-root's-group/other bits**, i.e. no wider than the vault root itself, and never wider than the process umask would allow. Stated because C3 promotes new notes and an unstated mode leaves an implementation free to publish a user's note world-readable or unreadable to their own editor |
 | H7 | **Refusal is total and reported** | every failure path returns `{written:false, reason}`; nothing is partially written, and the temp is removed on every exit. The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
 | H8 | **No policy lives here** | this module knows nothing about tiers, extensions, instruction files or report directories. It owns the filesystem discipline; `admit` owns the rules. That separation is the point of the extraction: the rules can be argued about and changed in one place, and none of those arguments can weaken the filesystem discipline by accident |
 
@@ -167,9 +194,12 @@ inherits this contract as its only write path.
       precedent)
 - [ ] Out of scope (what the consumer owns)
 - [ ] **Every surface that says what this primitive guarantees** — the package
-      note, the Context, rows H2 and H5, and the acceptance criteria. **No
-      surface may call the compare→publish window "closed", and none may
-      describe vault-containment as sufficient.**
+      note, the Context, rows H2, H3, H4 and H5, and the acceptance criteria.
+      **No surface may call the compare→publish window "closed", describe
+      vault-containment as sufficient, claim the component-swap race is closed,
+      or claim substitution is prevented rather than detected. And no surface
+      may say "the only way anything writes the vault" without the Context's
+      enumeration of the content writers this family owns.**
 
 ## Implementation notes & constraints
 
@@ -195,6 +225,12 @@ inherits this contract as its only write path.
       (`validate.js:624-650`), the followable temp (`:855-863`), and the
       working-tree staging (`:1412`).
 - [ ] Named residual: the compare→publish window is narrowed, not closed (H5).
+- [ ] Named residual, inherited from the ruling at `delta.js:22-40`: a parent
+      component replaced between the walk and the open is followed, and
+      portable Node cannot close that class (H3). Discharged by ORDERING at the
+      family level — every vault write runs after a verified reap.
+- [ ] Named residual: a temp substituted after creation is DETECTED via the
+      opened descriptor's `(dev, ino)`, not prevented (H4).
 - [ ] Named residual: `O_NOFOLLOW`'s absence on win32 moves the weight onto the
       H3 component walk; no cross-platform guarantee is claimed.
 
@@ -207,23 +243,45 @@ inherits this contract as its only write path.
       the write. Proven RED against an implementation that passes `rel`.
 - [ ] **H2 — containment alone admits nothing.** A resolved path inside the
       vault but denied by `admit` is refused.
-- [ ] **H3 — a symlink component fails closed.** A symlink anywhere in the
-      parent chain, and a symlink at the target itself, each refuse with a
-      reason; the symlink's target is byte-unchanged.
-- [ ] **H4 — the temp cannot be pre-empted.** With a symlink planted at every
-      name the implementation could choose, the write still refuses or creates
-      its own file, and the planted symlink's target is byte-unchanged. Proven
-      RED against a predictable-name-plus-`writeFileSync` implementation, which
-      overwrites the victim.
+- [ ] **H3 — a symlink component fails closed, and the race is not claimed
+      closed.** A symlink anywhere in the parent chain, and a symlink at the
+      target itself, each refuse with a reason; the symlink's target is
+      byte-unchanged. **No criterion asserts that a component swapped BETWEEN
+      the walk and the open is caught** — measured, it is not, and the residual
+      is H3's; a test claiming otherwise would be asserting something portable
+      Node cannot deliver.
+- [ ] **H4 — the temp cannot be pre-empted, and substitution is DETECTED.** With
+      a symlink planted at every name the implementation could choose, the write
+      still refuses or creates its own file, and the planted symlink's target is
+      byte-unchanged. Proven RED against a predictable-name-plus-`writeFileSync`
+      implementation, which overwrites the victim. Separately: with the temp
+      unlinked and replaced AFTER creation and before the publish, the call
+      **throws** on the `(dev, ino)` mismatch rather than reporting success.
+      Proven RED against an implementation that omits the check, where the
+      substituted object lands and the call reports success.
+- [ ] **H9 — a missing parent chain is created safely.** Promoting
+      `01-Projects/new-project/note.md` into a vault holding only
+      `01-Projects/` creates the missing directory and publishes the note. With
+      a symlink planted as one of the segments, the write refuses and follows
+      nothing. A chain created for a write later refused is left in place, and
+      the refusal names it.
+- [ ] **H10 — a new note's mode.** A promoted new note is created no wider than
+      the vault root's own mode, and is readable by the user who owns the vault.
 - [ ] **H5 — the conditional publish.** With `expect` given and the target
       changed after the decision, the write is abandoned, `{written:false}` is
       returned, and the target keeps the changed bytes. With `expect` absent and
       the target existing, the write is refused.
-- [ ] **H6 — the returned hash is over the published bytes.** The `sha256`
-      matches the buffer passed in, and a target mutated immediately after the
-      `rename` does not change it.
+- [ ] **H6 — the return carries the published bytes, and the digest is not an
+      object id.** `bytes` equals the buffer passed in and `sha256` is over it;
+      a target mutated immediately after the `rename` changes neither. Asserted
+      explicitly: the returned `sha256` is NOT accepted by `git update-index
+      --cacheinfo` in this repository's object format — the criterion exists so
+      an implementer does not discover it at integration time.
 - [ ] **H7 — refusal leaves nothing behind.** After every refusal path, the
-      target directory contains no temp file and the target is unchanged.
+      target directory contains no temp file and the target is unchanged. **The
+      one named exception is H4's post-rename substitution**, which throws with
+      the target already replaced; the criterion asserts the throw, not an
+      unchanged target.
 - [ ] **This module has no policy and no process.** It requires no
       `child_process`, and no tier, extension or filename rule appears in it —
       asserted mechanically.
@@ -258,8 +316,9 @@ test -f docs/GLOSSARY.md && grep -q "\*\*vault write\*\*" docs/GLOSSARY.md
   consumer and owns its own migration under its own boundary.
 - **Any policy** — which directories, which extensions, which filenames. That
   is the consumer's `admit` (H8). This package may not grow a rule.
-- **Staging or committing.** H6 returns the hash that makes correct staging
-  possible; the `git` call belongs to the consumer.
+- **Staging or committing.** H6 returns the BYTES that make correct staging
+  possible; deriving the repository-native blob id from them and the `git` call
+  itself belong to the consumer.
 - **The layout's cross-key overlap** (`layout.js` permits two keys naming one
   directory). Measured and recorded here because it is why a consumer's
   `admit` needs an explicit negative check, but changing `layout.js` is not
