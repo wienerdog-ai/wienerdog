@@ -1125,3 +1125,59 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   launchd/systemd label domain, which its throwaway `HOME` does not scope, and
   running it locally on 2026-08-20 booted out the live `ai.wienerdog.dream` and
   `ai.wienerdog.catchup` agents.
+- **WP-dream-baseline-delta-primitive:** `--test-name-pattern` matches test NAMES, not
+  file names. A spec verification step written as `npm test -- --test-name-pattern
+  "<file-slug>"` is VACUOUS — exit 0 with a broken assertion in the file — unless the
+  tests carry the `<file-slug>: ` name prefix this repo already uses everywhere. Prove
+  every new verification gate red before believing its green.
+- **WP-dream-baseline-delta-primitive:** a `grep`-based "this file must not spawn"
+  gate cannot distinguish a comment from a call, so the module cannot NAME the module
+  it must not require. Enumerating every `require(...)` in the source and pinning the
+  whole set is strictly stronger and has no such blind spot.
+- **WP-dream-baseline-delta-primitive:** a spec obligation that names a specific
+  production function must also guarantee the implementer can REACH it. Naming a
+  non-exported function while forbidding edits to its file forces a choice between a
+  drifting copy and source extraction — decide it in the spec, not in the PR.
+- **WP-dream-baseline-delta-primitive:** "my diff is a conservative SUPERSET of git's"
+  is the kind of claim that feels safe and is not. Where duplicate lines admit two
+  equally minimal alignments, neither answer contains the other — git's is not maximal
+  either — so no single alignment can promise the superset. Counterexample: before
+  `"a\na\n"`, after `"b\na\na\nb\na\n"` — git `[1,4,5]`, prefix/suffix trim
+  `[1,2,3,4]`. State the property you can PROVE (here: every line whose content is
+  absent from the baseline is reported) and prove it exhaustively; a conservatism claim
+  that was never searched for a counterexample is a fail-open hole wearing a
+  fail-closed label.
+- **WP-dream-baseline-delta-primitive:** an oracle whose failure mode is
+  indistinguishable from one of its success values is the same defect class as a gate
+  that cannot go red. `binary` was derived from git's stdout, and a git that never ran
+  yields empty stdout — which reads as "text". Assert that the oracle RAN, not only
+  what it said.
+- **WP-dream-baseline-delta-primitive:** converting a PATH-selected executable to an
+  absolute realpath does not remove the PATH-selection channel — it only moves it
+  earlier. If a repo already has a pinning discipline (here `verifyExecutable`'s owner
+  and ancestor-writability checks), a test that invents a weaker one is claiming
+  parity it does not have.
+- **WP-dream-baseline-delta-primitive:** in zsh an unquoted `$VAR` holding newlines is
+  ONE argument, not many. `node scripts/boundary-check.js <spec> $CHANGED` reports a
+  bogus boundary violation for that reason alone. Quote or use `xargs`.
+- **WP-dream-baseline-delta-primitive:** structural verification of an executable is not
+  identity pinning. Checking that a PATH candidate is a regular file, owned by you, in a
+  non-world-writable directory says it is ACCEPTABLE, never that it is the INTENDED
+  installation — and a shim in a user-owned `0700` directory satisfies all of it. If PATH
+  order can still decide, the channel is open. Resolve from fixed locations and report
+  when you could not.
+- **WP-dream-baseline-delta-primitive:** guarding one of two subprocesses is guarding
+  neither. A failed process's empty stdout reads as a legitimate "nothing here" for
+  whichever inputs legitimately produce nothing, so the vacuous cases pass first and
+  loudest.
+- **WP-dream-baseline-delta-primitive:** POSIX makes a trailing separator force directory
+  resolution, so `lstat(p)` and `lstat(p + '/')` disagree about whether `p` is a symlink.
+  Any refusal built on `lstat` must normalise first — `path.resolve` is the whole fix,
+  and without it the refusal is false for one character of caller input.
+- **WP-dream-baseline-delta-primitive:** when a fix round corrects a MIRROR, check the
+  direction. Correcting the mirror and leaving the canonical table makes the code more
+  accurate than the contract that owns it — a registered-mirror checklist detects the
+  drift but does not say which way the edit should flow.
+- **WP-dream-baseline-delta-primitive:** citing a measurement you inherited as one you
+  made is the same defect as citing evidence that does not reach its claim. Either
+  re-measure it or attribute it; "measured" is a claim about who looked.
