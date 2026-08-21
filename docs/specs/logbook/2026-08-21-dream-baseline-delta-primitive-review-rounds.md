@@ -584,3 +584,59 @@ both sites consciously name what carries the weight on win32. The idiom criticis
 (a missing flag should not look like a present one); the "disagrees with itself" framing
 was too strong, and the three-times-wrong-precedent lesson keeps its narrower form:
 `private-fs.js` was wrong in the details inherited, not incoherent about the substance.
+
+## Owner ruling on the platform question — folded; and the round-6 judgment
+
+**RULING (2026-08-21): the recommendation, as proposed.** Adopt
+`src/core/vault-snapshot.js:48-57`'s explicit-branch shape and STATE the platform
+condition; the zero-fallback idiom is FORBIDDEN in this contract, because a missing
+flag must not be indistinguishable from a present one. What must be named: on win32 the
+open follows a swapped leaf symlink and the refusal moves from `open` to `fstat`, where
+`(dev, ino)` refuses before any byte is read; no capability is gained; what is lost is
+the refusal's TIMING plus a briefly-held descriptor on an out-of-tree object that is
+never read; the surviving residual is inode reuse, which exists everywhere.
+
+The owner's grounds, recorded because they generalise: refusing to run on win32 is not
+available (the product ships a Windows installer and scheduler under their own ADRs),
+and the status quo — **implying the flag is universal — IS the defect**. A named
+weakness beats a silent one.
+
+**The fourth containment-family finding therefore CLOSES as a named (b) residual — and
+it could only close that way because it is (b).** An (a) could not have. That is the
+practical payoff of the classification discipline, and of the re-measurement that
+downgraded it: had the park gone up as reported, this would still be open.
+
+Folded across every registered containment mirror: the canonical row now carries the
+owner-ruled platform contract, the security checklist names BOTH residuals, the
+checklist registration forbids any surface from implying the flag is universal, and the
+successor handoff requires the exposure to be measured PER PLATFORM. A sweep confirms no
+surface still implies universal availability.
+
+### Does weighted closure require a round 6? YES — my judgment, by the rule
+
+Round 5 produced two folds. Their weights differ and only one matters:
+
+- The UTF-8 byte-preservation fold is **LIGHT**: it extends Table C's corpus and requires
+  the reference output to be compared as bytes. That is the spec's own verification
+  machinery, which the rule names as LIGHT explicitly.
+- **The platform fold is HEAVY.** The rule's test is whether the fix changes what the
+  implementer builds in the product. Before it, an implementer reading "opened with
+  `O_NOFOLLOW`" would write `fs.constants.O_NOFOLLOW` and, on win32, either crash or
+  reach for the zero fallback. After it they must write an explicit platform branch.
+  That is different `src/` code.
+
+**HEAVY fixes land, then a full fresh external round.** And the loop is DONE only when a
+round finds nothing about the product; round 5 found things. Neither clause offers an
+exit, so **round 6 is required**.
+
+Two honest notes for the owner alongside that verdict. First, the defect supply IS
+shrinking as the convergence rule predicts — four findings in round 3, three in round 4,
+two in round 5 — so round 6 is expected to be small, not another treadmill turn.
+Second, round 6 would review text whose SUBSTANCE the owner just ruled; that does not
+make it vacuous, because a reviewer can still find the FOLD wrong — a mirror missed, the
+ruling implemented incorrectly, a contradiction introduced — and this loop has caught
+exactly that twice.
+
+**If the owner judges the remaining risk not worth one more round and closes 1a on the
+current text, that is a legitimate owner act on a named residual.** It is simply not a
+call the rule lets me make, and I have declined to read the rule loosely twice already.
