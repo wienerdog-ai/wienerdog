@@ -62,16 +62,16 @@ Nothing exists; you are creating both files.
 Two neighbouring patterns already in the tree, for shape only — neither is edited
 here:
 
-- `src/cli/dream.js:44-56` `hashScratch` / `:66-78` `scratchIntact`: the pipeline
+- `src/cli/dream.js:44-55` `hashScratch` / `:66-78` `scratchIntact`: the pipeline
   already takes a pre-brain baseline of its *input* files and verifies them after the
   run. That baseline stores hashes, which is enough for a yes/no integrity answer and
   **not** enough here: a consumer that must show what changed needs the bytes.
-- `src/core/private-fs.js:620-668` returns `{ dirs, files, anomalies }` — the
+- `src/core/private-fs.js` `listPrivateEntries` (`:619-669`) returns `{ dirs, files, anomalies }` — the
   established idiom for a walk that surfaces what it refused to treat as a normal
   file instead of silently dropping it. This module follows it.
 
 Today's validator derives its own evidence from git (`src/core/dream/validate.js`
-`changedPaths` `:1020-1033`, and the `git diff --cached` family in Step 3). **None of
+`changedPaths` `:1020-1034`, and the `git diff --cached` family in Step 3). **None of
 that changes in this package.**
 
 ## Deliverables (permission boundary — touch ONLY these)
@@ -94,7 +94,8 @@ fix: this package is additive by ruling.
  *  @param {string} rootDir  absolute path to an existing real directory
  *  @param {(rel:string) => boolean} [include]  optional filter over relative paths;
  *    omitted means every regular file under rootDir
- *  @returns {Baseline} — throws WienerdogError on an unreadable root or file */
+ *  @returns {Baseline} — `{files, anomalies}`, Table A; throws WienerdogError on an
+ *    unreadable root or file */
 function captureBaseline(rootDir, include)
 
 /** Difference the SAME root, as it stands at call time, against a baseline.
@@ -114,10 +115,10 @@ package inherits this contract unchanged.
 
 | Fact / rule | Value |
 |-------------|-------|
-| What a baseline holds | relative path → the file's exact **bytes**. Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
+| What a baseline holds | `{files, anomalies}`: `files` maps relative path → the file's exact **bytes**; `anomalies` is what the capture walk refused to treat as a regular file (row below). Nothing else: a content hash was considered and cut, because `computeDelta` must read the current bytes anyway, so no consumer would ever read the hash |
 | Path shape | relative to `rootDir`, POSIX separators (`/`) on every platform — the same shape `git status` yields, so the successor's registry and prefix tests keep working unchanged |
 | Scope | every regular file under `rootDir`, filtered by `include` when the caller supplies one. **The module owns no policy about which files matter** — no ignore rules, no git notion of tracked, no dot-prefix rule. Scope is the caller's, and in the successor it is the workspace's copy-in scope |
-| Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported in `anomalies` as `{rel, kind}` and appears in no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
+| Symlinks and other non-regular entries | **never followed and never captured.** A symlink (to a file or a directory), a device, a socket or a FIFO is reported as `{rel, kind}` in the `anomalies` list that **both** walks return — the baseline carries the anomalies seen at capture, `computeDelta` returns the anomalies seen now — and appears in no baseline and no record. Following one would let content outside `rootDir` enter a baseline that claims to describe `rootDir` |
 | Containment | every path the walk visits resolves inside `rootDir`. A `..` segment cannot occur (paths are built from directory entries), and the no-follow rule is what keeps that true |
 | Ordering | `records` are sorted by `rel`, byte-wise ascending, so two runs over the same state produce identical output and a report built from them is stable |
 | Failure at capture | an unreadable root, or a file that cannot be read, throws `WienerdogError`. There is no partial baseline: a baseline that silently omits a file would report that file as `added` later, which is a false accusation against whoever wrote it |
@@ -227,8 +228,10 @@ against a repository the test builds; the module itself contains no git.
 npm test -- --test-name-pattern "dream-delta"
 npm test
 npm run lint
-# The module is git-free and spawns nothing (Table A's scope row)
-! grep -qE "child_process|spawnSync|execFile|require\('node:child_process'\)" src/core/dream/delta.js
+# The module is git-free and spawns nothing (Table A's scope row).
+# `test -f` FIRST: grep on a missing file exits 2, which `!` would turn into a
+# false green — measured during round zero, on this very gate.
+test -f src/core/dream/delta.js && ! grep -qE "child_process|spawnSync|execFile" src/core/dream/delta.js
 # This package edits nothing that already existed
 test "$(git diff --name-only --diff-filter=M main -- src tests | wc -l)" -eq 0
 ```
@@ -238,7 +241,9 @@ test "$(git diff --name-only --diff-filter=M main -- src tests | wc -l)" -eq 0
   finished state AND a real red from a deliberately broken state (a
   `require('node:child_process')` added to the module; one character changed in an
   existing file under `src/`), so a check that cannot fail is caught before anyone
-  believes it.
+  believes it. The first assertion additionally goes red when the deliverable is
+  ABSENT — verify that too: its unguarded form (`! grep …` with no `test -f`) went
+  green on a missing file, measured during this spec's round zero.
 
 ## Out of scope (do NOT do these)
 
