@@ -55,6 +55,17 @@ decisions made while executing it.
   row in Part i's Table A — a workspace the system builds must pass the
   capture the system is about to run on it, so following a symlink into the
   copy would fail the run the system itself constructed.
+- **One wording correction to the original, made during the split:** Part i's
+  Table B runnable form says "no element equal to, and no element containing,
+  the vault path" where the original said "`vaultDir` (and any prefix of it)".
+  Read literally, the original forbade every prefix of the vault path —
+  including `$HOME`, and with it the workspace path itself — from appearing
+  anywhere. The acceptance-criterion form was already the containing-element
+  form; the table now matches it.
+- **The two part-less "—" Deliverables rows assigned:** `docs/GLOSSARY.md`
+  split one-name-each (workspace → Part i, promotion → Part ii); the
+  `docs/adr/0012` amendment wholly to Part ii, because Part i changes no
+  lifecycle.
 - The split resolves the pre-split round zero's one undisposed blocking
   finding (the size ceiling). Each half now measures within
   `docs/specs/README.md`'s limits: Part i touches 5 files, Part ii touches 8.

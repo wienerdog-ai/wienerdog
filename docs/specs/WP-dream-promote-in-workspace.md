@@ -89,7 +89,13 @@ listed and both are re-verified then.
   baseline + two postconditions, its Table A) and `destroyWorkspace`
   (idempotent, never touches the vault); `spawnBrain` takes `workspaceDir` as
   its write target (its Table B); the single production call site passes the
-  vault as a transitional argument, marked for this WP.
+  vault as a transitional argument, marked for this WP. **At dispatch the
+  implementer reads the exact signatures from the code by path** —
+  `createWorkspace`/`destroyWorkspace` in `src/core/dream/workspace.js`,
+  `spawnBrain`'s options in `src/core/dream/brain.js` — cited rather than
+  restated here so they cannot drift; the transitional write-target argument
+  to replace sits at the single production `spawnBrain` call in
+  `src/cli/dream.js` (its line is re-measured at dispatch).
 - `src/core/dream/validate.js` (1469 lines at `025021f`) — Step 1 scratch
   integrity (`:1107`), Step 2 per-path classification (`:1144`), Step 3 the EP2
   secret gate (`:1211`), Step 4 the dream report (`:1374`), Step 5
@@ -137,8 +143,13 @@ under "Discovered issues" in the PR body.
  *           baseline:import('./delta').Baseline, layout:import('../layout').VaultLayout,
  *           gates}} o
  *    gates  the four decision functions of Table D, injected rather than
- *           imported so `promote.js` does not depend on `validate.js`; each
- *           takes candidate bytes and returns a refusal reason or null
+ *           imported so `promote.js` does not depend on `validate.js`. Their
+ *           inputs differ BY GATE, and Table D owns them: the EP2 secret gate
+ *           judges the delta's added lines against the baseline BEFORE the
+ *           merge (remedy: withhold + quarantine); the other three judge the
+ *           MERGED candidate bytes, and the skill-body guard additionally
+ *           takes the BASELINE ledger as its authorizing input. Each returns
+ *           a refusal reason or null
  *  @returns {{promoted:string[], refused:Array<{rel:string, reason:string}>}} */
 function promote(o)
 ```
@@ -172,7 +183,7 @@ condition.
 | C8 | delta status is `modified` and the path is gone from `vault-now` (the user deleted it during the run) | **refuse-and-report** — modify/delete is a conflict, and the user's deletion wins |
 | C9 | **the promotion allowlist** | a path is admitted when ALL hold: (a) it is under one of the layout's writable tier directories — `identity_dir`, `daily_dir`, `projects_dir`, `skills_dir`, `inbox_dir` (`layout.js:21-29`; `reports_dir` is excluded, and `daily_filename` is not a directory) — or under `02-Areas/` or `03-Resources/`; (b) its final component ends in `.md`; (c) its basename is not `CLAUDE.md` or `AGENTS.md` at any depth. (a) and (b) are a positive allowlist and close the class M7's remediation asks for — a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json` and an Obsidian plugin binary are all outside it without anyone enumerating them. (c) is a **named deny-list and is stated as one: it will not cover the next harness convention.** It exists because (a) and (b) cannot reach an `AGENTS.md` written inside a tier directory |
 | M1 | Merge mechanics | **Merge on a COPY; promote only on a clean merge.** Measured on git 2.50.1: `git merge-file` exits 1 and writes conflict markers **INTO the target** — for a divergent edit and for modify/delete alike — so merging on the user's live note would violate the very guarantee refuse-and-report exists to keep. Clean divergent edits exit 0 with correct merged bytes |
-| M2 | The merge's git invocation | The merge exit code is a security decision (clean → promote), so the invocation takes the dependency's **constructed-environment** discipline verbatim (`WP-dream-baseline-delta-primitive`, Table C): an environment BUILT from nothing rather than filtered, config and attribute roots pointed at directories this run created empty, a cwd outside any repository, and the verified absolute executable via `spawnPinnedSync`. **This spec does not restate that recipe — the dependency owns it.** Measured here as corroboration, not as the guarantee: an armed `merge=` driver via `core.attributesFile` does not reach `merge-file`, and a hostile global config did not move an exit code. That enumeration is not trusted — this program's record at enumerating git's influence channels is 0 for 4, which is precisely why the answer is construction rather than a blocklist. **Named residual, inherited:** absolute verified invocation prevents PATH selection of an impostor; it does not freeze the executable's bytes |
+| M2 | The merge's git invocation | The merge exit code is a security decision (clean → promote), so the invocation takes the dependency's **constructed-environment** discipline verbatim (`WP-dream-baseline-delta-primitive`, Table C): an environment BUILT from nothing rather than filtered, config and attribute roots pointed at directories this run created empty, a cwd outside any repository, and the verified absolute executable via `spawnPinnedSync` (`src/core/exec-identity.js`). **This spec does not restate that recipe — the dependency owns it, and its spec is a Done record on main: `docs/specs/done/WP-dream-baseline-delta-primitive.md`, Table C.** Measured here as corroboration, not as the guarantee: an armed `merge=` driver via `core.attributesFile` does not reach `merge-file`, and a hostile global config did not move an exit code. That enumeration is not trusted — this program's record at enumerating git's influence channels is 0 for 4, which is precisely why the answer is construction rather than a blocklist. **Named residual, inherited:** absolute verified invocation prevents PATH selection of an impostor; it does not freeze the executable's bytes |
 | M3 | Repository attribute sensitivity | **DISCHARGED here, as the dependency required.** The dependency named this as the successor's obligation. Discharged structurally: classification is `computeDelta`, which is git-free and reads no attributes; the workspace contains no `.git` (sibling Table A, Postcondition 1); and the only git this package runs against workspace content is the merge, under the constructed roots above. There is no path by which a repository attribute reaches a promotion decision |
 
 ### Table D — the four gates: input and order
@@ -187,7 +198,7 @@ this package it runs FIRST.
 
 | Gate | Today | Decision input after | Position | Refusal remedy |
 |---|---|---|---|---|
-| EP2 secret gate (ADR-0034) | `validate.js:1211` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | withhold from promotion + preserve to quarantine. **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1324-1364` is its revert core) has no subject and goes. **No line count is stated here**: the figure this row originally carried came from the war-room log and was not measured against the tree, and a spec that repeats an unmeasured number lends it authority it never had |
+| EP2 secret gate (ADR-0034) | `validate.js:1211` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | withhold from promotion + preserve to quarantine. **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1324-1364` is its revert core) has no subject and goes. **No line count is stated here**: the figure this row originally carried came from the war-room log (a war-room record kept outside this repo) and was not measured against the tree, and a spec that repeats an unmeasured number lends it authority it never had |
 | Skill-body guard (ADR-0020) | `validate.js:1187` `skillBodyViolation` | the merged candidate bytes. **Its authorizing input is the BASELINE ledger, never the post-brain one** — otherwise the brain authorizes its own skill rewrite within a single run | AFTER the merge | refuse-and-report; the note stays in the user's live version |
 | Tier-3 floor | `validate.js:1194` `tier3Decision` | the merged candidate bytes | AFTER the merge | refuse-and-report |
 | Ledger validation | `validate.js:1156` `ledgerViolation` | the merged candidate bytes | AFTER the merge | refuse-and-report |
@@ -211,9 +222,9 @@ this package it runs FIRST.
 | Fact / rule | Value |
 |-------------|-------|
 | The run's workspace lifecycle | `createWorkspace` runs before the brain is spawned (which is what makes the sibling's capture-before-spawn ordering a pipeline fact, not just a module fact); the sibling's transitional call-site argument is replaced by the run's workspace; after the brain, `computeDelta` then `promote`; `destroyWorkspace` on every exit path (exception below). **This is the line where the sibling's CLAIM 1 becomes true of the running product**, and the acceptance criteria re-assert its composed-argv form at pipeline level |
-| **The reap precondition** | `computeDelta` runs on the workspace only after the brain's process group is **verifiably** empty. `runBrainWithWatchdog` (`cli/dream.js:137`) already computes that verdict at `:272` — `reapGroupFn(...)` returning `{reaped:true}` — and today **discards it**; on `{reaped:false}` it retains the pidfile for run-job's backstop and returns anyway. This package surfaces the verdict and **refuses the run fail-closed** on anything but a verified reap, rather than walking a workspace a surviving process can still mutate. This converts the dependency's explicitly-unverified hypothesis (2) into an enforced precondition (sibling Table F), and it is what keeps the Codex arm's in-workspace shell from mattering to the walk |
+| **The reap precondition** | `computeDelta` runs on the workspace only after the brain's process group is **verifiably** empty. `runBrainWithWatchdog` (`cli/dream.js:137`) already computes that verdict at `:272` — `reapGroupFn(...)` returning `{reaped:true}` — and today consumes it only to gate the pidfile unlink, never surfacing it to its caller; on `{reaped:false}` it retains the pidfile for run-job's backstop and returns anyway. This package surfaces the verdict and **refuses the run fail-closed** on anything but a verified reap, rather than walking a workspace a surviving process can still mutate. This converts the dependency's explicitly-unverified hypothesis (2) into an enforced precondition (sibling Table F), and it is what keeps the Codex arm's in-workspace shell from mattering to the walk |
 | Teardown wiring | the workspace is removed on every exit path — success, refusal, brain failure, timeout — **with one named exception: a run that refused because the reap was not verified does NOT tear down.** Removing a tree a surviving process may still be writing is not a cleanup, and the row above is the whole reason that state is distinguishable. Teardown never touches the vault. A workspace left behind by that refusal, or by a crash, is the residue-lifecycle successor's subject, not this package's |
-| **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:535` and `:550`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone, a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: **the intent brief routed the abort paths to the residue-lifecycle successor, and this row is narrower than that** — it changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject |
+| **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:535` and `:550`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone, a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: **the package's intent brief (a war-room record kept outside this repo) routed the abort paths to the residue-lifecycle successor, and this row is narrower than that** — it changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject |
 
 ### Mirrored Surface Checklist
 
@@ -224,7 +235,7 @@ this package it runs FIRST.
 - [ ] Current-state description (the validator's steps, the discarded reap
       verdict, the sibling's handed-over state)
 - [ ] Implementation notes (the merge-on-a-copy trap, the existing reap verdict)
-- [ ] Out of scope (what the residue-lifecycle successor and C2 own)
+- [ ] Out of scope (what the residue-lifecycle successor and audit finding C2 own)
 - [ ] **The package note and the dispatch-precondition block** — the note
       mirrors the pair's table-letter division and the Table F citation rule;
       the dispatch block mirrors the pinned base and the certain line-number
@@ -259,7 +270,10 @@ this package it runs FIRST.
       is joined to the vault root, and containment is re-resolved against the
       vault's realpath at write time, not only at decision time.
 - [ ] **The dependency's caller invariant is discharged across the pair, and
-      sibling Table F says how.** The pre-brain walks are the sibling's, run
+      sibling Table F says how.** The invariant, stated so the reader knows
+      what is being discharged: no untrusted actor may replace the root entry,
+      or any ancestor or directory entry used to reach an enumerated path, for
+      the duration of each walk. The pre-brain walks are the sibling's, run
       before any actor exists; the post-brain walk is this WP's and runs only
       after a verified reap (Table G). **No surface may claim the walk
       establishes containment.**
@@ -330,6 +344,12 @@ this package it runs FIRST.
 - [ ] **Promotion accounting partitions the delta**: every record is either
       `promoted` or `refused` with a reason, and the counts sum to the record
       count.
+- [ ] **The glossary carries the name.** `docs/GLOSSARY.md` defines
+      **promotion** as a canonical name (the grep below is the anchor; the
+      wording is the implementer's).
+- [ ] **ADR-0012 states the changed lifecycle.** `docs/adr/0012-dream-run-lifecycle.md`
+      describes the workspace → promote run shape (the grep below is the
+      anchor; the amendment's wording is the implementer's).
 - [ ] Idempotence: `N/A — a dream run is not a repeatable command; it consumes a
       moving watermark and writes a date-stamped report, so a second run is a
       different run by construction.` What this package ships in its place is the
@@ -340,23 +360,40 @@ this package it runs FIRST.
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-npm test -- --test-name-pattern "dream-promote"
+# A --test-name-pattern with ZERO matching tests exits 0 (measured, Node 24),
+# so pattern runs against a CREATED file are guarded by its existence — the
+# guard is what makes the deliverable-ABSENT state red instead of vacuously
+# green. (dream-validate needs no guard: its file exists today, a modify
+# deliverable.)
+test -f tests/unit/dream-promote.test.js && npm test -- --test-name-pattern "dream-promote"
 npm test -- --test-name-pattern "dream-validate"
 npm test
 npm run lint
+# Pipeline-level CLAIM 1 and CLAIM 2b live in the deliverable test file; the
+# spec fixes only the test NAMES (claim-1-pipeline, claim-2b), because a
+# verification command must be runnable; what the tests contain is the
+# implementer's.
+test -f tests/unit/dream-promote.test.js && npm test -- --test-name-pattern "claim-1-pipeline"
+test -f tests/unit/dream-promote.test.js && npm test -- --test-name-pattern "claim-2b"
 # The pipeline no longer pre-commits the user's edits (Table E). This is a
 # grep on a file that MUST exist, so guard the absence case first: grep on a
 # missing file exits 2, which `!` would turn into a false green.
 test -f src/cli/dream.js && ! grep -q "precommitSessionEdits" src/cli/dream.js
+test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" docs/GLOSSARY.md
+test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-dream-run-lifecycle.md
 ```
 
-- The `precommitSessionEdits` grep is a NEW step and an ASSERTION: it exits
+- The two `claim-` runs, the `precommitSessionEdits` grep and the two docs
+  greps are NEW steps and each is an ASSERTION: it exits
   non-zero on failure rather than printing something a reader must judge. Paste
   a real green on the finished state AND a real red from a deliberately broken
-  state — the sibling's transitional vault argument restored at the call site;
-  a git call added with the workspace as cwd; the `precommitSessionEdits` call
-  restored — so a check that cannot fail is caught before anyone believes it.
-  Verify each **also** goes red when its deliverable is ABSENT.
+  state — the sibling's transitional vault argument restored at the call site
+  (reddens `claim-1-pipeline`); a git call added with the workspace as cwd
+  (reddens `claim-2b`); the `precommitSessionEdits` call
+  restored (reddens its grep); the glossary or ADR text reverted (reddens the
+  docs greps) — so a check that cannot fail is caught before anyone believes it.
+  Verify each **also** goes red when its deliverable is ABSENT — for the
+  pattern runs that is the file-existence guard's job.
 - **CLAIM 2b is asserted through the git seam, never through a grep.** A source
   grep for a workspace-rooted cwd cannot discriminate: it is green today, green
   on a correct implementation, and green on a broken one that passes the path
@@ -367,13 +404,17 @@ test -f src/cli/dream.js && ! grep -q "precommitSessionEdits" src/cli/dream.js
 
 ## Out of scope (do NOT do these)
 
-- **M9** — repo-local git configuration naming executable programs. Owner-ruled
-  open on 2026-08-05, C2's package. This package may not claim it, and the
-  validator still runs git in the vault for the commit.
-- **C3** — the layout dot-rule and its notice. Table C9's allowlist is a
+- **Audit finding M9** — repo-local git configuration naming executable
+  programs. Owner-ruled open on 2026-08-05, audit finding C2's package. This
+  package may not claim it, and the
+  validator still runs git in the vault for the commit. (The "audit" prefix
+  distinguishes these ids from this spec's own Table C row ids.)
+- **Audit finding C3** — the layout dot-rule and its notice. Table C9's
+  allowlist is a
   directory-and-extension rule, deliberately **not** a dot-rule, so it does not
-  step on C3.
-- **The residue-lifecycle successor** — the journal schema, crash replay,
+  step on audit C3.
+- **The residue-lifecycle successor** (not yet drafted — it has no WP id yet) —
+  the journal schema, crash replay,
   uninstall restore, and a workspace surviving a crash. Table G's abort row is
   narrower and says so.
 - **An ADR for the promote-in inversion.** The war-room decision log owns the
