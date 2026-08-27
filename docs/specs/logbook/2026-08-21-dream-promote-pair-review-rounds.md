@@ -1163,3 +1163,77 @@ was this author's own, four commits back. **No new defect class appeared, and
 the two that did appear were both caught by disciplines that already exist — one
 of which had to be widened rather than invented.** Mechanism findings: zero for
 five rounds.
+
+## THE REVIEW LOOP IS CLOSED — owner ruling, 2026-08-27
+
+**Closed BY MATERIALITY, and the zero-finding stop criterion is explicitly
+WAIVED, not met.** Recorded that way deliberately: no round ever returned zero
+product findings, and this record must never read as if one did.
+
+**The materiality ruler the ruling classifies on:**
+
+- **A** — silently prescribes wrong behaviour that conforms to its own tests,
+  with a data-loss or security consequence.
+- **B** — a wrong or missing build, likely caught downstream by the implementer,
+  the PR gates, the behavioural both-directions proofs, or the runtime gates.
+- **C** — spec hygiene.
+
+**The last class-A findings were round 8's R8-1 and round 9's R9-1 and R9-2.
+Round 10 contained only B and C.** The core contracts — the chokepoint, the
+gates, admission, Table R — have been stable since round 6. What remains is
+cheaper to catch at implementation and PR-review time than by further external
+rounds. Every named residual stands as recorded.
+
+**The full count history: 10 → 9 → 6 → 9 → 4 → 4 → 2 → 2 → 3 → 2.** Mechanism
+findings zero for the last five rounds; cross-surface staleness zero since the
+mirror sweep moved inside the edit pass; intra-cell contradiction zero since it
+was named after round 7.
+
+### The closing internal sweep (no external round), all four disciplines
+
+- **Concept sweep**, claim-level and family-wide: five claim shapes across all
+  three specs. Every hit is corrected text, a named withdrawal, or a prohibition.
+- **Number-vs-noun sweep**: every count agrees with the list it counts.
+- **Dense-cell whole-read**: eleven cells over 1 200 characters. **One mechanical
+  completion found and fixed** — C9's normalisation MOTIVATION still argued from
+  a `reports_dir` negative test that the F2'' ruling removed, the same stale-basis
+  class as R7-2 and in the same cell. Re-based onto rule (c), the surviving
+  negative.
+- **Mirrored Surface Checklist walk**: 11 + 7 + 13 registered mirrors; every
+  section they point at is present.
+
+**One C-band observation recorded and deliberately NOT edited.** Table D's report
+row says the promoted body is judged by "all four gates"; in practice three of
+the four do not match a path under `reports_dir` and pass it through. The prose
+is loose rather than false, Table D itself already says which gate applies where,
+and **at a closing gate a C-band prose change is not worth the risk of
+introducing what five rounds of this loop documented** — that every edit pass
+carries its own defects. Left for the implementer to read against Table D.
+
+### The flip
+
+All three specs move **Draft → Ready** on this ruling. `depends_on` is satisfied:
+`WP-dream-baseline-delta-primitive` is `Done`. Dispatch order per `depends_on` —
+**Part i (`WP-dream-workspace-retarget`), then the primitive
+(`WP-dream-vault-write-primitive`), then Part ii
+(`WP-dream-promote-in-workspace`)**.
+
+### Standing reporting rule, effective immediately and permanent
+
+**Every review-round report and finding list carries an A/B/C materiality band
+per finding, not counts alone.** Counts without materiality are not
+decision-grade information. This applies to the PR-review gates ahead, not only
+to design review.
+
+### Still routed, not applied here
+
+The three sweep rules earned by this arc go to `main` as one small docs PR after
+the family lands, stated bare per main hygiene:
+
+> After rewriting a canonical cell, re-read that cell whole for a sentence the
+> rewrite falsified.
+>
+> Sweep for the CLAIM, not for any wording of it — and across every spec in the
+> family, not only the one being edited.
+>
+> A count that moved is wrong everywhere it appears, in whatever wording.
