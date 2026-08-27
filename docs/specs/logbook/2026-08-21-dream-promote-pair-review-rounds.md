@@ -934,3 +934,32 @@ adding the new sentence and leaving the old one — expressed **inside a single
 cell**, where the sweep structurally cannot look. Worth recording before the next
 edit: **after rewriting a canonical cell, re-read that cell whole for a sentence
 the rewrite falsified.**
+
+### Owner ruling on round 7's report (2026-08-27) — verification, and where the intra-cell rule lives
+
+**1. Round 7's two in-commit fixes are CONFIRMED, no revert.** Advisor-verified
+on the tree at `f30b5b0`: R7-1 is the R6-1 ruling fully applied — the residual
+made the absolute "never removes anything it did not create" sentence false by
+definition, so stating the two prohibitions at their actual strengths is
+completion, not decision. R7-2 is the R6-4 sweep one occurrence short. Both were
+correctly applied in-commit rather than escalated.
+
+**2. The intra-cell rule IS PROMOTED to a standing authoring rule — and is
+deliberately NOT applied here.** Routing ruled by the owner: it does not touch
+`docs/runbooks/spec-authoring.md` on this branch or during this loop. It lives
+operationally in this logbook for the remainder of the loop; after the loop
+closes and the family lands, it goes to `main` as a separate small docs PR
+through the normal process, stated bare and without provenance, per main
+hygiene. **The arc paid for this rule twice and it earns its runbook line — but
+not by breaking the loop's cadence or this branch's scope.**
+
+The rule, in the form it will take:
+
+> After rewriting a canonical cell, re-read that cell whole for a sentence the
+> rewrite falsified.
+
+**3. Round 8** runs in the same shape as round 7 — whole settled text at the
+current tip, prompt hash-checked, read-only baseline captured. The stop
+criterion is unchanged: **a full fresh round with zero findings about the
+PRODUCT closes the loop.** After that, the `Ready` flips are the owner's, Part i
+first.
