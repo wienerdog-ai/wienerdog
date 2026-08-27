@@ -565,3 +565,57 @@ ONE external adversarial round on the cut text. If that round still returns
 mechanism-level findings, the loop is signalling artifact SIZE rather than
 content: **stop and escalate to the owner rather than patching further.** The
 round counter continues at 5.
+
+### Round 5 — 2026-08-27 — reviewer: gptsol (Codex side), external
+
+**Does NOT close. 4 findings — 3 CONTRACT defects, 1 MECHANISM. All four
+verified on the tree by this author; all hold. Raw output:
+`2026-08-27-promote-pair-round-5-gptsol-raw.txt` (relayed verbatim, uncut).**
+
+Gate hygiene, recorded because a verdict whose checks did not run is a reading:
+the vendored prompt body hashed `f3b28a6c…`, equal to the pinned value; the
+reviewer reported what it EXECUTED, including one command that exited 1 and was
+rerun; `git status --porcelain` was byte-identical and empty before and after —
+the run is VALID.
+
+The count reads 10 → 9 → 6 → 9 → **4**, and for the first time in this loop it
+fell rather than rebounded.
+
+**THE PRE-AGREED TRIGGER FIRED, AND IT IS BEING FOLLOWED: nothing is patched
+here, this goes to the owner.** But the trigger's PREMISE does not survive
+measurement, and that is this round's most important output.
+
+The pre-agreed reading was: a mechanism finding means the artifact is too LARGE.
+Measured, all four findings — the mechanism one included — are the same defect
+class, and it is not size:
+
+| Round-5 finding | What it actually is |
+|---|---|
+| F1 (report fallback undefined) | the Option A edit added a fallback branch and never gave it bytes or an `expect` premise |
+| F2 (throw vs `{written:false}`) | H4 was cut; the JSDoc at `:178-179` still prescribes the throw H4 used to require, and the new security-checklist item calls the same detection optional |
+| F3 (H9 row vs its criterion) | the H9 ROW was rewritten to "a refusal leaves no partially-created chain behind"; its criterion at `:296-301` still says the chain "is left in place" |
+| F4 (mechanism residue) | Current state `:125` still names the adopted `O_EXCL\|O_NOFOLLOW` shape, and the consumer's Table E restates it |
+
+**Every one is a canonical row edited without its registered mirrors.** The
+Mirrored Surface Checklist exists precisely to make that impossible, and this
+author did not run it after the cut. That is a diagnosis about the EDIT PASS,
+not about the artifact's size — and the remedy is a mirror sweep, which is
+mechanical and bounded, not another extraction and not a split.
+
+**Recorded honestly: three of the four defects were introduced by the 2026-08-27
+edit pass itself**, i.e. by the very commit that applied the rulings. The round
+earned its keep by catching them before an implementer did.
+
+**HELD for the owner**, per the pre-agreed escalation:
+
+1. Whether the size interpretation still applies, given that the mechanism
+   finding is a stale mirror rather than over-specification. This author's
+   measured recommendation is that it does NOT, and that the correct next step
+   is one mirror sweep plus the F1 fallback matrix — but the interpretation was
+   pre-agreed with the owner and is not this author's to revise.
+2. The F1 fallback matrix is a genuine design gap with real user-visible
+   consequences (a lost report or a lost enforcement record), and needs a
+   ruling on what the refused-body case must preserve.
+3. F3's substantive question — must a refusal leave the vault byte-unchanged,
+   including directories the call created? That is a contract decision, not a
+   mechanism one.
