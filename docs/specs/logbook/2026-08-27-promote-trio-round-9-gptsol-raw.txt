@@ -1,0 +1,83 @@
+Round 9 — external adversarial review — reviewer: gptsol (Codex side).
+Base: wp/dream-promote-in-workspace @ 2eef8c5
+Scope: the WHOLE settled text of all three specs, not a diff.
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value)
+Read-only check: `git status --porcelain` byte-identical and empty before and
+after — VALID. Scope objections: none.
+
+VERBATIM OUTPUT BELOW (findings abridged to their operative fields; the full
+JSON is reproduced in the round log's disposition table).
+
+verdict: needs-attention
+
+summary: "NO-SHIP: three CONTRACT defects remain; zero MECHANISM findings still
+holds. R8-1 is genuinely generalized: Table D and Table R use the complete class
+of any unpublished brain-authored body, and no narrower trigger mirror remains.
+R8-2 corrected Table B's canonical behavioural row, but the all-spec count sweep
+found a long-standing stale five-site mirror in the implementation notes. The
+dense-cell sweep found no other intra-cell contradiction in Tables H, B, F, C, D,
+E, or R. The stale-mirror sweep also found that the workspace spec still claims
+there is no actor during the pre-brain vault walk, contradicting the primitive
+spec's explicit statement that the user's editor or file synchroniser is live
+throughout. Executed: full-file sed reads of all three specs, grep sweeps for
+counts, fallback triggers, expect semantics, and actor/concurrency claims, plus
+git diff/log/blame dating checks; all exited 0. No implementation tests or
+runtime probes were run because this was a read-only contract review of Draft
+specs. Checkout preservation was verified: before/after git status outputs were
+both zero bytes and cmp exited 0."
+
+R9-1 — CONTRACT, stale cross-surface mirror, confidence 0.97
+  docs/specs/WP-dream-workspace-retarget.md:176
+  "The pre-brain vault walk is still credited with a no-live-actor invariant
+  that the family explicitly says is false. Table A says copy-in and
+  captureBaseline have no actor because they run before the brain exists. The
+  Security checklist repeats that no actor can replace a root entry or ancestor.
+  But the primitive spec at lines 99-109 explicitly establishes that the user's
+  editor or file synchroniser is a live vault writer throughout. Copy-in walks
+  that live vault, so brain ordering alone does not discharge the dependency's
+  caller invariant. A concurrent directory-entry or component replacement can
+  therefore change what object is copied, produce an incomplete source view, or
+  expose unintended bytes in the workspace without any contract here defining a
+  refusal or naming the residual. This is a consequence defect, not a challenge
+  to any settled ruling."
+  date_assessment: "Long-standing workspace text from 2026-08-21; the
+  contradiction became explicit when the primitive was corrected on 2026-08-27.
+  This reads as a stale cross-surface mirror, not a defect introduced by the
+  round-8 edit."
+  recommendation: "Stop claiming that pre-brain ordering means no live actor on
+  the vault side. State how copy-in behaves under a concurrent editor or
+  synchroniser: either add an observable fail-closed condition that discharges
+  the dependency invariant, or name and bound the residual consistently in Table
+  A, Table F, the Security checklist, and acceptance criteria."
+
+R9-2 — CONTRACT, underspecified API state, confidence 0.92
+  docs/specs/WP-dream-vault-write-primitive.md:164-174
+  "The vault-write API admits null for expect but never defines its security
+  semantics. The exact signature accepts expect?: Buffer|null, creating omitted,
+  null, and Buffer states. The prose and H5 define only Buffer-present versus
+  absent. An implementer can therefore reasonably interpret explicit null as
+  either 'target must be absent' or 'no conditional check', while a caller can
+  reasonably use null as the absent-target sentinel. The latter interpretation
+  can turn an intended create-only publish into an overwrite. The acceptance
+  criteria exercise an omitted expect, not explicit null, so this ambiguity can
+  survive the stated verification."
+  date_assessment: "Long-standing text introduced with the primitive on
+  2026-08-22; it is not recently introduced by the round-8 repair."
+  recommendation: "Choose one exact API: remove null from the type and use
+  omission exclusively for must-not-exist, or define null explicitly and add an
+  acceptance case proving that it cannot disable H5's conditional publish."
+
+R9-3 — CONTRACT, stale cross-surface mirror, confidence 1.0
+  docs/specs/WP-dream-workspace-retarget.md:254-256
+  "The seven-site behavioural proof still contains six-site arithmetic. The
+  implementation note says there are seven reds and that one site is broken at a
+  time, but then says a single red leaves only five sites pointing at the vault.
+  With seven sites, breaking one leaves six. Table B and the acceptance criteria
+  now correctly require seven one-at-a-time reds, so this is the same stale-count
+  class as R8-2 on a second surface."
+  date_assessment: "Long-standing arithmetic from 2026-08-21, predating Site 7's
+  2026-08-22 addition and the round-8 count discipline. It was not introduced by
+  the immediately preceding edit."
+  recommendation: "Change 'five sites still pointing at the vault' to 'six sites
+  still pointing at the vault' and retain the existing seven-red requirement."

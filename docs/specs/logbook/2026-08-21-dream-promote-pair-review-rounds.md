@@ -1006,3 +1006,45 @@ one instance, and that instance predates the rule by six rounds — R8-2's drift
 was introduced in round 2. **Both of this round's findings are older than the
 disciplines now in place**, which is a different and better situation than
 rounds 5-7, where the defects were created by the immediately preceding edit.
+
+### Round 9 — 2026-08-27 — reviewer: gptsol (Codex side), external, WHOLE TEXT
+
+**Does NOT close. 3 findings, all CONTRACT, ZERO mechanism — fourth consecutive
+round with none. No scope objections.** All three verified on the tree. Raw
+output: `2026-08-27-promote-trio-round-9-gptsol-raw.txt`.
+
+**Count: 10 → 9 → 6 → 9 → 4 → 4 → 2 → 2 → 3.** The number rose, and **the
+dating is the reason it does not mean what a rise usually means.** This round
+was asked to date every finding. All three came back LONG-STANDING — 2026-08-21,
+2026-08-22, 2026-08-21 — and none was introduced by the preceding edit. Compare
+rounds 5-7, where three of four each time were created by the edit immediately
+before. **The disciplines have stopped producing defects; the loop is now
+draining backlog, and backlog does not arrive in a monotonic sequence.**
+
+**R8-1 confirmed genuinely generalised.** The dense-cell sweep found no intra-cell
+contradiction in Tables H, B, F, C, D, E or R — the class round 8 found at one
+instance is now at zero.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R9-1 | **The pre-brain vault walk is still credited with a no-live-actor invariant the family elsewhere says is false.** Table A and the Security checklist say copy-in and `captureBaseline` have no actor because they precede the brain. The primitive spec says the user's editor or file synchroniser is a live vault writer THROUGHOUT. **Copy-in walks the LIVE vault**, so brain ordering alone does not discharge the dependency's caller invariant | **ESCALATED — OWNER.** It needs the same values call the owner already made twice (fail-closed condition vs named bounded residual), and it is the same error this arc caught at round 4 as F3'' on the vault-write side, surviving on a surface that correction never reached |
+| R9-2 | **`expect?:Buffer\|null` admits three states and defines two.** An explicit `null` is readable as "target must be absent" or as "no conditional check", and the second reading turns a create-only publish into an overwrite | **FIXED**, by the simpler option: `null` removed from the type, omission is the only way to say must-not-exist, and the withdrawn state is named in place. Recorded here and for "Decisions made" |
+| R9-3 | **The seven-site proof still contained six-site arithmetic** in the implementation notes: "a single red passes with five sites still pointing at the vault" | **FIXED** — six |
+
+**A DISCIPLINE FAILURE OF THIS AUTHOR'S OWN, AND ITS CORRECTION.** Round 8's
+R8-2 was the same stale-count class. After fixing it this author swept — and
+swept for the PHRASE (`"other five sites"`) rather than for the NUMBER. R9-3 sat
+three lines away in different wording and survived. Re-sweeping this round **by
+number against the noun it counts**, across all three specs, found R9-3 **and a
+third instance the external round did not report**: Table F's claim-1 row still
+said `brain.js:98` "is one of six sites". That is now seven, and a full
+number-vs-noun sweep of all three specs is clean.
+
+**The rule this earns, stated for the same routing as the intra-cell rule:**
+
+> Sweep for the VALUE, not for the sentence that carried it. A count that moved
+> is wrong everywhere it appears, in whatever wording.
+
+Like the intra-cell rule it stays in this logbook for the loop and goes to
+`main` as part of that same small docs PR afterwards — it is not applied to
+`docs/runbooks/spec-authoring.md` on this branch.

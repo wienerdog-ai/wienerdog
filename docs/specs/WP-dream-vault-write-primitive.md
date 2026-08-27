@@ -163,12 +163,19 @@ under "Discovered issues" in the PR body.
  *  caller's policy denies, and returns the bytes it published (Table H).
  *  @param {{vaultDir:string, rel:string, bytes:Buffer,
  *           admit:(resolvedRel:string)=>string|null,
- *           expect?:Buffer|null}} o
+ *           expect?:Buffer}} o
  *    rel     vault-relative candidate path, segment-validated before use
  *    admit   the caller's policy, applied to the RESOLVED vault-relative path,
  *            not to `rel`; returns a refusal reason or null. Injected so this
  *            module owns no policy and the caller owns no filesystem
- *    expect  the bytes the caller's decision was made against; when present the
+ *    expect  the bytes the caller's decision was made against. **TWO states
+ *            only, never three (round 9, R9-2):** an earlier signature typed it
+ *            `Buffer|null`, admitting an explicit `null` whose meaning no
+ *            surface defined — readable as either "target must be absent" or
+ *            "no conditional check at all", and the second reading turns an
+ *            intended create-only publish into an overwrite. `null` is removed
+ *            from the type; OMISSION is the only way to say must-not-exist.
+ *            When present the
  *            write is abandoned unless the target still holds exactly these at
  *            publish time (absent = the caller asserts the target must not
  *            exist)
