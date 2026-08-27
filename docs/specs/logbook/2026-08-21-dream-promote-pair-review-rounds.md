@@ -869,3 +869,30 @@ prohibition, "never removes anything it did not create", was not tested**, and
 R6-1 is precisely that gap. "Protected by shape, not by care" is true of content
 and false of identity. The report the owner acted on was narrower than it
 sounded.
+
+### Owner rulings on round 6 (2026-08-27) — all four, applied in ONE pass with the mirror sweep inside it
+
+The cadence this author proposed was accepted: one pass, sweep inside, then a
+fresh round. All four findings are closed.
+
+| # | Ruling | Applied as |
+|---|---|---|
+| R6-1 | **NAMED RESIDUAL** (option a). Concurrent empty-directory substitution is recorded beside H9; the absolute non-empty prohibition is untouched | H9's "protected by shape" claim is narrowed to what was actually measured — **true of CONTENT, residual for IDENTITY** — with the reproduction stated, the damage bound stated (**at most an empty directory, never content**), and the platform limit cited to the ruling the repo already carries at `delta.js:22-40`. A new criterion asserts it AS A RESIDUAL and forbids any criterion claiming prevention. Registered in the Security checklist beside the other residuals |
+| R6-2 | **GENERALISE R4.** Any primitive refusal of the report write — `expect`, a symlinked target under H3, any H-rule — converges on one outcome | R4's condition column widened; the outcome stated once: **vault object untouched, the COMPLETE record to the run's log and output, reason named.** The observable-property row's false claim ("the only remaining refusal path is the `expect` guard") is corrected in place. Rejected alternatives recorded: writing through the symlink, replacing it with a regular file, a different filename. Table D's remedy cell now routes its own refusal to R4 instead of assuming the code section always publishes |
+| R6-3 | **CRITERION A STANDS, B IS DELETED AS SUPERSEDED.** The commit carries the DECIDED bytes; the user's post-publish save is neither committed nor lost | B removed. A now carries B's RED direction verbatim (path-named staging must fail), states that the user's save remains an uncommitted working-tree modification, and records the ruling's reason: dropping would make the commit lie by omission about a file the system did publish, and muddy the next run's baseline |
+| R6-4 | **Mechanical half** — apply F2'' fully. **Design half** — the Unicode criterion flips to CONSISTENT ADMISSION | The stale "`reports_dir` is excluded" parenthetical is gone from C9 and its mirrors are clean. The criterion is re-based both directions: GREEN, composed and decomposed spellings of an admitted directory name ONE directory and both admit (`reports_dir` is the worked example now that it is admitted); RED, unchanged, an instruction-file basename in either normal form is refused. **Its purpose survives — normalisation proven where admission is decided — and only its basis moved** |
+
+**Mirror sweep run INSIDE the pass, not after it.** Swept and verified clean: no
+surviving "`reports_dir` is excluded" anywhere; no surviving "dropped from the
+commit"; exactly ONE criterion now speaks to the publish/staging race, down from
+two. Two mirrors were found and fixed by the sweep rather than by the round —
+Table D's remedy cell, which assumed the code section always publishes, and the
+report-symlink criterion, which asserted the refusal but never said where the
+record goes.
+
+Verified after the pass: lint green, frontmatter 226 specs, 76 `file:line`
+citations resolve with ranges checked at both ends.
+
+**Round 7 is owner-pre-approved on the whole settled text at this tip.** The
+stop criterion is unchanged: a full fresh round returning zero findings about
+the PRODUCT.
