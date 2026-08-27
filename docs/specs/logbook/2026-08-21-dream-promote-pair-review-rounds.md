@@ -896,3 +896,41 @@ citations resolve with ranges checked at both ends.
 **Round 7 is owner-pre-approved on the whole settled text at this tip.** The
 stop criterion is unchanged: a full fresh round returning zero findings about
 the PRODUCT.
+
+### Round 7 — 2026-08-27 — reviewer: gptsol (Codex side), external, WHOLE TEXT
+
+**Does NOT close. 2 findings, both CONTRACT, ZERO mechanism — the
+zero-mechanism result holds for a second round.** Both verified verbatim on the
+tree by this author. Raw output:
+`2026-08-27-promote-trio-round-7-gptsol-raw.txt`, relayed uncut.
+
+Gate hygiene: prompt body hashed `f3b28a6c…`, equal to the pinned value; the
+reviewer reported what it EXECUTED; `git status --porcelain` byte-identical and
+empty before and after — VALID.
+
+**Count: 10 → 9 → 6 → 9 → 4 → 4 → 2.** Falling again after the plateau, and
+still no mechanism findings.
+
+**R6-2 and R6-3 are confirmed genuinely fixed**, not re-worded — the reviewer
+checked both explicitly. **R6-1 and R6-4 were INCOMPLETE repairs**, and both in
+the same shape.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R7-1 | H9 still declared absolutely that "the call never removes anything it did not create", and then, **in the same cell**, required the residual where a substituted empty directory IS removed. Narrowing to CONTENT did not reconcile them | **FIXED.** The two prohibitions are now stated at the strength each actually holds: (i) ABSOLUTE — never removes anything NON-EMPTY; (ii) QUALIFIED — outside the named residual, removes only directories it created. The criteria mirror was aligned to name which prohibition each case proves |
+| R7-2 | C9's normalisation sentence still instructed the implementer to normalise "the `reports_dir` negative" — an implementation instruction inside the normative row, while the same row says `reports_dir` is admitted | **FIXED.** The list now names the ADMITTED `reports_dir` prefix |
+
+**Applied rather than escalated, and why:** neither needed a decision. R7-1's
+resolution is what the R6-1 ruling already said (the identity prohibition became
+a residual); R7-2 is the R6-4 ruling's own sweep, one occurrence short. Both are
+ruling-application completions, so they were finished rather than sent back.
+
+**THE DIAGNOSIS THIS ROUND EARNS — both findings are INTRA-CELL, and no existing
+discipline catches that.** The Mirrored Surface Checklist governs a fact stated
+on one surface and repeated on another; it has nothing to say about a canonical
+cell that contradicts itself. Rounds 5 and 6 were cross-surface (stale mirrors)
+and the sweep now catches those. Round 7's two are the same *edit habit* —
+adding the new sentence and leaving the old one — expressed **inside a single
+cell**, where the sweep structurally cannot look. Worth recording before the next
+edit: **after rewriting a canonical cell, re-read that cell whole for a sentence
+the rewrite falsified.**
