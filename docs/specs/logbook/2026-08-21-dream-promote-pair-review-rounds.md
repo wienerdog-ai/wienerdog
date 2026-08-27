@@ -827,3 +827,45 @@ four consecutive substantive edit commits with no review pass over the result,
 and round 5's own lesson is that an edit pass introduces defects of its own —
 three of its four findings came from the ruling edit that preceded it. The round
 runs on all three specs at the post-ruling tip.
+
+### Round 6 — 2026-08-27 — reviewer: gptsol (Codex side), external, WHOLE TEXT
+
+**Does NOT close. 4 findings — ALL FOUR CONTRACT defects, ZERO mechanism
+findings.** All four verified by this author on the tree; all hold. Raw output:
+`2026-08-27-promote-trio-round-6-gptsol-raw.txt`, relayed verbatim and uncut.
+
+Gate hygiene: vendored prompt body hashed `f3b28a6c…`, equal to the pinned
+value; the reviewer reported what it EXECUTED, including a Node probe it wrote
+to test a claim; `git status --porcelain` byte-identical and empty before and
+after — the run is VALID, not a reading. No scope objections were filed against
+the five settled rulings.
+
+**The count reads 10 → 9 → 6 → 9 → 4 → 4. The number is flat; the COMPOSITION
+is the result.** Round 5 carried a mechanism finding and this one carries none,
+on a reviewer explicitly asked to classify and explicitly told mechanism
+findings are treated differently. **The round-4 CUT held.** What is left is
+contract, which is what a spec is for.
+
+**NOTHING IS CHANGED IN THIS COMMIT — a deliberate choice, stated with its
+reason.** Round 5's lesson was that an edit pass introduces defects of its own,
+and this round is that lesson repeating: **three of these four findings were
+authored by the ruling edits that preceded it**, exactly as three of round 5's
+four were. Two of the four also require a product decision that is not this
+author's. Applying the one settled item alone would relocate a contradiction
+rather than remove it (see R6-4). So the whole set goes to the owner together.
+
+| # | Finding | Whose call |
+|---|---|---|
+| R6-1 | **H9's "never removes what it did not create" is not implementable as written.** Independently reproduced by this author: the call creates an empty chain, a concurrent editor renames it away and puts a DIFFERENT empty directory at the same path, and a path-based `rmdir` removes the replacement while the original survives under its new name. Portable Node has no identity-bound `rmdir`, and a pre-removal inode check has its own race | **OWNER — it is a hole in the F3 ruling itself.** The empty-only rule protects CONTENT, which this author verified; it does not protect IDENTITY, which this author did not test and should have |
+| R6-2 | **Table R is not exhaustive.** It states the record's only remaining refusal path is R4's `expect` guard, but H3 makes the primitive refuse a symlinked report target — and this spec's own criterion at `:489-490` requires exactly that refusal. R2/R3 promise publication for a report that is PRESENT; a symlink is present and must be refused, and no case says where the enforcement record goes then | **OWNER** — needs one ruled outcome for every `{written:false}` on the report's writes, not only `expect` divergence |
+| R6-3 | **Two acceptance criteria demand opposite commit outcomes for the same race** (`:491-497` vs `:502-506`): one requires the decided bytes in the commit with the user's later save left in the working tree, the other requires that path dropped from the commit and reported. Both trigger on a user save between publish and staging | **OWNER** — a product contract choice. Introduced by the round-4 CUT pass, which added a replacement criterion without removing the older F5' one |
+| R6-4 | **C9 says `reports_dir` is excluded AND admitted in the same cell**, and the Unicode-overlap criterion still demands a refusal that the settled ruling removed the basis for | The exclusion half is an UNAPPLIED settled ruling and is mechanical; the criterion's replacement is a **design choice** and is the owner's. Fixing only the first would move the contradiction into the criterion, so both are held together |
+
+**An author's correction, recorded because it changed what was reported to the
+owner.** When the F3 ruling landed, this author measured its load-bearing claim
+and reported that it held. What was measured was `rmdirSync` refusing a
+NON-EMPTY directory — one of the ruling's two hard prohibitions. **The other
+prohibition, "never removes anything it did not create", was not tested**, and
+R6-1 is precisely that gap. "Protected by shape, not by care" is true of content
+and false of identity. The report the owner acted on was narrower than it
+sounded.
