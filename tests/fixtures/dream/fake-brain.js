@@ -1,22 +1,69 @@
 #!/usr/bin/env node
 'use strict';
 
-// Controlled stand-in for the real dream brain (claude -p). The dream pipeline
-// runs it via WIENERDOG_DREAM_CMD. It reads its paths from the env WP-008's
-// spawnBrain sets, then performs a fixed set of writes that exercise every
-// branch of WP-017's validation gate. It must be directly executable (shebang +
-// +x bit): WP-008's spawnBrain does `spawn(cmd, [])` with no shell, so
-// WIENERDOG_DREAM_CMD has to be a single token — the path to THIS file.
+// Controlled stand-in for the real dream brain (claude -p). It is installed as
+// the PINNED claude (WP-155 deleted the command env seam), reads its paths from
+// the three WIENERDOG_DREAM_* values spawnBrain constructs, its run date from
+// the prompt argv and its scenario from the control file beside it, then
+// performs a fixed set of writes that exercise every branch of WP-017's
+// validation gate. It must be directly executable (shebang + +x bit) and it must
+// stay SELF-CONTAINED: the installing test copies this single file into a temp
+// bin dir, so it can never require a sibling helper.
 
 const fs = require('node:fs');
 const path = require('node:path');
 
+// Answer the pinned-exec version probe (spawnPinnedSync claude --version) and
+// stop. Load-bearing since the run date moved into the prompt: the probe carries
+// no prompt, so without this it would run the whole scenario a second time at
+// the DEFAULT date and write files the real run never asked for. Mirrors
+// tests/fixtures/reap/spawn-variant.js, which has always answered the probe.
+if (process.argv.includes('--version')) {
+  process.stdout.write('0.0.0 (wienerdog fake claude)\n');
+  process.exit(0);
+}
+
+/**
+ * SCENARIO SELECTION — the control file, never the environment
+ * (WP-dream-workspace-retarget, Table B's fixture-control row). The dream's
+ * child environment is CONSTRUCTED, so an ambient variable a test sets can no
+ * longer reach this process. What can is a JSON file the installing test writes
+ * BESIDE this copy of the fixture: every fixture brain is installed by copying
+ * it into a test-owned temp bin dir and pinning that path, so `__dirname` here
+ * is that temp dir, never the repo. Absent the file, the defaults below stand.
+ * @returns {{mode?:string, gitBreakFlag?:string}}
+ */
+function control() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'wd-fixture-control.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * RUN INPUTS travel the way the REAL brain receives them. Vault and scratch
+ * arrive in the constructed WIENERDOG_DREAM_* values; the DATE arrives in the
+ * PROMPT, which is an argv element on both arms and carries the literal line
+ * `Today's date: <date>`.
+ * @param {string} fallback @returns {string}
+ */
+function promptDate(fallback) {
+  for (const a of process.argv.slice(2)) {
+    const m = /^Today's date: (.+)$/m.exec(String(a));
+    if (m) return m[1].trim();
+  }
+  return fallback;
+}
+
+const ctl = control();
+const mode = ctl.mode || '';
 const vault = process.env.WIENERDOG_DREAM_VAULT;
 const scratch = process.env.WIENERDOG_DREAM_SCRATCH;
-const date = process.env.WIENERDOG_FAKE_TODAY || '2026-07-02';
+const date = promptDate('2026-07-02');
 
 // Watchdog test: hang forever so the pipeline must group-kill us.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'hang') {
+if (mode === 'hang') {
   setInterval(() => {}, 1 << 30);
   return;
 }
@@ -30,7 +77,7 @@ function write(rel, content) {
 
 // Crash test: simulate a brain that died mid-write (transient API drop) — a
 // partial, unvalidated vault write, an error on stderr, then a nonzero exit.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'crash') {
+if (mode === 'crash') {
   write('00-Inbox/partial-note.md', '---\ntype: note\n---\n\nhalf-written\n');
   process.stderr.write('brain error: API connection dropped mid-run\n');
   process.exit(1);
@@ -41,7 +88,7 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'crash') {
 // message to STDOUT, and still exited 0 — consolidating nothing. This models
 // that exact failure: no vault writes at all, so a missing non-vacuity guard
 // would let the orchestrator commit a vacuous "0 notes, 0 skills" run.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command') {
+if (mode === 'unknown-command') {
   process.stdout.write('Unknown command: /wienerdog-dream\n');
   process.exit(0);
 }
@@ -50,7 +97,7 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command') {
 // CLI diagnostic lands on STDERR while stdout carries only whitespace — the
 // normalized-empty stdout fallback must still signal, and (no writes) the
 // compound guard must still abort.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command-stderr') {
+if (mode === 'unknown-command-stderr') {
   process.stdout.write('\n');
   process.stderr.write('Unknown command: /wienerdog-dream\n');
   process.exit(0);
@@ -62,8 +109,11 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command-stderr') {
 // modeling a TRANSIENT git failure at exactly the post-brain clean-tree
 // probe. The guard must not guess ("no evidence" is not "dirty"): the run
 // must fail loud with no commit and no ledger advance.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-break-git') {
-  fs.writeFileSync(path.join(process.env.WIENERDOG_HOME, 'git-break.flag'), '1');
+if (mode === 'bare-marker-break-git') {
+  // The flag path is TEST-OWNED and arrives in the control file — the fixture no
+  // longer rebuilds it from an ambient WIENERDOG_HOME (which the constructed
+  // child env does not carry).
+  fs.writeFileSync(ctl.gitBreakFlag, '1');
   process.stdout.write('Unknown command: /wienerdog-dream\n');
   process.exit(0);
 }
@@ -74,7 +124,7 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-break-git') {
 // must NOT trip the non-vacuity guard — the signal fires only when that line
 // is the run's ENTIRE output. Emits the near-marker output, then falls through
 // to the normal successful writes below (the run must proceed and commit).
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'near-marker') {
+if (mode === 'near-marker') {
   process.stdout.write('Consolidating sessions...\nUnknown command: /wienerdog-dream\nDone consolidating.\n');
 }
 
@@ -82,7 +132,7 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'near-marker') {
 // scratch mid-read, so the brain found its inputs gone and — degrading gracefully —
 // wrote only a failure-documentation note, then exited 0. The orchestrator's
 // watermark-safety gate must catch that the inputs vanished and refuse to advance.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'vanish-scratch') {
+if (mode === 'vanish-scratch') {
   if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
   write('00-Inbox/dream-failure-note.md', '---\ntype: note\n---\n\nInputs disappeared mid-run; nothing to consolidate.\n');
   process.exit(0);
@@ -136,7 +186,7 @@ write(path.join('reports', 'dreams', `${date}.md`), `# Dream report — ${date}\
 // signal fires, but the vault is dirty, so the compound guard must NOT abort:
 // the run proceeds into validateAndCommit and commits normally. Aborting here
 // would roll back valid writes and retry the same transcript nightly.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-after-writes') {
+if (mode === 'bare-marker-after-writes') {
   process.stdout.write('Unknown command: /wienerdog-dream\n');
 }
 
@@ -147,7 +197,7 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-after-writes') {
 // real credential and not a high-entropy blob — the labelled rule is the stable
 // half of the detector. The note is re-created identically on every run (the
 // previous run's revert removed it), so each run produces exactly one revert.
-if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'secret-note') {
+if (mode === 'secret-note') {
   write(
     '00-Inbox/session-rollup.md',
     ['---', 'type: note', 'derived_from_untrusted: false', '---', '', 'Ada rotated the key AKIAQQQQQQQQQQQQQQQQ during the session.', ''].join('\n')

@@ -175,18 +175,17 @@ function ensureBrainStaging(paths) {
  * WHY CONSTRUCTION AND NOT ASSIGNMENT. Measured: with an ambient
  * `WIENERDOG_VAULT` set, the vault path reaches the child regardless of what the
  * six named argv/cwd sites do — `spawnBrain` used to spread the ambient env and
- * the production caller hands it `process.env` (`cli/dream.js:144-146`) — and
- * the Codex arm's shell CAN read its own environment. Re-pointing one assigned
- * value cannot establish "no env value carries the vault path"; only building
- * the env from a fixed list can.
+ * then set exactly three Wienerdog-owned names, and the production caller hands
+ * it `process.env` (`cli/dream.js:144-146`) — and the Codex arm's shell CAN read
+ * its own environment. Re-pointing one assigned value cannot establish "no env
+ * value carries the vault path"; only building the env from a fixed list can.
  *
- * THE LIST IS run-job's OWN CLEAN ENV, MINUS THE VAULT. In production the dream
- * already runs under `buildCleanEnv` (`src/cli/run-job.js:150-263`), which
- * constructs the job env from scratch and passes through exactly
- * `WIENERDOG_HOME` and `WIENERDOG_VAULT`. This list is that env's key set minus
- * `WIENERDOG_VAULT` — that subtraction is the whole of site 7 — plus the win32
- * essentials a Task-Scheduler child needs. A harness that will not start under
- * it is a FINDING, not a licence to widen it back to ambient.
+ * THE LIST IS WHAT A HARNESS NEEDS TO START, AND NOTHING ELSE. In production the
+ * dream already runs under `buildCleanEnv` (`src/cli/run-job.js:150-263`), which
+ * constructs the job env from scratch; this list is the subset of that env a
+ * harness measurably needs, plus the win32 essentials a Task-Scheduler child
+ * needs. A harness that will not start under it is a FINDING, not a licence to
+ * widen it back to ambient.
  */
 const BRAIN_ENV_ALLOWLIST = [
   // Both harnesses resolve config, credentials and cache from the home dir.
@@ -226,15 +225,17 @@ const BRAIN_ENV_ALLOWLIST = [
   'USERDOMAIN',
   'PROCESSOR_ARCHITECTURE',
   'NUMBER_OF_PROCESSORS',
-  // The wienerdog-owned core override — run-job's ENV_PASSTHROUGH, MINUS
-  // WIENERDOG_VAULT.
-  'WIENERDOG_HOME',
-  // NOTHING TEST-ONLY IS ON THIS LIST, and that is deliberate: WP-155/audit A7
-  // deleted the test-exec/date env seams from production, and
-  // `tests/unit/a7-integrity-negatives.test.js:375` greps `src/` to keep them
-  // deleted. A fixture channel that needs to reach the brain must therefore be
-  // re-plumbed test-side, onto the WIENERDOG_DREAM_* vars this function already
-  // constructs — it may not be smuggled back in here.
+  // NO WIENERDOG-OWNED NAME IS ON THIS LIST. The constructed env carries exactly
+  // three of them, and `buildBrainEnv` sets all three itself: the run's write
+  // root, its scratch and its layout. run-job's own passthrough also carries
+  // `WIENERDOG_HOME` and `WIENERDOG_VAULT`; neither reaches the brain, and the
+  // second one not reaching it is the whole of site 7.
+  //
+  // NOTHING TEST-ONLY IS ON THIS LIST EITHER, and that is the design rather than
+  // a grep dodge: a name in `src/` that exists only so tests can steer the child
+  // is a WP-155-class production seam. The fixtures are steered instead by a
+  // control file the installing test writes beside the pinned command, which
+  // touches no production file at all.
 ];
 
 /**
@@ -268,9 +269,15 @@ function isAtOrBeneath(candidate, root) {
  * `spawnPinned` re-resolves the logical harness name through the env it is
  * handed (`exec-identity.js:451-472`, `:621-627`), so DROPPING `PATH` breaks pin
  * verification before the child ever starts; copying it VERBATIM can carry a
- * vault-rooted component and violate the claim. In production the incoming PATH
- * is already run-job's from-scratch system-defaults PATH, so what is left after
- * this filter is exactly "the system defaults with the vault removed".
+ * vault-rooted component and violate the claim.
+ *
+ * FILTERED, NEVER REBUILT (owner ruling, 2026-08-27). The child's PATH is the
+ * JOB'S OWN PATH minus the vault-rooted components — it is NOT composed from the
+ * system defaults. On the primary platform the pinned harness lives in a
+ * version-manager bin dir the system defaults do not contain, so a
+ * defaults-built PATH would fail pin resolution and break the product, while the
+ * security goal — no vault-derived component on the child's PATH — is delivered
+ * identically either way.
  * @param {string|undefined} rawPath @param {string} vaultDir
  * @param {NodeJS.Platform} platform @returns {string}
  */

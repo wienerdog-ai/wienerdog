@@ -173,10 +173,18 @@ function resolveOnPath(name, searchPath) {
  *  from an existing store, and the dream commits via a pinned `git`; a fake git
  *  marker would break real vault commits, so the genuine git is pinned. Replaces
  *  the deleted fake-command env seam (WP-155).
+ *
+ *  Also writes the fixture's CONTROL FILE beside the pinned command
+ *  (WP-dream-workspace-retarget, Table B's fixture-control row). Scenario
+ *  selection can no longer travel in the environment — the dream composes the
+ *  brain's env from a fixed allowlist — so it travels in a JSON file in this
+ *  temp bin dir, which is the copied fixture's own `__dirname` at run time.
  *  @param {string} root @param {string} core @param {string} fakeScriptPath
  *  @param {string} [name='claude']
+ *  @param {object} [control] written as wd-fixture-control.json; omitted → the
+ *    fixture keeps its defaults
  *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
-function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude', control) {
   // realpath FIRST (macOS /var → /private/var) so commandPath and
   // dirname(realpath) are stable and the pin's string-equality checks pass.
   const realRoot = fs.realpathSync(root);
@@ -185,6 +193,9 @@ function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
   const cmd = path.join(binDir, name);
   fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
   fs.chmodSync(cmd, 0o755);
+  const controlFile = path.join(binDir, 'wd-fixture-control.json');
+  if (control) fs.writeFileSync(controlFile, JSON.stringify(control));
+  else fs.rmSync(controlFile, { force: true }); // absent → fixture defaults
   const pins = {
     [name]: { commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString() },
   };
@@ -224,7 +235,13 @@ async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
     CLAUDE_CONFIG_DIR: ctx.claude,
     CODEX_HOME: ctx.codex,
     WIENERDOG_FAKE_TODAY: DATE,
-    ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN),
+    // The mode reaches the fixture through the control file beside the pinned
+    // command; the ambient names stay set and INERT, which is the visible proof
+    // that the channel moved. The flag path is TEST-OWNED and travels with it.
+    ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN, 'claude', {
+      mode: extraEnv.WIENERDOG_FAKE_BRAIN_MODE || '',
+      gitBreakFlag: path.join(ctx.core, 'git-break.flag'),
+    }),
     ...extraEnv,
   });
   if (extraEnv.WIENERDOG_FAKE_BRAIN_MODE === undefined) delete process.env.WIENERDOG_FAKE_BRAIN_MODE;
@@ -1478,7 +1495,7 @@ test('dream-integration: a passing probe result is recorded in the dream run evi
   // spawnBrain threading), using the fake brain so no real claude is spawned.
   const ctx = setup();
   const { done } = spawnBrain({
-    vaultDir: ctx.vault,
+    workspaceDir: ctx.vault,
     scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
     date: DATE,
     model: null,

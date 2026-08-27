@@ -722,3 +722,72 @@ test('dream-workspace: the write-target option reaches every argv site it owns',
   const codex = buildCodexArgs({ workspaceDir: '/ws', scratchDir: '/s', date: DATE, model: null });
   assert.equal(codex[codex.indexOf('--cd') + 1], '/ws', 'site 4 — the Codex write fence');
 });
+
+// ── Fixture control adds no production seam (Table B's fixture-control row) ───
+
+test('dream-workspace: the constructed env carries exactly three Wienerdog-owned names', () => {
+  // Criterion (i), asserted over the COMPOSED env rather than by grep. Adding a
+  // fourth Wienerdog-owned name so tests could steer the child would be a
+  // WP-155-class production seam; the fixtures are steered by a control file the
+  // installing test writes beside the pinned command instead, which touches no
+  // production file at all.
+  const env = buildBrainEnv({
+    baseEnv: {
+      HOME: '/home/ada',
+      PATH: '/usr/bin',
+      WIENERDOG_HOME: '/home/ada/.wienerdog',
+      WIENERDOG_VAULT: '/home/ada/vault',
+      WIENERDOG_FAKE_BRAIN_MODE: 'crash',
+      WD_SPAWN_VARIANT_MODE: 'sleep',
+    },
+    vaultDir: '/home/ada/vault',
+    workspaceDir: '/home/ada/.wienerdog/state/dream-workspace',
+    scratchDir: '/home/ada/.wienerdog/state/dream-scratch',
+    date: DATE,
+    layout: defaultLayout(),
+    platform: 'linux',
+  });
+  assert.deepEqual(
+    Object.keys(env).filter((k) => k.startsWith('WIENERDOG')).sort(),
+    ['WIENERDOG_DREAM_LAYOUT', 'WIENERDOG_DREAM_SCRATCH', 'WIENERDOG_DREAM_VAULT'],
+    'exactly the three it sets today, and no fourth Wienerdog-owned name'
+  );
+  // The non-Wienerdog entries are site 7's, not this row's — they are what a
+  // harness needs to start, and PATH must survive or pin verification breaks.
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.HOME, '/home/ada');
+  assert.equal('WD_SPAWN_VARIANT_MODE' in env, false, 'no fixture channel travels in the env');
+});
+
+test('dream-workspace: no production file names the control file or a deleted env seam', () => {
+  // Criterion (ii). Walked with `fs` rather than shelled out to `grep`: a grep
+  // that skips a file it reads as binary would report a clean tree it never
+  // fully read. The four literals are the exact set
+  // tests/unit/a7-integrity-negatives.test.js:383 greps — asserted here too so
+  // this WP's own evidence does not depend on that file staying where it is.
+  const A7_LITERALS = [
+    'WIENERDOG_RUNJOB_CMD',
+    'WIENERDOG_DREAM_CMD',
+    'WIENERDOG_FAKE_TODAY',
+    'WIENERDOG_RUNJOB_TIMEOUT_MS',
+  ];
+  const srcRoot = path.resolve(__dirname, '..', '..', 'src');
+  /** @type {string[]} */
+  const offenders = [];
+  const visit = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        visit(abs);
+        continue;
+      }
+      if (!e.isFile()) continue;
+      const body = fs.readFileSync(abs, 'utf8');
+      for (const lit of [...A7_LITERALS, 'wd-fixture-control']) {
+        if (body.includes(lit)) offenders.push(`${path.relative(srcRoot, abs)}: ${lit}`);
+      }
+    }
+  };
+  visit(srcRoot);
+  assert.deepEqual(offenders, [], 'src/ names no control file and no deleted env seam');
+});
