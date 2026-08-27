@@ -251,7 +251,46 @@ reason** — the empty scan is never evidence of safety.
 | Ledger validation | `validate.js:1156` `ledgerViolation` | the merged candidate bytes | AFTER the merge | refuse-and-report |
 | **Why this order** | — | — | — | EP2 runs first and scans the BRAIN's added bytes because those are what the run authored and is responsible for (ADR-0034 is about the AI's accidental persistence); the other three gates run after the merge because a Tier-3/skill/ledger judgment must be made on the MERGED bytes, which are exactly what would be promoted — a gate judging pre-merge bytes would not be judging what is promoted, and that is a data-loss contract, not an implementation detail. **Owner-ruled correction (round 1, F4):** the earlier rationale — "scanning the merged bytes would force discarding the user's diverging edits" — is FALSE, because refuse-and-report (C7) already leaves the user's live version untouched. EP2 is pre-merge and brain-scoped by CHOICE, not by that false necessity, and the consequence is a named residual (Security checklist): a secret the USER writes into their own note during the run rides a clean C6 merge into the dream commit unscanned. That is the user's own content in their own vault — the dream commits it but did not author it — and making the secret gate refuse or redact a user's own note was ruled the worse trade |
 | **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically at the DECISION** (round 1, F8): both outcomes are decided before either is written, so a policy failure on one refuses BOTH — the guard authorizes the skill from the ledger and the ledger is validated from the skill, and promoting one while refusing the other would leave the vault inconsistent. Enforced by Table E's decide-then-write ordering. **This does NOT claim write-atomicity across the two paths**: if the first `rename` succeeds and the second fails (ENOSPC/EIO/kill), the vault holds a half-applied pair. Same-directory `rename` is atomic for ONE path, not across two, and rollback/crash-replay of a partial publish is the residue-lifecycle successor's subject, named in Out of scope — this row claims decision-atomicity and says so |
-| The dream report (owner ruling, F2'', 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, all four gates judge it, and it is published by the primitive like any other note. **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The fallback is stated because a gate can refuse the body:** if the brain's report is refused or absent, code publishes a report holding its own section alone, so the run's enforcement record always reaches the user | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own |
+| The dream report (owner ruling, F2'', 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, all four gates judge it, and it is published by the primitive like any other note. **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The fallback — when a gate refuses the body, or no body exists — is Table R**, which this row does not restate | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own |
+
+### Table R — the report's publish decision (owner ruling on F1, 2026-08-27)
+
+**PRESERVE-AND-EXTEND. The fallback preserves BOTH values at stake — the report
+already in the vault AND this run's enforcement record — and never chooses
+between them.** The shape is the normal path's second write, generalised: read
+the vault's current report bytes, compose IN MEMORY (what is there, plus this
+run's enforcement section appended), publish the whole as ONE write through the
+primitive with `expect` set to the bytes just read. No new mechanism and no new
+naming: the only difference from the normal second write is that the base is
+"what the vault currently holds" rather than "what we just published".
+
+| # | The vault's report for this date, at fallback time | Candidate bytes | `expect` | Outcome |
+|---|---|---|---|---|
+| R1 | ABSENT | the code section alone | absent | published |
+| R2 | PRESENT and byte-equal to what the fallback read | the read bytes + this run's section appended | the read bytes | published; run 1's report preserved intact |
+| R3 | PRESENT but DIVERGED from any expectation — the user edited it since run 1 | **the bytes ACTUALLY there** + this run's section appended | the bytes read now | published. **The fallback never reconstructs or "corrects" existing content** — R3 is the same rule as R2, stated separately only because the instinct to repair a diverged file is what would break it |
+| R4 | mutates between the read and the publish | — | the read bytes | **refused by the `expect` guard.** The enforcement record then goes to the run's log and output, NOT the vault report. **NAMED RESIDUAL, accepted by ruling:** in this narrow window an overwrite would be the worse failure, because it would clobber the user's live edit |
+
+| Rule | Value |
+|---|---|
+| Gates | the composed content passes the gates like any candidate — the appended section is code-authored, exactly as in the normal second write |
+| Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion |
+| Rejected alternatives, recorded so they are not re-proposed | **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver) |
+
+**AUTHOR'S FLAG — not a re-litigation of the ruling, a measured collision the
+ruling could not have seen.** The Gates row above and today's shipped ordering
+disagree, and the disagreement can destroy the value this whole table exists to
+protect. Measured: the enforcement section interpolates `r.path`
+(`validate.js:1385-1386`), a vault-relative path the BRAIN chose, so its content
+is attacker-influenceable; and today's code appends the report **after** the EP2
+gate on purpose, its comment saying so in as many words — "Runs AFTER the EP2
+gate so a secret-revert reason lands in the report" (`:1375-1377`). If the
+composed fallback is scanned, a secret-shaped path in an enforcement line can get
+the report withheld or redacted, and the enforcement record is lost on exactly
+the branch that exists to deliver it. **Held for the owner; nothing here is
+decided on it.** The narrowest resolutions, for the ruling to choose between: scan
+only the preserved region and exempt the code-authored section, or sanitize the
+interpolated path (the repo already ships that sanitizer — `WP-sanitize-project-display-names`).
 
 ### Table E — the promotion write, and the one new window
 
@@ -261,7 +300,7 @@ reason** — the empty scan is never evidence of safety.
 | The same-date second run (**F4''**, resolved by the F2'' ruling) | two runs on one date share `<reports_dir>/<date>.md`, and under the ruling that path is an ordinary promotion candidate, so nothing special is needed: run 1 promotes it with `expect` absent (absent from baseline, absent from the vault); run 2 finds it in the baseline because `reports_dir` is copied in, the brain rewrites it, and it promotes as a `modified` with `expect` set to the vault's current bytes. **The append-based workaround is not needed and is forbidden** — it was what re-opened the symlink-following defect F3' closed |
 | **The publish goes through the primitive — this spec writes no vault byte itself** | every promoted path is published by `writeIntoVault` (`WP-dream-vault-write-primitive`, Table H): the resolved path is what policy judges, nothing is written on or through a symlink, no partial content is ever observable at the target, the publish is conditional on the caller's premise still holding, and the published bytes come back. **Those are the primitive's OBSERVABLE properties, which is all a consumer may restate** — the mechanism list this cell carried mirrored rows the round-4 CUT withdrew (round-5 F4). **This spec does not restate that discipline — the primitive owns it.** What this spec supplies is the two caller-side arguments: `admit` (Table C's policy, applied by the primitive to the RESOLVED path) and `expect` (the `vault-now` bytes the decision was made against). A promotion that writes the vault by any other route is a defect, and the acceptance criteria assert the seam |
 | **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed**, to milliseconds against today's minutes-long silent window. The narrowing is the primitive's `expect` guard (Table H, row H5); this spec's obligation is to PASS the right bytes — the `vault-now` bytes the decision used — and to turn `{written:false}` into refuse-and-report. **The residual is the primitive's and is inherited here unchanged:** a user save landing between the re-read and the `rename` is still lost |
-| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
+| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The report's fallback publish is recorded as its own outcome, never as a normal promotion (Table R). The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
 | `precommitSessionEdits` **does not survive** | measured: its stated job is "so the subsequent dream diff is exactly the brain's writes" (`validate.js:113-115`). Under this package the brain writes nothing in the vault, so there is no such diff, and the three-way compare reads `vault-now` from the **filesystem** rather than from git. What remains is only its cost: it commits the user's in-flight edits under the `wienerdog` identity without asking. It goes, and the `assertCleanTree(vaultDir)` at `cli/dream.js:494` (its precommit-pairing use) goes with it. **A SECOND consumer of `assertCleanTree` does NOT go and must be re-based — Table G's non-vacuity row owns it:** `cli/dream.js:237` uses vault-cleanliness to tell a genuine brain rejection from a working run, and that signal's premise (the tree was clean immediately before spawn) is exactly what removing the precommit destroys |
 | The dream commit contains **only promoted paths, and the DECIDED bytes** | two requirements, and the second is the one a path-shaped implementation misses (round 2, F5'). First: with no pre-commit, a wholesale stage would sweep the user's uncommitted edits into the dream commit, so the commit carries the promoted paths and the report, and nothing else. Second: **naming the path is not enough** — staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path.** **How that is achieved is the implementer's — round-4 CUT ruling (owner, 2026-08-27):** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so (the invocation exits 128 with nothing binding it to a repository; `--cacheinfo` needs an index mode the spec never gave). Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged |
 
@@ -301,6 +340,7 @@ reason** — the empty scan is never evidence of safety.
       pipeline-consumes-disposition row, and the redact/deferral acceptance
       criteria. **No surface may reduce EP2 to `reason|null` or drop the
       `redacted` outcome or `secretDisposition`.**
+- [ ] **Table R's four cases and its named residual** — Table D's report row (which cites, never restates), the acceptance criteria, and the promotion-accounting row in Table E. Registered on the spot per register-new-mirrors
 - [ ] **The primitive seam** — the package note, Table E's publish row, C9's
       application clause, the staged-bytes row, and their acceptance criteria.
       **No surface may describe filesystem discipline as this spec's (it is
@@ -403,6 +443,19 @@ reason** — the empty scan is never evidence of safety.
       second finds the first's report in the baseline and promotes a rewritten
       body; neither run refuses the report for existing, and no append-in-place
       is used.
+- [ ] **The refused-body fallback preserves both values (Table R).** One case
+      per row: **R1** with no report for the date, the code section alone is
+      published; **R2** with run 1's report present, that report is
+      byte-preserved and this run's section appended below it; **R3** with the
+      report user-edited since run 1, the USER's bytes are preserved verbatim
+      and appended to — the criterion goes RED against any implementation that
+      reconstructs or repairs the diverged content; **R4** with the file mutated
+      between the read and the publish, the write is refused, the vault keeps
+      the user's bytes, and the enforcement record appears in the run's output.
+      **No case may lose both values, and no case may silently lose either.**
+- [ ] **The fallback is accounted as itself.** A run that falls back records the
+      brain's body as refused with a reason, and does not record the report as a
+      normal promotion.
 - [ ] **Policy is judged on the RESOLVED path (F4').** With a pre-existing vault
       symlink `01-Projects/alias` → a directory C9 denies (`../.claude`, and a
       vault-root target), a brain-written `01-Projects/alias/evil.md` is
@@ -418,8 +471,9 @@ reason** — the empty scan is never evidence of safety.
       a pass.
 - [ ] **Every vault content write goes through the primitive — the REPORT
       included (F3).** Asserted by substituting the primitive's seam and failing
-      if any vault content write bypasses it — **both of the report's writes,
-      the promoted body and the appended accounting, included**. Proven RED with
+      if any vault content write bypasses it — **every one of the report's
+      writes included: the promoted body, the appended accounting, and Table R's
+      fallback publish**. Proven RED with
       the accounting published by a direct `appendFileSync`, and separately:
       with `reports/dreams/<date>.md` pre-existing as a symlink to another vault
       note, the report write refuses and the victim is byte-unchanged.

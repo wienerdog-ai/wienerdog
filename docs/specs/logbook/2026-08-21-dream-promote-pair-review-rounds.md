@@ -670,3 +670,54 @@ now the only failure shape named anywhere in the primitive's contract surfaces.
 2. **F3** — must a refusal leave the vault byte-unchanged, including directories
    the call itself created? Until this lands, the H9 row and its criterion
    contradict each other in the shipped text, deliberately and on the record.
+
+### Owner ruling on F1 (2026-08-27) — PRESERVE-AND-EXTEND
+
+**RULING: the refused-body report fallback preserves BOTH values at stake — the
+report already in the vault AND this run's enforcement record — and never
+chooses between them.** Applied to `WP-dream-promote-in-workspace` as a new
+canonical table, **Table R**, registered in the Mirrored Surface Checklist on
+the spot. Table D's report row now CITES it and no longer describes the
+fallback; the promotion-accounting row and the primitive-seam criterion were
+swept in the same pass.
+
+The shape, as ruled: the normal path's second write generalised — read the
+vault's current report bytes, compose in memory, publish the whole as ONE
+primitive write with `expect` set to the bytes just read. No new mechanism, no
+new naming; the only difference is that the base is what the vault currently
+holds rather than what this run just published. Four cases (absent /
+unchanged-existing / diverged-existing / concurrently-changed), one acceptance
+criterion per case, plus one asserting the fallback is accounted as itself.
+**R3 is the case that carries the ruling's weight** — the fallback preserves the
+user's diverged bytes verbatim and never reconstructs or "corrects" them; its
+criterion goes red against any implementation that repairs. **R4 is a named,
+accepted residual**: the `expect` guard refuses, the enforcement record goes to
+the run's output rather than the vault, because an overwrite in that window
+would clobber the user's live edit.
+
+Rejected alternatives recorded in the table so they are not re-proposed:
+overwrite, a distinct fallback filename, silent refusal.
+
+**ONE MEASURED COLLISION, FLAGGED IN PLACE AND HELD FOR THE OWNER — the ruling
+could not have seen it.** The ruling says the composed fallback passes the gates
+like any candidate. Measured against the tree, that can destroy the value the
+table exists to protect:
+
+- the enforcement section interpolates `r.path` (`validate.js:1385-1386`), a
+  vault-relative path the BRAIN chose — so the section's content is
+  attacker-influenceable;
+- today's code appends the report **after** the EP2 gate deliberately, and says
+  why in as many words: "Runs AFTER the EP2 gate so a secret-revert reason lands
+  in the report" (`:1375-1377`).
+
+So a secret-shaped path in an enforcement line can get the composed report
+withheld or redacted, losing the enforcement record on exactly the branch that
+exists to deliver it. Nothing is decided on this; the flag sits in Table R and
+names the two narrowest resolutions for the owner to choose between — scan only
+the preserved region and exempt the code-authored section, or sanitize the
+interpolated path (the repo already ships that sanitizer,
+`WP-sanitize-project-display-names`).
+
+**F3 remains the only other open item**; H9's row and criterion are untouched,
+verified mechanically against `11ab732` — this pass did not modify the primitive
+spec at all.
