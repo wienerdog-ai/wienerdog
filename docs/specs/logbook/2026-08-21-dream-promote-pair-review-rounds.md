@@ -963,3 +963,46 @@ current tip, prompt hash-checked, read-only baseline captured. The stop
 criterion is unchanged: **a full fresh round with zero findings about the
 PRODUCT closes the loop.** After that, the `Ready` flips are the owner's, Part i
 first.
+
+### Round 8 — 2026-08-27 — reviewer: gptsol (Codex side), external, WHOLE TEXT
+
+**Does NOT close. 2 findings, both CONTRACT, ZERO mechanism — the third
+consecutive round with none.** Both verified verbatim on the tree. Raw output:
+`2026-08-27-promote-trio-round-8-gptsol-raw.txt`, relayed uncut. No scope
+objections.
+
+Gate hygiene: prompt body hashed `f3b28a6c…`, equal to the pinned value; the
+reviewer reported what it EXECUTED; `git status --porcelain` byte-identical and
+empty before and after — VALID.
+
+**Count: 10 → 9 → 6 → 9 → 4 → 4 → 2 → 2.**
+
+**R7-1 and R7-2 are confirmed genuinely fixed**, both checked explicitly.
+
+**The named class was hunted deliberately this round, and the answer is
+"rarer, not absent".** The round was instructed to read each dense contract cell
+end to end for a sentence falsified by another sentence in the same cell, and to
+say plainly whether the class had gone. It found one — which is the honest
+result the instruction was designed to produce, and better evidence than a clean
+verdict on an unfocused read would have been.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R8-1 | **Table R's TRIGGER was a list, not a class.** It read "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own (H5's `expect` guard, H3's symlinked target). On any of those the body is unpublished with no gate involved, and the enforcement record had nowhere to go — the exact "chooses between them" the F1 ruling forbids | **FIXED.** The trigger is now stated as one complete class — whenever the body is not successfully published, for ANY reason — in Table D's row and in a new Trigger line at Table R's head. A new criterion proves it on a C4 conflict and an H5 refusal, RED against a gate-refusal-only trigger |
+| R8-2 | **Intra-cell arithmetic: Table B has SEVEN site rows, and its behavioural-form row demanded "six reds ... the other five sites".** Round 2's F8' added Site 7 (the inherited environment) and updated Table F, the implementation notes, the criteria and the verification steps — but not this cell. An implementer following it would have omitted behavioural coverage for the inherited-environment site | **FIXED.** Seven reds, six other sites, with the count tied to Table B's own row count and the drift named in place. Verified mechanically: the table now has 7 site rows and no surface says six |
+
+**Applied rather than escalated, and the reasoning is offered for checking:**
+neither needed a decision. R8-2 is arithmetic against a table in the same
+document. R8-1 is the F1 ruling's own value statement — "preserves BOTH values
+and never chooses between them" — applied to the paths the narrow trigger
+excluded; leaving it would have violated a settled ruling rather than left a
+question open. If the owner reads R8-1 as a fresh decision instead of a
+completion, it can be reverted on its own.
+
+**What this round says about the loop.** Mechanism findings: zero for three
+rounds. Cross-surface stale mirrors: zero for two rounds, since the sweep moved
+inside the edit pass. The intra-cell class survived its first deliberate hunt at
+one instance, and that instance predates the rule by six rounds — R8-2's drift
+was introduced in round 2. **Both of this round's findings are older than the
+disciplines now in place**, which is a different and better situation than
+rounds 5-7, where the defects were created by the immediately preceding edit.
