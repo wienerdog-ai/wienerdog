@@ -491,3 +491,77 @@ Fix commit for F3'' only: applied in the commit that carries this record.
 Everything else: **HELD — owner ruling requested**, on two questions: the
 `SKILL.md` scope for the report, and whether to CUT the mechanism-level rows
 rather than patch them.
+
+### Owner rulings on round 4 (2026-08-27) — and the cut
+
+Both questions round 4 escalated came back ruled. Relayed from the war-room
+session; applied here in one edit pass, before the next round.
+
+**RULING 1 — F2'' (report scope): Option A. The report stays BRAIN-AUTHORED.**
+The specs align to the shipped skill contract; `skills/wienerdog-dream/SKILL.md`
+is NOT edited and stays outside all three boundaries, so there is no WP-129
+digest churn. Verified against the tree before applying: `SKILL.md:409-425`
+does require the brain to write `<reports_dir>/<today>.md` including a
+`## Gated out (and why)` section, and does say "the orchestrator appends its own
+… section to this same report … you write the candidate-level accounting above
+it". The code-owned-report design is dropped everywhere it appeared.
+
+What changed, and where:
+
+- **Part i, Table A copy-in exclusions** — `reports_dir` LEAVES the exclusion
+  list. It has to: the brain's report must be written inside its write root,
+  and a same-date second run's existing report must be in the BASELINE, or
+  Part ii's C4 refuses it as an `added` path that already exists in the vault.
+  A new acceptance criterion goes red if `reports_dir` is treated as an
+  exclusion.
+- **Part ii, C9** — `reports_dir` moves from DENIED to ADMITTED. **Round 4's
+  F10 dissolves with it**: the overlap check existed to keep brain content out
+  of a code-owned report tree, and there is no such tree now.
+- **Part ii, Table D report row** — rewritten. The body is an ordinary
+  promotion candidate (delta sees it, four gates judge it, the primitive
+  publishes it); code then APPENDS its accounting as a SECOND write through the
+  primitive with `expect` set to the bytes the first publish returned — never an
+  in-place append, which is what re-opened F3'. Fallback stated: if a gate
+  refuses the brain's body, code publishes its section alone, so the
+  enforcement record always reaches the user.
+- **F4'' is RESOLVED by this ruling, not left open.** Two runs on one date need
+  nothing special once the report is an ordinary candidate: run 1 promotes with
+  `expect` absent, run 2 finds the first report in the baseline and promotes a
+  `modified` with `expect` set to the vault's current bytes.
+
+**RULING 2 — CUT, not PATCH.** Rows H3–H10 of the primitive and Table E's git
+mechanics are cut back to OBSERVABLE PROPERTIES: what must be true of the end
+state, what must be refused, what must never happen. Mechanism — syscall
+choices, git flags, index modes, umask arithmetic, error-handling internals —
+returns to the implementer, and acceptance criteria test visible behaviour only.
+The five round-4 findings that the specs manufactured are NOT patched; they
+dissolve with the rows that carried them:
+
+| Round-4 finding | Disposition |
+|---|---|
+| F5'' — the cited `private-fs` precedent swallows a post-rename `lstat` failure | DISSOLVED. The precedent is now cited as proof the class is solvable to a stated bound, not as a shape to copy. The withdrawn "verbatim in shape" wording is named in place so the import cannot return silently |
+| F6'' — `git hash-object -w` exits 128 from the neutral cwd | DISSOLVED with Table E's prescription |
+| F7'' — `update-index --cacheinfo` needs an unspecified index mode | DISSOLVED with the same row |
+| F8'' — H9/H10's two mode rules are mutually unsatisfiable | DISSOLVED. H10 now states ONE rule: a new note is neither more restricted nor more exposed than one the user creates in the same directory |
+| F9'' — H7 forbids the throw H4 requires | DISSOLVED. H4 no longer prescribes a throw, so H7's carve-out goes with it |
+
+**F1'' fixed as a contract defect, by the simpler of the two options the ruling
+offered: the CLAIM is narrowed, the API is not split.** Measured statement of
+the defect: `writeIntoVault` performs its premise-still-holds check inside the
+call, at publish time, so "every path's outcome is decided before any vault byte
+is written" could not be true of the `expect` guard. Table E now says what is
+true — every POLICY outcome (allowlist, merge, all four gates) is decided first,
+and a path may still turn into refuse-and-report during the write phase. A
+prepare/commit split would buy write-atomicity across paths, which this package
+already disclaims as the residue-lifecycle successor's subject, at the cost of a
+second contract surface. Recorded here and to be repeated under "Decisions made"
+in the PR body.
+
+**F3'' stands as fixed in the previous commit** (the ordering discharge was
+false); nothing here reopens it.
+
+**NEXT — pre-agreed interpretation, recorded before the round runs.** Exactly
+ONE external adversarial round on the cut text. If that round still returns
+mechanism-level findings, the loop is signalling artifact SIZE rather than
+content: **stop and escalate to the owner rather than patching further.** The
+round counter continues at 5.

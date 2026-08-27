@@ -66,17 +66,24 @@ and all three are in code that reads correct:
   tree (`validate.js:1412`, `git add -A`), so a save landing between the write
   and the staging is what gets committed — content no gate ever saw.
 
-The repo already contains the hardened shape for the second of these, in a
-different subsystem: `src/core/private-fs.js:259-317` creates temps with a
-crypto-random name and `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, **and carries
-the opened descriptor's `(dev, ino)` through to a post-`rename` check** because
+The repo already solves this class in a different subsystem
+(`src/core/private-fs.js:259-317`), and its own comment states the honest bound:
 "pure Node cannot prevent" a post-creation substitution (`:270-277`). **This
-package generalises that discipline into one vault-facing primitive and makes
-it the only way this family writes a vault CONTENT file.**
+package makes one vault-facing primitive the only way this family writes a vault
+CONTENT file.** It is cited as PRECEDENT that the class is solvable to a stated
+bound, not as a shape to copy: **round-4 CUT ruling (owner, 2026-08-27), how
+this primitive achieves Table H's properties is the implementer's.** An earlier
+draft said this package "adopts that precedent verbatim in shape" and thereby
+imported the precedent's fail-open — a post-`rename` `lstat` failure it treats
+as "best-effort detection — do not fail a legit write" (`:354-370`, round 4,
+F5'').
 
 **The enumeration that claim requires** (an unquantified "only way" is a hope,
 not a contract): the vault content writers this family owns are (i) each
-promoted note and (ii) the code-owned dream report. Both go through
+promoted note and (ii) the dream report — whose BODY the brain authors and to
+which code appends its own accounting section (owner ruling on F2'', 2026-08-27;
+`skills/wienerdog-dream/SKILL.md:409-425`), so it is two writes through this
+primitive rather than one. Both go through
 `writeIntoVault`; the report's own policy is the consumer's, not this module's
 (`WP-dream-promote-in-workspace`, Tables D and E). Git's writes to the vault's
 `.git` directory are not content files and are outside this contract.
@@ -86,8 +93,8 @@ already ruled on this exact class:** portable Node cannot bind a path's
 component chain against concurrent replacement — `delta.js:22-40` (owner-ruled
 2026-08-21) says it "cannot close that class without per-component `openat`,
 which no `fs` API exposes", and hands its caller a checkable ordering
-obligation instead. Rows H3 and H4 inherit that shape: they narrow and they
-DETECT, and each says which.
+obligation instead. Row H3 inherits that shape: it narrows and it detects, and
+it says so.
 
 **The obligation is NOT discharged, and an earlier draft of this spec claimed it
 was (round 4, corrected here).** The claim was that ordering discharges it —
@@ -147,7 +154,7 @@ under "Discovered issues" in the PR body.
 ```js
 /** Write one file into the vault, deciding on the object rather than the name.
  *  The ONLY sanctioned way for this family to write a vault CONTENT file —
- *  promoted notes and the code-owned dream report alike. (Git writes the
+ *  promoted notes and the dream report alike. (Git writes the
  *  vault's own `.git` internals; that is not a content file and not this
  *  module's subject.) Refuses a symlink it can see, refuses a destination its
  *  caller's policy denies, and returns the bytes it published (Table H).
@@ -187,12 +194,12 @@ inherits this contract as its only write path.
 |---|---|---|
 | H1 | **Decide on the RESOLVED path, not the given one** | `rel` is first segment-validated (no segment equal to `.` or `..`, none containing a separator, none empty). The target's parent directory is then resolved (`realpath`), the resolved absolute path is expressed relative to the vault's own resolved root, and **`admit` is called with THAT** — so a caller's policy judges where the write actually lands. Measured motivation: a pre-existing vault symlink makes an admitted lexical path resolve into a denied directory, and the repo's existing containment check (`validate.js:624-650`) cannot see it because the resolved target is still inside the vault |
 | H2 | **Containment is necessary but never sufficient** | the resolved path must remain inside the vault's resolved root — and passing that check decides nothing on its own; H1's `admit` on the resolved path is what admits. **No surface may describe containment as the barrier**: it rejects escapes from the vault, not writes into a denied part of it |
-| H3 | **No component may be a symlink — and the swap race is NAMED, not claimed closed** | the parent chain from the vault root down to the target's directory is walked with `lstat`, and any symlink component fails the write closed with a reason. A symlink AT the target itself is likewise refused: promotion replaces a note, never whatever a note points at. **What this does NOT establish, per the ruling this repo already made on exactly this class** (`delta.js:22-40`, owner-ruled 2026-08-21): a component observed as a real directory and REPLACED between the walk and the open is followed, and **portable Node cannot close that without per-component `openat`, which no `fs` API exposes.** `O_NOFOLLOW` protects the final component only. Measured in round 3: after an `lstat` saw a real directory, swapping it for a directory symlink let an `O_EXCL\|O_NOFOLLOW` temp open write through it. So this row NARROWS the window and states the residual; the same caller obligation the delta primitive names applies here — for the duration of the call, no untrusted actor may replace an ancestor of the target. **That obligation is NOT discharged by this family, and the Context says why (round 4): the reap removes the BRAIN, not the user's editor, which this very design expects to be writing the vault concurrently.** It is carried as an unclosed named residual. Another `realpath` before the open would only narrow the same race and must not be described as closing it |
-| H4 | **The temp is created, never opened — and its identity is carried through the publish** | crypto-random basename in the target's own directory, `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`. **A predictable name with a following write is the measured defect this row exists to prevent** (`validate.js:855-863`): a symlink planted at that path is followed, and the victim is overwritten before any `rename`. Round 3 confirmed the crypto-random `O_EXCL` create defeats a PRE-planted symlink — and found the residual the repo's own precedent already names (`private-fs.js:270-277`): after the create, a concurrent same-owner process can unlink the entry and plant another object at that name, so the `rename` moves the SUBSTITUTED object. "Pure Node cannot prevent this (no directory-relative rename), but this DETECTS it" — and this primitive adopts that precedent verbatim in shape: capture the opened fd's `(dev, ino)` via `fstat`, write and set the mode ON THE FD (never a post-write path-following `chmod`), and after the `rename` `lstat` the target — a symlink or a `(dev, ino)` mismatch means substitution and **throws**. **Detection, not prevention, and this row says so.** A substitution detected after the rename is the one case where H7's leaves-nothing-behind property cannot hold: the throw is loud precisely because the state is already wrong |
-| H5 | **Publish is `rename`, after a conditional re-read — NARROWED, not closed** | when `expect` is given, the target is re-read immediately before the `rename` and compared byte-for-byte; a difference abandons the write and returns `{written:false}`. When `expect` is absent the target must not exist. **The residual is stated because POSIX offers no content-conditional replace:** a save landing between the re-read and the `rename` is still lost. The repo's precedent (`validate.js:884-890`) has exactly this window and shipped with it; this row narrows the same window and does not claim to close it |
-| H6 | **The published BYTES are returned, so the caller never re-reads the path** | on success the return carries `bytes` — the exact buffer published — plus `sha256` over it. Measured motivation: staging that reads the working tree (`validate.js:1412`, `git add -A`) commits whatever the file holds at staging time, so a save between publish and stage enters the commit ungated. **Three identities are distinct and this row keeps them apart (round 3, F5):** the content digest `sha256`; the filesystem object identity `(dev, ino)` that H4 verifies; and the repository-native blob id, which the caller obtains from the returned BYTES (`git hash-object -w --stdin` under its own constructed git environment) — measured, this repo's object format is `sha1`, so for `abc\n` the blob id is `8baef1b4…` while the raw sha256 is `edeaaff3…`. **`sha256` is a verification digest and is NOT a stageable object id.** This module does not stage and runs no git; the consumer's spec owns the staging call |
-| H9 | **Missing parent directories are created HERE, under the same discipline** | a promoted note may be the first file in a new tier subdirectory (its parent exists in the workspace but not yet in the vault), and no other package may create it — a second vault-write route is exactly what this extraction exists to prevent. `writeIntoVault` therefore creates the missing chain **segment by segment from the vault root down**, each segment `mkdir`-ed and then `lstat`-verified as a real directory before descending, refusing closed on any symlink or non-directory it meets. Directories are created 0700-plus-umask-widened to match the vault's own root mode, so a new folder is no more permissive than the vault. **Cleanup:** a chain created for a write that is then refused is left in place — an empty directory is inert, and removing it would race a concurrent creator; the refusal reason names it. The H3 residual applies to these segments unchanged |
-| H10 | **A newly created note's mode** | when the target exists, the temp takes the target's mode (H4). When it does NOT exist, the new file is created **0600-plus-the-vault-root's-group/other bits**, i.e. no wider than the vault root itself, and never wider than the process umask would allow. Stated because C3 promotes new notes and an unstated mode leaves an implementation free to publish a user's note world-readable or unreadable to their own editor |
+| H3 | **No write lands on or through a symlink** | if the target, or any component of the path from the vault root down to it, is a symlink, the call refuses. **NAMED RESIDUAL, not closed:** portable Node cannot bind a path's component chain against concurrent replacement — `delta.js:22-40` (owner-ruled 2026-08-21) says so and hands its caller an ordering obligation instead. This row DETECTS and NARROWS; it does not prevent. The reap removes the BRAIN as a concurrent writer and says nothing about the user's editor, which this whole design expects to be writing the vault (round 4, F3''). **How the refusal is achieved is the implementer's** — this row states only that it must happen |
+| H4 | **The target is never observed holding a partial write** | a reader looking at the target at any instant sees either its previous content or the complete new content, never a prefix. **The mechanism is the implementer's** (round-4 CUT ruling): an earlier draft prescribed the temp's flags, its naming and its identity carry-through, and manufactured three contradictions doing so |
+| H5 | **The publish is CONDITIONAL on the caller's premise still holding** | with `expect` present the write is abandoned unless the target still holds exactly those bytes; with `expect` absent it is abandoned unless the target does not exist. Abandonment is a refusal (H7), never a silent overwrite. **NARROWED, not closed:** a write landing between the check and the publish is still lost — a residual this row states rather than hides |
+| H6 | **The caller never re-reads the path to learn what was published** | on success the return carries the exact bytes published, so a consumer that must act on them (staging, hashing, appending) acts on the returned value and not on a fresh read of a path another writer may since have changed |
+| H9 | **Missing parent directories are created by this call, under H3's rule** | a promoted note may be the first file in a new tier subdirectory, and a caller that pre-creates parents would be writing the vault outside the primitive, which H8's enumeration forbids. A refusal leaves no partially-created chain behind |
+| H10 | **A newly created file gets the process's ordinary default permissions, and the spec states ONE rule** | nothing here widens or narrows them. **The two-rule form this row carried is withdrawn (round 4, F8''):** "match the vault root" and "never wider than the umask" were measured mutually unsatisfiable — under umask `0077`, `mkdir 0755` yields `0700` and `open 0644` yields `0600`, so no implementation could satisfy both. A note the dream creates is no more sensitive than one the user creates in the same directory, and it should not be more surprising either |
 | H7 | **Refusal is total and reported** | every failure path returns `{written:false, reason}`; nothing is partially written, and the temp is removed on every exit. The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
 | H8 | **No policy lives here** | this module knows nothing about tiers, extensions, instruction files or report directories. It owns the filesystem discipline; `admit` owns the rules. That separation is the point of the extraction: the rules can be argued about and changed in one place, and none of those arguments can weaken the filesystem discipline by accident |
 
@@ -244,59 +251,62 @@ inherits this contract as its only write path.
       — the reap removes the brain, not the user's editor, which the design
       explicitly expects to be writing the vault concurrently. Carried as an
       unclosed family residual.
-- [ ] Named residual: a temp substituted after creation is DETECTED via the
-      opened descriptor's `(dev, ino)`, not prevented (H4).
-- [ ] Named residual: `O_NOFOLLOW`'s absence on win32 moves the weight onto the
-      H3 component walk; no cross-platform guarantee is claimed.
+- [ ] Named residual: substitution of the object between its creation and its
+      publish is not prevented; H4 requires only that no partial content is ever
+      observable at the target. Whether an implementation additionally detects
+      such a substitution is its own choice and is not a contract here.
+- [ ] Named residual: platform support for atomic no-follow opens is not
+      uniform (win32 has no `O_NOFOLLOW`), so H3's refusal is stronger on some
+      platforms than others; no cross-platform guarantee is claimed.
 
 ## Acceptance criteria
 
+Every criterion below is a VISIBLE-BEHAVIOUR criterion. **Round-4 CUT ruling
+(owner, 2026-08-27):** the mechanism-level criteria this section carried —
+temp-name pre-emption, the post-`rename` `(dev, ino)` throw, the
+`update-index --cacheinfo` rejection, the mode-versus-vault-root comparison —
+are WITHDRAWN with the rows that prescribed them. They tested how, not what,
+and five of round 4's nine findings existed only because they did.
+
 - [ ] **H1 — the resolved path is what policy judges.** With a pre-existing
-      vault symlink (`01-Projects/alias` → `../reports/dreams`), a write to
-      `01-Projects/alias/x.md` calls `admit` with the RESOLVED
-      `reports/dreams/x.md`, and an `admit` that denies that directory refuses
-      the write. Proven RED against an implementation that passes `rel`.
+      vault symlink (`01-Projects/alias` → a directory the caller's `admit`
+      denies), a write to `01-Projects/alias/x.md` calls `admit` with the
+      RESOLVED path, and the write refuses. Proven RED against an
+      implementation that passes `rel`.
 - [ ] **H2 — containment alone admits nothing.** A resolved path inside the
       vault but denied by `admit` is refused.
-- [ ] **H3 — a symlink component fails closed, and the race is not claimed
-      closed.** A symlink anywhere in the parent chain, and a symlink at the
-      target itself, each refuse with a reason; the symlink's target is
-      byte-unchanged. **No criterion asserts that a component swapped BETWEEN
-      the walk and the open is caught** — measured, it is not, and the residual
-      is H3's; a test claiming otherwise would be asserting something portable
-      Node cannot deliver.
-- [ ] **H4 — the temp cannot be pre-empted, and substitution is DETECTED.** With
-      a symlink planted at every name the implementation could choose, the write
-      still refuses or creates its own file, and the planted symlink's target is
-      byte-unchanged. Proven RED against a predictable-name-plus-`writeFileSync`
-      implementation, which overwrites the victim. Separately: with the temp
-      unlinked and replaced AFTER creation and before the publish, the call
-      **throws** on the `(dev, ino)` mismatch rather than reporting success.
-      Proven RED against an implementation that omits the check, where the
-      substituted object lands and the call reports success.
-- [ ] **H9 — a missing parent chain is created safely.** Promoting
+- [ ] **H3 — nothing is written on or through a symlink.** A symlink anywhere
+      in the parent chain, and a symlink at the target itself, each refuse with
+      a reason, and the symlink's target is byte-unchanged. **No criterion
+      asserts that a component swapped concurrently is caught** — measured, it
+      is not, and the residual is H3's; a test claiming otherwise asserts
+      something portable Node cannot deliver.
+- [ ] **H4 — no partial content is ever observable at the target.** A reader
+      sampling the target across a write sees either the old complete content
+      or the new complete content. Proven RED against an implementation that
+      writes the target in place.
+- [ ] **H5 — the conditional publish.** With `expect` given and the target
+      changed after the decision, the write is abandoned, `{written:false}` is
+      returned, and the target keeps the changed bytes. With `expect` absent
+      and the target existing, the write is refused.
+- [ ] **H6 — the return carries the published bytes.** `bytes` equals the
+      buffer passed in and `sha256` is over it; a target mutated immediately
+      after the publish changes neither, so a caller acting on the return is
+      never acting on another writer's content.
+- [ ] **H9 — a missing parent chain is created.** Promoting
       `01-Projects/new-project/note.md` into a vault holding only
       `01-Projects/` creates the missing directory and publishes the note. With
       a symlink planted as one of the segments, the write refuses and follows
       nothing. A chain created for a write later refused is left in place, and
       the refusal names it.
-- [ ] **H10 — a new note's mode.** A promoted new note is created no wider than
-      the vault root's own mode, and is readable by the user who owns the vault.
-- [ ] **H5 — the conditional publish.** With `expect` given and the target
-      changed after the decision, the write is abandoned, `{written:false}` is
-      returned, and the target keeps the changed bytes. With `expect` absent and
-      the target existing, the write is refused.
-- [ ] **H6 — the return carries the published bytes, and the digest is not an
-      object id.** `bytes` equals the buffer passed in and `sha256` is over it;
-      a target mutated immediately after the `rename` changes neither. Asserted
-      explicitly: the returned `sha256` is NOT accepted by `git update-index
-      --cacheinfo` in this repository's object format — the criterion exists so
-      an implementer does not discover it at integration time.
-- [ ] **H7 — refusal leaves nothing behind.** After every refusal path, the
-      target directory contains no temp file and the target is unchanged. **The
-      one named exception is H4's post-rename substitution**, which throws with
-      the target already replaced; the criterion asserts the throw, not an
-      unchanged target.
+- [ ] **H10 — a new note is no more restricted and no more exposed than one the
+      user creates in the same directory**, compared against a file the test
+      creates there by ordinary means under the same umask.
+- [ ] **H7 — refusal leaves nothing behind and is total.** After every refusal
+      path, the target directory contains no leftover file of this call's
+      making and the target is unchanged. There is no exception: the
+      throw-with-target-already-replaced case that H7 previously had to carve
+      out was a consequence of the withdrawn mechanism (round 4, F9'').
 - [ ] **This module has no policy and no process.** It requires no
       `child_process`, and no tier, extension or filename rule appears in it —
       asserted mechanically.
