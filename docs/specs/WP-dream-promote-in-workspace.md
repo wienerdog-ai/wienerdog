@@ -200,7 +200,7 @@ condition.
 
 | # | Condition | Outcome |
 |---|---|---|
-| C1 | the path is not admitted by the promotion allowlist (row C9) | **refuse-and-report.** Nothing is written to the vault |
+| C1 | the path is not admitted by the promotion allowlist (row C9) | **refuse-and-report.** No CONTENT is written to the vault; what a refusal may leave behind is bounded by the primitive's H9 — empty directories the call created are unwound, one that acquired content is left and named — and this row does not restate that bound |
 | C2 | delta status is `deleted` (present in baseline, gone from the workspace) | **refuse-and-report — promotion never deletes.** The vault keeps the note. Named rather than traded off: a deletion is unrecoverable and the brain has no business making one |
 | C3 | delta status is `added` and `vault-now` has no such path | **promote** the workspace bytes (Table E's write) |
 | C4 | delta status is `added` and `vault-now` HAS the path | **refuse-and-report.** The user created a note at that path during the run; the brain's version does not displace it |

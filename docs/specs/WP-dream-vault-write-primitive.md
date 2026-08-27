@@ -209,9 +209,9 @@ inherits this contract as its only write path.
 | H4 | **The target is never observed holding a partial write** | a reader looking at the target at any instant sees either its previous content or the complete new content, never a prefix. **The mechanism is the implementer's** (round-4 CUT ruling): an earlier draft prescribed the temp's flags, its naming and its identity carry-through, and manufactured three contradictions doing so |
 | H5 | **The publish is CONDITIONAL on the caller's premise still holding** | with `expect` present the write is abandoned unless the target still holds exactly those bytes; with `expect` absent it is abandoned unless the target does not exist. Abandonment is a refusal (H7), never a silent overwrite. **NARROWED, not closed:** a write landing between the check and the publish is still lost — a residual this row states rather than hides |
 | H6 | **The caller never re-reads the path to learn what was published** | on success the return carries the exact bytes published, so a consumer that must act on them (staging, hashing, appending) acts on the returned value and not on a fresh read of a path another writer may since have changed |
-| H9 | **Missing parent directories are created by this call, under H3's rule** | a promoted note may be the first file in a new tier subdirectory, and a caller that pre-creates parents would be writing the vault outside the primitive, which H8's enumeration forbids. A refusal leaves no partially-created chain behind |
+| H9 | **Missing parent directories are created by this call, under H3's rule — and a refusal removes the EMPTY ones it created** | a promoted note may be the first file in a new tier subdirectory, and a caller that pre-creates parents would be writing the vault outside the primitive, which H8's enumeration forbids. **On refusal (owner ruling on F3, 2026-08-27): the call removes the directories IT created that are STILL EMPTY at removal time. Anything it created that has meanwhile acquired content is LEFT IN PLACE and NAMED in the refusal. Two hard prohibitions: the call never removes anything it did not create, and never removes anything non-empty.** Why the synthesis rather than either pure rule: always-byte-unchanged is unimplementable without risking deletion of concurrent user content — the user's editor is a live vault writer throughout, which this package already carries as a named fact (Security checklist) — while leave-everything makes a REFUSED operation mutate the vault, which is this family's own definition of failure in miniature. **The empty-only rule handles the race STRUCTURALLY: removing a non-empty directory must fail by construction, so concurrent user work is not deletable — protected by shape, not by care.** Measured on Node 24.18 that the platform supplies that shape: `rmdirSync` on a directory holding one file fails `ENOTEMPTY` and the file survives. Which call makes empty-only removal safe is the implementer's (round-4 CUT); this row states the visible end state |
 | H10 | **A newly created file gets the process's ordinary default permissions, and the spec states ONE rule** | nothing here widens or narrows them. **The two-rule form this row carried is withdrawn (round 4, F8''):** "match the vault root" and "never wider than the umask" were measured mutually unsatisfiable — under umask `0077`, `mkdir 0755` yields `0700` and `open 0644` yields `0600`, so no implementation could satisfy both. A note the dream creates is no more sensitive than one the user creates in the same directory, and it should not be more surprising either |
-| H7 | **Refusal is total and reported** | every failure path returns `{written:false, reason}`; nothing is partially written, and the temp is removed on every exit. The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
+| H7 | **Refusal is total and reported** | every failure path returns `{written:false, reason}`; nothing is partially written, and nothing of this call's making survives it — for directories, bounded exactly as H9 states. The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
 | H8 | **No policy lives here** | this module knows nothing about tiers, extensions, instruction files or report directories. It owns the filesystem discipline; `admit` owns the rules. That separation is the point of the extraction: the rules can be argued about and changed in one place, and none of those arguments can weaken the filesystem discipline by accident |
 
 ### Mirrored Surface Checklist
@@ -268,6 +268,12 @@ inherits this contract as its only write path.
       publish is not prevented; H4 requires only that no partial content is ever
       observable at the target. Whether an implementation additionally detects
       such a substitution is its own choice and is not a contract here.
+- [ ] Named residual (owner ruling on F3): a directory this call created that
+      acquires content between its creation and the refusal's unwind is LEFT in
+      the vault, so that refusal does not restore the vault byte-for-byte. It is
+      reported in the refusal reason. The alternative — removing it — would
+      delete concurrent user content, and the empty-only rule makes that
+      impossible by construction rather than by care (H9).
 - [ ] Named residual: platform support for atomic no-follow opens is not
       uniform (win32 has no `O_NOFOLLOW`), so H3's refusal is stronger on some
       platforms than others; no cross-platform guarantee is claimed.
@@ -306,20 +312,31 @@ and five of round 4's nine findings existed only because they did.
       buffer passed in and `sha256` is over it; a target mutated immediately
       after the publish changes neither, so a caller acting on the return is
       never acting on another writer's content.
-- [ ] **H9 — a missing parent chain is created.** Promoting
-      `01-Projects/new-project/note.md` into a vault holding only
-      `01-Projects/` creates the missing directory and publishes the note. With
-      a symlink planted as one of the segments, the write refuses and follows
-      nothing. A chain created for a write later refused is left in place, and
-      the refusal names it.
+- [ ] **H9 — a missing parent chain is created, and a refusal unwinds the empty
+      part of it.** Promoting `01-Projects/new-project/note.md` into a vault
+      holding only `01-Projects/` creates the missing directory and publishes
+      the note. With a symlink planted as one of the segments, the write refuses
+      and follows nothing. **On a refusal AFTER the chain was created (a policy
+      or `expect` refusal), the vault is byte-identical to its pre-call state** —
+      the created-and-still-empty directories are gone. Proven RED against an
+      implementation that leaves them.
+- [ ] **H9's two prohibitions, each proven RED.** With a pre-existing empty
+      directory the call did NOT create, a refusal leaves it in place — an
+      implementation that removes it fails. With a directory the call DID create
+      that acquired a file before removal, the refusal leaves it and NAMES it in
+      the reason — an implementation that removes it fails, and that removal is
+      the deletion of concurrent user content the empty-only rule exists to make
+      impossible.
 - [ ] **H10 — a new note is no more restricted and no more exposed than one the
       user creates in the same directory**, compared against a file the test
       creates there by ordinary means under the same umask.
 - [ ] **H7 — refusal leaves nothing behind and is total.** After every refusal
       path, the target directory contains no leftover file of this call's
-      making and the target is unchanged. There is no exception: the
-      throw-with-target-already-replaced case that H7 previously had to carve
-      out was a consequence of the withdrawn mechanism (round 4, F9'').
+      making and the target is unchanged. The throw-with-target-already-replaced
+      carve-out is gone with the mechanism that required it (round 4, F9''). The
+      one bounded case where a refusal does not restore the vault byte-for-byte
+      is H9's named residual — a directory this call created that acquired
+      content before removal — and it is stated there, not carved out here.
 - [ ] **This module has no policy and no process.** It requires no
       `child_process`, and no tier, extension or filename rule appears in it —
       asserted mechanically.

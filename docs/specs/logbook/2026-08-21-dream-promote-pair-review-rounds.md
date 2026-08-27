@@ -721,3 +721,49 @@ interpolated path (the repo already ships that sanitizer,
 **F3 remains the only other open item**; H9's row and criterion are untouched,
 verified mechanically against `11ab732` — this pass did not modify the primitive
 spec at all.
+
+### Owner ruling on F3 (2026-08-27) — empty-only unwind; round 5 is now fully dispositioned
+
+**RULING: a refusal removes the directories THIS CALL created that are STILL
+EMPTY at removal time. Anything it created that has meanwhile acquired content
+is LEFT IN PLACE and NAMED in the refusal. Two hard prohibitions: the call never
+removes anything it did not create, and never removes anything non-empty.**
+
+Applied to `WP-dream-vault-write-primitive`'s H9 row and its criterion, which
+**ends the deliberate contradiction round 5 found (F3) and closes it.** H7's row
+and criterion were swept in the same pass — H7's "nothing is partially written"
+now points at H9 for the directory bound instead of implying an absolute, and
+its criterion no longer says "there is no exception" when H9 names one. The new
+residual is registered in the Security checklist beside the others. On the
+consumer side, C1's "Nothing is written to the vault" was bounded to "no
+CONTENT", citing H9 — it was the one mirror that would otherwise have gone
+quietly false.
+
+**The ruling's load-bearing claim was measured before being written down, not
+after.** It rests on removal-of-non-empty failing by construction; measured on
+Node 24.18, `rmdirSync` on a directory holding one file fails `ENOTEMPTY` and
+the file survives. "Protected by shape, not by care" is therefore a property of
+the platform here, and the row carries that as one provenance line. Had it
+failed, the ruling's rationale would have needed the owner again.
+
+Also verified in this pass: the two remaining `byte-identical` claims in the
+consumer (the pipeline-level CLAIM 1 criterion and the abort-paths criterion)
+are NOT mirrors of H9 — both describe paths on which no `writeIntoVault` call is
+made at all, so no directory is created and the residual cannot arise. Left
+unchanged deliberately, recorded so a later round does not re-open them.
+
+**ROUND 5 IS NOW FULLY DISPOSITIONED: F1 ruled and applied (Table R), F2 and F4
+closed by the mirror sweep, F3 ruled and applied here.**
+
+**Still open, and it is the only thing open:** the gate-ordering question inside
+Table R — whether the composed fallback report passes the EP2 gate, given that
+its enforcement section interpolates a brain-chosen path and that today's code
+deliberately appends the report AFTER that gate so a secret-revert reason can
+land in it. Acknowledged by the owner as a genuine question; ruling to follow;
+nothing in Table R touched pending it.
+
+**The loop's state, stated plainly because no ruling changes it.** Rounds 1-5
+ran 10 → 9 → 6 → 9 → 4. The stop criterion — one external round returning no
+finding about the PRODUCT — has never been met. Every finding from round 5 is
+now dispositioned, which is the precondition for another round, not a
+substitute for one.
