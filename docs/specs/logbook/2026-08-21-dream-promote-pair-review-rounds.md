@@ -767,3 +767,63 @@ ran 10 → 9 → 6 → 9 → 4. The stop criterion — one external round return
 finding about the PRODUCT — has never been met. Every finding from round 5 is
 now dispositioned, which is the precondition for another round, not a
 substitute for one.
+
+### Owner ruling on the Table R gate-ordering question (2026-08-27) — round 5's last open item closes
+
+**RULING: two rules, neither of the flagged options alone.** (1) The PRESERVED
+REGION is not re-gated — gates guard content ENTERING the vault, not content
+residing in it, and re-scanning bytes that are already vault content protects
+nothing while it can destroy the enforcement record or mutate the user-edited
+bytes R3 forbids. (2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION
+time — every interpolated value passes through BOTH the shipped sanitizer and
+EP2's redact arm before entering the section.
+
+Stated as the observable property, which is how it went into Table R: **the
+code-authored section can never carry bytes any gate would refuse, so no gate
+exemption exists and none is needed.** Gate refusal on this branch is impossible
+by construction, and the record's only remaining refusal path is the `expect`
+guard — R4, already a named residual.
+
+**Scope widened where the ruling's logic reaches, and said so explicitly:** the
+neutralisation rule governs the code-authored enforcement section WHEREVER it is
+composed — the normal second write as well as the fallback — because the same
+interpolation happens in both. Table D's report row now cites Table R for it
+rather than restating; the acceptance criterion covers both branches in one
+case. Leaving the normal path ungoverned would have left the unscanned
+brain-influenced channel open on the common path while closing it on the rare
+one.
+
+Both flagged options are recorded in the rejected-alternatives row as
+insufficient ALONE, with the ruling's reasons: exempting the section opens an
+unscanned brain-influenced channel (`r.path` is attacker-influenceable, so a
+secret in a filename rides through); sanitizing alone still lets a secret-shaped
+path or user-edited preserved bytes get the whole report withheld.
+
+**One measured cost of rule (2), named rather than absorbed.** The shipped
+sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`),
+built for display NAMES: it replaces every character outside
+`[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured:
+`01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note
+stays identifiable, which is what the record is for, but the line stops being a
+copy-pasteable path. Recorded in Table R as an accepted, stated cost — a
+path-preserving sanitizer would be a new product surface and the ruling chose the
+shipped one.
+
+The author's flag that opened this question is kept in Table R as the record of
+how it was found; both of its measurements still hold. What the ruling changed is
+that the question DISSOLVES rather than being traded off.
+
+**ROUND 5 IS CLOSED — every finding ruled and applied, no open items.**
+
+Verified after this pass: lint green, frontmatter 226 specs, 75 `file:line`
+citations resolve with ranges checked at both ends (one was corrected in this
+pass — `digest.js:413-418` began on the JSDoc's closing line rather than on the
+function, and is now `:414-418`).
+
+### Round 6 — APPROVED by the owner, to run on the WHOLE SETTLED TEXT
+
+Not on any single ruling's diff. Rationale accepted from this author's report:
+four consecutive substantive edit commits with no review pass over the result,
+and round 5's own lesson is that an edit pass introduces defects of its own —
+three of its four findings came from the ruling edit that preceded it. The round
+runs on all three specs at the post-ruling tip.

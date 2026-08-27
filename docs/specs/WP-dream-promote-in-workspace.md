@@ -251,7 +251,7 @@ reason** — the empty scan is never evidence of safety.
 | Ledger validation | `validate.js:1156` `ledgerViolation` | the merged candidate bytes | AFTER the merge | refuse-and-report |
 | **Why this order** | — | — | — | EP2 runs first and scans the BRAIN's added bytes because those are what the run authored and is responsible for (ADR-0034 is about the AI's accidental persistence); the other three gates run after the merge because a Tier-3/skill/ledger judgment must be made on the MERGED bytes, which are exactly what would be promoted — a gate judging pre-merge bytes would not be judging what is promoted, and that is a data-loss contract, not an implementation detail. **Owner-ruled correction (round 1, F4):** the earlier rationale — "scanning the merged bytes would force discarding the user's diverging edits" — is FALSE, because refuse-and-report (C7) already leaves the user's live version untouched. EP2 is pre-merge and brain-scoped by CHOICE, not by that false necessity, and the consequence is a named residual (Security checklist): a secret the USER writes into their own note during the run rides a clean C6 merge into the dream commit unscanned. That is the user's own content in their own vault — the dream commits it but did not author it — and making the secret gate refuse or redact a user's own note was ruled the worse trade |
 | **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically at the DECISION** (round 1, F8): both outcomes are decided before either is written, so a policy failure on one refuses BOTH — the guard authorizes the skill from the ledger and the ledger is validated from the skill, and promoting one while refusing the other would leave the vault inconsistent. Enforced by Table E's decide-then-write ordering. **This does NOT claim write-atomicity across the two paths**: if the first `rename` succeeds and the second fails (ENOSPC/EIO/kill), the vault holds a half-applied pair. Same-directory `rename` is atomic for ONE path, not across two, and rollback/crash-replay of a partial publish is the residue-lifecycle successor's subject, named in Out of scope — this row claims decision-atomicity and says so |
-| The dream report (owner ruling, F2'', 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, all four gates judge it, and it is published by the primitive like any other note. **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The fallback — when a gate refuses the body, or no body exists — is Table R**, which this row does not restate | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own |
+| The dream report (owner ruling, F2'', 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, all four gates judge it, and it is published by the primitive like any other note. **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — when a gate refuses the body, or no body exists — is Table R**, which this row does not restate | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own |
 
 ### Table R — the report's publish decision (owner ruling on F1, 2026-08-27)
 
@@ -273,24 +273,23 @@ naming: the only difference from the normal second write is that the base is
 
 | Rule | Value |
 |---|---|
-| Gates | the composed content passes the gates like any candidate — the appended section is code-authored, exactly as in the normal second write |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** Every interpolated value — `r.path` and kin — passes through BOTH the shipped sanitizer AND EP2's redact arm before it enters the section. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| The observable property the two rules buy | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** Gate refusal on this branch is impossible by construction, and the record's only remaining refusal path is the `expect` guard — R4, already a named residual above |
+| Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion |
-| Rejected alternatives, recorded so they are not re-proposed | **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver) |
+| Rejected alternatives, recorded so they are not re-proposed | On the fallback shape: **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver). On the gate question, both of the options the author's flag named, rejected as insufficient ALONE: **exempting the code-authored section from the gates** (opens an unscanned brain-influenced channel into the vault — `r.path` is attacker-influenceable, so a secret in a filename would ride through), and **sanitizing alone** (a secret-shaped path, or user-edited preserved bytes, could still get the whole report withheld — the record dies either way) |
 
-**AUTHOR'S FLAG — not a re-litigation of the ruling, a measured collision the
-ruling could not have seen.** The Gates row above and today's shipped ordering
-disagree, and the disagreement can destroy the value this whole table exists to
-protect. Measured: the enforcement section interpolates `r.path`
-(`validate.js:1385-1386`), a vault-relative path the BRAIN chose, so its content
-is attacker-influenceable; and today's code appends the report **after** the EP2
-gate on purpose, its comment saying so in as many words — "Runs AFTER the EP2
-gate so a secret-revert reason lands in the report" (`:1375-1377`). If the
-composed fallback is scanned, a secret-shaped path in an enforcement line can get
-the report withheld or redacted, and the enforcement record is lost on exactly
-the branch that exists to deliver it. **Held for the owner; nothing here is
-decided on it.** The narrowest resolutions, for the ruling to choose between: scan
-only the preserved region and exempt the code-authored section, or sanitize the
-interpolated path (the repo already ships that sanitizer — `WP-sanitize-project-display-names`).
+**The author's flag that opened this question is RESOLVED by the ruling above,
+and is kept as the record of how it was found.** Measured, and both facts still
+hold: the enforcement section interpolates `r.path` (`validate.js:1385-1386`), a
+vault-relative path the BRAIN chose, so its content is attacker-influenceable;
+and today's code appends the report **after** the EP2 gate deliberately, saying
+so in as many words — "Runs AFTER the EP2 gate so a secret-revert reason lands in
+the report" (`:1375-1377`). The collision was real: scanning the composed report
+could withhold or redact the enforcement record on exactly the branch that exists
+to deliver it. **What the ruling changed is that the question dissolves rather
+than being traded off** — neutralise at composition and there is nothing left for
+a gate to refuse.
 
 ### Table E — the promotion write, and the one new window
 
@@ -456,6 +455,18 @@ interpolated path (the repo already ships that sanitizer — `WP-sanitize-projec
 - [ ] **The fallback is accounted as itself.** A run that falls back records the
       brain's body as refused with a reason, and does not record the report as a
       normal promotion.
+- [ ] **The preserved region is not re-gated (Table R).** A preserved report
+      whose EXISTING bytes contain secret-shaped text is republished
+      byte-identical, and no gate withholds, redacts or alters it. Proven RED
+      against an implementation that scans the whole composed content.
+- [ ] **The code-authored section cannot carry refusable bytes (Table R).** With
+      a brain-chosen refused path that is both markdown-active and
+      secret-shaped, the composed section contains neither the active markdown
+      nor the secret, the report is published, and the refused note is still
+      identifiable in the line. Proven RED with the sanitizer skipped, and
+      separately with the redact arm skipped — **both arms, because either alone
+      was ruled insufficient.** This criterion covers the NORMAL second write as
+      well as the fallback; the rule governs both.
 - [ ] **Policy is judged on the RESOLVED path (F4').** With a pre-existing vault
       symlink `01-Projects/alias` → a directory C9 denies (`../.claude`, and a
       vault-root target), a brain-written `01-Projects/alias/evil.md` is
