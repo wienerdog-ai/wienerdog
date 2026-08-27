@@ -1,0 +1,36 @@
+Round 7 — external adversarial review — reviewer: gptsol (Codex side).
+Base: wp/dream-promote-in-workspace @ 8f48cec7178afe6796e72e1d097cf9d39eb589fd
+Scope: the WHOLE settled text of all three specs, not a diff.
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value in docs/runbooks/review-prompts/adversarial.md)
+Read-only check: `git status --porcelain` byte-identical and empty before and
+after — VALID.
+
+VERBATIM OUTPUT BELOW.
+
+{
+  "verdict": "needs-attention",
+  "summary": "Do not ship yet. Two CONTRACT defects remain, and both are incomplete Round 6 repairs. R6-2 is genuinely generalized across all primitive refusal paths, and R6-3 now has one governing commit-race criterion with the original RED direction preserved. R6-1 still states an absolute identity prohibition immediately before admitting that the prohibition is false under empty-directory substitution. R6-4 still instructs the implementer to perform a `reports_dir` negative comparison even though that directory is now admitted. No MECHANISM findings were found; Round 6's zero-mechanism result still holds. Executed checks: all three complete specs were read with `cat` (exit 0 each); `git diff --exit-code 025021f -- src` verified the pinned source tree (exit 0); targeted `/usr/bin/grep -a` probes found the stale R6-1 absolute claim (exit 0), the stale R6-4 negative comparison (exit 0), and R6-2's generalized refusal contract (exit 0); `cmp` verified checkout status was byte-identical before and after (exit 0, both statuses empty).",
+  "findings": [
+    {
+      "title": "R6-1 still states the identity prohibition absolutely",
+      "classification": "CONTRACT defect",
+      "file": "docs/specs/WP-dream-vault-write-primitive.md",
+      "line_start": 212,
+      "line_end": 212,
+      "confidence": 1.0,
+      "description": "H9 still declares as a hard prohibition that \"the call never removes anything it did not create,\" then later in the same row requires the accepted residual where a different concurrently substituted empty directory is removed. Narrowing the claim to CONTENT does not reconcile those statements: removing the replacement still removes an object the call did not create. An implementer cannot satisfy both observable contracts, and a test author can legitimately encode the absolute sentence and reject the owner-accepted residual.",
+      "recommendation": "Rewrite the hard prohibition so it is explicitly content-scoped and identity-qualified, for example: the call never removes non-empty content, and outside the named concurrent empty-directory substitution residual it removes only directories it created. Keep the residual and its at-most-empty-directory damage bound unchanged, and sweep mirrored acceptance/security text for any remaining absolute identity claim."
+    },
+    {
+      "title": "R6-4 leaves a `reports_dir` negative comparison in the admission rule",
+      "classification": "CONTRACT defect",
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 211,
+      "line_end": 211,
+      "confidence": 0.99,
+      "description": "C9 says every comparison in the admission rule includes \"the `reports_dir` negative\" and must be normalized, but the same row later says `reports_dir` is admitted, not denied, and that its earlier negative check was withdrawn. This is not merely historical wording: it is an implementation instruction inside the normative allowlist row. An implementer following it can retain a negative reports-directory branch, contradicting the same-date report flow and the two-direction Unicode acceptance criterion.",
+      "recommendation": "Remove `the reports_dir negative` from the normative comparison list and replace it with the admitted `reports_dir` prefix comparison. State uniformly that all admitted directory-prefix comparisons, including `reports_dir`, are NFC-normalized and case-folded before matching."
+    }
+  ]
+}
