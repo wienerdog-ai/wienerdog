@@ -1105,3 +1105,17 @@ all of them).
 **Also accepted for the record:** the value-not-phrase sweep rule routes exactly
 like the intra-cell rule — logbook for the loop, then the same small docs PR to
 `main` afterwards; `docs/runbooks/spec-authoring.md` stays untouched here.
+
+### R9-1 scope confirmed (2026-08-27) — no widening
+
+The question this author raised when applying the ruling is closed: **the three
+layers cover copy-in's live-vault reads only, and the actorless claim rightly
+survives for `captureBaseline`.** Advisor-verified on the tree — the workspace it
+walks is built by the run under the 0700 private core and nothing else writes
+there — and consistent with the ruling's own singular wording, "copy-in walks the
+LIVE vault". Table F's neighbour re-scoping is accepted as part of the same
+completion. **R9-1 is closed; no open items remain from round 9.**
+
+Recorded by the owner: the intra-cell rule catching two of this author's own
+pre-commit defects, one round after being named, is the first direct evidence it
+pays.
