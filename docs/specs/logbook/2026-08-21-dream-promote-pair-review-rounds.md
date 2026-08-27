@@ -1048,3 +1048,60 @@ number-vs-noun sweep of all three specs is clean.
 Like the intra-cell rule it stays in this logbook for the loop and goes to
 `main` as part of that same small docs PR afterwards — it is not applied to
 `docs/runbooks/spec-authoring.md` on this branch.
+
+### Owner ruling on R9-1 (2026-08-27) — the three-layer shape replaces the actorless claim
+
+**RULING: in the copy-in window the only concurrent actor is BENIGN** — the
+user's own editor or synchroniser; the brain does not exist yet. The sentence
+"there is no actor" is replaced everywhere with the precise claim: **there is no
+UNTRUSTED actor**, with consequences and bounds stated. The reduction "the
+residual reduces to statically-planted objects" falls with it. Three layers,
+each an established family pattern:
+
+1. **FILE-LEVEL CONTAINMENT — fail-closed, observable.** An entry that becomes a
+   symlink between the check and the read is never followed; copy-in skips and
+   reports it. **This closes the one genuine security edge: out-of-vault bytes
+   cannot enter the workspace through a swap.** Mechanism is the implementer's.
+2. **CHAIN-LEVEL SUBSTITUTION — NAMED RESIDUAL** under the standing platform
+   ruling (`delta.js:22-40`, owner-ruled 2026-08-21), same citation and same
+   treatment as H3.
+3. **COHERENCE — NAMED BOUNDED RESIDUAL.** A copy of a live tree is not atomic,
+   so a concurrent save can hand the dream a view mixing two moments. **Bound:
+   this affects what the dream SEES — input quality — never what enters the
+   VAULT unvetted**, since every return path runs through C9 admission, the four
+   gates and the primitive.
+
+Applied identically across Table A, Table F, the Security checklist and the
+acceptance criteria; Table F's capture-before-spawn row needed the fullest
+rewrite and got it, with both its withdrawn claims named in place.
+
+**TWO DEFECTS THIS AUTHOR INTRODUCED WHILE APPLYING THE RULING, CAUGHT BY THE
+CADENCE'S OWN CHECKS BEFORE THE COMMIT.** Recorded because they are the first
+direct evidence that the dense-cell re-read pays:
+
+- **Over-application.** The first draft applied all three layers to BOTH walks
+  this WP ships. Measured against the text: `captureBaseline` reads the
+  WORKSPACE, which this run just built under the 0700 private core, where
+  nothing else writes — it is genuinely actorless and the claim stays true
+  there. **Only copy-in reads the live VAULT**, and the ruling says so in as
+  many words ("copy-in walks that live vault"). Table A and the Security
+  checklist now distinguish the two trees explicitly.
+- **An unscoped neighbour.** Table F's "real exposure" row said the race "needs
+  a writer concurrent with the walk, and the successor's reap precondition
+  removes the only one" — true of the workspace walks, and **false of copy-in's
+  vault reads the moment Table A distinguished them.** The row is now scoped to
+  the workspace walks in its own title and first sentence, and says explicitly
+  that it covers nothing about copy-in.
+
+Both were found by re-reading each rewritten cell whole and then re-reading its
+neighbours — the intra-cell rule doing exactly what it was written for, one round
+after being named.
+
+Verified after the pass: lint green, frontmatter 226 specs, 79 `file:line`
+citations resolve at both ends, and the number-vs-noun sweep is clean across all
+three specs (the "three layers" count now appears on four surfaces and agrees on
+all of them).
+
+**Also accepted for the record:** the value-not-phrase sweep rule routes exactly
+like the intra-cell rule — logbook for the loop, then the same small docs PR to
+`main` afterwards; `docs/runbooks/spec-authoring.md` stays untouched here.
