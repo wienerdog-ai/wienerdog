@@ -141,8 +141,15 @@ async function runBrainWithWatchdog(o) {
   const reapTreeFn = seams.reapTree || reapTree;
   const reapGroupFn = seams.reapGroup || reapGroup;
   const writePrivate = seams.writeFilePrivate || writeFilePrivate;
+  // TRANSITIONAL (WP-dream-workspace-retarget, Table B last row). The brain's
+  // write target is now a WORKSPACE, and here it is still the vault — passed
+  // explicitly, so the running product stays byte-identical until
+  // WP-dream-promote-in-workspace builds the workspace in this pipeline, wires
+  // teardown into every exit path, and re-points this one argument. Re-pointing
+  // it HERE, with no promotion, would leave the dream writing notes nothing ever
+  // promotes: an inert product.
   const { child, done } = spawnBrain({
-    vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
+    workspaceDir: vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
 
   // Hand the brain's identity UP to the outer supervisor, per-run token.
