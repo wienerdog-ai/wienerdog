@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { WienerdogError } = require('../errors');
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
 const { redactOnly } = require('../secret-scan');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
@@ -307,8 +308,26 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
   const env = {};
   for (const k of BRAIN_ENV_ALLOWLIST) {
     const v = baseEnv[k];
-    if (typeof v === 'string' && v !== '') env[k] = v;
+    if (typeof v === 'string' && v !== '') {
+      // AN ALLOWLISTED NAME IS NOT A LICENCE FOR ITS VALUE. The claim is about
+      // VALUES — "no env value is, or contains, the vault path" — so a name
+      // being on the list settles nothing about what it holds. Measured: with a
+      // vault at `~/.codex`, an allowlisted `CODEX_HOME` carries the vault path
+      // into the child verbatim, which is the leak site 7 exists to close.
+      // FAIL CLOSED rather than drop: a harness whose config root lives inside
+      // the memory vault cannot both start and stay outside it, and refusing
+      // loudly before any spawn is this package's posture everywhere else.
+      if (String(v).includes(vaultDir)) {
+        throw new WienerdogError(
+          `dream brain: refusing to spawn — the environment variable ${k} carries the vault path. ` +
+            'The brain must not be handed the vault; move that location outside the vault and re-run.'
+        );
+      }
+      env[k] = v;
+    }
   }
+  // PATH is FILTERED rather than refused: it is a list, and dropping the whole
+  // list would break pin verification before the child starts.
   env.PATH = sanitizeBrainPath(baseEnv.PATH, vaultDir, platform || process.platform);
   // SITE 5. The env var NAME stays: renaming it would churn the WP-026 mapped
   // fake-brain fixtures for no guarantee. The VALUE is the workspace. On the
@@ -337,11 +356,21 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
  * inherited environment. The vault is still known here — `paths.vault` — for
  * exactly one purpose: stripping it out of the child's PATH.
  * @param {{workspaceDir:string, scratchDir:string, date:string, model:string|null,
+ *          vaultDir?:string,
  *          layout?:import('../layout').VaultLayout,
  *          harness?:'claude'|'codex', env?:NodeJS.ProcessEnv,
  *          platform?:NodeJS.Platform,
  *          logStream?:NodeJS.WritableStream}} o
  *   workspaceDir  the run's write root, built by `dream/workspace.js`
+ *   vaultDir  the run's REAL vault — NOT a write target, and never handed to the
+ *     brain. It exists so the vault can be kept OUT of the child: it is the path
+ *     whose components are stripped from `PATH` and whose presence in any
+ *     allowlisted value refuses the spawn. It must be the vault the RUN uses
+ *     (`cfg.vault`, read from config.yaml), because `wienerdog adopt` writes an
+ *     arbitrary path there and `paths.vault` — `$WIENERDOG_VAULT` or
+ *     `~/wienerdog` — is then a DIFFERENT directory, so sanitising against it
+ *     would strip the wrong one and leave the real vault on the child's PATH.
+ *     Defaults to `paths.vault` for callers that have no config (tests).
  *   platform  the run's platform (never mock process.platform — inject it)
  * @returns {{ child: import('child_process').ChildProcess,
  *             done: Promise<{code:number|null, durationMs:number, stderrTail:string,
@@ -361,7 +390,9 @@ function spawnBrain(o) {
   // vault value strips PATH and is absent from everything else.
   const childEnv = buildBrainEnv({
     baseEnv,
-    vaultDir: paths.vault,
+    // The RUN's vault when the caller knows it (it reads config.yaml); the
+    // env/default one only as a fallback for callers that have no config.
+    vaultDir: o.vaultDir || paths.vault,
     workspaceDir,
     scratchDir,
     date,

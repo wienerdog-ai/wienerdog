@@ -32,7 +32,10 @@
  *     revalidation catches the swap everywhere else, because `lstat` recorded
  *     the ENTRY's identity and `fstat` reports the TARGET's. The entry is
  *     skipped and reported. Bytes from outside the vault cannot enter the
- *     workspace through a swap.
+ *     workspace through a swap AT A FILE ENTRY. A DIRECTORY entry replaced
+ *     between its `lstat` and the `readdirSync` that descends into it is a
+ *     chain-level substitution and belongs to layer 2 below — `readdirSync`
+ *     resolves the name again, and portable Node cannot bind it.
  *  2. CHAIN-LEVEL SUBSTITUTION: a replaced ANCESTOR component is a NAMED
  *     RESIDUAL — portable Node cannot bind a path's component chain against
  *     concurrent replacement (`delta.js:22-40`, owner-ruled 2026-08-21).
@@ -457,11 +460,34 @@ function createWorkspace(o) {
   }
 
   const workspaceDir = path.join(paths.state, WORKSPACE_DIRNAME);
-  // A leftover from a crashed run is removed before the build, never merged
-  // into: the baseline must describe THIS run's copy and nothing else.
-  destroyWorkspace(workspaceDir);
-  mkdirPrivate(workspaceDir, paths.core ? { core: paths.core } : {});
+  const mkdirOpts = paths.core ? { core: paths.core } : {};
+  // ORDER IS LOAD-BEARING, and it is a destructive-action rule: the private
+  // ancestry is VALIDATED BEFORE anything is removed. `mkdirPrivate` refuses a
+  // symlinked core, a symlinked intermediate directory and a symlinked leaf.
+  // Removing first and validating second was measured to delete an EXTERNAL
+  // tree: with `<core>/state` a symlink to somewhere else, the recursive remove
+  // resolved through it and destroyed that directory's `dream-workspace` before
+  // the validation that would have refused ever ran.
+  mkdirPrivate(workspaceDir, mkdirOpts);
   try {
+    // The placement contract, now checkable: the ancestry above is verified
+    // real, so this resolves to where the workspace actually lives. A workspace
+    // at or beneath the vault would put the brain's write root inside the
+    // promotion TARGET — and copy-in would descend into the tree it is writing,
+    // measured to recurse until ENAMETOOLONG. Reachable without any symlink: a
+    // core configured inside the vault (`WIENERDOG_VAULT=~/notes` with
+    // `WIENERDOG_HOME=~/notes/.wienerdog`) does it.
+    const workspaceReal = fs.realpathSync(workspaceDir);
+    if (workspaceReal === vaultRoot || workspaceReal.startsWith(vaultRoot + path.sep)) {
+      throw new WienerdogError(
+        `dream workspace: refusing to build the run workspace at ${workspaceDir} — it is inside the vault, ` +
+          'so the brain would write straight into the promotion target (move the Wienerdog core outside the vault)'
+      );
+    }
+    // A leftover from a crashed run is removed before the build, never merged
+    // into: the baseline must describe THIS run's copy and nothing else.
+    destroyWorkspace(workspaceDir);
+    mkdirPrivate(workspaceDir, mkdirOpts);
     const { copied, skipped } = copyIn(vaultRoot, workspaceDir);
     assertReportCopied(vaultRoot, workspaceDir, layout, date);
     assertNoGitEntry(workspaceDir);
@@ -521,5 +547,11 @@ module.exports = {
   // could not tell which of the two fired.
   assertNoGitEntry,
   excludeReason,
+  // Layer 1's mechanism. Exported because it is UNREACHABLE through
+  // `createWorkspace` in a test: a symlink planted before the walk is
+  // classified by `lstat` and skipped by the walk, so the swap branches here
+  // are never entered. A test that could only reach them through the walk would
+  // stay green against a naive `fs.copyFileSync(abs, dest)` — measured.
+  copyRegularFileSecure,
   WORKSPACE_DIRNAME,
 };

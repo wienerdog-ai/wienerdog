@@ -149,7 +149,12 @@ async function runBrainWithWatchdog(o) {
   // it HERE, with no promotion, would leave the dream writing notes nothing ever
   // promotes: an inert product.
   const { child, done } = spawnBrain({
-    workspaceDir: vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
+    // `vaultDir` is NOT a second write target — it is the run's real vault
+    // (`cfg.vault`), passed so the brain's constructed environment can keep it
+    // OUT. It must come from here: `wienerdog adopt` writes an arbitrary path
+    // into config.yaml, so `paths.vault` is a different directory on an adopted
+    // vault and sanitising against it would strip the wrong one.
+    workspaceDir: vaultDir, vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
 
   // Hand the brain's identity UP to the outer supervisor, per-run token.

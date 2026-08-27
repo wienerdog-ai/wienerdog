@@ -58,7 +58,17 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **capability profile** — a synonym for one specific hermetic runtime profile
   (`dream`, `daily-digest`, `inbox-triage`, `weekly-review`) as defined in
   `src/core/runtime-profile.js`.
-- **workspace** — the directory one dream run writes into: built fresh under `~/.wienerdog/state/`, filled with a copy of the vault's readable content, and removed when the run ends. The brain's only write root, so the vault is never what it edits. Copying the content in is also what makes the run's *baseline* — the exact bytes present before the brain started — something Wienerdog knows because it wrote them, rather than something it has to observe afterwards. (Not: "sandbox" — that word means the `WIENERDOG_HOME`-redirect guard; not "staging directory" — that is the empty working directory a job RUNS from; not "scratch", "shadow vault", "mirror".)
+- **workspace** — the directory one dream run writes into: built fresh under
+  `~/.wienerdog/state/`, filled with a copy of the vault's readable content, and
+  removed when the run ends. It is meant to be the brain's only write root, so
+  the vault is never what it edits — the pipeline is switched over to it in a
+  follow-on work package, and until then the dream still writes the vault
+  directly. Copying the content in is also what makes the run's *baseline* — the
+  exact bytes present before the brain started — something Wienerdog knows
+  because it wrote them, rather than something it has to observe afterwards.
+  (Not: "sandbox" — that word means the `WIENERDOG_HOME`-redirect guard; not
+  "staging directory" — that is the empty working directory a job RUNS from; not
+  "scratch", "shadow vault", "mirror".)
 - **staging directory** — the fresh, empty, Wienerdog-owned working directory a
   hermetic job runs in (and, for a routine, its only writable output), so no
   project or local settings can be discovered under the job's working directory.

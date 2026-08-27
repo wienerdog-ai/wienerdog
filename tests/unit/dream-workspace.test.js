@@ -44,6 +44,7 @@ const {
   destroyWorkspace,
   assertNoGitEntry,
   excludeReason,
+  copyRegularFileSecure,
   WORKSPACE_DIRNAME,
 } = require('../../src/core/dream/workspace');
 const {
@@ -790,4 +791,178 @@ test('dream-workspace: no production file names the control file or a deleted en
   };
   visit(srcRoot);
   assert.deepEqual(offenders, [], 'src/ names no control file and no deleted env seam');
+});
+
+// ── Layer 1's MECHANISM, driven directly (review round 1, finding 1) ─────────
+
+test('dream-workspace: layer 1 refuses an object that is not the one the walk enumerated', { skip: WIN32 }, () => {
+  // THE WALK CANNOT REACH THESE BRANCHES. A symlink planted before the walk is
+  // classified by `lstat` and skipped there, so `copyRegularFileSecure` is never
+  // entered — measured: a test that only goes through `createWorkspace` stays
+  // GREEN against a naive `fs.copyFileSync(abs, dest)`, and green with both
+  // `O_NOFOLLOW` and the (dev, ino) revalidation deleted. The mechanism is
+  // therefore asserted where it lives.
+  const root = mkTmp('layer1');
+  const src = path.join(root, 'real.md');
+  fs.writeFileSync(src, 'the real bytes\n');
+  const st = fs.lstatSync(src);
+  const dest = path.join(root, 'copied.md');
+
+  // Green: the object opened IS the object enumerated.
+  assert.equal(copyRegularFileSecure(src, dest, st.dev, st.ino, 'real.md'), null);
+  assert.equal(fs.readFileSync(dest, 'utf8'), 'the real bytes\n');
+
+  // The INTERMEDIATE-component swap the flag cannot catch: the open lands on a
+  // different inode than the walk classified, so the (dev, ino) revalidation
+  // refuses it and NOTHING is written.
+  const dest2 = path.join(root, 'copied2.md');
+  assert.equal(copyRegularFileSecure(src, dest2, st.dev, st.ino + 1, 'real.md'), 'identity-changed');
+  assert.equal(fs.existsSync(dest2), false, 'a refused read writes no bytes');
+
+  // The FINAL-component swap: the entry became a symlink after it was
+  // classified as a regular file. Never followed — the target's bytes appear
+  // nowhere — and the entry is reported rather than silently dropped.
+  const outside = path.join(root, 'outside-secret.md');
+  fs.writeFileSync(outside, 'BYTES FROM OUTSIDE THE VAULT\n');
+  const swapped = path.join(root, 'swapped.md');
+  fs.symlinkSync(outside, swapped);
+  const dest3 = path.join(root, 'copied3.md');
+  const why = copyRegularFileSecure(swapped, dest3, st.dev, st.ino, 'swapped.md');
+  assert.ok(why === 'symlink' || why === 'identity-changed', `refused, got ${why}`);
+  assert.equal(fs.existsSync(dest3), false, 'out-of-vault bytes never entered the workspace');
+});
+
+// ── The workspace's own placement, checked (review round 1, PR-gate P1 #1/#2) ─
+
+test('dream-workspace: a symlinked private ancestor is refused BEFORE anything is removed', { skip: WIN32 }, () => {
+  // Order is a destructive-action rule. Measured before the fix: with
+  // `<core>/state` a symlink, the recursive remove resolved through it and
+  // deleted an EXTERNAL directory's `dream-workspace` — user data — and only
+  // then threw from the validation that should have refused first.
+  const root = fs.realpathSync(mkTmp('ancestry'));
+  const core = path.join(root, 'core');
+  const outside = path.join(root, 'outside');
+  fs.mkdirSync(core, { recursive: true });
+  writeFile(path.join(outside, WORKSPACE_DIRNAME, 'precious.txt'), 'USER DATA\n');
+  fs.symlinkSync(outside, path.join(core, 'state'));
+  const vault = path.join(root, 'vault');
+  fs.mkdirSync(vault);
+
+  assert.throws(
+    () => createWorkspace({ vaultDir: vault, paths: { core, state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
+    WienerdogError
+  );
+  assert.equal(
+    fs.readFileSync(path.join(outside, WORKSPACE_DIRNAME, 'precious.txt'), 'utf8'),
+    'USER DATA\n',
+    'the external tree is untouched — validation ran before the removal'
+  );
+});
+
+test('dream-workspace: a workspace that would land inside the vault is refused', () => {
+  // No symlink needed: a core configured INSIDE the vault does it, which the
+  // path configuration permits. Before the fix, copy-in descended into the tree
+  // it was writing and recursed until ENAMETOOLONG — every dream on such an
+  // install failed, and the placement contract's whole point (the write root
+  // must not be inside the promotion target) was silently void.
+  const root = fs.realpathSync(mkTmp('nested'));
+  const vault = path.join(root, 'notes');
+  const core = path.join(vault, '.wienerdog');
+  fs.mkdirSync(path.join(core, 'state'), { recursive: true });
+  writeFile(path.join(vault, 'note.md'), 'hi\n');
+  assert.throws(
+    () => createWorkspace({ vaultDir: vault, paths: { core, state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
+    (e) => e instanceof WienerdogError && /inside the vault/.test(e.message)
+  );
+  assert.equal(fs.existsSync(path.join(core, 'state', WORKSPACE_DIRNAME)), false, 'nothing left behind');
+});
+
+// ── Site 7 against the RUN's vault, and every value (review round 1) ─────────
+
+test('dream-workspace: the sanitiser uses the RUN vault, not $WIENERDOG_VAULT or the default', () => {
+  // `wienerdog adopt` writes an arbitrary path into config.yaml, so the run's
+  // vault and `paths.vault` ($WIENERDOG_VAULT || ~/wienerdog) are DIFFERENT
+  // directories on any adopted vault. Sanitising against the wrong one leaves a
+  // PATH component rooted in the real vault in the child — exactly the leak
+  // site 7 exists to close. The claim-1 tests above cannot see this: they set
+  // WIENERDOG_VAULT to the fixture vault, which forces the two to coincide.
+  const adopted = '/home/ada/Documents/my-notes';
+  const env = buildBrainEnv({
+    baseEnv: {
+      HOME: '/home/ada',
+      PATH: ['/usr/bin', `${adopted}/bin`, '/home/ada/wienerdog/bin'].join(path.delimiter),
+    },
+    vaultDir: adopted, // the RUN's vault — not /home/ada/wienerdog
+    workspaceDir: '/home/ada/.wienerdog/state/dream-workspace',
+    scratchDir: '/home/ada/.wienerdog/state/dream-scratch',
+    date: DATE,
+    layout: defaultLayout(),
+    platform: 'linux',
+  });
+  assert.deepEqual(env.PATH.split(path.delimiter), ['/usr/bin', '/home/ada/wienerdog/bin']);
+  assert.equal(Object.values(env).some((v) => String(v).includes(adopted)), false);
+});
+
+test('dream-workspace: an allowlisted NAME is no licence for a vault-carrying VALUE', () => {
+  // The claim is about VALUES. `CODEX_HOME` is allowlisted because a harness
+  // needs it, but with a vault at `~/.codex` its value IS the vault path.
+  // Fail closed before any spawn rather than hand it over.
+  assert.throws(
+    () =>
+      buildBrainEnv({
+        baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: '/home/ada/.codex' },
+        vaultDir: '/home/ada/.codex',
+        workspaceDir: '/w',
+        scratchDir: '/s',
+        date: DATE,
+        layout: defaultLayout(),
+        platform: 'linux',
+      }),
+    (e) => e instanceof WienerdogError && /CODEX_HOME carries the vault path/.test(e.message)
+  );
+});
+
+test('dream-workspace: spawnBrain sanitises against the vault it is HANDED, not the one in the env', { skip: WIN32 }, async () => {
+  // The wiring, not just the composer: `cli/dream.js` reads the run's vault from
+  // config.yaml and hands it over, and a `spawnBrain` that ignored it and fell
+  // back to `paths.vault` would leave the adopted vault on the child's PATH.
+  // Asserted end to end, over what the child actually received.
+  const fx = fixture('run-vault');
+  const adopted = path.join(fx.root, 'Documents', 'my-notes');
+  fs.mkdirSync(path.join(adopted, 'bin'), { recursive: true });
+  const binDir = pinHarness(fx, CAPTURE_HARNESS);
+  const capture = path.join(fx.scratch, 'capture.jsonl');
+  fs.rmSync(capture, { force: true });
+  // The Codex arm runs FROM the write root (site 6), so it has to exist.
+  const workspaceDir = path.join(fx.paths.state, WORKSPACE_DIRNAME);
+  fs.mkdirSync(workspaceDir, { recursive: true });
+
+  const { done } = spawnBrain({
+    workspaceDir,
+    vaultDir: adopted, // the RUN's vault (cfg.vault)
+    scratchDir: fx.scratch,
+    date: DATE,
+    model: null,
+    harness: 'codex',
+    env: {
+      ...fx.env,
+      WIENERDOG_VAULT: fx.vault, // a DIFFERENT directory — paths.vault
+      PATH: [binDir, path.join(adopted, 'bin'), '/usr/bin', '/bin'].join(path.delimiter),
+    },
+    platform: process.platform,
+  });
+  await done;
+  const run = fs
+    .readFileSync(capture, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => JSON.parse(l))
+    .find((l) => !(l.argv.length === 1 && l.argv[0] === '--version'));
+  assert.ok(run, 'the pinned harness started');
+  assert.equal(
+    run.env.PATH.split(path.delimiter).includes(path.join(adopted, 'bin')),
+    false,
+    'the RUN vault\'s bin dir is stripped from the child PATH'
+  );
+  assert.deepEqual(vaultLeaks(run, adopted), [], 'nothing the child received carries the run vault');
 });
