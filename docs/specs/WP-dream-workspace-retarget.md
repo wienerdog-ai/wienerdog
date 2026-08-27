@@ -122,7 +122,20 @@ unchanged.
 | modify | src/core/dream/brain.js | the write-target input becomes the workspace; all seven sites, including the constructed child env (Table B) |
 | modify | src/cli/dream.js | ONE transitional argument at the spawn call (`:144-145`) — Table B, last row. Nothing else in this file: the pipeline is the successor's |
 | create | tests/unit/dream-workspace.test.js | Table A + Table B + Table F evidence |
+| modify | tests/unit/ | directory grant (trailing-slash rule in `scripts/boundary-check.js`): the `spawnBrain` write-target rename ripples through existing call sites — `dream-brain.test.js`, `codex-adapter.test.js` |
+| modify | tests/integration/ | the constructed child env (Table B, site 7) cuts the ambient-env channel the fake-brain fixtures used — `dream.test.js`, `reap-escape.test.js`, `adopt-e2e.test.js` |
+| modify | tests/fixtures/ | fixture control moves to the already-allowlisted `WIENERDOG_DREAM_*` channel — `dream/fake-brain.js`, `adopt/fake-brain-mapped.js`, `reap/spawn-variant.js` |
 | modify | docs/GLOSSARY.md | one canonical name: **workspace** |
+
+**Amendment (owner-ruled 2026-08-27).** The original five-row table excluded the
+test surface this spec's own Exact contracts necessarily break: the
+`vaultDir → workspaceDir` rename breaks its call sites, and the constructed
+child env drops the ambient variables the fake-brain fixtures were driven by —
+a channel that cannot move to the production allowlist, because
+`tests/unit/a7-integrity-negatives.test.js` forbids test-only names in `src/`.
+Three directory rows (not eight file rows) keep this table within the ten-row
+cap. **`tests/golden/` is deliberately NOT granted:** golden fixtures change
+only when a spec explicitly says so, and this one does not.
 
 If a further file appears necessary, that is a finding, not a fix: record it
 under "Discovered issues" in the PR body.
