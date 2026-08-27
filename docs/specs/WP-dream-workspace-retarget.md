@@ -140,7 +140,11 @@ under "Discovered issues" in the PR body.
  *           layout:import('../layout').VaultLayout}} o
  *  @returns {{workspaceDir:string, baseline:import('./delta').Baseline,
  *             copied:number, skipped:Array<{rel:string, reason:string}>}}
- *    throws WienerdogError when a postcondition fails (fail closed, before spawn) */
+ *    throws WienerdogError when a postcondition fails (fail closed, before
+ *    spawn) — and **removes whatever of the workspace it had already built
+ *    before it throws** (Table A's failed-construction row). It is the only
+ *    party that can: on the throw path the caller never receives
+ *    `workspaceDir`, so no pipeline exit path can reach the partial tree */
 function createWorkspace(o)
 
 /** Remove the workspace tree. Idempotent; never touches the vault. */
@@ -174,6 +178,7 @@ this spec's surfaces and the successor's citations.
 | **POSTCONDITION 1 — no `.git` object anywhere in the workspace** | asserted by a walk over the finished workspace inside `createWorkspace`, before it returns. Any entry named `.git` — directory, file or symlink — fails the run closed |
 | **POSTCONDITION 2 — no product code runs git with a cwd at or beneath the workspace root** | this is the checkable form of "the workspace is not a git repository", and it is the form that is TRUE. Measured: a plain directory nested anywhere under a repository IS inside that repository for every git command — `git rev-parse --show-toplevel` from `<repo>/sub/workspace` resolves to `<repo>`. So the absence of a `.git` entry does **not** establish the property, and no construction of ours can: whether an ancestor of the private core is a repository is a property of the user's filesystem (`$HOME` as a dotfiles repo is a common habit). What IS ours is where we point git, and Table F states what each half actually carries. This WP's share: `workspace.js` runs no git — it spawns nothing at all. The pipeline-wide git-seam assertion is the successor's |
 | **The no-UNTRUSTED-actor obligation, in three layers — split across the pair** | both walks this WP ships run inside `createWorkspace`, before any brain exists — but **they walk DIFFERENT trees, and only one of them is live.** `captureBaseline` reads the WORKSPACE, which this run just built under the 0700 private core; nothing else writes there, so for that walk the actorless claim is true and stays. **Copy-in reads the VAULT, and that is where the earlier form of this row overstated it (round 9, R9-1): during the copy-in window there is no UNTRUSTED actor — not "no actor".** The brain does not exist yet; **the user's own editor or file synchroniser is a live BENIGN writer of the vault throughout**, so brain ordering alone does not discharge the dependency's caller invariant for copy-in's vault-side reads. Three layers do, each an established pattern in this family. **(1) FILE-LEVEL CONTAINMENT — fail-closed, observable:** an entry that becomes a symlink between the check and the read is NEVER followed; copy-in skips it and reports it in `skipped`. This closes the one genuine security edge — **bytes from outside the vault cannot enter the workspace through a swap.** The mechanism is the implementer's; this row states the visible behaviour. **(2) CHAIN-LEVEL SUBSTITUTION — NAMED RESIDUAL:** portable Node cannot bind a path's component chain against concurrent replacement (`delta.js:22-40`, owner-ruled 2026-08-21), the same citation and the same treatment as H3 and everywhere else in this family. **(3) COHERENCE — NAMED BOUNDED RESIDUAL:** a copy of a live tree is not atomic, so a concurrent user save during the window can hand the dream a view mixing two moments. **Its damage bound: this affects what the dream SEES — input quality — never what enters the VAULT unvetted**, because every return path runs through C9 admission, the four gates and the primitive. Detectable anomalies are reported; undetectable mixing is the accepted residual. The POST-brain walk (`computeDelta` over the workspace) is the successor's, and so is the reap precondition that guards it (successor Table G): `runBrainWithWatchdog` computes a reap verdict at `cli/dream.js:272` and today consumes it only to gate the pidfile unlink — it is never surfaced to the caller; surfacing it and refusing the walk on anything but a verified reap is the successor's contract. **No surface here may claim the post-brain walk is guarded — this WP does not run it** |
+| **Failed construction cleans up after itself (Codex PR gate, 2026-08-27)** | when `createWorkspace` throws — a postcondition failure, a capture anomaly, an unreadable source — **it removes whatever it had already built before the throw propagates.** Measured that this cannot be delegated: the throw path returns no `workspaceDir`, so the pipeline (successor Table G) is never handed the path and **no exit path there can reach the partial tree**; Table G's teardown presupposes a successful create. Without this row an implementation could leave a private copy of the user's vault on disk and still satisfy every other criterion, which ADR-0004 forbids — nothing this job creates outlives it. **Distinct from the residue-lifecycle successor's subject**, which is a workspace that survives a CRASH; this is an ordinary, in-process failure with a live stack |
 | Teardown | `destroyWorkspace` removes the workspace tree; idempotent; never touches the vault. **Wiring it into every pipeline exit path — and the one named exception, a run that refused because the reap was not verified and therefore does NOT tear down — is the successor's (its Table G)**, because the exit paths live in the pipeline this WP does not touch. A workspace left behind by a crash is the residue-lifecycle successor's subject, not this package's |
 
 ### Table B — the brain re-target, site by site (CLAIM 1)
@@ -336,8 +341,13 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, a
       `.claude`/`.codex` segment, `.mcp.json`) — appears in
       `skipped` with a reason, and nothing else is skipped.
-- [ ] **Fail closed.** A POSTCONDITION 1 failure, or a capture that reports any
-      anomaly, makes `createWorkspace` throw; no workspace handle is returned.
+- [ ] **Fail closed, AND it leaves nothing behind.** A POSTCONDITION 1 failure,
+      or a capture that reports any anomaly, makes `createWorkspace` throw and
+      return no workspace handle — **and after the throw no part of the
+      workspace it had begun building remains on disk.** Proven RED against an
+      implementation that throws without cleaning up, which is otherwise
+      indistinguishable: with no handle returned, no later exit path can find
+      the partial tree to remove it.
 - [ ] **Copy-in over a LIVE vault, all three layers (R9-1).** Layer 1, the
       security edge, fail-closed: a vault entry that becomes a symlink between
       the check and the read is NOT followed — its target's bytes appear nowhere

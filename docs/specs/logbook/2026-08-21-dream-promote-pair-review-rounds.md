@@ -1237,3 +1237,79 @@ the family lands, stated bare per main hygiene:
 > family, not only the one being edited.
 >
 > A count that moved is wrong everywhere it appears, in whatever wording.
+
+## The two PR gates (2026-08-27) — and the ruling that revised the wave
+
+Run locally on the branch's diff against `origin/main`; GitHub CI unavailable
+(no credits), so every CI-side check was reproduced locally on a simulated merge.
+**Both gates returned no-ship.**
+
+| Gate | Verdict | Findings |
+|---|---|---|
+| wd-reviewer (spec fidelity) | REQUEST-CHANGES | 11 — one blocking, three further B, seven C |
+| Codex rubric | "patch is incorrect" | 2 — both B |
+
+**THE ZERO-OVERLAP MEASUREMENT, recorded because it is decision-grade about the
+GATES rather than about this diff: thirteen findings, NONE shared.** The Codex
+gate found the `promote()` signature's stale un-narrowed claim and the
+failed-construction cleanup gap; wd-reviewer found the blocking sizing violation
+and ten others; neither found anything the other did. **Both gates are
+load-bearing and neither is redundant** — running only one would have shipped
+what the other caught.
+
+### The blocking finding, independently measured by this author
+
+**Part ii is L, not M.** Measured: 36 acceptance criteria against 13 in Part i
+and 14 in the primitive — more than both siblings combined — and 8 deliverables,
+exactly at the README ceiling. It fails the "zero 'and also' clauses" heuristic
+outright. `docs/specs/README.md`: **"L is forbidden — split it."**
+
+This is the second time the size rule has done real work in this family: the
+original package's own round-zero size self-check named a seam, the owner split
+it three ways, and Part ii is *still* over. The rule caught it at the Ready
+flip, which is where the README makes settling it a gate job.
+
+### Owner ruling on the verdicts
+
+**PATH 1, EXTENDED.** Part i and the primitive keep their `Ready` flips; **Part
+ii returns to `Draft`.** Disposing all thirteen findings in the current shape
+was **rejected outright** — "L is forbidden" is house law and not negotiable.
+
+**THE SEAM IS RULED NOW, IN PRINCIPLE, so the future split starts from it rather
+than from a fresh debate:** Part ii splits along its own tables — **Tables C, D,
+E and R become a `promote.js` package, shipped consumed by nothing** (exactly the
+pattern the delta primitive and the vault-write primitive both used), and
+**Table G becomes the pipeline package.** That split is Part ii's next authoring
+step WHEN ITS TURN COMES, not now; it cannot dispatch before its dependencies
+are `Done` in any case.
+
+### B-band routing, as ruled
+
+- **Fixed immediately in Part ii (no gate pressure on a Draft):** the
+  `promote()` signature's stale un-narrowed decide-then-write claim — a settled
+  ruling's basis, same stale-mirror class as R10-1; and **Table R's
+  quantification**, whose universal now NAMES both channels (`r.path` AND
+  `r.reason`) with the criterion testing both. That universal is what justifies
+  having no gate exemption, so an unneutralised reason channel would have made
+  the justification false.
+- **The failed-construction cleanup — MEASURED to Part i's surface, and fixed
+  there as a completion.** `createWorkspace` throws, so the caller never receives
+  `workspaceDir`; the pipeline (Table G) is never handed the path and **no exit
+  path there can reach the partial tree**, since Table G's teardown presupposes a
+  successful create. It is therefore reachable by nobody but `createWorkspace`
+  itself. Part i now states it in the signature, in a Table A row, and in a
+  both-directions criterion. Distinct from the residue-lifecycle successor's
+  subject, which is a workspace surviving a CRASH.
+- **The remaining B and C items ride with Part ii's Draft and its future split.**
+
+### What the gates confirmed rather than faulted
+
+wd-reviewer verified independently, by execution rather than reading, that
+`HEAD:src` and `origin/main:src` are the same tree object; that every `file:line`
+citation in all three specs resolves with ranges checked at both ends; that
+`validate.js` exports exactly seven names without `addedLineNumbersFromDiff`;
+that all six cited ADRs exist and are Accepted; and that all ten template
+sections are present in all three specs. It also reported the named residuals as
+the strongest part of the package and could not break one — and reached this
+author's own C-band conclusion on Table D's "all four gates" independently,
+agreeing it should not be edited at a closing gate.

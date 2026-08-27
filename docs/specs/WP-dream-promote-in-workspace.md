@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-in-workspace
 title: Promote approved workspace content into the vault and re-wire the dream pipeline
-status: Ready
+status: Draft
 model: opus
 size: M
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive]
@@ -154,8 +154,13 @@ under "Discovered issues" in the PR body.
 
 ```js
 /** Decide, per changed path, what happens to it — and promote what survives.
- *  Pure decision first, writes second: no vault byte is written until every
- *  decision in the run is made (Table E's atomicity row).
+ *  Pure decision first, writes second: **every POLICY decision** in the run —
+ *  allowlist, merge, all four gates — is made before any vault byte is written
+ *  (Table E). **NOT every decision**: the primitive's `expect` guard is
+ *  necessarily per-path at publish time, so a path can still become
+ *  refuse-and-report during the write phase, after earlier paths are published.
+ *  This comment carried the un-narrowed claim after the F1'' ruling narrowed
+ *  Table E — the same stale-mirror class as R10-1 (Codex PR gate, 2026-08-27).
  *  @param {{vaultDir:string, workspaceDir:string,
  *           baseline:import('./delta').Baseline, layout:import('../layout').VaultLayout,
  *           gates}} o
@@ -278,7 +283,7 @@ naming: the only difference from the normal second write is that the base is
 
 | Rule | Value |
 |---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** Every interpolated value — `r.path` and kin — passes through BOTH the shipped sanitizer AND EP2's redact arm before it enters the section. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** Every value the code-authored section interpolates passes through BOTH the shipped sanitizer AND EP2's redact arm before it enters the section. **The set is NAMED, not gestured at (wd-reviewer PR gate, 2026-08-27): `r.path` AND `r.reason`** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9, which names in the refusal a directory that acquired content). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** Gate refusal on this branch is impossible by construction. **What remains is the primitive's own refusals, and R4 above covers ALL of them uniformly** — an earlier form of this row named only the `expect` guard, which was false: H3 refuses a symlinked report target too, and this spec's own criterion requires that refusal (round 6, R6-2) |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion |
@@ -485,7 +490,10 @@ a gate to refuse.
       a brain-chosen refused path that is both markdown-active and
       secret-shaped, the composed section contains neither the active markdown
       nor the secret, the report is published, and the refused note is still
-      identifiable in the line. Proven RED with the sanitizer skipped, and
+      identifiable in the line. **Repeated for the REASON channel — a refusal
+      reason carrying brain-chosen markdown-active and secret-shaped text — and
+      proven RED against an implementation that neutralises `r.path` alone**,
+      which otherwise passes every other case here. Proven RED with the sanitizer skipped, and
       separately with the redact arm skipped — **both arms, because either alone
       was ruled insufficient.** This criterion covers the NORMAL second write as
       well as the fallback; the rule governs both.
