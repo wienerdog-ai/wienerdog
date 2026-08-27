@@ -619,3 +619,54 @@ earned its keep by catching them before an implementer did.
 3. F3's substantive question — must a refusal leave the vault byte-unchanged,
    including directories the call created? That is a contract decision, not a
    mechanism one.
+
+### Owner ruling on the round-5 escalation (2026-08-27) — and the mirror sweep
+
+**RULING — question 1: the SIZE interpretation does NOT apply; the mirror sweep
+is APPROVED.** Basis, as relayed: all four round-5 findings are one class — a
+canonical row edited without its registered mirrors — and three of the four were
+introduced by the `af85247` ruling edit itself. A skipped mechanical step, not
+over-specification; the count's first real fall (9 → 4) reads the same way.
+
+Scope as ruled: a MECHANICAL pass bounded by the Mirrored Surface Checklist, no
+free editing. **F1 excluded** (a genuine contract defect, under owner ruling).
+**F3's H9 pair excluded** until the substantive ruling lands.
+
+**A contradiction inside the ruling, reported rather than resolved by this
+author.** Its first bullet says the sweep "closes F2, F3, F4"; its third says to
+leave the H9 row and its criterion untouched and flag them if the sweep reaches
+them before the F3 ruling. F3 *is* that pair, so the sweep cannot close it. The
+narrower, conservative bullet was followed: **H9's row and criterion are
+byte-untouched**, verified mechanically in the sweep commit's own diff.
+**F3 therefore remains OPEN.**
+
+**What the sweep changed — five stale mirrors, each brought to its canonical
+row, none re-decided:**
+
+| Mirror | Canonical row it now follows |
+|---|---|
+| the signature's substitution-throw clause | H7 — refusal is by RETURN; the only throw is a caller-contract violation. Closes **F2** |
+| the signature's `sha256` cell, which told the consumer to derive a blob id from it | Table E of the consumer, as CUT — how bytes reach a commit is the consumer's, and naming it here mirrored a withdrawn row. **Found by the sweep itself**, on the same surface F2 sits on; the round did not name it |
+| Current state's "the hardened temp-create shape this package adopts" | H4 as CUT — the precedent proves the class is solvable to a stated bound; the shape is the implementer's. Part of **F4** |
+| the verification block's deliberate-red ("a predictable temp name") | H4 as CUT — the red now names a BEHAVIOUR to break (the target written in place, so partial content is observable). Part of **F4** |
+| the consumer's publish row, restating `O_EXCL\|O_NOFOLLOW` and `rename` | Table H's observable properties, which is all a consumer may restate. Part of **F4** |
+
+One Implementation note was corrected rather than removed: the `O_NOFOLLOW`
+win32 warning stays — it is a real repo-established trap and the template
+sanctions trap notes — but its claim that "the H3 walk carries the weight" is
+withdrawn, because H3 now states a refusal and not a walk.
+
+**Verified after the sweep:** lint green; frontmatter 226 specs; 73 `file:line`
+citations resolve with ranges checked at both ends; `{written:false, reason}` is
+now the only failure shape named anywhere in the primitive's contract surfaces.
+
+**Still OPEN, awaiting the owner:**
+
+1. **F1** — the refused-body report fallback matrix. The genuine design gap:
+   candidate bytes, `expect` premise, gates and accounting are undefined for the
+   absent / unchanged-existing / diverged-existing / concurrently-changed cases,
+   so an implementer can lose either the previous report or the enforcement
+   record while conforming to the stated happy path.
+2. **F3** — must a refusal leave the vault byte-unchanged, including directories
+   the call itself created? Until this lands, the H9 row and its criterion
+   contradict each other in the shipped text, deliberately and on the record.

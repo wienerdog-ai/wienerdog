@@ -121,8 +121,11 @@ hold.
   temp name, `writeFileSync`, `chmodSync`, then (`:890`) `renameSync`. The
   compare-then-write guard at `:884-890` re-reads the target and compares
   before renaming.
-- `src/core/private-fs.js:259-317` — the hardened temp-create shape this
-  package adopts: crypto-random name, `O_EXCL\|O_NOFOLLOW`, mode 0600.
+- `src/core/private-fs.js:259-317` — an existing hardened publish path,
+  PRECEDENT that this class is solvable to a stated bound. **What shape this
+  package's primitive uses is the implementer's (round-4 CUT):** an earlier
+  draft named the precedent's mechanism here as the one "this package adopts",
+  which mirrored a row that no longer prescribes it (round-5 F4).
   Private-core-facing; it does not write the vault and is not modified here.
 - `src/core/dream/validate.js:1412` — `git add -A`, the staging call whose
   bytes are read from the working tree.
@@ -173,10 +176,18 @@ under "Discovered issues" in the PR body.
  *           |{written:false, reason:string}}
  *    bytes  the exact buffer published — the caller stages FROM these, never by
  *           re-reading the path (Table H, row H6)
- *    sha256 a verification digest over them. NOT a git object id: the caller
- *           derives the repository-native blob id from `bytes` itself
- *    throws WienerdogError when the temp was SUBSTITUTED between creation and
- *    publish (H4) — detection, not prevention, and the state is already wrong */
+ *    sha256 a verification digest over the returned bytes. It is this module's
+ *           own integrity value and carries no meaning in any other system —
+ *           what a consumer does to get these bytes into a commit is the
+ *           consumer's (its Table E), and naming that here was a mirror of a
+ *           row the round-4 CUT withdrew
+ *  Refusal is by RETURN, never by exception (H7): every policy, containment,
+ *  symlink and `expect` failure yields `{written:false, reason}`. The only
+ *  throw is a caller-contract violation — a `rel` that is not segment-valid, a
+ *  missing `admit`. **The substitution-throw clause this signature carried is
+ *  WITHDRAWN with the row that required it (round-4 CUT, round-5 F2):** H4 now
+ *  states only that no partial content is observable, so a caller no longer
+ *  has two failure shapes to distinguish */
 function writeIntoVault(o)
 ```
 
@@ -228,9 +239,11 @@ inherits this contract as its only write path.
 - **`O_NOFOLLOW` does not exist on win32.** State the platform condition where
   it bites rather than hiding it behind the `fs.constants.X || 0` idiom, which
   makes a missing flag look like a present one; `src/core/vault-snapshot.js:45-61`
-  is the precedent that does this correctly and names what is lost. On win32 the
-  H3 walk is what carries the weight, and the spec claims no cross-platform
-  equivalence.
+  is the precedent that does this correctly and names what is lost. **This note
+  is a TRAP warning, not a prescription (round-5 F4):** H3 states a refusal, not
+  a walk, and an earlier form of this note assigned H3's weight to a particular
+  mechanism. Whatever mechanism achieves H3, its platform condition must be
+  stated rather than hidden, and the spec claims no cross-platform equivalence.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -331,8 +344,10 @@ test -f docs/GLOSSARY.md && grep -q "\*\*vault write\*\*" docs/GLOSSARY.md
 - The pattern run and the glossary grep are NEW steps and each is an ASSERTION.
   Paste a real green on the finished state AND a real red from a deliberately
   broken state — `admit` called with `rel` instead of the resolved path; the
-  temp created with a predictable name and a following write; the glossary
-  entry removed. Verify each **also** goes red when its deliverable is ABSENT.
+  target written in place, so a reader can observe partial content (H4); the
+  glossary entry removed. **Each red names a BEHAVIOUR to break, not a
+  mechanism to omit** — the earlier "predictable temp name" form mirrored the
+  withdrawn H4 (round-5 F4). Verify each **also** goes red when its deliverable is ABSENT.
 
 ## Out of scope (do NOT do these)
 
