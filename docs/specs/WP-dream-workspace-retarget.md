@@ -29,8 +29,14 @@ rest on, while M7's allowlist half and M10's classification consumer ship with
 the successor.
 
 **Dispatch precondition.** This spec is written against the tree at
-`025021fc0fa8f871f1eb960a8ad57a14d223360e` (`025021f`), verified as both `main`
-and `origin/main` at authoring time. Before dispatch, re-run every `file:line`
+`2cfb2b1d9bb47dbe44664ef49b40823d5deb7c26` (`2cfb2b1`), verified as both `main`
+and `origin/main`. Tables A, B and F were first measured at
+`025021fc0fa8f871f1eb960a8ad57a14d223360e` (`025021f`) and are re-pinned forward
+to `2cfb2b1` without re-measurement, on this evidence: `025021f` is an ancestor
+of `2cfb2b1`, and the diff between them touches **only `docs/`** — measured,
+`git diff --name-only 025021f 2cfb2b1` yields twelve paths and **zero** outside
+`docs/`. Every `src/` and `tests/` citation therefore resolves identically at
+both commits. Before dispatch, re-run every `file:line`
 citation and every measurement below against the tree the implementer will find
 (`docs/specs/README.md` → Dispatch-time re-verification). A citation that does
 not resolve blocks the dispatch. **Range citations are checked at BOTH ends.**
@@ -93,9 +99,14 @@ unchanged.
   the child env), `:189` (`cwd = vaultDir` on the Codex path). The Claude path
   already runs from a neutral staging cwd (`:198`, `ensureBrainStaging`). All
   six derive from the single `vaultDir` option of `spawnBrain`; the seventh is
-  the INHERITED child environment (`:169-173` spreads `...baseEnv`, and
+  the INHERITED child environment (`:169-178` spreads `...baseEnv` and then sets
+  exactly **three** Wienerdog-owned names — `WIENERDOG_DREAM_VAULT`,
+  `WIENERDOG_DREAM_SCRATCH`, `WIENERDOG_DREAM_LAYOUT` — while
   `cli/dream.js:144-146` hands it `process.env`), which carries the vault path
-  whenever an ambient variable holds it.
+  whenever an ambient variable holds it. That inherited spread is also the only
+  channel the repo's fake-brain fixtures are steered through today, which is why
+  cutting it is a test-surface change as well as a security one (Table B's
+  fixture-control row).
 - `src/cli/dream.js:144-145` — the only production `spawnBrain` call, inside
   `runBrainWithWatchdog` (`:137`); the call opens at `:144` and its write-target
   argument sits at `:145`. This WP touches that one argument and nothing else
@@ -122,20 +133,33 @@ unchanged.
 | modify | src/core/dream/brain.js | the write-target input becomes the workspace; all seven sites, including the constructed child env (Table B) |
 | modify | src/cli/dream.js | ONE transitional argument at the spawn call (`:144-145`) — Table B, last row. Nothing else in this file: the pipeline is the successor's |
 | create | tests/unit/dream-workspace.test.js | Table A + Table B + Table F evidence |
-| modify | tests/unit/ | directory grant (trailing-slash rule in `scripts/boundary-check.js`): the `spawnBrain` write-target rename ripples through existing call sites — `dream-brain.test.js`, `codex-adapter.test.js` |
-| modify | tests/integration/ | the constructed child env (Table B, site 7) cuts the ambient-env channel the fake-brain fixtures used — `dream.test.js`, `reap-escape.test.js`, `adopt-e2e.test.js` |
-| modify | tests/fixtures/ | fixture control moves to the already-allowlisted `WIENERDOG_DREAM_*` channel — `dream/fake-brain.js`, `adopt/fake-brain-mapped.js`, `reap/spawn-variant.js` |
+| modify | tests/unit/dream-brain.test.js | Table B — the `vaultDir → workspaceDir` option rename, at **eleven** measured sites where `vaultDir` is passed as an option to `spawnBrain` / `buildClaudeArgs` (`:25`, `:105`, `:126`, `:138`, `:191`, `:236`, `:271`, `:359`, `:417`, `:447`, `:471`) |
+| modify | tests/unit/codex-adapter.test.js | Table B — the same rename, at **three** measured option-passing sites (`:330`, `:355` for `buildCodexArgs`, `:454` for `spawnBrain`) |
+| modify | tests/integration/dream.test.js | Table B — the rename at the direct `spawnBrain` call (`:1481`) AND the fixture-control move (Table B's fixture-control row). Behavioural assertions do not change; the acceptance criteria say so |
+| modify | tests/integration/reap-escape.test.js | Table B's fixture-control row — its brain-shaped invocations select a `spawn-variant.js` mode through the ambient env (`:950-951`, `:1005`, `:1041`, `:1074`, measured) |
+| modify | tests/fixtures/dream/fake-brain.js | Table B's fixture-control row — mode selection and the run date move off the ambient env |
+| modify | tests/fixtures/adopt/fake-brain-mapped.js | Table B's fixture-control row — its only ambient input is the run date (`:15`); the other two are already constructed |
+| modify | tests/fixtures/reap/spawn-variant.js | Table B's fixture-control row — mode and out-file selection move off the ambient env for the brain-shaped invocation (`:49-50`) |
 | modify | docs/GLOSSARY.md | one canonical name: **workspace** |
 
-**Amendment (owner-ruled 2026-08-27).** The original five-row table excluded the
-test surface this spec's own Exact contracts necessarily break: the
-`vaultDir → workspaceDir` rename breaks its call sites, and the constructed
-child env drops the ambient variables the fake-brain fixtures were driven by —
-a channel that cannot move to the production allowlist, because
-`tests/unit/a7-integrity-negatives.test.js` forbids test-only names in `src/`.
-Three directory rows (not eight file rows) keep this table within the ten-row
-cap. **`tests/golden/` is deliberately NOT granted:** golden fixtures change
-only when a spec explicitly says so, and this one does not.
+**Why the test surface is inside the boundary.** This spec's own Exact contracts
+break it, so excluding it would be asking the implementer to deliver a red tree:
+the `vaultDir → workspaceDir` rename breaks every existing call site, and the
+constructed child env (Table B, site 7) cuts the ambient channel the fake-brain
+fixtures were driven by. The rows above are the **exact** files that break —
+file rows, not directory grants, so the boundary keeps its least-privilege
+shape. In particular `tests/unit/a7-integrity-negatives.test.js` stays OUTSIDE
+the boundary and passes unchanged: it is the guard this WP's fixture-control
+design is built to satisfy, and a boundary that could edit it would be a
+boundary that could retire it. **`tests/golden/` is likewise NOT granted:**
+golden fixtures change only when a spec explicitly says so, and this one does
+not. **`tests/integration/adopt-e2e.test.js` is NOT granted either** — its one
+failing test is red at the pinned base for a machine-environment reason (a real
+`claude` on the developer's `PATH` defeats the test's temp-bin pin, and
+`resolvePinnedSpawn` refuses **before** any child env is built), so no contract
+in this WP can change its verdict; its fixture is granted, its test file is not.
+The ruling and its evidence are recorded in
+`docs/specs/logbook/2026-08-27-workspace-retarget-deliverables-amendment.md`.
 
 If a further file appears necessary, that is a finding, not a fix: record it
 under "Discovered issues" in the PR body.
@@ -202,7 +226,7 @@ as `brain.js:98`; measured, the vault path reaches the brain through seven sites
 and two of them are Codex-specific with a different mechanism. A re-target that
 changes only `addDirs` leaves the Codex arm writing the vault.
 
-| Site (measured at `025021f`) | Today | After | Why it is not optional |
+| Site (measured at `2cfb2b1`) | Today | After | Why it is not optional |
 |---|---|---|---|
 | `brain.js:57` | prompt: `Vault directory (your only write target): ${vaultDir}` | the workspace path | the brain writes where the prompt tells it to; a stale path here is a write outside the fence |
 | `brain.js:65` | `layoutPromptLines(lay, date, vaultDir)` — ABSOLUTE vault-prefixed tier paths | workspace-prefixed | absolute paths bypass the write root entirely |
@@ -211,8 +235,9 @@ changes only `addDirs` leaves the Codex arm writing the vault.
 | `brain.js:172` | `WIENERDOG_DREAM_VAULT: vaultDir` | the workspace path (the env var NAME stays — renaming it churns the WP-026 fake-brain fixtures for no guarantee) | read by the WP-026 mapped fake brain. On the Claude arm the real brain has no Bash to read env (the dream profile); on the Codex arm it CAN run shell and so CAN read env (Table F) — which is exactly why the var is re-pointed for consistency of the fence and no arm may treat it as a control |
 | `brain.js:189` | `cwd = vaultDir` (Codex arm) | `cwd = workspaceDir` | instruction discovery happens at cwd — this is M7's step 3 |
 | **Site 7 — the INHERITED environment (round 2, F8')** | `spawnBrain` spreads the ambient env (`brain.js:169-173`, `...baseEnv`) and the production call hands it `process.env` (`cli/dream.js:144-146`) | the child env is **CONSTRUCTED** — an allowlist of what the harness actually needs — rather than inherited and then overwritten. **`PATH` is on the allowlist, SANITISED, not omitted (round 3, F7):** `spawnPinned` re-resolves the logical harness name through the env it is handed (`exec-identity.js:451-472`, `:621-627`), so dropping `PATH` breaks pin verification before the child starts, while copying it verbatim can carry a vault-rooted component and violate the claim. The run therefore builds `PATH` from the system defaults with every component at or beneath the vault removed. The rest of the allowlist is what each harness measurably needs to start (`HOME`, the harness's own config/auth variables, `TMPDIR`), and the implementer establishes that set by starting each harness under the constructed env — a harness that will not start is a finding, not a licence to widen the list back to ambient | Measured: with an ambient `WIENERDOG_VAULT` set, the vault path reaches the child env regardless of what the six named sites do, and the Codex arm's shell can read its own environment. Re-pointing one assigned value cannot establish "no env value carries the vault path"; only construction can. **This makes the re-target a SEVEN-site change** |
+| **THE FIXTURE-CONTROL CHANNEL — Site 7's consequence, not an eighth site.** This row is the CANONICAL statement of the channel; the Deliverables `Notes` cells for the four test files and the three fixtures, and the fixture-control acceptance criterion, all defer to it | The three fixtures that stand in for the brain read their scenario selection and the run date from the INHERITED env: `fake-brain.js:16` (`WIENERDOG_FAKE_TODAY`), its nine mode switches at `:19`, `:33`, `:44`, `:53`, `:65`, `:77`, `:85`, `:139`, `:150` (`WIENERDOG_FAKE_BRAIN_MODE`) and `:66` (`WIENERDOG_HOME`, for the flag path one mode plants); `fake-brain-mapped.js:15` (`WIENERDOG_FAKE_TODAY`); `spawn-variant.js:49-50` (`WD_SPAWN_VARIANT_MODE` / `_OUT` — its argv route at `:48-50` is unreachable on a brain spawn, because `brain.js` composes brain-shaped argv). Every one of these arrives only because the child env is inherited | **Two channels, neither of them the environment. (a) RUN INPUTS travel the way the REAL brain receives them.** Vault, scratch and layout already arrive in the three constructed `WIENERDOG_DREAM_*` values (`brain.js:170-178`, measured — exactly `WIENERDOG_DREAM_VAULT`, `_SCRATCH`, `_LAYOUT`). The run DATE arrives in the PROMPT, which is an argv element on both arms — Claude `runtime-profile.js:189` (`'-p', prompt`), Codex `brain.js:129` (positional, last) — and `brain.js:58` composes the literal line `Today's date: ${date}`. A fixture reads its own `process.argv`; `spawn-variant.js:43` already does exactly this for `--version`. **(b) SCENARIO SELECTION travels in a control file.** NAME: one JSON file, resolved by the fixture from its own `__dirname`, carrying the mode and any test-owned absolute path that mode needs (the `git-break.flag` path, the variant out-file). OWNER: the test that installs the pinned command. WHO MAY SET IT: only that test, at install time — every fixture brain is installed by COPYING it into a test-owned temp bin dir and pinning that path (`dream.test.js:186-187`, `reap-escape.test.js:868-869`, `adopt-e2e.test.js:107-108`, measured), so the fixture's `__dirname` at run time is that temp dir, never the repo. ABSENT the file, a fixture keeps its present defaults | **WHY IT IS NOT A PRODUCTION SEAM, and why no env name may be added instead.** Adding a test-control name to the constructed env would be a WP-155-class production test seam: `src/` would name a variable that exists only so tests can steer the child. The A7 guard is narrower than that and must be cited at its real strength — measured, `tests/unit/a7-integrity-negatives.test.js:383` greps `src/` for exactly four literals (`WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`, `WIENERDOG_FAKE_TODAY`, `WIENERDOG_RUNJOB_TIMEOUT_MS`); it would catch a re-added `WIENERDOG_FAKE_TODAY` and would **not** catch a newly-invented name, `WIENERDOG_DREAM_`-prefixed or otherwise. **So the guard is a backstop for one of the four names, never the reason** — the reason is this row. The channel above touches no `src/` file: the constructed env keeps exactly its three names, production `wienerdog sync` pins a real harness and writes no control file, and the only readers are three files under `tests/fixtures/`. **REJECTED ALTERNATIVE — fixture args in argv:** `spawn-variant.js:48-50` selects a mode from `argv[2]`, but on a brain spawn `brain.js` owns every argv element and the pin store carries only a `commandPath` (`dream.test.js:189`), so no test argument can reach the child. Measured; that is why the control file exists and the argv route carries only what the real brain also receives |
 | **The claim's runnable form** | — | — | for **both** harnesses: build the argv and the child env with a `workspaceDir` DISTINCT from the vault, and assert the vault path (and any element containing it) appears in **no** argv element and **no** env value — asserted with a vault-valued ambient variable SET, which is the case site 7 exists for. A grep over the source is not sufficient — renaming the variable would pass it. The assertion is over the composed values. Measured on the pinned base as a red-side proof that the check discriminates: the composed Codex argv carries the vault path in **two** elements today — the `--cd` operand and the positional prompt |
-| **The claim's behavioural form** | — | — | a real `spawnBrain` run against the pinned fake brain that deliberately attempts a vault write, after which the vault is **byte-identical** to its pre-run state. Proven RED by pointing one site back at the vault, one site at a time — **seven** reds, because a single red does not prove the other **six** sites are covered. **The count is Table B's own row count and nothing else (round 8, R8-2):** this sentence said six-and-five, arithmetic left behind when round 2's F8' added Site 7, while every other surface — Table F, the implementation notes, the acceptance criteria and the verification steps — already said seven. An implementer following this cell would have omitted behavioural coverage for the inherited-environment site |
+| **The claim's behavioural form** | — | — | a real `spawnBrain` run against the pinned fake brain that deliberately attempts a vault write, after which the vault is **byte-identical** to its pre-run state. Proven RED by pointing one site back at the vault, one site at a time — **seven** reds, because a single red does not prove the other **six** sites are covered. **The count is Table B's SITE-row count and nothing else — the six `brain.js:<line>` rows plus Site 7 (round 8, R8-2):** Table B also carries rows that are NOT sites (this one, the structural form above, the fixture-control channel, and the transitional call site), and none of them raises the count. This sentence once said six-and-five, arithmetic left behind when round 2's F8' added Site 7, while every other surface — Table F, the implementation notes, the acceptance criteria and the verification steps — already said seven. An implementer following this cell would have omitted behavioural coverage for the inherited-environment site |
 | **The transitional call site** (`cli/dream.js:144-145`) | `spawnBrain({ vaultDir, ... })` | `spawnBrain({ workspaceDir: vaultDir, ... })` — the vault, passed explicitly as the write target, with a comment naming the successor | keeps the running product byte-identical until the successor builds the workspace in the pipeline and re-points this argument. Re-pointing it HERE, without promotion, would leave the dream writing notes that nothing promotes — an inert product, which is what the stacked split exists to avoid. **CLAIM 1 is therefore a property of the spawn seam in this WP, and becomes a property of the running product in the successor** |
 
 ### Table F — what the two claims actually establish (measured, not asserted)
@@ -257,7 +282,24 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       product's write target.**
 - [ ] **Every surface that describes the brain re-target** — the Context
       paragraph, Table B, Table F, the acceptance criteria and the verification
-      steps. **None may describe it as a one-line change to `addDirs`, and none may state a site count other than Table B's.**
+      steps. **None may describe it as a one-line change to `addDirs`, and none
+      may state a site count other than Table B's SITE-row count (seven: the six
+      `brain.js:<line>` rows plus Site 7). Table B's non-site rows — the two
+      claim-form rows, the fixture-control row and the transitional call site —
+      never raise that count.**
+- [ ] **The fixture-control channel.** Table B's fixture-control row is the ONE
+      place the channel's facts are decided. Its registered mirrors: the
+      Deliverables `Notes` cells for `tests/unit/dream-brain.test.js`,
+      `tests/unit/codex-adapter.test.js`, `tests/integration/dream.test.js`,
+      `tests/integration/reap-escape.test.js` and the three
+      `tests/fixtures/` rows; the "Why the test surface is inside the boundary"
+      paragraph; the fixture-control and transitional-call-site acceptance
+      criteria; and the A7 verification step. **No surface may name a new
+      environment variable as the channel, may state that the constructed child
+      env carries anything beyond its three `WIENERDOG_DREAM_*` names, or may
+      describe `tests/unit/a7-integrity-negatives.test.js` as forbidding
+      test-only names in `src/` generally — it greps four literals (`:383`).**
+      A finding that changes the channel updates every mirror in the same pass.
 - [ ] **What the Codex arm's shell can reach** — Table F's measured row and
       the Security checklist's Codex residual. **No surface may state the
       sandbox result without its three bounds (platform, harness version, vault
@@ -376,8 +418,28 @@ it — the successor never restates it (owner ruling, split logbook entry).**
       call: no-op, no throw), and never touches the vault — the vault is
       byte-identical across create → destroy.
 - [ ] **The transitional call site changes no behaviour.**
-      `tests/integration/dream.test.js` is not modified (it is not in the
-      Deliverables — the boundary enforces this) and passes unchanged.
+      `cli/dream.js:144-145` passes the vault as `workspaceDir` (Table B, last
+      row), so the running product is byte-identical.
+      `tests/integration/dream.test.js` IS modified — it is in the Deliverables
+      — but **only** for the two mechanical consequences its row names: the
+      `vaultDir → workspaceDir` option rename at `:1481`, and the
+      fixture-control move (Table B's fixture-control row). **No behavioural
+      assertion in it changes**: same test names, same expected vault contents,
+      same counts, same error messages. The evidence is the file's own diff —
+      no `assert*` expectation is edited — and a green `npm test` on it.
+      The same holds for `tests/integration/reap-escape.test.js`.
+- [ ] **Fixture control adds no production seam (Table B's fixture-control
+      row).** Three checks, each an assertion. (i) The constructed child env
+      sets exactly the three names it sets today — `WIENERDOG_DREAM_VAULT`,
+      `WIENERDOG_DREAM_SCRATCH`, `WIENERDOG_DREAM_LAYOUT` — and no fourth
+      Wienerdog-owned name; asserted over the composed env, not by grep. (ii)
+      No file under `src/` names the control file, and none contains any of the
+      four literals `tests/unit/a7-integrity-negatives.test.js:383` greps
+      (`WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`, `WIENERDOG_FAKE_TODAY`,
+      `WIENERDOG_RUNJOB_TIMEOUT_MS`). (iii)
+      `tests/unit/a7-integrity-negatives.test.js` is NOT in the Deliverables and
+      passes unchanged — the boundary enforces the first half, `npm test` the
+      second.
 - [ ] **The glossary carries the name.** `docs/GLOSSARY.md` defines
       **workspace** as a canonical name (the grep below is the anchor; the
       wording is the implementer's).
@@ -403,9 +465,18 @@ npm run lint
 test -f tests/unit/dream-workspace.test.js && npm test -- --test-name-pattern "claim-1"
 test -f tests/unit/dream-workspace.test.js && npm test -- --test-name-pattern "claim-2a"
 test -f docs/GLOSSARY.md && grep -q "\*\*workspace\*\*" docs/GLOSSARY.md
+# Fixture control adds no production seam (Table B's fixture-control row).
+# grep exits 1 when it finds nothing, so `!` makes ABSENCE the passing state;
+# this is the same four-literal set tests/unit/a7-integrity-negatives.test.js:383
+# greps, asserted here so the PR carries the evidence directly.
+! grep -rqE 'WIENERDOG_RUNJOB_CMD|WIENERDOG_DREAM_CMD|WIENERDOG_FAKE_TODAY|WIENERDOG_RUNJOB_TIMEOUT_MS' src/
+# The guard itself is outside the Deliverables and must be byte-unchanged.
+git diff --quiet origin/main -- tests/unit/a7-integrity-negatives.test.js
+test -f tests/unit/a7-integrity-negatives.test.js && npm test -- --test-name-pattern "a7-integrity-negatives"
 ```
 
-- The two `claim-` runs and the glossary grep are NEW steps and each is an
+- The two `claim-` runs, the glossary grep and the three fixture-control /
+  A7 steps are NEW steps and each is an
   ASSERTION: it exits
   non-zero on failure rather than printing something a reader must judge. Paste
   a real green on the finished state AND a real red from a deliberately broken
@@ -438,6 +509,17 @@ test -f docs/GLOSSARY.md && grep -q "\*\*workspace\*\*" docs/GLOSSARY.md
   how it becomes a drifting copy.
 - **Any bound on the baseline's memory** — Table A states why a cap would be
   worse than the cost.
+- **`tests/unit/a7-integrity-negatives.test.js`.** It is the guard Table B's
+  fixture-control row is designed to satisfy. If it goes red, the fixture-control
+  design is wrong and that is a finding for the PR body — never an edit to the
+  guard.
+- **`tests/integration/adopt-e2e.test.js`, and any other test not in the
+  Deliverables.** `adopt-e2e`'s fixture is granted; its test file is not. Its one
+  failing test is red at the pinned base for a machine-environment reason and
+  fails inside `resolvePinnedSpawn`, before any child env is built, so nothing in
+  this WP moves its verdict. If the fixture-control move leaves it needing a
+  control file the test cannot write, that is a finding for the PR body and a
+  follow-on WP, not a licence to widen the boundary.
 
 ## Definition of done
 
