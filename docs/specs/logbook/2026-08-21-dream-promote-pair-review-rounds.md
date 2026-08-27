@@ -1119,3 +1119,47 @@ completion. **R9-1 is closed; no open items remain from round 9.**
 Recorded by the owner: the intra-cell rule catching two of this author's own
 pre-commit defects, one round after being named, is the first direct evidence it
 pays.
+
+### Round 10 — 2026-08-27 — reviewer: gptsol (Codex side), external, WHOLE TEXT
+
+**Does NOT close. 2 findings, both CONTRACT, ZERO mechanism — fifth consecutive
+round with none.** Both verified on the tree. Raw output:
+`2026-08-27-promote-trio-round-10-gptsol-raw.txt`. **Count: … 4 → 4 → 2 → 2 → 3
+→ 2.**
+
+**R9-2 and R9-3 confirmed genuinely fixed, by executed probes rather than
+reading** — a sweep found only `expect?:Buffer` with omission as the
+must-not-exist state, and a count found all seven retarget sites with no stale
+six-site claim anywhere.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R10-1 | **The promote spec's Security checklist still said the pre-brain walks "run before any actor exists"** — the exact blanket claim R9-1 withdrew, on the sibling surface. Long-standing (2026-08-21), while the correction landed 2026-08-27 | **FIXED.** That item now carries the two-walk distinction in full: `captureBaseline` genuinely actorless, copy-in discharged only through the sibling's three layers, with the withdrawn wording named in place |
+| R10-2 | **H7's criterion said "the ONE bounded case" while H9 defines TWO residuals** — a retained content-acquired directory, and a removed substituted empty one. The H9 criterion's byte-identity requirement was correspondingly overbroad. Recently introduced (2026-08-27) — this author's own R6-1/F3 edits | **FIXED.** H9's criterion is qualified to the ORDINARY case (every call-created directory still empty and still the object the call created); H7's enumerates both exceptions and names the arithmetic left behind when R6-1 added the second |
+
+**THE SAME META-FAILURE, A THIRD TIME — and this is the round's real output.**
+Round 9 caught this author sweeping for the PHRASE rather than the NUMBER, and
+the rule recorded was *sweep for the VALUE, not the sentence that carried it*.
+Applying R9-1, this author swept for the actorless claim — **by grepping the
+exact wordings it had itself written** (`"there is no actor"`,
+`"no live actor"`, `"statically-planted"`). The promote spec said **"before any
+actor exists"**, matched none of them, and survived.
+
+The rule as recorded was too narrow. Its general form, which is what goes to
+`main` with the others:
+
+> Sweep for the CLAIM, not for any wording of it — and across every spec in the
+> family, not only the one being edited.
+
+A concept sweep was run this round instead of a phrase sweep: a single regex over
+the claim's *shape* (`no actor` / `actorless` / `before any|the actor|brain`),
+across all three specs. It returned nineteen hits, every one of which is either
+corrected text or a named withdrawal — the surface R10-1 found would have been
+caught by it. A residual-count sweep was run the same way and is clean.
+
+**What this round says about the loop.** Both findings were real and both are
+now closed. One was six days old on a surface the correction never reached; one
+was this author's own, four commits back. **No new defect class appeared, and
+the two that did appear were both caught by disciplines that already exist — one
+of which had to be widened rather than invented.** Mechanism findings: zero for
+five rounds.

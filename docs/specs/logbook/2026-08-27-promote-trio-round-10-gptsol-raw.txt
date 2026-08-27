@@ -1,0 +1,68 @@
+Round 10 — external adversarial review — reviewer: gptsol (Codex side).
+Base: wp/dream-promote-in-workspace @ bead9c6
+Scope: the WHOLE settled text of all three specs, not a diff.
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value)
+Read-only: `git status --porcelain` zero bytes before and after, cmp exit 0 — VALID.
+
+VERBATIM OUTPUT BELOW.
+
+verdict: needs-attention
+
+summary: "Do not ship: R9-1 remains unfixed on one security-checklist surface,
+and the vault-write acceptance criteria still contradict and miscount H9's two
+refusal residuals. Both are CONTRACT findings; MECHANISM findings remain zero.
+R9-2 is genuinely fixed: a Python/grep sweep found only expect?:Buffer and
+omission as the must-not-exist state. R9-3 is genuinely fixed: a Python count
+found all seven listed retarget sites and no stale six-site claim. Named-class
+result: one long-standing stale cross-surface mirror, plus one recently
+introduced acceptance cell that is simultaneously an intra-cell contradiction, a
+stale mirror, and a count/list mismatch. I read all 1,563 lines of the three
+specs with cat/sed (all commands exit 0), ran grep/Python contract probes (exit
+0), and dated findings with git blame (exit 0). No implementation tests were run
+because this is a spec-only whole-text review; the verdict is based on the
+executed contract probes and reading. Read-only verification passed: both git
+status --porcelain captures were zero bytes and cmp exited 0."
+
+R10-1 — [CONTRACT] R9-1 still reverts to a blanket actorless claim
+  docs/specs/WP-dream-promote-in-workspace.md:390-397, confidence 1.0
+  "The promotion spec's Security checklist says the pre-brain walks run 'before
+  any actor exists.' That is the exact blanket claim R9-1 withdrew. The
+  workspace sibling now distinguishes the two walks: captureBaseline reads the
+  private run-built workspace and is actorless, while copy-in reads the live
+  vault with the user's editor or synchronizer acting as a benign concurrent
+  writer; copy-in therefore relies on file-level fail-closed containment plus
+  the named chain-substitution and coherence residuals. An implementer following
+  this checklist could incorrectly treat ordering as discharging copy-in's
+  caller invariant and omit those observable protections. This is a
+  long-standing stale cross-surface mirror: git blame dates the sentence to
+  2026-08-21, while the three-layer R9-1 correction was introduced on
+  2026-08-27."
+  recommendation: "Replace the blanket sentence with the sibling's two-walk
+  distinction: captureBaseline is actorless; copy-in has no untrusted brain but
+  does have a benign live vault writer and is discharged only through the three
+  layers in sibling Table A. Preserve the separate verified-reap statement for
+  the post-brain workspace walk."
+
+R10-2 — [CONTRACT] H7's acceptance cell claims one exception although H9 defines two
+  docs/specs/WP-dream-vault-write-primitive.md:327-359, confidence 0.99
+  "The acceptance criteria first require a policy or expect refusal after parent
+  creation to leave the vault byte-identical, then title H7 as 'refusal leaves
+  nothing behind,' and finally claim there is 'one bounded case' where byte
+  identity is not restored. Table H9 and the immediately preceding criteria
+  define two distinct non-byte-identical refusal cases: a call-created directory
+  that acquired content is retained, and a concurrently substituted empty
+  directory can be removed while the original call-created directory survives
+  under its new name. The absolute byte-identity criterion is therefore
+  overbroad, and the one-case count disagrees with the two-case list. This can
+  produce mutually incompatible tests or an implementation that handles only the
+  content-acquisition residual. The defect is recently introduced: git blame
+  dates the broad H9/H7 acceptance wording and both residual criteria to
+  2026-08-27. It is an intra-cell contradiction in H7, a stale mirror of Table
+  H9, and a count/list mismatch."
+  recommendation: "Qualify the byte-identical criterion to the ordinary case
+  where every call-created directory remains empty and retains its identity.
+  Rename H7's criterion so it does not promise that every refusal leaves nothing
+  behind, and enumerate both accepted exceptions: retained call-created
+  directories that acquired content, and removal of a substituted empty
+  directory with the original surviving under another name."

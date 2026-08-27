@@ -329,7 +329,10 @@ and five of round 4's nine findings existed only because they did.
       holding only `01-Projects/` creates the missing directory and publishes
       the note. With a symlink planted as one of the segments, the write refuses
       and follows nothing. **On a refusal AFTER the chain was created (a policy
-      or `expect` refusal), the vault is byte-identical to its pre-call state** —
+      or `expect` refusal), and in the ORDINARY case — every call-created
+      directory still empty and still the object the call created — the vault is
+      byte-identical to its pre-call state** (the two exceptions are H9's named
+      residuals, enumerated in the H7 criterion below) —
       the created-and-still-empty directories are gone. Proven RED against an
       implementation that leaves them.
 - [ ] **H9's two prohibitions, each proven RED at the strength H9 states it.**
@@ -353,10 +356,16 @@ and five of round 4's nine findings existed only because they did.
 - [ ] **H7 — refusal leaves nothing behind and is total.** After every refusal
       path, the target directory contains no leftover file of this call's
       making and the target is unchanged. The throw-with-target-already-replaced
-      carve-out is gone with the mechanism that required it (round 4, F9''). The
-      one bounded case where a refusal does not restore the vault byte-for-byte
-      is H9's named residual — a directory this call created that acquired
-      content before removal — and it is stated there, not carved out here.
+      carve-out is gone with the mechanism that required it (round 4, F9'').
+      **TWO bounded cases, not one, where a refusal does not restore the vault
+      byte-for-byte — both are H9's named residuals, enumerated here because
+      this criterion is where a test author counts them (round 10):** (a) a
+      directory this call created that acquired content before removal is
+      RETAINED, and (b) a concurrently substituted empty directory can be
+      REMOVED while the directory the call actually created survives under its
+      new name. An earlier form of this criterion said "one bounded case",
+      arithmetic left behind when R6-1 added the second residual. Neither is
+      carved out here; both are stated in H9.
 - [ ] **This module has no policy and no process.** It requires no
       `child_process`, and no tier, extension or filename rule appears in it —
       asserted mechanically.

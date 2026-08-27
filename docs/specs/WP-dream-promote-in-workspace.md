@@ -391,8 +391,17 @@ a gate to refuse.
       sibling Table F says how.** The invariant, stated so the reader knows
       what is being discharged: no untrusted actor may replace the root entry,
       or any ancestor or directory entry used to reach an enumerated path, for
-      the duration of each walk. The pre-brain walks are the sibling's, run
-      before any actor exists; the post-brain walk is this WP's and runs only
+      the duration of each walk. The pre-brain walks are the sibling's, and they are
+      **NOT discharged by ordering alone — the two walks differ (R9-1):**
+      `captureBaseline` reads the run-built workspace under the 0700 private
+      core, where nothing else writes, and is genuinely actorless; **copy-in
+      reads the LIVE vault**, where no untrusted actor exists but the user's
+      editor or synchroniser is a benign concurrent writer, and it is discharged
+      only through the sibling's three layers (its Table A) — fail-closed
+      file-level containment, the named chain-substitution residual, and the
+      bounded coherence residual. **An earlier form of this item said the
+      pre-brain walks "run before any actor exists", which is the blanket claim
+      R9-1 withdrew** (round 10). The post-brain walk is this WP's and runs only
       after a verified reap (Table G). **No surface may claim the walk
       establishes containment.**
 - [ ] The merge's git invocation is a security decision and takes the
