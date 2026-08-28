@@ -138,53 +138,58 @@ function fold(name) {
 /**
  * True when `candidate` names `root` itself or something beneath it.
  *
- * THE ONE CONTAINMENT COMPARISON IN THIS PACKAGE, and it lives here because
- * every weaker form of it has now been measured wrong. Three rules — the
- * workspace's placement, the child `PATH`'s components, and the child
- * environment's values — each decide "is this inside the vault", and each
- * hand-rolled variant leaked.
+ * THE ONE CONTAINMENT COMPARISON IN THIS PACKAGE. Three rules — the workspace's
+ * placement, the child `PATH`'s components, and the child environment's values —
+ * each ask it, and every weaker form of it has been measured wrong.
  *
- * TWO PASSES, because neither alone is enough.
+ * TWO PASSES, and the division of labour is the whole design: SPELLING answers
+ * only what it can answer exactly, and THE FILESYSTEM answers what counts as the
+ * same place.
  *
- * PASS 1, SPELLING. Normalise NFC, case-fold, compare on a SEPARATOR BOUNDARY —
- * the same order as `src/scheduler/tccguard.js:48`, and the boundary is why a
- * sibling merely starting with the vault's name (`~/wienerdog-backup` beside
- * `~/wienerdog`) is not inside it. A filesystem ROOT is separator-terminated
- * already, so appending another would build `//` and match nothing: measured,
- * `isAtOrBeneath('/tmp/x', '/')` returned false. This pass answers for paths
- * that do not exist, which is the only thing it is trusted for.
+ * PASS 1, SPELLING, EXACT. Resolve, then compare on a SEPARATOR BOUNDARY — which
+ * is why a sibling merely starting with the vault's name (`~/wienerdog-backup`
+ * beside `~/wienerdog`) is not inside it, and why a filesystem ROOT, already
+ * separator-terminated, must not have another appended.
  *
- * PASS 2, IDENTITY, and it is what closes the cases spelling cannot. Two
- * spellings can name one directory, and `realpathSync` does NOT reconcile them:
- * measured on the primary filesystem, a directory created as `straße` is
- * reachable as `STRASSE` while `realpath` hands each spelling straight back, and
- * `toLowerCase()` does not equate them because JavaScript has no full Unicode
- * case folding. A symlinked vault root does the same with different spellings
- * of different paths. So when `root` exists, walk the candidate's ancestors and
- * compare `(dev, ino)`: the filesystem's own answer to "is this the same
- * directory", which needs no case table and no symlink reasoning.
+ * IT DELIBERATELY DOES NOT CASE-FOLD OR NORMALISE, and that is a correction of
+ * this function's own earlier design. Folding looked free — "it can only
+ * over-match, which is the fail-safe direction" — and that reasoning was WRONG.
+ * Measured on a case-sensitive filesystem: the default core `/home/ada/.wienerdog`
+ * beside an adopted vault `/home/ada/.WIENERDOG`, which are different directories
+ * there and which `wienerdog adopt` accepts, made the placement gate report
+ * containment and refuse EVERY dream. Over-refusing is not a safe direction; it
+ * is the product not running. The same argument retires NFC normalisation, since
+ * composed and decomposed spellings are likewise distinct files where the
+ * filesystem says they are.
+ *
+ * PASS 2, IDENTITY, is what makes that safe to give up. Where a filesystem DOES
+ * treat two spellings as one place, it says so itself: walk the resolved
+ * candidate's ancestors and compare `(dev, ino)`. That covers a case-insensitive
+ * filesystem (measured: a directory created as `straße` is reachable as
+ * `STRASSE`, which `toLowerCase()` does not equate and `realpath` does not
+ * reconcile), a symlinked vault root, and an alias into the vault — with no case
+ * table and no guess about the volume. The one thing it cannot answer for is a
+ * path that does not exist, and a path that does not exist grants no access.
  *
  * A NON-ABSOLUTE CANDIDATE IS NEVER INSIDE ANYTHING. Resolving one would join it
  * to OUR working directory — and measured, `run-job` runs the dream with its cwd
  * AT the vault, so the scalar `USER=ada` resolved to `<vault>/ada` and refused
  * every scheduled dream. Nothing is lost: a relative `PATH` component is
- * resolved by the OS against the CHILD's cwd — the staging dir or the workspace
- * — never the vault.
+ * resolved by the OS against the CHILD's cwd, never the vault.
+ *
  * ONE FAIL-OPEN, NAMED: if `root` itself cannot be `stat`ed, pass 2 is
- * unavailable and containment falls back to spelling alone. Not worth guarding
- * — a dream that cannot stat its own vault fails moments later in copy-in — but
- * it is the only direction in which this helper answers less than it looks.
+ * unavailable and containment falls back to exact spelling. Not worth guarding —
+ * a dream that cannot stat its own vault fails moments later in copy-in.
  * @param {string} candidate @param {string} root @returns {boolean}
  */
 function isAtOrBeneath(candidate, root) {
   const c0 = String(candidate);
   if (!path.isAbsolute(c0)) return false;
-  const fold = (x) => path.resolve(String(x)).normalize('NFC').toLowerCase();
   let c;
   let r;
   try {
-    c = fold(c0);
-    r = fold(root);
+    c = path.resolve(c0);
+    r = path.resolve(String(root));
   } catch {
     return false; // unresolvable — nothing to compare
   }
@@ -196,11 +201,6 @@ function isAtOrBeneath(candidate, root) {
   // Pass 2 — the filesystem's own identity answer.
   const rootId = statIdOrNull(root);
   if (rootId === null) return false; // root does not exist: spelling was all there was
-  // Walk from the RESOLVED candidate, not its spelling. A symlink that lives
-  // outside the vault and points INTO it — `<home>/opt-tools -> <vault>/bin` on
-  // a PATH — has ancestors that never visit the vault, so a lexical walk misses
-  // it entirely. Resolving first makes the walk start at `<vault>/bin`, whose
-  // parent IS the vault.
   let cur = resolveExisting(c0);
   for (;;) {
     const id = statIdOrNull(cur);

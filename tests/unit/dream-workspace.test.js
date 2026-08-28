@@ -1010,29 +1010,59 @@ test('dream-workspace: a paths value without core is refused before anything is 
   assert.equal(fs.readFileSync(path.join(outside, WORKSPACE_DIRNAME, 'precious.txt'), 'utf8'), 'USER DATA\n');
 });
 
-test('dream-workspace: containment is decided NFC-normalised, case-folded, on a separator boundary', () => {
+test('dream-workspace: containment compares spelling EXACTLY and lets the filesystem decide equivalence', () => {
   const V = '/home/ada/wienerdog';
-  // A sibling whose name merely STARTS with the vault's is not inside it — the
+  // A sibling merely STARTING with the vault's name is not inside it — the
   // separator boundary is what says so, and `~/wienerdog-backup` beside the
   // DEFAULT vault name is the case a substring test bricked the product on.
   assert.equal(isAtOrBeneath('/home/ada/wienerdog-backup/.codex', V), false);
   assert.equal(isAtOrBeneath('/home/ada/wienerdog2', V), false);
-  // Inside, in every form the filesystem treats as the same place.
   assert.equal(isAtOrBeneath(V, V), true);
   assert.equal(isAtOrBeneath('/home/ada/wienerdog/notes', V), true);
-  assert.equal(isAtOrBeneath('/home/ada/WIENERDOG/notes', V), true, 'case variant — the same dir on the primary FS');
   assert.equal(isAtOrBeneath('/home/ada/./wienerdog/notes', V), true, 'un-normalised');
   assert.equal(isAtOrBeneath('/home/ada/wienerdog/../wienerdog/x', V), true);
+
+  // A CASE VARIANT OF A PATH THAT DOES NOT EXIST IS NOT ASSUMED EQUIVALENT, and
+  // that is a deliberate correction. Case-folding here looked free — "it can
+  // only over-match, which is the fail-safe direction" — and on a case-SENSITIVE
+  // filesystem it made the default core `/home/ada/.wienerdog` contain an
+  // adopted vault `/home/ada/.WIENERDOG`, which `wienerdog adopt` accepts and
+  // which is a different directory there. Every dream was then refused. Over-
+  // refusing is not a safe direction; it is the product not running.
+  assert.equal(isAtOrBeneath('/home/ada/.wienerdog/state/dream-workspace', '/home/ada/.WIENERDOG'), false);
+});
+
+test('dream-workspace: where the FILESYSTEM treats two spellings as one place, containment says so', { skip: WIN32 }, () => {
+  // The other half of the same design: what spelling gives up, identity answers
+  // — but only for paths that exist, and a path that does not exist grants no
+  // access. Written against REAL directories so the filesystem, not this test,
+  // decides what is equivalent. On a case-insensitive volume the variant IS the
+  // vault; on a case-sensitive one it is a different directory and must NOT be
+  // reported as contained. Both are correct, and the assertion follows the
+  // volume rather than assuming one.
+  const root = fs.realpathSync(mkTmp('fs-equiv'));
+  const vault = path.join(root, 'notes');
+  fs.mkdirSync(path.join(vault, 'inner'), { recursive: true });
+  const variant = path.join(root, 'NOTES', 'inner');
+
+  const sameDirectory = (() => {
+    const a = fs.statSync(vault);
+    try {
+      const b = fs.statSync(path.join(root, 'NOTES'));
+      return a.dev === b.dev && a.ino === b.ino;
+    } catch {
+      return false;
+    }
+  })();
+  assert.equal(isAtOrBeneath(variant, vault), sameDirectory, `volume treats them as one place: ${sameDirectory}`);
+
+  // And a genuinely different sibling is outside on every volume.
+  fs.mkdirSync(path.join(root, 'notes-backup'), { recursive: true });
+  assert.equal(isAtOrBeneath(path.join(root, 'notes-backup'), vault), false);
 });
 
 test('dream-workspace: the env value gate uses containment, not substring — no false alarm, no leak', () => {
-  const base = {
-    workspaceDir: '/w',
-    scratchDir: '/s',
-    date: DATE,
-    layout: defaultLayout(),
-    platform: 'linux',
-  };
+  const base = { workspaceDir: '/w', scratchDir: '/s', date: DATE, layout: defaultLayout(), platform: 'linux' };
   // FALSE POSITIVE the substring form produced: a sibling of the DEFAULT vault.
   const ok = buildBrainEnv({
     ...base,
@@ -1040,14 +1070,46 @@ test('dream-workspace: the env value gate uses containment, not substring — no
     vaultDir: '/home/ada/wienerdog',
   });
   assert.equal(ok.CODEX_HOME, '/home/ada/wienerdog-backup/.codex', 'a sibling directory is not inside the vault');
-  // FALSE NEGATIVES the substring form let through.
-  for (const leak of ['/home/ada/Notes/.codex', '/home/ada/./notes/.codex']) {
-    assert.throws(
-      () => buildBrainEnv({ ...base, baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: leak }, vaultDir: '/home/ada/notes' }),
-      (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message),
-      leak
-    );
+  // A FALSE NEGATIVE the substring form let through, and one the resolver still
+  // must catch on every platform.
+  assert.throws(
+    () =>
+      buildBrainEnv({
+        ...base,
+        baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: '/home/ada/./notes/.codex' },
+        vaultDir: '/home/ada/notes',
+      }),
+    (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message)
+  );
+});
+
+test('dream-workspace: the env gate refuses a real case-variant where the volume says it is the vault', { skip: WIN32 }, () => {
+  // The case-variant leak, asserted against a real directory rather than a
+  // spelling rule — see the FS-equivalence test above for why.
+  const root = fs.realpathSync(mkTmp('env-variant'));
+  const vault = path.join(root, 'notes');
+  fs.mkdirSync(path.join(vault, '.codex'), { recursive: true });
+  const variant = path.join(root, 'NOTES', '.codex');
+  let sameDirectory = false;
+  try {
+    const a = fs.statSync(vault);
+    const b = fs.statSync(path.join(root, 'NOTES'));
+    sameDirectory = a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    sameDirectory = false;
   }
+  const run = () =>
+    buildBrainEnv({
+      baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: variant },
+      vaultDir: vault,
+      workspaceDir: '/w',
+      scratchDir: '/s',
+      date: DATE,
+      layout: defaultLayout(),
+      platform: 'linux',
+    });
+  if (sameDirectory) assert.throws(run, WienerdogError, 'the volume says it is the vault — refuse');
+  else assert.doesNotThrow(run, 'a different directory on this volume — must not refuse');
 });
 
 // ── Round-2 review: no silent fallback, no invocation without a write root ──
