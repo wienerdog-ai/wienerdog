@@ -257,3 +257,37 @@ author's.
 
 **No `Ready` flip and no PR.** The round was not clean, and the trigger the
 owner set was a clean round.
+
+### OWNER RULING on the escalation (2026-08-28)
+
+**THE SEAM STANDS.** Two reasons, in the owner's terms:
+
+1. **Table S IS the boundary's contract.** The thing that was missing when both
+   findings were written now exists, is owned, and has registered mirrors. A
+   boundary with a named contract is not the same object as a boundary without
+   one, and it is the latter that produced R1-1 and R2-2.
+2. **R2-1 is exposed inheritance, not a seam defect.** The validator's Step 6 was
+   unowned before the split as well; the seam made "who owns this" an askable
+   question and the question got asked. A boundary that surfaces a pre-existing
+   gap is doing its job, not creating work.
+
+**Consequence for this record's STOP CRITERION — stated so the next round does
+not re-escalate a settled question.** The family escalation has now FIRED and
+been ANSWERED. A third finding on the decided-bytes family therefore no longer
+means "the seam is suspect"; that is ruled. It would mean **Table S is not
+working as the boundary's contract**, which is a different claim with a different
+remedy — the table's own rows, mirrors and prohibitions — and it returns to the
+owner as that, not as a seam question. **The seam is closed to re-litigation
+absent new evidence of a kind neither round produced.**
+
+## Round 3 — authorised 2026-08-28
+
+**Authorised by the owner under the runbook's HEAVY rule**, on the same terms as
+round 2: the **whole settled text**, not the diff, and **the clean definition
+pinned above stands unchanged** — no A-band and no B-band finding. Round 2's
+fixes were larger than round 1's (a new canonical table, a new Table G row, two
+new acceptance criteria, and five stale mirrors repaired), which is precisely
+what the HEAVY rule exists to re-test.
+
+**A clean round 3 is the owner's authorised trigger for the `Ready` flip on both
+specs and the PR** (owner: "tiszta = Ready-flip + PR #30").
