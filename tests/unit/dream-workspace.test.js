@@ -1074,3 +1074,62 @@ test('dream-workspace: the argv builders refuse to compose an invocation with no
     (e) => e instanceof WienerdogError && /workspaceDir is required/.test(e.message)
   );
 });
+
+test('dream-workspace: a non-absolute value is never "inside" the vault', { skip: WIN32 }, () => {
+  // Self-review of the round-3 mechanism, and the fourth instance of the family
+  // the reviewer named. `path.resolve` joins a relative value to OUR working
+  // directory, so with cwd inside the vault — an ordinary
+  // `cd ~/wienerdog && wienerdog dream` — the scalar `USERNAME=ada` became
+  // `<vault>/ada` and the gate refused a perfectly good spawn. Measured before
+  // the fix.
+  const vault = fs.realpathSync(mkTmp('relative'));
+  assert.equal(isAtOrBeneath('ada', vault), false, 'a username is not a path');
+  assert.equal(isAtOrBeneath('.', vault), false);
+  assert.equal(isAtOrBeneath('', vault), false);
+  const cwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(vault, 'ada'));
+    process.chdir(vault); // the whole point: our cwd IS the vault
+    assert.equal(isAtOrBeneath('ada', vault), false, 'still not a path, even from inside the vault');
+    assert.doesNotThrow(() =>
+      buildBrainEnv({
+        baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', USERNAME: 'ada', USER: 'ada' },
+        vaultDir: vault,
+        workspaceDir: '/w',
+        scratchDir: '/s',
+        date: DATE,
+        layout: defaultLayout(),
+        platform: 'linux',
+      })
+    );
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test('dream-workspace: a containment refusal costs the user NOTHING — no delete, no chmod', { skip: WIN32 }, () => {
+  // Both measured against the version that gated after `mkdirPrivate`. With the
+  // vault AT the workspace path: an EMPTY vault directory was DELETED by the
+  // refusal's own cleanup, and a vault with content survived only incidentally
+  // (a non-recursive rmdir happens to fail on a non-empty dir) — while its mode
+  // was already changed 0755 → 0700. A refusal must touch nothing at all, so
+  // the gate's first pass is purely lexical and runs before any filesystem call.
+  for (const withContent of [false, true]) {
+    // NOT realpathed on purpose: on the primary platform `/var` is a symlink to
+    // `/private/var`, so this is the shape whose lexical compare misses.
+    const root = mkTmp(`refusal-${withContent}`);
+    const core = path.join(root, 'core');
+    const vaultAtWorkspace = path.join(core, 'state', WORKSPACE_DIRNAME);
+    fs.mkdirSync(vaultAtWorkspace, { recursive: true });
+    fs.chmodSync(vaultAtWorkspace, 0o755);
+    if (withContent) writeFile(path.join(vaultAtWorkspace, 'note.md'), 'PRECIOUS\n');
+
+    assert.throws(
+      () => createWorkspace({ vaultDir: vaultAtWorkspace, paths: { core, state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
+      (e) => e instanceof WienerdogError && /contain one another/.test(e.message)
+    );
+    assert.equal(fs.existsSync(vaultAtWorkspace), true, `the vault directory survives (content: ${withContent})`);
+    assert.equal(fs.statSync(vaultAtWorkspace).mode & 0o777, 0o755, 'the vault\'s mode is untouched');
+    if (withContent) assert.equal(fs.readFileSync(path.join(vaultAtWorkspace, 'note.md'), 'utf8'), 'PRECIOUS\n');
+  }
+});
