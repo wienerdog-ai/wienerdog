@@ -506,31 +506,46 @@ function assertReportCopied(vaultRoot, workspaceDir, layout, date) {
 }
 
 /**
- * Canonicalise a path that may not exist yet: realpath its DEEPEST EXISTING
- * ancestor and re-join the missing tail.
+ * Canonicalise a path the way the KERNEL does, even when its tail does not exist
+ * yet: walk it one component at a time, resolving each symlink as it is reached,
+ * and apply `..` to what is resolved SO FAR.
  *
- * A plain lexical compare is not enough, and the gap is not exotic — on the
- * primary platform `/var` is a symlink to `/private/var`, so a configured vault
- * and the workspace path can name the same directory while sharing no prefix.
- * `realpathSync` on the workspace itself cannot be used before it exists, and
- * creating it first is precisely what the caller must not do. This resolves as
- * far as the filesystem allows and touches nothing.
+ * NEITHER `path.resolve` NOR `fs.realpathSync` DOES THIS, and the gap is a hole
+ * rather than a nicety. Both collapse `..` LEXICALLY first, which discards a
+ * symlink that came before it. Measured, with `/outside-alias -> <vault>/nested`:
+ * `path.resolve('/outside-alias/../nested')` answers `/nested`, `realpathSync`
+ * on it throws ENOENT — and `cat` on that same path prints the vault's bytes,
+ * because the kernel resolves the alias FIRST and then applies `..` to the real
+ * parent. A value shaped like that, handed to a child as `HOME`, is vault access
+ * that every string comparison agrees is somewhere else.
+ *
+ * The other half is the tail: `realpathSync` needs the whole path to exist,
+ * while the workspace does not exist yet when the placement gate must answer.
+ * Once a component is missing, the rest is appended lexically — the kernel would
+ * refuse to walk further anyway.
  * @param {string} p @returns {string}
  */
 function resolveExisting(p) {
-  let cur = path.resolve(p);
-  /** @type {string[]} */
-  const tail = [];
-  for (;;) {
+  const input = String(p);
+  if (!path.isAbsolute(input)) return path.resolve(input);
+  const parts = input.split(path.sep).filter((seg) => seg !== '' && seg !== '.');
+  let cur = path.parse(input).root;
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (part === '..') {
+      // `cur` is already fully resolved, so its parent is the real parent —
+      // which is exactly what the kernel walks to.
+      cur = path.dirname(cur);
+      continue;
+    }
     try {
-      return tail.length === 0 ? fs.realpathSync(cur) : path.join(fs.realpathSync(cur), ...tail.slice().reverse());
+      cur = fs.realpathSync(path.join(cur, part));
     } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(p); // reached the root, nothing resolves
-      tail.push(path.basename(cur));
-      cur = parent;
+      // This component does not exist; nothing beyond it can be resolved.
+      return path.join(cur, ...parts.slice(i));
     }
   }
+  return cur;
 }
 
 /**

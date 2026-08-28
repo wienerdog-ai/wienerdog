@@ -1232,3 +1232,45 @@ test('dream-workspace: a symlink from outside that points INTO the vault is cont
   });
   assert.equal(env.PATH, '/usr/bin', 'the aliased component is stripped from the child PATH');
 });
+
+test('dream-workspace: containment follows the KERNEL, not the string — alias plus `..`', { skip: WIN32 }, () => {
+  // The nastiest shape found in review, and the reason containment cannot be
+  // decided by any string function. With `/outside-alias -> <vault>/nested`,
+  // the path `/outside-alias/../nested` reads the vault's bytes — the kernel
+  // resolves the alias FIRST and applies `..` to the real parent — while
+  // `path.resolve` answers `/nested` and `fs.realpathSync` throws ENOENT.
+  // Handed to a child as HOME, that is vault access every string comparison
+  // agrees is somewhere else.
+  const root = fs.realpathSync(mkTmp('dotdot'));
+  const vault = path.join(root, 'vault');
+  fs.mkdirSync(path.join(vault, 'nested'), { recursive: true });
+  fs.writeFileSync(path.join(vault, 'nested', 'secret.md'), 'VAULT BYTES\n');
+  fs.symlinkSync(path.join(vault, 'nested'), path.join(root, 'outside-alias'));
+  // Built by hand: `path.join` would collapse the `..` itself, which is the
+  // very confusion this test exists to pin.
+  const tricky = `${root}${path.sep}outside-alias${path.sep}..${path.sep}nested`;
+
+  // Non-vacuity: the path really does reach the vault.
+  // `path.join` here would collapse it too — hand-built again, deliberately.
+  assert.equal(fs.readFileSync(`${tricky}${path.sep}secret.md`, 'utf8'), 'VAULT BYTES\n');
+  // And the two functions that are NOT good enough to decide this.
+  assert.notEqual(path.resolve(tricky), path.join(vault, 'nested'));
+  assert.throws(() => fs.realpathSync(tricky));
+
+  assert.equal(isAtOrBeneath(tricky, vault), true);
+  assert.throws(
+    () =>
+      buildBrainEnv({
+        baseEnv: { HOME: tricky, PATH: '/usr/bin' },
+        vaultDir: vault,
+        workspaceDir: '/w',
+        scratchDir: '/s',
+        date: DATE,
+        layout: defaultLayout(),
+        platform: 'linux',
+      }),
+    (e) => e instanceof WienerdogError && /HOME is at or inside the vault/.test(e.message)
+  );
+  // A `..` that genuinely leaves the vault is still outside.
+  assert.equal(isAtOrBeneath(`${root}${path.sep}outside-alias${path.sep}..${path.sep}..`, vault), false);
+});
