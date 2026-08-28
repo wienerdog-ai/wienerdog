@@ -828,3 +828,57 @@ kept the report's growth visible round by round, and its baseline is what made
    I018, I078/I085, I081, I093, F1's G12 wiring, and F2's V3 extension.
 2. **Pass (c)** — one undirected confirming round, **on the whole family now**,
    per the HEAVY rule. Its B-count is the deciding measurement.
+
+## Pass (b), pipeline side — landed ONCE against the settled shape, 2026-08-28
+
+All seven routed items, in one pass, against the three-package shape the T1 cut
+settled — which is what the owner's order ruling was for.
+
+| Item | Where it landed |
+|---|---|
+| **F2** — V3 understated EP2's durable lifecycle | **V3 rewritten** to enumerate the quarantine artifact and its collision-resolved name, the preservation-failure abort, retention, and the report metadata — citing `WP-dream-promote-module`'s **Table Q**, which now owns it, and naming G5 as a second inheriting row |
+| **F1** — scratch records had no route to the report | **G12** now passes them through `promote()`'s `records` input as well as to G11's log. **Two channels, and needing both is the point: a log line is not a durable record** |
+| **I095** — lock-guarded teardown ordering | **G5** + new **V9**: scratch removed then lock released, both only while this process still owns the lock |
+| **I018** — dry-run preview | **G1** + new **V8**: the preview is the same composition as the real spawn, or it is not a preview |
+| **I078 / I085** — count semantics and their producer | **G11** + **V7**: increments once per staged added-or-modified path; **any** path under the skills directory counts as a skill, not only `SKILL.md`; deletions and the report count in neither. G11 is named as the producer — before this pass the summary promised counts no surface produced |
+| **I081** — `committed[]` | **G11**: DROPPED explicitly. Measured: `cli/dream.js` reads `sha`, `counts`, `reverted.length`, `outOfVault.length` and never `committed`, and `promoted[]` carries the same information where it is decided. **A reader looking for it finds a sentence, not silence** |
+| **I093** — digest regeneration order | **G4** + new **V10**: the digest is regenerated after the ledger persists, because `state/digest.md` is the next session's context |
+
+**Table V gained a membership preamble** naming the inventory record as the
+authority, with its 76/19 split, and stating that Table V carries a row for each
+IN element that needed an owner assigned while the inventory names the owner for
+the rest.
+
+Six new acceptance criteria, each with a stated RED direction. **Pipeline: 24
+criteria / 6 deliverables.** Module 23 / 3, report 9 / 2. `npm run lint` exit 0.
+
+### Defects this pass introduced, and one that is now a pattern
+
+- **The V-rows were inserted before V7** — the THIRD time this exact
+  insertion-order slip has happened (G10 before G9; G11/G12 before G10; now
+  V8–V10 before V7). The mechanical check caught it all three times, which is
+  the check working. **But three instances says the check is treating a symptom:
+  the cause is anchoring an insert on a NAMED row rather than appending after the
+  LAST row.** Recorded as such, because "run the check" has now been the answer
+  three times and the error rate has not moved.
+- **A table cell was split by a stray `|`** in the G11 edit, breaking the row
+  into four columns. Caught by markdownlint's MD056, not by reading — which is
+  the same lesson at a different layer: the mechanical check is what finds the
+  mechanical defect.
+
+### Standing lesson, queued for the post-loop runbook PR
+
+The blunt-beside-targeted tripwire lesson (recorded above under "The tripwire's
+own lesson") **joins the five review-loop rules already queued for a single docs
+PR to `main` after this family lands**, stated bare per main hygiene:
+
+> Keep a blunt cap beside every targeted threshold. A targeted threshold can
+> only watch the hypothesis you already hold; it is blind by construction in
+> exactly the case where you most need a signal.
+
+## Pass (c) — the confirming round, authorised and pending
+
+**One undirected round on the WHOLE FAMILY** — all three specs — per the HEAVY
+rule. **Its B-count is the deciding measurement, and the interpretation is the
+one pinned before round 4**: clean, or B-findings NOT in the family, opens the
+`Ready` path; B-findings IN the family is a structural signal, not a defect list.
