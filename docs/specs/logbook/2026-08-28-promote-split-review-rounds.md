@@ -578,3 +578,63 @@ criteria (T1 fires above 28 — not fired) / **3** deliverables; pipeline half
 
 **B-band trend: 1 → 1 → 2 → 3 → 2.** The round-3 peak was partly this author's
 steer; round 4 removed the steer and still returned two.
+
+## OWNER RULINGS on the round-4 structural escalation (2026-08-28)
+
+### (1) F1 is the INTERFACE family, not the replaced-code family
+
+**The deciding test is the REMEDY, and the owner states it as the general rule:**
+F1's fix is an interface field — `promote()` gains an input for code-owned,
+pre-promotion records — which is **Table S's closed-consumer-list
+jurisdiction**. That places it with R1-1 and R2-2.
+
+**The structural test's inward pull recorded the DISCOVERY path, not the family
+membership.** That distinction is the reusable part: *where a defect was found*
+and *what kind of defect it is* are different questions, and the classification
+test this author pinned conflated them. The remedy test does not.
+
+**The two families are TWO PROJECTIONS OF ONE ROOT CAUSE — the inventory-level
+reading.** Reading `validateAndCommit` by step name and line, rather than by what
+each step consumes and durably produces, yields:
+
+- **an ownership gap** when a produced thing has no row — the replaced-code
+  projection (R2-1, R3-1, R3-3, F2);
+- **an interface gap** when a produced thing has a row but no field to travel on
+  — the interface projection (R1-1, R2-2, F1).
+
+**This is why the remedy below is SHARED rather than two remedies.** Both
+projections are closed by the same act: reading the source of truth once,
+completely, and checking every produced thing against both a row AND a field.
+
+**F2's consequence and the escalation STAND** regardless of F1's
+reclassification, exactly as this author stated when escalating: F2 alone
+triggered it.
+
+### (2) THE STRUCTURAL REMEDY IS APPROVED — the systematic read, not more sampling
+
+Sampling has produced 1, 2, 3 and 2 B-band findings across four rounds and is not
+converging on zero. The approved sequence, in order, **pinned here before step
+(a) runs**:
+
+| Step | What | Constraint |
+|---|---|---|
+| **(a) MEASUREMENT** | a fresh clean-context agent reads `validateAndCommit`'s **all 1469 lines** and the surrounding run path **against the CODE**, and produces the COMPLETE inventory — every durable output, side effect, artifact, retention behaviour and report line, each with its consumers — then diffs it line by line against Table V and the D / G / S surfaces | **NO SPEC EDITS.** Its output is the **gap list**, not spec text |
+| **(b) FIX** | ONE pass from the VERIFIED inventory, including **F1's interface field** and **F2's discovery-path delivery** | under the standing disciplines: intra-cell whole re-read after rewriting a canonical cell, claim-level family-wide sweep, the mechanical G-row-ordering check, number-vs-noun |
+| **(c) CONFIRM** | ONE round under the HEAVY rule, **undirected** | **its B-count is the deciding measurement** |
+
+**The tripwire stays self-executing as designed** — if step (b) pushes the module
+half past 28 criteria, T1 fires on its own and the report moves to
+`WP-dream-promote-report`. No further decision is needed.
+
+**F1 and F2 stay OPEN until pass (b).** The owner recorded that this author's
+restraint in not fixing them was correct.
+
+### Method note for step (a), pinned so the measurement is not anchored
+
+**The inventory is built from the CODE BEFORE the specs are opened.** Reading the
+spec first and then looking for confirmation in the code is the exact failure
+mode that produced every instance of both projections — the reader inherits the
+spec's frame and sees what it describes. The agent therefore produces its
+complete inventory from `src/` alone, writes it down, and only then opens Table V
+and the D / G / S surfaces to diff. **The ordering is the method, not a
+preference.**
