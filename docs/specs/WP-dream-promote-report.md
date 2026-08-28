@@ -25,7 +25,7 @@ seam and the resulting shape.
 **Contract table letters are family-wide, across five packages.**
 `WP-dream-workspace-retarget` owns **Tables A, B and F**;
 `WP-dream-vault-write-primitive` owns **Table H**; `WP-dream-promote-module`
-owns **C, D, E, Q and S**; **this spec owns Table R and the report row**; and
+owns **C, D, E, Q and S**; **this spec owns Tables N and R and the report row**; and
 `WP-dream-promote-in-workspace` owns **Tables G and V**. Every cross-package
 reference CITES its owner and never restates it.
 
@@ -169,6 +169,43 @@ a row because the module half's Table D owns the gates it refers to:
 |---|---|---|---|---|
 | The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against the gate rows above: three of the four do not match a path under `reports_dir` and pass it through; the table above is what says which gate applies where.** **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (H5's `expect` guard, H3's symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4 |
 
+### Table N — the neutralisation contract: which channels, which transformation, in which order
+
+**Extracted by the ADR-0031 circuit-breaker.** Two consecutive rounds landed an
+A-band finding on one rule — first that it named no ORDER, then that its named
+value SET was incomplete. The breaker's prescription is not discretionary: stop
+patching and pull the contract into one canonical table. **A third edit to a
+hand-maintained list was rejected for the reason the second finding's own lesson
+line states — "an 'every interpolated value' rule plus an explicit named list is
+only as strong as the list".**
+
+**THE VALUE SET IS DERIVED FROM THE RETURN SHAPE, NEVER HAND-LISTED.** The
+channels below are exactly the string-typed fields of `promote()`'s return and
+of its `records` input that the report interpolates. **A new channel cannot come
+into existence without appearing as a field of that shape, and therefore cannot
+come into existence without a row here.** This is the same discipline as the
+module half's Table S row S5 — form, not memory — and it is what the previous two
+findings lacked: both were channels that existed while the list did not mention
+them.
+
+| Channel (a field of the return shape or of `records`) | Origin | Attacker-influenceable? | Transformation |
+|---|---|---|---|
+| `refused[].rel` | the brain chose the path | **YES** | **redact, then sanitise** |
+| `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and H7/H9 naming a surviving object | **YES** | **redact, then sanitise** |
+| `redacted[].rel` | the brain chose the path | **YES — and this is the channel round (d) found leaking**, because the redaction line existed while the list named only the refusal fields | **redact, then sanitise** |
+| `redacted[].artifact` | the quarantine basename, DERIVED from the brain-chosen path (Table Q, row Q2) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
+| `redacted[].labels` | detector names from a code-owned closed set | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
+| `redacted[].lines` | a count | **NO** | none — same reason |
+| `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
+| every remaining string field of the return shape | — | **treated as YES until a row here says otherwise** | **redact, then sanitise.** The default is the safe direction: an unclassified channel is neutralised, never passed through |
+
+| Rule | Value |
+|---|---|
+| N1 — **THE ORDER: redact first, then sanitise** | EP2's context-dependent detectors need the RAW bytes, separators included, and `sanitizeProjectName` replaces every character outside `[\p{L}\p{N}\p{M} ._-]` — `=` and `:` among them. **Measured:** `refused token=abcdefghijkl` sanitises to `refused token_abcdefghijkl`, and the detector that fires on the first does not fire on the second. **The justification for the reverse order, corrected to what was actually measured (round (d)):** it is NOT that the redaction placeholder survives the sanitiser unchanged — measured, `[REDACTED:generic-secret]` becomes `REDACTED_generic-secret_`. **It is that sanitising a placeholder cannot restore the secret the redactor already removed.** The earlier "sanitizer-neutral" wording was asserted from reading rather than running, and is withdrawn |
+| N2 — **The default is neutralise** | the last row above is the contract's closure: a string channel this table has not classified is neutralised. **A universal that depends on someone remembering to extend a list is what failed twice; a default that must be argued DOWN cannot fail the same way** |
+| N3 — **Scope: wherever the section is composed** | the normal second write and Table R's fallback alike, since the same interpolation happens in both |
+| N4 — **What the contract buys** | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** This sentence is load-bearing and it has been FALSE twice — once under an unordered rule, once under an incomplete set. It is true only while N1's order and the derived value set both hold, and the acceptance criterion asserts THIS TABLE rather than an enumeration |
+
 ### Table R — the report's publish decision
 
 **Trigger:** Table R governs whenever the brain-authored report body is not
@@ -194,8 +231,8 @@ naming: the only difference from the normal second write is that the base is
 
 | Rule | Value |
 |---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** Every value the code-authored section interpolates passes through EP2's redact arm AND the shipped sanitizer before it enters the section — **IN THAT ORDER, and the order is the rule (owner ruling, 2026-08-29, on pass (c)'s A-band finding): REDACT FIRST, THEN SANITIZE.** **EP2's context-dependent detectors need the RAW bytes, separators included**, and `sanitizeProjectName` replaces every character outside `[\p{L}\p{N}\p{M} ._-]` — `=` and `:` among them. Measured by execution: `refused token=abcdefghijkl` sanitises to `refused token_abcdefghijkl`, and the contextual detector that fires on the first does not fire on the second, so a sanitizer-first implementation writes the credential into the vault's report. The reverse order is safe because **EP2's placeholder is sanitizer-neutral**: what the redact arm leaves behind survives the sanitizer unchanged. **An earlier form of this rule said "through BOTH" and named no order — which is not a weaker rule but a different one, since one of its two readings leaks.** **The set is NAMED, not gestured at: `r.path` AND `r.reason` — for this module's own records AND for the caller's `records` (`### Exact contracts`), which are neutralised identically because they carry brain-chosen path text too** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
-| The observable property the two rules buy | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** Gate refusal on this branch is impossible by construction. **This sentence is load-bearing and it was FALSE for one round: under the unordered form of rule (2), sanitizer-first defeated the very scan the claim rests on. It is true again ONLY because the order is now fixed** — which is why the order lives in the rule and not in a note, and why the criterion below refuses a sanitizer-first implementation rather than merely requiring both transformations to be present. **What remains is the primitive's own refusals, and R4 above covers ALL of them uniformly** — an earlier form of this row named only the `expect` guard, which was false: H3 refuses a symlinked report target too, and this spec's own criterion requires that refusal |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **The set is NAMED, not gestured at: `r.path` AND `r.reason` — for this module's own records AND for the caller's `records` (`### Exact contracts`), which are neutralised identically because they carry brain-chosen path text too** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and it is true only while N1's order and N4's derived value set both hold. This row does not restate it |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (Table Q, rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
@@ -232,6 +269,14 @@ left for a gate to refuse.
       RETURNING the record as delivering it.**
 - [ ] **Table R's four cases and its named residual** — the report row (which
       cites, never restates), and the acceptance criteria
+- [ ] **Table N — the neutralisation contract.** Its mirrors are Table R's gate
+      rule (2), Table R's observable-property row (which defers to N4), the
+      redaction-lines row, the `records` input in `### Exact contracts`, and the
+      code-authored-section criterion. **Three prohibitions, each earned by a
+      finding: no surface may state a neutralisation rule without its ORDER; no
+      surface may carry a hand-listed value set, because the set is DERIVED from
+      the return shape; and no surface may restate N4's justification, which has
+      been false twice and is true only while N1 and the derived set both hold.**
 - [ ] **The redaction lines** — Table R's redaction-lines row and the module
       half's **Table Q**, which owns the metadata they carry. **This package
       cites Table Q and never restates the quarantine lifecycle.**
@@ -298,26 +343,30 @@ left for a gate to refuse.
       whose EXISTING bytes contain secret-shaped text is republished
       byte-identical, and no gate withholds, redacts or alters it. Proven RED
       against an implementation that scans the whole composed content.
-- [ ] **The code-authored section cannot carry refusable bytes (Table R).** With
-      a brain-chosen refused path that is both markdown-active and
-      secret-shaped, the composed section contains neither the active markdown
-      nor the secret, the report is published, and the refused note is still
-      identifiable in the line. **Repeated for the REASON channel — a refusal
-      reason carrying brain-chosen markdown-active and secret-shaped text — and
-      proven RED against an implementation that neutralises `r.path` alone**,
-      which otherwise passes every other case here. Proven RED with the
-      sanitizer skipped, and separately with the redact arm skipped — **both
-      arms, because either alone was ruled insufficient.**
-      **AND proven RED against a SANITIZER-FIRST implementation, which is the
-      case that has both arms and still leaks (pass (c)'s A-band finding).** The
-      test values must be secrets the sanitizer's own character class would
-      destroy the context of — at least `token=abcdefghijkl` and
-      `client_secret: abcdefghijkl` — because a prefix-shaped secret survives
-      the sanitizer intact and is caught in either order, so a test built only
-      from one would go green on the leaking implementation. **The assertion is
-      that the raw secret bytes appear nowhere in the published report, on the
-      normal second write AND on the fallback.** This criterion covers
-      the NORMAL second write as well as the fallback; the rule governs both.
+- [ ] **The code-authored section cannot carry refusable bytes — asserted
+      against TABLE N, not against a list (rounds (c) and (d)).** The test is
+      driven from the table: **for EVERY channel Table N marks
+      attacker-influenceable, the same case runs** — a value carrying both
+      markdown-active text and a context-dependent secret is composed into the
+      report, and the raw secret bytes appear nowhere in the published bytes, on
+      the normal second write AND on the fallback. **The channels are enumerated
+      from `promote()`'s return shape at test time, not typed into the test**, so
+      a field added later without a Table N row fails the test rather than
+      silently escaping it — which is the defect that produced round (d).
+      **Four RED directions, each a real failure this loop measured:**
+      (i) the sanitiser skipped; (ii) the redact arm skipped; (iii) **sanitiser
+      FIRST** — the round (c) A, which has both arms and still leaks; (iv)
+      **`refused[].rel` and `refused[].reason` neutralised while
+      `redacted[].rel` is not** — the round (d) A, which passes every
+      refusal-shaped case.
+      **The secret values must be context-dependent** — at least
+      `token=abcdefghijkl` and `client_secret: abcdefghijkl` — because a
+      prefix-shaped secret survives the sanitiser intact and is caught in either
+      order, so a test built only from one goes green on the leaking
+      implementation.
+      **Channels Table N marks NOT influenceable are asserted too**, by showing
+      the test's enumeration covers them and records why they need nothing — an
+      unclassified channel must be impossible to leave unnoticed.
 - [ ] **Every report refusal delivers the record.** For an `expect` conflict AND
       for a symlinked report target, the outcome is the same three things: the
       vault object is byte-unchanged, the COMPLETE enforcement record is

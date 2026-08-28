@@ -969,3 +969,84 @@ unprompted from a reviewer.
 
 **One more undirected round on the whole family, per the HEAVY rule.** Its
 interpretation stands as pinned.
+
+## Round (d) — the second A, the extraction, and a correction owned by the advisor
+
+Raw: `2026-08-29-promote-split-round-d-raw.md`. Undirected, whole family.
+**13 of 14 priors genuinely fixed; ONE A-band; zero scope objections.** NOT clean.
+
+### The finding
+
+**F1 (A): the redaction line leaked the note's PATH.** Table R's rule opened
+with a universal — every interpolated value — then named `r.path` and
+`r.reason`. The redaction line added in pass (b) carries its own path and never
+said it was transformed, and the criterion exercised only a REFUSED path.
+**Reproduced by running the shipped validator** on a note named
+`04-Atomic/token=abcdefghijkl.md` whose content triggers redaction:
+`secretRedactions: 1`, and the credential still in the report.
+
+### THE CIRCUIT-BREAKER FIRED — third firing, and the ruling is EXTRACT
+
+Two consecutive rounds landed an A on ONE rule: round (c) that it named no
+ORDER, round (d) that its named SET was incomplete. **The breaker's letter is
+met and its prescription is not discretionary.** A third patch to a
+hand-maintained list was **rejected**, for the reason round (d)'s own lesson line
+gives: *an "every interpolated value" rule plus an explicit named list is only as
+strong as the list.*
+
+**Table N — the neutralisation contract** now owns which channels carry
+attacker-influenceable text, what transformation each gets, and in what order.
+
+**The load-bearing design choice, owner-ruled: THE VALUE SET IS DERIVED FROM THE
+RETURN SHAPE, NEVER HAND-LISTED.** The channels are exactly the string-typed
+fields of `promote()`'s return and of its `records` input, so **a new channel
+cannot exist without being a field of that shape, and therefore cannot exist
+without a row in Table N.** Both prior findings were channels that existed while
+the list did not mention them; a derived set cannot fail that way. This is the
+same discipline as Table S's row S5 — **form, not memory.**
+
+Two further closures the table carries:
+
+- **N2, the default:** an unclassified string channel is NEUTRALISED. A universal
+  that depends on someone remembering to extend a list is what failed twice; a
+  default that must be argued DOWN cannot fail the same way.
+- **Non-influenceable channels get rows too** (`labels`, `lines`), stated rather
+  than omitted — because a channel with no row is indistinguishable from a
+  channel nobody thought about, which is exactly how F1 arose.
+
+**The criterion now asserts the TABLE, not an enumeration:** the channels are
+enumerated from the return shape at test time rather than typed into the test, so
+a field added later without a row fails the test instead of silently escaping it.
+Four RED directions, each a failure this loop actually measured — sanitiser
+skipped, redact arm skipped, **sanitiser first** (round (c)'s A), and **refusal
+fields neutralised while `redacted[].rel` is not** (round (d)'s A).
+
+### CORRECTION ON THE RECORD — owned by the ADVISOR, not the session
+
+**The "sanitizer-neutral placeholder" claim was false.** Measured:
+`[REDACTED:generic-secret]` becomes `REDACTED_generic-secret_`.
+
+**It originated in the owner-channel relay, asserted from reading rather than
+running, and it is recorded against the advisor.** The order ruling STANDS on the
+reviewer's verified ground — sanitising a placeholder cannot restore a secret the
+redactor already removed — and **that measured reason replaces the invented one**
+in Table N row N1.
+
+**It is the same error class as the A itself:** a property of shipped code
+asserted from reading, in the same pass that told the reviewer a claim about a
+function is a claim to be RUN. Recorded rather than quietly corrected, because
+the loop's convergence argument rests on instances being counted.
+
+### Classification — accepted
+
+F1 is a **new-design** defect by the remedy test: Table R's composition rule is
+this family's own invention, absent from today's code. **The pinned family
+trigger does NOT fire, and the drained reading stands** — this is a different
+loop closing on a different contract.
+
+### Counts after the pass
+
+Module **23/3**, report **9/2**, pipeline **24/6**. Lint 0; G- and V-row order
+checks pass. No tripwire fires.
+
+**Next: one more undirected round on the whole family, per the HEAVY rule.**

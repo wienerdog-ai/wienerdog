@@ -26,7 +26,7 @@ decisions are recorded in `2026-08-28-promote-split.md`.
 **Contract table letters are family-wide, across four packages.**
 `WP-dream-workspace-retarget` owns **Tables A, B and F**;
 `WP-dream-vault-write-primitive` owns **Table H**; `WP-dream-promote-module`
-owns **C, D, E, Q and S**, `WP-dream-promote-report` owns **Table R and the
+owns **C, D, E, Q and S**, `WP-dream-promote-report` owns **Tables N and R and the
 report row**; this spec owns **G and V**. Every cross-package reference
 CITES its owner and never restates it — the pattern the family already uses for
 Table F and for the delta primitive's constructed-environment recipe.
@@ -607,7 +607,7 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
 
 ## Out of scope (do NOT do these)
 
-- **`WP-dream-promote-report`'s contracts** — Table R and the report row: the
+- **`WP-dream-promote-report`'s contracts** — Tables N and R and the report row: the neutralisation contract for every attacker-influenceable channel,
   body as a promotion candidate, the code-authored second write, the
   preserve-and-extend fallback and its four cases. This package DELIVERS
   `report.record` (row G11) and PRODUCES the `records` that package consumes
