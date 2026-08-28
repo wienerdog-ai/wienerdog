@@ -460,3 +460,121 @@ Module half stands at **26** of a **28** ceiling. If round 4's dispositions add
 three or more criteria there, **T1 fires by itself** and Table R plus the
 report's criteria move to `WP-dream-promote-report`. No further owner decision
 is needed for that; the ruling that pinned it is the decision.
+
+### Round 4 — 2026-08-28 — gptsol, external, FRESH agent, UNDIRECTED, WHOLE TEXT
+
+Raw: `2026-08-28-promote-split-round-4-raw.md`, committed before adjudication.
+Verdict **needs-attention**, **two findings, both band B, zero scope
+objections.** Nine of ten priors genuinely fixed; **R3-3 ruled RE-WORDED BUT
+STILL DEFECTIVE** — the first time this loop's re-audit has caught that, and the
+reason the runbook requires the re-audit at all.
+
+**NOT CLEAN.** No `Ready` flip, no PR.
+
+**The dispatch carried no steer.** The family was not named, `validateAndCommit`
+was not named, no walk was prescribed, and Table V went over as "the newest
+text". The round-3 confound is therefore absent from this measurement.
+
+### THE CLASSIFICATION, applied against the test pinned before the round
+
+**F2 — Table V drops EP2's durable redaction lifecycle. IN THE FAMILY. Both
+formulations agree, unambiguously.**
+
+- Test (1) — does it concern something that already EXISTS in the replaced code?
+  **Yes**, and this author verified all four on the tree before classifying:
+  `quarantinePreserve` writing the private artifact and its collision-resolved
+  basename (`validate.js:1276-1290`); the byte-identity preservation-failure
+  abort that refuses to destroy a file when no durable copy holds the bytes that
+  are there NOW (`:1298-1323`); once-per-run retention via
+  `pruneRedactedOriginals` (`:1365-1366`); and the report's "Redacted in place"
+  section carrying `{path, lines, labels, name}` (`:1398-1408`).
+- Test (2) — is the defect ownership or understated evidence? **Yes.** V3 lists
+  only "dispositions and the revert/re-stage/index-drop machinery". Table D's
+  gate return is `{ok} | {refuse, reason} | {redact, sanitizedBytes}` and carries
+  none of `lines`, `labels` or `name`.
+- Operational form — does the right answer require reading the REPLACED code?
+  **Yes, decisively.** Nothing in this package's own design says a redaction owes
+  the user a recovery pointer; only Step 3 does.
+
+**The user-visible consequence, stated plainly:** a conforming implementation can
+redact a note, delete nothing, break nothing any criterion tests — and never tell
+the user where their unredacted original is. `state/quarantine/redacted/`
+deliberately carries no digest banner, so **the report line IS the discovery
+path**. Losing it loses the copy in practice.
+
+**F1 — scratch violations have no interface into the report. AMBIGUOUS; the two
+formulations DISAGREE, so per the pin the OWNER classifies, not this author.**
+
+- The structural test leans IN: the obligation exists in the replaced code
+  (Step 1's records reach the report at `:1385-1386`), and that is where G12's
+  wording came from.
+- The operational test leans OUT: knowing the right ANSWER — that `promote()`
+  needs an input field for code-owned pre-promotion records — requires only this
+  package's own design, not the replaced code. That makes it the R1-1/R2-2 class:
+  **a rule stated that the interface cannot carry**, which was ruled NOT in the
+  family when it was calibrated.
+- **It does not change the consequence.** F2 alone triggers the escalation. F1's
+  classification matters for the RECORD and for whether the family is one
+  phenomenon or two, so it is left to the owner rather than resolved by the
+  author whose work is being judged.
+
+### CONSEQUENCE — STRUCTURAL ESCALATION, per the pinned reading
+
+**Three consecutive rounds have landed a finding in this family, after TWO
+extractions built to close it — and round 4's instance is INSIDE Table V, the
+extraction whose entire purpose was to prevent it.** The pinned rule is
+unambiguous and is followed exactly:
+
+> **STRUCTURAL ESCALATION to the owner — no further patching, no fourth
+> extraction.**
+
+**Nothing is patched. No spec was edited in response to this round.** F1 and F2
+stand open and undispositioned, on purpose. Patching them would be the fourth
+instance of the behaviour the escalation exists to stop, and would also destroy
+the measurement the owner set up.
+
+### What this author believes the escalation MEANS — offered as input, not as a ruling
+
+**The undirected round is the decisive evidence.** Round 3's count was
+confounded because this author aimed it. Round 4 was not aimed, and the family
+came back anyway — from a completely different region of the replaced code
+(EP2's redaction lifecycle, which no prior round had touched). **That is the
+measurement the owner designed, and it came back "not drained".**
+
+**What the two extractions did and did not achieve.** Table S closed the
+decided-bytes contract, and it has held for two rounds. Table V closed the
+STRUCTURE of inheritance — it made "who owns this step" askable and gave "no
+owner" a visible home. **What neither did is establish WHAT each step actually
+owns**, and that is not a table-shaped problem. V3 is not wrong in form; it is
+wrong in content, because its content was written from the same inventory-level
+reading of `validateAndCommit` that produced every prior instance. **A ledger
+filled in from an incomplete reading inherits the incompleteness and gives it an
+official-looking home.**
+
+**The honest conclusion this author draws, with its counterweight.** The
+remaining work is not review work. It is a **systematic read of
+`validateAndCommit`'s 1469 lines and the run path around it**, enumerating every
+durable output, side effect, artifact, retention behaviour and report line, and
+checking each against a Table V row — done once, offline, against the code rather
+than against the spec. Four rounds have each found a slice of that by sampling;
+sampling has produced 1, 2, 3 and 2 B-band findings and is not converging on
+zero. **The counterweight, because it is real:** such a pass is expensive, it is
+exactly the work the split was supposed to have already done, and there is no
+guarantee it is complete either — its only advantage is that it reads the source
+of truth instead of sampling around it, and that it can be checked line-by-line
+against Table V afterwards.
+
+**What is NOT in question:** the seam (owner-ruled, closed), the two extractions
+(both holding — Table S for two rounds, Table V structurally), and the nine
+priors that are genuinely fixed. The loop is finding real defects and the fixes
+are sticking. The question the escalation puts is whether to keep finding them
+one round at a time.
+
+### Measurements after round 4
+
+Unchanged from round 3, because **nothing was edited**: module half **26**
+criteria (T1 fires above 28 — not fired) / **3** deliverables; pipeline half
+**18** / **6**. `npm run lint` exit 0.
+
+**B-band trend: 1 → 1 → 2 → 3 → 2.** The round-3 peak was partly this author's
+steer; round 4 removed the steer and still returned two.
