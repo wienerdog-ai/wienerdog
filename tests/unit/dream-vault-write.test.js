@@ -333,14 +333,14 @@ test('dream-vault-write: H4 — a reader holding the target open across the publ
 });
 
 /**
- * Plant a symlink at the FIRST path this call opens for creation inside the
- * vault, pointing at `victim`. Name-agnostic on purpose: it never guesses what
+ * Plant a symlink at EVERY path this call opens for creation inside the vault,
+ * pointing at `victim`. Name-agnostic on purpose: it never guesses what
  * the staging object is called, it uses whatever path the implementation itself
  * chose, which is what keeps this a behaviour probe rather than a mechanism
  * assertion.
  * @param {string} vault @param {string} victim @param {() => void} body
  */
-function plantSymlinkAtFirstCreateOpen(vault, victim, body) {
+function plantSymlinkAtEveryCreateOpen(vault, victim, body) {
   let planted = false;
   withPatchedFs(
     'openSync',
@@ -348,7 +348,7 @@ function plantSymlinkAtFirstCreateOpen(vault, victim, body) {
       /** @param {any[]} args */ (...args) => {
         const [target, flags] = args;
         const creating = typeof flags === 'number' && (flags & fs.constants.O_CREAT) !== 0;
-        if (!planted && creating && typeof target === 'string' && target.startsWith(vault + path.sep)) {
+        if (creating && typeof target === 'string' && target.startsWith(vault + path.sep)) {
           planted = true;
           fs.symlinkSync(victim, target);
         }
@@ -356,6 +356,10 @@ function plantSymlinkAtFirstCreateOpen(vault, victim, body) {
       },
     body
   );
+  // Arming is not optional. An earlier form armed only ONCE, on the first
+  // create-open, and an implementation that made a single throwaway open before
+  // staging burned the arming on the decoy and then staged with the measured
+  // defect's exact shape, green.
   assert.ok(planted, 'the probe never armed — no create-open happened inside the vault');
 }
 
@@ -371,7 +375,7 @@ test('dream-vault-write: the second measured defect — a staged write never lan
   // staging object is named or opened: whatever path this call stages through,
   // a file it was not asked to write must come out byte-unchanged.
   let result;
-  plantSymlinkAtFirstCreateOpen(vault, victim, () => {
+  plantSymlinkAtEveryCreateOpen(vault, victim, () => {
     result = writeIntoVault({ vaultDir: vault, rel: 'notes/x.txt', bytes: Buffer.from('payload'), admit: ADMIT_ALL });
   });
 
@@ -388,7 +392,7 @@ test('dream-vault-write: the second measured defect — a staged write never lan
   const controlVictim = path.join(controlVault, 'notes', 'precious.txt');
   fs.writeFileSync(controlVictim, 'the user’s only copy');
   assertDiscriminates(() => {
-    plantSymlinkAtFirstCreateOpen(controlVault, controlVictim, () => {
+    plantSymlinkAtEveryCreateOpen(controlVault, controlVictim, () => {
       const staging = path.join(controlVault, 'notes', '.x.txt.tmp');
       const fd = fs.openSync(staging, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC, 0o666);
       fs.writeSync(fd, Buffer.from('payload'), 0, 7, null);
@@ -482,12 +486,14 @@ test('dream-vault-write: H6 — a target mutated IMMEDIATELY AFTER the publish c
   // composed. Then the module re-reading the path would report the OTHER
   // writer's content as what it published.
   let result;
+  let injected = false;
   withPatchedFs(
     'renameSync',
     (original) =>
       /** @param {any[]} args */ (...args) => {
         const out = Reflect.apply(original, fs, args);
         fs.writeFileSync(target, 'somebody else wrote this, right after the publish');
+        injected = true;
         return out;
       },
     () => {
@@ -495,6 +501,11 @@ test('dream-vault-write: H6 — a target mutated IMMEDIATELY AFTER the publish c
     }
   );
 
+  // Without this the probe is vacuous, and vacuous is the exact defect it was
+  // written to close. Measured: a module that reaches `renameSync` through a
+  // destructured binding never sees the patch, the concurrent write never
+  // happens, and every assertion below passes while H6 is violated.
+  assert.ok(injected, 'the probe never armed — the publish did not go through fs.renameSync');
   assert.equal(result.written, true);
   assert.deepEqual(result.bytes, bytes, 'the return carries what this call published, not what the path holds now');
   assert.equal(result.sha256, digest(bytes), 'and the digest is over those same bytes');
@@ -551,6 +562,9 @@ test('dream-vault-write: H9 — a refusal after the chain was created removes th
   assert.equal(result.written, false);
   const unwound = () => assert.deepEqual(snapshot(vault), before);
   unwound();
+  // Nothing was retained, so the reason must not say anything was: a directory
+  // that is already gone is not a directory left in the vault.
+  assert.doesNotMatch(result.reason, /left in the vault/);
 
   // RED: an implementation that leaves its created directories behind.
   fs.mkdirSync(path.join(vault, 'notes', 'new-project'));
@@ -614,6 +628,99 @@ test('dream-vault-write: H9 — prohibition (i): a created directory that acquir
   assert.match(result.reason, /no longer empty and was left in the vault: notes\/new-project/);
 });
 
+test('dream-vault-write: H7 — a staging file that cannot be removed is LEFT and NAMED, never left silently', { skip: !POSIX }, () => {
+  const vault = makeVault();
+  const target = path.join(vault, 'notes', 'x.txt');
+  fs.writeFileSync(target, 'on disk');
+
+  // No fault is injected into the module. The concurrent actor simply takes
+  // write permission off the parent between the staging open and the refusal —
+  // the same class of concurrent act the rest of this file uses, and the same
+  // class (EACCES on an unwind step) the directory buckets already handle.
+  let armed = false;
+  let result;
+  withPatchedFs(
+    'readFileSync',
+    (original) =>
+      /** @param {any[]} args */ (...args) => {
+        if (!armed) {
+          armed = true;
+          fs.chmodSync(path.join(vault, 'notes'), 0o500);
+        }
+        return Reflect.apply(original, fs, args);
+      },
+    () => {
+      result = writeIntoVault({
+        vaultDir: vault,
+        rel: 'notes/x.txt',
+        bytes: Buffer.from('REFUSED PAYLOAD'),
+        admit: ADMIT_ALL,
+        expect: Buffer.from('what the decision was made against'),
+      });
+    }
+  );
+  fs.chmodSync(path.join(vault, 'notes'), 0o700);
+
+  assert.ok(armed, 'the probe never armed — the conditional publish did not re-read the target');
+  assert.equal(result.written, false);
+
+  const leftovers = fs.readdirSync(path.join(vault, 'notes')).filter((n) => n !== 'x.txt');
+  // What must NEVER happen is a leftover that nothing reports: the staged bytes
+  // are the REFUSED payload, and they sit where a consumer's later `git add -A`
+  // would sweep them into a commit.
+  for (const name of leftovers) {
+    assert.match(
+      result.reason,
+      /a file this write staged could not be removed and was left in the vault/,
+      `${name} was left behind and the refusal says nothing about it`
+    );
+    assert.ok(result.reason.includes(name), `${name} was left behind but is not named in the refusal`);
+  }
+});
+
+test('dream-vault-write: H9 — a directory that cannot be removed for an unknown reason is named WITHOUT claiming it holds content', () => {
+  const vault = makeVault();
+
+  // The refusal reason must say what the platform said, not what would be a
+  // tidy story. An EACCES rmdir is not evidence that a concurrent writer put
+  // something in the directory, and reporting it as such is the overclaiming
+  // this package exists to stop.
+  let armed = false;
+  let result;
+  withPatchedFs(
+    'rmdirSync',
+    (original) =>
+      /** @param {any[]} args */ (...args) => {
+        if (!armed) {
+          armed = true;
+          const e = new Error('synthetic: the platform refused this removal');
+          // @ts-expect-error — a synthetic errno, which is the whole point
+          e.code = 'EACCES';
+          throw e;
+        }
+        return Reflect.apply(original, fs, args);
+      },
+    () => {
+      result = writeIntoVault({
+        vaultDir: vault,
+        rel: 'notes/new-project/note.txt',
+        bytes: Buffer.from('body'),
+        admit: ADMIT_ALL,
+        expect: Buffer.from('bytes that are not there'),
+      });
+    }
+  );
+
+  assert.ok(armed, 'the probe never armed — no directory removal was attempted');
+  assert.equal(result.written, false);
+  assert.match(result.reason, /could not be removed and was left in the vault: notes\/new-project \(EACCES\)/);
+  assert.doesNotMatch(
+    result.reason,
+    /no longer empty/,
+    'an EACCES is not evidence that the directory acquired content, and must not be reported as if it were'
+  );
+});
+
 test('dream-vault-write: H9 — the unwind identity gap is a RESIDUAL, not a guarantee', { skip: !POSIX }, () => {
   const vault = makeVault();
   const createdPath = path.join(vault, 'notes', 'new-project');
@@ -655,6 +762,47 @@ test('dream-vault-write: H9 — the unwind identity gap is a RESIDUAL, not a gua
 // ===========================================================================
 // H10 / H7 / H8 — permissions, total refusal, and the absence of policy
 // ===========================================================================
+
+test('dream-vault-write: H9 — a created directory that is already GONE at unwind time is not reported as left behind', { skip: !POSIX }, () => {
+  const vault = makeVault();
+  const createdPath = path.join(vault, 'notes', 'new-project');
+  const movedPath = path.join(vault, 'notes', 'moved-away');
+
+  // Same concurrent act as the identity residual, minus the replacement: the
+  // directory this call created is renamed away and nothing is put back, so the
+  // removal finds nothing there. Nothing was retained, so the refusal must not
+  // say anything was — a directory that is already gone is not a directory left
+  // in the vault, and a reason that claims otherwise is the same overclaiming
+  // the buckets above exist to prevent.
+  let armed = false;
+  let result;
+  withPatchedFs(
+    'rmSync',
+    (original) =>
+      /** @param {any[]} args */ (...args) => {
+        const out = Reflect.apply(original, fs, args);
+        if (!armed) {
+          armed = true;
+          fs.renameSync(createdPath, movedPath);
+        }
+        return out;
+      },
+    () => {
+      result = writeIntoVault({
+        vaultDir: vault,
+        rel: 'notes/new-project/note.txt',
+        bytes: Buffer.from('body'),
+        admit: ADMIT_ALL,
+        expect: Buffer.from('bytes that are not there'),
+      });
+    }
+  );
+
+  assert.ok(armed, 'the probe never armed — the staging file was never removed');
+  assert.equal(result.written, false);
+  assert.equal(fs.existsSync(createdPath), false);
+  assert.doesNotMatch(result.reason, /left in the vault/, 'nothing was retained, so nothing may be reported as retained');
+});
 
 test('dream-vault-write: H10 — a published note carries the same permissions as one the user creates by hand', { skip: !POSIX }, () => {
   const vault = makeVault();

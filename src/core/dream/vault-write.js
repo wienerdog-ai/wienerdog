@@ -234,29 +234,45 @@ function writeIntoVault(o) {
   let vaultReal;
 
   /**
-   * Total refusal (H7): nothing this call made survives it, bounded exactly as
-   * the unwind residual describes. The temp goes first, so a directory this
+   * Total refusal (H7): nothing this call made survives it, and where something
+   * does, the reason SAYS SO. The staging file goes first, so a directory this
    * call created is not held non-empty by our own leftover.
+   *
+   * Three buckets, and the split exists because a refusal reason that asserts
+   * more than the platform said is exactly the overclaiming this package exists
+   * to stop:
+   *
+   *   - The staging file could not be removed. Measured: with the parent
+   *     directory concurrently made unwritable between the staging open and the
+   *     refusal, `rmSync` fails and the staged bytes stay in the vault. An
+   *     earlier form swallowed that error on the theory that "the rmdir below
+   *     reports the consequence" — but when no directory was created there IS
+   *     no rmdir, so nothing reported it, and what stayed behind was the
+   *     REFUSED payload, sitting where a consumer's later `git add -A` would
+   *     sweep it into a commit. It is named now.
+   *   - `ENOTEMPTY` (`EEXIST` where a platform spells it that way) is the case
+   *     H9's rule is about: the directory holds something, so it is LEFT IN
+   *     PLACE. Note that this states WHAT IS TRUE, not why — the usual cause is
+   *     a concurrent writer's work, which must not be deleted, but our own
+   *     unremovable staging file can produce it too, and the bucket above is
+   *     what tells those apart.
+   *   - Any OTHER error means the removal failed for a reason we do not know,
+   *     and saying "no longer empty" there would be a guess stated as a fact.
+   *
+   * `ENOENT` is in none of them: it is already gone, so nothing is retained.
    * @param {string} reason @returns {{written:false, reason:string}}
    */
   const refuse = (reason) => {
+    /** @type {string|null} */
+    let staleStaging = null;
     if (tmp) {
       try {
         fs.rmSync(tmp, { force: true });
-      } catch {
-        /* the temp is gone or unreachable; the rmdir below reports the consequence */
+      } catch (e) {
+        staleStaging = `${toVaultRel(vaultReal, tmp)} (${(e && e.code) || (e && e.message)})`;
       }
       tmp = null;
     }
-    // Two buckets, because a refusal reason that asserts more than the platform
-    // said is exactly the overclaiming this package exists to stop. ENOTEMPTY
-    // (EEXIST on the platforms that spell it that way) is the case the rule is
-    // about: content arrived after we created the directory, so it is LEFT IN
-    // PLACE — removing it would delete a concurrent writer's work, and the
-    // empty-only rule makes that impossible by construction rather than by
-    // care. Any OTHER error means the removal failed for a reason we do not
-    // know, and saying "no longer empty" there would be a guess stated as a
-    // fact. ENOENT is neither: it is already gone, so nothing is retained.
     /** @type {string[]} */
     const acquiredContent = [];
     /** @type {string[]} */
@@ -274,6 +290,9 @@ function writeIntoVault(o) {
     /** @param {string[]} list */
     const rel = (list) => list.map((p) => toVaultRel(vaultReal, p)).join(', ');
     let suffix = '';
+    if (staleStaging) {
+      suffix += ` (a file this write staged could not be removed and was left in the vault: ${staleStaging})`;
+    }
     if (acquiredContent.length) {
       suffix += ` (a directory this write created is no longer empty and was left in the vault: ${rel(acquiredContent)})`;
     }
