@@ -638,3 +638,76 @@ spec's frame and sees what it describes. The agent therefore produces its
 complete inventory from `src/` alone, writes it down, and only then opens Table V
 and the D / G / S surfaces to diff. **The ordering is the method, not a
 preference.**
+
+## Step (a) — the measurement's result, and ONE scope question for the owner
+
+Raw: `2026-08-28-promote-split-inventory-measurement.md`, committed before
+adjudication. **95 items; 48 COVERED, 8 DROPPED-BY-DESIGN, and 39 gaps** — 27
+ownership, 4 interface, 8 understated.
+
+**The method held.** The agent confirms it wrote `/tmp/inventory.md` from the
+code before opening any spec, and its execution report shows it read all 1469
+lines of `validate.js` and all 646 of `cli/dream.js` by numbered ranges plus the
+called modules. This is the first reading of this system that was not anchored
+by the spec's own frame.
+
+### The strongest independent result
+
+**All four GAP-INTERFACE items are the EP2 redaction metadata** — the
+collision-resolved quarantine basename, the scrubbed-line count and detector
+labels, the per-redaction report line, and the enforcement record's
+surviving-original metadata. **A different method, run blind, landed on exactly
+round 4's F2.** That is confirmation rather than repetition, and it means the
+interface projection of the root cause is real and precisely located.
+
+Alongside them the measurement adds three EP2 items no round had found: **I067**
+(no recoverability invariant when redaction fails AND withheld preservation
+fails — workspace teardown could then destroy the only copy), **I070** (the
+byte-identity condition for deleting a redundant redacted copy), and **I072**
+(retention: the 50-file cap, oldest-first, never pruning this run's own copies).
+I067 is ranked first in the gap list on damage, and this author agrees with that
+ranking: it is the one item where a conforming implementation destroys a user's
+only copy of something.
+
+### THE SCOPE QUESTION — the owner's call, not this author's
+
+**The measurement inventoried the WHOLE RUN PATH. Table V's stated remit is
+`validateAndCommit`** — its heading says so. That difference is worth roughly
+**20 of the 27 ownership gaps**, so it changes the size of pass (b) by about
+three times, and it is a scope decision rather than a technical one.
+
+The disputed items are behaviours in `cli/dream.js` that this package does not
+change: the single-run lock (I004, I005, I006), transcript selection, budgeting
+and scratch construction (I007–I017), the digest and its inputs (I019, I020),
+the containment probe (I021, I022), private logging and output redaction (I025,
+I031), run-evidence (I030), the settings profile and staging reset (I027, I028),
+and the config/date input contract (I002).
+
+**The case for the narrow reading (Table V = the validator):** a spec does not
+owe a row to every behaviour in a file it edits. These are untouched by rows
+G1–G12, and "don't break what you don't touch" is the default that keeps a
+package's boundary meaningful. Writing 20 rows for behaviour nobody is changing
+is the plausible-looking rigor the authoring rules tell us to cut.
+
+**The case for the wide reading (Table V = the run path):** this package
+**modifies `src/cli/dream.js`** — its whole blast radius is that file. Four
+rounds have now shown that what this pair fails at is precisely *not noticing
+what existing code produces*. The narrow reading is also what produced R3-3: Step
+1 was "not this package's subject" right up until it turned out G12 had to own
+it.
+
+**This author's recommendation, with its weakness stated.** Take a MIDDLE
+reading: Table V's remit is the validator PLUS any run-path behaviour that this
+package's own required changes interact with. On that reading the real gap list
+is about twelve items — the four interface gaps, I067, I070, I072, plus **I095**
+(lock-guarded scratch cleanup, which G5's teardown wiring touches), **I018**
+(dry-run previews the composed argv, which G1 re-points), **I078/I085** (the
+note/skill counter semantics, which G11 now claims), **I081** (`committed[]`
+neither inherited nor dropped), and a check on **I093** (digest regeneration
+ordering versus G4's changed transcript-advance). **The weakness: "interacts
+with" is a judgement, and it is the same kind of judgement that missed Step 1.**
+A middle reading is only as good as the person drawing the line, and that person
+has now been wrong about this four times.
+
+**Nothing is edited. Pass (b) does not start until the scope is ruled**, because
+the ruling determines what pass (b) contains.
