@@ -711,3 +711,48 @@ has now been wrong about this four times.
 
 **Nothing is edited. Pass (b) does not start until the scope is ruled**, because
 the ruling determines what pass (b) contains.
+
+## T1 HAS FIRED — measured mid-pass-(b), 2026-08-28
+
+**Measured, not estimated:** the module half now carries **30** acceptance
+criteria. **T1 fires above 28.** The pinned ruling
+(`2026-08-28-promote-split-owner-ruling.md`) makes this self-executing: *"whoever
+measures the condition states the measurement and cuts the package. It is not a
+fresh escalation; the escalation already happened and this is its answer."* The
+owner reaffirmed it when approving the remedy — *"the tripwire stays
+self-executing as designed"*.
+
+| Measure | Value | Threshold | State |
+|---|---|---|---|
+| module acceptance criteria | **30** | T1 fires above **28** | **FIRED** |
+| of those, the report's (#15–#20, #25) | **7** | T2 fires above **8** | not fired |
+| module deliverables | 3 | — | — |
+
+**What pushed it over, stated so the cause is visible:** pass (b) added four
+criteria to the module half — three for Table Q (the redaction's recovery copy,
+the only-copy invariant, retention) and one for round 4's F1 (the caller's
+records reaching the report). The count went 26 → 30. **None of the four is
+report-scoped**, which is why T2 did not fire alongside it: the pressure this
+time came from the EP2 quarantine lifecycle, not from Table R.
+
+**That is worth recording against the tripwire's own design.** The tripwire was
+pinned on the hypothesis that the REPORT was the module half's pressure point,
+and T2 was the sharper instrument aimed at exactly that. The measurement says
+the hypothesis was half right: the report is large, but what actually broke the
+ceiling was a contract nobody had inventoried. **T1, the blunt instrument, is
+what caught it** — an argument for keeping a coarse ceiling alongside a targeted
+one, since the targeted one can only watch what you already suspect.
+
+**The cut, as pinned:** Table R, Table D's report row, and the report's
+acceptance criteria move to a third, stacked package **`WP-dream-promote-report`**,
+which depends on the module half and is depended on by the pipeline half. The
+module half keeps the decision, the four gates, Table Q and the publish for
+ordinary notes; the report package takes the body's promotion, the code-authored
+second write, and the fallback. **Ordinary notes need nothing from Table R**, and
+the module half already ships consumed by nothing, so the intermediate state
+regresses no running product.
+
+**Pass (b) is therefore not finished.** Its module-side work is committed; the
+pipeline-side items (I095, I018, I078/I085, I081, I093, F1's G12 wiring, and
+F2's V3 expansion) and the cut itself remain. **The cut lands before pass (c)**,
+because pass (c)'s undirected round must run on the shape that will ship.
