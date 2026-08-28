@@ -69,6 +69,22 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   (Not: "sandbox" — that word means the `WIENERDOG_HOME`-redirect guard; not
   "staging directory" — that is the empty working directory a job RUNS from; not
   "scratch", "shadow vault", "mirror".)
+- **vault write** — the one call this family's code goes through to put a
+  content file into the vault. Two writers use it and no others: each promoted
+  note, and the dream report (whose body the brain authors and to which code
+  appends its accounting section, so that one is two calls). Git's writes to the
+  vault's own `.git` directory are not content files and are not vault writes.
+  It decides on the object the write would actually LAND on rather than on the
+  path it was handed: the destination is resolved first — a directory that is
+  really a symlink elsewhere resolves to where it points — and THAT is what the
+  caller's policy judges. It refuses to write onto or through a symlink it can
+  see, publishes so that a reader of the target never catches a half-written
+  file, abandons the write when the target no longer holds the bytes the
+  decision was made against, and returns the exact bytes it published so nothing
+  downstream re-reads the path to learn what landed. It carries no rules of its
+  own — which destinations are allowed belongs to the caller. Staying inside the
+  vault is required of every write and admits none of them by itself. (Not:
+  "publish", "atomic write", "safe write".)
 - **staging directory** — the fresh, empty, Wienerdog-owned working directory a
   hermetic job runs in (and, for a routine, its only writable output), so no
   project or local settings can be discovered under the job's working directory.
