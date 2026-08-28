@@ -216,9 +216,9 @@ inherits this contract as its only write path.
 | H4 | **The target is never observed holding a partial write** | a reader looking at the target at any instant sees either its previous content or the complete new content, never a prefix. **The mechanism is the implementer's** (round-4 CUT ruling): an earlier draft prescribed the temp's flags, its naming and its identity carry-through, and manufactured three contradictions doing so |
 | H5 | **The publish is CONDITIONAL on the caller's premise still holding** | with `expect` present the write is abandoned unless the target still holds exactly those bytes; with `expect` absent it is abandoned unless the target does not exist. Abandonment is a refusal (H7), never a silent overwrite. **NARROWED, not closed:** a write landing between the check and the publish is still lost — a residual this row states rather than hides |
 | H6 | **The caller never re-reads the path to learn what was published** | on success the return carries the exact bytes published, so a consumer that must act on them (staging, hashing, appending) acts on the returned value and not on a fresh read of a path another writer may since have changed |
-| H9 | **Missing parent directories are created by this call, under H3's rule — and a refusal removes the EMPTY ones it created** | a promoted note may be the first file in a new tier subdirectory, and a caller that pre-creates parents would be writing the vault outside the primitive, which H8's enumeration forbids. **On refusal (owner ruling on F3, 2026-08-27): the call removes the directories IT created that are STILL EMPTY at removal time. Anything it created that has meanwhile acquired content is LEFT IN PLACE and NAMED in the refusal. Two prohibitions, each stated at the strength it actually holds (round 7, R7-1 — an earlier form stated both absolutely, and the second half of this same row then admitted the first was false): (i) ABSOLUTE — the call never removes anything NON-EMPTY; content is structurally undeletable and nothing below weakens it. (ii) QUALIFIED — outside the named concurrent empty-directory substitution residual below, the call removes only directories it created; inside that residual it can remove a substituted EMPTY directory it did not create, which is the accepted damage-bounded case rather than a violation.** Why the synthesis rather than either pure rule: always-byte-unchanged is unimplementable without risking deletion of concurrent user content — the user's editor is a live vault writer throughout, which this package already carries as a named fact (Security checklist) — while leave-everything makes a REFUSED operation mutate the vault, which is this family's own definition of failure in miniature. **The empty-only rule handles the CONTENT race structurally: removing a non-empty directory must fail by construction, so concurrent user work is not deletable — protected by shape, not by care.** Measured on Node 24.18 that the platform supplies that shape: `rmdirSync` on a directory holding one file fails `ENOTEMPTY` and the file survives. **The claim is narrowed to CONTENT deliberately (round 6, R6-1): it is NOT true of IDENTITY.** The removal is path-based, and portable Node cannot bind it to the directory the call created — the same platform limit this repo already carries as an owner ruling at `delta.js:22-40`, and a pre-removal identity check has its own race. Measured: rename the call-created empty chain away, put a DIFFERENT empty directory at the same path, and the unwind removes the replacement while the original survives under its new name. **Named residual, owner-ruled 2026-08-27, with its damage bound stated: at most an EMPTY directory, never content** — the absolute non-empty prohibition is untouched. Same treatment as the component-swap residual and Table R's R4. Which call makes empty-only removal safe is the implementer's (round-4 CUT); this row states the visible end state |
+| H9 | **Missing parent directories are created by this call, under H3's rule — and a refusal removes the EMPTY ones it created** | a promoted note may be the first file in a new tier subdirectory, and a caller that pre-creates parents would be writing the vault outside the primitive, which H8's enumeration forbids. **On refusal (owner ruling on F3, 2026-08-27): the call removes the directories IT created that are STILL EMPTY at removal time. Anything it created that has meanwhile acquired content is LEFT IN PLACE and NAMED in the refusal.** **A removal that fails for a platform reason that is NOT non-emptiness is likewise LEFT IN PLACE and NAMED — and the refusal reports WHAT THE PLATFORM SAID, never "no longer empty" (added 2026-08-28 from the shipped implementation's own measurement; it is case (d) in the H7 criterion, which is the surface that counts these cases). A failed removal is not evidence that a concurrent writer put something in the directory, and reporting it as if it were is exactly the overclaiming this package exists to stop.** **Two prohibitions, each stated at the strength it actually holds (round 7, R7-1 — an earlier form stated both absolutely, and the second half of this same row then admitted the first was false): (i) ABSOLUTE — the call never removes anything NON-EMPTY; content is structurally undeletable and nothing below weakens it. (ii) QUALIFIED — outside the named concurrent empty-directory substitution residual below, the call removes only directories it created; inside that residual it can remove a substituted EMPTY directory it did not create, which is the accepted damage-bounded case rather than a violation.** Why the synthesis rather than either pure rule: always-byte-unchanged is unimplementable without risking deletion of concurrent user content — the user's editor is a live vault writer throughout, which this package already carries as a named fact (Security checklist) — while leave-everything makes a REFUSED operation mutate the vault, which is this family's own definition of failure in miniature. **The empty-only rule handles the CONTENT race structurally: removing a non-empty directory must fail by construction, so concurrent user work is not deletable — protected by shape, not by care.** Measured on Node 24.18 that the platform supplies that shape: `rmdirSync` on a directory holding one file fails `ENOTEMPTY` and the file survives. **The claim is narrowed to CONTENT deliberately (round 6, R6-1): it is NOT true of IDENTITY.** The removal is path-based, and portable Node cannot bind it to the directory the call created — the same platform limit this repo already carries as an owner ruling at `delta.js:22-40`, and a pre-removal identity check has its own race. Measured: rename the call-created empty chain away, put a DIFFERENT empty directory at the same path, and the unwind removes the replacement while the original survives under its new name. **Named residual, owner-ruled 2026-08-27, with its damage bound stated: at most an EMPTY directory, never content** — the absolute non-empty prohibition is untouched. Same treatment as the component-swap residual and Table R's R4. Which call makes empty-only removal safe is the implementer's (round-4 CUT); this row states the visible end state |
 | H10 | **A newly created file gets the process's ordinary default permissions, and the spec states ONE rule** | nothing here widens or narrows them. **The two-rule form this row carried is withdrawn (round 4, F8''):** "match the vault root" and "never wider than the umask" were measured mutually unsatisfiable — under umask `0077`, `mkdir 0755` yields `0700` and `open 0644` yields `0600`, so no implementation could satisfy both. A note the dream creates is no more sensitive than one the user creates in the same directory, and it should not be more surprising either |
-| H7 | **Refusal is total and reported** | every failure path returns `{written:false, reason}`; nothing is partially written, and nothing of this call's making survives it — for directories, bounded exactly as H9 states. The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
+| H7 | **Refusal is total and reported — and wherever something of this call's making does survive, the refusal NAMES it** | every failure path returns `{written:false, reason}`; nothing is partially written, and nothing of this call's making survives a refusal — **bounded on both sides, and neither bound is a licence to be silent: the DIRECTORY side exactly as H9 states, the STAGING-OBJECT side as stated next in this cell. Neither side is counted here; the H7 acceptance criterion is the single surface that enumerates and counts the cases, so this row cannot go stale against it.** **The staging-object side is NOT absolute, and the spec states the strength that actually holds (raised 2026-08-28 from the shipped implementation's own measurement):** portable Node cannot remove the call's own staging object from a parent directory that became unwritable between the object's creation and the refusal — the removal fails `EACCES` and the staged bytes stay in the vault. Same class as the two-rule H10 absolute this table already withdrew: an absolute no implementation can satisfy is not a contract, it is a wish. **Damage bound, stated so the residual is not open-ended: at most ONE object per call, of this call's own making, in the target's own parent directory, and the refusal reason NAMES it.** Naming it is the load-bearing half — the staged bytes are the REFUSED payload, sitting where a consumer's later `git add -A` would sweep them into a commit, so a leftover nothing reports is the failure this whole package exists to prevent, in miniature. **What the staging object is CALLED and how it is opened remain the implementer's (round-4 CUT); this row bounds only what may survive and requires that it be reported.** The module throws only on a caller-contract violation (a `rel` that is not segment-valid, a missing `admit`), never on a policy refusal |
 | H8 | **No policy lives here** | this module knows nothing about tiers, extensions, instruction files or report directories. It owns the filesystem discipline; `admit` owns the rules. That separation is the point of the extraction: the rules can be argued about and changed in one place, and none of those arguments can weaken the filesystem discipline by accident |
 
 ### Mirrored Surface Checklist
@@ -231,13 +231,41 @@ inherits this contract as its only write path.
 - [ ] Current-state description (the three measured defects and the hardened
       precedent)
 - [ ] Out of scope (what the consumer owns)
+- [ ] Security checklist — its "Named residual" bullets restate the limits
+      stated in H3, H4, H5, H7 and H9; each defers to its row
+- [ ] **`docs/GLOSSARY.md`'s `**vault write**` entry** — a mirror OUTSIDE this
+      spec, and this deliverable's only one. It restates Table H in plain
+      language for a non-implementer reader: the enumeration of content writers
+      (Context), H1's resolve-then-judge, H2's containment-admits-nothing,
+      H3's symlink refusal, H4's no-half-written-file, H5's abandon-on-changed-
+      bytes, H6's return-the-bytes, and H8's no-policy-here. It was NOT
+      registered here until 2026-08-28, so it could have drifted unseen. It
+      defers to Table H: where the two disagree the table is right and the
+      glossary is the bug. Verified against Table H on 2026-08-28 — no
+      contradiction; it is silent on H7, H9 and H10, and silence is permitted
+      because a glossary entry names a concept rather than enumerating a
+      contract
 - [ ] **Every surface that says what this primitive guarantees** — the package
       note, the Context, rows H2, H3, H4 and H5, and the acceptance criteria.
       **No surface may call the compare→publish window "closed", describe
       vault-containment as sufficient, claim the component-swap race is closed,
-      or claim substitution is prevented rather than detected. And no surface
+      claim substitution is prevented rather than detected, or state H7's
+      file side as an absolute ("a refusal always leaves nothing behind").
+      And no surface
       may say "the only way anything writes the vault" without the Context's
       enumeration of the content writers this family owns.**
+- [ ] **Every surface that COUNTS.** Two counts run through this spec and each
+      has exactly one owning surface; every other surface defers instead of
+      restating. (1) The measured defects: **three**, owned by the Context, and
+      each now carries a red-side criterion — H1's, H4's and H6's. (2) The
+      bounded cases where a refusal does not restore the vault byte-for-byte:
+      **four**, owned by the H7 acceptance criterion, which is where a test
+      author counts them. The H7 row, the H9 row and the H9 criterion all point
+      at that criterion rather than repeating a number. **This bullet exists
+      because both counts have gone stale before** — the defect count sat at
+      three in the Deliverables cell while the criteria carried one red, and the
+      bounded-case count went one → two → four, each time as arithmetic left
+      behind by a residual added elsewhere.
 
 ## Implementation notes & constraints
 
@@ -286,6 +314,21 @@ inherits this contract as its only write path.
       reported in the refusal reason. The alternative — removing it — would
       delete concurrent user content, and the empty-only rule makes that
       impossible by construction rather than by care (H9).
+- [ ] Named residual (H7, raised 2026-08-28 from the shipped implementation's
+      own measurement): the call's own STAGING OBJECT can survive a refusal.
+      With its parent directory made unwritable between the staging and the
+      refusal, the removal fails `EACCES` and the staged bytes — which are the
+      REFUSED payload — stay in the vault, where a consumer's later
+      `git add -A` would sweep them into a commit. **Bounded: at most one
+      object per call, of this call's own making, in the target's own parent
+      directory, and NAMED in the refusal reason.** The file side of H7 is
+      therefore not an absolute, and no surface may state it as one.
+- [ ] Named residual (H9, raised 2026-08-28 from the shipped implementation's
+      own measurement): a directory this call created whose removal fails for a
+      platform reason that is NOT non-emptiness is likewise RETAINED. It is
+      NAMED in the refusal, reported as what the platform said and never as
+      "no longer empty" — a failed removal is not evidence that a concurrent
+      writer put something there.
 - [ ] Named residual: platform support for atomic no-follow opens is not
       uniform (win32 has no `O_NOFOLLOW`), so H3's refusal is stronger on some
       platforms than others; no cross-platform guarantee is claimed.
@@ -316,6 +359,20 @@ and five of round 4's nine findings existed only because they did.
       sampling the target across a write sees either the old complete content
       or the new complete content. Proven RED against an implementation that
       writes the target in place.
+- [ ] **H4 — whatever path the call stages through, it never writes through
+      something planted at that path.** With a symlink planted at EVERY path
+      this call opens for creation inside the vault, pointing at an unrelated
+      file, that file is byte-unchanged — whether the call goes on to publish
+      or to refuse. **Proven RED against a following create-open at the staging
+      path: the SECOND measured defect (`validate.js:855-863` — a predictable
+      staging name plus a following write, so anything planted there is
+      followed and its victim overwritten before the `rename` ever happens).**
+      The probe is name-agnostic by requirement: it plants at whatever path the
+      implementation itself opens and never at a name this criterion guesses,
+      because the staging object's naming is the implementer's (round-4 CUT)
+      and a name-guessing probe would smuggle the withdrawn mechanism back in
+      as a test. This criterion sits under H4 because H4 is the row that makes
+      a staging object exist at all.
 - [ ] **H5 — the conditional publish.** With `expect` given and the target
       changed after the decision, the write is abandoned, `{written:false}` is
       returned, and the target keeps the changed bytes. With `expect` absent
@@ -323,16 +380,32 @@ and five of round 4's nine findings existed only because they did.
 - [ ] **H6 — the return carries the published bytes.** `bytes` equals the
       buffer passed in and `sha256` is over it; a target mutated immediately
       after the publish changes neither, so a caller acting on the return is
-      never acting on another writer's content.
+      never acting on another writer's content. **Proven RED against a return
+      learned by re-reading the path — the THIRD measured defect
+      (`validate.js:1412`: staging reads the working tree, so a save landing
+      after the decision is what gets committed).** The red is required at both
+      ends of the return, because either end alone reintroduces the defect: a
+      MODULE that reads the path back instead of carrying the payload it
+      published, and a CALLER that re-reads the path instead of using `bytes`.
+      This criterion is where the THIRD measured defect's red-side lives. The
+      first's lives in the H1 criterion and the second's in the H4 criterion
+      immediately above, so each of the three has exactly one and the count is
+      three on the canonical side as well as in the deliverable. **Corrected
+      2026-08-28 against the shipped tree: an earlier form of this section
+      carried an explicit red for the first defect only — arithmetic left
+      behind by the round-4 CUT, while the Deliverables cell and the Mirrored
+      Surface Checklist both went on saying three.**
 - [ ] **H9 — a missing parent chain is created, and a refusal unwinds the empty
       part of it.** Promoting `01-Projects/new-project/note.md` into a vault
       holding only `01-Projects/` creates the missing directory and publishes
       the note. With a symlink planted as one of the segments, the write refuses
       and follows nothing. **On a refusal AFTER the chain was created (a policy
       or `expect` refusal), and in the ORDINARY case — every call-created
-      directory still empty and still the object the call created — the vault is
-      byte-identical to its pre-call state** (the two exceptions are H9's named
-      residuals, enumerated in the H7 criterion below) —
+      directory still empty, still the object the call created and removable,
+      and the call's staging object removable too — the vault is
+      byte-identical to its pre-call state** (the departures from ordinary are
+      NOT counted here: the H7 criterion below is the one surface that
+      enumerates and counts them, and this criterion defers to it) —
       the created-and-still-empty directories are gone. Proven RED against an
       implementation that leaves them.
 - [ ] **H9's two prohibitions, each proven RED at the strength H9 states it.**
@@ -353,19 +426,50 @@ and five of round 4's nine findings existed only because they did.
 - [ ] **H10 — a new note is no more restricted and no more exposed than one the
       user creates in the same directory**, compared against a file the test
       creates there by ordinary means under the same umask.
-- [ ] **H7 — refusal leaves nothing behind and is total.** After every refusal
-      path, the target directory contains no leftover file of this call's
-      making and the target is unchanged. The throw-with-target-already-replaced
+- [ ] **H7 — refusal is total, and wherever it is not, it says so.** After
+      every refusal path the target is unchanged and the target directory holds
+      no leftover FILE of this call's making, EXCEPT case (c) below — which is
+      never silent. Directories are H9's side and are enumerated below too.
+      The throw-with-target-already-replaced
       carve-out is gone with the mechanism that required it (round 4, F9'').
-      **TWO bounded cases, not one, where a refusal does not restore the vault
-      byte-for-byte — both are H9's named residuals, enumerated here because
-      this criterion is where a test author counts them (round 10):** (a) a
-      directory this call created that acquired content before removal is
-      RETAINED, and (b) a concurrently substituted empty directory can be
+      **FOUR bounded cases, not two, where a refusal does not restore the
+      vault byte-for-byte — enumerated here because this criterion is the ONE
+      surface that counts them, and every other surface defers to this count
+      instead of restating it (round 10; cases (c) and (d) added 2026-08-28
+      from the shipped implementation's own measurements):**
+      **(a)** a directory this call created that acquired content before
+      removal is RETAINED.
+      **(b)** a concurrently substituted empty directory can be
       REMOVED while the directory the call actually created survives under its
-      new name. An earlier form of this criterion said "one bounded case",
-      arithmetic left behind when R6-1 added the second residual. Neither is
-      carved out here; both are stated in H9.
+      new name.
+      **(c)** the call's own STAGING OBJECT can be unremovable — with
+      its parent directory made unwritable between the staging and the refusal,
+      the removal fails and the staged bytes stay in the vault.
+      **(d)** a directory this call created can be unremovable for a platform
+      reason that is NOT non-emptiness — the same physical cause as (c),
+      applied to a directory instead of a file — and is then RETAINED.
+      **(a), (b) and (d) are H9's; (c) is H7's own.** Earlier forms of this
+      criterion said "one bounded case" and then "two" — each time arithmetic
+      left behind when a residual was added, which is why this criterion now
+      names itself as the counting surface. None of the four is carved out:
+      (a), (b) and (d) are stated in H9, (c) in H7.
+- [ ] **Every case that RETAINS something reports it, and (d) reports it
+      without overclaiming.** (a), (c) and (d) each leave an object in the
+      vault, and each names that object in the refusal `reason`; an
+      implementation that leaves one and says nothing fails. (b) retains
+      nothing — it removes the wrong empty directory — so there is nothing for
+      it to name. For (c) the report IS the bound: the staged bytes ARE the
+      refused payload, so an unreported leftover is refused content sitting in
+      the vault where a consumer's later `git add -A` would sweep it into a
+      commit. For (d) the reason must state what the platform said and must NOT
+      say the directory is non-empty — a failed removal is not evidence that a
+      concurrent writer put something there, and reporting it as if it were is
+      the overclaiming this package exists to stop. Proven RED against a
+      refusal that reports (d) as (a).
+      The probes plant nothing and guess no name: (c) makes the staging
+      object's parent unwritable between the staging and the refusal, (d) makes
+      a directory removal fail with a non-emptiness errno, and each then
+      requires that whatever the call left behind is named in the reason.
 - [ ] **This module has no policy and no process.** It requires no
       `child_process`, and no tier, extension or filename rule appears in it —
       asserted mechanically.
@@ -389,11 +493,17 @@ test -f docs/GLOSSARY.md && grep -q "\*\*vault write\*\*" docs/GLOSSARY.md
 
 - The pattern run and the glossary grep are NEW steps and each is an ASSERTION.
   Paste a real green on the finished state AND a real red from a deliberately
-  broken state — `admit` called with `rel` instead of the resolved path; the
-  target written in place, so a reader can observe partial content (H4); the
+  broken state — `admit` called with `rel` instead of the resolved path (H1,
+  the first measured defect); the target written in place, so a reader can
+  observe partial content (H4); a staging open that FOLLOWS whatever is planted
+  at its path, so an unrelated file is clobbered (H4, the second measured
+  defect); a return read back from the path instead of carried (H6, the third
+  measured defect); a refusal that leaves the staged bytes and names nothing
+  (H7, case (c)); the
   glossary entry removed. **Each red names a BEHAVIOUR to break, not a
   mechanism to omit** — the earlier "predictable temp name" form mirrored the
-  withdrawn H4 (round-5 F4). Verify each **also** goes red when its deliverable is ABSENT.
+  withdrawn H4 (round-5 F4), and the reds above name what goes WRONG, never
+  which call to leave out. Verify each **also** goes red when its deliverable is ABSENT.
 
 ## Out of scope (do NOT do these)
 
