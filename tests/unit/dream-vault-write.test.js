@@ -332,6 +332,72 @@ test('dream-vault-write: H4 — a reader holding the target open across the publ
   }
 });
 
+/**
+ * Plant a symlink at the FIRST path this call opens for creation inside the
+ * vault, pointing at `victim`. Name-agnostic on purpose: it never guesses what
+ * the staging object is called, it uses whatever path the implementation itself
+ * chose, which is what keeps this a behaviour probe rather than a mechanism
+ * assertion.
+ * @param {string} vault @param {string} victim @param {() => void} body
+ */
+function plantSymlinkAtFirstCreateOpen(vault, victim, body) {
+  let planted = false;
+  withPatchedFs(
+    'openSync',
+    (original) =>
+      /** @param {any[]} args */ (...args) => {
+        const [target, flags] = args;
+        const creating = typeof flags === 'number' && (flags & fs.constants.O_CREAT) !== 0;
+        if (!planted && creating && typeof target === 'string' && target.startsWith(vault + path.sep)) {
+          planted = true;
+          fs.symlinkSync(victim, target);
+        }
+        return Reflect.apply(original, fs, args);
+      },
+    body
+  );
+  assert.ok(planted, 'the probe never armed — no create-open happened inside the vault');
+}
+
+test('dream-vault-write: the second measured defect — a staged write never lands on something planted at its own path', { skip: !POSIX }, () => {
+  const vault = makeVault();
+  const victim = path.join(vault, 'notes', 'precious.txt');
+  fs.writeFileSync(victim, 'the user’s only copy');
+
+  // The measured defect this replaces, from the repo's own publish path: a
+  // PREDICTABLE staging name plus a FOLLOWING write, so anything planted at
+  // that name is followed and its victim is overwritten before the publish ever
+  // happens. The criterion here is behavioural and says nothing about how the
+  // staging object is named or opened: whatever path this call stages through,
+  // a file it was not asked to write must come out byte-unchanged.
+  let result;
+  plantSymlinkAtFirstCreateOpen(vault, victim, () => {
+    result = writeIntoVault({ vaultDir: vault, rel: 'notes/x.txt', bytes: Buffer.from('payload'), admit: ADMIT_ALL });
+  });
+
+  assert.equal(fs.readFileSync(victim, 'utf8'), 'the user’s only copy', 'the planted link’s victim is untouched');
+  if (result.written) {
+    assert.equal(fs.readFileSync(path.join(vault, 'notes', 'x.txt'), 'utf8'), 'payload');
+  } else {
+    assert.equal(fs.existsSync(path.join(vault, 'notes', 'x.txt')), false, 'a refusal publishes nothing');
+  }
+
+  // RED: the same probe against the defect's own shape — a following create
+  // open. It must reject it, or the green above is worth nothing.
+  const controlVault = makeVault();
+  const controlVictim = path.join(controlVault, 'notes', 'precious.txt');
+  fs.writeFileSync(controlVictim, 'the user’s only copy');
+  assertDiscriminates(() => {
+    plantSymlinkAtFirstCreateOpen(controlVault, controlVictim, () => {
+      const staging = path.join(controlVault, 'notes', '.x.txt.tmp');
+      const fd = fs.openSync(staging, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC, 0o666);
+      fs.writeSync(fd, Buffer.from('payload'), 0, 7, null);
+      fs.closeSync(fd);
+    });
+    assert.equal(fs.readFileSync(controlVictim, 'utf8'), 'the user’s only copy');
+  }, 'it would accept a staging open that follows whatever is planted at its path');
+});
+
 // ===========================================================================
 // H5 / H6 — the conditional publish, and what the caller gets back
 // ===========================================================================
@@ -389,9 +455,9 @@ test('dream-vault-write: H6 — the return carries the published bytes, so no ca
   assert.deepEqual(result.bytes, bytes);
   assert.equal(result.sha256, digest(bytes), 'the digest is over the returned bytes');
 
-  // Another writer changes the path immediately after the publish. A caller
-  // acting on the RETURN is unaffected; a caller re-reading the path would now
-  // be acting on content no gate ever saw — the third measured defect.
+  // Another writer changes the path after the call returned. A caller acting on
+  // the RETURN is unaffected; a caller re-reading the path would now be acting
+  // on content no gate ever saw — the third measured defect.
   fs.writeFileSync(target, 'somebody else wrote this');
   assert.deepEqual(result.bytes, bytes);
   assert.equal(result.sha256, digest(bytes));
@@ -399,6 +465,39 @@ test('dream-vault-write: H6 — the return carries the published bytes, so no ca
     () => assert.deepEqual(fs.readFileSync(target), bytes),
     'it would accept a caller that learns what it published by re-reading the path'
   );
+});
+
+test('dream-vault-write: H6 — a target mutated IMMEDIATELY AFTER the publish changes neither the returned bytes nor the digest', () => {
+  const vault = makeVault();
+  const target = path.join(vault, 'notes', 'x.txt');
+  const bytes = Buffer.from('the approved content');
+
+  // The criterion says "immediately after the publish", and the distance
+  // between that and "after the call returned" is the whole finding: by the
+  // time the call has returned, the result object is already built, so a
+  // mutation then cannot discriminate. Measured — an implementation whose
+  // return read the path instead of carrying the payload passed the suite
+  // untouched. So the concurrent write goes in at the ONLY instant that can
+  // catch it: after the rename has published the bytes, before the return is
+  // composed. Then the module re-reading the path would report the OTHER
+  // writer's content as what it published.
+  let result;
+  withPatchedFs(
+    'renameSync',
+    (original) =>
+      /** @param {any[]} args */ (...args) => {
+        const out = Reflect.apply(original, fs, args);
+        fs.writeFileSync(target, 'somebody else wrote this, right after the publish');
+        return out;
+      },
+    () => {
+      result = writeIntoVault({ vaultDir: vault, rel: 'notes/x.txt', bytes, admit: ADMIT_ALL });
+    }
+  );
+
+  assert.equal(result.written, true);
+  assert.deepEqual(result.bytes, bytes, 'the return carries what this call published, not what the path holds now');
+  assert.equal(result.sha256, digest(bytes), 'and the digest is over those same bytes');
 });
 
 // ===========================================================================

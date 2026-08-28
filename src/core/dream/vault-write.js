@@ -248,28 +248,39 @@ function writeIntoVault(o) {
       }
       tmp = null;
     }
+    // Two buckets, because a refusal reason that asserts more than the platform
+    // said is exactly the overclaiming this package exists to stop. ENOTEMPTY
+    // (EEXIST on the platforms that spell it that way) is the case the rule is
+    // about: content arrived after we created the directory, so it is LEFT IN
+    // PLACE — removing it would delete a concurrent writer's work, and the
+    // empty-only rule makes that impossible by construction rather than by
+    // care. Any OTHER error means the removal failed for a reason we do not
+    // know, and saying "no longer empty" there would be a guess stated as a
+    // fact. ENOENT is neither: it is already gone, so nothing is retained.
     /** @type {string[]} */
-    const retained = [];
+    const acquiredContent = [];
+    /** @type {string[]} */
+    const unremovable = [];
     for (let i = created.length - 1; i >= 0; i -= 1) {
       try {
         fs.rmdirSync(created[i]);
       } catch (e) {
-        // ENOENT: already gone, so nothing is retained. Anything else — and
-        // ENOTEMPTY is the case that matters — means content arrived after we
-        // created the directory. That directory is LEFT IN PLACE and named:
-        // removing it would delete a concurrent writer's work, and the
-        // empty-only rule makes that impossible by construction rather than by
-        // care.
-        if (!e || e.code !== 'ENOENT') retained.push(created[i]);
+        const code = e && e.code;
+        if (code === 'ENOENT') continue;
+        if (code === 'ENOTEMPTY' || code === 'EEXIST') acquiredContent.push(created[i]);
+        else unremovable.push(`${toVaultRel(vaultReal, created[i])} (${code || (e && e.message)})`);
       }
     }
-    const named = retained.map((p) => toVaultRel(vaultReal, p)).join(', ');
-    return {
-      written: false,
-      reason: retained.length
-        ? `${reason} (a directory this write created is no longer empty and was left in the vault: ${named})`
-        : reason,
-    };
+    /** @param {string[]} list */
+    const rel = (list) => list.map((p) => toVaultRel(vaultReal, p)).join(', ');
+    let suffix = '';
+    if (acquiredContent.length) {
+      suffix += ` (a directory this write created is no longer empty and was left in the vault: ${rel(acquiredContent)})`;
+    }
+    if (unremovable.length) {
+      suffix += ` (a directory this write created could not be removed and was left in the vault: ${unremovable.join(', ')})`;
+    }
+    return { written: false, reason: `${reason}${suffix}` };
   };
 
   try {
@@ -433,6 +444,16 @@ function writeIntoVault(o) {
   } catch (e) {
     // An unexpected filesystem error is a REFUSAL, not a throw: a caller has
     // exactly one failure shape to handle, and the unwind still runs.
+    //
+    // The rethrow below rests on an ORDERING INVARIANT, written down because it
+    // is not visible from here: every `WienerdogError` this module raises is
+    // raised during argument validation, before a single byte of the vault is
+    // touched, and the one piece of CALLER code that runs inside this `try` —
+    // `admit` — is called before the first `mkdir`. So there is never anything
+    // to unwind on this path. Move `admit` (or any throw) after the chain
+    // creation and that stops being true: the throw would then escape past the
+    // unwind, leaving directories behind and handing the caller a second
+    // failure shape H7 says it does not have.
     if (e instanceof WienerdogError) throw e;
     return refuse(`the write failed unexpectedly (${(e && e.code) || (e && e.message)})`);
   }
