@@ -1133,3 +1133,52 @@ test('dream-workspace: a containment refusal costs the user NOTHING — no delet
     if (withContent) assert.equal(fs.readFileSync(path.join(vaultAtWorkspace, 'note.md'), 'utf8'), 'PRECIOUS\n');
   }
 });
+
+test('dream-workspace: containment answers for a filesystem root and for real aliases', { skip: WIN32 }, () => {
+  // Spelling alone was measured insufficient in three ways, and each is here.
+  // (1) A ROOT is separator-terminated already, so appending another built `//`
+  // and matched nothing.
+  assert.equal(isAtOrBeneath('/tmp/x', '/'), true, 'everything is beneath a root vault');
+
+  const root = fs.realpathSync(mkTmp('identity'));
+  // (2) A SYMLINKED vault root: the configured spelling and the physical one
+  // share no prefix, and a value using either names the same place.
+  const physical = path.join(root, 'physical-vault');
+  const alias = path.join(root, 'configured-vault');
+  fs.mkdirSync(path.join(physical, '.codex'), { recursive: true });
+  fs.symlinkSync(physical, alias);
+  assert.equal(isAtOrBeneath(path.join(physical, '.codex'), alias), true, 'physical value vs configured vault');
+  assert.equal(isAtOrBeneath(path.join(alias, '.codex'), physical), true, 'configured value vs physical vault');
+
+  // (3) A CASE-EQUIVALENT spelling the filesystem accepts but `toLowerCase()`
+  // does not equate — JavaScript has no full Unicode case folding, and measured,
+  // `realpath` hands each spelling straight back rather than reconciling them.
+  const odd = path.join(root, 'straße-notes');
+  fs.mkdirSync(path.join(odd, '.codex'), { recursive: true });
+  const shouted = path.join(root, 'STRASSE-notes', '.codex');
+  if (fs.existsSync(shouted)) {
+    assert.equal(isAtOrBeneath(shouted, odd), true, 'the filesystem says it is the same directory');
+  }
+  // And a genuinely different sibling is still outside, identity or not.
+  fs.mkdirSync(path.join(root, 'straße-notes-backup'), { recursive: true });
+  assert.equal(isAtOrBeneath(path.join(root, 'straße-notes-backup'), odd), false);
+});
+
+test('dream-workspace: an allowlisted value is checked WHOLE, not split on the search-path delimiter', () => {
+  // `:` is legal in a POSIX filename. Split, a vault at `/tmp/team:vault` and a
+  // CODEX_HOME inside it became two uncontained halves and the exact vault path
+  // reached the child.
+  assert.throws(
+    () =>
+      buildBrainEnv({
+        baseEnv: { HOME: '/h', PATH: '/usr/bin', CODEX_HOME: '/tmp/team:vault/.codex' },
+        vaultDir: '/tmp/team:vault',
+        workspaceDir: '/w',
+        scratchDir: '/s',
+        date: DATE,
+        layout: defaultLayout(),
+        platform: 'linux',
+      }),
+    (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message)
+  );
+});

@@ -139,43 +139,82 @@ function fold(name) {
  * True when `candidate` names `root` itself or something beneath it.
  *
  * THE ONE CONTAINMENT COMPARISON IN THIS PACKAGE, and it lives here because
- * every weaker form of it has now been measured wrong. Three separate rules —
- * the workspace's placement, the child `PATH`'s components, and the child
+ * every weaker form of it has now been measured wrong. Three rules — the
+ * workspace's placement, the child `PATH`'s components, and the child
  * environment's values — each decide "is this inside the vault", and each
- * hand-rolled form leaked: a raw `===`/`startsWith` misses a case variant on the
- * primary (case-insensitive) filesystem, and a bare `includes` fires on
- * `~/wienerdog-backup` when the vault is `~/wienerdog` while still missing
- * `~/Notes` and `~/./notes`.
+ * hand-rolled variant leaked.
  *
- * Normalise NFC, then case-fold, then compare on a SEPARATOR BOUNDARY — the same
- * order as `src/scheduler/tccguard.js:48` and the reason a sibling directory
- * whose name merely starts with the vault's is not "inside" it. Folding on a
- * case-SENSITIVE filesystem can only over-match — refusing where it need not —
- * which is the fail-safe direction.
+ * TWO PASSES, because neither alone is enough.
  *
- * A NON-ABSOLUTE CANDIDATE IS NEVER INSIDE ANYTHING, and resolving one would be
- * the fourth instance of the very bug this helper exists to end. `path.resolve`
- * would join it to OUR working directory: measured, with the process cwd inside
- * the vault — an ordinary `cd ~/wienerdog && wienerdog dream` — the scalar
- * `USERNAME=ada` resolves to `<vault>/ada` and refuses the spawn. Nothing is
- * lost by declining to guess: a relative `PATH` component is resolved by the OS
- * against the CHILD's working directory, which is the staging dir or the
- * workspace, never the vault.
+ * PASS 1, SPELLING. Normalise NFC, case-fold, compare on a SEPARATOR BOUNDARY —
+ * the same order as `src/scheduler/tccguard.js:48`, and the boundary is why a
+ * sibling merely starting with the vault's name (`~/wienerdog-backup` beside
+ * `~/wienerdog`) is not inside it. A filesystem ROOT is separator-terminated
+ * already, so appending another would build `//` and match nothing: measured,
+ * `isAtOrBeneath('/tmp/x', '/')` returned false. This pass answers for paths
+ * that do not exist, which is the only thing it is trusted for.
+ *
+ * PASS 2, IDENTITY, and it is what closes the cases spelling cannot. Two
+ * spellings can name one directory, and `realpathSync` does NOT reconcile them:
+ * measured on the primary filesystem, a directory created as `straße` is
+ * reachable as `STRASSE` while `realpath` hands each spelling straight back, and
+ * `toLowerCase()` does not equate them because JavaScript has no full Unicode
+ * case folding. A symlinked vault root does the same with different spellings
+ * of different paths. So when `root` exists, walk the candidate's ancestors and
+ * compare `(dev, ino)`: the filesystem's own answer to "is this the same
+ * directory", which needs no case table and no symlink reasoning.
+ *
+ * A NON-ABSOLUTE CANDIDATE IS NEVER INSIDE ANYTHING. Resolving one would join it
+ * to OUR working directory — and measured, `run-job` runs the dream with its cwd
+ * AT the vault, so the scalar `USER=ada` resolved to `<vault>/ada` and refused
+ * every scheduled dream. Nothing is lost: a relative `PATH` component is
+ * resolved by the OS against the CHILD's cwd — the staging dir or the workspace
+ * — never the vault.
  * @param {string} candidate @param {string} root @returns {boolean}
  */
 function isAtOrBeneath(candidate, root) {
   const c0 = String(candidate);
   if (!path.isAbsolute(c0)) return false;
-  const norm = (x) => path.resolve(String(x)).normalize('NFC').toLowerCase();
+  const fold = (x) => path.resolve(String(x)).normalize('NFC').toLowerCase();
   let c;
   let r;
   try {
-    c = norm(c0);
-    r = norm(root);
+    c = fold(c0);
+    r = fold(root);
   } catch {
     return false; // unresolvable — nothing to compare
   }
-  return c === r || c.startsWith(r + path.sep);
+  // A root already ends in the separator; anything else needs one appended so
+  // `/a/bc` is not read as being inside `/a/b`.
+  const prefix = r.endsWith(path.sep) ? r : r + path.sep;
+  if (c === r || c.startsWith(prefix)) return true;
+
+  // Pass 2 — the filesystem's own identity answer.
+  const rootId = statIdOrNull(root);
+  if (rootId === null) return false; // root does not exist: spelling was all there was
+  let cur = path.resolve(c0);
+  for (;;) {
+    const id = statIdOrNull(cur);
+    if (id !== null && id.dev === rootId.dev && id.ino === rootId.ino) return true;
+    const parent = path.dirname(cur);
+    if (parent === cur) return false; // reached the filesystem root
+    cur = parent;
+  }
+}
+
+/**
+ * `(dev, ino)` of `p`, following symlinks — that following is deliberate, since
+ * the question is which directory a path REACHES. Null when it does not exist
+ * or cannot be read.
+ * @param {string} p @returns {{dev:number, ino:number}|null}
+ */
+function statIdOrNull(p) {
+  try {
+    const st = fs.statSync(p);
+    return { dev: st.dev, ino: st.ino };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -593,15 +632,30 @@ function createWorkspace(o) {
   // (measured: the vault's note was gone). The only removal here is a
   // NON-recursive `rmdir`, and only of a directory THIS call created — never of
   // one that was already on disk.
-  const workspaceReal = fs.realpathSync(workspaceDir);
-  if (isAtOrBeneath(workspaceReal, vaultRoot) || isAtOrBeneath(vaultRoot, workspaceReal)) {
-    if (!preExisting) {
-      try {
-        fs.rmdirSync(workspaceDir);
-      } catch {
-        /* leave it: nothing on a refusal path may delete what it did not create */
-      }
+  // Everything from here to the end of the gate can throw, and a throw here is
+  // an ordinary refused call with a live stack — not a crash — so it may not
+  // leave the directory this call just created behind. The removal is
+  // NON-recursive and conditional on us having created it: nothing on a refusal
+  // path deletes what it did not make.
+  const undoCreate = () => {
+    if (preExisting) return;
+    try {
+      fs.rmdirSync(workspaceDir);
+    } catch {
+      /* non-empty or gone — leave it rather than escalate to a recursive delete */
     }
+  };
+  let workspaceReal;
+  try {
+    workspaceReal = fs.realpathSync(workspaceDir);
+  } catch (err) {
+    undoCreate();
+    throw new WienerdogError(
+      `dream workspace: cannot resolve the workspace directory (${(err && err.code) || 'realpath failed'})`
+    );
+  }
+  if (isAtOrBeneath(workspaceReal, vaultRoot) || isAtOrBeneath(vaultRoot, workspaceReal)) {
+    undoCreate();
     throw new WienerdogError(containmentRefusal(workspaceDir, vaultRoot));
   }
 

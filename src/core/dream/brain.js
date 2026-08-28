@@ -313,16 +313,15 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
       // FAIL CLOSED rather than drop: a harness whose config root lives inside
       // the memory vault cannot both start and stay outside it, and refusing
       // loudly before any spawn is this package's posture everywhere else.
-      // Decided with the SAME containment rule as `PATH`, per delimiter-separated
-      // component, because a value may be a list. A substring test was measured
-      // wrong in both directions: it refused a spawn for a `~/wienerdog-backup`
-      // sibling of the DEFAULT vault (bricking the product with an instruction
-      // the user has already followed), and it passed `~/Notes` and `~/./notes`
-      // straight into the child.
-      const carrier = String(v)
-        .split(platform === 'win32' ? ';' : ':')
-        .some((part) => part !== '' && isAtOrBeneath(part, vaultDir));
-      if (carrier) {
+      // Decided with the SAME containment rule as `PATH` — but over the WHOLE
+      // value, not split on the search-path delimiter. Every name on this
+      // allowlist is a SCALAR path or a non-path scalar; `PATH` is the one list
+      // and it is filtered separately below. Splitting was measured wrong: `:`
+      // is legal in a POSIX filename, so a vault at `/tmp/team:vault` and a
+      // `CODEX_HOME` inside it split into two uncontained halves and the exact
+      // vault path was copied into the child. A list-valued name added to this
+      // allowlist later needs its own per-component check.
+      if (isAtOrBeneath(String(v), vaultDir)) {
         throw new WienerdogError(
           `dream brain: refusing to spawn — the environment variable ${k} is at or inside the vault ` +
             `(${vaultDir}), so handing it to the brain would hand it the vault. Move that location ` +
