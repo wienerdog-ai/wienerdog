@@ -101,7 +101,9 @@ function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
   console.log(`  truncated to fit: ${sel.truncated.length}`);
-  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
+  // The --dry-run preview must compose the SAME write-target argument the real
+  // invocation does, or it prints a plan that is not the plan.
+  const argv = buildClaudeArgs({ workspaceDir: vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
 

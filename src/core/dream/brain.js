@@ -13,6 +13,9 @@ const { spawnPinned, spawnPinnedSync, loadPins } = require('../exec-identity');
 const { mkdirPrivate } = require('../private-fs');
 const { detectPolicyHooks } = require('../policy-hooks');
 const { recordRunEvidence } = require('../run-evidence');
+// The package's ONE containment comparison (NFC → case-fold → separator
+// boundary). Every hand-rolled variant of it in this file was measured wrong.
+const { isAtOrBeneath } = require('./workspace');
 
 /** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
 const STDERR_TAIL_MAX = 4096;
@@ -79,6 +82,20 @@ function DREAM_PROMPT(scratchDir, workspaceDir, date, layout) {
 }
 
 /**
+ * Refuse to compose an invocation with no write root. Measured: after the
+ * `vaultDir → workspaceDir` rename, a call site that still passed the old name
+ * composed `--add-dir undefined` and a prompt reading "your only write target:
+ * undefined" — and printed it as a resolved plan. A write root is the one input
+ * these builders exist to place; failing loudly beats composing a lie.
+ * @param {string} workspaceDir
+ */
+function assertWriteRoot(workspaceDir) {
+  if (typeof workspaceDir !== 'string' || workspaceDir === '') {
+    throw new WienerdogError('dream brain: workspaceDir is required — there is no invocation without a write root');
+  }
+}
+
+/**
  * Build the argv for the headless brain (Claude), AFTER the "claude" name —
  * composed from the code-owned 'dream' hermetic runtime profile (WP-128,
  * ADR-0025), never hand-assembled. The invocation gives the brain no Bash, no
@@ -102,6 +119,7 @@ function DREAM_PROMPT(scratchDir, workspaceDir, date, layout) {
  * @returns {string[]}
  */
 function buildClaudeArgs({ workspaceDir, scratchDir, date, model, layout, settingsPath, skillSeam }) {
+  assertWriteRoot(workspaceDir);
   const profile = getProfile('dream');
   return composeClaudeArgs(profile, {
     prompt: DREAM_PROMPT(scratchDir, workspaceDir, date, layout), // headless, non-interactive
@@ -129,6 +147,7 @@ function buildClaudeArgs({ workspaceDir, scratchDir, date, model, layout, settin
  * @returns {string[]}
  */
 function buildCodexArgs({ workspaceDir, scratchDir, date, model, layout }) {
+  assertWriteRoot(workspaceDir);
   return [
     'exec',
     '--sandbox',
@@ -240,29 +259,6 @@ const BRAIN_ENV_ALLOWLIST = [
 ];
 
 /**
- * True when `candidate` names the vault root itself or something beneath it.
- *
- * Compared NFC-normalised and case-folded, the same order as
- * `src/scheduler/tccguard.js:48`: the primary filesystem is case-insensitive, so
- * a case- or composition-variant of the vault path is the same directory. On a
- * case-sensitive filesystem this can only over-match — dropping a PATH entry
- * that differs from the vault by case alone — which is the fail-safe direction.
- * @param {string} candidate @param {string} root @returns {boolean}
- */
-function isAtOrBeneath(candidate, root) {
-  const norm = (p) => path.resolve(p).normalize('NFC').toLowerCase();
-  let c;
-  let r;
-  try {
-    c = norm(candidate);
-    r = norm(root);
-  } catch {
-    return false; // unresolvable component — keep it; PATH resolution ignores it
-  }
-  return c === r || c.startsWith(r + path.sep);
-}
-
-/**
  * Build the child's `PATH`: the job's own PATH with every component AT OR
  * BENEATH the vault removed.
  *
@@ -317,10 +313,20 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
       // FAIL CLOSED rather than drop: a harness whose config root lives inside
       // the memory vault cannot both start and stay outside it, and refusing
       // loudly before any spawn is this package's posture everywhere else.
-      if (String(v).includes(vaultDir)) {
+      // Decided with the SAME containment rule as `PATH`, per delimiter-separated
+      // component, because a value may be a list. A substring test was measured
+      // wrong in both directions: it refused a spawn for a `~/wienerdog-backup`
+      // sibling of the DEFAULT vault (bricking the product with an instruction
+      // the user has already followed), and it passed `~/Notes` and `~/./notes`
+      // straight into the child.
+      const carrier = String(v)
+        .split(platform === 'win32' ? ';' : ':')
+        .some((part) => part !== '' && isAtOrBeneath(part, vaultDir));
+      if (carrier) {
         throw new WienerdogError(
-          `dream brain: refusing to spawn — the environment variable ${k} carries the vault path. ` +
-            'The brain must not be handed the vault; move that location outside the vault and re-run.'
+          `dream brain: refusing to spawn — the environment variable ${k} is at or inside the vault ` +
+            `(${vaultDir}), so handing it to the brain would hand it the vault. Move that location ` +
+            'outside the vault and re-run.'
         );
       }
       env[k] = v;
@@ -355,8 +361,8 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
  * roots, the Codex `--cd` fence, the Codex cwd, `WIENERDOG_DREAM_VAULT`, and the
  * inherited environment. The vault is still known here — `paths.vault` — for
  * exactly one purpose: stripping it out of the child's PATH.
- * @param {{workspaceDir:string, scratchDir:string, date:string, model:string|null,
- *          vaultDir?:string,
+ * @param {{workspaceDir:string, vaultDir:string, scratchDir:string, date:string,
+ *          model:string|null,
  *          layout?:import('../layout').VaultLayout,
  *          harness?:'claude'|'codex', env?:NodeJS.ProcessEnv,
  *          platform?:NodeJS.Platform,
@@ -377,7 +383,14 @@ function buildBrainEnv({ baseEnv, vaultDir, workspaceDir, scratchDir, date, layo
  *                            sawUnknownCommand:boolean}> }}
  */
 function spawnBrain(o) {
-  const { workspaceDir, scratchDir, date, model, harness, env, logStream, containmentProbe } = o;
+  const { workspaceDir, vaultDir, scratchDir, date, model, harness, env, logStream, containmentProbe } = o;
+  // REQUIRED, and deliberately with no fallback. It used to default to
+  // `paths.vault`, and that default was measured to hide its own removal: the
+  // production call site could drop `vaultDir` and the whole suite stayed green
+  // while the child silently got the wrong vault sanitised out.
+  if (typeof vaultDir !== 'string' || vaultDir === '') {
+    throw new WienerdogError('dream brain: vaultDir is required — the run\'s vault, so it can be kept out of the child');
+  }
   const platform = o.platform || process.platform;
   const layout = o.layout || defaultLayout();
   const baseEnv = env || process.env;
@@ -390,9 +403,7 @@ function spawnBrain(o) {
   // vault value strips PATH and is absent from everything else.
   const childEnv = buildBrainEnv({
     baseEnv,
-    // The RUN's vault when the caller knows it (it reads config.yaml); the
-    // env/default one only as a fallback for callers that have no config.
-    vaultDir: o.vaultDir || paths.vault,
+    vaultDir,
     workspaceDir,
     scratchDir,
     date,

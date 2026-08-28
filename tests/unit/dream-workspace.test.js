@@ -45,6 +45,7 @@ const {
   assertNoGitEntry,
   excludeReason,
   copyRegularFileSecure,
+  isAtOrBeneath,
   WORKSPACE_DIRNAME,
 } = require('../../src/core/dream/workspace');
 const {
@@ -460,6 +461,7 @@ async function runSpawn(fx, harness, workspaceDir, binDir) {
   };
   const { done } = spawnBrain({
     workspaceDir,
+    vaultDir: fx.vault,
     scratchDir: fx.scratch,
     date: DATE,
     model: null,
@@ -872,7 +874,7 @@ test('dream-workspace: a workspace that would land inside the vault is refused',
   writeFile(path.join(vault, 'note.md'), 'hi\n');
   assert.throws(
     () => createWorkspace({ vaultDir: vault, paths: { core, state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
-    (e) => e instanceof WienerdogError && /inside the vault/.test(e.message)
+    (e) => e instanceof WienerdogError && /contain one another/.test(e.message)
   );
   assert.equal(fs.existsSync(path.join(core, 'state', WORKSPACE_DIRNAME)), false, 'nothing left behind');
 });
@@ -918,7 +920,7 @@ test('dream-workspace: an allowlisted NAME is no licence for a vault-carrying VA
         layout: defaultLayout(),
         platform: 'linux',
       }),
-    (e) => e instanceof WienerdogError && /CODEX_HOME carries the vault path/.test(e.message)
+    (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message)
   );
 });
 
@@ -965,4 +967,110 @@ test('dream-workspace: spawnBrain sanitises against the vault it is HANDED, not 
     'the RUN vault\'s bin dir is stripped from the child PATH'
   );
   assert.deepEqual(vaultLeaks(run, adopted), [], 'nothing the child received carries the run vault');
+});
+
+// ── Round-2 review: containment, decided once and decided right ─────────────
+
+test('dream-workspace: a vault BENEATH the workspace is refused — teardown must never delete the vault', () => {
+  // The mirror image of the placement case, and the worse one: the check was
+  // one-directional, so a vault nested under the workspace passed it and
+  // `destroyWorkspace` recursively deleted the vault. Reproduced: the note was
+  // gone. `destroyWorkspace` may never touch the vault, and this is the only
+  // moment that can be decided — before anything is removed.
+  const root = fs.realpathSync(mkTmp('reverse'));
+  const core = path.join(root, 'core');
+  const nestedVault = path.join(core, 'state', WORKSPACE_DIRNAME, 'notes');
+  writeFile(path.join(nestedVault, 'precious.md'), 'PRECIOUS\n');
+  assert.throws(
+    () => createWorkspace({ vaultDir: nestedVault, paths: { core, state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
+    (e) => e instanceof WienerdogError && /contain one another/.test(e.message)
+  );
+  assert.equal(fs.readFileSync(path.join(nestedVault, 'precious.md'), 'utf8'), 'PRECIOUS\n', 'the vault survives');
+});
+
+test('dream-workspace: a paths value without core is refused before anything is removed', { skip: WIN32 }, () => {
+  // `core` is what the private-ancestry validation validates AGAINST. With it
+  // absent the validation fell back to the ambient core, found the target was
+  // not under it, and returned WITHOUT validating — silently disarming the
+  // destructive-order guard. Reproduced: the external tree was deleted and
+  // `createWorkspace` returned without throwing at all.
+  const root = fs.realpathSync(mkTmp('nocore'));
+  const core = path.join(root, 'core');
+  const outside = path.join(root, 'outside');
+  fs.mkdirSync(core, { recursive: true });
+  writeFile(path.join(outside, WORKSPACE_DIRNAME, 'precious.txt'), 'USER DATA\n');
+  fs.symlinkSync(outside, path.join(core, 'state'));
+  const vault = path.join(root, 'vault');
+  fs.mkdirSync(vault);
+  assert.throws(
+    () => createWorkspace({ vaultDir: vault, paths: { state: path.join(core, 'state') }, date: DATE, layout: defaultLayout() }),
+    (e) => e instanceof WienerdogError && /core and state/.test(e.message)
+  );
+  assert.equal(fs.readFileSync(path.join(outside, WORKSPACE_DIRNAME, 'precious.txt'), 'utf8'), 'USER DATA\n');
+});
+
+test('dream-workspace: containment is decided NFC-normalised, case-folded, on a separator boundary', () => {
+  const V = '/home/ada/wienerdog';
+  // A sibling whose name merely STARTS with the vault's is not inside it — the
+  // separator boundary is what says so, and `~/wienerdog-backup` beside the
+  // DEFAULT vault name is the case a substring test bricked the product on.
+  assert.equal(isAtOrBeneath('/home/ada/wienerdog-backup/.codex', V), false);
+  assert.equal(isAtOrBeneath('/home/ada/wienerdog2', V), false);
+  // Inside, in every form the filesystem treats as the same place.
+  assert.equal(isAtOrBeneath(V, V), true);
+  assert.equal(isAtOrBeneath('/home/ada/wienerdog/notes', V), true);
+  assert.equal(isAtOrBeneath('/home/ada/WIENERDOG/notes', V), true, 'case variant — the same dir on the primary FS');
+  assert.equal(isAtOrBeneath('/home/ada/./wienerdog/notes', V), true, 'un-normalised');
+  assert.equal(isAtOrBeneath('/home/ada/wienerdog/../wienerdog/x', V), true);
+});
+
+test('dream-workspace: the env value gate uses containment, not substring — no false alarm, no leak', () => {
+  const base = {
+    workspaceDir: '/w',
+    scratchDir: '/s',
+    date: DATE,
+    layout: defaultLayout(),
+    platform: 'linux',
+  };
+  // FALSE POSITIVE the substring form produced: a sibling of the DEFAULT vault.
+  const ok = buildBrainEnv({
+    ...base,
+    baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: '/home/ada/wienerdog-backup/.codex' },
+    vaultDir: '/home/ada/wienerdog',
+  });
+  assert.equal(ok.CODEX_HOME, '/home/ada/wienerdog-backup/.codex', 'a sibling directory is not inside the vault');
+  // FALSE NEGATIVES the substring form let through.
+  for (const leak of ['/home/ada/Notes/.codex', '/home/ada/./notes/.codex']) {
+    assert.throws(
+      () => buildBrainEnv({ ...base, baseEnv: { HOME: '/home/ada', PATH: '/usr/bin', CODEX_HOME: leak }, vaultDir: '/home/ada/notes' }),
+      (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message),
+      leak
+    );
+  }
+});
+
+// ── Round-2 review: no silent fallback, no invocation without a write root ──
+
+test('dream-workspace: spawnBrain REFUSES a call with no vaultDir — the fallback hid its own removal', () => {
+  // Measured: with `o.vaultDir || paths.vault`, deleting `vaultDir` from the
+  // production call site left the entire suite green while the child got the
+  // wrong vault sanitised out. A required input cannot go missing quietly.
+  assert.throws(
+    () => spawnBrain({ workspaceDir: '/w', scratchDir: '/s', date: DATE, model: null, env: { HOME: '/h', PATH: '/usr/bin' } }),
+    (e) => e instanceof WienerdogError && /vaultDir is required/.test(e.message)
+  );
+});
+
+test('dream-workspace: the argv builders refuse to compose an invocation with no write root', () => {
+  // The `--dry-run` preview called the renamed builder with the OLD option name
+  // and printed a resolved plan containing `--add-dir undefined` and "your only
+  // write target: undefined". Composing a lie is worse than failing.
+  assert.throws(
+    () => buildClaudeArgs({ scratchDir: '/s', date: DATE, model: null, settingsPath: '/set.json' }),
+    (e) => e instanceof WienerdogError && /workspaceDir is required/.test(e.message)
+  );
+  assert.throws(
+    () => buildCodexArgs({ scratchDir: '/s', date: DATE, model: null }),
+    (e) => e instanceof WienerdogError && /workspaceDir is required/.test(e.message)
+  );
 });

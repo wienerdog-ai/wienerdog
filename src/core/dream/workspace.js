@@ -37,7 +37,11 @@
  *     chain-level substitution and belongs to layer 2 below — `readdirSync`
  *     resolves the name again, and portable Node cannot bind it.
  *  2. CHAIN-LEVEL SUBSTITUTION: a replaced ANCESTOR component is a NAMED
- *     RESIDUAL — portable Node cannot bind a path's component chain against
+ *     RESIDUAL — and this covers one more window than copy-in's. `createWorkspace`
+ *     validates the private ancestry BEFORE it removes the previous workspace,
+ *     which is what stops a symlinked `state` from redirecting a recursive
+ *     delete out of the tree; an ancestor swapped between that validation and
+ *     the delete is still followed. Same class, same reason — — portable Node cannot bind a path's component chain against
  *     concurrent replacement (`delta.js:22-40`, owner-ruled 2026-08-21).
  *  3. COHERENCE: a copy of a live tree is not atomic, so a concurrent save can
  *     hand the dream a view mixing two moments. Its damage bound: this affects
@@ -128,6 +132,38 @@ const GIT_ENTRY = '.git';
  */
 function fold(name) {
   return name.normalize('NFC').toLowerCase();
+}
+
+/**
+ * True when `candidate` names `root` itself or something beneath it.
+ *
+ * THE ONE CONTAINMENT COMPARISON IN THIS PACKAGE, and it lives here because
+ * every weaker form of it has now been measured wrong. Three separate rules —
+ * the workspace's placement, the child `PATH`'s components, and the child
+ * environment's values — each decide "is this inside the vault", and each
+ * hand-rolled form leaked: a raw `===`/`startsWith` misses a case variant on the
+ * primary (case-insensitive) filesystem, and a bare `includes` fires on
+ * `~/wienerdog-backup` when the vault is `~/wienerdog` while still missing
+ * `~/Notes` and `~/./notes`.
+ *
+ * Normalise NFC, then case-fold, then compare on a SEPARATOR BOUNDARY — the same
+ * order as `src/scheduler/tccguard.js:48` and the reason a sibling directory
+ * whose name merely starts with the vault's is not "inside" it. Folding on a
+ * case-SENSITIVE filesystem can only over-match — refusing where it need not —
+ * which is the fail-safe direction.
+ * @param {string} candidate @param {string} root @returns {boolean}
+ */
+function isAtOrBeneath(candidate, root) {
+  const norm = (x) => path.resolve(String(x)).normalize('NFC').toLowerCase();
+  let c;
+  let r;
+  try {
+    c = norm(candidate);
+    r = norm(root);
+  } catch {
+    return false; // unresolvable — nothing to compare
+  }
+  return c === r || c.startsWith(r + path.sep);
 }
 
 /**
@@ -440,8 +476,13 @@ function createWorkspace(o) {
   if (typeof vaultDir !== 'string' || !path.isAbsolute(vaultDir)) {
     throw new WienerdogError('dream workspace: vaultDir must be an absolute path');
   }
-  if (!paths || typeof paths.state !== 'string') {
-    throw new WienerdogError('dream workspace: paths must be a WienerdogPaths value');
+  if (!paths || typeof paths.state !== 'string' || typeof paths.core !== 'string') {
+    // `core` is not decoration: it is what `mkdirPrivate` validates the private
+    // ancestry AGAINST. Measured — with it absent, `assertInCoreAncestry` falls
+    // back to the ambient core, finds the target is not under it, and returns
+    // WITHOUT validating anything, which silently disarms the destructive-order
+    // guard below and deleted an external tree.
+    throw new WienerdogError('dream workspace: paths must be a WienerdogPaths value with core and state');
   }
   if (typeof date !== 'string' || date === '') {
     throw new WienerdogError('dream workspace: date must be a non-empty string');
@@ -460,7 +501,7 @@ function createWorkspace(o) {
   }
 
   const workspaceDir = path.join(paths.state, WORKSPACE_DIRNAME);
-  const mkdirOpts = paths.core ? { core: paths.core } : {};
+  const mkdirOpts = { core: paths.core };
   // ORDER IS LOAD-BEARING, and it is a destructive-action rule: the private
   // ancestry is VALIDATED BEFORE anything is removed. `mkdirPrivate` refuses a
   // symlinked core, a symlinked intermediate directory and a symlinked leaf.
@@ -469,23 +510,40 @@ function createWorkspace(o) {
   // resolved through it and destroyed that directory's `dream-workspace` before
   // the validation that would have refused ever ran.
   mkdirPrivate(workspaceDir, mkdirOpts);
-  try {
-    // The placement contract, now checkable: the ancestry above is verified
-    // real, so this resolves to where the workspace actually lives. A workspace
-    // at or beneath the vault would put the brain's write root inside the
-    // promotion TARGET — and copy-in would descend into the tree it is writing,
-    // measured to recurse until ENAMETOOLONG. Reachable without any symlink: a
-    // core configured inside the vault (`WIENERDOG_VAULT=~/notes` with
-    // `WIENERDOG_HOME=~/notes/.wienerdog`) does it.
-    const workspaceReal = fs.realpathSync(workspaceDir);
-    if (workspaceReal === vaultRoot || workspaceReal.startsWith(vaultRoot + path.sep)) {
-      throw new WienerdogError(
-        `dream workspace: refusing to build the run workspace at ${workspaceDir} — it is inside the vault, ` +
-          'so the brain would write straight into the promotion target (move the Wienerdog core outside the vault)'
-      );
+
+  // THE CONTAINMENT GATE SITS OUTSIDE THE CLEANUP HANDLER, and that placement is
+  // the whole point. BOTH DIRECTIONS are refused: a workspace at or beneath the
+  // vault puts the brain's write root inside the promotion TARGET (and copy-in
+  // descends into the tree it is writing — measured, it recurses to
+  // ENAMETOOLONG); a vault at or beneath the WORKSPACE makes every recursive
+  // removal below delete the vault. Neither needs a symlink — a core configured
+  // inside the vault, or a vault configured inside the core's state, does it.
+  //
+  // Refusing here rather than inside the `try` is not tidiness: the cleanup
+  // handler's whole job is a recursive delete of `workspaceDir`, so on THIS
+  // refusal it would destroy exactly what the refusal exists to protect.
+  // Measured — the vault's note was gone. The only removal on this path is a
+  // NON-recursive `rmdir`, which succeeds if we just created the directory and
+  // fails harmlessly if anything is inside it.
+  const workspaceReal = fs.realpathSync(workspaceDir);
+  if (isAtOrBeneath(workspaceReal, vaultRoot) || isAtOrBeneath(vaultRoot, workspaceReal)) {
+    try {
+      fs.rmdirSync(workspaceDir);
+    } catch {
+      /* non-empty → leave it: nothing here may recursively delete this tree */
     }
-    // A leftover from a crashed run is removed before the build, never merged
-    // into: the baseline must describe THIS run's copy and nothing else.
+    throw new WienerdogError(
+      `dream workspace: refusing to build the run workspace at ${workspaceDir} — it and the vault ` +
+        `${vaultRoot} contain one another, so the run would either write straight into the promotion ` +
+        'target or delete the vault at teardown (move the Wienerdog core outside the vault)'
+    );
+  }
+
+  try {
+    // Past the gate the workspace provably does not contain the vault, so the
+    // recursive removals from here on cannot reach it. A leftover from a crashed
+    // run is removed before the build, never merged into: the baseline must
+    // describe THIS run's copy and nothing else.
     destroyWorkspace(workspaceDir);
     mkdirPrivate(workspaceDir, mkdirOpts);
     const { copied, skipped } = copyIn(vaultRoot, workspaceDir);
@@ -547,6 +605,7 @@ module.exports = {
   // could not tell which of the two fired.
   assertNoGitEntry,
   excludeReason,
+  isAtOrBeneath,
   // Layer 1's mechanism. Exported because it is UNREACHABLE through
   // `createWorkspace` in a test: a symlink planted before the walk is
   // classified by `lstat` and skipped by the walk, so the swap branches here

@@ -1496,6 +1496,7 @@ test('dream-integration: a passing probe result is recorded in the dream run evi
   const ctx = setup();
   const { done } = spawnBrain({
     workspaceDir: ctx.vault,
+    vaultDir: ctx.vault,
     scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
     date: DATE,
     model: null,

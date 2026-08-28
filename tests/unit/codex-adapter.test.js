@@ -452,6 +452,7 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   const { done } = spawnBrain({
     harness: 'codex',
     workspaceDir: vault,
+    vaultDir: vault,
     scratchDir: collected.scratchDir,
     date: '2026-07-03',
     model: null,

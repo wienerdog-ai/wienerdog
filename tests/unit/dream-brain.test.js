@@ -193,6 +193,7 @@ test('dream-brain: spawnBrain runs the pinned fake brain from the fresh staging 
 
   const { done } = spawnBrain({
     workspaceDir: vaultDir,
+    vaultDir,
     scratchDir,
     date: '2026-07-02',
     model: null,
@@ -238,6 +239,7 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
 
   const { done } = spawnBrain({
     workspaceDir: vaultDir,
+    vaultDir,
     scratchDir,
     date: '2026-07-04',
     model: null,
@@ -273,6 +275,7 @@ async function runShBrain(scriptLines) {
   fs.mkdirSync(vaultDir);
   const { done } = spawnBrain({
     workspaceDir: vaultDir,
+    vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
     model: null,
@@ -361,6 +364,7 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
 
   const { done } = spawnBrain({
     workspaceDir: vaultDir,
+    vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
     model: null,
@@ -421,7 +425,7 @@ test('dream-brain: spawnBrain spawns the pinned ABSOLUTE claude path, never the 
   };
   createPins(getPaths(env), { env, platform: process.platform });
 
-  const { done } = spawnBrain({ workspaceDir: vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env });
+  const { done } = spawnBrain({ workspaceDir: vaultDir, vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env });
   const result = await done;
   assert.equal(result.code, 0);
   assert.equal(fs.readFileSync(marker, 'utf8').trim(), fs.realpathSync(fake), 'spawned by absolute realpath');
@@ -451,7 +455,7 @@ test('dream-brain: spawnBrain fails safe on pin drift — a fake claude earlier 
   const env = { ...pinEnv, PATH: `${evil}:${bin}:/usr/bin:/bin` };
 
   assert.throws(
-    () => spawnBrain({ workspaceDir: vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env }),
+    () => spawnBrain({ workspaceDir: vaultDir, vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env }),
     (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message) && /claude/.test(err.message)
   );
   assert.equal(fs.existsSync(marker), false, 'the planted fake was never executed');
@@ -476,6 +480,7 @@ test('dream-brain: a set WIENERDOG_DREAM_CMD has ZERO effect — the pinned brai
 
   const { done } = spawnBrain({
     workspaceDir: vaultDir,
+    vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-18',
     model: null,
