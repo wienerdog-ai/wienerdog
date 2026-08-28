@@ -25,8 +25,11 @@ recorded in `2026-08-28-promote-split.md`.
 
 **Contract table letters are family-wide, across four packages.**
 `WP-dream-workspace-retarget` owns **Tables A, B and F**;
-`WP-dream-vault-write-primitive` owns **Table H**; this spec owns **C, D, E and
-R**; `WP-dream-promote-in-workspace` owns **Table G**. Every cross-package
+`WP-dream-vault-write-primitive` owns **Table H**; this spec owns **C, D, E, R
+and S**; `WP-dream-promote-in-workspace` owns **Table G**. **The ruling quoted
+above named four tables; S was extracted later by the ADR-0031 circuit-breaker
+(round 2) out of a contract those four already carried, so it adds no subject —
+it gives one an owner.** Every cross-package
 reference CITES its owner and never restates it — the pattern the family already
 uses for Table F and for the delta primitive's constructed-environment recipe
 (row M2).
@@ -159,8 +162,8 @@ it, and none may attribute it to any repository-status property of the workspace
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/promote.js | three-way decide + gates + merge + publish + the report (Tables C, D, E and R) |
-| create | tests/unit/dream-promote.test.js | Tables C, D, E and R |
+| create | src/core/dream/promote.js | three-way decide + gates + merge + publish + the report (Tables C, D, E, R and S) |
+| create | tests/unit/dream-promote.test.js | Tables C, D, E, R and S |
 | modify | docs/GLOSSARY.md | one canonical name: **promotion** |
 
 **Nothing else, and the exclusions are load-bearing.** This package does not
@@ -210,20 +213,16 @@ under "Discovered issues" in the PR body.
  *  @returns {{promoted:Array<{rel:string, bytes:Buffer}>,
  *             redacted:Array<{rel:string, bytes:Buffer}>,
  *             refused:Array<{rel:string, reason:string}>,
- *             report:{outcome:'promoted'|'fallback'|'refused', reason?:string,
- *                     bytes?:Buffer, record:string[]},
+ *             report:{outcome:'promoted'|'fallback', bytes:Buffer,
+ *                     record:string[]}
+ *                    |{outcome:'refused', reason:string, record:string[]},
  *             secretDisposition:{withheld:number, redactions:number}}}
- *    bytes   on `promoted` and `redacted` alike, the EXACT buffer
- *            `writeIntoVault` returned for that path (Table H, H6) — not a
- *            re-read and not the candidate this module composed. **Every
- *            published path carries it, and that is what makes Table E's
- *            staged-bytes handoff satisfiable:** the pipeline stages FROM these
- *            (`WP-dream-promote-in-workspace`, row G8), because naming the path
- *            and letting git re-read it commits whatever a user save put there
- *            after the publish. A return shape that carried paths alone would
- *            leave that rule unimplementable except through a side channel —
- *            round 1's finding, and the reason this field is in the canonical
- *            interface rather than in prose
+ *    **`bytes` on every PUBLISHED outcome, and the shape is what guarantees it
+ *    — Table S owns this contract and this block does not restate it.** Note
+ *    the `report` union: a published report outcome REQUIRES `bytes`, and the
+ *    refused arm cannot carry them. An optional field spanning success and
+ *    refusal guarantees nothing on the successful branch, which is round 2's
+ *    finding
  *    report  the dream report's own outcome, never folded into `promoted` —
  *            Table R's fallback publish is recorded as itself (Table E). On
  *            `refused` the complete enforcement record is in `record`, for the
@@ -240,9 +239,11 @@ function promote(o)
 
 ## Contract reference
 
-**Reading order.** The four tables are named "C, D, E and R" everywhere,
-because those are the family-wide letters; the document orders them C, D, R, E,
-because Table E's accounting row refers to the report outcome Table R defines.
+**Reading order.** The first four tables are named "C, D, E and R" everywhere,
+because that is how the owner's seam ruling named them; the document orders them C, D, R, E, because
+Table E's accounting row refers to the report outcome Table R defines. **Table S
+was added last, by the ADR-0031 circuit-breaker (round 2), and sits after the
+table it generalises.**
 
 Activation (ADR-0031, 2-of-7 — five are true): (i) a new module interface
 appears; (ii) a promotion outcome taxonomy is introduced; (iv) refusal and
@@ -373,14 +374,33 @@ left for a gate to refuse.
 | **The publish goes through the primitive — this spec writes no vault byte itself** | every promoted path is published by `writeIntoVault` (Table H): the resolved path is what policy judges, nothing is written on or through a symlink, no partial content is ever observable at the target, the publish is conditional on the caller's premise still holding, and the published bytes come back. **Those are the primitive's OBSERVABLE properties, which is all a consumer may restate.** **This spec does not restate that discipline — the primitive owns it.** What this spec supplies is the two caller-side arguments: `admit` (Table C's policy, applied by the primitive to the RESOLVED path) and `expect` (the `vault-now` bytes the decision was made against). A promotion that writes the vault by any other route is a defect, and the acceptance criteria assert the seam |
 | **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed**, to milliseconds against today's minutes-long silent window. The narrowing is the primitive's `expect` guard (Table H, row H5); this spec's obligation is to PASS the right bytes — the `vault-now` bytes the decision used — and to turn `{written:false}` into refuse-and-report. **The residual is the primitive's and is inherited here unchanged:** a user save landing between the re-read and the `rename` is still lost |
 | Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The report's own outcome is carried separately in `report` and a fallback publish is never recorded as a normal promotion (Table R). The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
-| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **The interface carries them: `promoted[].bytes` and `redacted[].bytes` (`### Exact contracts`), plus `report.bytes` for the report's own write.** Stating the rule without a field that carries the bytes is what round 1 found. **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the returned bytes in `promoted[].bytes`, `redacted[].bytes` and `report.bytes` so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
+| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **Which bytes those are, which outcomes carry them, and what a consumer may derive from them is TABLE S — extracted after two consecutive rounds landed here, and cited rather than restated.** **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the decided bytes per Table S so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
+
+### Table S — the decided bytes, and what may be derived from them
+
+**Extracted by the ADR-0031 loop circuit-breaker**, after two consecutive
+external rounds landed a finding on this one contract: round 1's R1-1 (the
+interface typed paths where the prose promised bytes) and round 2's F2 (the same
+defect surviving on the report's arm of the same interface). The breaker's rule
+is to stop patching finding-by-finding and pull the contract into ONE canonical
+table with registered mirrors. **This table is now the single place the contract
+is decided;** `### Exact contracts`, Table E's staged-bytes row, and
+`WP-dream-promote-in-workspace`'s rows G8 and G10 cite it and do not restate it.
+
+| # | Fact / rule | Value |
+|---|---|---|
+| S1 | **What "the decided bytes" ARE** | for any path this module PUBLISHES, the exact buffer `writeIntoVault` returned for it (Table H, row H6). Not the candidate this module composed, not a read of the target afterwards, and not a digest of either. They are the only bytes any gate judged and the only bytes the vault is known to hold at publish time |
+| S2 | **Every published outcome carries them, and the SHAPE is what guarantees it — not the prose** | `promoted[].bytes` and `redacted[].bytes` are required fields, and `report` is a DISCRIMINATED UNION whose published arms (`promoted`, `fallback`) require `bytes` while the refused arm cannot carry them. **Stated as a shape rule because twice now the prose was right and the type was not:** a return of paths alone (round 1), then an OPTIONAL `bytes` spanning success and refusal (round 2) — the second conforms to its own interface while omitting the bytes on exactly the branch that enters the commit. A rule the type cannot express is a rule an implementation can satisfy and still break |
+| S3 | **A refused outcome carries no bytes, and must not** | nothing was published, so there is nothing to carry, and a field that could hold the candidate would invite a consumer to commit bytes the vault never took. `refused[]` is `{rel, reason}`; the report's refused arm is `{outcome:'refused', reason, record}` |
+| S4 | **EVERY fact a consumer derives about a published path is derived FROM these bytes** | and this is deliberately broader than "the staged content". A frontmatter field, a length, a digest, a registry entry — each is derived from the returned buffer, never from a fresh read of the vault path. **Re-reading re-opens the window the publish closed:** a user save landing after the publish would decide what gets committed, hashed or registered, and none of it was gated. **This generalisation is what round 2's F1 needed** — its registry entry reads `id` and `created` out of a promoted `SKILL.md`, and today's code reads them from the vault path (`validate.js:1203`), which is correct only because today the brain wrote that path directly |
+| S5 | **The consumers, named — the universal above quantifies over THIS list** | two, both in `WP-dream-promote-in-workspace`: the dream commit (row G8) and the skill-ownership registry (row G10). **A consumer that needs a byte of a published path and is not in this list is a finding, not a fix** — it means an obligation this family owns has no owner, which is exactly how round 2's F1 arose |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table `Notes` cells (each cites its owning table)
 - [ ] `### Exact contracts`' signature and its return shape
-- [ ] Acceptance criteria that assert Tables C, D, E and R
-- [ ] Verification steps (the assertions mirror Tables C, D, E and R)
+- [ ] Acceptance criteria that assert Tables C, D, E, R and S
+- [ ] Verification steps (the assertions mirror Tables C, D, E, R and S)
 - [ ] Current-state description (the validator's four gates, the delta
       primitive's binary record, the shipped sanitizer, the skill's report
       requirement)
@@ -406,12 +426,12 @@ left for a gate to refuse.
 - [ ] **Table R's four cases and its named residual** — Table D's report row
       (which cites, never restates), the acceptance criteria, and the
       promotion-accounting row in Table E
-- [ ] **The bytes the caller stages from** — the `@returns` shape's `bytes`
-      field on BOTH `promoted` and `redacted`, Table E's staged-bytes handoff
-      row, and `WP-dream-promote-in-workspace`'s row G8. **No surface may state
-      the staged-bytes rule without the field that carries the bytes** — the
-      pre-round-1 text did, and the rule was unimplementable except through a
-      side channel.
+- [ ] **Table S — the decided bytes.** Its mirrors are the `@returns` shape
+      (including the `report` union's arms), Table E's staged-bytes handoff row,
+      and `WP-dream-promote-in-workspace`'s rows G8 and G10. **Two prohibitions,
+      both earned by a round: no surface may state a decided-bytes rule that the
+      TYPE does not enforce; and no surface may add a consumer of published
+      bytes without adding it to row S5's list.**
 - [ ] **The primitive seam** — the package note, Table E's publish row, C9's
       application clause, the staged-bytes handoff row, and their acceptance
       criteria. **No surface may describe filesystem discipline as this spec's
@@ -618,6 +638,13 @@ left for a gate to refuse.
       returned in `report.record`, and the refusal names its reason. Proven RED
       against an implementation that refuses the write and drops the record —
       which is the failure that survives if only the `expect` path is handled.
+- [ ] **Every published outcome carries its decided bytes (Table S).** Asserted
+      per outcome: an ordinary promotion, a redacted promotion, a promoted
+      report body, and a Table R fallback publish each return the exact buffer
+      the primitive published, byte-equal to what the vault then holds; a
+      refused path and a refused report return no bytes at all. **Proven RED
+      against a return that omits `bytes` on the report's published arms**,
+      which is the case round 2 found conforming to the previous interface.
 - [ ] **The module ships consumed by nothing.** No file outside the Deliverables
       table changes, and no production code requires `promote.js`. Asserted by
       the boundary check and by a grep whose red side is a planted require.
