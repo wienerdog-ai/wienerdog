@@ -1,7 +1,7 @@
 ---
 id: WP-dream-vault-write-primitive
 title: Add the single identity-anchored primitive through which this family writes vault content
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: []
