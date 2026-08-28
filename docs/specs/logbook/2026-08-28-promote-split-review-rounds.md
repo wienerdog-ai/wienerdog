@@ -17,6 +17,20 @@ to be re-found against these two.
 ## STOP CRITERION (pinned before the round, per the owner's ruling)
 
 - **The owner authorised ONE external round** (2026-08-28), after round zero.
+  **AMENDED 2026-08-28, same day: a SECOND round is authorised under the
+  runbook's HEAVY rule** — round 1's fix changed `promote()`'s return type, and
+  weighted closure says a HEAVY fix lands and then earns a full fresh external
+  round. It runs **on the whole settled text**, not on the diff.
+- **"CLEAN" IS DEFINED HERE, BEFORE THE ROUND RUNS, so the definition cannot be
+  chosen after seeing the findings:** a round is clean when it returns **no
+  A-band and no B-band finding**. C-band findings are spec hygiene by
+  definition; per the runbook they are fixed or accepted as named residuals and
+  **do not extend the loop**. This matches the runbook's own closure rule — the
+  loop is done when a round finds nothing about the PRODUCT — and the A/B/C
+  ruler the standing reporting rule already binds every round to.
+- **A clean round is the owner's authorised trigger for the `Ready` flip and the
+  PR** (owner, 2026-08-28). Not clean → disposition, and the loop rules below
+  apply.
 - **The family escalation, carried forward unchanged from the pre-split loop:**
   this family's characteristic failure is **a vault write that bypasses the
   promotion decision**, or **a decision made on bytes other than the ones that
