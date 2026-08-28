@@ -207,12 +207,23 @@ under "Discovered issues" in the PR body.
  *           **Preserving the unredacted copy to quarantine is the EP2 GATE's
  *           own act, not this module's** — the module consumes the disposition
  *           and knows nothing about the state directory
- *  @returns {{promoted:string[],
- *             redacted:Array<{rel:string}>,
+ *  @returns {{promoted:Array<{rel:string, bytes:Buffer}>,
+ *             redacted:Array<{rel:string, bytes:Buffer}>,
  *             refused:Array<{rel:string, reason:string}>,
  *             report:{outcome:'promoted'|'fallback'|'refused', reason?:string,
  *                     bytes?:Buffer, record:string[]},
  *             secretDisposition:{withheld:number, redactions:number}}}
+ *    bytes   on `promoted` and `redacted` alike, the EXACT buffer
+ *            `writeIntoVault` returned for that path (Table H, H6) — not a
+ *            re-read and not the candidate this module composed. **Every
+ *            published path carries it, and that is what makes Table E's
+ *            staged-bytes handoff satisfiable:** the pipeline stages FROM these
+ *            (`WP-dream-promote-in-workspace`, row G8), because naming the path
+ *            and letting git re-read it commits whatever a user save put there
+ *            after the publish. A return shape that carried paths alone would
+ *            leave that rule unimplementable except through a side channel —
+ *            round 1's finding, and the reason this field is in the canonical
+ *            interface rather than in prose
  *    report  the dream report's own outcome, never folded into `promoted` —
  *            Table R's fallback publish is recorded as itself (Table E). On
  *            `refused` the complete enforcement record is in `record`, for the
@@ -362,7 +373,7 @@ left for a gate to refuse.
 | **The publish goes through the primitive — this spec writes no vault byte itself** | every promoted path is published by `writeIntoVault` (Table H): the resolved path is what policy judges, nothing is written on or through a symlink, no partial content is ever observable at the target, the publish is conditional on the caller's premise still holding, and the published bytes come back. **Those are the primitive's OBSERVABLE properties, which is all a consumer may restate.** **This spec does not restate that discipline — the primitive owns it.** What this spec supplies is the two caller-side arguments: `admit` (Table C's policy, applied by the primitive to the RESOLVED path) and `expect` (the `vault-now` bytes the decision was made against). A promotion that writes the vault by any other route is a defect, and the acceptance criteria assert the seam |
 | **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed**, to milliseconds against today's minutes-long silent window. The narrowing is the primitive's `expect` guard (Table H, row H5); this spec's obligation is to PASS the right bytes — the `vault-now` bytes the decision used — and to turn `{written:false}` into refuse-and-report. **The residual is the primitive's and is inherited here unchanged:** a user save landing between the re-read and the `rename` is still lost |
 | Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The report's own outcome is carried separately in `report` and a fallback publish is never recorded as a normal promotion (Table R). The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
-| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the returned bytes in `promoted` and `report.bytes` so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
+| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **The interface carries them: `promoted[].bytes` and `redacted[].bytes` (`### Exact contracts`), plus `report.bytes` for the report's own write.** Stating the rule without a field that carries the bytes is what round 1 found. **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the returned bytes in `promoted[].bytes`, `redacted[].bytes` and `report.bytes` so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
 
 ### Mirrored Surface Checklist
 
@@ -395,6 +406,12 @@ left for a gate to refuse.
 - [ ] **Table R's four cases and its named residual** — Table D's report row
       (which cites, never restates), the acceptance criteria, and the
       promotion-accounting row in Table E
+- [ ] **The bytes the caller stages from** — the `@returns` shape's `bytes`
+      field on BOTH `promoted` and `redacted`, Table E's staged-bytes handoff
+      row, and `WP-dream-promote-in-workspace`'s row G8. **No surface may state
+      the staged-bytes rule without the field that carries the bytes** — the
+      pre-round-1 text did, and the rule was unimplementable except through a
+      side channel.
 - [ ] **The primitive seam** — the package note, Table E's publish row, C9's
       application clause, the staged-bytes handoff row, and their acceptance
       criteria. **No surface may describe filesystem discipline as this spec's
