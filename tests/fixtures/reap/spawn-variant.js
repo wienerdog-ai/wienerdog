@@ -13,11 +13,11 @@
 //
 // It is ALSO the pinned fake "claude" brain for the dream.js live proofs
 // (R6-2 / R10-1 / R11-3): spawnBrain invokes it with claude-shaped argv, so
-// mode selection falls back to the WD_SPAWN_VARIANT_MODE env var when argv[2]
-// is flag-shaped, and `--version` anywhere in argv answers the run-evidence
-// version probe immediately.
+// argv[2] never selects there and mode selection falls back to the control file
+// beside this copy of the fixture; `--version` anywhere in argv answers the
+// run-evidence version probe immediately.
 //
-// Modes (argv[2] wins when it is not flag-shaped; else WD_SPAWN_VARIANT_MODE):
+// Modes (argv[2] wins when it is not flag-shaped; else the control file):
 //   sleep                          keep-alive forever (the sleeper leaf).
 //   setsid-holder <out>            spawn a setsid (detached:true) sleeper, stay
 //                                  alive — a new-session grandchild whose ppid
@@ -45,9 +45,38 @@ if (process.argv.includes('--version')) {
   process.exit(0);
 }
 
+/**
+ * SCENARIO SELECTION — the control file, never the environment
+ * (WP-dream-workspace-retarget, Table B's fixture-control row). The dream's
+ * child environment is CONSTRUCTED, so the ambient WD_SPAWN_VARIANT_* pair a
+ * test used to set can no longer reach a BRAIN-shaped invocation. What can is a
+ * JSON file the installing test writes beside this copy of the fixture: the test
+ * copies this file into its own temp bin dir and pins that path, so `__dirname`
+ * here is that temp dir. Absent the file, the defaults below stand.
+ * @returns {{mode?:string, out?:string}}
+ */
+function control() {
+  try {
+    return JSON.parse(fs.readFileSync(require('node:path').join(__dirname, 'wd-fixture-control.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+// PRECEDENCE: argv WINS, the control file is only the fallback — and that is
+// load-bearing, not tidiness. `spawnSleeper` below re-spawns THIS SAME script
+// with 'sleep' as argv[2]; the child resolves the SAME __dirname and therefore
+// reads the SAME control file, so an implementation in which the file OVERRODE
+// argv would hand the child the parent's spawning mode and fork-bomb (ADR-0004).
+// The two routes serve two different invocations: on a brain spawn brain.js owns
+// every argv element and composes flag-shaped argv, so argv[2] never selects and
+// the control file is the only route; on the self-re-spawn argv[2] is a literal
+// mode name and it is the selector.
+const ctl = control();
 const rawArg = process.argv[2];
-const mode = rawArg && !rawArg.startsWith('-') ? rawArg : process.env.WD_SPAWN_VARIANT_MODE || 'sleep';
-const out = rawArg && !rawArg.startsWith('-') ? process.argv[3] : process.env.WD_SPAWN_VARIANT_OUT;
+const argvSelects = Boolean(rawArg) && !rawArg.startsWith('-');
+const mode = argvSelects ? rawArg : ctl.mode || 'sleep';
+const out = argvSelects ? process.argv[3] : ctl.out;
 
 /** Append a {role, pid} JSON line to the shared out file. */
 function record(role, pid) {
@@ -61,14 +90,16 @@ function keepAlive() {
   setTimeout(() => process.exit(0), 10 * 60 * 1000);
 }
 
-/** Spawn THIS script again in `sleep` mode. Env mode vars are cleared so a
- *  pinned-claude invocation can never fork-bomb through inherited env.
+/** Spawn THIS script again in `sleep` mode. The explicit `'sleep'` argv is what
+ *  keeps a re-spawn from inheriting the parent's spawning mode: it takes
+ *  precedence over the control file the child re-reads from the same __dirname,
+ *  so a pinned-claude invocation can never fork-bomb.
  *  @param {boolean} detached @returns {import('node:child_process').ChildProcess} */
 function spawnSleeper(detached) {
   const child = spawn(process.execPath, [__filename, 'sleep'], {
     detached,
     stdio: 'ignore',
-    env: { ...process.env, WD_SPAWN_VARIANT_MODE: '', WD_SPAWN_VARIANT_OUT: '' },
+    env: process.env,
   });
   child.unref();
   return child;

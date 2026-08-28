@@ -101,7 +101,9 @@ function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
   console.log(`  truncated to fit: ${sel.truncated.length}`);
-  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
+  // The --dry-run preview must compose the SAME write-target argument the real
+  // invocation does, or it prints a plan that is not the plan.
+  const argv = buildClaudeArgs({ workspaceDir: vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
 
@@ -141,8 +143,20 @@ async function runBrainWithWatchdog(o) {
   const reapTreeFn = seams.reapTree || reapTree;
   const reapGroupFn = seams.reapGroup || reapGroup;
   const writePrivate = seams.writeFilePrivate || writeFilePrivate;
+  // TRANSITIONAL (WP-dream-workspace-retarget, Table B last row). The brain's
+  // write target is now a WORKSPACE, and here it is still the vault — passed
+  // explicitly, so the running product stays byte-identical until
+  // WP-dream-promote-in-workspace builds the workspace in this pipeline, wires
+  // teardown into every exit path, and re-points this one argument. Re-pointing
+  // it HERE, with no promotion, would leave the dream writing notes nothing ever
+  // promotes: an inert product.
   const { child, done } = spawnBrain({
-    vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
+    // `vaultDir` is NOT a second write target — it is the run's real vault
+    // (`cfg.vault`), passed so the brain's constructed environment can keep it
+    // OUT. It must come from here: `wienerdog adopt` writes an arbitrary path
+    // into config.yaml, so `paths.vault` is a different directory on an adopted
+    // vault and sanitising against it would strip the wrong one.
+    workspaceDir: vaultDir, vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
 
   // Hand the brain's identity UP to the outer supervisor, per-run token.
