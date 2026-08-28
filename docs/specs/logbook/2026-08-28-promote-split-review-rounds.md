@@ -291,3 +291,96 @@ what the HEAVY rule exists to re-test.
 
 **A clean round 3 is the owner's authorised trigger for the `Ready` flip on both
 specs and the PR** (owner: "tiszta = Ready-flip + PR #30").
+
+### Round 3 — 2026-08-28 — reviewer: gptsol (Codex side), external, FRESH agent, WHOLE TEXT
+
+Raw: `2026-08-28-promote-split-round-3-raw.md`, committed before adjudication.
+Verdict **needs-attention**, **four findings — 3 B + 1 C — zero scope
+objections.** Read-only verified independently.
+
+**All six prior findings (R1-1, R2-1, R2-2, Z1, Z2, Z3) re-audited and ruled
+GENUINELY FIXED**, each with current lines cited. **NOT CLEAN** by the pinned
+criterion, so no `Ready` flip and no PR.
+
+| # | Band | Finding |
+|---|---|---|
+| R3-1 | B | **No Table G row consumes `report.record`.** On Table R's refused arm the vault correctly keeps nothing — so `report.record` is the ONLY surviving copy of the run's enforcement record, and the module returning it is not the pipeline delivering it |
+| R3-2 | B | **Table D understated the gates' evidence.** Measured: `skillBodyViolation` takes a registry snapshot and the run date and reads `HEAD:<rel>` (`:340`) and `HEAD:<ledgerRel>` (`:398`); `ledgerViolation` takes a registry snapshot and `extractsBySession` and reads `HEAD:<rel>` (`:555`) and the extracts (`:600`). **Their verdicts are not functions of the candidate bytes** — identical ledger bytes flip on whether the named session invoked the parent skill (`:589-606`). An extraction following the old table would keep the byte checks and silently drop ADR-0020's ownership, history and invocation-binding controls |
+| R3-3 | B | **Validator Step 1's delete-and-RECORD half was inherited by nobody**, while this spec's own checklist claimed every step had an inheriting row. `scratchIntact` (`cli/dream.js:57-78`) is not equivalent — measured, an added `EVIL.json` passes it |
+| R3-4 | C | **Table S's closed consumer list was false**: S1 quantified over "any path this module publishes" while the list held only downstream consumers, and the report's own internal second write consumes the first publish's returned buffer |
+
+All four reproduced independently against the tree before acting.
+
+### THE CIRCUIT-BREAKER FIRED A SECOND TIME, on a NEW family
+
+R2-1, R3-1, R3-2 and R3-3 are one family: **a durable or security-visible
+behaviour of the code this package replaces that no row inherits, or whose
+evidence the replacement understates.** Four instances across two consecutive
+rounds. The breaker's rule is to stop patching and extract.
+
+**Table V — what `validateAndCommit` owns today, and which row inherits it** is
+that extraction, in the pipeline half. Six step rows plus a row for the RETURN.
+
+**The root cause, named in the table itself:** this spec's Current state listed
+the validator's six steps **by name and line — an inventory, not an
+enumeration.** It never said what any step CONSUMES or what it durably PRODUCES,
+and all four findings lived in exactly that gap. **A 1469-line function is
+replaced safely only by the second kind of reading, and it never got one.**
+
+**The enumeration immediately found a FIFTH instance the round did not report:**
+row V7. The pipeline consumes five of the validator's seven return fields, four
+of them in the user-visible summary line (`cli/dream.js:628-631`), and **no row
+owned that channel** — which is the same channel R3-1's enforcement record and
+R3-3's out-of-vault records must travel on. That is what makes the extraction
+load-bearing rather than clerical.
+
+### Dispositions
+
+| # | Disposition |
+|---|---|
+| R3-1 | **FIXED.** New row **G11** owns the run's accounting and output, and states plainly that returning is not delivering. New criterion, RED against a pipeline that reads the published outcomes but never `report.record` |
+| R3-2 | **FIXED.** Table D's three gate rows now enumerate the complete evidence per gate, with a new row stating why and two rules: each gate receives every value its row names, and no gate may substitute a vault re-read or a git query. New criterion: identical bytes, different verdicts, solely from registry or invocation evidence |
+| R3-3 | **FIXED.** New row **G12** keeps both halves — the fail-loud abort unchanged, and the enumerate-delete-record behaviour preserved. New criterion RED against `scratchIntact` alone, which is green on the input that discriminates |
+| R3-4 | **FIXED.** Table S gains a SCOPE row (S5) before its list (now S6): the table governs what `promote()` RETURNS, and the one internal `writeIntoVault` handoff is Table D's report row and Table R's, cited not restated |
+
+Also repaired: the Mirrored Surface Checklist bullet that **asserted every
+validator step had an inheriting row.** It was written with nothing to check it
+against and was false. It now points at Table V, where "no owner" is a visible
+row rather than an absence.
+
+### Defects this round's own fixes introduced
+
+- **Rows G11 and G12 were again inserted BEFORE G10** — the identical mistake as
+  round 2's G10-before-G9. **Twice is a pattern, so it now has a mechanical
+  check** rather than another promise to be careful: extract the row ids, sort
+  numerically, diff. It caught this one; it is recorded here so any future editor
+  runs it instead of re-deriving it.
+
+### Measurements after the round
+
+| Measure | Value | Tripwire |
+|---|---|---|
+| module half acceptance criteria | **26** (was 25) | T1 fires above 28 — **not fired, and now two away** |
+| of those, the report's | **6** | T2 fires above 8 — not fired |
+| pipeline half criteria / deliverables | **18** / **6** | — |
+
+`npm run lint` exit 0.
+
+### The trend, and an honest confound
+
+**B-band findings per round: 1 → 1 → 2 → 3.** Rising, which is the opposite of
+what convergence looks like, and it is decision-grade rather than reassuring.
+
+**The confound, stated because it cuts against the alarming reading and this
+author introduced it:** round 3's dispatch explicitly aimed the reviewer at the
+family that had just produced a finding — it told the reviewer to walk
+`validateAndCommit`'s six steps and ask which row owns each outcome. **Finding
+more of that family is therefore not independent evidence that the text is
+decaying.** It is partly evidence that a region nobody had systematically
+inspected was finally inspected. The two readings are not distinguishable from
+the count alone, and the count should not be reported as if they were.
+
+What IS independent: **every finding in rounds 2 and 3 was in the same region**,
+and that region now has a canonical table with an explicit "no owner" entry. The
+next round's B count is the measurement that discriminates — if the family is
+genuinely drained, it should come back on something else or on nothing.

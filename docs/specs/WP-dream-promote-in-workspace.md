@@ -246,6 +246,11 @@ across the run's exit paths; (v) this package emits the run's decisions but
 `WP-dream-promote-module` owns their interpretation; (vi) the residue-lifecycle
 successor inherits the pipeline contract.
 
+**Two canonical tables.** **Table G** is the pipeline's own contract. **Table V**
+is the inheritance ledger — what the code this package replaces owns today, and
+which Table G row takes each piece — extracted by the ADR-0031 circuit-breaker
+after four findings in two rounds lived in the gap between them.
+
 ### Table G — the pipeline: wiring, the reap precondition, and the abort paths
 
 | # | Fact / rule | Value |
@@ -260,6 +265,37 @@ successor inherits the pipeline contract.
 | G8 | **The dream commit, and the staged-bytes handoff discharged here** | `WP-dream-promote-module`'s Table E states the rule and names it as this package's to satisfy: the commit contains **only promoted paths, and the DECIDED bytes**. First: with no pre-commit (G6), a wholesale stage would sweep the user's uncommitted edits into the dream commit, so the commit carries the promoted paths and the report, and nothing else — which is also what keeps a staging object surviving a primitive refusal (Table H, H7) out of it. Second: **naming the path is not enough** — staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the DECIDED BYTES — `WP-dream-promote-module`'s Table S, which owns what they are, which outcomes carry them and what may be derived from them, and which this row cites rather than restates.** That table was extracted after two consecutive rounds landed on it; this row is one of its two named consumers. **How that is achieved is the implementer's — round-4 CUT ruling.** ADR-0012's "one dream run = one git commit in the vault" is unchanged. **The user's post-publish save remains as an uncommitted working-tree modification**: it is not committed and it is not discarded |
 | G9 | **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:549` and `:564`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone (G6), a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: this row changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject, which is the residue-lifecycle successor's |
 | G10 | **The skill-ownership registry survives the rewiring — a durable POST-COMMIT side effect the validator owns today and Table G must inherit (round 2, F1)** | today `validateAndCommit` does this in two halves: it collects accepted NEW dream-created skill drafts during classification (`validate.js:1200-1205`) and calls `recordSkills` after the commit (`:1443-1448`, Step 6), so the registry only ever names committed skills. **The shipped contract requires an entry for every new dream-created skill the orchestrator accepts and commits** (`docs/specs/done/WP-083-skill-ownership-registry.md`, its acceptance criteria) — and a skill that is committed but unregistered is not dream-owned, so every later autonomous revision of it fails closed. **Replacing the validator's classification, gates, report and commit without carrying this obligation would leave the old code and its passing unit test in place while production registration is dead** — green tests, missing product. This row assigns it. Three things it fixes, and each is a consequence of the inversion rather than a port: (i) **"NEW" can no longer be `change.untracked`** (`validate.js:1202`), which is a git INDEX fact — the same class of evidence whose absence made this family's predecessor `Superseded` — so newness comes from the run's delta status `added` for a path the promotion outcome shows PUBLISHED, ordinary or redacted alike; (ii) **`id` and `created` are derived from the DECIDED BYTES**, never by re-reading the vault path as `:1203` does today (`WP-dream-promote-module`, Table S, row S4 — this row is its second named consumer); (iii) **the call still runs only after the commit succeeds**, which is what keeps the registry from naming an uncommitted skill. Refused paths, modifications of existing tracked skills, and shipped `wienerdog-*` skills are registered by nobody, exactly as today. `src/core/dream/skill-registry.js` is NOT modified — `recordSkills` is called, not changed; `isNewSkillDraft` (`validate.js:300`) is reused, exported if the call site needs it |
+| G11 | **The run's accounting and output — every record this run produces reaches the user (round 3, F1 and F7 of Table V)** | today the run ends with a user-visible summary built from the validator's return (`cli/dream.js:628-631`: the commit sha, note and skill counts, the reverted count and the out-of-vault count). Table V row V7 shows the pipeline consumes five of seven fields and that no row owned the channel. This row owns it. Two obligations it must carry that the pre-round-3 text left homeless: **(i) the REFUSED report arm.** When `promote()` returns `report.outcome === 'refused'`, `report.record` holds the COMPLETE enforcement record and the vault holds none of it — Table R's R4 is explicit that the vault object is left untouched and the record travels through the run's log and output instead. **The module RETURNS it; returning is not delivering, and this row is the delivery.** Nothing is staged or committed on that arm — there are no bytes to commit (Table S, row S3). **(ii) the out-of-vault records from row G12**, which reach the same channel. A refusal that names its reason to nobody is the failure Table R exists to prevent, arriving one package later |
+| G12 | **Scratch integrity — the delete-and-RECORD half, which no row inherited (round 3, F3)** | Table V row V1: today Step 1 deletes any file in the read-only scratch dir that is not an expected extract, deletes an expected extract whose content changed, and RECORDS each as an out-of-vault violation that reaches the report and the run's return. **The pipeline's existing `scratchIntact` (`cli/dream.js:57-78`) is NOT equivalent and must not be mistaken for it: measured, it checks only that expected extracts still exist and byte-match, so an added `EVIL.json` passes it unchanged.** This row keeps both halves: the fail-loud abort for a missing or changed expected input stays exactly as it is, and the enumerate-delete-record behaviour for UNEXPECTED writes is preserved, running after the verified reap (row G2) and before promotion. Its records reach the user through row G11. **Rationale, not ceremony:** an unexpected scratch write is a sandbox-policy breach; dropping the record would downgrade a security-visible event into routine teardown, and the file would be deleted by cleanup with nothing left to show it existed. `src/core/dream/scratch.js` is not modified |
+
+### Table V — what `validateAndCommit` owns today, and which row inherits it
+
+**Extracted by the ADR-0031 loop circuit-breaker, its SECOND firing on this
+pair.** Round 2's R2-1 and round 3's F1, F2 and F3 are one family: *a durable or
+security-visible behaviour of the code this package replaces that no row
+inherits, or whose evidence the replacement understates.* Four instances in two
+rounds is the breaker's trigger, and its rule is to stop patching and enumerate.
+
+**The root cause, named so it is not repeated:** this spec's Current state
+listed `validateAndCommit`'s six steps by NAME and LINE. That is an inventory,
+not an enumeration — it says where each step is, never what it CONSUMES or what
+it durably PRODUCES, and every one of the four findings lived in that gap. A
+1469-line function is replaced safely only by the second kind of reading. **This
+table is that reading, and it is the checkable form of the claim the Mirrored
+Surface Checklist used to make without one.**
+
+**"No row" is an entry here, never silence.** A behaviour this package drops on
+purpose is recorded as dropped, with the ruling that dropped it.
+
+| # | What the validator owns today | Consumes | Durably produces | Inherited by |
+|---|---|---|---|---|
+| V1 | **Step 1 — scratch integrity** (`validate.js:1107-1142`) | `scratchDir`, `expectedScratch`, `scratchBaseline` | deletes any scratch file that is not an expected extract, deletes an expected extract whose content changed, and **RECORDS each as an out-of-vault violation** (`outOfVaultDetailed`), which reaches the enforcement section (`:1385-1386`) and the return (`:1450-1457`) | **row G12.** **NOT already covered by the pipeline's `scratchIntact`** (`cli/dream.js:57-78`), which only checks that expected extracts still exist and byte-match — measured, an extra `EVIL.json` passes it. The delete-and-record half has no other owner (round 3, F3) |
+| V2 | **Step 2 — per-path classification and three gates** (`:1144`) | git evidence in the vault; the four gates' own inputs | the promote/refuse decision per path | rows **G7** (the gates' extraction and evidence) and, for the decision itself, `WP-dream-promote-module`'s Tables C and D |
+| V3 | **Step 3 — the EP2 secret gate and its enforcement half** (`:1211`, revert core `:1324-1364`) | staged git diffs | withheld/redacted dispositions; the revert, re-stage and index-drop machinery | **row G7.** The DISPOSITION survives in `WP-dream-promote-module`'s Table D; the enforcement half has no subject once nothing is written to the vault, and goes |
+| V4 | **Step 4 — the dream report** (`:1374-1408`) | the run's records | the report body plus the appended enforcement section | `WP-dream-promote-module`'s Table D report row and Table R. Its REFUSED arm's delivery is **row G11** |
+| V5 | **Step 5 — stage and commit** (`:1411`, `git add -A` at `:1412`) | the working tree | one commit in the vault | **row G8** |
+| V6 | **Step 6 — the skill ownership registry** (`:1443-1448`) | accepted new skill drafts collected at `:1200-1205` | `state/skill-registry.json` entries | **row G10** |
+| V7 | **The RETURN, and the run's user-visible accounting** | the above | seven fields, of which the pipeline consumes five today: `secretReverts` (`cli/dream.js:592`), and `sha`, `counts.notes`, `counts.skills`, `reverted.length`, `outOfVault.length` in the summary line (`:628-631`) | `secretReverts` → **row G4**; everything else → **row G11**. **This row is why the enumeration was needed at all:** the summary line is the delivery channel V1's records and Table R's refused enforcement record both travel on, and no row owned it |
 
 ### Mirrored Surface Checklist
 
@@ -298,10 +334,14 @@ successor inherits the pipeline contract.
 - [ ] **The two consumers of the decided bytes** — rows G8 and G10, and row S5
       in `WP-dream-promote-module`, which lists them. **A third consumer added
       here without being added there is a finding.**
-- [ ] **The durable side effects the validator owns today** — Current state's
-      Step-1-to-Step-6 enumeration and the Table G row that inherits each. **Step
-      6 is row G10; a step named in Current state with no row that inherits it is
-      exactly round 2's F1.** Both name `WP-dream-promote-module` as the owner of the rule and
+- [ ] **Table V — what the validator owns and who inherits it.** Its mirrors are
+      Current state's step list, every Table G row named in its "Inherited by"
+      column, and the acceptance criteria those rows carry. **The claim this
+      bullet used to make — "a Table G row inherits each step" — was asserted
+      with nothing to check it against and was FALSE (round 3, F3 found Step 1
+      unowned). Table V is the checkable form: a row of it with no owner, or an
+      owner that is not a real Table G row, is the finding.** A behaviour dropped
+      on purpose is an entry saying so, never an absence. Both name `WP-dream-promote-module` as the owner of the rule and
       this package as the discharger, in the package note, the Deliverables
       Notes cells, the rows themselves and their acceptance criteria
 - [ ] **The reap precondition's platform scope** — row G2, row G5's exception,
@@ -437,6 +477,22 @@ successor inherits the pipeline contract.
       **Proven RED against a pipeline that never calls `recordSkills`** — the
       failure mode round 2 found, where the validator's own unit test still
       passes while production registration is dead.
+- [ ] **A refused report still delivers its record (row G11, round 3 F1).** For
+      an `expect` conflict AND for a symlinked report target, the run's log and
+      user-visible output carry the COMPLETE enforcement record and the refusal's
+      named reason, the vault object is byte-unchanged, and nothing is staged or
+      committed for the report. **Proven RED against a pipeline that consumes
+      `promote()`'s published outcomes but never reads `report.record`** — which
+      passes every other criterion here while losing the only surviving copy of
+      the run's decisions.
+- [ ] **An unexpected scratch write is deleted AND recorded (row G12, round 3
+      F3).** With every expected extract present and byte-intact, a brain that
+      also writes `<scratch>/EVIL.json` does not abort the run; the file is
+      removed and the violation appears in the run's output and in the report's
+      enforcement section. **Proven RED against `scratchIntact` alone**, which is
+      green on that input — the measurement that shows the two are not the same
+      check. The fail-loud abort for a MISSING or CHANGED expected extract is
+      asserted unchanged in the same criterion.
 - [ ] **The abort paths (row G9).** Brain failure and mid-run scratch change
       each remove the workspace and leave the vault byte-identical, including
       uncommitted user edits. Proven RED against the current
@@ -511,6 +567,8 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   nothing beyond them; Table S names **two CONSUMERS of the decided bytes**,
   rows G8 and G10. G8 is both. G10 is a consumer, not a handoff — the obligation
   it inherits is the validator's Step 6, not one the module ever owned.
+- **`src/core/dream/scratch.js`** — row G12 preserves Step 1's behaviour inside
+  this package's own deliverables; the scratch module itself is not modified.
 - **`src/core/dream/skill-registry.js`** — row G10 CALLS `recordSkills` and does
   not change it. The registry's own file format, atomicity and read behaviour are
   `WP-083-skill-ownership-registry`'s, shipped and untouched here.
