@@ -506,16 +506,24 @@ function assertReportCopied(vaultRoot, workspaceDir, layout, date) {
 }
 
 /**
- * The path's components BELOW its root, with `.` and empty segments dropped.
+ * A path's ROOT and the components below it, with `.` and empty segments
+ * dropped. Returned together because the walk needs both, and getting the root
+ * wrong silently relocates every component that follows.
  *
  * THE ROOT MUST COME OFF FIRST. A plain `split(sep)` keeps it as a component,
  * and on win32 that component is the drive or the UNC host: measured,
- * `C:\\outside-alias\\bin` splits to `['C:', 'outside-alias', 'bin']` and a walk
- * seeded at `C:\\` then probes `C:\\C:`, while `\\\\server\\share\\…` probes
- * `\\\\server\\share\\server`. Both fail, the walk falls back to a malformed
- * lexical answer, and every alias reaching into the vault goes unseen. POSIX
- * hid this because its root component splits to the empty string, which the
- * filter drops anyway.
+ * `C:\outside-alias\bin` split to `['C:', 'outside-alias', 'bin']`, so a walk
+ * seeded at `C:\` then probed `C:\C:`. POSIX hid this because its root
+ * component splits to the empty string, which the filter drops anyway.
+ *
+ * A NAMESPACED UNC ROOT IS NOT WHAT NODE SAYS IT IS. `\\?\UNC\server\share\` is
+ * the same location as `\\server\share\`, so the server and the share belong to
+ * the ROOT — but measured, BOTH `path.win32.parse().root` and
+ * `path.win32.dirname()` stop at `\\?\UNC\` and hand `server` and `share` back
+ * as ordinary components. Walking from there probes `\\?\UNC\server`, which is
+ * not a location at all; resolution stops, and an alias below the share is
+ * never followed. There is no Node primitive that gets this right, so the two
+ * components are absorbed here.
  *
  * WIN32 ACCEPTS BOTH SEPARATORS, so both are split there — and only there: a
  * backslash is a legal character in a POSIX filename, so splitting on it would
@@ -524,12 +532,19 @@ function assertReportCopied(vaultRoot, workspaceDir, layout, date) {
  * `mod` is injectable ONLY so the win32 shapes can be asserted from a POSIX test
  * run; production always uses the platform's own `path`.
  * @param {string} input @param {typeof path} [mod]
- * @returns {string[]}
+ * @returns {{root:string, parts:string[]}}
  */
-function splitBelowRoot(input, mod = path) {
-  const rest = String(input).slice(mod.parse(String(input)).root.length);
-  const parts = mod.sep === '\\' ? rest.split(/[\\/]+/) : rest.split('/');
-  return parts.filter((seg) => seg !== '' && seg !== '.');
+function splitPath(input, mod = path) {
+  const s = String(input);
+  let root = mod.parse(s).root;
+  const rest = s.slice(root.length);
+  const split = mod.sep === '\\' ? rest.split(/[\\/]+/) : rest.split('/');
+  let parts = split.filter((seg) => seg !== '' && seg !== '.');
+  if (mod.sep === '\\' && /^\\\\[?.]\\UNC\\$/i.test(root) && parts.length >= 2) {
+    root = `${root}${parts[0]}${mod.sep}${parts[1]}${mod.sep}`;
+    parts = parts.slice(2);
+  }
+  return { root, parts };
 }
 
 /**
@@ -555,8 +570,8 @@ function splitBelowRoot(input, mod = path) {
 function resolveExisting(p) {
   const input = String(p);
   if (!path.isAbsolute(input)) return path.resolve(input);
-  const parts = splitBelowRoot(input);
-  let cur = path.parse(input).root;
+  const { root, parts } = splitPath(input);
+  let cur = root;
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
     if (part === '..') {
@@ -777,7 +792,7 @@ module.exports = {
   assertNoGitEntry,
   excludeReason,
   isAtOrBeneath,
-  splitBelowRoot,
+  splitPath,
   // Layer 1's mechanism. Exported because it is UNREACHABLE through
   // `createWorkspace` in a test: a symlink planted before the walk is
   // classified by `lstat` and skipped by the walk, so the swap branches here

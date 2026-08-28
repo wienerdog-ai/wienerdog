@@ -46,7 +46,7 @@ const {
   excludeReason,
   copyRegularFileSecure,
   isAtOrBeneath,
-  splitBelowRoot,
+  splitPath,
   WORKSPACE_DIRNAME,
 } = require('../../src/core/dream/workspace');
 const {
@@ -1276,19 +1276,38 @@ test('dream-workspace: containment follows the KERNEL, not the string — alias 
   assert.equal(isAtOrBeneath(`${root}${path.sep}outside-alias${path.sep}..${path.sep}..`, vault), false);
 });
 
-test('dream-workspace: the component walk drops the root first — including a win32 drive or UNC host', () => {
-  // POSIX hid this: its root component splits to the empty string, which the
-  // filter drops anyway. On win32 the root component is the DRIVE or the UNC
-  // host, so a walk seeded at the root then probes `C:\C:` (or
-  // `\\server\share\server`), fails, and falls back to a malformed lexical
-  // answer — at which point every alias reaching into the vault goes unseen by
-  // all three gates. Asserted for both platforms from one run, which is the
-  // reason the path module is injectable at all.
-  assert.deepEqual(splitBelowRoot('C:\\outside-alias\\bin', path.win32), ['outside-alias', 'bin']);
-  assert.deepEqual(splitBelowRoot('\\\\server\\share\\outside-alias\\bin', path.win32), ['outside-alias', 'bin']);
-  // win32 accepts both separators; POSIX must NOT split on a backslash, which
-  // is a legal character in a filename there.
-  assert.deepEqual(splitBelowRoot('C:/mixed/sep', path.win32), ['mixed', 'sep']);
-  assert.deepEqual(splitBelowRoot('/a/we\\ird/b', path.posix), ['a', 'we\\ird', 'b']);
-  assert.deepEqual(splitBelowRoot('/a/./b', path.posix), ['a', 'b']);
+test('dream-workspace: the component walk gets the ROOT right on every absolute shape', () => {
+  // Getting the root wrong silently relocates every component after it, so both
+  // halves are asserted. POSIX hid the first bug: its root component splits to
+  // the empty string, which the filter drops anyway. On win32 the root component
+  // is the DRIVE or the UNC host, so a walk seeded at the root then probed
+  // `C:\\C:` — and from there no alias reaching into the vault is ever seen by
+  // any of the three gates. Asserted for both platforms from one run, which is
+  // the only reason the path module is injectable.
+  assert.deepEqual(splitPath('C:\\outside-alias\\bin', path.win32), {
+    root: 'C:\\',
+    parts: ['outside-alias', 'bin'],
+  });
+  assert.deepEqual(splitPath('\\\\server\\share\\outside-alias\\bin', path.win32), {
+    root: '\\\\server\\share\\',
+    parts: ['outside-alias', 'bin'],
+  });
+  // A NAMESPACED UNC root is not what Node says it is: `\\\\?\\UNC\\server\\share\\`
+  // is the same location as `\\\\server\\share\\`, but measured, BOTH `parse().root`
+  // and `dirname()` stop at `\\\\?\\UNC\\` and hand the server and share back as
+  // components — so a walk probes `\\\\?\\UNC\\server`, which is not a location.
+  assert.deepEqual(splitPath(path.win32.toNamespacedPath('\\\\server\\share\\a\\b'), path.win32), {
+    root: '\\\\?\\UNC\\server\\share\\',
+    parts: ['a', 'b'],
+  });
+  // A namespaced DRIVE root needs no absorption — Node parses that one right.
+  assert.deepEqual(splitPath(path.win32.toNamespacedPath('C:\\a\\b'), path.win32), {
+    root: '\\\\?\\C:\\',
+    parts: ['a', 'b'],
+  });
+  // win32 accepts both separators; POSIX must NOT split on a backslash, which is
+  // a legal character in a filename there.
+  assert.deepEqual(splitPath('C:/mixed/sep', path.win32).parts, ['mixed', 'sep']);
+  assert.deepEqual(splitPath('/a/we\\ird/b', path.posix), { root: '/', parts: ['a', 'we\\ird', 'b'] });
+  assert.deepEqual(splitPath('/a/./b', path.posix), { root: '/', parts: ['a', 'b'] });
 });
