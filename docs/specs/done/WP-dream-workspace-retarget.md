@@ -1,7 +1,7 @@
 ---
 id: WP-dream-workspace-retarget
 title: Build the dream run's workspace and re-target the brain's write root into it
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-dream-baseline-delta-primitive]
