@@ -25,8 +25,8 @@ recorded in `2026-08-28-promote-split.md`.
 
 **Contract table letters are family-wide, across four packages.**
 `WP-dream-workspace-retarget` owns **Tables A, B and F**;
-`WP-dream-vault-write-primitive` owns **Table H**; this spec owns **C, D, E, Q, R
-and S**; `WP-dream-promote-in-workspace` owns **Table G**. **The ruling quoted
+`WP-dream-vault-write-primitive` owns **Table H**; this spec owns **C, D, E, Q and
+S**; `WP-dream-promote-in-workspace` owns **Table G**. **The ruling quoted
 above named four tables; S was extracted later by the ADR-0031 circuit-breaker
 (round 2) out of a contract those four already carried, so it adds no subject —
 it gives one an owner.** Every cross-package
@@ -149,7 +149,9 @@ it, and none may attribute it to any repository-status property of the workspace
   (`:1385-1386`). The repo already reasons about case-insensitive
   instruction-file matching at `:1083-1086`.
 - `src/core/digest.js` — `sanitizeProjectName` (`:414-418`), exported at `:867`.
-  The shipped sanitizer Table R names.
+  **Named here only because the T1 cut moved its consumer**: the sanitizer
+  neutralises the report's code-authored section, which is
+  `WP-dream-promote-report`'s. This package uses it nowhere.
 - `src/core/layout.js:21-29` — the seven `LAYOUT_KEYS`. `:32-42` — the defaults.
 - `skills/wienerdog-dream/SKILL.md:409-425` — the shipped skill requires the
   BRAIN to author the dream report body, including a `## Gated out (and why)`
@@ -162,8 +164,8 @@ it, and none may attribute it to any repository-status property of the workspace
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/promote.js | three-way decide + gates + merge + publish + the report (Tables C, D, E, Q, R and S) |
-| create | tests/unit/dream-promote.test.js | Tables C, D, E, Q, R and S |
+| create | src/core/dream/promote.js | three-way decide + gates + merge + publish + the report (Tables C, D, E, Q and S) |
+| create | tests/unit/dream-promote.test.js | Tables C, D, E, Q and S |
 | modify | docs/GLOSSARY.md | one canonical name: **promotion** |
 
 **Nothing else, and the exclusions are load-bearing.** This package does not
@@ -189,7 +191,6 @@ under "Discovered issues" in the PR body.
  *           baseline:import('./delta').Baseline,
  *           delta:ReturnType<import('./delta').computeDelta>,
  *           layout:import('../layout').VaultLayout,
- *           records?:Array<{path:string, reason:string}>,
  *           gates}} o
  *    delta  the run's classified changes, computed by the CALLER. Passed in
  *           rather than computed here because the caller needs the same result
@@ -214,32 +215,8 @@ under "Discovered issues" in the PR body.
  *           and knows nothing about the state directory, but it DOES consume
  *           what the preservation produced, because the report line is the
  *           user's only route back to their copy (Table Q)
- *    records code-owned accounting the CALLER produced before promotion and
- *           cannot compose into the report itself, because the report is
- *           composed here. Today's only producer is the pipeline's scratch
- *           enforcement (`WP-dream-promote-in-workspace`, row G12). Each is
- *           `{path:string, reason:string}` and is neutralised at composition
- *           exactly like this module's own records (Table R's gate rules).
- *           **Round 4's F1: the obligation existed with no field to travel
- *           on** — an assigned rule the interface could not carry, which is
- *           this family's interface projection
- *  @returns {{promoted:Array<{rel:string, bytes:Buffer}>,
- *             redacted:Array<{rel:string, bytes:Buffer}>,
- *             refused:Array<{rel:string, reason:string}>,
- *             report:{outcome:'promoted'|'fallback', bytes:Buffer,
- *                     record:string[]}
- *                    |{outcome:'refused', reason:string, record:string[]},
- *             secretDisposition:{withheld:number, redactions:number}}}
- *    **`bytes` on every PUBLISHED outcome, and the shape is what guarantees it
- *    — Table S owns this contract and this block does not restate it.** Note
- *    the `report` union: a published report outcome REQUIRES `bytes`, and the
- *    refused arm cannot carry them. An optional field spanning success and
- *    refusal guarantees nothing on the successful branch, which is round 2's
- *    finding
- *    report  the dream report's own outcome, never folded into `promoted` —
- *            Table R's fallback publish is recorded as itself (Table E). On
- *            `refused` the complete enforcement record is in `record`, for the
- *            caller to deliver through the run's log and output (Table R, R4)
+ *    **`report` is NOT in this package's return — `WP-dream-promote-report`
+ *    adds it.** This module publishes ordinary notes and composes no report
  *    secretDisposition is the typed signal the pipeline's transcript-advance
  *    consumes (`WP-dream-promote-in-workspace`, Table G) — never a parsed
  *    refusal reason. ONLY `withheld`
@@ -252,11 +229,12 @@ function promote(o)
 
 ## Contract reference
 
-**Reading order.** The first four tables are named "C, D, E and R" everywhere,
-because that is how the owner's seam ruling named them; the document orders them C, D, R, E, because
-Table E's accounting row refers to the report outcome Table R defines. **Table S
-was added last, by the ADR-0031 circuit-breaker (round 2), and sits after the
-table it generalises.**
+**Reading order, and one name that is no longer here.** The owner's seam ruling
+named four tables "C, D, E and R"; **Table R has since been cut to
+`WP-dream-promote-report` by the T1 tripwire**, so this spec owns C, D, E, Q and
+S. Q and S were added later — S by the ADR-0031 circuit-breaker (round 2), Q in
+pass (b) — and each sits after the table it generalises. A "Table R" reference
+in this spec is a CITATION of the report package.
 
 Activation (ADR-0031, 2-of-7 — five are true): (i) a new module interface
 appears; (ii) a promotion outcome taxonomy is introduced; (iv) refusal and
@@ -335,50 +313,15 @@ never evidence of safety.
 | **The gates' evidence is enumerated, not summarised — and WHY (round 3, F2)** | — | — | — | an earlier form of the three rows above said "the merged candidate bytes" and stopped. **Measured, that is false of all three:** the skill guard takes a registry snapshot and the run date, the ledger validator takes a registry snapshot and `extractsBySession`, and both read committed baselines. **Their verdicts are therefore NOT functions of the candidate bytes** — identical ledger bytes must be refused or admitted depending on whether the named session appears in this run's extracts and invoked the parent skill (`validate.js:589-606`). A spec that understated this would let an extraction preserve the byte checks and silently drop ADR-0020's ownership, history and invocation-binding controls, while passing every case the spec listed. **Two rules follow: (a) each gate receives every value its row names, and (b) NO gate may substitute a vault re-read or a git query for any of them** — G7 forbids the git route and Table S row S4 forbids the re-read route, so the values must arrive as inputs or the gate cannot be built |
 | **Why this order** | — | — | — | EP2 runs first and scans the BRAIN's added bytes because those are what the run authored and is responsible for (ADR-0034 is about the AI's accidental persistence); the other three gates run after the merge because a Tier-3/skill/ledger judgment must be made on the MERGED bytes, which are exactly what would be promoted — a gate judging pre-merge bytes would not be judging what is promoted, and that is a data-loss contract, not an implementation detail. **Owner-ruled correction:** the earlier rationale — "scanning the merged bytes would force discarding the user's diverging edits" — is FALSE, because refuse-and-report (C7) already leaves the user's live version untouched. EP2 is pre-merge and brain-scoped by CHOICE, not by that false necessity, and the consequence is a named residual (Security checklist): a secret the USER writes into their own note during the run rides a clean C6 merge into the dream commit unscanned. That is the user's own content in their own vault — the dream commits it but did not author it — and making the secret gate refuse or redact a user's own note was ruled the worse trade |
 | **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically at the DECISION**: both outcomes are decided before either is written, so a policy failure on one refuses BOTH — the guard authorizes the skill from the ledger and the ledger is validated from the skill, and promoting one while refusing the other would leave the vault inconsistent. Enforced by Table E's decide-then-write ordering. **This does NOT claim write-atomicity across the two paths**: if the first `rename` succeeds and the second fails (ENOSPC/EIO/kill), the vault holds a half-applied pair. Same-directory `rename` is atomic for ONE path, not across two, and rollback/crash-replay of a partial publish is the residue-lifecycle successor's subject, named in Out of scope — this row claims decision-atomicity and says so |
-| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against the gate rows above: three of the four do not match a path under `reports_dir` and pass it through; the table above is what says which gate applies where.** **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (H5's `expect` guard, H3's symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4 |
+| The dream report | `validate.js:1374-1408` | **MOVED — `WP-dream-promote-report` owns the report row and Table R.** What stays true here and matters to the gates: the brain writes `<reports_dir>/<date>.md` in the WORKSPACE, C9 admits `reports_dir`, and **three of the four gates above do not match a path under `reports_dir` and pass it through** — the gate rows are what say which gate applies where. Everything else about the report, including the second write and the fallback, is that package's | judged with the rest | that package's |
 
-### Table R — the report's publish decision
+### Table R — MOVED to `WP-dream-promote-report`
 
-**Trigger:** Table R governs whenever the brain-authored report body is not
-successfully published — a gate refusal, no body at all, a promotion-decision
-refusal (C4, C7, C8), or a primitive refusal (any H-rule). **One class, not a
-list.**
-
-**PRESERVE-AND-EXTEND. The fallback preserves BOTH values at stake — the report
-already in the vault AND this run's enforcement record — and never chooses
-between them.** The shape is the normal path's second write, generalised: read
-the vault's current report bytes, compose IN MEMORY (what is there, plus this
-run's enforcement section appended), publish the whole as ONE write through the
-primitive with `expect` set to the bytes just read. No new mechanism and no new
-naming: the only difference from the normal second write is that the base is
-"what the vault currently holds" rather than "what we just published".
-
-| # | The vault's report for this date, at fallback time | Candidate bytes | `expect` | Outcome |
-|---|---|---|---|---|
-| R1 | ABSENT | the code section alone | absent | published |
-| R2 | PRESENT and byte-equal to what the fallback read | the read bytes + this run's section appended | the read bytes | published; run 1's report preserved intact |
-| R3 | PRESENT but DIVERGED from any expectation — the user edited it since run 1 | **the bytes ACTUALLY there** + this run's section appended | the bytes read now | published. **The fallback never reconstructs or "corrects" existing content** — R3 is the same rule as R2, stated separately only because the instinct to repair a diverged file is what would break it |
-| R4 | mutates between the read and the publish — **or the primitive refuses the write for ANY other reason: a symlinked target under H3, containment, policy, any H-rule** | — | the read bytes | **refused.** The enforcement record then goes back to the caller in `report.record`, for the run's log and output, NOT the vault. **NAMED RESIDUAL, accepted by ruling:** in this narrow window an overwrite would be the worse failure, because it would clobber the user's live edit. **Every refusal path converges on this ONE outcome — the vault object is left untouched, the complete enforcement record is delivered to the caller, and the refusal names its reason.** A symlinked report target is additionally a suspicious state, and surfacing it beats overwriting anything. Rejected for the record: **writing through the symlink** (overwrites a different user note — the acceptance criterion below rightly goes RED on it); **replacing the symlink with a regular file** (a code decision mutating the user's vault structure); **a different filename** (a new product surface) |
-
-| Rule | Value |
-|---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** Every value the code-authored section interpolates passes through BOTH the shipped sanitizer AND EP2's redact arm before it enters the section. **The set is NAMED, not gestured at: `r.path` AND `r.reason` — for this module's own records AND for the caller's `records` (`### Exact contracts`), which are neutralised identically because they carry brain-chosen path text too** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
-| The observable property the two rules buy | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** Gate refusal on this branch is impossible by construction. **What remains is the primitive's own refusals, and R4 above covers ALL of them uniformly** — an earlier form of this row named only the `expect` guard, which was false: H3 refuses a symlinked report target too, and this spec's own criterion requires that refusal |
-| Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one |
-| The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (Table Q, rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
-| Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
-| Rejected alternatives, recorded so they are not re-proposed | On the fallback shape: **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver). On the gate question, both of the options the author's flag named, rejected as insufficient ALONE: **exempting the code-authored section from the gates** (opens an unscanned brain-influenced channel into the vault — `r.path` is attacker-influenceable, so a secret in a filename would ride through), and **sanitizing alone** (a secret-shaped path, or user-edited preserved bytes, could still get the whole report withheld — the record dies either way) |
-
-**The author's flag that opened this question is RESOLVED by the ruling above,
-and is kept as the record of how it was found.** Measured, and both facts still
-hold: the enforcement section interpolates `r.path` (`validate.js:1385-1386`), a
-vault-relative path the BRAIN chose, so its content is attacker-influenceable;
-and today's code appends the report **after** the EP2 gate deliberately, saying
-so in as many words (`:1375-1377`). The collision was real: scanning the composed
-report could withhold or redact the enforcement record on exactly the branch that
-exists to deliver it. **What the ruling changed is that the question dissolves
-rather than being traded off** — neutralise at composition and there is nothing
-left for a gate to refuse.
+**Cut by the T1 tripwire** (`2026-08-28-promote-split-review-rounds.md`, "T1 HAS
+FIRED"). The report's publish decision, its preserve-and-extend fallback, its
+gate rules and its four cases are owned by `WP-dream-promote-report` and are
+**cited here, never restated**. This spec's surfaces refer to "Table R" by that
+name; the name did not move, the ownership did.
 
 ### Table E — the promotion write, and the one new window
 
@@ -388,7 +331,7 @@ left for a gate to refuse.
 | The same-date second run | two runs on one date share `<reports_dir>/<date>.md`, and under the report ruling that path is an ordinary promotion candidate, so nothing special is needed: run 1 promotes it with `expect` absent (absent from baseline, absent from the vault); run 2 finds it in the baseline because `reports_dir` is copied in, the brain rewrites it, and it promotes as a `modified` with `expect` set to the vault's current bytes. **The append-based workaround is not needed and is forbidden** — it was what re-opened the symlink-following defect |
 | **The publish goes through the primitive — this spec writes no vault byte itself** | every promoted path is published by `writeIntoVault` (Table H): the resolved path is what policy judges, nothing is written on or through a symlink, no partial content is ever observable at the target, the publish is conditional on the caller's premise still holding, and the published bytes come back. **Those are the primitive's OBSERVABLE properties, which is all a consumer may restate.** **This spec does not restate that discipline — the primitive owns it.** What this spec supplies is the two caller-side arguments: `admit` (Table C's policy, applied by the primitive to the RESOLVED path) and `expect` (the `vault-now` bytes the decision was made against). A promotion that writes the vault by any other route is a defect, and the acceptance criteria assert the seam |
 | **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed**, to milliseconds against today's minutes-long silent window. The narrowing is the primitive's `expect` guard (Table H, row H5); this spec's obligation is to PASS the right bytes — the `vault-now` bytes the decision used — and to turn `{written:false}` into refuse-and-report. **The residual is the primitive's and is inherited here unchanged:** a user save landing between the re-read and the `rename` is still lost |
-| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. The report's own outcome is carried separately in `report` and a fallback publish is never recorded as a normal promotion (Table R). The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
+| Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. **The report has no outcome in this package's accounting** — `WP-dream-promote-report` adds it, and its fallback publish is never recorded as a normal promotion. The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
 | **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **Which bytes those are, which outcomes carry them, and what a consumer may derive from them is TABLE S — extracted after two consecutive rounds landed here, and cited rather than restated.** **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the decided bytes per Table S so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
 
 ### Table Q — the EP2 gate's result, and the quarantine lifecycle behind it
@@ -439,8 +382,8 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 
 - [ ] Deliverables-table `Notes` cells (each cites its owning table)
 - [ ] `### Exact contracts`' signature and its return shape
-- [ ] Acceptance criteria that assert Tables C, D, E, Q, R and S
-- [ ] Verification steps (the assertions mirror Tables C, D, E, Q, R and S)
+- [ ] Acceptance criteria that assert Tables C, D, E, Q and S
+- [ ] Verification steps (the assertions mirror Tables C, D, E, Q and S)
 - [ ] Current-state description (the validator's four gates, the delta
       primitive's binary record, the shipped sanitizer, the skill's report
       requirement)
@@ -463,9 +406,10 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       EP2 row and its preamble, the promotion-accounting row, and the
       redact acceptance criterion. **No surface may reduce EP2 to `reason|null`
       or drop the `redacted` outcome or `secretDisposition`.**
-- [ ] **Table R's four cases and its named residual** — Table D's report row
-      (which cites, never restates), the acceptance criteria, and the
-      promotion-accounting row in Table E
+- [ ] **What the T1 cut removed** — Table R, Table D's report row and the seven
+      report criteria are `WP-dream-promote-report`'s. **Their placeholders here
+      cite that package; no surface may restate a report rule, and none may
+      claim a report outcome in this package's accounting.**
 - [ ] **Table Q — the EP2 result and the quarantine lifecycle.** Its mirrors are
       the `gates` paragraph in `### Exact contracts`, Table D's EP2 row, Table
       R's redaction-lines row, and `WP-dream-promote-in-workspace`'s row G5
@@ -517,10 +461,12 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
   A second implementation of it in this module is a defect, not a defence.
 - **Measure `promote.js` and report the number in the PR body.** A pinned
   tripwire (logbook: `2026-08-28-promote-split-owner-ruling.md`) fires at **600
-  lines of non-test content**, and firing it moves Table R and the report's
-  criteria into a third package rather than re-opening the seam. Reporting the
-  measurement is the implementer's only obligation here; the cut, if it comes,
-  is not theirs to make mid-implementation.
+  lines of non-test content. **T1 has already fired once**, on the criteria
+  count, and cut Table R and the report's criteria into
+  `WP-dream-promote-report`; T3 is the remaining arm and it is measured at
+  implementation time. Reporting the measurement is the implementer's only
+  obligation here; a cut, if one comes, is not theirs to make
+  mid-implementation.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -621,10 +567,10 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       (Out of scope) and is not asserted against here.
 - [ ] **Every vault content write goes through the primitive — the REPORT
       included.** Asserted by substituting the primitive's seam and failing if
-      any vault content write bypasses it — **every one of the report's writes
-      included: the promoted body, the appended accounting, and Table R's
-      fallback publish**. Proven RED with the accounting published by a direct
-      `appendFileSync`, and separately: with `reports/dreams/<date>.md`
+      any vault content write bypasses it. **The report's own writes are
+      `WP-dream-promote-report`'s to assert; this criterion covers every write
+      this package makes.** Proven RED with a promoted note published by a
+      direct `writeFileSync`, and separately: with `reports/dreams/<date>.md`
       pre-existing as a symlink to another vault note, the report write refuses
       and the victim is byte-unchanged.
 - [ ] **The compare→promote window is narrowed.** With the vault target changed
@@ -637,54 +583,6 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       of `promoted`, `redacted`, or `refused` with a reason, and the counts sum
       to the record count. The report's own outcome is in `report`, never
       double-counted as a promotion.
-- [ ] **The brain's report body survives end to end, and a same-date second run
-      lands.** A brain that writes a report containing a `## Gated out (and
-      why)` section sees that section, byte-for-byte, in the published report —
-      with the code's own accounting appended below it. Proven RED against a
-      code-composed report, which drops the section entirely. Asserted again for
-      two runs on one date: the second finds the first's report in the baseline
-      and promotes a rewritten body; neither run refuses the report for
-      existing, and no append-in-place is used.
-- [ ] **The refused-body fallback preserves both values, and is accounted as
-      itself (Table R).** One case per row: **R1** with no report for the date,
-      the code section alone is published; **R2** with run 1's report present,
-      that report is byte-preserved and this run's section appended below it;
-      **R3** with the report user-edited since run 1, the USER's bytes are
-      preserved verbatim and appended to — the criterion goes RED against any
-      implementation that reconstructs or repairs the diverged content; **R4**
-      with the file mutated between the read and the publish, the write is
-      refused, the vault keeps the user's bytes, and the enforcement record is
-      returned in `report.record`. **No case may lose both values, and no case
-      may silently lose either.** In every case `report.outcome` records the
-      fallback as itself and the brain's body as refused with a reason, never as
-      a normal promotion.
-- [ ] **Every unpublished-body path enters the fallback.** Not only a gate
-      refusal: with a **C4** conflict (the user creates a report at that path
-      during the run) and with an **H5** refusal (the target changes between
-      decision and publish), the fallback fires in both cases. Proven RED
-      against an implementation whose trigger is the gate-refusal case alone,
-      which preserves the report and drops the record.
-- [ ] **The preserved region is not re-gated (Table R).** A preserved report
-      whose EXISTING bytes contain secret-shaped text is republished
-      byte-identical, and no gate withholds, redacts or alters it. Proven RED
-      against an implementation that scans the whole composed content.
-- [ ] **The code-authored section cannot carry refusable bytes (Table R).** With
-      a brain-chosen refused path that is both markdown-active and
-      secret-shaped, the composed section contains neither the active markdown
-      nor the secret, the report is published, and the refused note is still
-      identifiable in the line. **Repeated for the REASON channel — a refusal
-      reason carrying brain-chosen markdown-active and secret-shaped text — and
-      proven RED against an implementation that neutralises `r.path` alone**,
-      which otherwise passes every other case here. Proven RED with the
-      sanitizer skipped, and separately with the redact arm skipped — **both
-      arms, because either alone was ruled insufficient.** This criterion covers
-      the NORMAL second write as well as the fallback; the rule governs both.
-- [ ] **Every report refusal delivers the record.** For an `expect` conflict AND
-      for a symlinked report target, the outcome is the same three things: the
-      vault object is byte-unchanged, the COMPLETE enforcement record is
-      returned in `report.record`, and the refusal names its reason. Proven RED
-      against an implementation that refuses the write and drops the record —
-      which is the failure that survives if only the `expect` path is handled.
 - [ ] **The gates are judged on the evidence Table D enumerates, not on bytes
       alone (round 3, F2).** Two cases, each RED against a gate given candidate
       bytes only: **identical** candidate ledger bytes are refused or admitted
@@ -712,17 +610,14 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       and every artifact this run created survives it — including the one the
       report just told the user to restore. A redundant copy is deleted only on
       proven byte-identity (Q5); a failed or impossible comparison retains it.
-- [ ] **The caller's records reach the report (round 4's F1).** Records passed
-      in `records` appear in the report's enforcement section, neutralised by
-      Table R's rules exactly as this module's own are. Proven RED against a
-      module that composes the report from its own records alone.
 - [ ] **Every published outcome carries its decided bytes (Table S).** Asserted
-      per outcome: an ordinary promotion, a redacted promotion, a promoted
-      report body, and a Table R fallback publish each return the exact buffer
-      the primitive published, byte-equal to what the vault then holds; a
-      refused path and a refused report return no bytes at all. **Proven RED
-      against a return that omits `bytes` on the report's published arms**,
-      which is the case round 2 found conforming to the previous interface.
+      per outcome: an ordinary promotion and a redacted promotion each return
+      the exact buffer the primitive published, byte-equal to what the vault then
+      holds; a refused path returns no bytes at all. **Proven RED against a
+      return that carries paths without bytes** — round 1's finding. **The
+      report's arms are `WP-dream-promote-report`'s to assert**, under the same
+      Table S rule, which is why row S2 states it as a shape rule rather than
+      per-outcome prose.
 - [ ] **The module ships consumed by nothing.** No file outside the Deliverables
       table changes, and no production code requires `promote.js`. Asserted by
       the boundary check and by a grep whose red side is a planted require.

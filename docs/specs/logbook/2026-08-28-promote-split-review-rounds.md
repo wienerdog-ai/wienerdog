@@ -756,3 +756,75 @@ regresses no running product.
 pipeline-side items (I095, I018, I078/I085, I081, I093, F1's G12 wiring, and
 F2's V3 expansion) and the cut itself remain. **The cut lands before pass (c)**,
 because pass (c)'s undirected round must run on the shape that will ship.
+
+## THE CUT IS EXECUTED — `WP-dream-promote-report`, 2026-08-28
+
+**Order ruled by the owner: the cut FIRST, before the pipeline-side pass-(b)
+items.** The reason is the load-bearing part and is recorded as a rule, not a
+preference: **two of those items (F1's G12 wiring, F2's V3 extension) CITE the
+report contract the cut re-homes, and editing text a pending restructure will
+move is this loop's most-paid-for defect class.** Every stale-mirror finding this
+arc produced — R10-1, round 2's staleness, round 3's five falsified surfaces —
+is that shape. Doing the restructure first makes the pipeline pass land ONCE
+against a settled three-package shape.
+
+### What moved, and what it measures
+
+| Spec | Owns | Criteria | Deliverables |
+|---|---|---|---|
+| `WP-dream-promote-module` | C, D, E, Q, S | **23** (was 30) | 3 |
+| `WP-dream-promote-report` — NEW | Table R + the report row | **9** | 2 |
+| `WP-dream-promote-in-workspace` | G, V | 18 | 6 |
+
+**The module half is back under the 28 ceiling at 23.** The report package is
+stacked between the module and the pipeline: it extends `promote()` with the
+report's composition, the second write and the fallback, and **it also ships
+consumed by nothing** — nothing calls `promote()` until the pipeline lands.
+
+**The seam is clean in a way worth naming:** the `records` input and the
+`report` return field left the module half entirely with the cut, because
+nothing but the report ever used them. A seam that removes fields from the
+package it cuts away from is a seam along a real joint, not a convenience.
+
+**The stale-mirror sweep the cut required**, done in the same pass and recorded
+because it is evidence the ordering ruling was right: fourteen "Table R"
+references survived in the module half after the move. Six were fine as
+citations; **eight were stale and each would have been a finding** — a leftover
+`records` paragraph in the signature, the reading-order note, the
+promotion-accounting row claiming a report outcome, a Mirrored Surface Checklist
+entry pointing at a table that had left, two acceptance criteria asserting the
+report's writes, the `digest.js` sanitizer's justification, and the tripwire note
+written in the future tense about a firing that had already happened.
+
+### The tripwire's own lesson — owner-directed, recorded as standing
+
+**T1 (the blunt ceiling) caught what T2 (the targeted threshold) could not.**
+
+The tripwire was pinned on a hypothesis: that the module half's pressure point
+was the REPORT. T2 was the sharp instrument aimed at exactly that — the report's
+own criteria, ceiling 8. **T2 never fired.** The report's criteria went 6 → 7 and
+stopped.
+
+What actually broke the ceiling was the **EP2 quarantine lifecycle** — a
+contract nobody had inventoried, which no threshold was watching because nobody
+knew to watch it. It arrived as three Table Q criteria plus one for F1, and T1,
+the crude count-everything cap, is what noticed.
+
+> **STANDING LESSON: keep a blunt cap beside every targeted one.**
+> A targeted threshold can only watch the hypothesis you already hold. It is
+> sharper and it fires earlier when you are right — and it is blind by
+> construction when you are wrong, which is exactly the case where you most need
+> a signal. The blunt cap costs one number and catches the thing you did not
+> think of.
+
+**The counterweight, so the lesson is not over-read:** T2 was not useless — it
+kept the report's growth visible round by round, and its baseline is what made
+"7 of 23" a measurement rather than an impression. The lesson is *keep both*, not
+*prefer blunt*.
+
+### What remains
+
+1. **Pipeline-side pass (b)**, landing ONCE against this settled shape: I095,
+   I018, I078/I085, I081, I093, F1's G12 wiring, and F2's V3 extension.
+2. **Pass (c)** — one undirected confirming round, **on the whole family now**,
+   per the HEAVY rule. Its B-count is the deciding measurement.
