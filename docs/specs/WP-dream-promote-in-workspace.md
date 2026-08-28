@@ -48,12 +48,11 @@ the implementer will find (`docs/specs/README.md` → Dispatch-time
 re-verification). A citation that does not resolve blocks the dispatch.
 **Range citations are checked at BOTH ends.**
 
-Note for the re-verifier: an unmerged branch `wp/dream-write-fence-control-files`
-(`7093079`, **not** an ancestor of `main`) carries two Draft specs from the
-superseded filter-out design (`WP-dream-fence-candidate-set`,
-`WP-dream-denied-object-disposal`). They are recorded, not deleted, and are
-superseded by this package's shape. Nothing here depends on them and nothing
-here may be merged on top of them.
+Note for the re-verifier: the superseded filter-out design
+(`WP-dream-fence-candidate-set`, `WP-dream-denied-object-disposal`, and their
+two parent specs) is filed in `docs/specs/done/` as `Superseded`, with its
+round records in the logbook. Nothing here depends on it and nothing here may
+build on it.
 
 ## Context (read this, nothing else)
 
