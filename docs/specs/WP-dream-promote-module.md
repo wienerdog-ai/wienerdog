@@ -32,7 +32,9 @@ uses for Table F and for the delta primitive's constructed-environment recipe
 (row M2).
 
 **This package ships consumed by nothing**, exactly as `delta.js` and
-`vault-write.js` did before it. It creates one module and its test; it changes
+`vault-write.js` each did at their own merge (`delta.js` has since gained one:
+`workspace.js:63` consumes `captureBaseline`, while `computeDelta` is still
+called by nobody). It creates one module and its test; it changes
 no call site, retires no code path, and leaves the running dream byte-identical.
 Its first and only consumer is `WP-dream-promote-in-workspace`, which wires it
 into the run under its own boundary.
@@ -226,6 +228,10 @@ function promote(o)
 ```
 
 ## Contract reference
+
+**Reading order.** The four tables are named "C, D, E and R" everywhere,
+because those are the family-wide letters; the document orders them C, D, R, E,
+because Table E's accounting row refers to the report outcome Table R defines.
 
 Activation (ADR-0031, 2-of-7 — five are true): (i) a new module interface
 appears; (ii) a promotion outcome taxonomy is introduced; (iv) refusal and
@@ -425,6 +431,12 @@ left for a gate to refuse.
 - **Do not build a containment check.** The one rule the family has is the
   primitive's, and it took eleven review rounds — see the Dispatch precondition.
   A second implementation of it in this module is a defect, not a defence.
+- **Measure `promote.js` and report the number in the PR body.** A pinned
+  tripwire (logbook: `2026-08-28-promote-split-owner-ruling.md`) fires at **600
+  lines of non-test content**, and firing it moves Table R and the report's
+  criteria into a third package rather than re-opening the seam. Reporting the
+  measurement is the implementer's only obligation here; the cut, if it comes,
+  is not theirs to make mid-implementation.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 

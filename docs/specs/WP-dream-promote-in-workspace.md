@@ -31,9 +31,14 @@ CITES its owner and never restates it — the pattern the family already uses fo
 Table F and for the delta primitive's constructed-environment recipe.
 
 **This is the package where the family's claims become true of the running
-product.** The three modules it consumes all shipped consumed by nothing:
-`workspace.js` builds a workspace no pipeline uses yet, `vault-write.js`
-publishes for no caller, `promote.js` decides for no run. This WP replaces the
+product.** Every entry point it needs is shipped and called by nobody —
+**stated as entry points, not as modules, because two of the modules already
+have a consumer** (measured on `36c2ce5`): `createWorkspace` and
+`destroyWorkspace` have no caller in `src/`, though `brain.js:18` requires
+`workspace.js` for the `isAtOrBeneath` helper; `computeDelta` has no caller,
+though `workspace.js:63` requires `delta.js` for `captureBaseline`;
+`writeIntoVault` has no caller and `vault-write.js` has no requirer at all;
+and `promote.js` will ship the same way. This WP replaces the
 sibling's transitional `spawnBrain` argument with the run's real workspace,
 classifies what the brain wrote with `computeDelta`, hands it to `promote()`,
 and makes the dream commit from what promotion returned. **It also discharges
