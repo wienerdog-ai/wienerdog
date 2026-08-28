@@ -1182,3 +1182,53 @@ test('dream-workspace: an allowlisted value is checked WHOLE, not split on the s
     (e) => e instanceof WienerdogError && /CODEX_HOME is at or inside the vault/.test(e.message)
   );
 });
+
+test('dream-workspace: a symlink from outside that points INTO the vault is contained', { skip: WIN32 }, () => {
+  // Both gates found this class independently — one called it a residual, the
+  // other a blocker. The identity walk started from the candidate's SPELLING, so
+  // `<home>/opt-tools -> <vault>/bin` had ancestors that never visit the vault:
+  // `/opt-tools → <home> → /`. Neither the root-targeting form nor the
+  // DESCENDANT-targeting form was caught. The walk now starts from the resolved
+  // candidate, so it lands inside the vault and meets the vault's own inode.
+  const root = fs.realpathSync(mkTmp('alias-in'));
+  const vault = path.join(root, 'vault');
+  fs.mkdirSync(path.join(vault, 'nested', '.codex'), { recursive: true });
+  fs.mkdirSync(path.join(vault, 'bin'), { recursive: true });
+
+  // (a) the alias targets the vault root's direct child
+  fs.symlinkSync(path.join(vault, 'bin'), path.join(root, 'opt-tools'));
+  assert.equal(isAtOrBeneath(path.join(root, 'opt-tools'), vault), true);
+  // (b) the alias targets a DESCENDANT, which no root-inode compare can see
+  fs.symlinkSync(path.join(vault, 'nested'), path.join(root, 'outside-alias'));
+  assert.equal(isAtOrBeneath(path.join(root, 'outside-alias', '.codex'), vault), true);
+  // (c) an alias pointing somewhere genuinely outside stays outside
+  fs.mkdirSync(path.join(root, 'elsewhere'));
+  fs.symlinkSync(path.join(root, 'elsewhere'), path.join(root, 'outside-real'));
+  assert.equal(isAtOrBeneath(path.join(root, 'outside-real'), vault), false);
+
+  // And the two gates that consume it: the value is refused, the PATH component
+  // is stripped.
+  assert.throws(
+    () =>
+      buildBrainEnv({
+        baseEnv: { HOME: '/h', PATH: '/usr/bin', CODEX_HOME: path.join(root, 'outside-alias', '.codex') },
+        vaultDir: vault,
+        workspaceDir: '/w',
+        scratchDir: '/s',
+        date: DATE,
+        layout: defaultLayout(),
+        platform: 'linux',
+      }),
+    WienerdogError
+  );
+  const env = buildBrainEnv({
+    baseEnv: { HOME: '/h', PATH: ['/usr/bin', path.join(root, 'opt-tools')].join(path.delimiter) },
+    vaultDir: vault,
+    workspaceDir: '/w',
+    scratchDir: '/s',
+    date: DATE,
+    layout: defaultLayout(),
+    platform: 'linux',
+  });
+  assert.equal(env.PATH, '/usr/bin', 'the aliased component is stripped from the child PATH');
+});

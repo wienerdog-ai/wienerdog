@@ -170,6 +170,10 @@ function fold(name) {
  * every scheduled dream. Nothing is lost: a relative `PATH` component is
  * resolved by the OS against the CHILD's cwd — the staging dir or the workspace
  * — never the vault.
+ * ONE FAIL-OPEN, NAMED: if `root` itself cannot be `stat`ed, pass 2 is
+ * unavailable and containment falls back to spelling alone. Not worth guarding
+ * — a dream that cannot stat its own vault fails moments later in copy-in — but
+ * it is the only direction in which this helper answers less than it looks.
  * @param {string} candidate @param {string} root @returns {boolean}
  */
 function isAtOrBeneath(candidate, root) {
@@ -192,7 +196,12 @@ function isAtOrBeneath(candidate, root) {
   // Pass 2 — the filesystem's own identity answer.
   const rootId = statIdOrNull(root);
   if (rootId === null) return false; // root does not exist: spelling was all there was
-  let cur = path.resolve(c0);
+  // Walk from the RESOLVED candidate, not its spelling. A symlink that lives
+  // outside the vault and points INTO it — `<home>/opt-tools -> <vault>/bin` on
+  // a PATH — has ancestors that never visit the vault, so a lexical walk misses
+  // it entirely. Resolving first makes the walk start at `<vault>/bin`, whose
+  // parent IS the vault.
+  let cur = resolveExisting(c0);
   for (;;) {
     const id = statIdOrNull(cur);
     if (id !== null && id.dev === rootId.dev && id.ino === rootId.ino) return true;
