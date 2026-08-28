@@ -384,3 +384,79 @@ What IS independent: **every finding in rounds 2 and 3 was in the same region**,
 and that region now has a canonical table with an explicit "no owner" entry. The
 next round's B count is the measurement that discriminates — if the family is
 genuinely drained, it should come back on something else or on nothing.
+
+## Round 4 — authorised 2026-08-28, WITH ITS READING PINNED IN ADVANCE
+
+**Authorised** by the owner under the runbook's HEAVY rule, whole settled text,
+clean definition unchanged (no A, no B).
+
+**Why this round is designed differently.** Round 3's B count could not be
+interpreted, because this author had aimed that round at the family which had
+just produced a finding — so "found more of them" and "the text is decaying"
+were indistinguishable. The owner's fix is to remove the confound at the source
+and to fix the interpretation before the measurement exists.
+
+### (b) UNDIRECTED DISPATCH — owner-ruled
+
+**The dispatch does NOT name the family, does NOT name `validateAndCommit`, and
+does NOT tell the reviewer to walk anything.** Table V is handed over the way
+Table S was in round 3 — as the newest text, attack it — with no hint of what
+produced it. The attack surface is the generic one this gate always carries.
+
+**One tension, resolved and recorded.** The runbook requires that a round ≥ 2
+list the prior findings and ask the reviewer to verify each is genuinely fixed.
+That listing inevitably carries some signal. It is kept, because catching a
+re-worded fix is what it exists for and round 2 proved it necessary — but the
+priors are stated as *individual defects and their claimed fixes only*, with no
+pattern named, no grouping, and nothing said about where the next one might be.
+
+### THE READING, PINNED BEFORE THE ROUND — owner-ruled
+
+| Round 4 returns | Reading | Consequence |
+|---|---|---|
+| **Clean** (no A, no B) | the region is drained | **Ready path** — flip both specs, update PR #30 |
+| **B-band findings, but NOT in the family** | the region is drained; the loop is finding ordinary new-design defects | **Ready path**, after those findings are dispositioned under the normal rules |
+| **B-band findings IN the family** | the region is NOT drained, and three consecutive rounds on one family after two extractions is a structural signal, not a defect list | **STRUCTURAL ESCALATION to the owner** — no further patching, no fourth extraction |
+
+### "IN THE FAMILY" — the decidable test, written before any finding exists
+
+The family: *a durable or security-visible behaviour of the code this package
+replaces that no row inherits, or whose evidence the replacement understates.*
+A finding is IN the family **iff BOTH hold**:
+
+1. **It concerns something that already EXISTS** in the code this package
+   replaces or rewires — `validateAndCommit` and its return, or the
+   `src/cli/dream.js` run path — on `main` @ `36c2ce5`. Not something this
+   package newly invents.
+2. **The defect is one of ownership or understated evidence**: no Table G or
+   Table V row assigns the thing an owner, or a row assigns it but names less
+   than it actually consumes or produces.
+
+**The operational form, which must agree:** *does knowing the right answer
+require reading the REPLACED code?* If the correct fix can only be found by
+going and looking at what `validateAndCommit` or the current pipeline actually
+does — IN the family. If it is derivable from this package's own new design —
+NOT in the family.
+
+**Worked both ways, from findings already ruled, so the test is calibrated
+rather than asserted:**
+
+- **IN:** R2-1 (Step 6 unowned), R3-2 (gate evidence understated), R3-3 (Step 1
+  unowned), R3-1 (the return/summary delivery channel is inherited, and V7 is
+  where it lives).
+- **NOT IN:** R1-1 and R2-2 (the decided-bytes interface is this package's own
+  invention — no replaced code to consult); R3-4 (Table S's scope, likewise);
+  and, hypothetically, anything about C9's allowlist, Table R's fallback shape,
+  or the reap precondition's platform scoping — all new design.
+
+**If the two formulations disagree on a real finding, the owner rules the
+classification. This author does not.** That is the whole point of pinning it
+now: the classification decides the consequence, so it must not be made by the
+person whose work is being judged, after seeing what was found.
+
+### (c) The tripwire is self-acting — acknowledged
+
+Module half stands at **26** of a **28** ceiling. If round 4's dispositions add
+three or more criteria there, **T1 fires by itself** and Table R plus the
+report's criteria move to `WP-dream-promote-report`. No further owner decision
+is needed for that; the ruling that pinned it is the decision.
