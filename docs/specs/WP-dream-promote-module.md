@@ -215,6 +215,22 @@ under "Discovered issues" in the PR body.
  *           and knows nothing about the state directory, but it DOES consume
  *           what the preservation produced, because the report line is the
  *           user's only route back to their copy (Table Q)
+ *  @returns {{promoted:Array<{rel:string, bytes:Buffer}>,
+ *             redacted:Array<{rel:string, bytes:Buffer,
+ *                             lines:number, labels:string, artifact:string}>,
+ *             refused:Array<{rel:string, reason:string}>,
+ *             secretDisposition:{withheld:number, redactions:number}}}
+ *    **Every published entry carries BOTH halves — `rel` AND `bytes`.** Table S
+ *    owns why the bytes are required and this block does not restate it; the
+ *    PATH half is required here because a consumer that has bytes without a path
+ *    cannot stage, count or register them, and prose saying "per path" does not
+ *    make a type carry one. **Pass (c)'s finding: the T1 cut removed this whole
+ *    `@returns` block along with the report field, and Table S alone required
+ *    `bytes` without ever requiring `rel`** — the path half of round 1's fix was
+ *    unenforced for one round.
+ *    `redacted[]` additionally carries the EP2 accounting Table Q row Q1 defines
+ *    — the scrubbed-line count, the detector labels, and the artifact name the
+ *    gate returned — because those reach the report and cannot be recomputed.
  *    **`report` is NOT in this package's return — `WP-dream-promote-report`
  *    adds it.** This module publishes ordinary notes and composes no report
  *    secretDisposition is the typed signal the pipeline's transcript-advance
@@ -372,7 +388,7 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 | # | Fact / rule | Value |
 |---|---|---|
 | S1 | **What "the decided bytes" ARE** | for any path this module publishes and REPORTS in its return (row S5's scope), the exact buffer `writeIntoVault` returned for it (Table H, row H6). Not the candidate this module composed, not a read of the target afterwards, and not a digest of either. They are the only bytes any gate judged and the only bytes the vault is known to hold at publish time |
-| S2 | **Every published outcome carries them, and the SHAPE is what guarantees it — not the prose** | `promoted[].bytes` and `redacted[].bytes` are required fields, and `report` is a DISCRIMINATED UNION whose published arms (`promoted`, `fallback`) require `bytes` while the refused arm cannot carry them. **Stated as a shape rule because twice now the prose was right and the type was not:** a return of paths alone (round 1), then an OPTIONAL `bytes` spanning success and refusal (round 2) — the second conforms to its own interface while omitting the bytes on exactly the branch that enters the commit. A rule the type cannot express is a rule an implementation can satisfy and still break |
+| S2 | **Every published outcome carries them, and the SHAPE is what guarantees it — not the prose** | **published entries are `{rel, bytes}` — BOTH halves required, not the bytes alone (pass (c)).** A consumer that receives bytes without a path cannot stage, count or register them, and this row said "`.bytes` is required" for one round while nothing required `rel`, which is the same defect one field over. `promoted[].bytes` and `redacted[].bytes` are required fields, and `report` is a DISCRIMINATED UNION whose published arms (`promoted`, `fallback`) require `bytes` while the refused arm cannot carry them. **Stated as a shape rule because twice now the prose was right and the type was not:** a return of paths alone (round 1), then an OPTIONAL `bytes` spanning success and refusal (round 2) — the second conforms to its own interface while omitting the bytes on exactly the branch that enters the commit. A rule the type cannot express is a rule an implementation can satisfy and still break |
 | S3 | **A refused outcome carries no bytes, and must not** | nothing was published, so there is nothing to carry, and a field that could hold the candidate would invite a consumer to commit bytes the vault never took. `refused[]` is `{rel, reason}`; the report's refused arm is `{outcome:'refused', reason, record}` |
 | S4 | **EVERY fact a consumer derives about a published path is derived FROM these bytes** | and this is deliberately broader than "the staged content". A frontmatter field, a length, a digest, a registry entry — each is derived from the returned buffer, never from a fresh read of the vault path. **Re-reading re-opens the window the publish closed:** a user save landing after the publish would decide what gets committed, hashed or registered, and none of it was gated. **This generalisation is what round 2's F1 needed** — its registry entry reads `id` and `created` out of a promoted `SKILL.md`, and today's code reads them from the vault path (`validate.js:1203`), which is correct only because today the brain wrote that path directly |
 | S5 | **SCOPE, stated before the list, because round 3's F4 showed the list without it was false** | this table governs the bytes `promote()` RETURNS to its caller — the downstream consumers of its result. **It does NOT govern this module's own internal use of a `writeIntoVault` return**, of which there is exactly one: the report's second write, whose `expect` is the buffer the first report publish returned. That handoff is owned by Table D's report row and by Table R, which state it operatively; naming it here as well would be the restatement this family's citation rule forbids. **An earlier form of this row listed two consumers while S1 quantified over "any path this module publishes", which the internal report handoff falsified** — the scope sentence is what makes the list true rather than the list being widened |
@@ -612,8 +628,10 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       proven byte-identity (Q5); a failed or impossible comparison retains it.
 - [ ] **Every published outcome carries its decided bytes (Table S).** Asserted
       per outcome: an ordinary promotion and a redacted promotion each return
-      the exact buffer the primitive published, byte-equal to what the vault then
-      holds; a refused path returns no bytes at all. **Proven RED against a
+      **both `rel` and** the exact buffer the primitive published, byte-equal to
+      what the vault then holds; a refused path returns no bytes at all.
+      **Proven RED against a return carrying bytes without `rel`**, which the
+      pre-pass shape permitted. **Proven RED against a
       return that carries paths without bytes** — round 1's finding. **The
       report's arms are `WP-dream-promote-report`'s to assert**, under the same
       Table S rule, which is why row S2 states it as a shape rule rather than

@@ -882,3 +882,90 @@ PR to `main` after this family lands**, stated bare per main hygiene:
 rule. **Its B-count is the deciding measurement, and the interpretation is the
 one pinned before round 4**: clean, or B-findings NOT in the family, opens the
 `Ready` path; B-findings IN the family is a structural signal, not a defect list.
+
+## Pass (c) — findings, owner rulings, and THE FAMILY MEASUREMENT READS DRAINED
+
+Raw: `2026-08-28-promote-split-round-c-raw.md`, committed before adjudication.
+Undirected round on all three specs. **One A-band and one B, zero scope
+objections.** Twelve of fourteen priors genuinely fixed.
+
+### (1) The A-band, and the order the owner ruled — 2026-08-29
+
+**REDACT FIRST, THEN SANITIZE.** Table R's rule required each interpolated value
+through BOTH the shipped sanitizer and EP2's redact arm and **named no order**.
+That is not a weaker rule than an ordered one — it is a different rule, and one
+of its two readings leaks: `sanitizeProjectName` replaces `=` and `:`, so
+`refused token=abcdefghijkl` sanitises to `refused token_abcdefghijkl` and EP2's
+context-dependent detector no longer fires. Reproduced by the reviewer and again
+independently by this author.
+
+**The reverse order is safe for a stated reason, not by luck: EP2's placeholder
+is sanitizer-neutral**, so what the redact arm leaves survives the sanitizer
+unchanged.
+
+**The row that mattered most is the justification.** Table R claims the
+code-authored section can never carry refusable bytes, *therefore* no gate
+exemption is needed. **That sentence was FALSE for one round** under
+sanitizer-first, and it is what the whole no-exemption design rests on. It now
+says so explicitly, and is true again only because the order is fixed.
+
+**The criterion now REFUSES sanitizer-first** rather than merely requiring both
+transformations, and it pins the test values: at least `token=abcdefghijkl` and
+`client_secret: abcdefghijkl`, **because a prefix-shaped secret survives the
+sanitizer intact and is caught in either order** — a test built only from one
+would go green on the leaking implementation. That was the finding's whole
+point: sanitizer-first conformed to its own tests.
+
+### (2) Owner ruling on the classification — THE PINNED TRIGGER DOES NOT FIRE
+
+- **Finding 1 is a NEW-DESIGN defect — the third category.** Table R's
+  composition rule is this family's own invention; today's code has no such
+  composition at all. The **remedy test decides**, as it did for F1.
+- **Finding 2 is EDIT-PASS INJECTION, not a family survivor.** R1-1's fix was
+  confirmed genuine in an earlier round; **the T1 cut regressed it** by deleting
+  the whole `@returns` block along with the report field. **Booked under the
+  0.5–0.9 injection rate, not under the region's drainage** — a defect created by
+  a restructure two commits earlier is not evidence about a region diagnosed
+  four rounds ago.
+
+> **THE FAMILY MEASUREMENT READS DRAINED.** An undirected round **with
+> demonstrated teeth** — it found a real A elsewhere, so a null result on the
+> family is a measurement and not a miss — reported **zero survivors** from the
+> diagnosed region and confirmed nine of ten priors genuinely fixed.
+
+**This reclassification is the OWNER's, made on the advisor's independent check
+— exactly as the pin routes it.** The pin said the classification decides the
+consequence and therefore cannot be made by the party whose work is judged; that
+is what happened, and it is recorded so the routing is visible rather than
+assumed.
+
+### (3) Both fixes, one pass
+
+| Finding | Fix |
+|---|---|
+| 1 (A) | the order ruled into Table R's rule (2), with the measured reason; the justification row states that it was false and why it is true again; the criterion goes RED on sanitizer-first with context-dependent test values |
+| 2 (B) | the module's `@returns` restored, with **`rel` AND `bytes` both required** on every published entry, and `redacted[]` additionally carrying Table Q's accounting; Table S row S2 and its criterion mirror it; the report package now extends a CONCRETE base shape instead of an ellipsis |
+
+Counts: module **23/3**, report **9/2**, pipeline **24/6**. Lint 0; G- and V-row
+order checks pass.
+
+### Credit, on the record
+
+**This was the first round of the entire loop to EXECUTE its checks rather than
+read.** It ran the suite, ran `lint`, and ran a node probe against the two
+shipped functions in sequence — **which is what caught the A.** Three prior
+rounds and a blind code-first inventory read the same two sentences and passed
+them, because the defect is only visible when the functions are composed and
+run.
+
+It also **verified the vendored prompt's body sha256 against the file's own
+declared checksum** before using it — no prior round did — and **disclosed a bad
+checksum attempt it self-corrected** (`tail -n +13` hashed the wrong byte range,
+exit 0, wrong digest) rather than quietly using the good one. That disclosure is
+the behaviour this repo's "read-not-run" rule exists to produce, arriving
+unprompted from a reviewer.
+
+### Next
+
+**One more undirected round on the whole family, per the HEAVY rule.** Its
+interpretation stands as pinned.
