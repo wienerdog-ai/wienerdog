@@ -506,6 +506,33 @@ function assertReportCopied(vaultRoot, workspaceDir, layout, date) {
 }
 
 /**
+ * The path's components BELOW its root, with `.` and empty segments dropped.
+ *
+ * THE ROOT MUST COME OFF FIRST. A plain `split(sep)` keeps it as a component,
+ * and on win32 that component is the drive or the UNC host: measured,
+ * `C:\\outside-alias\\bin` splits to `['C:', 'outside-alias', 'bin']` and a walk
+ * seeded at `C:\\` then probes `C:\\C:`, while `\\\\server\\share\\…` probes
+ * `\\\\server\\share\\server`. Both fail, the walk falls back to a malformed
+ * lexical answer, and every alias reaching into the vault goes unseen. POSIX
+ * hid this because its root component splits to the empty string, which the
+ * filter drops anyway.
+ *
+ * WIN32 ACCEPTS BOTH SEPARATORS, so both are split there — and only there: a
+ * backslash is a legal character in a POSIX filename, so splitting on it would
+ * tear a real name in half.
+ *
+ * `mod` is injectable ONLY so the win32 shapes can be asserted from a POSIX test
+ * run; production always uses the platform's own `path`.
+ * @param {string} input @param {typeof path} [mod]
+ * @returns {string[]}
+ */
+function splitBelowRoot(input, mod = path) {
+  const rest = String(input).slice(mod.parse(String(input)).root.length);
+  const parts = mod.sep === '\\' ? rest.split(/[\\/]+/) : rest.split('/');
+  return parts.filter((seg) => seg !== '' && seg !== '.');
+}
+
+/**
  * Canonicalise a path the way the KERNEL does, even when its tail does not exist
  * yet: walk it one component at a time, resolving each symlink as it is reached,
  * and apply `..` to what is resolved SO FAR.
@@ -528,7 +555,7 @@ function assertReportCopied(vaultRoot, workspaceDir, layout, date) {
 function resolveExisting(p) {
   const input = String(p);
   if (!path.isAbsolute(input)) return path.resolve(input);
-  const parts = input.split(path.sep).filter((seg) => seg !== '' && seg !== '.');
+  const parts = splitBelowRoot(input);
   let cur = path.parse(input).root;
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
@@ -750,6 +777,7 @@ module.exports = {
   assertNoGitEntry,
   excludeReason,
   isAtOrBeneath,
+  splitBelowRoot,
   // Layer 1's mechanism. Exported because it is UNREACHABLE through
   // `createWorkspace` in a test: a symlink planted before the walk is
   // classified by `lstat` and skipped by the walk, so the swap branches here
