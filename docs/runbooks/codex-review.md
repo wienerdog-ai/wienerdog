@@ -381,6 +381,22 @@ other.
   stronger day-to-day mechanism (it keeps mirrors in lockstep up front); this
   breaker is the backstop for when scattered contract prose slipped through
   unregistered.
+- **Capture an exit code as its own statement, immediately.** `rc=$?` on the
+  line after the command — never after an intervening command substitution or
+  echo, which overwrite `$?` with their own status. The failure shape is a
+  gate measured as exit 0 that actually exited 1, pasted as green evidence;
+  it appeared twice in one day on the same check (PR #22's boundary run)
+  before the pattern was named. The general form: read the VALUE the tool
+  produced, not the value the pipeline last touched.
+- **A zero-hit sweep is evidence only if the sweep demonstrably read its
+  targets.** A grep that failed to open a file also reports zero matches —
+  an unquoted variable holding several paths, a shim that does not
+  word-split, a binary-skip default — and the output is indistinguishable
+  from a clean sweep. For an absence claim ("this phrase appears nowhere"),
+  pass every path literally, use the system grep with `-a`, and treat any
+  `No such file` on stderr as the sweep not having run. Measured on PR #22:
+  a full round of "ZERO HITS — clean" verdicts were false for exactly this
+  reason.
 
 ## Requirements
 

@@ -48,6 +48,19 @@ writing. Read both before drafting.
   surface cites the owner instead of restating. A place that keeps
   going stale predicting another surface's content stops predicting
   and points — what has no content cannot go stale.
+- After rewriting a canonical cell, re-read that cell WHOLE for a
+  sentence the rewrite just falsified. The edit habit that survives every
+  cross-surface discipline is intra-cell: the new sentence goes in, the
+  old one stays, and no mirror checklist can see inside one cell. The
+  re-read is the only tool that can.
+- Sweep for the CLAIM, not for any wording of it — and across every spec
+  in the family, not only the one being edited. A fact that changed is
+  wrong everywhere it appears, in whatever phrasing: a phrase-shaped
+  sweep finds only the wordings its author remembers writing, and a
+  count that moved is wrong wherever any sentence states it. Sweep the
+  concept (one pattern over the claim's shape, whitespace-flattened so a
+  hard wrap cannot hide a hit), then verify each hit is corrected text
+  or a named withdrawal.
 - The worked example of these rules is
   `docs/specs/done/WP-daily-summary-per-line-framing.md`. Every other
   spec under `done/` predates them: those are RECORDS of what shipped,
