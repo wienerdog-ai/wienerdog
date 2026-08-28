@@ -1373,3 +1373,44 @@ test('dream-workspace: the component walk gets the ROOT right on every absolute 
   assert.deepEqual(splitPath('/a/we\\ird/b', path.posix), { root: '/', parts: ['a', 'we\\ird', 'b'] });
   assert.deepEqual(splitPath('/a/./b', path.posix), { root: '/', parts: ['a', 'b'] });
 });
+
+test('dream-workspace: a symlink out of the vault followed by `..` does not refuse a safe child', { skip: WIN32 }, () => {
+  // The MIRROR of the alias-plus-`..` leak, and the same mistake seen from the
+  // other side: deciding containment on a spelling the kernel does not use.
+  // With `<vault>/alias -> <outside>/nested`, the path `<vault>/alias/../home`
+  // reaches `<outside>/home` — outside the vault — while `path.resolve` names
+  // `<vault>/home`. Refusing that is refusing a SAFE child, and it is reachable
+  // with nothing more exotic than an OS-standard HOME: `getPaths` takes it
+  // unchanged and `buildCleanEnv` preserves it.
+  const root = fs.realpathSync(mkTmp('out-alias'));
+  const vault = path.join(root, 'vault');
+  const outside = path.join(root, 'outside');
+  fs.mkdirSync(vault, { recursive: true });
+  fs.mkdirSync(path.join(outside, 'nested'), { recursive: true });
+  fs.mkdirSync(path.join(outside, 'home'), { recursive: true });
+  fs.symlinkSync(path.join(outside, 'nested'), path.join(vault, 'alias'));
+  const home = `${vault}${path.sep}alias${path.sep}..${path.sep}home`;
+
+  // Non-vacuity: the kernel really does land outside, and the lexical answer
+  // really does disagree.
+  assert.equal(fs.realpathSync(path.dirname(path.join(vault, 'alias', 'x'))), path.join(outside, 'nested'));
+  assert.equal(path.resolve(home), path.join(vault, 'home'));
+
+  assert.equal(isAtOrBeneath(home, vault), false);
+  assert.doesNotThrow(() =>
+    buildBrainEnv({
+      baseEnv: { HOME: home, PATH: '/usr/bin' },
+      vaultDir: vault,
+      workspaceDir: '/w',
+      scratchDir: '/s',
+      date: DATE,
+      layout: defaultLayout(),
+      platform: 'linux',
+    })
+  );
+  // …and the leak direction still refuses, so this did not trade one for the other.
+  fs.mkdirSync(path.join(vault, 'inner'), { recursive: true });
+  fs.symlinkSync(path.join(vault, 'inner'), path.join(root, 'in-alias'));
+  const leak = `${root}${path.sep}in-alias${path.sep}..${path.sep}inner`;
+  assert.equal(isAtOrBeneath(leak, vault), true);
+});

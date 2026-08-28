@@ -146,7 +146,8 @@ function fold(name) {
  * only what it can answer exactly, and THE FILESYSTEM answers what counts as the
  * same place.
  *
- * PASS 1, SPELLING, EXACT. Resolve, then compare on a SEPARATOR BOUNDARY — which
+ * PASS 1, SPELLING, EXACT — over the KERNEL-RESOLVED path, never the lexical
+ * one. Compare on a SEPARATOR BOUNDARY — which
  * is why a sibling merely starting with the vault's name (`~/wienerdog-backup`
  * beside `~/wienerdog`) is not inside it, and why a filesystem ROOT, already
  * separator-terminated, must not have another appended.
@@ -188,8 +189,16 @@ function isAtOrBeneath(candidate, root) {
   let c;
   let r;
   try {
-    c = path.resolve(c0);
-    r = path.resolve(String(root));
+    // RESOLVED, not merely `path.resolve`d. The lexical answer is wrong in BOTH
+    // directions once a symlink and a `..` meet, and each direction has been
+    // measured: `/outside-alias/../nested` reads the VAULT's bytes while
+    // `path.resolve` names somewhere else, and `<vault>/alias/../home` — where
+    // `<vault>/alias` points outside — reads bytes OUTSIDE the vault while
+    // `path.resolve` names something inside it. The first is a leak, the second
+    // refuses a safe child; both are the same mistake, which is deciding
+    // containment on a spelling the kernel does not use.
+    c = resolveExisting(c0);
+    r = resolveExisting(String(root));
   } catch {
     return false; // unresolvable — nothing to compare
   }
@@ -201,7 +210,7 @@ function isAtOrBeneath(candidate, root) {
   // Pass 2 — the filesystem's own identity answer.
   const rootId = statIdOrNull(root);
   if (rootId === null) return false; // root does not exist: spelling was all there was
-  let cur = resolveExisting(c0);
+  let cur = c;
   for (;;) {
     const id = statIdOrNull(cur);
     if (id !== null && id.dev === rootId.dev && id.ino === rootId.ino) return true;
