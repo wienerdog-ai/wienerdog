@@ -1181,3 +1181,44 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
 - **WP-dream-baseline-delta-primitive:** citing a measurement you inherited as one you
   made is the same defect as citing evidence that does not reach its claim. Either
   re-measure it or attribute it; "measured" is a claim about who looked.
+
+
+- `WP-dream-workspace-retarget`: a spec that renames a public option must list
+  its callers in Deliverables, or "npm test passes" and "touch ONLY these"
+  exclude each other.
+- `WP-dream-workspace-retarget`: "construct the child env from an allowlist"
+  collides with fixtures steered through the ambient env. The fix is not an env
+  name in `src/` — that is a WP-155-class production seam — but a control file
+  the installing test writes beside the pinned command, with the fixture's own
+  argv keeping precedence so a self-re-spawn cannot inherit a spawning mode.
+- `WP-dream-workspace-retarget`: a test fake that writes to `process.cwd()`
+  pollutes the repo — the run-evidence `--version` probe spawns without a `cwd`
+  and inherits the runner's.
+- `WP-dream-workspace-retarget`: `git checkout -- <file>` to undo a scripted
+  red-test mutation reverts to HEAD, not to the pre-mutation working tree, and
+  silently discarded a round of uncommitted edits. Back up the file instead.
+- `WP-dream-workspace-retarget`: when a test's own comment says "the invariant is
+  asserted on the mechanism instead", check that it actually asserts the
+  mechanism. Mine did not, and the name of the test hid it for a whole round.
+- `WP-dream-workspace-retarget`: "is this path inside that directory" is a much
+  harder question than it looks, and eleven review rounds went into it. Every
+  string answer is wrong: substring fires on `~/wienerdog-backup` beside
+  `~/wienerdog` and misses `~/Notes`; splitting on `:` breaks on a legal POSIX
+  filename; case-folding refuses every dream on a case-SENSITIVE filesystem;
+  and `path.resolve`/`fs.realpathSync` both collapse `..` before a symlink, which
+  leaks in one direction and refuses a safe child in the other. What works is
+  kernel-faithful resolution plus `(dev, ino)` — let the filesystem answer what
+  counts as the same place.
+- `WP-dream-workspace-retarget`: "it can only over-match, which is the fail-safe
+  direction" is not a safety argument. Over-refusing a gate the product must
+  pass is the product not running — the same severity as the leak it was meant
+  to prevent, and twice here it WAS the more damaging failure.
+- `WP-dream-workspace-retarget`: a refusal must cost the user nothing. A gate
+  that validates after `mkdirPrivate` has already chmodded the user's vault, and
+  a refusal path that deletes recursively destroys exactly what it refused to
+  protect.
+- `WP-dream-workspace-retarget`: asking a review gate to classify by
+  REACHABILITY — "what supported workflow produces this shape?" — is what ended
+  an eleven-round loop. It did not lower the bar: the same round the gate
+  accepted one shape as unreachable, it found a genuinely reachable blocker.
+
