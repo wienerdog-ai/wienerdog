@@ -804,6 +804,76 @@ test('dream-vault-write: H9 — a created directory that is already GONE at unwi
   assert.doesNotMatch(result.reason, /left in the vault/, 'nothing was retained, so nothing may be reported as retained');
 });
 
+test('dream-vault-write: H7 — a staging file that vanished on its own is not reported as unremovable', { skip: !POSIX }, () => {
+  const vault = makeVault();
+  const target = path.join(vault, 'notes', 'x.txt');
+  fs.writeFileSync(target, 'on disk');
+
+  // The file-side twin of the already-gone directory case. A staging file that
+  // a concurrent actor removed is not a staging file this call failed to
+  // remove, and reporting it as one would be a bucket reached with a false
+  // cause — the exact class the three-way split exists to stop.
+  /** @type {string|null} */
+  let staged = null;
+  let armed = false;
+  const originalOpen = fs.openSync;
+  const originalRead = fs.readFileSync;
+  fs.openSync = /** @param {any[]} a */ (...a) => {
+    const [p2, flags] = a;
+    if (typeof flags === 'number' && (flags & fs.constants.O_CREAT) !== 0 && typeof p2 === 'string' && p2.startsWith(vault + path.sep)) {
+      staged = p2;
+    }
+    return Reflect.apply(originalOpen, fs, a);
+  };
+  fs.readFileSync = /** @param {any[]} a */ (...a) => {
+    if (!armed && staged) {
+      armed = true;
+      fs.rmSync(staged, { force: true }); // the concurrent actor takes it away
+    }
+    return Reflect.apply(originalRead, fs, a);
+  };
+  let result;
+  try {
+    result = writeIntoVault({
+      vaultDir: vault,
+      rel: 'notes/x.txt',
+      bytes: Buffer.from('body'),
+      admit: ADMIT_ALL,
+      expect: Buffer.from('bytes that are not there'),
+    });
+  } finally {
+    fs.openSync = originalOpen;
+    fs.readFileSync = originalRead;
+  }
+
+  assert.ok(staged, 'the probe never armed — nothing was staged inside the vault');
+  assert.ok(armed, 'the probe never armed — the conditional publish did not re-read the target');
+  assert.equal(result.written, false);
+  assert.doesNotMatch(
+    result.reason,
+    /could not be removed and was left in the vault/,
+    'the staging file removed itself; nothing was left, so nothing may be reported as left'
+  );
+});
+
+test('dream-vault-write: H6 — the return is independent of the caller’s buffer after the call', () => {
+  const vault = makeVault();
+  const original = 'the approved content';
+  const bytes = Buffer.from(original);
+
+  const result = writeIntoVault({ vaultDir: vault, rel: 'notes/x.txt', bytes, admit: ADMIT_ALL });
+  assert.equal(result.written, true);
+
+  // H6's failure mode can arrive by ALIASING as easily as by re-reading: if the
+  // return carried the caller's own buffer, a caller mutating it afterwards
+  // would change `bytes` while `sha256` stayed over the original, and the
+  // return would contradict itself.
+  bytes.write('XXX', 0);
+  assert.deepEqual(result.bytes, Buffer.from(original), 'the return is a snapshot of what was published');
+  assert.equal(digest(result.bytes), result.sha256, 'and the digest still describes the bytes beside it');
+  assert.equal(fs.readFileSync(path.join(vault, 'notes', 'x.txt'), 'utf8'), original, 'as does the file on disk');
+});
+
 test('dream-vault-write: H10 — a published note carries the same permissions as one the user creates by hand', { skip: !POSIX }, () => {
   const vault = makeVault();
 
