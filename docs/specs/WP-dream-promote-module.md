@@ -346,7 +346,7 @@ prescription this table would have to keep true for the life of the module.
 
 | # | Condition | Outcome |
 |---|---|---|
-| C1 | the path is not admitted by the promotion allowlist (row C9) | **refuse-and-report.** No content is PUBLISHED to the vault. **What a refusal may leave behind is bounded by the primitive on BOTH sides, and this row cites both rather than restating either (corrected 2026-08-28; the pre-split form cited H9 alone and its "no CONTENT is written" clause was arguable):** the DIRECTORY side is H9's — empty directories the call created are unwound, one that acquired content or failed removal for a platform reason is left and NAMED; the STAGING-OBJECT side is H7's — at most one object of that call's making, in the target's own parent directory, may survive an unwritable-parent refusal, holding the REFUSED payload, and the refusal NAMES it. **The H7 acceptance criterion in the primitive's spec is the single surface that enumerates and counts those cases; this row defers to it and states no number.** The consequence this package must carry is in Table E's staged-bytes row: a refused staging object sits where a wholesale `git add -A` would sweep it into the commit, which is one more reason the commit is built from the primitive's returned bytes and named paths |
+| C1 | the path is not admitted by the promotion allowlist (row C9) | **refuse-and-report.** No content is PUBLISHED to the vault. **What a refusal may leave behind is bounded by the primitive on BOTH sides, and this row cites both rather than restating either (corrected 2026-08-28; the pre-split form cited the primitive's H9 alone and its "no CONTENT is written" clause was arguable):** the DIRECTORY side is **the primitive's H9** — empty directories the call created are unwound, one that acquired content or failed removal for a platform reason is left and NAMED; the STAGING-OBJECT side is **the primitive's H7** — at most one object of that call's making, in the target's own parent directory, may survive an unwritable-parent refusal, holding the REFUSED payload, and the refusal NAMES it. **That spec's own H7 acceptance criterion is the single surface that enumerates and counts those cases; this row defers to it and states no number.** The consequence this package must carry is in Table E's staged-bytes row: a refused staging object sits where a wholesale `git add -A` would sweep it into the commit, which is one more reason the commit is built from the primitive's returned bytes and named paths |
 | C2 | delta status is `deleted` (present in baseline, gone from the workspace) | **refuse-and-report — promotion never deletes.** The vault keeps the note. Named rather than traded off: a deletion is unrecoverable and the brain has no business making one |
 | C3 | delta status is `added` and `vault-now` has no such path | **promote** the workspace bytes (Table E's write) |
 | C4 | delta status is `added` and `vault-now` HAS the path | **refuse-and-report.** The user created a note at that path during the run; the brain's version does not displace it |
@@ -428,16 +428,19 @@ name; the name did not move, the ownership did.
 | **The publish goes through the primitive — this spec writes no vault byte itself** | every promoted path is published by `writeIntoVault` (Table H): the resolved path is what policy judges, nothing is written on or through a symlink, no partial content is ever observable at the target, the publish is conditional on the caller's premise still holding, and the published bytes come back. **Those are the primitive's OBSERVABLE properties, which is all a consumer may restate.** **This spec does not restate that discipline — the primitive owns it.** What this spec supplies is the two caller-side arguments: `admit` (Table C's policy, applied by the primitive to the RESOLVED path) and `expect` (the `vault-now` bytes the decision was made against). A promotion that writes the vault by any other route is a defect, and the acceptance criteria assert the seam |
 | **The compare→promote window** | the only genuinely new window this direction introduces, and it is **NARROWED, not closed**, to milliseconds against today's minutes-long silent window. The narrowing is the primitive's `expect` guard (Table H, row H5); this spec's obligation is to PASS the right bytes — the `vault-now` bytes the decision used — and to turn `{written:false}` into refuse-and-report. **The residual is the primitive's and is inherited here unchanged:** a user save landing between the re-read and the `rename` is still lost |
 | Promotion accounting | every path gets exactly one recorded outcome: `promoted`, `redacted` (EP2 sanitized-and-promoted, Table D), or `refused` with a reason. **The report has no outcome in this package's accounting** — `WP-dream-promote-report` adds it, and its fallback publish is never recorded as a normal promotion. The dream report's enforcement section is written from that record. A path with no outcome is a bug, and the acceptance criteria assert the partition |
-| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **Which bytes those are, which outcomes carry them, and what a consumer may derive from them is TABLE S — extracted after two consecutive rounds landed here, and cited rather than restated.** **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the decided bytes per Table S so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
+| **The staged bytes — a HANDOFF to `WP-dream-promote-in-workspace`, stated here because this table owns the rule** | the dream commit must contain **only promoted paths, and the DECIDED bytes**. The second half is the one a path-shaped implementation misses: staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **The committed content must therefore be the bytes the primitive returned (Table H, H6), not a fresh read of the path** — which is also what keeps a refused staging object surviving under the primitive's H7 (Table C, C1) out of the commit that a wholesale `git add -A` would have swept it into. **Which bytes those are, which outcomes carry them, and what a consumer may derive from them is TABLE S — extracted after two consecutive rounds landed here, and cited rather than restated.** **How that is achieved is the implementer's — round-4 CUT ruling:** an earlier draft prescribed `git hash-object -w --stdin` and `git update-index --cacheinfo`, and manufactured two contradictions doing so. Those findings dissolve with the prescription. ADR-0012's "one dream run = one git commit in the vault" is unchanged. **This module makes no commit and asserts nothing about one; it supplies the decided bytes per Table S so the pipeline package can satisfy this rule, and that package's acceptance criteria assert it** |
 
-### Table Q — the EP2 gate's result, and the quarantine lifecycle behind it
+### Table Q — the EP2 gate's result, and what promotion does with it
 
 **Extracted in pass (b)** from the step-(a) inventory
 (`2026-08-28-promote-split-inventory.md`, items I063–I072), after round 4's F2
 and all four of the measurement's GAP-INTERFACE items landed on one contract:
 **what the EP2 gate produces besides a verdict.** Table D owns each gate's
-INPUT; this table owns the EP2 gate's OUTPUT and the durable lifecycle it drives.
-Table D's EP2 row and Table R's report rules cite it.
+INPUT; this table owns the EP2 gate's OUTPUT and what promotion does with it.
+**It does NOT own the durable lifecycle behind that output** — the boundary the
+2026-08-29 reconciliation drew, restated in the paragraph below and in this
+table's rows Q4, Q5 and Q6. Table D's EP2 row and Table R's report rules cite
+it.
 
 **Why it is a table and not a sentence in Table D:** the shipped arm produces a
 durable artifact, a name that is not predictable, a report line and a refusal
@@ -451,18 +454,27 @@ into promotion and what promotion does with it. It does not own the durable
 lifecycle behind that result.** The retention prune, the identity-gated deletion
 of a redundant copy and the preservation-failure abort are decided, asserted and
 mutation-covered in the shipped `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`;
-rows Q4, Q5 and Q6 are pointers at it and restate none of it. Rows Q5 and Q6
-kept their numbers deliberately — other packages cite Q-rows by number, and a
-renumber would silently retarget those citations.
+**rows Q5 and Q6 are PURE POINTERS at it and restate none of it; row Q4 is a
+HYBRID and is not swept in with them** — it points at the shipped enforcement
+(that package's Table B row B3b and its Table Q row Q18) AND owns the invariant
+as it binds THIS family, which is why `WP-dream-promote-in-workspace`'s row G5
+cites Q4 rather than the shipped package. Rows Q5 and Q6 kept their NUMBERS:
+renumbering the rows of a table other packages cite by number retargets those
+citations silently, so in this family a row id is never reused and never
+shifted, whether or not that particular row is cited today.
 
 **LETTER-SPACE WARNING, and it is load-bearing for every citation in this
-table.** `WP-secret-fence-ep2-redact-arm` has its own Tables B, K, N, Q, R and
-T, in its own letter-space — its **Table N** is a retention contract while this
-family's Table N is `WP-dream-promote-report`'s neutralisation contract, and its
-**Table Q** and **Table R** collide with this family's letters too. **Every
-citation of that package in this family names the spec path, never the bare
-letter**, and the canonical map records the collision
-(`docs/specs/logbook/2026-08-29-promote-family-map.md`).
+table.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` carries its own
+tables in its own letter-space, and several of its letters are this family's
+letters meaning different things — its **Table N** is a retention contract while
+this family's Table N is `WP-dream-promote-report`'s neutralisation contract.
+**Every citation of that package in this family names the spec path, never the
+bare letter, and a citation of a row in a colliding letter names its owner
+(`the primitive's H7`, not `H7`).** **WHICH letters collide is the canonical
+map's to state, and this surface deliberately does not list them**
+(`docs/specs/logbook/2026-08-29-promote-family-map.md`): a member list in a
+citing surface is the defect this family measured twice, and on 2026-08-29 a
+list here was one of four surfaces giving three different answers.
 
 | # | Fact / rule | Value |
 |---|---|---|
@@ -470,8 +482,8 @@ letter**, and the canonical map records the collision
 | Q2 | **`artifact` is REPORTED, never PREDICTED** | the preserving call resolves collisions itself and returns the name it actually used (`validate.js:669-738`). A caller that reconstructs the name from the date and path will point the user at a file that does not exist on exactly the runs where two notes collide. **This row exists because the pre-pass-(b) interface had no field for it at all**, so the only available implementation was to guess |
 | Q3 | **The report line is the user's ONLY route back to their copy** | `state/quarantine/redacted/` deliberately carries no digest banner, so nothing else announces the file. Table R's report therefore carries one line per redaction naming the path, the scrubbed-line count, the labels and the artifact, with restore-or-delete guidance — the shape shipped today at `validate.js:1392-1409`. **Losing the line loses the copy in practice, which is why this is a data-loss row and not a reporting nicety** |
 | Q4 | **THE ONLY-COPY INVARIANT — the highest-damage item the measurement found (I067)** | **nothing may destroy the working copy of a note unless some durable artifact byte-identically holds THE BYTES THAT ARE THERE NOW.** Not an earlier version: the note's owner can have saved it mid-run, and a copy of what it used to be is not a copy of what they wrote. **The SHIPPED enforcement of it — the fail-loud abort (`validate.js:1298-1323`), the condition that fires it and every field of the message it raises — is decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`** (that spec's own letter-space: its Table B row B3b decides the condition, its Table Q row Q18 decides the message), **is asserted and mutation-covered there, and is restated NOWHERE here.** An earlier form of this row summarised that message as distinguishing three states; measured against the owner, the message decides FOUR fields and its identity disposition has three values of its own — so the summary was both weaker than the thing it summarised and already drifting from it. **What is THIS family's, and is genuinely new:** under promotion the destruction risk moves but does not vanish — the workspace, not the vault, is what teardown removes — so **the invariant binds the pipeline's teardown too, and `WP-dream-promote-in-workspace` row G5 cites this row.** No surface may weaken it to "a copy was attempted" |
-| Q5 | **Deleting a redundant copy — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table R consequence 2** (that spec's own letter-space), which owns the byte-identity guard, both keep-combinations and their reason suffix, and which is fault-injected and mutation-covered there. **Restated nowhere here.** Until this reconciliation pass this row carried a summary of that rule and an acceptance criterion for it — in a package whose Deliverables cannot reach the state directory at all (Q7), against a shipped, `Done` owner that forbids restatement. A pointer is the only form that cannot drift |
-| Q6 | **Retention of `redacted/` — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table N** (that spec's own letter-space), which states in its own header that every retention fact is decided there and that **no surface may restate a number from it** — the cap, the trigger, the candidate set, the ordering, the cap-yields precedence, the overshoot's lifetime and its best-effort failure. **Restated nowhere here.** Until this reconciliation pass this row restated five of those seven facts, including the cap's literal value, and omitted two; the one open gap in that contract has its own package, `WP-ep2-retention-prune-timing-test`. **`state/quarantine/` itself is unbounded and that is decided there too** |
+| Q5 | **Deleting a redundant copy — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table R consequence 2** (that spec's own letter-space), which owns the byte-identity guard, the keep-combinations and their reason suffix, and which is fault-injected and mutation-covered there. **Restated nowhere here.** Until this reconciliation pass this row carried a summary of that rule and an acceptance criterion for it — in a package whose Deliverables cannot reach the state directory at all (Q7), against a shipped, `Done` owner that forbids restatement. A pointer is the only form that cannot drift |
+| Q6 | **Retention of `redacted/` — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table N** (that spec's own letter-space), which states that every retention fact is decided there and forbids **any surface restating a number from it** — the cap, the trigger, the candidate set, the ordering, the cap-yields precedence, the overshoot's lifetime and its best-effort failure. **Restated nowhere here.** Until this reconciliation pass this row restated five of those seven facts, including the cap's literal value, and omitted two; the one open gap in that contract has its own package, `WP-ep2-retention-prune-timing-test`. **`state/quarantine/` itself is unbounded and that is decided there too** |
 | Q7 | **Where the preservation happens, where it does not, and WHO CAN EVIDENCE WHAT** | the GATE preserves (Table D), because it is the party holding the pre-change bytes. **This module never touches the state directory**, which is also why rows Q5 and Q6 are pointers and why the durable lifecycle behind them belongs to the package Q4 cites. What this module does is CARRY Q1's fields into the accounting and the report (Q8), and **refuse to publish when the redact arm reports no preserved artifact.** **That refusal is a SANITY CHECK on the gate's own result, not Q4's enforcement, and calling it the latter would be the weakening Q4 forbids:** this module cannot read the artifact, so it cannot tell "a copy exists and matches" from "a copy exists and does not" — only the gate holds both sides of that comparison, and only the gate and the pipeline's teardown destroy anything. **A match-verdict field on Q1 was considered and REJECTED:** it would put a second party's judgment on evidence only the first party has, and would duplicate a test that is already decided, asserted and mutation-covered in the package Q4 cites |
 | Q8 | **A REDACTION CAN BE FOLLOWED BY A REFUSAL, and the artifact then travels TYPED on the refused arm — never in prose** | the gate preserves and reports `artifact` BEFORE this module knows whether the path will publish, because Table D positions EP2 ahead of the merge. Everything downstream of EP2 can still refuse the path: the C3–C8 state checks, a conflicting merge, any of the three post-merge gates, the skill/ledger pair refusal, the primitive's `expect` guard, and **the primitive's application of C9's `admit` to the RESOLVED path — the resolved-only half of C1, which Table C's header separates out precisely because it CANNOT precede the gates.** That last route is the one the 2026-08-29 design round found, and it is why this row rather than Table C's header is the home for a refusal that carries an artifact. The copy is on disk by then, `state/quarantine/redacted/` announces nothing (Q3), and the path is not in `redacted[]` — so with no carrier the artifact's name leaves the return entirely and the copy becomes an unannounced file holding unredacted secret-shaped content. **Therefore `refused[]` is `{rel, reason, artifact}`, with `artifact` REQUIRED AND NULLABLE** (Table S, row S3): the basename the gate reported when a copy was preserved for that path, `null` when none was — a positive statement of absence rather than a missing field, because an optional field spanning both cases is the defect row S2 already records one field over. **The reason string does NOT name the artifact, and no surface may make prose the carrier.** The shipped mitigation did exactly that and produced its own defect inside one review round: the pair refusal embeds its sibling's reason, so the SIBLING's copy was named first and a report composed by reading the name back out would have pointed the user at the wrong file — the same class of harm Q3 calls data loss, one file over. **One fact, one field, one place.** What the report SAYS about it is `WP-dream-promote-report`'s Table R; returning it is not delivering it |
 
@@ -562,16 +574,19 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       there — this spec's `@returns` has no `report` arm.** **Two prohibitions,
       both earned by a round: no surface may state a decided-bytes rule that the
       TYPE does not enforce; and no surface may add a consumer of published
-      bytes without adding it to row S5's list.**
+      bytes without adding it to row S6's list** — S5 is the SCOPE row, S6 is the
+      list, and the same one-row slip was live in
+      `WP-dream-promote-in-workspace` until 2026-08-29.**
 - [ ] **The primitive seam** — the package note, Table E's publish row, C9's
       application clause, the staged-bytes handoff row, and their acceptance
       criteria. **No surface may describe filesystem discipline as this spec's
       (it is Table H's), and none may show a vault write that does not go
       through `writeIntoVault`.**
 - [ ] **The refusal-leftover bound** — Table C's C1 row and the Security
-      checklist. **Both sides are cited (H9 for directories, H7 for the staging
-      object) and NEITHER is counted here: the primitive's own H7 acceptance
-      criterion is the single counting surface.**
+      checklist. **Both sides are cited — the PRIMITIVE's H9 for directories,
+      the PRIMITIVE's H7 for the staging object, each named with its owner
+      because Table H's letter collides — and NEITHER is counted here: that
+      spec's own H7 acceptance criterion is the single counting surface.**
 - [ ] **The two HANDOFFS** — the gate-extraction handoff in Table D's preamble
       and Table E's staged-bytes row. Both name `WP-dream-promote-in-workspace`
       as the package that discharges them, both are repeated in Out of scope's
@@ -631,9 +646,9 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       the dream commits it but did not author it — and making the secret gate
       refuse or redact a user's own note was ruled the worse trade.
 - [ ] **What a refusal may leave behind is the primitive's bound, on both sides,
-      and this package inherits it rather than closing it** (Table C, C1): H9's
-      directory side and H7's staging-object side, each named in the refusal by
-      the primitive. The consequence this package must handle is that a
+      and this package inherits it rather than closing it** (Table C, C1): the primitive's
+      H9 directory side and its H7 staging-object side, each named in the
+      refusal by the primitive. The consequence this package must handle is that a
       surviving staging object holds the REFUSED payload; Table E's staged-bytes
       row is what keeps it out of the commit.
 - [ ] The merge's git invocation is a security decision and takes the
@@ -851,8 +866,10 @@ test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" docs/GLOSSARY.md
   `state/quarantine/redacted/`, the identity-gated deletion of a redundant copy,
   and the preservation-failure abort with its message. All three are decided,
   asserted and mutation-covered in the shipped
-  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, and Table Q rows Q4, Q5
-  and Q6 point at it rather than restating it. **This package never touches the
+  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. **Table Q rows Q5 and Q6
+  are pure pointers at it; row Q4 points at the shipped ENFORCEMENT of the
+  only-copy invariant while owning the invariant as it binds this family, and is
+  not a pure pointer.** None of the three restates the lifecycle. **This package never touches the
   state directory (Table Q row Q7), so it can neither implement nor assert any
   of them**; that the gate extraction preserves them is asserted by
   `WP-dream-promote-in-workspace`'s row G7. **Cite that spec by PATH, never by

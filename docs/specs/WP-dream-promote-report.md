@@ -236,7 +236,7 @@ pass-through — the defect both prior A-bands shared.
 | Channel (a field of the return shape or of `records`) | Origin | Attacker-influenceable? | Transformation |
 |---|---|---|---|
 | `refused[].rel` | the brain chose the path | **YES** | **redact, then sanitise** |
-| `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and H7/H9 naming a surviving object | **YES** | **redact, then sanitise** |
+| `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and the primitive's H7/H9 naming a surviving object | **YES** | **redact, then sanitise** |
 | `redacted[].rel` | the brain chose the path | **YES — and this is the channel round (d) found leaking**, because the redaction line existed while the list named only the refusal fields | **redact, then sanitise** |
 | `redacted[].artifact` | the quarantine basename, DERIVED from the brain-chosen path (Table Q, row Q2) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
 | `refused[].artifact`, and `report.artifact` on the refused report arm | the quarantine basename, DERIVED from the brain-chosen path (Table Q, rows Q2 and Q8) | **YES, by derivation** — same as `redacted[].artifact`, and for the same reason: a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
@@ -277,7 +277,7 @@ naming: the only difference from the normal second write is that the base is
 
 | Rule | Value |
 |---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and the primitive's H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (module half, Table Q rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
@@ -340,7 +340,9 @@ left for a gate to refuse.
       identity-gated deletion and the preservation-failure abort are decided in
       `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, whose table letters
       collide with this family's, so it is cited by spec path and never by bare
-      letter. **No surface here may read an artifact name out of a refusal
+      letter. **WHICH letters collide is the canonical map's
+      (`docs/specs/logbook/2026-08-29-promote-family-map.md`); this surface does
+      not list them.** **No surface here may read an artifact name out of a refusal
       reason.**
 
 ## Implementation notes & constraints
@@ -506,9 +508,13 @@ test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js' --exclude='
   `state/quarantine/redacted/`, the identity-gated deletion of a redundant copy,
   and the preservation-failure abort. Not the module half's either: they are
   decided, asserted and mutation-covered in the shipped
-  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, which the module half's
-  Table Q rows Q4–Q6 point at. **Cite it by spec path, never by bare table
-  letter — its Tables N, Q and R collide with this family's.**
+  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. **The module half's Table
+  Q rows Q5 and Q6 are pure pointers at it; its row Q4 points at that package's
+  enforcement of the only-copy invariant while owning the invariant as it binds
+  this family.** **Cite that spec by path, never by bare table letter, and name
+  the owner of any row id in a colliding letter — the canonical map
+  (`docs/specs/logbook/2026-08-29-promote-family-map.md`) states which letters
+  collide, and no spec restates that list.**
 - **The pipeline** — `WP-dream-promote-in-workspace` owns Tables G and V,
   including row G11's delivery of `report.record` and row G12's production of
   the `records` this package consumes. Returning the record is this package's;

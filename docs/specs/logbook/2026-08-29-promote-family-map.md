@@ -40,15 +40,20 @@ pipeline.
 **Table letters are family-wide, and this family is not the only one that has
 them.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — shipped, `Done`,
 and the canonical owner of the EP2 secret gate's durable quarantine lifecycle —
-carries its own Tables **B, H, J, K, N, Q, R and T** in its own letter-space.
-Four of those collide with this family's, and the collisions are not harmless:
+carries its own Tables **B, H, J, K, N, P, Q, R and T** in its own letter-space
+(measured: `grep -E '^### Table [A-Z]'` over that spec). **THIS TABLE IS THE ONE
+PLACE THE COLLIDING LETTERS ARE LISTED.** No spec in this family restates the
+list — a member list in a citing surface is the defect this family already
+measured twice, and on 2026-08-29 the round-zero pass found four surfaces giving
+three different answers, the canonical one among the wrong ones. Every collision:
 
-| Letter | In THIS family | In `WP-secret-fence-ep2-redact-arm` |
+| Letter | In THIS family | In `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` |
 |---|---|---|
+| **B** | the brain re-target, site by site (`WP-dream-workspace-retarget`) | the EP2 disposition contract |
+| **H** | the vault-write primitive's filesystem discipline (`WP-dream-vault-write-primitive`) | what a DEFINITION is versus a REGISTRATION |
 | **N** | the neutralisation contract (`WP-dream-promote-report`) | the retention contract for `state/quarantine/redacted/` |
 | **Q** | the EP2 gate's result and what promotion does with it (`WP-dream-promote-module`) | the shipped user-facing claims about what EP2 does with a finding |
 | **R** | the report's publish decision (`WP-dream-promote-report`) | the redact arm's outcome matrix |
-| **H** | the vault-write primitive's filesystem discipline (`WP-dream-vault-write-primitive`) | what a DEFINITION is versus a REGISTRATION |
 
 **THE RULE THAT FOLLOWS: every citation of that package from this family names
 the SPEC PATH, never a bare table letter.** A bare "Table N" inside a promote
@@ -57,6 +62,17 @@ retention contract has been sent to the wrong document by a correct-looking
 reference. The rule became load-bearing on 2026-08-29, when the Table Q
 reconciliation pass turned three of the module half's rows into pointers at that
 package (logbook: `2026-08-29-promote-table-q-reconciliation.md`).
+
+**AND THE RULE REACHES ROW IDS, NOT ONLY TABLE LETTERS — added 2026-08-29,
+because the round that wrote the rule above did not apply it where it was most
+needed.** Both Table H letter-spaces number their rows H1 upward, and **`H7` and
+`H9` exist in both and mean different things**: in the primitive they are the
+surviving staging object and the directory unwind; in the EP2 package they are
+"registration is a presence test" and "the step prints what it checked". **So a
+citation of a Table H row inside this family names its owner — "the primitive's
+H7", "Table H (the vault-write primitive), row H9" — never a bare `H7`.** The
+hazard is the same for any other row id in a colliding letter, and the rule is
+stated over the class rather than over the two ids that provoked it.
 
 **The collision is recorded, not resolved.** Renaming letters in a `Done` spec
 would rewrite a closed record, and renaming them here would invalidate every
@@ -85,8 +101,9 @@ way.** On 2026-08-29 the Table Q reconciliation pass found that the EP2 gate's
 DURABLE quarantine lifecycle — the retention prune, the identity-gated deletion
 of a redundant copy and the preservation-failure abort — was restated in
 `WP-dream-promote-module`'s Table Q rows Q5 and Q6 while its canonical owner is
-the shipped `WP-secret-fence-ep2-redact-arm`, whose own Table N forbids
-restating it by name. **No letter moved between the three live packages, so the
+the shipped `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, whose own
+Table N forbids restating it by name — **and that path, rather than the bare WP
+id, is how the rule above is obeyed by the surface that states it.** **No letter moved between the three live packages, so the
 ownership table above is unchanged** — what changed is that all three specs'
 Out-of-scope sections now name that lifecycle as outside the family. The lesson
 is the general one: a stale ownership sentence is not always about a table this
