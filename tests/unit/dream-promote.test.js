@@ -673,6 +673,34 @@ test('dream-promote Q3: a redaction that is LATER refused still names the preser
   });
   assert.match(refusalFor(r2, SKILL), /preserved as `skill-copy\.md`/);
 
+  // (d) BOTH halves redacted — the case round 2's N1 found. Each refusal must
+  // name ITS OWN copy exactly once. An unattributed clause built from the
+  // sibling's already-decorated reason pointed the user at the OTHER file's
+  // artifact, which is the very harm this mitigation exists to prevent.
+  const bothRedacted = scenario({
+    vault: { [SKILL]: 'v1\n', [LEDGER]: 'l1\n' },
+    brain: { [SKILL]: 'v2\n', [LEDGER]: 'l2\n' },
+  });
+  const r4 = run(bothRedacted, {
+    gates: gates({
+      secret: ({ rel }) => ({
+        ...redactArm,
+        artifact: rel.endsWith('SKILL.md') ? 'skill-copy.md' : 'ledger-copy.md',
+      }),
+      ledger: ({ rel }) => (rel.endsWith('LEARNINGS.md') ? 'ledger fails policy' : null),
+    }),
+  });
+  const skillReason = refusalFor(r4, SKILL);
+  const ledgerReason = refusalFor(r4, LEDGER);
+  assert.match(ledgerReason, /copy of `05-Skills\/x\/LEARNINGS\.md` was preserved as `ledger-copy\.md`/);
+  assert.match(skillReason, /copy of `05-Skills\/x\/SKILL\.md` was preserved as `skill-copy\.md`/);
+  assert.equal(
+    (skillReason.match(/was preserved as/g) || []).length,
+    1,
+    `exactly one artifact clause, naming this path's own copy: ${skillReason}`
+  );
+  assert.ok(!skillReason.includes('ledger-copy.md'), "the sibling's artifact must not appear here");
+
   // (c) refused by the primitive's expect guard, during the write phase
   const { writeIntoVault } = require('../../src/core/dream/vault-write');
   const byExpect = scenario({ vault: { [NOTE]: 'base\n' }, brain: { [NOTE]: 'base\nsecret\n' } });
@@ -713,10 +741,17 @@ test('dream-promote E: every vault content write goes through the primitive', ()
   // write that ALSO omitted its outcome — both sides would move together. So
   // walk the tree and take the set of paths whose bytes actually changed.
   const changed = [];
-  for (const rel of walkVault(sc.vaultDir)) {
+  const after = walkVault(sc.vaultDir);
+  for (const rel of after) {
     const now = get(sc.vaultDir, rel);
     const was = vaultBefore.get(rel);
     if (was === undefined || !was.equals(now)) changed.push(rel);
+  }
+  // Both directions: a path that DISAPPEARED is a vault mutation too, and a
+  // post-run walk alone cannot see one. Promotion never deletes (C2), so this
+  // should always be empty — which is exactly why it is worth asserting.
+  for (const rel of vaultBefore.keys()) {
+    if (!after.includes(rel)) changed.push(rel);
   }
   assert.deepEqual(changed.sort(), throughSeam.sort(), 'every changed vault file went through the primitive');
 
@@ -806,6 +841,80 @@ test('dream-promote claim-2b-merge-cwd: an ambient TMPDIR inside the workspace i
   assert.deepEqual(cwds, [], 'no merge ran from inside the workspace');
   // And it happens in the decision phase, so nothing was half-published.
   assert.deepEqual(get(sc.vaultDir, NOTE), B('one\ntwo\nthree\nfour\nFIVE\n'));
+});
+
+test('dream-promote claim-2b-merge-cwd: a RELATIVE TMPDIR does not slip past the guard', () => {
+  // Found by the PR-review gate (round 2, P1): the round-1 guard failed OPEN
+  // here. `os.tmpdir()` returns TMPDIR as given, so a relative TMPDIR yields a
+  // relative root — and `isAtOrBeneath` answers false for every non-absolute
+  // candidate BY DESIGN, which is the right answer where it was written and a
+  // fail-open in a guard that asks "am I outside?".
+  const sc = scenario({
+    vault: { [NOTE]: 'one\ntwo\nthree\nfour\nfive\n' },
+    brain: { [NOTE]: 'ONE\ntwo\nthree\nfour\nfive\n' },
+  });
+  // The user diverges too, so a merge is actually required — without this the
+  // path takes C5 and the guard is never reached, which would make the test
+  // pass for the wrong reason.
+  put(sc.vaultDir, NOTE, 'one\ntwo\nthree\nfour\nFIVE\n');
+  const savedTmp = process.env.TMPDIR;
+  const savedCwd = process.cwd();
+  /** @type {string[]} */
+  const cwds = [];
+  try {
+    // A cwd from which the workspace is reachable by a RELATIVE name.
+    process.chdir(path.dirname(sc.workspaceDir));
+    process.env.TMPDIR = path.basename(sc.workspaceDir);
+    assert.ok(!path.isAbsolute(os.tmpdir()), 'the fixture must really make os.tmpdir() relative');
+    assert.equal(
+      isAtOrBeneath(os.tmpdir(), sc.workspaceDir),
+      false,
+      'and the helper must really answer false for it — that is the trap being guarded'
+    );
+    assert.throws(
+      () =>
+        run(sc, {
+          spawnGit: (o) => {
+            cwds.push(o.cwd);
+            return { status: 0 };
+          },
+        }),
+      (err) => err instanceof WienerdogError && /outside the workspace/.test(err.message)
+    );
+  } finally {
+    process.chdir(savedCwd);
+    if (savedTmp === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = savedTmp;
+  }
+  assert.deepEqual(cwds, [], 'no merge ran from a relative path inside the workspace');
+});
+
+test('dream-promote M2: the merge env confines git\'s upward discovery to its own temp root', () => {
+  // The other half of M2's cwd rule — "outside any repository". The config
+  // switches neutralise SYSTEM and GLOBAL; none of them stops repository-local
+  // discovery walking up from the cwd (PR-review gate, round 2, N2).
+  const sc = scenario({
+    vault: { [NOTE]: 'one\ntwo\nthree\nfour\nfive\n' },
+    brain: { [NOTE]: 'ONE\ntwo\nthree\nfour\nfive\n' },
+  });
+  put(sc.vaultDir, NOTE, 'one\ntwo\nthree\nfour\nFIVE\n');
+
+  /** @type {Array<Record<string,string>>} */
+  const envs = [];
+  run(sc, {
+    spawnGit: (o) => {
+      envs.push(o.env);
+      return spawnGitForMerge(o);
+    },
+  });
+  assert.equal(envs.length, 1);
+  const env = envs[0];
+  assert.equal(env.GIT_CEILING_DIRECTORIES, path.resolve(env.GIT_CEILING_DIRECTORIES), 'must be absolute');
+  assert.equal(env.HOME.startsWith(env.GIT_CEILING_DIRECTORIES + path.sep), true, 'the ceiling IS the temp root');
+  // The constructed switches are still all there — the ceiling is an addition.
+  assert.equal(env.GIT_CONFIG_NOSYSTEM, '1');
+  assert.equal(env.GIT_ATTR_NOSYSTEM, '1');
+  assert.ok(env.GIT_CONFIG_GLOBAL);
 });
 
 test('dream-promote E: the compare→promote window is narrowed — a change at the re-read abandons the write', () => {

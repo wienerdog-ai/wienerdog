@@ -371,6 +371,15 @@ function constructMergeEnv(root) {
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: emptyConfig,
     GIT_ATTR_NOSYSTEM: '1',
+    // The OTHER half of M2's cwd rule: "outside any repository". The three
+    // switches above neutralise SYSTEM and GLOBAL config; none of them stops
+    // REPOSITORY-LOCAL discovery walking up from the cwd, and the same ambient
+    // input that produced the workspace defect can put that cwd inside a repo.
+    // Measured by the dependency: a cwd inside a repository applies that
+    // repository's `.gitattributes` even to operands living outside it.
+    // A ceiling is construction, not enumeration — the walk cannot leave the
+    // directory this call created, whatever is above it.
+    GIT_CEILING_DIRECTORIES: root,
   };
   if (process.platform === 'win32' && process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
   return env;
@@ -406,8 +415,26 @@ function constructMergeEnv(root) {
  * @throws {WienerdogError} when the temp root lands at or beneath the workspace
  */
 function threeWayMerge(o) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-promote-merge-'));
+  // ABSOLUTE BEFORE THE CHECK, and this is the whole finding. `os.tmpdir()`
+  // returns `TMPDIR` as given, so a RELATIVE `TMPDIR` yields a relative root —
+  // and `isAtOrBeneath` answers `false` for every non-absolute candidate BY
+  // DESIGN ("a non-absolute candidate is never inside anything", which is the
+  // right answer where it was written, because resolving one against our cwd
+  // is what broke a scheduled dream). Here that same rule makes the guard fail
+  // OPEN: it reports "outside the workspace" about a path that is inside it.
+  // Measured: with cwd `/tmp/x` holding `workspace/` and `TMPDIR=workspace`,
+  // the root `workspace/wd-promote-merge-XXXX` passed the check while resolving
+  // to `/private/tmp/x/workspace/wd-promote-merge-XXXX`.
+  //
+  // A GUARD THAT ASKS "AM I OUTSIDE?" CANNOT USE A HELPER THAT FAILS CLOSED ON
+  // "INSIDE". Resolving first is what makes the helper's answer meaningful, and
+  // the explicit absoluteness assertion keeps a later edit from silently
+  // reintroducing the same shape.
+  const root = path.resolve(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-promote-merge-')));
   try {
+    if (!path.isAbsolute(root)) {
+      throw new WienerdogError(`promote: the merge's temp root must be an absolute path (${root})`);
+    }
     if (isAtOrBeneath(root, o.workspaceDir)) {
       throw new WienerdogError(
         'promote: the three-way merge needs a working directory outside the workspace, but the ' +
@@ -475,11 +502,20 @@ function baselineBytesOf(baseline, rel) {
  * preserved one for this path. Table Q row Q3 makes the announcement of that
  * copy a data-loss concern rather than a reporting nicety, and a refusal is the
  * only channel a non-promoted path has.
- * @param {string} reason @param {string|null|undefined} preserved @returns {string}
+ *
+ * THE CLAUSE NAMES ITS OWN PATH, and that is not decoration. Because the
+ * refused arm has no typed carrier (escalated), a consumer must read the
+ * artifact out of this string — so on the skill/ledger pair route, where one
+ * refusal quotes the other's reason, an unattributed clause pointed the user at
+ * the SIBLING's copy. That is the same class of harm this note exists to
+ * prevent. Pair refusals are additionally built from the sibling's UNDECORATED
+ * reason, so exactly one clause is ever appended.
+ * @param {string} reason @param {string|null|undefined} preserved
+ * @param {string} rel @returns {string}
  */
-function withPreserved(reason, preserved) {
+function withPreserved(reason, preserved, rel) {
   if (typeof preserved !== 'string' || preserved === '') return reason;
-  return `${reason} (an unredacted copy was preserved as \`${preserved}\`)`;
+  return `${reason} (an unredacted copy of \`${rel}\` was preserved as \`${preserved}\`)`;
 }
 
 /**
@@ -617,8 +653,12 @@ function promote(o) {
   /**
    * One decision per delta record, keyed by `rel`. `publish` entries carry the
    * candidate bytes and the `expect` the primitive will be given; `refuse`
-   * entries carry only a reason.
-   * @type {Map<string, {rel:string, refuse?:string,
+   * entries carry a reason, plus — when the secret gate preserved an unredacted
+   * copy for this path — that reason UNDECORATED (`refuseRaw`) and the artifact
+   * name (`preserved`). The raw form exists so a pair refusal can quote its
+   * sibling without inheriting the sibling's artifact clause.
+   * @type {Map<string, {rel:string, refuse?:string, refuseRaw?:string,
+   *   preserved?:string|null,
    *   candidate?:Buffer, expect?:Buffer|null,
    *   redaction?:{lines:number, labels:string, artifact:string}}>}
    */
@@ -643,10 +683,7 @@ function promote(o) {
      * @param {string} reason
      */
     const refuse = (reason) =>
-      decisions.set(rel, {
-        rel,
-        refuse: preserved === null ? reason : `${reason} (an unredacted copy was preserved as \`${preserved}\`)`,
-      });
+      decisions.set(rel, { rel, refuse: withPreserved(reason, preserved, rel), refuseRaw: reason, preserved });
     /** @type {string|null} the artifact name the secret gate reported, once it has */
     let preserved = null;
 
@@ -892,7 +929,12 @@ function promote(o) {
     if (reason) {
       // A gate refusing AFTER the secret gate redacted this path must not lose
       // the preserved copy's name — Table Q row Q3.
-      decisions.set(rel, { rel, refuse: withPreserved(reason, d.preserved), preserved: d.preserved });
+      decisions.set(rel, {
+        rel,
+        refuse: withPreserved(reason, d.preserved, rel),
+        refuseRaw: reason,
+        preserved: d.preserved,
+      });
     }
   }
 
@@ -914,9 +956,13 @@ function promote(o) {
       decisions.set(sibling.rel, {
         rel: sibling.rel,
         refuse: withPreserved(
-          `paired with \`${d.rel}\`, which was refused: ${d.refuse}`,
-          sibling.preserved
+          // The sibling's RAW reason: quoting its decorated form would append a
+          // second, unattributed artifact clause naming the WRONG file's copy.
+          `paired with \`${d.rel}\`, which was refused: ${d.refuseRaw || d.refuse}`,
+          sibling.preserved,
+          sibling.rel
         ),
+        refuseRaw: `paired with \`${d.rel}\`, which was refused: ${d.refuseRaw || d.refuse}`,
         preserved: sibling.preserved,
       });
     }
@@ -960,7 +1006,7 @@ function promote(o) {
       // refusals do.
       refused.push({
         rel: d.rel,
-        reason: withPreserved((res && res.reason) || 'the vault write was refused', d.preserved),
+        reason: withPreserved((res && res.reason) || 'the vault write was refused', d.preserved, d.rel),
       });
       continue;
     }
