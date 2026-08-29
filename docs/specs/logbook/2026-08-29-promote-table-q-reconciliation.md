@@ -442,3 +442,217 @@ twice.
 **Nothing merges on this branch until the ruling lands.** `WP-dream-promote-module`'s
 implementation (PR #31) is unaffected in its shipped behaviour — the divergence
 is the typed carrier, which is exactly what the ruling decides.
+
+---
+
+## OWNER RULING ON THE ESCALATION, AND THE SWEEP THAT IMPLEMENTED IT
+
+**The EP2 disposition shape is APPROVED as the root-cause fix**, and the ruling
+is reproduced in substance because the sweep below is only checkable against it:
+
+> One owned, typed disposition record per candidate, carried on **EVERY**
+> preserving arm — the hard withhold included — and every fact about a preserved
+> copy (artifact, remediation, the keep-suffix) is a **TYPED FIELD ON THAT
+> SHAPE**, never prose, never a new per-arm carrier. Then the one sweep through
+> Q1, `refused[]`, the report arm, Table N's channels, Table R's rows and the
+> criteria.
+
+Implemented on `docs/promote-table-q-reconciliation` in four commits — the shape
+and the module half, the report half, the pipeline half, and the round-2 LIGHT
+findings swept last so the same surfaces were not rewritten twice.
+`wp/dream-promote-module` was read with `git show` and never checked out; its
+`status:` line and its `workspace.js` Current-state bullet are untouched, because
+PR #31 modifies both.
+
+### THE TWO SUB-QUESTIONS, ANSWERED BY MEASUREMENT
+
+**(a) Remediation semantics IS arm-dependent, and the two surfaces do not
+conflict — they describe different arms, each correctly.** Measured here rather
+than relayed: `validate.js:1398-1409` is the **redacted-in-place** arm, gated on
+`secretRedacted.length > 0`, and its guidance is *"If the redaction was wrong,
+restore from that copy while it is there; otherwise delete it."*
+`WP-dream-promote-report`'s preserved-copy row is the **refused** arm, and its
+guidance is delete, because the note never promoted — a provenance rationale, not
+a contradiction. **The round-2 adversarial gate's framing of this as a conflict
+was a category error and is NOT carried into any spec text.** The shape carries
+remediation as a typed per-arm value (row Q9) so every surface READS it.
+
+**One correction to the ruling's own citation, made by measuring both ends:** the
+redact-in-place section's construct is `validate.js:1398-1409`, not `:1398-1404`
+— `:1398` is `if (secretRedacted.length > 0) {` at indent 2 and `:1409` is its
+closing brace at indent 2, while `:1404` is the `);` that closes the inner
+`.map(` call. That is exactly the shape round-2 nit P-4 filed against three other
+citations, so it is corrected rather than copied.
+
+**A third measurement the sub-question did not ask for, and it changed what row
+Q3 may claim.** The WITHHELD shelf is *not* in the same position as the redacted
+one: `src/core/digest.js:817-822` renders a state-driven banner for
+`state/quarantine/`, built by `listSecretQuarantine` (`:853-863`) from a
+directory listing, and that function's own comment says the `redacted/`
+subdirectory is deliberately excluded because "they are announced in the dream
+report instead". So a withheld copy IS announced elsewhere; a redacted-shelf copy
+is not. Row Q3 now says only what is true, and row Q9 states the withhold arm's
+ground for being on the record — contract coherence and typed composition, not an
+unannounced file. **Overclaiming there would have been a new false universal in
+the same pass that closed one.**
+
+**(b) The keep-suffix rides the record.** Q8's narrowing bound
+`refused[].artifact`, a field this ruling deletes; row Q9's fields are not scoped
+by Q8, and row Q8 now says so in as many words so the narrowing is not
+re-derived.
+
+### THE SHAPE, AND WHERE IT IS OWNED
+
+**Owned in `WP-dream-promote-module`'s Table Q**, which was already the canonical
+table for the EP2 gate's result. **No new table** — the surface accounting this
+pass froze stays frozen; the shape cost ONE new row.
+
+- **Row Q1 owns WHICH ARMS CARRY IT.** `{ok}` | `{refuse, reason, preserved}` |
+  `{redact, sanitizedBytes, lines, labels, preserved}`. `{ok}` has no `preserved`
+  field at all; the redact arm carries it; **the refuse arm carries it, hard
+  withhold included** — the gap that ended the loop.
+- **Row Q9 (NEW) owns AN ENTRY'S FIELDS.**
+  `Array<{artifact, location, remediation}>`, one entry per copy the gate
+  preserved, in the order it wrote them. `artifact` is the reported basename;
+  `location` is the state-relative directory the gate reports; `remediation` is
+  `restore-or-delete` (the redact arm) or `delete` (every refusing arm).
+- **REQUIRED wherever it appears, EMPTY when nothing was preserved** — row S2's
+  positive-absence lesson, applied to an array instead of a nullable field.
+- **Deleted: the standalone `refused[].artifact` and `redacted[].artifact`.**
+
+**`location` is a field the ruling did not name, and adding it was a judgment
+call worth stating.** The keep-suffix the ruling puts on the record IS a location
+string (`state/quarantine/redacted/<basename>`), so making it a field means a
+field that carries where the copy sits. Without it the report package would have
+to hardcode the quarantine directory — restating a fact
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md` owns, which is the
+cross-family duplicate this pass's stop criterion names as condition 4.
+
+**Rejected, and recorded so it is not re-proposed: named slots keyed by shelf**
+(`{withheld, redacted}`) instead of a list. It reads more explicitly and it bakes
+the two-shelf layout of the durable lifecycle into this family's TYPE, which is
+condition 2 of the stop criterion — re-importing a property the family was re-cut
+to exclude. A list plus a reported `location` carries the same information and
+owns none of it.
+
+### THE SWEEP, SURFACE BY SURFACE
+
+**`WP-dream-promote-module`** — `### Exact contracts`' `gates` paragraph; a new
+`PreservedCopy` typedef declared once and used on both arms (writing the fields
+out twice would be the two-carriers shape Q8 closes); the `@returns` shape and
+its prose; Table C's header consequence (ii) and its resolved-only sentence;
+Table D's EP2 row; Table Q rows Q1, Q2, Q3, Q7, Q8 and the new Q9, plus a
+preamble paragraph recording the ruling; Table S row S3; three Mirrored Surface
+Checklist entries (Table Q's mirror list and prohibitions, Table C's ordering
+entry, Table S's entry); and four acceptance criteria — the resolved-path
+refusal, the redaction-reports-its-copy criterion, the only-copy sanity refusal,
+and the Q8 criterion, which gains **a fourth assertion route on the hard-withhold
+arm** including the two-entry keep case and a per-arm `remediation` assertion
+read off the record rather than derived from the outcome.
+
+**`WP-dream-promote-report`** — Current state's description of the module's
+return; the base-shape block, which now NAMES the module's shapes instead of
+writing out their fields; the refused `report` arm, `artifact` → `preserved`;
+Table N's two artifact channel rows become **three rows over the record's three
+fields**, with `location` and `remediation` classified **NO** and stated rather
+than omitted, because N2's fail-closed default makes an unclassified channel a
+test failure; Table R's redaction-lines row and preserved-copy row, both of which
+now READ each field off the entry and neither of which decides the guidance; four
+Mirrored Surface Checklist entries; the preserved-copy acceptance criterion; and
+the Out-of-scope bullet.
+
+**`WP-dream-promote-in-workspace`** — the `validate.js` Deliverables cell,
+Current state's geometry sentence, row G7, Table V row V3, row G7's acceptance
+criterion, and a NEW Mirrored Surface Checklist entry registering the carrier
+change and its five mirrors.
+
+**No acceptance criterion was ADDED to any of the three specs** — every new
+assertion extends an existing criterion. Counted after the sweep: module 23
+(ceiling 28), report 10, pipeline 24, all unchanged.
+
+### THE KEEP-SUFFIX, AND WHY "MUST SURVIVE" NEEDED ONE WORD MORE
+
+Measured at both ends: `:1338` is `if (redactCopy) {` at indent 4 and `:1360` is
+its closing brace at indent 4; the keep branch is `:1357-1359`, whose `reason +=`
+at `:1358` is the only thing announcing a kept copy; `reason`'s only consumer in
+the per-path loop (`:1233-1364`) is `:1361`, inside the range these rows delete.
+
+**So `:1338-1360` survives with exactly one change, and the four surfaces now
+say so identically:** the DECISION is untouched — the `Buffer.compare` guard,
+which copy is deleted, which is kept, all exactly as their shipped owner decides
+them — and the CARRIER moves to the record. **This is an owner-authorized change
+to how a shipped `Done` package's contract item travels** (that package's own
+Table Q registers the suffix as the only thing announcing that copy), so the
+obligation is discharged rather than dropped, and the criterion proves RED in
+both directions: against an extraction that keeps `:1358` and announces to
+nobody, and against one that drops the branch without adding the entry.
+
+The removal also gained the refusal-reason suffixes at `:1333-1337`, which fed
+the same doomed consumer and were named by no surface.
+
+### PER-FINDING DISPOSITION — ROUND 2, BOTH GATES
+
+**Adversarial (gptsol).**
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | third carrier gap: the hard-withhold artifact cannot leave the gate | **RULED, then FIXED as a shape rather than a field.** Row Q1 carries the record on the refuse arm; row Q9 decides its fields. The finding's own recommendation — "define ONE EP2 disposition shape... including hard withhold... then propagate through Q1, `refused[]`, report composition, neutralisation classification, and acceptance tests" — is what the sweep above did, in that order |
+| 1 (sub) | "decide whether the payload must also distinguish artifact provenance/remediation — because Table R assigns DELETE while the shipped banner offers RESTORE" | **YES to the field, NO to the premise.** Remediation is a typed per-arm value (Q9). **The conflict the gate reported does not exist:** the two surfaces describe different arms and each is correct about its own, measured at `validate.js:1398-1409` and at Table R's refused-arm row. The framing is recorded here and is deliberately absent from every spec |
+| 2 | colliding H rows still cited without their owner | **FIXED.** Counted: fourteen citation edits, of which twelve were genuinely unqualified — five in the module, seven in the report, the spec that ADDED the rule and was never swept — and two already named the primitive and were reworded to the same form. |
+| 2 (sub) | "add a mechanical absence check for bare row ids so the rule is ENFORCEABLE rather than advisory" | **DECLINED, on the stop criterion pinned before round 1, condition 3:** a grep over spec text for bare row ids grows the verification surface to hold a finding about the verification surface. Named residual: the row-id rule stays advisory, enforced by the sweep discipline and the Mirrored Surface Checklists, not by a check |
+
+**Internal coherence.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| C-1 | the must-survive block's only output channel is deleted by the rows that mandate its survival | **FIXED under the ruling, as a carrier change rather than a narrowed removal.** See above. The reviewer's own two options were "either the removal narrows, or a replacement carrier is assigned"; the ruling assigns the carrier, and its objection that it "CANNOT be `refused[].artifact`" is correct and moot — that field no longer exists |
+| C-2 | the preserved-copy line is scoped to a branch that excludes the common case | **FIXED — and it is NOT in the ruling's list, which named only C-1 and the LIGHT findings.** Fixed anyway, because it is a product defect in exactly the surface the ruling ordered swept ("Table R's rows"), and because leaving it would leave the ORDINARY case — a refused path with a preserved copy on a run where the report publishes normally — with no surface saying who writes the line. The `refused[]` lines now follow Table N row N3's scope (the normal second write and the fallback alike); only the report arm's own line is fallback-scoped, which it is by construction. The acceptance criterion asserts the normal branch and goes RED on a fallback-only composer. **Flagged to the owner rather than absorbed silently** |
+| H-1 | the row-id rule swept into one spec and not the sibling | **FIXED**, same sweep as adversarial finding 2 |
+| H-2 | Table C's header names Q8 the owner and restates the owned fact | **FIXED.** The header now states the ORDERING consequence and defers the form of the refusal to Q8, with the correction dated in place |
+| H-3 | the header imports the clause the same revision identified as the contradiction's source | **FIXED, and by restating the logic rather than deleting the "So".** The paragraph now opens with the rule that actually carries the conclusion — C9 is ONE predicate applied TWICE, the primitive's application is definitive, the candidate application may only REFUSE — which is why the candidate-decidable half is orderable ahead of the gates |
+| H-4 | the report's `### Exact contracts` restates the module's shape and names its own defect | **FIXED by stopping, not by re-syncing.** The block names the module's four returned shapes and its `PreservedCopy` typedef and writes out none of their fields. The same list had gone stale once already (round-zero C2); a block that names its own defect and keeps it had now proved the point twice |
+| H-5 | the map puts a 9-item and a 5-item letter list two lines apart | **FIXED by labelling both counts.** Nine is that spec's tables, five is the collisions, and the page says which is which |
+| H-6 | the module's letter-space warning names a collision three lines before saying it names none | **FIXED.** The Table N example is deleted; the map states the collisions |
+| H-7 | three byte-identical blocks, registered by no MSC, carrying a claim false in one | **FIXED by making them NOT mirrors.** Each spec's `### Contract table(s)` now states its OWN tables, so there is no shared text to go stale, and the false claim dies with it: the report spec says its report row is deliberately unlettered, which is what the map already records. Registered on each spec's existing map-citation checklist entry rather than in a new one |
+| H-8 | an MSC entry names two acceptance criteria where the spec has one | **FIXED, and the miscount is named in place.** One criterion here; the redaction-lines row's assertion is the module half's, and the entry now says so |
+| H-9 | the Table Q owner's mirror list omits two mirrors this revision created | **FIXED.** Table Q's mirror list now names the report spec's Table N channel rows, its criterion asserting Q3 and Q8, the pipeline's rows G7 and V3 and row G7's criterion |
+| N-1 | "immediately BELOW it" where five lines intervene | **FIXED at both sites**, and the geometry is now stated as an ordered five-part list with the intervening suffixes named |
+| N-2 | the blocks write `N/A as a single heading` where the runbook prescribes `N/A — <one-line reason>` | **FIXED in all three, in the prescribed literal**, in the same edit as H-7 |
+| N-3 | ragged mid-sentence break left by a range edit | **FIXED** |
+| N-4 | "one case per row C1-C8" under-specified now that C1 has two halves | **FIXED.** The criterion says which half it covers and points at the resolved-only half's own criterion |
+| P-1 | a cell moved whole by the T1 cut still says "the table above" | **FIXED.** It names `WP-dream-promote-module`'s Table D, and says why the old wording resolved to the Deliverables table here |
+| P-2 | a pointer whose target is a pointer | **FIXED.** Row S5 names `WP-dream-promote-report`'s report row and Table R directly, not this spec's two placeholders for them |
+| P-3 | dropped sentence boundary | **FIXED** |
+| P-4 | two endpoints one line short of their construct | **FIXED at all three sites** (`:1450-1458` twice-cited as `:1450-1457`, and `:1374-1409` cited as `:1374-1408` in two specs), each re-verified by indentation. **The same class was then found in the ruling's own citation and corrected** — see sub-question (a) |
+
+**Round-2 findings NOT re-dispositioned here:** the adversarial round's
+confirmation that round 1's C1 ordering finding is fixed stands unchanged, and
+the coherence pass's four no-finding categories were not re-run.
+
+### STOP-CRITERION COMPLIANCE, CHECKED CONDITION BY CONDITION
+
+1. *A third round landing again on the EP2-result family.* **This is the
+   escalation's own resolution, not a new round.** The shape is the owner's act.
+2. *A fix that re-imports an excluded property.* **Checked and refused once** —
+   named slots keyed by shelf, rejected above. `location` was checked against the
+   same condition and passes: it CARRIES what the owning package produces and
+   restates none of its rules, which is what the ruling required of every field.
+3. *Growing the verification surface to hold a finding about it.* **Refused
+   once** — the mechanical bare-row-id check. No criterion was added anywhere.
+4. *A second cross-family duplicate.* **None found; one was PREVENTED.** Without
+   `location`, the report package would have had to hardcode the quarantine
+   directory, which is a duplicate of the `Done` package's layout fact.
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **C-2 was missing from the ruling's finding list and is a contract defect, not
+  a LIGHT one.** I fixed it and said so rather than deferring it to a round that
+  might not come; if the omission was deliberate, this is the surface to reverse
+  it on.
+- **`location` is mine, not the ruling's.** The ruling named three facts and I
+  shipped four fields. The argument is above; if it is wrong, the smaller shape
+  is `{artifact, remediation}` and the cost is a hardcoded directory in the
+  report composer.
+- **The withheld shelf's shipped digest banner still offers RESTORE for a copy
+  this record marks `delete`.** Named as a residual on row Q9 rather than fixed:
+  `src/core/digest.js` is in no Deliverables table in this family.
