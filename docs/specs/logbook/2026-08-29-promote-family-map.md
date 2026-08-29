@@ -29,7 +29,7 @@ own Mirrored Surface Checklists — the discipline was present and was not run.
 | `WP-dream-vault-write-primitive` | Table **H** | Done |
 | `WP-dream-baseline-delta-primitive` | its own Table C — a different letter-space, predating the convention | Done |
 | `WP-dream-promote-module` | Tables **C, D, E, Q, S** | Ready; ships consumed by nothing |
-| `WP-dream-promote-report` | Tables **N, R** and the report row | Ready; ships consumed by nothing |
+| `WP-dream-promote-report` | Tables **N, R, Y** and the report row | Ready; ships consumed by nothing |
 | `WP-dream-promote-in-workspace` | Tables **G, V** | Ready; wires the run |
 
 **Dispatch order is `depends_on`:** workspace → primitive → module → report →
@@ -59,6 +59,22 @@ three different answers, the canonical one among the wrong ones. Every collision
 | **N** | the neutralisation contract (`WP-dream-promote-report`) | the retention contract for `state/quarantine/redacted/` |
 | **Q** | the EP2 gate's result and what promotion does with it (`WP-dream-promote-module`) | the shipped user-facing claims about what EP2 does with a finding |
 | **R** | the report's publish decision (`WP-dream-promote-report`) | the redact arm's outcome matrix |
+
+**`Y` WAS ADDED ON 2026-08-30 AND ADDS NO COLLISION — the measurement, because
+this is the surface where a new letter has to be justified.** The report
+package's report row had become an unlettered contract table of 8,082
+characters, and the owner ruled it lettered (round 6 of the design loop;
+`2026-08-29-promote-table-q-reconciliation.md`). Measured with
+`grep -rhoE '^### Table [A-Z]' docs/specs/`, the letters live ANYWHERE under
+`docs/specs/` are A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
+and W; **I, X, Y and Z occur nowhere.** `Y` therefore collides with nothing in
+this family, nothing in the shipped package below, and nothing in any other
+spec in the tree — **the collision table below stays at five rows and gains
+none.** `I` was rejected because its row ids (`I1`) are misread as `11` or `Il`
+in running prose; `X` because this family already uses `### Table X` as its
+METASYNTACTIC placeholder for "some table", so a real one would collide with the
+family's own notation; `Z` was left free because it reads as "the last one" and
+this is not the last table this family will name.
 
 **THE RULE THAT FOLLOWS: every citation of that package from this family names
 the SPEC PATH, never a bare table letter.** A bare "Table N" inside a promote
