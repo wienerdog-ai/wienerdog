@@ -87,6 +87,20 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   own — which destinations are allowed belongs to the caller. Staying inside the
   vault is required of every write and admits none of them by itself. (Not:
   "publish", "atomic write", "safe write".)
+- **promotion** — the decision that takes a note the dream wrote in the
+  *workspace* and puts it into the vault, and the act of putting it there. One
+  outcome per changed path, and only three: the note is promoted as the dream
+  wrote it, a merged version of it is promoted (when you edited the same note
+  during the run and the two edits combine cleanly), or it is refused and the
+  reason is reported. Promotion never deletes a note and never overwrites a
+  version you wrote — where the two disagree and cannot be combined, your copy
+  stays and the dream's is refused. A note reaches the vault only by being
+  *admitted*: promotion allows content files in the vault's writable folders
+  rather than blocking a list of known-bad names, which is why the dream cannot
+  leave a file behind that steers a later session. Every promoted byte goes
+  through a *vault write*, and the four quality gates judge the bytes that would
+  actually land, not an earlier draft of them. (Not: "gating in", "write-back",
+  "publishing a note", "sync" — say promotion.)
 - **staging directory** — the fresh, empty, Wienerdog-owned working directory a
   hermetic job runs in (and, for a routine, its only writable output), so no
   project or local settings can be discovered under the job's working directory.

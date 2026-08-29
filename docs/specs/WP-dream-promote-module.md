@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-module
 title: Build the promotion module — decide, gate, merge and publish, consumed by nothing
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive]
