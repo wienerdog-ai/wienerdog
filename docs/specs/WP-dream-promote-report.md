@@ -235,50 +235,29 @@ below, and that is the only one it writes out.
  *            every outcome and must be announced on every outcome, while a
  *            scrub's accounting describes a candidate that exists on one.
  *            **`accounting` is on the `promoted` arm ALONE, REQUIRED, and is
- *            itself a DISCRIMINATED SUB-UNION** — the fate of the report's
+ *            itself a DISCRIMINATED SUB-UNION** — `{published:true}` or
+ *            `{published:false, reason:string}` — the fate of the report's
  *            SECOND primitive write, the one that publishes the code-authored
  *            enforcement section on top of the body the first write published.
  *            **Added by the owner ruling of 2026-08-29 (round 4's A1), whose
- *            ruled property is that NO REAL OUTCOME IS SILENT.** The report row
- *            below OWNS this contract — the two writes, which buffer the vault
- *            then holds, what each field means and who fills it — and none of
- *            its rules is restated here. **The SCOPE is by MEASUREMENT, exactly
- *            as `redaction`'s is:** `promoted` is the only arm whose sequence
- *            is TWO writes, so it is the only arm on which a second write can
- *            be refused after a first has succeeded. Table R's fallback
- *            publishes in ONE write, and `refused` publishes nothing at all; a
- *            refusal on either of those IS the arm, and Table R's row R4
- *            governs it. **`published` — FILLED BY THIS PACKAGE, AT
- *            SECOND-WRITE TIME:** `true` when the primitive returned for that
- *            write, `false` when it refused. **`reason` — ORIGINATING WITH THE
- *            VAULT-WRITE PRIMITIVE (Table H, its row H7, which returns
- *            `{written:false, reason}`) AND CARRIED UNCHANGED BY THIS PACKAGE,
- *            AT SECOND-WRITE TIME.** It is on the `published:false` form ALONE
- *            and required there; this package composes no reason of its own for
- *            that write and may not recompute one. **The TYPE carries that
- *            provenance BY DISCRIMINATION rather than by a base/extension
- *            split, and it is stated rather than left to symmetry:** the module
- *            half's `GateReportedCopy`/`PreservedCopy` split exists because ONE
- *            shape carries two parties' fields at once, whereas here the
- *            primitive's field exists on exactly the form where the primitive
- *            refused — a single `reason` spanning both states would be the
- *            guarantees-nothing shape the module half's Table S row S2 records.
- *            **WHAT THE VAULT HOLDS, and this arm now says it: `bytes` is the
- *            bytes the vault holds for the report path** — the SECOND write's
- *            returned buffer on the `published:true` form, the FIRST write's on
- *            the `published:false` form. Never a fresh read, and never the
- *            composed-but-unpublished section (module half, Table S rows S1,
- *            S4 and S5). **`redaction` IS UNCHANGED BY THIS FIELD, and that is
- *            deliberate:** row Q10's carrier rule is keyed on THIS CANDIDATE'S
- *            SANITIZED BYTES HAVING PUBLISHED, which is true on both forms —
- *            the body published either way — so the accounting stays required
- *            and nullable on `promoted` and row Q10's carriers are NOT widened.
- *            What the `published:false` form loses is not the accounting but
- *            its delivery INTO THE VAULT: the write that was refused is the
- *            very one carrying the redaction line and every preserved-copy
- *            line, so on that form `record` is the only route those lines take
- *            to the user (`WP-dream-promote-in-workspace`, row G11) */
-```
+ *            ruled property is that NO REAL OUTCOME IS SILENT.**
+ *            **THE REPORT ROW BELOW IS THE SINGLE OWNER OF THIS CONTRACT, AND
+ *            THIS BLOCK RESTATES NONE OF IT — one owner, settled by round 5's
+ *            C1.** The two writes, WHICH BUFFER travels in `bytes` on which
+ *            form, what each field means, WHO FILLS IT AND WHEN, why the arm
+ *            stays `promoted`, and the measurement that scopes the field to
+ *            this arm are all decided there. **What THIS block declares is the
+ *            TYPE and its two-arm shape, and nothing else** — exactly as it
+ *            declares `redaction` without writing out row Q10's fields.
+ *            **The per-field-provenance rule that binds this field is
+ *            `WP-dream-promote-module`'s Table Q preamble** — it binds every
+ *            field of a shape that carries ONE PARTY'S FACTS TO ANOTHER, and
+ *            this field is the third such shape — **and the report row is where
+ *            this family DISCHARGES it for this field.** **Until round 5's C1
+ *            this block and the report row each named the OTHER as owner and
+ *            both wrote the fields out in full, which is two deciders and no
+ *            owner; this block additionally wrote out what the vault holds,
+ *            one of the three things it said it did not restate.** */```
 
 ## Contract reference
 
@@ -313,7 +292,7 @@ a row because the module half's Table D owns the gates it refers to:
 
 | Contract | Today | The rule here | Position | Refusal remedy |
 |---|---|---|---|---|
-| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1409` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against `WP-dream-promote-module`'s Table D: three of its four gates do not match a path under `reports_dir` and pass it through, and that table — not this one, and not anything above this line — is what says which gate applies where.** (Corrected 2026-08-29: this cell was moved here whole by the T1 cut and kept saying "the table above", which in this spec resolves to the Deliverables table.) **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (the PRIMITIVE's rows H5 and H6), never an in-place append. **THE SECOND WRITE HAS ITS OWN OUTCOME, AND IT IS NEVER SILENT — this row is where that contract is DECIDED (owner ruling, 2026-08-29, round 4's A1).** The first write publishes the body; the second publishes body-plus-section. The two can disagree, and the state in which the FIRST succeeded and the SECOND was refused — by the primitive's H5 `expect` guard, by a symlinked target under its H3, by any of its H-rules — is a real outcome the union carried NOWHERE before this ruling. It is **`outcome:'promoted'` with `accounting:{published:false, reason}`**: the body IS in the vault, so this is not `fallback` (which means the body did NOT publish) and not `refused` (which means nothing published). **WHAT THE VAULT HOLDS is the first write's returned buffer and no enforcement section, and that buffer is this arm's `bytes`**; on `accounting:{published:true}` the vault holds the second write's returned buffer and THAT is the arm's `bytes`. Neither is ever a fresh read, and which of the two travels to the caller is decided here because `WP-dream-promote-module`'s Table S row S5 puts this two-write sequence in this package (its rows S1 and S4 still govern what either buffer must be). **THE RULE THIS CONVERGES ON IS TABLE R's R4 RULE, APPLIED DELIBERATELY AND NOT VERBATIM:** the COMPLETE enforcement record goes to the caller in `report.record` for the run's log and output, and the refusal NAMES ITS REASON — carried from the primitive (its row H7), never composed here. **R4's OUTCOME CLAUSE — "the vault object is left untouched" — DOES NOT HOLD HERE AND MUST NOT BE COPIED:** R4 was written for a refusal of THE report write, where no byte of this run's report reached the vault; here the first write already published the body, so the truthful statement is the positive one above — what the vault HOLDS — and not an untouched-vault claim. **`preserved`, `record` and `redaction` are unchanged on this arm**: the body published, so row Q10's carrier rule still reaches it (`WP-dream-promote-module`, row Q10) and this outcome widens nothing. **Its per-field provenance is `### Exact contracts`'** — `published` filled by this package at second-write time, `reason` originating with the primitive and carried unchanged — **and the fields are not written out again here.** **DOWNSTREAM, because an outcome nothing handles is silent by another route:** `WP-dream-promote-in-workspace`'s row **G8** commits the report path from this arm's `bytes` on BOTH forms of `accounting`, and its row **G11** delivers `report.record` on the `published:false` form exactly as it delivers R4's. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (its H5 `expect` guard, its H3 symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4. **A refusal of the SECOND write on the NORMAL path is a DIFFERENT case and R4 does not govern it** — there the body has already published, the vault is not untouched, and the outcome is the `accounting:{published:false, reason}` this row's rule cell decides |
+| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1409` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against `WP-dream-promote-module`'s Table D: three of its four gates do not match a path under `reports_dir` and pass it through, and that table — not this one, and not anything above this line — is what says which gate applies where.** (Corrected 2026-08-29: this cell was moved here whole by the T1 cut and kept saying "the table above", which in this spec resolves to the Deliverables table.) **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (the PRIMITIVE's rows H5 and H6), never an in-place append. **THE SECOND WRITE HAS ITS OWN OUTCOME, AND IT IS NEVER SILENT — this row is where that contract is DECIDED (owner ruling, 2026-08-29, round 4's A1).** The first write publishes the body; the second publishes body-plus-section. The two can disagree, and the state in which the FIRST succeeded and the SECOND was refused — by the primitive's H5 `expect` guard, by a symlinked target under its H3, by any of its H-rules — is a real outcome the union carried NOWHERE before this ruling. It is **`outcome:'promoted'` with `accounting:{published:false, reason}`**: the body IS in the vault, so this is not `fallback` (which means the body did NOT publish) and not `refused` (which means nothing published). **WHICH BUFFER TRAVELS IN `bytes`, and the claim is about what THIS RUN PUBLISHED rather than about what the vault holds now:** on `accounting:{published:true}` it is the SECOND write's returned buffer, on `accounting:{published:false}` the FIRST write's. Neither is ever a fresh read, and which of the two travels to the caller is decided here because `WP-dream-promote-module`'s Table S row S5 puts this two-write sequence in this package (its rows S1 and S4 still govern what either buffer must be). **THE QUALIFIER IS ROW S1's OWN AND IT IS LOAD-BEARING — "the only bytes the vault is KNOWN TO HOLD AT PUBLISH TIME" — and the unqualified form is FALSE BY CONSTRUCTION on the `published:false` form, for the very refusal that produced it (round 5's C5, filed by BOTH gates independently, the first such overlap in this loop):** the primitive's H5 abandons the second write unless the target STILL holds exactly the `expect` bytes, so an `expect` conflict MEANS the vault no longer holds the first write's buffer — it holds whatever intervened — and under its H3 a symlinked report target is a symlink and not those bytes at all. **NO SURFACE MAY SAY THIS ARM's `bytes` IS BYTE-EQUAL TO WHAT THE VAULT THEN HOLDS.** What IS true on this form, and what this arm states positively: **the enforcement section never reached the vault, and `bytes` is the body this run published — the bytes any commit of this path must carry (`WP-dream-promote-in-workspace`, row G8), never a re-read.** **THE RULE THIS CONVERGES ON IS TABLE R's R4 RULE, APPLIED DELIBERATELY AND NOT VERBATIM:** the COMPLETE enforcement record goes to the caller in `report.record` for the run's log and output, and the refusal NAMES ITS REASON — carried from the primitive (its row H7), never composed here. **R4's OUTCOME CLAUSE — "the vault object is left untouched" — DOES NOT HOLD HERE AND MUST NOT BE COPIED:** R4 was written for a refusal of THE report write, where no byte of this run's report reached the vault; here the first write already published the body, so the truthful statement is the positive one above — what the vault HOLDS — and not an untouched-vault claim. **`preserved`, `record` and `redaction` are unchanged on this arm**: the body published, so row Q10's carrier rule still reaches it (`WP-dream-promote-module`, row Q10) and this outcome widens nothing. **THE SCOPE IS BY MEASUREMENT, not by symmetry, and the measurement is stated here because this row owns it:** `promoted` is the only arm whose sequence is TWO writes, so it is the only arm on which a second write can be refused after a first has succeeded — Table R's fallback publishes in ONE write and `refused` publishes nothing at all, and a refusal on either of those IS the arm, governed by Table R's row R4. **PER-FIELD PROVENANCE IS DECIDED HERE AND NOWHERE ELSE** — `WP-dream-promote-module`'s Table Q preamble binds the rule to every field of a shape that carries ONE PARTY'S FACTS TO ANOTHER and names this field as the third such shape, and this row is where the family discharges it: **`published` — FILLED BY THIS PACKAGE, AT SECOND-WRITE TIME**, `true` when the primitive returned for that write and `false` when it refused; **`reason` — ORIGINATING WITH THE VAULT-WRITE PRIMITIVE** (Table H, its row H7, which returns `{written:false, reason}`) **AND CARRIED UNCHANGED BY THIS PACKAGE, AT SECOND-WRITE TIME**, on the `published:false` form ALONE and required there, this package composing no reason of its own for that write and never recomputing one. **The TYPE carries that provenance BY DISCRIMINATION rather than by a base/extension split, and it is stated rather than left to symmetry:** the module half's `GateReportedCopy`/`PreservedCopy` split exists because ONE shape carries two parties' fields at once, whereas here the primitive's field exists on exactly the form where the primitive refused — a single `reason` spanning both states would be the guarantees-nothing shape that spec's Table S row S2 records. **`### Exact contracts` DECLARES THE TYPE AND RESTATES NONE OF THIS (round 5's C1):** until that finding both surfaces named the other as owner and both wrote the fields out in full. **DOWNSTREAM, because an outcome nothing handles is silent by another route:** `WP-dream-promote-in-workspace`'s row **G8** commits the report path from this arm's `bytes` on BOTH forms of `accounting`, and its row **G11** delivers `report.record` on the `published:false` form exactly as it delivers R4's. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (its H5 `expect` guard, its H3 symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4. **A refusal of the SECOND write on the NORMAL path is a DIFFERENT case and R4 does not govern it** — there the body has already published, the vault is not untouched, and the outcome is the `accounting:{published:false, reason}` this row's rule cell decides |
 
 ### Table N — the neutralisation contract: which channels, which transformation, in which order
 
@@ -366,6 +345,7 @@ pass-through — the defect both prior A-bands shared.
 | `redaction.labels`, wherever a redaction accounting travels — on a `redacted[]` entry and on the `report` arm's `promoted` form (module half, Table Q row Q10, which owns both the fields and that scope) | detector names from a code-owned closed set, never the matched bytes | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
 | `redaction.lines`, on the same two carriers | a count | **NO** | none — same reason |
 | `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
+| `accounting.reason`, on the `promoted` arm's `published:false` form (the report row) | COMPOSED BY THE VAULT-WRITE PRIMITIVE (its row H7) and carried unchanged by this package; the primitive's rows H7 and H9 name a surviving staging object or directory, whose name derives from the brain-chosen path | **YES, by derivation** — the same classification `refused[].reason` carries and for the same reason, and a value derived from attacker text is treated as attacker text | **redact, then sanitise, wherever it is rendered.** **Its DELIVERY on that form is the run's log and output rather than the composed section** (`WP-dream-promote-in-workspace`, row G11) — the write carrying the section is the very one that was refused — so what reaches it is row N2's fail-closed default. **Classified rather than omitted (round 5's N1):** the field was added by round 4's A1 and this table had no row for it, which is the state row N1's own ground calls indistinguishable from a channel nobody thought about |
 | **any string the composer interpolates that is not classified above** | — | **treated as YES — the classification is not a permission list** | **redact-then-sanitise, or composition REFUSES. This is the fail-closed default and it is the contract's actual enforcement**, not a note about the rows above: a channel nobody classified must not be able to reach the report unneutralised, and that is exactly how both prior A-bands leaked |
 
 | Rule | Value |
@@ -404,7 +384,7 @@ naming: the only difference from the normal second write is that the base is
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines — **TWO sources, ONE shape, by the disclosure-parity ruling of 2026-08-29** | one line per entry of `redacted[]`, **and one line for the REPORT PATH when the `report` arm is `promoted` and its `redaction` is non-null**, each carrying the path, the scrubbed-line count and the labels read off that source's own `redaction` field — the module half's `RedactionAccounting`, whose two fields, their GATE provenance and their permitted carriers are its Table Q row **Q10**'s and are restated in neither source — and **each ENTRY of that path's preservation record, read field by field — its `artifact`, its `location` and its `remediation`** (module half, Table Q rows Q1–Q3, Q9 and Q10; `preserved` is an array and it is its ENTRIES that carry those fields, the record itself carrying none — round 3's F9. How many entries an arm holds is row Q9's and not this row's: the redact arm preserves one). **BOTH sources compose the SAME line from the SAME shape, and that is what parity of disclosure means here** — it is also why the accounting is ONE named field rather than two loose ones, because two look-alike field pairs would be two shapes. **An earlier form of this row was scoped to `redacted[]` alone**, which left a body the gate redacted and promotion published sanitized with no line at all — round 3 named it a residual and the ruling closed it. **NEITHER VALUE MAY BE RECOMPUTED HERE** (row Q10): only the gate held the pre-scrub bytes. **Table Q owns why this is data-loss-critical and what each field means; this row restates neither, and in particular it does not decide the guidance — `remediation` carries it.** Composed wherever the enforcement section is composed (Table N, row N3); the `report` source rides the normal second write, `promoted` being by construction an arm on which the body published — **and when that second write is REFUSED the line travels in `report.record` rather than into the vault, which the report row owns and this row does not restate.** **THE PARTITION, stated here as well as in the preserved-copy row below, because it is a TWO-SIDED rule and a checklist that protects it needs both sides to carry it (round 4's F-7):** every preserved copy is rendered EXACTLY ONCE, and the partition is over whether that copy's PATH HAS A REDACTION ACCOUNTING — never over the outcome, and no longer over where the entry sits. A copy on a `redacted[]` entry, and a copy on a `report` arm that is `promoted` with a non-null `redaction`, are rendered HERE; every other copy is the preserved-copy row's |
-| **The preserved-copy line on a REFUSAL — added by the Table Q reconciliation pass, 2026-08-29, and re-cut by the shape ruling of the same day** | one line per entry of a preservation record that is not on a `redacted[]` entry, naming the path and reading the entry's `artifact`, `location` and `remediation` off it, **from BOTH of its sources: every `refused[]` entry, and the `report` arm's own record WHATEVER THAT ARM'S OUTCOME — save the copies the redaction-lines row above already names, per the partition stated below.** Both, because the report body is subject to the identical sequence and is not a member of `refused[]`: it is a promotion candidate under `reports_dir`, the report row above records that EP2 is the one gate that judges a path there, so the gate can preserve a copy for the body and the body can then be published sanitized, replaced by the fallback, or refused by C4, C7, C8 or an H-rule. **The arm's OUTCOME does not decide whether the line exists — preservation is orthogonal to outcome, which is round 3's F1 and is why the module half's row Q8 quantifies over arms that exist after a preservation rather than over refusals.** **The line names the path and the entry's fields and nothing else.** Until the disclosure-parity ruling of 2026-08-29 that was FORCED — the `report` union carried no scrubbed-line count and no labels at all, on any arm — and it is now a CONSEQUENCE OF THE PARTITION rather than a limitation: a body the gate redacted and promotion published sanitized is the redaction-lines row's, and every copy that still reaches THIS row sits on a path with no accounting to name (module half, row Q10, which owns why a refused path has none). A row scoped to `refused[]` alone left the report's own copy unannounced, found by the round-zero pass of 2026-08-29, one surface over from the defect that created this row. **THE TWO SOURCES ARE SCOPED DIFFERENTLY, and conflating them was a defect this row carried for one round (round-2 coherence, C-2):** the `refused[]` lines are composed **wherever the enforcement section is composed — the normal second write and the fallback alike (Table N, row N3)** — because a refused path with a preserved copy is the ORDINARY case and occurs on runs where the report body publishes perfectly well; scoping them to the fallback left the common case with no surface saying who writes the line. The `report` arm's line travels with the enforcement section too, on whichever write carries it — the normal second write when the body published sanitized, the fallback when the fallback fired, and `report.record` when every write was refused (row R4). **An earlier form of this sentence put that line on the fallback branch "by construction"; that was true only while the arm carrying a copy was the refused one (round 3's F1).** **Each preserved copy is rendered exactly once, and the partition is over WHETHER THAT PATH HAS A REDACTION ACCOUNTING, not over the outcome and no longer over where the entry sits — re-cut by the disclosure-parity ruling of 2026-08-29, which gave one `report` arm an accounting and so made the old partition send that arm's copies to the wrong row:** a copy on a `redacted[]` entry is the redaction-lines row's, always, because membership of that array IS a redaction; a copy on the `report` arm is that row's TOO when the arm is `promoted` with a non-null `redaction`; every other copy — on a `refused[]` entry, or on a `report` arm carrying no accounting — is this row's. **The guidance is NOT decided here and is NOT restated here — it is READ from the entry's `remediation`, whatever that entry holds.** The values, which arm takes which, their grounds, and the fact that the module half ASSIGNS the field at outcome time are all `WP-dream-promote-module`'s Table Q row Q9. **An earlier form of this cell restated the values and their rationale (round 3's F7) — which re-created, in the one surface that says it does not decide the guidance, the second independent statement the field exists to remove.** **Why the line exists at all:** the gate wrote those copies before promotion knew the path would be refused, a copy on the redacted shelf carries no digest banner, and the path is not in `redacted[]` — so without this line an unredacted copy of secret-shaped content sits unannounced until retention silently removes it (module half, Table Q rows Q3, Q8 and Q9, which own all three facts). **Every field is READ FROM THE TYPED RECORD; this row may not recover one from `reason`** — measured in the module half's own PR gate, a prose carrier on a paired refusal named the SIBLING's copy first. Neutralised at composition exactly like every other channel (Table N) |
+| **The preserved-copy line on a REFUSAL — added by the Table Q reconciliation pass, 2026-08-29, and re-cut by the shape ruling of the same day** | one line per entry of a preservation record that is not on a `redacted[]` entry, naming the path and reading the entry's `artifact`, `location` and `remediation` off it, **from BOTH of its sources: every `refused[]` entry, and the `report` arm's own record WHATEVER THAT ARM'S OUTCOME — save the copies the redaction-lines row above already names, per the partition stated below.** Both, because the report body is subject to the identical sequence and is not a member of `refused[]`: it is a promotion candidate under `reports_dir`, the report row above records that EP2 is the one gate that judges a path there, so the gate can preserve a copy for the body and the body can then be published sanitized, replaced by the fallback, or refused by C4, C7, C8 or an H-rule. **The arm's OUTCOME does not decide whether the line exists — preservation is orthogonal to outcome, which is round 3's F1 and is why the module half's row Q8 quantifies over arms that exist after a preservation rather than over refusals.** **The line names the path and the entry's fields and nothing else.** Until the disclosure-parity ruling of 2026-08-29 that was FORCED — the `report` union carried no scrubbed-line count and no labels at all, on any arm — and it is now a CONSEQUENCE OF THE PARTITION rather than a limitation: a body the gate redacted and promotion published sanitized is the redaction-lines row's, and every copy that still reaches THIS row sits on a path with no accounting to name (module half, row Q10, which owns why a refused path has none). A row scoped to `refused[]` alone left the report's own copy unannounced, found by the round-zero pass of 2026-08-29, one surface over from the defect that created this row. **THE TWO SOURCES ARE SCOPED DIFFERENTLY, and conflating them was a defect this row carried for one round (round-2 coherence, C-2):** the `refused[]` lines are composed **wherever the enforcement section is composed — the normal second write and the fallback alike (Table N, row N3)** — because a refused path with a preserved copy is the ORDINARY case and occurs on runs where the report body publishes perfectly well; scoping them to the fallback left the common case with no surface saying who writes the line. The `report` arm's line travels with the enforcement section too, on whichever write carries it — the normal second write when the body published sanitized, the fallback when the fallback fired, and `report.record` when the write that would have carried it was REFUSED — **which is TWO states and not one (round 5's C2): Table R's row R4, where no write published at all, AND the normal path's SECOND write refused after the first published the body (`accounting:{published:false}`, the report row's outcome), where the body IS in the vault and the section is not.** **An earlier form said "when every write was refused", which is false on the second state: this row is the STRUCTURAL TWIN of the redaction-lines row above, that row was given exactly this sentence in the same window, and this one was not.** **An earlier form of this sentence put that line on the fallback branch "by construction"; that was true only while the arm carrying a copy was the refused one (round 3's F1).** **Each preserved copy is rendered exactly once, and the partition is over WHETHER THAT PATH HAS A REDACTION ACCOUNTING, not over the outcome and no longer over where the entry sits — re-cut by the disclosure-parity ruling of 2026-08-29, which gave one `report` arm an accounting and so made the old partition send that arm's copies to the wrong row:** a copy on a `redacted[]` entry is the redaction-lines row's, always, because membership of that array IS a redaction; a copy on the `report` arm is that row's TOO when the arm is `promoted` with a non-null `redaction`; every other copy — on a `refused[]` entry, or on a `report` arm carrying no accounting — is this row's. **The guidance is NOT decided here and is NOT restated here — it is READ from the entry's `remediation`, whatever that entry holds.** The values, which arm takes which, their grounds, and the fact that the module half ASSIGNS the field at outcome time are all `WP-dream-promote-module`'s Table Q row Q9. **An earlier form of this cell restated the values and their rationale (round 3's F7) — which re-created, in the one surface that says it does not decide the guidance, the second independent statement the field exists to remove.** **Why the line exists at all:** the gate wrote those copies before promotion knew the path would be refused, a copy on the redacted shelf carries no digest banner, and the path is not in `redacted[]` — so without this line an unredacted copy of secret-shaped content sits unannounced until retention silently removes it (module half, Table Q rows Q3, Q8 and Q9, which own all three facts). **Every field is READ FROM THE TYPED RECORD; this row may not recover one from `reason`** — measured in the module half's own PR gate, a prose carrier on a paired refusal named the SIBLING's copy first. Neutralised at composition exactly like every other channel (Table N) |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
 | Rejected alternatives, recorded so they are not re-proposed | On the fallback shape: **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver). On the gate question, both of the options the author's flag named, rejected as insufficient ALONE: **exempting the code-authored section from the gates** (opens an unscanned brain-influenced channel into the vault — `r.path` is attacker-influenceable, so a secret in a filename would ride through), and **sanitizing alone** (a secret-shaped path, or user-edited preserved bytes, could still get the whole report withheld — the record dies either way) |
 
@@ -468,21 +448,47 @@ left for a gate to refuse.
       which is why `### Exact contracts` names six shapes it reads while this
       prohibition covers seven.
       **The `accounting` field on the `promoted` arm is registered here too
-      (owner ruling, 2026-08-29, round 4's A1), and THE REPORT ROW is where its
-      contract is decided.** Its mirrors are `### Exact contracts`, the report
-      row's rule cell and its refusal-remedy cell, **Table R's row R4 (whose
-      untouched-vault clause is scoped AWAY from it)**, the Security checklist's
-      refusal item, the report-refusal acceptance criterion's case (b), and
-      `WP-dream-promote-in-workspace`'s rows **G8**, **G11** and **V4**.
-      **Four prohibitions, each earned by the escalation that produced the
-      field:** no surface may describe the `promoted` arm as a complete report
+      (owner ruling, 2026-08-29, round 4's A1).** **THE OWNER IS THE REPORT ROW's
+      RULE CELL — one owner, named between the mirrors rather than left to be
+      inferred (round 5's C1): that cell and `### Exact contracts` each named
+      the OTHER as owner while both wrote the fields out in full, and this entry
+      listed both as mirrors and named no owner between them.** `### Exact
+      contracts` declares the TYPE; the rule cell decides everything else.
+      Its mirrors are `### Exact contracts`, the report
+      row's refusal-remedy cell, **Table R's row R4 (whose
+      untouched-vault clause is scoped AWAY from it)**, **Table R's
+      redaction-lines row (its sentence on the line travelling in
+      `report.record` when the second write is refused) and Table R's
+      preserved-copy row (its travel enumeration, which must name BOTH refusal
+      states) — registered 2026-08-29 by round 5's C2, having been mirrors from
+      the day they were written**, **Table N's `accounting.reason` channel row
+      (round 5's N1)**, the Security checklist's
+      refusal item, the report-refusal acceptance criterion's case (b),
+      **the preserved-copy announcement criterion's channel disjunction (round
+      5's H5)**, and
+      `WP-dream-promote-in-workspace`'s rows **G8**, **G11** and **V4**, whose
+      own side of the registration is that spec's checklist entry for the
+      partially published report.
+      **SEVEN prohibitions, each earned by a finding, and the last three by
+      round 5:** no surface may describe the `promoted` arm as a complete report
       without saying what happened to the SECOND write; no surface may classify
       a published-body/refused-accounting run as `fallback` or `refused`; **no
       surface may copy R4's "the vault object is left untouched" onto this
-      outcome** — the body published, and the true statement is what the vault
-      HOLDS; and no surface may widen row Q10's carriers because of this field —
+      outcome** — the body published, and the true statement is what THIS RUN
+      PUBLISHED; no surface may widen row Q10's carriers because of this field —
       the body published on BOTH of its forms, so `redaction` stays exactly
-      where row Q10 put it.
+      where row Q10 put it; **no surface but the rule cell may state this
+      field's PER-FIELD PROVENANCE** — `WP-dream-promote-module`'s Table Q
+      preamble binds the rule and names this as the third shape it binds, and
+      one shape has one discharging surface; **no surface may assert this
+      arm's `bytes` is BYTE-EQUAL to what the vault then holds** — the refusal
+      that produces the form can be, and on an `expect` conflict IS, the vault
+      no longer holding those bytes (round 5's C5); **and a surface enumerating
+      where the record TRAVELS on a
+      refusal states BOTH refusal states or it is wrong** — the write that
+      published nothing, and the second write refused after the first published
+      the body (round 5's C2). **The count is stated because this checklist has
+      carried a stale one before; seven, counted against the list above.**
 - [ ] **Table R's four cases and its named residual** — the report row (which
       cites, never restates), and the acceptance criteria
 - [ ] **Table N — the neutralisation contract.** Its mirrors are Table R's gate
@@ -573,9 +579,17 @@ left for a gate to refuse.
       this run gated and published through the primitive. **TWO SHAPES, and the
       second made this a false universal until round 4's A1:** on a refusal of
       the report write (Table R, row R4) the vault object is byte-unchanged; on
-      a refusal of the NORMAL path's SECOND write the vault holds exactly the
-      body the first write published and no enforcement section (the report
-      row), which is not "byte-unchanged" and may not be asserted as such.
+      a refusal of the NORMAL path's SECOND write the ENFORCEMENT SECTION never
+      reached the vault and `report.bytes` is the body the FIRST write published
+      (the report row), which is not "byte-unchanged" and may not be asserted as
+      such. **AND IT MAY NOT BE ASSERTED AS BYTE-EQUALITY WITH THE LIVE VAULT
+      EITHER (round 5's C5):** on the `expect`-conflict cause the vault no
+      longer holds the first write's buffer — that IS why the primitive refused
+      (Table H, the PRIMITIVE's row H5) — and a symlinked target is a symlink
+      and not those bytes. What this item asserts on that shape is the two
+      things that stay true: the complete record still reaches the caller, and
+      the vault holds no byte this run did not gate and publish through the
+      primitive.
 
 ## Acceptance criteria
 
@@ -640,8 +654,12 @@ left for a gate to refuse.
       redacts the body and the SANITIZED body publishes (`promoted`), a run in
       which the body is withheld for a hard secret and the fallback publishes
       (`fallback`), and a run in which a preserved body is then refused
-      (`refused`). In each, the enforcement section — or `report.record` on the
-      arm that publishes nothing — names the report path and the entries in
+      (`refused`). In each, the enforcement section — or `report.record` on **EVERY arm whose
+      section never reached the vault: the `refused` arm, which publishes
+      nothing, and the `promoted` arm whose `accounting.published` is `false`,
+      where the body published and the section did not** (round 5's H5 — before
+      A1 the disjunction had one member, and it was still written that way
+      afterwards) — names the report path and the entries in
       `report.preserved`; with an empty `report.preserved` it names none.
       **On the `promoted` arm with a non-null `redaction` that naming is the
       REDACTION line's and not a second preserved-copy line — proven RED
@@ -704,7 +722,12 @@ left for a gate to refuse.
       order, so a test built only from one goes green on the leaking
       implementation.
 - [ ] **Every report refusal delivers the record, and the TWO refusal shapes
-      are asserted apart.** **(a) THE REPORT WRITE IS REFUSED.** For an `expect`
+      are asserted apart.** **(a) THE ONE-WRITE PATH's WRITE IS REFUSED — Table R's
+      row R4, where nothing of this run's report reached the vault, and the
+      return is `report.outcome === 'refused'`.** **The title was singular in a
+      criterion whose whole subject is that the normal path has TWO report
+      writes, and nothing in (a) said which write it meant (round 5's N3):**
+      this case is the FALLBACK's single publish. For an `expect`
       conflict AND for a symlinked report target, the outcome is the same three
       things: the vault object is byte-unchanged, the COMPLETE enforcement
       record is returned in `report.record`, and the refusal names its reason.
@@ -715,8 +738,23 @@ left for a gate to refuse.
       section's write is refused — asserted on an `expect` conflict AND on a
       symlinked target. The return is `report.outcome === 'promoted'` with
       `accounting.published === false` and `accounting.reason` carrying the
-      PRIMITIVE's reason; `report.bytes` is the FIRST write's returned buffer
-      and is byte-equal to what the vault then holds; `report.record` holds the
+      PRIMITIVE's reason; `report.bytes` is the FIRST write's returned buffer.
+      **THE VAULT-STATE ASSERTION IS SPLIT BY REFUSAL CAUSE, because ONE
+      equality claim here is false by construction (round 5's C5):** on the
+      **`expect` CONFLICT** the vault RETAINS THE INTERVENING USER BYTES that
+      caused the refusal — the primitive's H5 abandons the write unless the
+      target still holds the `expect` bytes, so the conflict IS the vault no
+      longer holding them — while `report.bytes` retains the first-write body;
+      the two are asserted UNEQUAL, and the criterion goes RED against an
+      implementation that returns a fresh read and RED against one that
+      overwrites the user's intervening bytes. On the **SYMLINKED TARGET** the
+      path is a symlink and holds none of those bytes; what is asserted is that
+      the symlink is not written through (Table H, the PRIMITIVE's row H3) and
+      that `report.bytes` is still the first-write body. **Byte-equality with
+      the live vault is asserted NOWHERE on this form** — it is assertable only
+      where the premise "the target is unchanged since the first write" is
+      explicitly established, and neither of these two cases establishes it.
+      `report.record` holds the
       COMPLETE record, the redaction line and every preserved-copy line the
       unpublished section would have carried included. **Proven RED against an
       implementation that reports this as `fallback` or as `refused`** — the
