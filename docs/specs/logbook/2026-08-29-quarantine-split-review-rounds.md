@@ -37,4 +37,4 @@ prompt `docs/runbooks/review-prompts/adversarial.md`, per the runbook contract.
 
 | Round | Input tip | Raw output (path, introducing commit) | Verdict |
 |---|---|---|---|
-| 0 | `77a41f9` | `2026-08-29-quarantine-split-round-zero-raw.md` @ (this commit — SHA cited in round 1's row once it exists, since a record cannot cite its own hash) | 16 findings: 15 LIGHT, 1 HEAVY; dispositions proposed, owner ruling pending |
+| 0 | `77a41f9` | `2026-08-29-quarantine-split-round-zero-raw.md` @ `9fb4b63` | 16 findings: 15 LIGHT, 1 HEAVY; owner ruled all 16 **fix**, finding 14 → write-if-absent (option 1) |

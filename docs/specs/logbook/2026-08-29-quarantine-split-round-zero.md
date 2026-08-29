@@ -86,11 +86,11 @@ wrong: the doctor spec's "Nine are inline; three use the helper-loop idiom"
 ## 4. Findings and dispositions
 
 Sixteen findings, fifteen LIGHT and one HEAVY (14). Full text in the raw file.
-Dispositions below are the relay's PROPOSALS per the runbook ("the relay
-PROPOSES a disposition for every finding"); the owner rules before the revision
-pass, and this record is finalized with the ruling:
+The relay proposed a disposition for every finding per the runbook; the owner
+ruled 2026-08-29 (this session): the LIGHT batch accepted as proposed, and
+finding 14 resolved to option 1, write-if-absent.
 
-| # | One-line summary | Class | Proposed disposition |
+| # | One-line summary | Class | Disposition (owner-ruled) |
 |---|---|---|---|
 | 1 | doctor spec: inline/helper-loop group count is 8/4, not 9/3 | LIGHT | fix |
 | 2 | doctor spec: `doctor.test.js:44` → `:45` | LIGHT | fix |
@@ -109,8 +109,8 @@ pass, and this record is finalized with the ruling:
 | 15 | Amendment 2's restated invariant says "after the quarantine set changes"; the mechanism is per-record freshness (a shrink-only change starts no window) | LIGHT | fix (align the ADR sentence to the mechanism) |
 | 16 | doctor retype gate misses a backtick template-literal `reports/warnings.md` | LIGHT | fix (regex) |
 
-**Finding 14 proposed resolution (contract change — the owner's act, ruling
-pending).** The warnings file gains a third refresh trigger:
+**Finding 14 resolution (contract change, owner-ruled 2026-08-29).** The
+warnings file gains a third refresh trigger:
 **write-if-absent** — a dream run that ends with ≥1 active quarantine in the
 ledger and no `reports/warnings.md` on disk writes the file, even when the run
 consumed nothing and the quarantine set did not change. This keeps doctor's
@@ -119,8 +119,8 @@ preserves the churn property (an *existing* file is still rewritten only when
 the set changes — write-if-absent fires at most once, on the first run after
 the file went missing), and closes the upgrade scenario (pre-existing
 quarantines, idle nights, no file yet). The alternative — hedging doctor's
-message text to a weaker promise — is the relay's non-preferred option: it
-trades a user-facing property away to avoid a one-condition mechanism.
+message text to a weaker promise — was rejected by the owner: it trades a
+user-facing property away to avoid a one-condition mechanism.
 
 Per weighted closure, finding 14 changes what the implementer builds; since no
 external round has run yet, the fix lands in the revision pass and **round 1 is
@@ -130,10 +130,10 @@ the fresh external round that follows it** — no extra round is spent.
 
 - Template conformance: PASS, four of four, nothing silently absent.
 - Internal coherence: 16 findings (15 LIGHT mechanical, 1 HEAVY contract
-  question routed to the owner), every proposed disposition **fix**; zero
-  residuals, zero drops proposed.
-- Owner ruling pending on the batch and on finding 14's resolution; once
-  ruled, the revision pass (wd-architect) applies the fixes, the mirror walk
-  on the six citation fixes and the re-run of the two touched gates (11, 16)
-  verify the LIGHT class mechanically, and finding 14's fix is verified by
-  round 1 (the first external round, fresh after the HEAVY fix by ordering).
+  question routed to the owner), all dispositioned **fix**; zero residuals,
+  zero drops.
+- Owner ruled 2026-08-29: LIGHT batch accepted, finding 14 → write-if-absent.
+  The revision pass (wd-architect) applies the fixes, the mirror walk on the
+  six citation fixes and the re-run of the two touched gates (11, 16) verify
+  the LIGHT class mechanically, and finding 14's fix is verified by round 1
+  (the first external round, fresh after the HEAVY fix by ordering).
