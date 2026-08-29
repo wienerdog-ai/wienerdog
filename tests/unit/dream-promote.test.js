@@ -81,6 +81,20 @@ function get(root, rel) {
   }
 }
 
+/** Every regular file in the tree, as `/`-separated relative paths.
+ *  @param {string} root @param {string} [rel] @returns {string[]} */
+function walkVault(root, rel = '') {
+  const dir = rel === '' ? root : path.join(root, ...rel.split('/'));
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const childRel = rel === '' ? entry.name : `${rel}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...walkVault(root, childRel));
+    else if (entry.isFile()) out.push(childRel);
+  }
+  return out;
+}
+
 /**
  * Build a run: a vault, a workspace filled with the vault's readable content,
  * a CONSTRUCTED baseline over those bytes, then the brain's writes, then the
@@ -225,6 +239,37 @@ test('dream-promote C8: modify/delete is a conflict and the user\'s deletion win
   assert.equal(get(sc.vaultDir, NOTE), null, 'the deletion stands');
 });
 
+test('dream-promote C1: the allowlist is evaluated FIRST — top to bottom, first match decides', () => {
+  // Table C: "Rows C1-C8 are the evaluated conditions, top to bottom, first
+  // match decides." A DELETED non-admitted path must therefore report C1's
+  // reason, not C2's. Found by the PR-review gate (round 1, F5a).
+  const sc = scenario({ vault: { 'CLAUDE.md': 'steer\n' }, brain: { 'CLAUDE.md': null } });
+  const res = run(sc);
+  const reason = refusalFor(res, 'CLAUDE.md');
+  assert.match(reason, /not admitted/, 'C1 decides before C2');
+  assert.ok(!/never deletes/.test(reason), 'C2 must not be the reported reason');
+});
+
+test('dream-promote C1: a never-admissible path does not feed the transcript-deferral signal', () => {
+  // C1 running before the secret gate is the other half of the ordering. Per
+  // Table E only `withheld` defers a transcript, so counting a path the
+  // allowlist can never admit would hold a transcript back to re-refuse the
+  // same note every run. Found by the PR-review gate (round 1, F5b).
+  const sc = scenario({ brain: { '.gitignore': Buffer.from([0x2a, 0x00, 0xff, 0x0a]) } });
+  let secretGateSaw = 0;
+  const res = run(sc, {
+    gates: gates({
+      secret: () => {
+        secretGateSaw += 1;
+        return { refuse: true, reason: 'hard secret' };
+      },
+    }),
+  });
+  assert.match(refusalFor(res, '.gitignore'), /not admitted/);
+  assert.equal(secretGateSaw, 0, 'a never-admissible path never reaches the secret gate');
+  assert.deepEqual(res.secretDisposition, { withheld: 0, redactions: 0 });
+});
+
 // ── Row C9 — the promotion allowlist ────────────────────────────────────────
 
 test('dream-promote: M7\'s mechanism — the current instruction-file conventions never enter the vault', () => {
@@ -297,7 +342,16 @@ test('dream-promote: policy is judged on the RESOLVED path, not the candidate', 
     const before = fs.readdirSync(victim).sort();
 
     const res = run(sc);
-    refusalFor(res, '01-Projects/alias/evil.md');
+    const reason = refusalFor(res, '01-Projects/alias/evil.md');
+    // THE MECHANISM, not just the outcome: the refusal must come from `admit`
+    // applied to the RESOLVED rel. Asserting only "some refusal happened" would
+    // stay green if the primitive's symlink refusal (H3) fired instead, which
+    // is a different guarantee on a different rule.
+    assert.match(reason, /not admitted/, 'the caller POLICY refused it, not the symlink guard');
+    assert.ok(
+      !reason.includes('01-Projects/alias/'),
+      `the policy judged the resolved path, not the candidate: ${reason}`
+    );
     assert.equal(res.promoted.length, 0);
     assert.deepEqual(fs.readdirSync(victim).sort(), before, 'the victim directory gains nothing');
   }
@@ -578,6 +632,60 @@ test('dream-promote Q4: the only-copy invariant — no artifact means nothing is
   assert.deepEqual(get(sc.vaultDir, NOTE), B('user bytes\nsaved mid-run\n'), 'the working copy is byte-unchanged');
 });
 
+test('dream-promote Q3: a redaction that is LATER refused still names the preserved copy', () => {
+  // Found by the PR-review gate (round 1, F1) and reproduced. By the time a
+  // post-merge gate refuses, the secret gate has ALREADY written an unredacted
+  // copy into the quarantine — and `state/quarantine/redacted/` carries no
+  // digest banner, so if nothing announces the file, the copy is lost in
+  // practice. The refusal reason is the only channel a non-promoted path has.
+  //
+  // PARTIAL BY DESIGN: this keeps the name reachable inside the `{rel, reason}`
+  // shape Table S row S3 fixes. A TYPED carrier on the refused arm is a
+  // contract change and is the owner's, so it is not asserted here.
+  const redactArm = {
+    redact: true,
+    sanitizedBytes: B('note\n[REDACTED]\n'),
+    lines: 1,
+    labels: 'aws-key',
+    artifact: '2026-08-29-n.md',
+  };
+
+  // (a) refused by a post-merge gate
+  const byGate = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
+  const r1 = run(byGate, {
+    gates: gates({ secret: () => redactArm, tier3: () => 'tier-3 floor: refused after redaction' }),
+  });
+  assert.match(refusalFor(r1, NOTE), /preserved as `2026-08-29-n\.md`/);
+  assert.equal(get(byGate.vaultDir, NOTE), null);
+
+  // (b) refused by pair atomicity — the sibling's refusal must not swallow it
+  const SKILL = '05-Skills/x/SKILL.md';
+  const LEDGER = '05-Skills/x/LEARNINGS.md';
+  const byPair = scenario({
+    vault: { [SKILL]: 'v1\n', [LEDGER]: 'l1\n' },
+    brain: { [SKILL]: 'v2\n', [LEDGER]: 'l2\n' },
+  });
+  const r2 = run(byPair, {
+    gates: gates({
+      secret: ({ rel }) => (rel.endsWith('SKILL.md') ? { ...redactArm, artifact: 'skill-copy.md' } : { ok: true }),
+      ledger: ({ rel }) => (rel.endsWith('LEARNINGS.md') ? 'ledger fails policy' : null),
+    }),
+  });
+  assert.match(refusalFor(r2, SKILL), /preserved as `skill-copy\.md`/);
+
+  // (c) refused by the primitive's expect guard, during the write phase
+  const { writeIntoVault } = require('../../src/core/dream/vault-write');
+  const byExpect = scenario({ vault: { [NOTE]: 'base\n' }, brain: { [NOTE]: 'base\nsecret\n' } });
+  const r3 = run(byExpect, {
+    gates: gates({ secret: () => redactArm }),
+    writeFile: (o) => {
+      put(byExpect.vaultDir, NOTE, 'user saved after the decision\n');
+      return writeIntoVault(o);
+    },
+  });
+  assert.match(refusalFor(r3, NOTE), /preserved as `2026-08-29-n\.md`/);
+});
+
 // ── Table E — the write, the seam, the window, the accounting ────────────────
 
 test('dream-promote E: every vault content write goes through the primitive', () => {
@@ -585,6 +693,9 @@ test('dream-promote E: every vault content write goes through the primitive', ()
     vault: { [NOTE]: 'base\n' },
     brain: { [NOTE]: 'edited\n', '00-Inbox/new.md': 'fresh\n', 'CLAUDE.md': 'denied\n' },
   });
+
+  /** @type {Map<string, Buffer>} the vault exactly as it stood before the run */
+  const vaultBefore = new Map(walkVault(sc.vaultDir).map((rel) => [rel, get(sc.vaultDir, rel)]));
 
   /** @type {string[]} */
   const throughSeam = [];
@@ -597,9 +708,18 @@ test('dream-promote E: every vault content write goes through the primitive', ()
     },
   });
 
-  // Every path whose vault bytes differ from what the vault held before the run
-  // must be accounted for by a seam call. A direct `writeFileSync` anywhere in
-  // the module would put a path in the vault that this set does not contain.
+  // THE ORACLE IS THE VAULT, not the return value. Comparing the seam calls
+  // against `res.promoted`/`res.redacted` would stay green against a bypass
+  // write that ALSO omitted its outcome — both sides would move together. So
+  // walk the tree and take the set of paths whose bytes actually changed.
+  const changed = [];
+  for (const rel of walkVault(sc.vaultDir)) {
+    const now = get(sc.vaultDir, rel);
+    const was = vaultBefore.get(rel);
+    if (was === undefined || !was.equals(now)) changed.push(rel);
+  }
+  assert.deepEqual(changed.sort(), throughSeam.sort(), 'every changed vault file went through the primitive');
+
   const published = [...res.promoted, ...res.redacted].map((p) => p.rel).sort();
   assert.deepEqual(throughSeam.sort(), published);
   assert.deepEqual(published, ['00-Inbox/new.md', NOTE].sort());
@@ -795,6 +915,16 @@ test('dream-promote: a missing gate or malformed input throws rather than promot
   const sc = scenario({ brain: { [NOTE]: 'x\n' } });
   assert.throws(() => run(sc, { gates: { secret: () => ({ ok: true }) } }), WienerdogError);
   assert.throws(() => promote({ ...sc, gates: gates(), vaultDir: '' }), WienerdogError);
+  // `layout` is validated like the other five inputs. Unvalidated, a malformed
+  // layout refuses EVERY path with a policy-shaped reason and the run looks
+  // like a quiet no-op rather than a caller bug (PR-review gate, round 1, F8).
+  for (const bad of [undefined, {}, { ...defaultLayout(), projects_dir: '' }]) {
+    assert.throws(
+      () => run(sc, { layout: bad }),
+      (err) => err instanceof WienerdogError && /`layout` must be a vault layout/.test(err.message),
+      `a layout of ${JSON.stringify(bad)} must fail loud`
+    );
+  }
   assert.throws(
     () => run(sc, { gates: gates({ secret: () => ({ maybe: true }) }) }),
     (err) => err instanceof WienerdogError && /unrecognised disposition/.test(err.message)

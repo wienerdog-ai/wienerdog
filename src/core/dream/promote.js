@@ -471,6 +471,18 @@ function baselineBytesOf(baseline, rel) {
 }
 
 /**
+ * Append the preserved-copy note to a refusal reason, when the secret gate
+ * preserved one for this path. Table Q row Q3 makes the announcement of that
+ * copy a data-loss concern rather than a reporting nicety, and a refusal is the
+ * only channel a non-promoted path has.
+ * @param {string} reason @param {string|null|undefined} preserved @returns {string}
+ */
+function withPreserved(reason, preserved) {
+  if (typeof preserved !== 'string' || preserved === '') return reason;
+  return `${reason} (an unredacted copy was preserved as \`${preserved}\`)`;
+}
+
+/**
  * Decide, per changed path, what happens to it — and promote what survives.
  *
  * PURE DECISION FIRST, WRITES SECOND. Every POLICY decision in the run —
@@ -576,6 +588,24 @@ function promote(o) {
   if (!gates || ['secret', 'skillBody', 'tier3', 'ledger'].some((k) => typeof gates[k] !== 'function')) {
     throw new WienerdogError('promote: `gates` must supply secret, skillBody, tier3 and ledger functions');
   }
+  // FAIL LOUD LIKE THE OTHERS. A missing or malformed layout would otherwise
+  // flow into `makeAdmit`, yield an empty set of writable tier directories, and
+  // refuse EVERY path with "not under a writable vault tier directory" — a run
+  // that promotes nothing and reads as policy rather than as a caller bug.
+  // The two PARA directories are literals, so `admittedDirs` is never empty and
+  // cannot itself detect this — the LAYOUT's own tier keys are what must be
+  // there.
+  const LAYOUT_TIER_KEYS = ['identity_dir', 'daily_dir', 'projects_dir', 'skills_dir', 'inbox_dir', 'reports_dir'];
+  if (
+    !layout ||
+    typeof layout !== 'object' ||
+    LAYOUT_TIER_KEYS.some((k) => typeof layout[k] !== 'string' || layout[k] === '')
+  ) {
+    throw new WienerdogError(
+      'promote: `layout` must be a vault layout with every tier directory set — ' +
+        `expected non-empty strings for ${LAYOUT_TIER_KEYS.join(', ')}`
+    );
+  }
   const writeFile = typeof opts.writeFile === 'function' ? opts.writeFile : writeIntoVault;
   const spawnGit = typeof opts.spawnGit === 'function' ? opts.spawnGit : spawnGitForMerge;
   const registry = opts.registry === undefined ? null : opts.registry;
@@ -597,8 +627,52 @@ function promote(o) {
   // ── Phase 1: decide. No vault byte is written in this loop. ───────────────
   for (const record of delta.records) {
     const rel = record.rel;
-    /** @param {string} reason */
-    const refuse = (reason) => decisions.set(rel, { rel, refuse: reason });
+    /**
+     * A refusal, which by Table S row S3 is `{rel, reason}` and carries no
+     * bytes. When the secret gate has already PRESERVED an unredacted copy for
+     * this path, the reason NAMES it — otherwise a redaction that is
+     * subsequently refused loses the only announcement that copy ever gets
+     * (Table Q row Q3: `state/quarantine/redacted/` carries no digest banner,
+     * so losing the line loses the copy in practice). Naming a survivor in the
+     * refusal is this family's existing idiom — Table C row C1 requires exactly
+     * that of a staging object the primitive leaves behind.
+     *
+     * PARTIAL, AND SAID SO: this keeps the artifact reachable inside a string
+     * the contract already has. It does NOT give the report package a typed
+     * field, which is a contract change and the owner's to make.
+     * @param {string} reason
+     */
+    const refuse = (reason) =>
+      decisions.set(rel, {
+        rel,
+        refuse: preserved === null ? reason : `${reason} (an unredacted copy was preserved as \`${preserved}\`)`,
+      });
+    /** @type {string|null} the artifact name the secret gate reported, once it has */
+    let preserved = null;
+
+    // ── C1, the promotion allowlist — FIRST, because Table C says so ──────
+    //
+    // "Rows C1–C8 are the evaluated conditions, top to bottom, first match
+    // decides." C1 is row one, so it precedes both C2 and the gates; an earlier
+    // form of this loop ran C2 and the secret gate ahead of it and reported the
+    // wrong reason for a deleted non-admitted path. This ordering also keeps
+    // Table D intact, because the allowlist is a Table C ROW, not one of the
+    // four gates — EP2 still runs first among the gates.
+    //
+    // The second consequence is the one that mattered: a path C1 can never
+    // admit no longer reaches the secret gate, so it no longer increments
+    // `secretDisposition.withheld` — and per Table E only `withheld` defers a
+    // transcript. Deferring on a note that is unpromotable at any destination
+    // would re-refuse it every run while holding the transcript back.
+    //
+    // The SAME function is handed to the primitive, which applies it to the
+    // RESOLVED path. That second application is the one that sees a symlinked
+    // component, and this one does not replace it.
+    const notAdmitted = admit(rel);
+    if (notAdmitted) {
+      refuse(notAdmitted);
+      continue;
+    }
 
     // C2 — promotion never deletes. A deletion is unrecoverable and the brain
     // has no business making one; the vault keeps the note.
@@ -690,26 +764,12 @@ function promote(o) {
       }
       candidate = verdict.sanitizedBytes;
       redaction = { lines: verdict.lines, labels: verdict.labels, artifact: verdict.artifact };
+      // From here on every refusal for this path names the preserved copy.
+      preserved = verdict.artifact;
     } else if (!verdict.ok) {
       throw new WienerdogError(
         `promote: the secret gate returned an unrecognised disposition for \`${rel}\``
       );
-    }
-
-    // ── C9, the promotion allowlist, applied to the CANDIDATE path ────────
-    //
-    // It runs AFTER the secret gate — Table D's order inverts today's and puts
-    // EP2 first — so the run's secret accounting is complete no matter where
-    // the brain aimed the note. Applying it here, before any filesystem call,
-    // is also what lets the skill/ledger pair be decided together.
-    //
-    // The SAME function is handed to the primitive, which applies it to the
-    // RESOLVED path. That second application is the one that sees a symlinked
-    // component, and this one does not replace it.
-    const notAdmitted = admit(rel);
-    if (notAdmitted) {
-      refuse(notAdmitted);
-      continue;
     }
 
     // ── The three-way decision and the merge (Table C, rows C3–C8) ─────────
@@ -763,7 +823,7 @@ function promote(o) {
       }
     }
 
-    decisions.set(rel, { rel, candidate, expect, redaction });
+    decisions.set(rel, { rel, candidate, expect, redaction, preserved });
   }
 
   // ── Phase 1b: the three post-merge gates, on the MERGED candidate bytes ───
@@ -830,7 +890,9 @@ function promote(o) {
     }
 
     if (reason) {
-      decisions.set(rel, { rel, refuse: reason });
+      // A gate refusing AFTER the secret gate redacted this path must not lose
+      // the preserved copy's name — Table Q row Q3.
+      decisions.set(rel, { rel, refuse: withPreserved(reason, d.preserved), preserved: d.preserved });
     }
   }
 
@@ -851,7 +913,11 @@ function promote(o) {
     if (sibling && !sibling.refuse) {
       decisions.set(sibling.rel, {
         rel: sibling.rel,
-        refuse: `paired with \`${d.rel}\`, which was refused: ${d.refuse}`,
+        refuse: withPreserved(
+          `paired with \`${d.rel}\`, which was refused: ${d.refuse}`,
+          sibling.preserved
+        ),
+        preserved: sibling.preserved,
       });
     }
   }
@@ -889,7 +955,13 @@ function promote(o) {
       // visible at the re-read abandons the write and the path is refused, and
       // a save landing between the re-read and the `rename` is the primitive's
       // stated residual, inherited here unchanged.
-      refused.push({ rel: d.rel, reason: (res && res.reason) || 'the vault write was refused' });
+      // A redaction refused HERE — after the gate already preserved its copy —
+      // still names that copy (Table Q, row Q3), exactly as the decision-phase
+      // refusals do.
+      refused.push({
+        rel: d.rel,
+        reason: withPreserved((res && res.reason) || 'the vault write was refused', d.preserved),
+      });
       continue;
     }
 

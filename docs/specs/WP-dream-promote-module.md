@@ -127,9 +127,15 @@ it, and none may attribute it to any repository-status property of the workspace
   dispatch, and from its spec's `### Exact contracts` block, rather than
   restated here** (`docs/specs/done/WP-dream-vault-write-primitive.md`).
 - `src/core/dream/workspace.js` — `createWorkspace`, `destroyWorkspace` and the
-  exported containment helper `isAtOrBeneath`. This module calls none of them;
-  the containment helper is named only as the implementation of the rule the
-  Dispatch precondition cites.
+  exported containment helper `isAtOrBeneath`. This module calls neither
+  lifecycle function. **It DOES call `isAtOrBeneath`, and only there: to check
+  that the merge's temp root is not at or beneath the workspace (Table C, row
+  M2's cwd clause).** Amended after the PR-review gate found that
+  `os.tmpdir()` honours the ambient `TMPDIR` — which the dream already passes
+  through to the brain (`brain.js:225`) — so CLAIM 2b had to be CHECKED rather
+  than assumed. **This is a CONSUMER of the family's one containment rule, not
+  a second implementation of it**, which is what the Implementation-notes
+  prohibition forbids; the rule itself is still owned by Table H.
 - `src/core/dream/delta.js` — `captureBaseline` and `computeDelta`, git-free,
   spawns nothing. **`computeDelta` still has no consumer**; this module is the
   first code to read its records, and the pipeline package is the first to call
