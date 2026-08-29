@@ -498,25 +498,65 @@ function baselineBytesOf(baseline, rel) {
 }
 
 /**
- * Append the preserved-copy note to a refusal reason, when the secret gate
- * preserved one for this path. Table Q row Q3 makes the announcement of that
- * copy a data-loss concern rather than a reporting nicety, and a refusal is the
- * only channel a non-promoted path has.
- *
- * THE CLAUSE NAMES ITS OWN PATH, and that is not decoration. Because the
- * refused arm has no typed carrier (escalated), a consumer must read the
- * artifact out of this string — so on the skill/ledger pair route, where one
- * refusal quotes the other's reason, an unattributed clause pointed the user at
- * the SIBLING's copy. That is the same class of harm this note exists to
- * prevent. Pair refusals are additionally built from the sibling's UNDECORATED
- * reason, so exactly one clause is ever appended.
- * @param {string} reason @param {string|null|undefined} preserved
- * @param {string} rel @returns {string}
+ * Read the preservation record off a gate verdict, checking only what this
+ * module is entitled to check: that it is a list of entries carrying the two
+ * fields the GATE fills. Absent means "nothing preserved" and is an empty list,
+ * never a missing field — an optional field spanning "nothing preserved" and
+ * "not asked" is the defect Table S row S2 records one field over.
+ * @param {unknown} raw @param {string} rel @param {string} arm
+ * @returns {GateReportedCopy[]}
  */
-function withPreserved(reason, preserved, rel) {
-  if (typeof preserved !== 'string' || preserved === '') return reason;
-  return `${reason} (an unredacted copy of \`${rel}\` was preserved as \`${preserved}\`)`;
+function readRecord(raw, rel, arm) {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new WienerdogError(
+      `promote: the secret gate's ${arm} arm returned a malformed preservation record for \`${rel}\``
+    );
+  }
+  return raw.map((e) => {
+    if (!e || typeof e.artifact !== 'string' || e.artifact === '' || typeof e.location !== 'string') {
+      throw new WienerdogError(
+        `promote: the secret gate's ${arm} arm reported a preserved copy without an artifact and location for \`${rel}\``
+      );
+    }
+    return { artifact: e.artifact, location: e.location };
+  });
 }
+
+/**
+ * Fill the one field the gate cannot — AT OUTCOME TIME, which is the whole
+ * reason it is not gate-reported. `restore-or-delete` for a copy whose
+ * sanitized content this run PROMOTED; `delete` for a copy on a path nothing
+ * was promoted for. Every downstream surface READS this value; none re-derives
+ * it (Table Q, row Q9).
+ * @param {GateReportedCopy[]} record @param {'restore-or-delete'|'delete'} remediation
+ * @returns {PreservedCopy[]}
+ */
+function withRemediation(record, remediation) {
+  return record.map((e) => ({ artifact: e.artifact, location: e.location, remediation }));
+}
+
+/**
+ * @typedef {{artifact:string, location:string}} GateReportedCopy
+ *   One preserved unredacted copy, as the EP2 GATE reported it. BOTH fields are
+ *   FILLED BY THE GATE, AT GATE TIME (Table Q, row Q9): `artifact` is the
+ *   basename the preserving call actually used — it resolves collisions itself,
+ *   so a caller that reconstructs the name points the user at a file that does
+ *   not exist — and `location` is the state-relative directory it wrote to,
+ *   reported rather than composed because this module never touches the state
+ *   directory (row Q7).
+ * @typedef {GateReportedCopy & {remediation:'restore-or-delete'|'delete'}} PreservedCopy
+ *   The same entry once this module has filled the one field the gate cannot:
+ *   `remediation` is FILLED BY THIS MODULE, AT OUTCOME TIME, because its value
+ *   depends on whether the run ended up promoting the path — which the gate,
+ *   running before the merge, cannot know. **Assigning is not re-deriving:**
+ *   the gate reports no value for it, so there is nothing here to derive FROM.
+ *   The no-re-derivation rule binds the surfaces DOWNSTREAM of this return.
+ * @typedef {{lines:number, labels:string}} RedactionAccounting
+ *   The scrub's PER-PATH accounting (Table Q, row Q10), both halves gate-filled.
+ *   Per-path and not per-copy: the case with the MOST preserved copies — a
+ *   redact arm falling through to a withhold — has no accounting at all.
+ */
 
 /**
  * Decide, per changed path, what happens to it — and promote what survives.
@@ -653,14 +693,12 @@ function promote(o) {
   /**
    * One decision per delta record, keyed by `rel`. `publish` entries carry the
    * candidate bytes and the `expect` the primitive will be given; `refuse`
-   * entries carry a reason, plus — when the secret gate preserved an unredacted
-   * copy for this path — that reason UNDECORATED (`refuseRaw`) and the artifact
-   * name (`preserved`). The raw form exists so a pair refusal can quote its
-   * sibling without inheriting the sibling's artifact clause.
-   * @type {Map<string, {rel:string, refuse?:string, refuseRaw?:string,
-   *   preserved?:string|null,
+   * entries carry a reason. Both carry the gate's preservation record, which
+   * gains its `remediation` only at outcome time in the write phase.
+   * @type {Map<string, {rel:string, refuse?:string,
+   *   preserved:GateReportedCopy[],
    *   candidate?:Buffer, expect?:Buffer|null,
-   *   redaction?:{lines:number, labels:string, artifact:string}}>}
+   *   redaction?:RedactionAccounting|null}>}
    */
   const decisions = new Map();
 
@@ -668,24 +706,22 @@ function promote(o) {
   for (const record of delta.records) {
     const rel = record.rel;
     /**
-     * A refusal, which by Table S row S3 is `{rel, reason}` and carries no
-     * bytes. When the secret gate has already PRESERVED an unredacted copy for
-     * this path, the reason NAMES it — otherwise a redaction that is
-     * subsequently refused loses the only announcement that copy ever gets
-     * (Table Q row Q3: `state/quarantine/redacted/` carries no digest banner,
-     * so losing the line loses the copy in practice). Naming a survivor in the
-     * refusal is this family's existing idiom — Table C row C1 requires exactly
-     * that of a staging object the primitive leaves behind.
+     * A refusal. By Table S row S3 it carries no bytes; by row Q9 it DOES carry
+     * the preservation record, because the gate may already have written an
+     * unredacted copy before anything downstream refused the path — and
+     * `state/quarantine/` announces nothing on its own (row Q3).
      *
-     * PARTIAL, AND SAID SO: this keeps the artifact reachable inside a string
-     * the contract already has. It does NOT give the report package a typed
-     * field, which is a contract change and the owner's to make.
+     * The record is the ONLY carrier. An earlier form named the copy inside the
+     * reason string, and that prose form produced its own defect within one
+     * review round: the pair refusal quoted its sibling's decorated reason and
+     * named the WRONG file's copy first. `remediation` is filled here, at
+     * outcome time: nothing was promoted for this path, so the copy is a delete.
      * @param {string} reason
      */
     const refuse = (reason) =>
-      decisions.set(rel, { rel, refuse: withPreserved(reason, preserved, rel), refuseRaw: reason, preserved });
-    /** @type {string|null} the artifact name the secret gate reported, once it has */
-    let preserved = null;
+      decisions.set(rel, { rel, refuse: reason, preserved });
+    /** @type {GateReportedCopy[]} what the gate reported preserving, if anything */
+    let preserved = [];
 
     // ── C1, the promotion allowlist — FIRST, because Table C says so ──────
     //
@@ -761,48 +797,49 @@ function promote(o) {
 
     /** The bytes the merge and the remaining three gates work on. */
     let candidate = afterBytes;
-    /** @type {{lines:number, labels:string, artifact:string}|null} */
+    /** @type {RedactionAccounting|null} */
     let redaction = null;
 
     if (verdict.refuse) {
+      // BOTH EP2 arms preserve (Table D), so the hard withhold reports a record
+      // too — the gap that made this contract's shape an owner question.
+      preserved = readRecord(verdict.preserved, rel, 'refuse');
       disposition.withheld += 1;
       refuse(`EP2: ${verdict.reason || 'secret withheld from promotion'}`);
       continue;
     }
     if (verdict.redact) {
-      // Table Q, rows Q1–Q4. The redact arm's three extra fields are not
-      // decoration: `lines` is how many added lines were scrubbed, `labels` is
-      // what the detectors matched (never the matched bytes), and `artifact` is
-      // the ACTUAL basename of the preserved unredacted copy — reported by the
-      // preserving call, which resolves collisions itself, and never predicted.
+      // Table Q, rows Q1, Q9 and Q10. The redact arm carries two structured
+      // values besides its bytes: the PER-PATH scrub accounting (`redaction`)
+      // and the PER-COPY preservation record (`preserved`).
       //
       // Q4, THE ONLY-COPY INVARIANT, is this module's share of it: refuse to
-      // publish when it is unsatisfied. A redact arm that reports no artifact
-      // is an arm whose preservation did not complete, and promoting the
-      // sanitized bytes on that evidence would report a recovery route that
-      // does not exist. This module cannot verify the copy — it never touches
-      // the state directory (Q7) — so it refuses fail-loud rather than
-      // weakening the invariant to "a copy was attempted".
+      // publish when it is unsatisfied. An empty record is an arm whose
+      // preservation did not complete, and promoting the sanitized bytes on
+      // that evidence would report a recovery route that does not exist. This
+      // module cannot verify the copy — it never touches the state directory
+      // (Q7) — so it refuses fail-loud rather than weakening the invariant to
+      // "a copy was attempted".
       if (!Buffer.isBuffer(verdict.sanitizedBytes)) {
         throw new WienerdogError(
           `promote: the secret gate's redact arm returned no sanitized bytes for \`${rel}\``
         );
       }
-      if (typeof verdict.artifact !== 'string' || verdict.artifact === '') {
+      preserved = readRecord(verdict.preserved, rel, 'redact');
+      if (preserved.length === 0) {
         throw new WienerdogError(
           `promote: the secret gate's redact arm reported no preserved copy for \`${rel}\` — ` +
             'the only-copy invariant is unsatisfied and nothing is promoted'
         );
       }
-      if (typeof verdict.lines !== 'number' || typeof verdict.labels !== 'string') {
+      const acc = verdict.redaction;
+      if (!acc || typeof acc.lines !== 'number' || typeof acc.labels !== 'string') {
         throw new WienerdogError(
           `promote: the secret gate's redact arm reported no scrub accounting for \`${rel}\``
         );
       }
       candidate = verdict.sanitizedBytes;
-      redaction = { lines: verdict.lines, labels: verdict.labels, artifact: verdict.artifact };
-      // From here on every refusal for this path names the preserved copy.
-      preserved = verdict.artifact;
+      redaction = { lines: acc.lines, labels: acc.labels };
     } else if (!verdict.ok) {
       throw new WienerdogError(
         `promote: the secret gate returned an unrecognised disposition for \`${rel}\``
@@ -929,12 +966,7 @@ function promote(o) {
     if (reason) {
       // A gate refusing AFTER the secret gate redacted this path must not lose
       // the preserved copy's name — Table Q row Q3.
-      decisions.set(rel, {
-        rel,
-        refuse: withPreserved(reason, d.preserved, rel),
-        refuseRaw: reason,
-        preserved: d.preserved,
-      });
+      decisions.set(rel, { rel, refuse: reason, preserved: d.preserved });
     }
   }
 
@@ -955,14 +987,10 @@ function promote(o) {
     if (sibling && !sibling.refuse) {
       decisions.set(sibling.rel, {
         rel: sibling.rel,
-        refuse: withPreserved(
-          // The sibling's RAW reason: quoting its decorated form would append a
-          // second, unattributed artifact clause naming the WRONG file's copy.
-          `paired with \`${d.rel}\`, which was refused: ${d.refuseRaw || d.refuse}`,
-          sibling.preserved,
-          sibling.rel
-        ),
-        refuseRaw: `paired with \`${d.rel}\`, which was refused: ${d.refuseRaw || d.refuse}`,
+        // Plain: with no artifact clause in either string there is nothing for a
+        // quoted sibling reason to drag along, so the raw/decorated split the
+        // prose form needed is gone with it.
+        refuse: `paired with \`${d.rel}\`, which was refused: ${d.refuse}`,
         preserved: sibling.preserved,
       });
     }
@@ -971,9 +999,9 @@ function promote(o) {
   // ── Phase 2: write. Every vault byte goes through the primitive. ──────────
   /** @type {Array<{rel:string, bytes:Buffer}>} */
   const promoted = [];
-  /** @type {Array<{rel:string, bytes:Buffer, lines:number, labels:string, artifact:string}>} */
+  /** @type {Array<{rel:string, bytes:Buffer, redaction:RedactionAccounting, preserved:PreservedCopy[]}>} */
   const redacted = [];
-  /** @type {Array<{rel:string, reason:string}>} */
+  /** @type {Array<{rel:string, reason:string, preserved:PreservedCopy[]}>} */
   const refused = [];
 
   for (const record of delta.records) {
@@ -984,7 +1012,9 @@ function promote(o) {
       throw new WienerdogError(`promote: no outcome was decided for \`${record.rel}\``);
     }
     if (d.refuse) {
-      refused.push({ rel: d.rel, reason: d.refuse });
+      // Nothing was promoted for this path, so any copy the gate preserved is a
+      // delete. The value is filled HERE because only here is the outcome known.
+      refused.push({ rel: d.rel, reason: d.refuse, preserved: withRemediation(d.preserved, 'delete') });
       continue;
     }
 
@@ -1006,7 +1036,8 @@ function promote(o) {
       // refusals do.
       refused.push({
         rel: d.rel,
-        reason: withPreserved((res && res.reason) || 'the vault write was refused', d.preserved, d.rel),
+        reason: (res && res.reason) || 'the vault write was refused',
+        preserved: withRemediation(d.preserved, 'delete'),
       });
       continue;
     }
@@ -1016,9 +1047,9 @@ function promote(o) {
       redacted.push({
         rel: d.rel,
         bytes: res.bytes,
-        lines: d.redaction.lines,
-        labels: d.redaction.labels,
-        artifact: d.redaction.artifact,
+        redaction: d.redaction,
+        // This path's sanitized bytes DID publish, so its copy is restorable.
+        preserved: withRemediation(d.preserved, 'restore-or-delete'),
       });
       disposition.redactions += 1;
     } else {

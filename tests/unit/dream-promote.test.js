@@ -556,9 +556,8 @@ test('dream-promote Q: the redact disposition promotes the SANITIZED candidate a
       secret: () => ({
         redact: true,
         sanitizedBytes: B('note\nentropy=[REDACTED]\n'),
-        lines: 1,
-        labels: 'high-entropy',
-        artifact: '2026-08-29-note.md',
+        redaction: { lines: 1, labels: 'high-entropy' },
+        preserved: [{ artifact: '2026-08-29-note.md', location: 'quarantine/redacted' }],
       }),
     }),
   });
@@ -586,21 +585,30 @@ test('dream-promote Q1–Q3: a redaction carries the artifact the gate RETURNED,
       secret: ({ rel }) => ({
         redact: true,
         sanitizedBytes: B(`${rel[12]}\n[REDACTED]\n`),
-        lines: 1,
-        labels: 'high-entropy,aws-key',
-        artifact: actual[rel],
+        redaction: { lines: 1, labels: 'high-entropy,aws-key' },
+        preserved: [{ artifact: actual[rel], location: 'quarantine/redacted' }],
       }),
     }),
   });
 
   assert.equal(res.redacted.length, 2);
   for (const entry of res.redacted) {
-    assert.equal(entry.artifact, actual[entry.rel], 'the collision-resolved name the gate reported');
-    assert.equal(entry.lines, 1);
-    assert.equal(entry.labels, 'high-entropy,aws-key');
+    assert.equal(entry.preserved.length, 1);
+    assert.equal(entry.preserved[0].artifact, actual[entry.rel], 'the collision-resolved name the gate reported');
+    // `location` is READ off the record, never composed here — the module never
+    // touches the state directory (Table Q, row Q7).
+    assert.equal(entry.preserved[0].location, 'quarantine/redacted');
+    // `remediation` is the MODULE's, filled at OUTCOME time: this path published
+    // its sanitized bytes, so the copy is restorable (Table Q, rows Q9 and Q10).
+    assert.equal(entry.preserved[0].remediation, 'restore-or-delete');
+    assert.deepEqual(entry.redaction, { lines: 1, labels: 'high-entropy,aws-key' });
     assert.ok(Buffer.isBuffer(entry.bytes));
   }
-  assert.notEqual(res.redacted[0].artifact, res.redacted[1].artifact, 'a predicted name would collide');
+  assert.notEqual(
+    res.redacted[0].preserved[0].artifact,
+    res.redacted[1].preserved[0].artifact,
+    'a predicted name would collide'
+  );
 });
 
 test('dream-promote Q1: a redact arm carrying only {redact, sanitizedBytes} is refused fail-loud', () => {
@@ -624,7 +632,12 @@ test('dream-promote Q4: the only-copy invariant — no artifact means nothing is
     () =>
       run(sc, {
         gates: gates({
-          secret: () => ({ redact: true, sanitizedBytes: B('sanitized\n'), lines: 1, labels: 'x', artifact: '' }),
+          secret: () => ({
+            redact: true,
+            sanitizedBytes: B('sanitized\n'),
+            redaction: { lines: 1, labels: 'x' },
+            preserved: [],
+          }),
         }),
       }),
     (err) => err instanceof WienerdogError && /only-copy invariant is unsatisfied/.test(err.message)
@@ -632,33 +645,43 @@ test('dream-promote Q4: the only-copy invariant — no artifact means nothing is
   assert.deepEqual(get(sc.vaultDir, NOTE), B('user bytes\nsaved mid-run\n'), 'the working copy is byte-unchanged');
 });
 
-test('dream-promote Q3: a redaction that is LATER refused still names the preserved copy', () => {
-  // Found by the PR-review gate (round 1, F1) and reproduced. By the time a
-  // post-merge gate refuses, the secret gate has ALREADY written an unredacted
-  // copy into the quarantine — and `state/quarantine/redacted/` carries no
-  // digest banner, so if nothing announces the file, the copy is lost in
-  // practice. The refusal reason is the only channel a non-promoted path has.
-  //
-  // PARTIAL BY DESIGN: this keeps the name reachable inside the `{rel, reason}`
-  // shape Table S row S3 fixes. A TYPED carrier on the refused arm is a
-  // contract change and is the owner's, so it is not asserted here.
+test('dream-promote Q8: a redaction that is LATER refused carries its copy TYPED, and the reason names none', () => {
+  // The prose mitigation this replaces was itself defective within one review
+  // round: the pair refusal quoted its sibling's decorated reason and named the
+  // WRONG file's copy first. A structured fact encoded into free text composes
+  // badly. The record is the carrier; the reason carries no basename at all.
   const redactArm = {
     redact: true,
     sanitizedBytes: B('note\n[REDACTED]\n'),
-    lines: 1,
-    labels: 'aws-key',
-    artifact: '2026-08-29-n.md',
+    redaction: { lines: 1, labels: 'aws-key' },
+    preserved: [{ artifact: '2026-08-29-n.md', location: 'quarantine/redacted' }],
+  };
+
+  /** Every refusal route must carry the record and keep the basename out of the reason. */
+  const assertTyped = (res, rel, basename) => {
+    const hit = res.refused.find((r) => r.rel === rel);
+    assert.ok(hit, `expected \`${rel}\` refused`);
+    assert.equal(hit.preserved.length, 1);
+    assert.equal(hit.preserved[0].artifact, basename);
+    assert.equal(hit.preserved[0].location, 'quarantine/redacted');
+    // Filled by the MODULE at outcome time: nothing was promoted for this path.
+    assert.equal(hit.preserved[0].remediation, 'delete');
+    assert.ok(!hit.reason.includes(basename), `the reason must name no copy: ${hit.reason}`);
   };
 
   // (a) refused by a post-merge gate
   const byGate = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
-  const r1 = run(byGate, {
-    gates: gates({ secret: () => redactArm, tier3: () => 'tier-3 floor: refused after redaction' }),
-  });
-  assert.match(refusalFor(r1, NOTE), /preserved as `2026-08-29-n\.md`/);
+  assertTyped(
+    run(byGate, {
+      gates: gates({ secret: () => redactArm, tier3: () => 'tier-3 floor: refused after redaction' }),
+    }),
+    NOTE,
+    '2026-08-29-n.md'
+  );
   assert.equal(get(byGate.vaultDir, NOTE), null);
 
-  // (b) refused by pair atomicity — the sibling's refusal must not swallow it
+  // (b) refused by pair atomicity, BOTH halves redacted — the case the prose
+  // form got wrong. Each half carries its OWN copy and neither reason names either.
   const SKILL = '05-Skills/x/SKILL.md';
   const LEDGER = '05-Skills/x/LEARNINGS.md';
   const byPair = scenario({
@@ -667,51 +690,73 @@ test('dream-promote Q3: a redaction that is LATER refused still names the preser
   });
   const r2 = run(byPair, {
     gates: gates({
-      secret: ({ rel }) => (rel.endsWith('SKILL.md') ? { ...redactArm, artifact: 'skill-copy.md' } : { ok: true }),
-      ledger: ({ rel }) => (rel.endsWith('LEARNINGS.md') ? 'ledger fails policy' : null),
-    }),
-  });
-  assert.match(refusalFor(r2, SKILL), /preserved as `skill-copy\.md`/);
-
-  // (d) BOTH halves redacted — the case round 2's N1 found. Each refusal must
-  // name ITS OWN copy exactly once. An unattributed clause built from the
-  // sibling's already-decorated reason pointed the user at the OTHER file's
-  // artifact, which is the very harm this mitigation exists to prevent.
-  const bothRedacted = scenario({
-    vault: { [SKILL]: 'v1\n', [LEDGER]: 'l1\n' },
-    brain: { [SKILL]: 'v2\n', [LEDGER]: 'l2\n' },
-  });
-  const r4 = run(bothRedacted, {
-    gates: gates({
       secret: ({ rel }) => ({
         ...redactArm,
-        artifact: rel.endsWith('SKILL.md') ? 'skill-copy.md' : 'ledger-copy.md',
+        preserved: [
+          {
+            artifact: rel.endsWith('SKILL.md') ? 'skill-copy.md' : 'ledger-copy.md',
+            location: 'quarantine/redacted',
+          },
+        ],
       }),
       ledger: ({ rel }) => (rel.endsWith('LEARNINGS.md') ? 'ledger fails policy' : null),
     }),
   });
-  const skillReason = refusalFor(r4, SKILL);
-  const ledgerReason = refusalFor(r4, LEDGER);
-  assert.match(ledgerReason, /copy of `05-Skills\/x\/LEARNINGS\.md` was preserved as `ledger-copy\.md`/);
-  assert.match(skillReason, /copy of `05-Skills\/x\/SKILL\.md` was preserved as `skill-copy\.md`/);
-  assert.equal(
-    (skillReason.match(/was preserved as/g) || []).length,
-    1,
-    `exactly one artifact clause, naming this path's own copy: ${skillReason}`
-  );
-  assert.ok(!skillReason.includes('ledger-copy.md'), "the sibling's artifact must not appear here");
+  assertTyped(r2, SKILL, 'skill-copy.md');
+  assertTyped(r2, LEDGER, 'ledger-copy.md');
+  const skillReason = r2.refused.find((r) => r.rel === SKILL).reason;
+  assert.ok(!skillReason.includes('ledger-copy.md'), "the sibling's copy must not appear in this reason");
 
   // (c) refused by the primitive's expect guard, during the write phase
   const { writeIntoVault } = require('../../src/core/dream/vault-write');
   const byExpect = scenario({ vault: { [NOTE]: 'base\n' }, brain: { [NOTE]: 'base\nsecret\n' } });
-  const r3 = run(byExpect, {
-    gates: gates({ secret: () => redactArm }),
-    writeFile: (o) => {
-      put(byExpect.vaultDir, NOTE, 'user saved after the decision\n');
-      return writeIntoVault(o);
-    },
+  assertTyped(
+    run(byExpect, {
+      gates: gates({ secret: () => redactArm }),
+      writeFile: (o) => {
+        put(byExpect.vaultDir, NOTE, 'user saved after the decision\n');
+        return writeIntoVault(o);
+      },
+    }),
+    NOTE,
+    '2026-08-29-n.md'
+  );
+});
+
+test('dream-promote Q1/Q9: the HARD-WITHHOLD arm carries its record too', () => {
+  // The gap that triggered the escalation: Table D says BOTH EP2 arms preserve,
+  // and the refuse arm had no field to report it on. A hard secret is withheld
+  // AFTER the gate wrote an unredacted copy.
+  const sc = scenario({ brain: { [NOTE]: 'note\nAKIA_SECRET\n' } });
+  const res = run(sc, {
+    gates: gates({
+      secret: () => ({
+        refuse: true,
+        reason: 'hard secret in added lines',
+        preserved: [{ artifact: '2026-08-29-n.md', location: 'quarantine' }],
+      }),
+    }),
   });
-  assert.match(refusalFor(r3, NOTE), /preserved as `2026-08-29-n\.md`/);
+  const hit = res.refused.find((r) => r.rel === NOTE);
+  assert.ok(hit);
+  assert.equal(hit.preserved.length, 1);
+  assert.equal(hit.preserved[0].artifact, '2026-08-29-n.md');
+  assert.equal(hit.preserved[0].location, 'quarantine', 'the withheld shelf, as the gate reported it');
+  assert.equal(hit.preserved[0].remediation, 'delete');
+  assert.ok(!hit.reason.includes('2026-08-29-n.md'));
+  assert.equal(res.secretDisposition.withheld, 1);
+  assert.equal(get(sc.vaultDir, NOTE), null);
+});
+
+test('dream-promote Q9: a path refused BEFORE EP2 ran carries an empty record, not a missing field', () => {
+  // Positive absence: an optional field spanning "nothing preserved" and "not
+  // asked" is the defect row S2 records one field over.
+  const sc = scenario({ brain: { 'CLAUDE.md': 'steer\n', [NOTE]: 'fine\n' } });
+  const res = run(sc);
+  const denied = res.refused.find((r) => r.rel === 'CLAUDE.md');
+  assert.ok(denied);
+  assert.ok(Array.isArray(denied.preserved), '`preserved` is required on every refusal');
+  assert.deepEqual(denied.preserved, []);
 });
 
 // ── Table E — the write, the seam, the window, the accounting ────────────────
@@ -952,7 +997,12 @@ test('dream-promote E: promotion accounting partitions the delta exactly', () =>
       secret: ({ rel }) => {
         if (rel.endsWith('secret.md')) return { refuse: true, reason: 'hard secret' };
         if (rel.endsWith('entropy.md')) {
-          return { redact: true, sanitizedBytes: B('[REDACTED]\n'), lines: 1, labels: 'entropy', artifact: 'a.md' };
+          return {
+            redact: true,
+            sanitizedBytes: B('[REDACTED]\n'),
+            redaction: { lines: 1, labels: 'entropy' },
+            preserved: [{ artifact: 'a.md', location: 'quarantine/redacted' }],
+          };
         }
         return { ok: true };
       },
@@ -980,7 +1030,12 @@ test('dream-promote S: every published outcome carries BOTH rel and the primitiv
     gates: gates({
       secret: ({ rel }) =>
         rel.endsWith('red.md')
-          ? { redact: true, sanitizedBytes: B('sanitized\n'), lines: 1, labels: 'entropy', artifact: 'r.md' }
+          ? {
+              redact: true,
+              sanitizedBytes: B('sanitized\n'),
+              redaction: { lines: 1, labels: 'entropy' },
+              preserved: [{ artifact: 'r.md', location: 'quarantine/redacted' }],
+            }
           : { ok: true },
     }),
     writeFile: (o) => {
@@ -1004,8 +1059,13 @@ test('dream-promote S: every published outcome carries BOTH rel and the primitiv
   // nothing to carry, and a field that could hold the candidate would invite a
   // consumer to commit bytes the vault never took.
   assert.equal(res.refused.length, 1);
-  assert.deepEqual(Object.keys(res.refused[0]).sort(), ['reason', 'rel']);
+  // The shape is the guarantee, not the prose: a refusal carries `rel`, its
+  // `reason`, and the preservation record — and NO bytes. A field that could
+  // hold the candidate would invite a consumer to commit bytes the vault never
+  // took (Table S, row S3).
+  assert.deepEqual(Object.keys(res.refused[0]).sort(), ['preserved', 'reason', 'rel']);
   assert.equal(res.refused[0].bytes, undefined);
+  assert.deepEqual(res.refused[0].preserved, [], 'nothing was preserved for a path denied before EP2 ran');
 });
 
 // ── Idempotence's stand-in: a run that writes nothing promotes nothing ───────
