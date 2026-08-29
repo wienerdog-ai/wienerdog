@@ -235,3 +235,166 @@ named residuals in the work package rather than claims of impossibility.
 inputs intact AND commit succeeded — is untouched; this amendment only adds a
 fourth condition before recording `processed`, never a weaker one. Capacity
 deferral still records nothing at all.
+
+### Amendment 2 (2026-08-29) — the quarantine surface splits: a durable vault record, plus a digest banner that is an exact count on a bounded window
+
+Status: **PROPOSED — awaiting owner signature.** The owner ratified this design
+on 2026-08-29 (issue #165 walkthrough); this file records it as PROPOSED until
+the owner replaces this line by hand with `Status: **ACCEPTED — OWNER-SIGNED
+<date>.**` **No agent may write that line.** Until it carries a signature, the
+implementing work packages are not dispatchable (each states this as a dispatch
+precondition).
+
+**What went wrong.** Decision §2's last bullet fixed the *channel* — "a fixed,
+code-owned, secret-free digest banner derived from the ledger … re-rendered every
+digest as long as the quarantine is active" — and never bounded its *volume* or
+its *lifetime*. Both assumptions failed on the first adopt-with-history install
+that met a real session history (maintainer's machine, 0.13.0, 2026-08-29):
+
+- **Volume.** `~/.codex/sessions` held 8,858 rollout files; **191** were
+  legitimately over `PRE_READ_CEILING_BYTES`. The banner enumerates every one
+  inline, so it rendered as a **single line of 16,805 bytes — 73% of a
+  22,986-byte digest**. `DigestCaps` cannot help: the byte cap is spent on the
+  banner while the 120-line cap never touches a one-line banner, so the payload
+  the digest exists to carry is what gets truncated, in every session, in both
+  harnesses.
+- **Lifetime.** The ADR was written for the hostile-input case, where a
+  quarantine is rare and transient. `over-ceiling` on a **closed historical
+  session** is neither: Codex never prunes session files, and a closed >50 MB
+  rollout never changes its fingerprint, so §2's "retried when it changes" is
+  moot and the banner is **permanent by construction**. Even a collapsed
+  count-banner would then sit in every digest forever — which trains
+  banner-blindness and damages the banners that *are* actionable.
+
+**The reframe that resolves it.** A quarantine is two different things to a
+reader. That **something entered quarantine** is an EVENT — news, and news
+belongs in the push channel for a bounded window. That **things are in
+quarantine** is STANDING STATE — a durable coverage fact about what the dream
+could not see, and standing state belongs in pull-based durable surfaces. §2
+routed both down the push channel.
+
+**And one principle governs every surface below: the full enumeration has exactly
+ONE home — the vault warnings file. Every other surface (the digest banner,
+`wienerdog doctor`, the dream report) carries exact counts plus a pointer to it,
+and never a list.** A second enumeration is not a second safety net: it is a
+second thing to keep in sync, offered in a surface with no durability advantage
+over the first. Counts are always read from the **ledger**, which is ground truth;
+the warnings file is derived from it and may legitimately lag by one dream run, so
+a surface taking its numbers from the file would report that lag as fact.
+
+Amended as follows.
+
+1. **A durable, code-owned warnings file in the vault, `reports/warnings.md`.**
+   Generated from the ledger alone, with the **same trust construction as the
+   banner** — `displayName`-sanitized basenames plus code-owned reason labels,
+   never transcript content, never a full path, never brain-writable. **This file
+   is the enumeration's one home.** Two sections: *Current conditions* (what is in quarantine now, grouped by reason;
+   containing nothing time-varying, so the file changes **exactly** when the
+   quarantine set changes and a git-backed vault shows a meaningful diff at that
+   moment and no other) and an append-only *Run log* of dated deltas (a run that
+   changes nothing appends nothing). The vault is the system's own durable
+   record and is git-versioned by design; the managed block is re-rendered by
+   every sync and, for most users, is not under version control, so it can never
+   carry this.
+
+2. **The digest banner for the intake reasons becomes an exact count plus a
+   pointer, on a bounded window.** No enumeration reaches the digest. The
+   anti-silent-drop invariant survives by different means: the **count is
+   exact**, and the enumeration has moved to a surface where it is *more*
+   durable than the banner ever was, not less.
+
+3. **Reason classes are split, because they are not the same kind of fact.**
+   - The **intake** reasons — `over-ceiling`, `too-many-lines`, `read-error` —
+     are **informational**: the user cannot act on them and Wienerdog has already
+     done the right thing. Their banner renders **only if at least one active
+     intake-reason quarantine was recorded within the last 7 days**. When the
+     set has been stable for 7 days the banner retires itself; a new quarantine
+     re-raises it. `read-error` is deliberately in this group: the owner
+     considered the argument that it may indicate a fixable local problem and
+     chose the informational classification (a genuinely actionable read failure
+     surfaces through `doctor` and the warnings file, which do not decay).
+   - `secret-revert-exhausted` is **actionable** — the user must triage
+     `state/quarantine/` — so its banner stays **permanent and verbatim**,
+     entirely unchanged by this amendment. A decaying banner is only ever
+     correct for a condition the user cannot act on.
+   - A reason this version does not recognize is counted with the informational
+     group but **never decays**, so a future reason class cannot be retired by
+     old code that assumed it was informational.
+
+4. **Seven days, and no new state whatsoever.** The window is 7 days, chosen
+   over 14 by the owner. Freshness is computed **at render time from the
+   ledger's existing `updated_at` field** — no acknowledgement record, no new
+   state file, no new CLI, no timer, no daemon (**ADR-0004**). A record whose
+   `updated_at` is missing or unparseable counts as **fresh**, which is the
+   fail-loud direction: an unreadable timestamp keeps the warning up rather than
+   silently retiring it.
+
+5. **`doctor` reports quarantine counts — the deferred follow-up in "Alternatives
+   considered" is now landed.** That entry rejected `doctor` as the *sole*
+   channel and left "`doctor` may additionally surface it" undone. It ships as
+   **counts, not a list**: `wienerdog doctor` prints one line per non-empty reason
+   class carrying the exact ledger count, plus one line naming
+   `reports/warnings.md` as where those sessions are named. No transcript name and
+   no size reaches `doctor` at all. `doctor` is pull-based, so nothing there
+   decays — and because it points at a file, it says so when that file is not
+   there yet.
+
+6. **The dream report accounts for its own run's skips.** A run that skipped N
+   sessions produces a report that says so.
+
+**The invariant, restated.** §2's "re-rendered every digest as long as the
+quarantine is active" is **withdrawn** and replaced by: *a quarantine is durably
+NAMED in the vault warnings file and durably COUNTED by `wienerdog doctor` for as
+long as it is active; the digest carries an **exact count** for a bounded window
+after the quarantine set changes; and an actionable reason class stays bannered
+permanently.* Every count is exact and read from the ledger, so no quarantine can
+be silently dropped from any surface — and exactly one surface has to be kept in
+agreement with the ledger's names.
+
+**Alternatives considered, and rejected.**
+
+- **Acknowledgement-based clearing** (a `wienerdog quarantine ack` that silences
+  the banner). Rejected here: it costs a new CLI verb plus new durable state for
+  a condition the user cannot act on, and in practice nobody acks — so the
+  banner becomes de facto permanent again, which is the defect. Nothing in this
+  amendment precludes a future attended review command layering an ack on top;
+  the decay is computed at render time and reads no acknowledgement state, so
+  adding one later changes nothing here.
+- **Raise the pre-read ceiling, or read oversized files partially.** Rejected:
+  the ceiling is a memory bound (§1) and never-reading is deliberate. A
+  partially consumed session recorded as `processed` would be a lie of exactly
+  the WP-048/WP-069 class this ADR exists to prevent.
+- **Jump the baseline at install time so pre-existing history is excluded.**
+  Rejected: adopt-with-history is a feature, not an accident. The user's
+  existing sessions are the point.
+- **Let `doctor` print the full list too.** Rejected by the owner on 2026-08-29,
+  against a drafted work package that did exactly that: *"I don't see 191 lines
+  being useful to the user; they can open the file the pointer names anytime."*
+  `doctor` is a scan-in-one-screen command, and a second enumeration buries its
+  other checks while offering nothing the warnings file does not already offer
+  more durably. This is what generalized into the one-home principle above, and
+  it is why the dream report and the digest banner also count rather than list.
+- **Keep the enumeration and rely on `DigestCaps`.** Rejected on measurement:
+  the banner is one line, so the line cap never reaches it, and the byte cap
+  then truncates the payload instead. Bounding the producer is the only fix.
+
+**One stale cross-reference, corrected.** Amendment 1's part 4 says "Clearing an
+*exhausted* transcript is a separate, explicitly authorized recovery action
+specified in `WP-quarantine-review-cli`; until that ships …". That work package
+was **superseded on 2026-07-25 and will never be implemented**
+(`docs/specs/done/WP-quarantine-review-cli.md`), and its slug is permanently
+taken (ADR-0029: slugs are never renumbered or reused). Read Amendment 1's
+sentence as naming an **unbuilt future recovery command**, not that package.
+Everything else it states is unaffected: an exhausted transcript stays skipped,
+which is not data loss — the transcript file is untouched and the withheld note
+is byte-identical in `state/quarantine/`.
+
+**What is unchanged.** §1's intake caps, §2's fingerprint, selection rule and
+three-outcome semantics, §3's one-file-at-a-time materialization, the boundary
+statement, and every part of Amendment 1 — including the sticky
+`secret-revert-exhausted` skip and its permanent banner.
+
+Implemented by **WP-quarantine-warnings-file** (the enumeration's one home, and
+the family's root), then **WP-doctor-quarantine-counts**,
+**WP-quarantine-banner-decay** and **WP-dream-report-run-skips**, each of which
+counts and points at it.
