@@ -1,0 +1,44 @@
+Gate: PR review (rubric), backend gptsol (codex/gpt-5.6-sol via llmp)
+PR: felho/wienerdog#31, branch wp/dream-promote-module
+Diff reviewed: dcd5777989559cb3a1ab8ce201177cccd7aff338..db86d3e (merge base with main)
+Round: 1
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+
+EXECUTION RECORD:
+git -C /Users/felho/dev/repos-to-learn-from/wienerdog status --porcelain — exit 0; before: empty
+cat /Users/felho/dev/repos-to-learn-from/wienerdog/docs/runbooks/review-prompts/pr-rubric.md — exit 0
+cat /Users/felho/dev/repos-to-learn-from/wienerdog/CLAUDE.md — exit 0
+node --test /Users/felho/dev/repos-to-learn-from/wienerdog/tests/unit/dream-promote.test.js — exit 0
+npm --prefix /Users/felho/dev/repos-to-learn-from/wienerdog run lint — exit 0
+awk specification-section extraction — exit 0
+grep specification headings — exit 0
+git diff --stat/--name-status dcd5777989559cb3a1ab8ce201177cccd7aff338 HEAD — exit 0
+git diff documentation files — exit 0
+sed specification and source/test inspections — exit 0
+nl numbered specification/source inspections — exit 0
+git diff --check dcd5777989559cb3a1ab8ce201177cccd7aff338 HEAD — exit 0
+node TMPDIR merge-cwd reproduction — exit 0; reproduced cwd beneath workspace
+node --test tests/unit/dream-promote.test.js — exit 0; 31 passed, 0 failed
+npm run lint — exit 0; lint passed (shellcheck and PSScriptAnalyzer unavailable and skipped)
+git -C /Users/felho/dev/repos-to-learn-from/wienerdog status --porcelain — exit 0; after: empty, byte-identical to before
+
+{
+  "findings": [
+    {
+      "title": "[P1] Keep the merge temp directory outside the workspace",
+      "body": "When `TMPDIR` points at the workspace (or a directory beneath it), `os.tmpdir()` makes this merge root—and therefore the git `cwd`—a descendant of the workspace; the supplied `workspaceDir` is never used to reject that case. I reproduced this by setting `TMPDIR` to the workspace before calling `promote()`, which passed a cwd beneath it to the injected git seam. This violates the governing requirement that the merge never run at or beneath the workspace ([WP-dream-promote-module.md:284](/Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/WP-dream-promote-module.md#L284)) and can let workspace-local repository discovery influence the security-sensitive merge exit code.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js",
+        "line_range": {
+          "start": 391,
+          "end": 391
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The required unit test suite ran and exited 0 with 31 passing tests, and `npm run lint` ran and exited 0. However, a reproducible ambient `TMPDIR` configuration violates the merge-cwd security contract, so the patch is not correct.",
+  "overall_confidence_score": 0.99
+}
