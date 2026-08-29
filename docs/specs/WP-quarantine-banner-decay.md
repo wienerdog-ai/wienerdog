@@ -97,7 +97,7 @@ place a stored `reason` string is rendered into the injected digest.
 
 The record typedef (`:58-66`) already carries `updated_at:string` — an ISO
 timestamp written by every recording function (`recordProcessed` `:256`,
-`recordQuarantined` `:269`, `recordSecretDeferred` `:292`, `recordSecretExhausted`
+`recordQuarantined` `:269`, `recordSecretDeferred` `:293`, `recordSecretExhausted`
 `:308`). **Nothing reads it today.** No new field, and no new file, is needed for
 this package.
 
@@ -142,8 +142,9 @@ edited by this package, and that is an acceptance criterion, not an omission.**
 | modify | tests/unit/digest.test.js | **the three literal banner strings only** (`:184`, `:192`, `:1101`) — replace them with **Table A**'s shape so they stop standing as examples of a withdrawn format. Assert nothing about `quarantineBannerLine` here; that is `ledger.test.js`'s |
 
 `docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md` is **not** a
-deliverable: Amendment 2 is already on `main`, written by the architect, and
-nothing in it is authored or revised by the implementer.
+deliverable: Amendment 2 is written by the architect and is on `main` before this
+package is dispatched (Definition of done item 0 gates on its owner signature),
+and nothing in it is authored or revised by the implementer.
 
 If a further file appears necessary, that is a finding, not a fix: record it under
 "Discovered issues" in the PR body.

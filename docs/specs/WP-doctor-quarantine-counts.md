@@ -35,7 +35,7 @@ additionally surface it (a deferred follow-up)." **That follow-up never landed.*
 The consequence, measured on the maintainer's 0.13.0 install on 2026-08-29: 191
 historical Codex sessions were legitimately quarantined `over-ceiling`, and the
 only place that list existed was a 16.8 KB single-line banner inside the injected
-session digest — 73% of the digest budget, crowding out the payload.
+session digest — 73% of a 22,986-byte digest, crowding out the payload.
 
 **ADR-0023 Amendment 2 (2026-08-29)** lands the follow-up under a principle that
 governs this whole family: **the full enumeration has exactly ONE home, the vault
@@ -86,8 +86,9 @@ notice at `:432`, printed with a bare `console.log` as `[info] …`, deliberatel
 outside the pass/fail accounting. **`[info]` is therefore an existing doctor
 shape, not something this package invents.**
 
-`run` is a flat sequence of twelve groups. Nine are inline; three use the
-helper-loop idiom, e.g. `:407-408`:
+`run` is a flat sequence of twelve groups. Eight are inline; four use the
+helper-loop idiom (scheduler `:408`, skill links `:414`/`:417`, stale hooks `:423`,
+Google readiness `:427`), e.g. `:407-408`:
 
 ```js
   const { doctorSchedulerChecks } = require('../scheduler/status');
@@ -106,7 +107,7 @@ vault (`:344`), secrets dir (`:354`), private modes (`:366`), harness detection
 
 Two values `run` already holds are the only inputs this package needs:
 `paths` from `getPaths()` (`:312`; its `state` field is the core state dir), and
-`const vaultPath = readVaultPath(paths.config);` at `:344`, **which is `null` on a
+`const vaultPath = readVaultPath(paths.config);` at `:345`, **which is `null` on a
 just-installed machine with no vault yet**.
 
 The ledger module `src/core/dream/ledger.js` already exports everything needed —
@@ -128,7 +129,7 @@ literal — it is the one place that path is decided, and this is the second mod
 to consume it.
 
 `tests/unit/doctor.test.js` has 37 tests, all named `doctor …`; each spawns the
-real binary with `execFileSync(process.execPath, [bin, ...args], {env})` (`:44`)
+real binary with `execFileSync(process.execPath, [bin, ...args], {env})` (`:45`)
 under an isolated temp `HOME`/`WIENERDOG_HOME` (`tempEnv()`, `:14`).
 
 ## Deliverables (permission boundary — touch ONLY these)
@@ -247,6 +248,7 @@ line was emitted**.
 | Fact / rule | Value |
 |---|---|
 | Why a branch at all | a pointer to a file that is not there is a broken promise, and `doctor` is the command whose whole job is to notice broken promises. The `warn` branch is honest and actionable: the condition really is resolved by the next dream run |
+| **Why "the next dream run writes it" is literally true** | `WP-quarantine-warnings-file` (this package's prerequisite) carries a third refresh trigger, **write-if-absent**: a dream run that ends with at least one active quarantine in the ledger and no `reports/warnings.md` on disk writes the file, even when that run consumed nothing and the quarantine set did not change. Any dream run therefore heals the missing file — including the idle nights of an install whose quarantines are all pre-existing, which is exactly the shape this branch is written for. This row records the mechanism the promise rests on; **the message text above is unchanged by it, byte for byte** |
 | Why `info` and not `ok` on the present branch | the pointer is information, not a passing check, and folding it into the pass/fail accounting would misreport. `[info]` is an **existing** doctor shape (`:432`), which is why this needs no grammar change |
 | **Existence only — staleness is deliberately NOT checked** | it *is* cheaply decidable read-only (`WP-quarantine-warnings-file`'s Current-conditions block is time-invariant by contract, so `doctor` could re-render it from the ledger and compare). Rejected anyway: it would make `doctor` a second authority on that file's bytes, for a condition the next dream run heals on its own, and a **false** "stale" warning is worse than a missing one. A pointer to a slightly-old file is still a good pointer; a pointer to no file is not |
 | Path source | the vault-relative constant exported by `src/core/dream/warnings.js`, joined under `vaultPath`. Not retyped |
@@ -345,7 +347,7 @@ npm run lint
 # Tables A + B gate — every user-facing message exists byte-exact in the shipped source.
 node -e "const t=require('fs').readFileSync('src/cli/doctor.js','utf8');const need=['are being skipped: the session file is bigger than Wienerdog will read','are being skipped: the session file has too many lines to read','are being skipped: the session file could not be read','were withheld by the secret check too many times in a row','are being skipped for a reason this version does not recognize','no session transcripts are being skipped','which sessions, and why:','that file is not there yet; the next dream run writes it'];const miss=need.filter(s=>!t.includes(s));if(miss.length){console.error('MISSING: '+miss.join(' | '));process.exit(1);}console.log('DOCTOR MESSAGES OK');"
 # Table A gate — doctor never mutates, never enumerates, and does not retype the path.
-node -e "const t=require('fs').readFileSync('src/cli/doctor.js','utf8');const bad=[];if(/writeLedger|migrateFromWatermarks/.test(t))bad.push('doctor mutates or migrates the ledger');if(t.includes('displayName'))bad.push('doctor names a transcript — the enumeration has one home');if(/'reports\/warnings\.md'|\"reports\/warnings\.md\"/.test(t))bad.push('the warnings path is retyped instead of imported');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('DOCTOR DISCIPLINE OK');"
+node -e "const t=require('fs').readFileSync('src/cli/doctor.js','utf8');const bad=[];if(/writeLedger|migrateFromWatermarks/.test(t))bad.push('doctor mutates or migrates the ledger');if(t.includes('displayName'))bad.push('doctor names a transcript — the enumeration has one home');if(/(['\"\x60])reports\/warnings\.md\1/.test(t))bad.push('the warnings path is retyped instead of imported');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('DOCTOR DISCIPLINE OK');"
 ```
 
 - The last two are NEW steps and each is an ASSERTION: it exits non-zero on failure

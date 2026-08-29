@@ -287,10 +287,18 @@ Amended as follows.
    containing nothing time-varying, so the file changes **exactly** when the
    quarantine set changes and a git-backed vault shows a meaningful diff at that
    moment and no other) and an append-only *Run log* of dated deltas (a run that
-   changes nothing appends nothing). The vault is the system's own durable
-   record and is git-versioned by design; the managed block is re-rendered by
-   every sync and, for most users, is not under version control, so it can never
-   carry this.
+   changes nothing appends nothing). **One reconciliation trigger, write-if-absent
+   (owner-ruled 2026-08-29):** a dream run that ends with at least one active
+   quarantine and **no** warnings file on disk writes the file, even when that run
+   consumed nothing and the quarantine set did not change — so a missing file is
+   healed by the next run rather than by the next set *change*, which is what makes
+   `doctor`'s "the next dream run writes it" literal and what gives an install
+   holding only pre-existing quarantines the file at all. An *existing* file is
+   still rewritten only when the set changes (no churn), and a write-if-absent
+   write appends **nothing** to the Run log, which stays delta-only. The vault is
+   the system's own durable record and is git-versioned by design; the managed
+   block is re-rendered by every sync and, for most users, is not under version
+   control, so it can never carry this.
 
 2. **The digest banner for the intake reasons becomes an exact count plus a
    pointer, on a bounded window.** No enumeration reaches the digest. The
@@ -341,10 +349,12 @@ Amended as follows.
 quarantine is active" is **withdrawn** and replaced by: *a quarantine is durably
 NAMED in the vault warnings file and durably COUNTED by `wienerdog doctor` for as
 long as it is active; the digest carries an **exact count** for a bounded window
-after the quarantine set changes; and an actionable reason class stays bannered
-permanently.* Every count is exact and read from the ledger, so no quarantine can
-be silently dropped from any surface — and exactly one surface has to be kept in
-agreement with the ledger's names.
+that runs from each record's own `updated_at` — the window opens when a quarantine
+record is written or refreshed, so a set change that only **removes** records
+re-renders the count without opening one; and an actionable reason class stays
+bannered permanently.* Every count is exact and read from the ledger, so no
+quarantine can be silently dropped from any surface — and exactly one surface has
+to be kept in agreement with the ledger's names.
 
 **Alternatives considered, and rejected.**
 

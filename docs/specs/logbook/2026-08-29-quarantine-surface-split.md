@@ -125,6 +125,19 @@ step. It also happens to be forced: a quarantine that *leaves* the set is only
 knowable after the commit (`dream.js:597-611`), and a quarantine-only run returns
 at `:467-470` without any commit at all — so one refresh point cannot serve both.
 
+> **Amended 2026-08-29, round-zero finding 14 (owner-ruled).** There is a third
+> point after all, and the reasoning above is what missed it: both points above are
+> *set-change* points, and a **fully idle** run (nothing fresh, no new quarantine)
+> reaches neither — which is precisely the upgrade shape, an install whose
+> quarantines are all pre-existing. `doctor`'s byte-gated message promises "the
+> next dream run writes it", and the owner ruled the mechanism in rather than
+> hedging the message. Refresh point 3 is **write-if-absent**, on the
+> `sel.entries.length === 0` return at `:467-470`: it writes only when the file is
+> absent and the current set is non-empty, appends no run-log entry, and leaves the
+> no-churn property of an existing file untouched. The "tie it to `digest.md`'s
+> refresh rule" argument still holds for points 1 and 2, which are the set-change
+> points; point 3 is a reconciliation and refreshes nothing else.
+
 **An unrecognized reason class is counted with the informational group but never
 decays.** The ratified design named three intake reasons as informational and one
 as actionable, and said nothing about a fourth arriving later. Folding an unknown
