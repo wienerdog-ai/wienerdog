@@ -19,7 +19,12 @@ clean before and after.
 
 ## THE OVERLAP MEASUREMENT — decision-grade about the GATES
 
-**Twelve findings; TWO shared.** The Codex gate's B (the module's Deliverables
+**The counting unit, named first, because an earlier form of this paragraph mixed
+two units and was right in neither.** Counting RAW FINDINGS AS EACH GATE FILED
+THEM: **12 filed (10 + 2), of which 1 is shared** — the Codex ownership finding,
+which alone covers wd-reviewer's findings 3 and 4. Counting DEDUPLICATED ATOMIC
+PROBLEMS: **11 distinct, of which 2 were found by both.** Either unit is
+defensible; mixing them is not. The Codex gate's B (the module's Deliverables
 note and its self-contradicting write criterion) is wd-reviewer's findings 3 and
 4; its C (a stale lint file count in the PR body) wd-reviewer measured
 independently but did not report, having been unable to read the PR body.
@@ -59,16 +64,21 @@ The discipline that should have caught it was present and was not run.
 | C9 | C | the module's mirror checklist named the `report` union's arms as its own mirror; corrected to a cross-package citation |
 | C10 | C | "Three further RED directions" followed by four; corrected |
 | Codex B | B | same as B4/the Deliverables note; the note now says "for ordinary notes… NOT the report" |
-| Codex C | C | the PR body's `539 files` was stale — the tip lints **553**. Refreshed |
+| Codex C | C | the PR body's `539 files` was stale. **THIS DISPOSITION WAS FALSE WHEN WRITTEN: it said "Refreshed" and the body was never edited** — recorded here rather than silently corrected, because a disposition table claiming a fix that was not made is the same failure this whole record is about, committed inside it. Both gates caught it on re-run. The body is now actually updated, and the file COUNT was dropped from it entirely: it changes with every markdown file this PR adds (539 → 553 → 554 across three tips), so it is self-invalidating evidence and `0 error(s)` is the claim that holds |
 
 ## THE STRUCTURAL FIX, per the gate's own ADR-0031 routing
 
 wd-reviewer routed C6 as a **canonical extraction rather than six patches**, and
 that is what was done: **the family-wide table-letter map now lives in ONE
 surface** — `2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER MAP" — and
-all three specs CITE it. **A cut that moves a table now updates one table and
-nothing else needs editing.** That structurally prevents the next cut from
-producing this same six-site sweep.
+all three specs CITE it. **A cut that moves a table now updates one table**, and the letter-division
+restatements are gone from all three specs. **The claim was over-sold in an
+earlier form of this line and the next gate falsified it inside the same diff:**
+each spec's **Out of scope** bullets still describe the other packages'
+ownership in hand-maintained prose, and one had ALREADY drifted — saying "Table
+G" where the map says "G and V". **A cut updates the map AND sweeps the
+Out-of-scope bullets.** The extraction removes one class of restatement, not
+every ownership sentence in the family.
 
 ## What the gates CONFIRMED rather than faulted
 

@@ -14,18 +14,22 @@ epic: audit-2026-07-29
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-**Package note — the module half of the promote split.** This WP and
-`WP-dream-promote-in-workspace` are one design, split along the seam the owner
-ruled at the PR-review gate (logbook:
+**Package note — one of THREE packages, and the ruling quoted below is the
+PRE-T1 one.** The seam ruling reproduced here split the work TWO ways; **the T1
+tripwire later cut a third package, `WP-dream-promote-report`, which took Table R
+and the report row out of this spec.** The quotation is kept as history —
+**current ownership is the canonical map, cited above, and nothing in this note
+overrides it.** This WP and `WP-dream-promote-in-workspace` were one design,
+split along the seam the owner ruled at the PR-review gate (logbook:
 `2026-08-21-dream-promote-pair-review-rounds.md`, "Owner ruling on the
 verdicts"): **Tables C, D, E and R become this `promote.js` package, shipped
 consumed by nothing; Table G becomes the pipeline package.** The split's input
 record is `2026-08-28-promote-split-inputs.md` and the split's own decisions are
 recorded in `2026-08-28-promote-split.md`.
 
-**Contract table letters are family-wide. The canonical map lives in ONE surface
-— `docs/specs/logbook/2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER
-MAP" — and this spec CITES it rather than restating it.** It was restated in three
+**Contract table letters are family-wide. The canonical map lives in ONE LIVING
+surface — `docs/specs/logbook/2026-08-29-promote-family-map.md` — and this
+spec CITES it rather than restating it.** It was restated in three
 specs until the PR gate found two of them stale; a cut that moves a table now
 updates that one table and nothing else. Every cross-package reference cites its
 owner and never restates it.
@@ -680,7 +684,7 @@ test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" docs/GLOSSARY.md
 
 ## Out of scope (do NOT do these)
 
-- **The pipeline** — `WP-dream-promote-in-workspace` owns Table G: the workspace
+- **The pipeline** — `WP-dream-promote-in-workspace` owns Tables G and V: the workspace
   lifecycle in the run, replacing the sibling's transitional `spawnBrain`
   argument, calling `computeDelta` and this module, the reap precondition, the
   unknown-command non-vacuity signal, the transcript-advance, the abort paths

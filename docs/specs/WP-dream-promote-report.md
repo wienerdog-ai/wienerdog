@@ -22,9 +22,9 @@ FIRED"). The tripwire was pinned before any review round ran
 an execution rather than an argument under gate pressure, and it names both the
 seam and the resulting shape.
 
-**Contract table letters are family-wide. The canonical map lives in ONE surface
-— `docs/specs/logbook/2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER
-MAP" — and this spec CITES it rather than restating it.** It was restated in three
+**Contract table letters are family-wide. The canonical map lives in ONE LIVING
+surface — `docs/specs/logbook/2026-08-29-promote-family-map.md` — and this
+spec CITES it rather than restating it.** It was restated in three
 specs until the PR gate found two of them stale; a cut that moves a table now
 updates that one table and nothing else. Every cross-package reference cites its
 owner and never restates it.
@@ -277,7 +277,7 @@ exists to deliver it. **What the ruling changed is that the question dissolves
 rather than being traded off** — neutralise at composition and there is nothing
 left for a gate to refuse.
 
-## Mirrored Surface Checklist
+### Mirrored Surface Checklist
 
 - [ ] Deliverables-table `Notes` cells
 - [ ] `### Exact contracts`' `records` input and `report` return union
