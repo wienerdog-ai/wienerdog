@@ -89,8 +89,9 @@ take it.
 - **From `WP-dream-promote-module` (`Done` at dispatch):**
   `src/core/dream/promote.js` exports `promote(o)`, which decides, gates, merges
   and publishes ordinary notes and returns `promoted`, `redacted`, `refused` and
-  `secretDisposition`. **It composes and publishes no report**, takes no
-  `records`, and its return carries no `report` field. Those are added here.
+  `secretDisposition`, with the preservation record on the arms its Table Q
+  row Q1 names. **It composes and publishes no report**, takes no `records`, and
+  its return carries no `report` field. Those are added here.
 - `src/core/dream/vault-write.js` — `writeIntoVault`, the only route into the
   vault. Its `expect` guard (Table H, H5) and its returned bytes (H6) are what
   make the second write and the fallback safe.
@@ -133,15 +134,19 @@ This package EXTENDS `promote()`; it does not introduce a new interface. The
 module half's `### Exact contracts` owns the base shape and is not restated.
 Two additions:
 
-**The base shape this extends is CONCRETE, not an ellipsis** — the module half's
-`@returns` names `promoted:Array<{rel, bytes}>`, `redacted:Array<{rel, bytes,
-lines, labels, artifact}>`, `refused:Array<{rel, reason, artifact}>` and
-`secretDisposition`. **Pass (c) found that base block missing entirely, so this
-package was extending nothing;** it is cited here and not restated. **The
-`refused[].artifact` half was stale here for one round after the Table Q
-reconciliation added it (`artifact` REQUIRED AND NULLABLE, module half Table Q
-row Q8) — a shape restated in a citing surface, which is the defect this block's
-own "cited here and not restated" sentence names.**
+**The base shape this extends is NAMED, not restated, and not an ellipsis
+either.** The module half's `@returns` decides `promoted[]`, `redacted[]`,
+`refused[]` and `secretDisposition`, and its `PreservedCopy` typedef decides
+what a preservation-record entry is; **all five are read from that spec's
+`### Exact contracts` at dispatch and none of their FIELDS is written out
+here.** **Pass (c) found that base block missing entirely, so this package was
+extending nothing** — the fix for that was to name it, and naming is where this
+block stops. **Ruled 2026-08-29, after the round-zero pass found the field list
+stale here for one round and the round-2 pass found the block naming its own
+restatement as a defect and keeping it anyway:** a spelled-out field list in a
+citing surface goes stale between one revision and the next, and this block had
+now proved it twice. The only shape this package DECIDES is the `report` union
+below, and that is the only one it writes out.
 
 ```js
 /** @param {{ <the module half's parameters>, records?:Array<{path:string, reason:string}> }} o
@@ -156,7 +161,7 @@ own "cited here and not restated" sentence names.**
  *             report:{outcome:'promoted'|'fallback', bytes:Buffer,
  *                     record:string[]}
  *                   |{outcome:'refused', reason:string,
- *                     artifact:string|null, record:string[]} }}
+ *                     preserved:Array<PreservedCopy>, record:string[]} }}
  *    report  the dream report's own outcome, never folded into `promoted` —
  *            Table R's fallback publish is recorded as itself. **A DISCRIMINATED
  *            UNION: a published arm REQUIRES `bytes`, the refused arm cannot
@@ -167,16 +172,19 @@ own "cited here and not restated" sentence names.**
  *            On `refused` the COMPLETE enforcement record is in `record`, and
  *            **returning it is not delivering it** — the caller delivers
  *            (`WP-dream-promote-in-workspace`, row G11).
- *            **The refused arm also carries `artifact`, REQUIRED AND NULLABLE,
- *            for the same reason the module half's `refused[]` does (its Table Q
- *            row Q8, which owns the rule and is not restated here).** The report
- *            body is a promotion candidate under `reports_dir`, and the report
- *            row below records that EP2 is the one gate that judges a path
- *            there — so the gate can REDACT the body, preserve an unredacted
- *            copy, and see the body refused afterwards by C4, C7, C8 or any
- *            H-rule. The body is not a member of `refused[]`, so without this
- *            field the copy's name leaves the return entirely. `null` when no
- *            copy was preserved */
+ *            **The refused arm also carries `preserved` — the module half's
+ *            PRESERVATION RECORD, REQUIRED and possibly EMPTY, for the same
+ *            reason its `refused[]` carries one (its Table Q row Q8, which owns
+ *            the rule, and row Q9, which owns an entry's fields; neither is
+ *            restated here, and `PreservedCopy` is that spec's typedef).** The
+ *            report body is a promotion candidate under `reports_dir`, and the
+ *            report row below records that EP2 is the one gate that judges a
+ *            path there — so the gate can REDACT the body, preserve an
+ *            unredacted copy, and see the body refused afterwards by C4, C7, C8
+ *            or any H-rule; a hard secret in the body takes the withhold arm
+ *            and preserves too. The body is not a member of `refused[]`, so
+ *            without this field those copies leave the return entirely. Empty
+ *            when the gate preserved nothing for the body, or never ran */
 ```
 
 ## Contract reference
@@ -248,8 +256,9 @@ pass-through — the defect both prior A-bands shared.
 | `refused[].rel` | the brain chose the path | **YES** | **redact, then sanitise** |
 | `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and the primitive's H7/H9 naming a surviving object | **YES** | **redact, then sanitise** |
 | `redacted[].rel` | the brain chose the path | **YES — and this is the channel round (d) found leaking**, because the redaction line existed while the list named only the refusal fields | **redact, then sanitise** |
-| `redacted[].artifact` | the quarantine basename, DERIVED from the brain-chosen path (Table Q, row Q2) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
-| `refused[].artifact`, and `report.artifact` on the refused report arm | the quarantine basename, DERIVED from the brain-chosen path (Table Q, rows Q2 and Q8) | **YES, by derivation** — same as `redacted[].artifact`, and for the same reason: a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
+| `preserved[].artifact`, wherever a preservation record travels — on `redacted[]`, on `refused[]`, and on the refused `report` arm | the quarantine basename, DERIVED from the brain-chosen path (module half, Table Q rows Q2 and Q9) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
+| `preserved[].location` | the state-relative directory the GATE reports for that copy — one of the two places the glossary's **secret quarantine** names, a code-owned closed set (module half, Table Q row Q9) | **NO** | none — **and stated rather than omitted**, for the reason the `labels` row gives: a channel with no row is indistinguishable from a channel nobody thought about |
+| `preserved[].remediation` | one of two code-owned values decided per arm (module half, Table Q row Q9) | **NO** | none — same reason |
 | `redacted[].labels` | detector names from a code-owned closed set | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
 | `redacted[].lines` | a count | **NO** | none — same reason |
 | `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
@@ -290,8 +299,8 @@ naming: the only difference from the normal second write is that the base is
 | Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and the primitive's H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
-| The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (module half, Table Q rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
-| **The preserved-copy line on a REFUSAL — added by the Table Q reconciliation pass, 2026-08-29** | one line per entry of `refused[]` whose `artifact` is non-null, naming the path and that artifact — **and, on the refused report arm, one line for `report.artifact` when it is non-null, naming the report path and that artifact.** **Both sources, because the report body is subject to the identical sequence and is not a member of `refused[]`:** it is a promotion candidate under `reports_dir`, the report row above records that EP2 is the one gate that judges a path there, so the gate can redact the body and preserve a copy before C4, C7, C8 or an H-rule refuses it. The line is composed onto the fallback branch, which is the branch that exists precisely because the body was not published. A row scoped to `refused[]` alone left the report's own copy unannounced — found by the round-zero pass of 2026-08-29, one surface over from the defect that created this row. **The guidance is DELETE, not restore**, and the difference is the content's provenance: the note was never promoted, so what the copy holds is brain-authored text the product refused, and telling the user where it is and that removing it is the expected action is the whole obligation. **Why the line exists at all:** the gate wrote that copy before promotion knew the path would be refused, `state/quarantine/redacted/` carries no digest banner, and the path is not in `redacted[]` — so without this line an unredacted copy of secret-shaped content sits unannounced until retention silently removes it (module half, Table Q rows Q3 and Q8, which own both facts). **The name is READ FROM THE TYPED FIELD `refused[].artifact`; this row may not recover it from `reason`** — measured in the module half's own PR gate, a prose carrier on a paired refusal named the SIBLING's copy first. Neutralised at composition exactly like every other channel (Table N) |
+| The redaction lines | one line per entry of `redacted[]`, carrying the path, the scrubbed-line count, the labels, and **that entry's preservation record read field by field — the `artifact`, the `location` and the `remediation`** (module half, Table Q rows Q1–Q3 and Q9). **Table Q owns why this is data-loss-critical and what each field means; this row restates neither, and in particular it does not decide the guidance — `remediation` carries it.** Composed wherever the enforcement section is composed (Table N, row N3) |
+| **The preserved-copy line on a REFUSAL — added by the Table Q reconciliation pass, 2026-08-29, and re-cut by the shape ruling of the same day** | one line per entry of the preservation record on a REFUSED outcome, naming the path and reading the entry's `artifact`, `location` and `remediation` off it, **from BOTH of its sources: every `refused[]` entry, and the refused `report` arm's own record.** Both, because the report body is subject to the identical sequence and is not a member of `refused[]`: it is a promotion candidate under `reports_dir`, the report row above records that EP2 is the one gate that judges a path there, so the gate can redact the body and preserve a copy — or withhold it and preserve one — before C4, C7, C8 or an H-rule refuses it. A row scoped to `refused[]` alone left the report's own copy unannounced, found by the round-zero pass of 2026-08-29, one surface over from the defect that created this row. **THE TWO SOURCES ARE SCOPED DIFFERENTLY, and conflating them was a defect this row carried for one round (round-2 coherence, C-2):** the `refused[]` lines are composed **wherever the enforcement section is composed — the normal second write and the fallback alike (Table N, row N3)** — because a refused path with a preserved copy is the ORDINARY case and occurs on runs where the report body publishes perfectly well; scoping them to the fallback left the common case with no surface saying who writes the line. The `report` arm's line is on the fallback branch by construction, since that arm IS why the fallback fires. **Each preserved copy is rendered exactly once:** a copy on a `redacted[]` entry is the redaction line's, a copy on a refused outcome is this row's. **The guidance is NOT decided here — it is READ from the entry's `remediation`**, which is a `delete` on every refusing arm because the note was never promoted, and the difference from a redaction's `restore-or-delete` is the content's provenance rather than a disagreement between two surfaces (module half, Table Q row Q9, which owns the values and their grounds). **Why the line exists at all:** the gate wrote those copies before promotion knew the path would be refused, a copy on the redacted shelf carries no digest banner, and the path is not in `redacted[]` — so without this line an unredacted copy of secret-shaped content sits unannounced until retention silently removes it (module half, Table Q rows Q3, Q8 and Q9, which own all three facts). **Every field is READ FROM THE TYPED RECORD; this row may not recover one from `reason`** — measured in the module half's own PR gate, a prose carrier on a paired refusal named the SIBLING's copy first. Neutralised at composition exactly like every other channel (Table N) |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
 | Rejected alternatives, recorded so they are not re-proposed | On the fallback shape: **overwrite** (loses run 1's report); **a distinct filename for the fallback** (a new product surface for a rare failure branch); **silent refusal** (loses the enforcement record — the very thing this branch exists to deliver). On the gate question, both of the options the author's flag named, rejected as insufficient ALONE: **exempting the code-authored section from the gates** (opens an unscanned brain-influenced channel into the vault — `r.path` is attacker-influenceable, so a secret in a filename would ride through), and **sanitizing alone** (a secret-shaped path, or user-edited preserved bytes, could still get the whole report withheld — the record dies either way) |
 
@@ -321,20 +330,25 @@ left for a gate to refuse.
       rule; the dispatch block mirrors the pinned base and the containment
       citation
 - [ ] **The `report` union's arms** — `### Exact contracts`, Table R's four
-      rows, Table R's preserved-copy row (the refused arm's `artifact`), the
+      rows, Table R's preserved-copy row (the refused arm's `preserved`), the
       module half's Table S row **S3**, and `WP-dream-promote-in-workspace`'s
       rows G8 and G11. **No surface may make `bytes` optional across the union,
-      none may describe RETURNING the record as delivering it, and none may omit
-      `artifact` from the refused arm** — it is required and nullable there for
-      the same reason it is on `refused[]` (module half, Table Q row Q8).
+      none may describe RETURNING the enforcement record as delivering it, and
+      none may omit `preserved` from the refused arm** — it is required and
+      possibly empty there for the same reason it is on `refused[]` (module
+      half, Table Q rows Q8 and Q9). **Nor may any surface here write out the
+      FIELDS of the module half's four returned shapes**: naming them is this
+      package's job and restating them is how they went stale twice.
 - [ ] **Table R's four cases and its named residual** — the report row (which
       cites, never restates), and the acceptance criteria
 - [ ] **Table N — the neutralisation contract.** Its mirrors are Table R's gate
       rule (2), Table R's observable-property row (which defers to N4), the
       redaction-lines row, **Table R's preserved-copy row (which ends "Neutralised
-      at composition exactly like every other channel (Table N)" — registered
+      at composition exactly like every other channel (Table N)" and whose
+      `refused[]` half cites row N3 for its composition scope — registered
       2026-08-29, having been an unregistered mirror since the round it was
-      added)**, the `records` input in `### Exact contracts`, and the
+      added)**, **Table R's redaction-lines row (which cites N3 for the same
+      scope)**, the `records` input in `### Exact contracts`, and the
       code-authored-section criterion. **Three prohibitions, each earned by a
       finding: no surface may state a neutralisation rule without its ORDER; no
       surface may carry a hand-listed value set, because a list in a citing surface
@@ -342,12 +356,18 @@ left for a gate to refuse.
       N4's justification, which has been false twice and whose prerequisites N4
       itself names.**
 - [ ] **The redaction lines AND the preserved-copy line on a refusal, from BOTH
-      of its sources** — Table R's two rows for them, their two acceptance
-      criteria, the refused report arm's `artifact` in `### Exact contracts`,
-      Table N's channel row for `refused[].artifact` and `report.artifact`, and
-      the module
+      of its sources** — Table R's two rows for them, **the ONE acceptance
+      criterion that asserts them (`- [ ] A refused path's preserved copy is
+      announced…`; the redaction-lines row's own assertion is the module half's,
+      at its `A redaction reports its recovery copy` criterion, and naming two
+      criteria here was a miscount this checklist carried until 2026-08-29)**,
+      the refused report arm's `preserved` in `### Exact contracts`, **Table N's
+      three channel rows for the record's fields — `preserved[].artifact`,
+      `preserved[].location` and `preserved[].remediation`** — and the module
       half's **Table Q**, which owns the metadata both carry (rows Q1–Q3 for the
-      first, row Q8 for the second). **This package cites Table Q and never
+      first, rows Q8 and Q9 for the second, and row Q9 for every field of every
+      entry). **No surface here may decide a copy's remediation guidance: it is
+      READ from the entry's `remediation`.** **This package cites Table Q and never
       restates the quarantine lifecycle** — and the DURABLE half of that
       lifecycle is not even the module half's: the retention prune, the
       identity-gated deletion and the preservation-failure abort are decided in
@@ -355,8 +375,8 @@ left for a gate to refuse.
       collide with this family's, so it is cited by spec path and never by bare
       letter. **WHICH letters collide is the canonical map's
       (`docs/specs/logbook/2026-08-29-promote-family-map.md`); this surface does
-      not list them.** **No surface here may read an artifact name out of a refusal
-      reason.**
+      not list them.** **No surface here may read any field of a
+      preserved copy out of a refusal reason.**
 
 ## Implementation notes & constraints
 
@@ -419,21 +439,34 @@ left for a gate to refuse.
       against an implementation whose trigger is the gate-refusal case alone,
       which preserves the report and drops the record.
 - [ ] **A refused path's preserved copy is announced, and so is the REPORT's
-      own (Table R's preserved-copy row; module half, Table Q rows Q3 and Q8).**
-      With a `refused[]` entry carrying a non-null `artifact`, the enforcement
-      section names that path and that artifact with delete guidance; with
-      `artifact: null` it names no artifact for that path. **Asserted a second
+      own (Table R's preserved-copy row; module half, Table Q rows Q3, Q8 and
+      Q9).** With a `refused[]` entry whose preservation record holds an entry,
+      the enforcement section names that path and reads the entry's `artifact`,
+      `location` and `remediation` off the record; with an EMPTY record it names
+      no copy for that path. **Asserted on the NORMAL branch as well as the
+      fallback**, because a refused path with a preserved copy occurs on runs
+      where the report body publishes perfectly well — proven RED against a
+      composer that renders these lines only when the fallback fires, which is
+      the scoping defect this row carried for one round. **Asserted a second
       time for the report body itself:** a run in which EP2 redacts the body
       (preserving a copy) and the body is then refused publishes a fallback whose
-      enforcement section names the report path and `report.artifact`; with
-      `report.artifact` null it names none. Proven RED against a composer that
-      renders redaction lines only, which leaves an unredacted copy unannounced —
-      the data-loss shape row Q3 names — **and separately RED against a composer
-      that handles `refused[]` but not the report arm**, which is the same
-      omission one surface over. **The name is asserted to come from the typed
-      field: proven RED against a composer that recovers it from `reason`**,
+      enforcement section names the report path and the entries in
+      `report.preserved`; with an empty `report.preserved` it names none.
+      **Asserted a third time on the HARD-WITHHOLD arm**, where the gate refuses
+      for a hard secret and the record can hold TWO entries — the withheld copy
+      and the redact arm's kept copy — and both are named, each with its own
+      `location`. Proven RED against a composer that renders redaction lines
+      only, which leaves an unredacted copy unannounced — the data-loss shape
+      row Q3 names — **and separately RED against a composer that handles
+      `refused[]` but not the report arm**, which is the same omission one
+      surface over, **and separately RED against one that renders only the first
+      entry of a record**. **Every field is asserted to come from the typed
+      record: proven RED against a composer that recovers a name from `reason`**,
       asserted on a skill/ledger pair refusal where both halves were redacted,
-      which is the case a prose carrier got wrong.
+      which is the case a prose carrier got wrong; **and RED against one that
+      hardcodes the guidance instead of reading `remediation`**, asserted by a
+      case that composes a redaction line and a refusal line in the same
+      section and requires the two guidances to differ.
 - [ ] **The preserved region is not re-gated (Table R).** A preserved report
       whose EXISTING bytes contain secret-shaped text is republished
       byte-identical, and no gate withholds, redacts or alters it. Proven RED
@@ -516,7 +549,9 @@ test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js' --exclude='
   EP2 gate's result and what promotion does with it, the decided bytes. This
   package extends `promote()` and cites those tables; it may not restate or
   re-implement them. **In particular the redaction lines and the preserved-copy
-  line on a refusal carry Table Q's metadata, and Table Q owns it.**
+  line on a refusal render the PRESERVATION RECORD, whose fields, values and
+  per-arm remediation are Table Q rows Q1, Q8 and Q9's — this package reads
+  them and decides none of them.**
 - **The EP2 gate's DURABLE quarantine lifecycle** — the retention prune of
   `state/quarantine/redacted/`, the identity-gated deletion of a redundant copy,
   and the preservation-failure abort. Not the module half's either: they are
