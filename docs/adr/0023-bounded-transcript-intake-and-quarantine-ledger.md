@@ -426,4 +426,9 @@ statement, and every part of Amendment 1 — including the sticky
 Implemented by **WP-quarantine-warnings-file** (the enumeration's one home, and
 the family's root), then **WP-doctor-quarantine-counts**,
 **WP-quarantine-banner-decay** and **WP-dream-report-run-skips**, each of which
-counts and points at it.
+counts and — for the counts that file can name — points at it. `doctor` and the
+banner count quarantines only, every one of which the file names, so they always
+point. The dream report is the one package that also counts capacity-deferred
+transcripts, for which §2 keeps no record: a section whose only non-zero count is
+that one carries no pointer. The exact condition is owned by
+`WP-dream-report-run-skips`'s Table A pointer row, cited here and not restated.

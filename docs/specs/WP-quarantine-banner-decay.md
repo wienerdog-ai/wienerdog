@@ -49,7 +49,13 @@ the banner-blindness that damages the banners that *are* actionable.
 window) from STANDING STATE (things are in quarantine — a durable coverage fact
 belonging in pull-based surfaces). Amendment 2 also fixes where the *list*
 lives: **the full enumeration has exactly ONE home, `reports/warnings.md` in the
-vault, and every other surface carries exact counts and a pointer to it.** That is
+vault, and every other surface carries exact counts and a pointer to it.** The
+pointer promises only what that file can name, and **this banner's counts are
+quarantine counts only** — every one of which the file names — so the exception
+cannot arise here. (It arises in exactly one sibling: the dream report also counts
+capacity-deferred transcripts, which carry no ledger record, and a section whose
+only non-zero count is that one carries no pointer. The condition is owned by
+`WP-dream-report-run-skips`'s Table A pointer row, cited and not restated.) That is
 why the new sentence names one destination and not two. `wienerdog doctor`
 (`WP-doctor-quarantine-counts`) also reports counts and also points at that file,
 so naming it here would spend digest bytes sending the reader to a second surface

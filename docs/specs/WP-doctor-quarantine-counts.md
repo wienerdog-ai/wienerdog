@@ -41,6 +41,12 @@ session digest — 73% of a 22,986-byte digest, crowding out the payload.
 governs this whole family: **the full enumeration has exactly ONE home, the vault
 warnings file `reports/warnings.md`. Every other surface — this one, the digest
 banner, the dream report — carries exact counts and a pointer, and never a list.**
+The pointer promises only what that file can name, and **this package's counts are
+quarantine counts only** — every one of which the file names — so the exception
+cannot arise here. (It arises in exactly one sibling: the dream report also counts
+capacity-deferred transcripts, which carry no ledger record, and a section whose
+only non-zero count is that one carries no pointer. The condition is owned by
+`WP-dream-report-run-skips`'s Table A pointer row, cited and not restated.)
 The owner ratified that explicitly against a first draft of this very package that
 had `doctor` printing all 191 names: *"I don't see 191 lines being useful to the
 user; they can open the file the pointer names anytime."* A second enumeration is

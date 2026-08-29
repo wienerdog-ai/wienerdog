@@ -260,8 +260,9 @@ the report composer owns the document. Two conditions, so the discipline applies
 - **Integers only.** The moment a session id or a basename enters this section, it
   needs the sanitizer, a length bound, and a review of what a filename can do to a
   markdown document — all of which `reports/warnings.md` already solved for the one
-  place that carries names. This section counts and points, like every surface in
-  the family except that file.
+  place that carries names. This section counts, and points at that file for the
+  sessions it can name — like every surface in the family except that file, with
+  the capacity-only exception Table A's pointer row owns.
 - **Named residual — the section describes the run up to the point the report is
   composed.** A `secret-revert-exhausted` quarantine minted after the commit is not
   in it. That class has two dedicated surfaces of its own, and moving the report's

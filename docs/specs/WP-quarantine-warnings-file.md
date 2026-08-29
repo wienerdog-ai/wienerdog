@@ -66,8 +66,14 @@ re-proposes them.
 **It is the family's root, because the enumeration has exactly one home and this
 is it.** ADR-0023 Amendment 2 states the principle: the full list of quarantined
 transcripts lives here and nowhere else, and every other surface — the digest
-banner, `wienerdog doctor`, the dream report — carries **exact counts and a
-pointer to this file**, never a list. So all three of this package's siblings
+banner, `wienerdog doctor`, the dream report — carries **exact counts and, for
+the counts this file can name, a pointer to it**, never a list. The banner and
+`doctor` count quarantines only, every one of which this file names, so they
+always point. The dream report also counts capacity-deferred transcripts, which
+carry no ledger record and therefore cannot appear here: a report section whose
+only non-zero count is that one carries no pointer. The exact condition is owned
+by `WP-dream-report-run-skips`'s Table A pointer row, cited here and not
+restated. So all three of this package's siblings
 point at what it builds, and all three depend on it:
 `WP-doctor-quarantine-counts`, `WP-quarantine-banner-decay` and
 `WP-dream-report-run-skips`. **Nothing here may be softened on the assumption that
