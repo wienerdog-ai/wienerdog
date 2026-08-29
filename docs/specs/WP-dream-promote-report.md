@@ -257,7 +257,8 @@ below, and that is the only one it writes out.
  *            additionally writing out what the vault holds; **round 6's COH-3
  *            found the REDUCED form still GLOSSING the two writes two lines
  *            before it claimed to declare the type "and nothing else". The
- *            gloss is gone — a pointer is not a gloss.** */```
+ *            gloss is gone — a pointer is not a gloss.** */
+```
 
 ## Contract reference
 
@@ -845,7 +846,7 @@ left for a gate to refuse.
       prefix-shaped secret survives the sanitiser intact and is caught in either
       order, so a test built only from one goes green on the leaking
       implementation.
-- [ ] **Every report refusal delivers the record, and the TWO refusal shapes
+- [ ] **Every report refusal delivers the record, and the TWO refusal shapes (Table Y, rows Y4 and Y5)
       are asserted apart.** **(a) THE ONE-WRITE PATH's WRITE IS REFUSED — Table R's
       row R4, where nothing of this run's report reached the vault, and the
       return is `report.outcome === 'refused'`.** **The title was singular in a

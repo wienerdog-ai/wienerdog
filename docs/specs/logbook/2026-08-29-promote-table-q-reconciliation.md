@@ -373,7 +373,7 @@ before the first round ran, and both round-2 passes hit it independently.
 | Round | Gate | Raw output | Commit |
 |---|---|---|---|
 | **2** | adversarial DESIGN review, backend gptsol | `docs/specs/logbook/2026-08-29-promote-family-design-round-2-gptsol-raw.txt` | `95fe35a` |
-| **2** | internal coherence, fresh executor | `docs/specs/logbook/2026-08-29-promote-family-design-round-2-coherence-raw.txt` | this commit's parent |
+| **2** | internal coherence, fresh executor | `docs/specs/logbook/2026-08-29-promote-family-design-round-2-coherence-raw.txt` | `9283a87` |
 
 **Round 1's finding is confirmed fixed** by the adversarial gate, on the text and
 without a scope objection: C1's two halves are separate, and the
@@ -1757,7 +1757,7 @@ committed BEFORE adjudication, per `docs/runbooks/codex-review.md`:**
 **The trend.** Rounds found 21 → 15 → 11 → 8 → 13 → **9** (three contract, three
 coherence, three nits). The adversarial gate filed two, both of which the
 coherence gate filed independently — the second round in a row the two gates
-overlap. **Citation endpoints: clean for the FOURTH consecutive round.**
+overlap. **Citation endpoints: clean for the THIRD consecutive round (round 4 was the first; round 3 still carried F6, a range one line short of its construct).**
 **Acceptance criteria: 23 / 10 / 24, unchanged.** The adversarial gate's
 escalation test returned **NOT TRIGGERED**.
 
@@ -1969,7 +1969,7 @@ row G8 is named by 5 Mirrored Surface Checklist entries (scope: dream-promote):
 omission.** Three reasons, and the first is decisive: **tree-wide the tool is red
 on twelve pre-existing stale references in closed records**, so wiring it as a
 gate today would make every PR in the repo fail for debt no PR introduced.
-Cleaning that up is a change to nine `Done` specs and belongs to a WP with its
+Cleaning that up is a change to seven `Done` specs (12 references) and belongs to a WP with its
 own Deliverables table. Second, this branch is a design-record branch, not a work
 package, and adding a repo-wide gate is not a documentation change. Third, the
 tool's reference extractor follows THIS family's citation grammar; before it
