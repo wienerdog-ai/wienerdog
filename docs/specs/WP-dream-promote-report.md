@@ -399,7 +399,7 @@ left for a gate to refuse.
       `preserved[].location` and `preserved[].remediation`** — and the module
       half's **Table Q**, which owns the metadata both carry (rows Q1–Q3 for the
       first, rows Q8 and Q9 for the second, and row Q9 for every field of every
-      entry). **No surface here may decide a copy's remediation guidance: it is
+      entry AND for which party fills each field and when). **No surface here may decide a copy's remediation guidance: it is
       READ from the entry's `remediation`, which the module half ASSIGNS at
       outcome time (its Table Q row Q9 owns who fills each field and when).** **This package cites Table Q and never
       restates the quarantine lifecycle** — and the DURABLE half of that

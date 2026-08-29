@@ -533,10 +533,29 @@ preserved anything — the hard withhold included — with every fact about a co
 a TYPED FIELD on it, never prose and never a new per-arm carrier.** Row **Q1**
 is where the arms carry it and row **Q9** is where its fields are decided; rows
 Q2, Q3 and Q8 were swept onto it in the same sitting, along with `refused[]`,
-the report package's refused arm, its Table N channels, its Table R rows and
+the report package's report arm, its Table N channels, its Table R rows and
 the acceptance criteria of all three specs. **What it deleted: the standalone
 `refused[].artifact` field and the standalone `redacted[].artifact` field.** A
 fifth field on a fifth arm was the treadmill the criterion existed to stop.
+
+**THE SHAPE RULING'S SECOND HALF, 2026-08-29 (round 3) — the record states its
+provenance PER FIELD.** The first round against the ruled shape found that one
+of the record's three fields is not what the shape implicitly claimed all three
+were: `artifact` and `location` are **gate-reported**, and `remediation` is
+**assigned at outcome time, by THIS MODULE**, because the gate runs before the
+merge and cannot know the candidate's outcome when it preserves a copy. Row Q2's
+"every field" claim is narrowed to the gate-filled fields accordingly. **The
+defect was not a wrong field — it was an IMPLICIT provenance claim about the
+record as a whole, which measured false for one field.** A record filled by two
+parties at two times, saying so nowhere, produces that defect again on the next
+field anyone adds. **So row Q9 states, per field, WHO fills it and WHEN, the
+`GateReportedCopy`/`PreservedCopy` split carries the same statement in the TYPE,
+and the Mirrored Surface Checklist forbids adding a field to Q9 without both.**
+**`remediation` remains a READ for every downstream surface, and the reason is
+exact:** this module is where that fact FIRST EXISTS, not a consumer re-deriving
+a value the gate returned — it returned none. Q9's no-re-derivation rule binds
+the surfaces downstream of `promote()`'s return, which is the distinction a
+careless wording turns into an accusation against the module.
 
 **LETTER-SPACE WARNING, and it is load-bearing for every citation in this
 table.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` carries its own
