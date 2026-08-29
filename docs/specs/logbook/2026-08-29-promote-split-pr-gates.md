@@ -70,8 +70,11 @@ The discipline that should have caught it was present and was not run.
 
 wd-reviewer routed C6 as a **canonical extraction rather than six patches**, and
 that is what was done: **the family-wide table-letter map now lives in ONE
-surface** — `2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER MAP" — and
-all three specs CITE it. **A cut that moves a table now updates one table**, and the letter-division
+LIVING surface** — `docs/specs/logbook/2026-08-29-promote-family-map.md` — and all
+three specs CITE it. **It was first placed in `2026-08-28-promote-split.md` and
+the next gate rejected that host as a dated execution record contradicting the
+table; this sentence named the old host for one round after the move, which is a
+mirror drifting inside the record about mirror drift.** **A cut that moves a table now updates one table**, and the letter-division
 restatements are gone from all three specs. **The claim was over-sold in an
 earlier form of this line and the next gate falsified it inside the same diff:**
 each spec's **Out of scope** bullets still describe the other packages'
@@ -123,9 +126,15 @@ repo — and `gh pr view 30` in the resolved one returns an unrelated work packa
 it is the reason the gate could not read the PR body. Recorded here rather than
 dismissed with the objection.
 
-## THIRD GATE RUN on `351bbfd` — THE READING PINNED BEFORE IT RUNS
+## THIRD GATE RUN on `4de2c6c` — THE READING PINNED BEFORE IT RUNS
 
-**Owner ruling, 2026-08-29.** Both gates re-run on the same tip, and **the
+**Owner ruling, 2026-08-29.** Both gates re-run on the same tip, and **that tip
+is `4de2c6c`, not the `351bbfd` the ruling named: committing this very section
+moved the tip.** Measured, the substance is unaffected —
+`git diff --name-only 351bbfd..4de2c6c -- docs/specs/WP-*.md` is empty, so both
+gates judge identical spec content. **The SHA is corrected rather than left to
+redirect**, because a self-invalidating identifier is the shape the file count
+was removed for one section above. And **the
 interpretation is fixed now so it cannot be chosen after seeing the findings** —
 the same discipline this family applied to round 4's classification.
 
@@ -146,3 +155,46 @@ measures at 0.5–0.9 per fix. **A fourth iteration is therefore not free and no
 obviously convergent**, so a B-band finding is a decision about materiality — is
 this worth another cycle's injected defects — and that decision is the owner's,
 not the author's.
+
+## RUN 2 (`da19609`) — dispositions
+
+| Gate | Verdict | Findings |
+|---|---|---|
+| spec fidelity | REQUEST-CHANGES | 6 — 3 B, 3 C, no A |
+| Codex rubric | NO-MERGE | 3 — all C, no A, no B |
+
+**All nine accepted and fixed** in `351bbfd`: the map relocated to a living
+surface (B2); the drifted `Table G` → `G and V` mirror and the narrowed
+extraction claim (B3); the PR body's three stale statements and **the disposition
+that claimed a fix never made** (B1); the two false universals (C4); both package
+notes' two-package framing (C5); the heading level (C6); the mixed counting units;
+and the "all five specs" citation claim.
+
+## RUN 3 (`4de2c6c`) — dispositions, and the gates' verdicts
+
+| Gate | Verdict | Findings |
+|---|---|---|
+| spec fidelity | **MERGE-READY** | 3 — **all C, no B, no A** |
+| Codex rubric | **"patch is correct" / MERGE** | 1 — **C, no B, no A** |
+
+**Under the reading pinned above, a C-only result SATISFIES the same-tip rule.**
+Both gates judged `4de2c6c`; both re-audited every prior finding and ruled all of
+them genuinely fixed; both independently re-derived 23/3, 9/2, 24/6.
+
+| # | Gate | Band | Disposition |
+|---|---|---|---|
+| 1 | fidelity | C | this record named the map's OLD host, in the same commit that moved it. **FIXED** |
+| 2 | fidelity | C | the pinned-reading heading named `351bbfd` while the section itself moved the tip to `4de2c6c`. **FIXED**, with the reason stated |
+| 3 | fidelity | C | the PR body said the gates are "recorded in" this file while runs 2 and 3 appeared only as prose. **FIXED by making it true** — the two disposition blocks above are that record |
+| 4 | Codex | C | **"a cut updates that one table and nothing else" survived in ALL THREE specs' citation block.** The narrowing landed in this record and not in the text the specs actually carry — *"the previous overclaim was relocated rather than genuinely removed"*. **FIXED in all three** |
+
+**Two things the gates declined to file, worth as much as what they filed:**
+fidelity checked the body's "15 logbook records" against 17 files and confirmed
+it reconciles exactly (the two remainders are the living map and this record,
+both described separately), then did NOT file it; and it noted `npm test` was not
+re-run for budget, substituting the decisive check — the empty `src`/`tests`/`bin`
+diff — which is what makes the pre-existing-failure attribution sound at all.
+
+**The lint file count reached 555 on this run** — 539 → 553 → 554 → 555 across
+four tips. Removing it rather than pinning it was the correct call, and this run
+is the fourth consecutive proof of it.

@@ -25,9 +25,11 @@ seam and the resulting shape.
 **Contract table letters are family-wide. The canonical map lives in ONE LIVING
 surface — `docs/specs/logbook/2026-08-29-promote-family-map.md` — and this
 spec CITES it rather than restating it.** It was restated in three
-specs until the PR gate found two of them stale; a cut that moves a table now
-updates that one table and nothing else. Every cross-package reference cites its
-owner and never restates it.
+specs until the PR gate found two of them stale. **A cut that moves a table
+updates that map AND sweeps each spec's Out-of-scope ownership prose, which stays
+hand-maintained** — an earlier form of this sentence said "and nothing else",
+which the next gate falsified by finding one of those bullets already drifted.
+Every cross-package reference cites its owner and never restates it.
 
 **Stacked between the module and the pipeline.** The module half publishes
 ordinary notes and ships consumed by nothing. This package adds the report: the
