@@ -213,7 +213,7 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/cli/dream.js | the whole of Table G: workspace lifecycle, the re-pointed write target, delta, promote, the reap precondition, non-vacuity, transcript-advance, abort paths, the commit |
-| modify | src/core/dream/validate.js | the gate-extraction handoff (Table G, row G7): the four gates become injectable in the input shape `WP-dream-promote-module`'s Table D assigns them; the EP2 enforcement half — the revert, re-stage and index-drop core (`:1324-1332`), the refusal-reason suffixes it composes (`:1333-1337`) and the `reverted[]` accounting they feed (`:1361-1363`) — and the git-derived evidence go. **The identity-gated deletion at `:1338-1360` sits inside that span's middle, inside the same loop, and MUST SURVIVE — with ONE carrier change, its keep branch at `:1357-1359`, which today announces the kept copy by appending to the same doomed `reason`** (row G7, row V3). Also row G10's side of the ownership registry: `isNewSkillDraft` (`:300`) is reused and exported if the new call site needs it |
+| modify | src/core/dream/validate.js | the gate-extraction handoff (Table G, row G7): the four gates become injectable in the input shape `WP-dream-promote-module`'s Table D assigns them; the EP2 enforcement half — the revert, re-stage and index-drop core (`:1324-1332`), the refusal-reason suffixes it composes (`:1333-1337`) and the `reverted[]` accounting they feed (`:1361-1363`) — and the git-derived evidence go. **The identity-gated deletion at `:1338-1360` sits between those suffixes (`:1333-1337`) and that accounting (`:1361-1363`), inside the same per-path loop (`:1233-1364`), and MUST SURVIVE — with ONE carrier change, its keep branch at `:1357-1359`, which today announces the kept copy by appending to the same doomed `reason`** (row G7, row V3). Also row G10's side of the ownership registry: `isNewSkillDraft` (`:300`) is reused and exported if the new call site needs it |
 | create | tests/unit/dream-pipeline.test.js | Table G, and pipeline-level CLAIM 1 and CLAIM 2b |
 | modify | tests/unit/dream-validate.test.js | the gates' new inputs and the removed enforcement half |
 | modify | tests/integration/dream.test.js | pipeline wiring and abort behaviour |
@@ -411,7 +411,11 @@ revisited.
       CARRIED, which is not an implementer's call and not this package's to
       re-open.** Its mirrors are the Deliverables `Notes` cell for
       `src/core/dream/validate.js`, Current state's geometry sentence, row G7,
-      row V3, and row G7's acceptance criterion. **No surface here may say the
+      row V3, row G7's acceptance criterion, **and the Out-of-scope bullet for
+      the EP2 gate's durable quarantine lifecycle** — the sixth carrying
+      surface, which this entry omitted and which therefore still said nothing
+      may change what those behaviours do (registered 2026-08-29, round 3's
+      F4). **No surface here may say the
       span survives byte-for-byte, and none may leave the kept copy announced by
       a refusal reason.**
 - [ ] **The `records` handoff** — row G12 produces them, row G11 delivers one
@@ -721,8 +725,16 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   prune, the identity-gated deletion and the preservation-failure abort are
   decided, asserted and mutation-covered in the shipped
   `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. This package touches the
-  code they live in, so row G7's criterion asserts they SURVIVE the extraction;
-  it may not change what they do, and it may not restate the rules. **Cite that
+  code they live in, so row G7's criterion asserts that the extraction
+  preserves their DECISIONS; it may not change what any of them DECIDES, and it
+  may not restate the rules. **ONE EXCEPTION, owner-authorized on 2026-08-29
+  and not this package's to widen or re-open:** the identity-gated deletion's
+  keep branch (`validate.js:1357-1359`) announces the copy it keeps through a
+  `reason` this package deletes, so its CARRIER moves to the preservation
+  record (`WP-dream-promote-module`, Table Q rows Q1, Q8 and Q9). Which copy is
+  deleted and which is kept is unchanged. **This bullet said they SURVIVE the
+  extraction and that nothing may change what they do, which contradicted the
+  four surfaces in this spec that landed the carrier change — round 3's F4.** **Cite that
   spec by path, never by bare table letter — its letters collide with this
   family's.**
 - **`src/core/dream/scratch.js`** — row G12 preserves Step 1's behaviour inside
