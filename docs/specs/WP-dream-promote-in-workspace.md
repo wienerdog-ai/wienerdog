@@ -314,7 +314,7 @@ revisited.
 |---|---|---|---|---|
 | V1 | **Step 1 — scratch integrity** (`validate.js:1107-1142`) | `scratchDir`, `expectedScratch`, `scratchBaseline` | deletes any scratch file that is not an expected extract, deletes an expected extract whose content changed, and **RECORDS each as an out-of-vault violation** (`outOfVaultDetailed`), which reaches the enforcement section (`:1385-1386`) and the return (`:1450-1457`) | **row G12.** **NOT already covered by the pipeline's `scratchIntact`** (`cli/dream.js:57-78`), which only checks that expected extracts still exist and byte-match — measured, an extra `EVIL.json` passes it. The delete-and-record half has no other owner (round 3, F3) |
 | V2 | **Step 2 — per-path classification and three gates** (`:1144`) | git evidence in the vault; the four gates' own inputs | the promote/refuse decision per path | rows **G7** (the gates' extraction and evidence) and, for the decision itself, `WP-dream-promote-module`'s Tables C and D |
-| V3 | **Step 3 — the EP2 secret gate, its enforcement half, and its DURABLE LIFECYCLE** (`:1211`; revert core `:1324-1364`; quarantine `:669-738`; preservation-failure abort `:1293-1323`; retention `:906-946,1365-1366`; report metadata `:1392-1409`) | staged git diffs; the pre-change bytes it preserves; the set of artifacts this run created | withheld/redacted dispositions; **a durable quarantine artifact under a collision-resolved name; a fail-loud abort that refuses to destroy a working copy unless a durable artifact byte-identically holds the CURRENT bytes; once-per-run retention of `redacted/`; and the per-redaction report line carrying path, scrubbed-line count, labels and artifact name**; and the revert, re-stage and index-drop machinery | **rows G7 and G5**, and `WP-dream-promote-module`'s **Table Q**, which owns the whole lifecycle above and is CITED here rather than restated. The enforcement half has no subject once nothing is written to the vault, and goes. **Row G5 cites Table Q's row Q4 because under promotion the destruction risk moves to the workspace rather than vanishing. An earlier form of this row listed only "dispositions and the revert machinery" — round 4's F2, and the reason Table Q exists** |
+| V3 | **Step 3 — the EP2 secret gate, its enforcement half, and its DURABLE LIFECYCLE** (`:1211`; revert core `:1324-1364`; quarantine `:669-738`; preservation-failure abort `:1293-1323`; retention `:906-946,1365-1366`; report metadata `:1392-1409`) | staged git diffs; the pre-change bytes it preserves; the set of artifacts this run created | withheld/redacted dispositions; **a durable quarantine artifact under a collision-resolved name; a fail-loud abort that refuses to destroy a working copy unless a durable artifact byte-identically holds the CURRENT bytes; once-per-run retention of `redacted/`; and the per-redaction report line carrying path, scrubbed-line count, labels and artifact name**; and the revert, re-stage and index-drop machinery | **rows G7 and G5**, and — for what the gate's RESULT carries into promotion and what promotion does with it — `WP-dream-promote-module`'s **Table Q**, CITED here and never restated. **The DURABLE half of the lifecycle above is neither package's, and saying it was Table Q's was wrong until the reconciliation pass of 2026-08-29 corrected it:** the preservation-failure abort, the identity-gated deletion of a redundant copy and the once-per-run retention of `redacted/` are decided, asserted and mutation-covered in the shipped `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — cited by spec path because its Tables N, Q and R collide with this family's letters — and Table Q rows Q4, Q5 and Q6 are pointers at it. **The extraction here must therefore PRESERVE them, which is what row G7's acceptance criterion asserts:** the revert core that goes (`:1324-1364`) sits immediately beside the abort (`:1293-1323`) and the prune (`:1365-1366`), so deleting a few lines too many is the concrete way this behaviour disappears silently. The enforcement half has no subject once nothing is written to the vault, and goes. **Row G5 cites Table Q's row Q4 because under promotion the destruction risk moves to the workspace rather than vanishing. An earlier form of this row listed only "dispositions and the revert machinery" — round 4's F2, and the reason Table Q exists** |
 | V4 | **Step 4 — the dream report** (`:1374-1408`) | the run's records | the report body plus the appended enforcement section | `WP-dream-promote-report`'s report row and Table R. Its REFUSED arm's delivery is **row G11** |
 | V5 | **Step 5 — stage and commit** (`:1411`, `git add -A` at `:1412`) | the working tree | one commit in the vault | **row G8** |
 | V6 | **Step 6 — the skill ownership registry** (`:1443-1448`) | accepted new skill drafts collected at `:1200-1205` | `state/skill-registry.json` entries | **row G10** |
@@ -360,9 +360,17 @@ revisited.
 - [ ] **The two consumers of the decided bytes** — rows G8 and G10, and row S5
       in `WP-dream-promote-module`, which lists them. **A third consumer added
       here without being added there is a finding.**
-- [ ] **The only-copy invariant** — row G5 and `WP-dream-promote-module`'s Table
-      Q row Q4, which owns it. **No surface here may restate it or weaken it to
-      "a copy was attempted"; teardown cites it.**
+- [ ] **The only-copy invariant, and the durable lifecycle behind it** — row
+      G5 and `WP-dream-promote-module`'s Table Q row Q4, which owns the
+      invariant as it binds THIS family; row V3 and row G7's acceptance
+      criterion for the shipped machinery that enforces it. **No surface here
+      may restate the invariant or weaken it to "a copy was attempted";
+      teardown cites it. And no surface here may restate the abort, the
+      identity-gated deletion or the retention prune — those are
+      `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s, cited by spec path
+      because its Tables N, Q and R collide with this family's letters. This
+      package's obligation is that the extraction preserves them, nothing
+      more.**
 - [ ] **The `records` handoff** — row G12 produces them, row G11 delivers one
       copy, and `WP-dream-promote-report`'s `records` input takes the other.
       **Two channels, deliberately: a log line is not a durable record.**
@@ -488,6 +496,20 @@ revisited.
       the EP2 enforcement half is gone. Proven RED by an extraction that hands a
       post-merge gate the pre-merge bytes, and separately by one that leaves the
       revert core reachable.
+      **And the EP2 gate's DURABLE lifecycle SURVIVES the same edit (Table V row
+      V3).** The three behaviours the revert core sits between are still
+      reachable and still behave as their owner decides them: the
+      preservation-failure abort (`validate.js:1293-1323`), the identity-gated
+      deletion of a redundant `redacted/` copy, and the once-per-run retention
+      prune (`:1365-1366`). **Their contract is
+      `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s** — cited by spec
+      path, because its table letters collide with this family's — **and this
+      criterion asserts only that the extraction did not remove or alter them**;
+      their own assertions and mutation coverage are that shipped package's and
+      are not duplicated here. Proven RED against an extraction that deletes the
+      abort or the prune along with the adjacent revert core, which is the
+      concrete way they disappear: the three regions are neighbours in one
+      function.
 - [ ] **The dream commit contains only promoted paths and the report (row G8).**
       With an unrelated uncommitted user edit present in the vault, that edit is
       **not** in the dream commit and is **not** lost.
@@ -634,6 +656,14 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   nothing beyond them; Table S names **two CONSUMERS of the decided bytes**,
   rows G8 and G10. G8 is both. G10 is a consumer, not a handoff — the obligation
   it inherits is the validator's Step 6, not one the module ever owned.
+- **The EP2 gate's DURABLE quarantine lifecycle as a CONTRACT** — the retention
+  prune, the identity-gated deletion and the preservation-failure abort are
+  decided, asserted and mutation-covered in the shipped
+  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. This package touches the
+  code they live in, so row G7's criterion asserts they SURVIVE the extraction;
+  it may not change what they do, and it may not restate the rules. **Cite that
+  spec by path, never by bare table letter — its letters collide with this
+  family's.**
 - **`src/core/dream/scratch.js`** — row G12 preserves Step 1's behaviour inside
   this package's own deliverables; the scratch module itself is not modified.
 - **`src/core/dream/skill-registry.js`** — row G10 CALLS `recordSkills` and does
