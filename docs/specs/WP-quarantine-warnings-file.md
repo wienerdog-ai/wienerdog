@@ -50,8 +50,12 @@ This package builds that file.
 **The file keeps no history of its own, and that is deliberate (owner-ruled
 2026-08-30).** It is a **pure, stateless render of the ledger**: the header
 paragraph plus `## Current conditions`, and nothing else. Nothing on disk is ever
-read forward into a write or into the dream commit, so no byte a user or another
-process leaves in the file can be laundered into Wienerdog's own record. The
+read forward into a write or into the composed bytes, so no byte a user or another
+process leaves in the file can be laundered into Wienerdog's own **render**.
+Whether that also holds of the dream COMMIT depends on which commit path is live:
+it does once `WP-dream-promote-in-workspace`'s row G8 lands, and until then the
+current wholesale-staging pipeline still commits whatever is on disk — the named
+transitional residual under Implementation notes. The
 **dated** history an earlier draft kept in a `## Run log` section comes for free
 from where it already lives: **the vault is git-versioned by design, so every
 rewrite commit IS the dated delta**, and the dream report's per-run counts
@@ -72,7 +76,11 @@ another surface also carries the names — none of them does.**
 **The file is code-owned and carries the banner's trust construction.** It is
 generated from the ledger alone: `displayName`-sanitized basenames plus code-owned
 labels. Never transcript content, never a full path, never a stored reason string,
-and never brain-writable — the dream's model does not know this file exists.
+and never brain-authored — the dream's model is never told this file exists (no
+`SKILL.md` mention, no prompt mention; a verification gate asserts it). **That is a
+rule about what the brain is TOLD, not a filesystem permission**: in the current
+pipeline a model that can write the vault can write any path in it, which is what
+the pre-promotion transitional residual under Implementation notes names.
 
 ## Current state
 
@@ -300,7 +308,7 @@ never retyped (Table A's path row).
 | Size (`over-ceiling` group only) | the fingerprint's first `:`-separated field as an integer, rendered as the suffix `— <X.X> MB (<bytes> bytes)` after an em-dash-spaced separator, with `X.X` = `bytes / 1048576` to one decimal. Absent, non-numeric, negative or not a safe integer → the entry renders with **no** size suffix |
 | Sort within a group | by `displayName` ascending; equal names render identical text, so the bytes are deterministic either way |
 | **Nothing time-varying may appear ANYWHERE in the file** | no timestamp, no date, no run count, no "last checked" — and, since 2026-08-30, no run log either. **The rule used to be scoped to "above `## Run log`"; dropping that section makes it total, which is strictly stronger and now trivially true**: the whole document is a pure function of the ledger. This is what makes "an existing file's bytes change exactly when its RENDERED CONTENT changes" true (the one other write is Table C row 3's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it: `composeWarnings` is a pure function of the ledger, so an unchanged ledger yields byte-equal output and no rewrite |
-| **Nothing on disk is carried forward** | a rewrite REPLACES the file with `composeWarnings(ledger)` in full. No section, line or byte of the previous file survives into the new one, and none survives into the dream commit. **This is the property that killed the run log** (round 3, finding 1): a carried section is user-controlled input to a code-owned document, and the only cheap way to be sure a user's bytes never enter Wienerdog's own commit is never to read them |
+| **Nothing on disk is carried forward** | a rewrite REPLACES the file with `composeWarnings(ledger)` in full. No section, line or byte of the previous file survives into the new one, and none survives into the bytes the commit-time render composes. **The COMMIT carries only those composed bytes once `WP-dream-promote-in-workspace`'s row G8 is the commit path; in the pre-promotion window the current `git add -A` staging still commits what is on disk** — the named transitional residual under Implementation notes. **This is the property that killed the run log** (round 3, finding 1): a carried section is user-controlled input to a code-owned document, and the only cheap way to be sure a user's bytes never enter Wienerdog's own commit is never to read them |
 
 Reason → heading, in emission order:
 
@@ -374,7 +382,7 @@ change moves nothing rendered and writes nothing.
 |---|---|
 | **The single-composer row — one function assembles this document, and NOTHING else may** | `composeWarnings` (`### Exact contracts`) composes the whole file — the fixed header and the Current-conditions block — from the ledger alone. **It has exactly TWO callers, both named here so a third is a finding rather than a fix:** (1) `refreshWarnings`, at Table B's three refresh points; (2) **the dream commit's reconciliation** — `WP-dream-promote-in-workspace`'s row G8, third clause, which renders the committed bytes from this function post-promotion. The rule exists because the two callers must produce BYTE-EQUAL output for the same ledger: the commit-time render must carry the same header and the same Current conditions as a refresh write would. Two composers cannot be kept byte-equal by review; one function makes it true by construction, and the wiring gate asserts the export, its single argument and the single assembly site |
 | **The PINNED state — ONE argument, the ledger** | both callers render from **the run's in-memory `ledger` binding**, which between refresh point 1 and the run's commit is **not mutated at all**. Measured on the current tree: the only assignments to that binding are `src/cli/dream.js:375` (post-migration), `:444` (recording `sel.newlyQuarantined`, inside refresh point 1's own block) and `:599-607` (`recordProcessed` / `recordSecretDeferred` / `recordSecretExhausted`), and **the last of those is after `validateAndCommit` at `:572-580`**. So the ledger point 1 rendered from and the ledger the commit renders from are the same object in the same state, and the two renders agree by construction rather than by timing luck. **The RULE is "the ledger as it stands at commit construction"; the measurement is what makes that byte-agree with point 1 today.** A future change that mutates the quarantine set between the two does not break the contract — the commit then carries the newer document and refresh point 2 brings the disk file to it later in the same run — but it does break the agreement, so it is a change that must be made deliberately. **A post-commit ledger change (a `secret-revert-exhausted` quarantine minted at `:604`) is deliberately OUTSIDE the pinned state**: refresh point 2 writes it to disk after the commit, and it rides the NEXT run's commit reconciliation — the one-run lag, now bounded to one commit instead of forever. **A SECOND pinned argument used to be needed and no longer exists** (owner ruling, 2026-08-30): with the run log gone the render takes no snapshot and no date, so there is nothing else for the two callers to agree about and nothing either of them can pass differently. That also disposes of round 3's finding 2, which was that the `date` argument was unpinned across the two callers — there is no date argument |
-| **The reconciliation reads the LEDGER; it reads no file and it writes none** | the commit-time render composes bytes for the COMMIT from the ledger and writes nothing to disk. **Table B's three refresh points stay the only writers of `reports/warnings.md`**, and this package adds no fourth write site — post-promotion or not. So a stray user edit to this code-owned file is never committed and never silently absorbed: it is not in the composed bytes (they never saw it), the commit carries the canonical render, and the edit survives as an uncommitted working-tree modification until a refresh point legitimately rewrites the whole file (`WP-dream-promote-in-workspace` row G8, third clause, owns the commit branch) |
+| **The reconciliation reads the LEDGER; it reads no file and it writes none** | the commit-time render composes bytes for the COMMIT from the ledger and writes nothing to disk. **Table B's three refresh points stay the only writers of `reports/warnings.md`**, and this package adds no fourth write site — post-promotion or not. So, **once row G8 is the commit path**, a stray user edit to this code-owned file is never committed and never silently absorbed — in the pre-promotion window the named transitional residual under Implementation notes applies instead: it is not in the composed bytes (they never saw it), the commit carries the canonical render, and the edit survives as an uncommitted working-tree modification until a refresh point legitimately rewrites the whole file (`WP-dream-promote-in-workspace` row G8, third clause, owns the commit branch) |
 | Publish call | `writeIntoVault({vaultDir, rel: 'reports/warnings.md', bytes, admit, expect})` — this package is that primitive's first production caller |
 | `admit` | admits the resolved vault-relative path `reports/warnings.md` and **nothing else**; every other value returns a refusal reason. The policy is the caller's by the primitive's contract |
 | `expect` | the exact bytes read from the file for the comparison, when the read succeeded; **omitted** when the read failed with ENOENT. Never `null` — the primitive rejects it. **Those bytes are used for the row-1/row-2 comparison and as the primitive's premise, and for nothing else — no part of them reaches the composed document** |
@@ -445,21 +453,27 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       commit-time bytes as anything but `composeWarnings`' output over the pinned
       ledger** — an authorship test ("the run wrote it") is the round-2 defect, and
       a second composer is how the committed and the written bytes drift apart
-- [ ] **Nothing on disk enters a write or the commit.** Table A's
+- [ ] **Nothing on disk enters a write or the composed bytes — and, once
+      `WP-dream-promote-in-workspace`'s row G8 lands, the commit.** Table A's
       nothing-carried-forward row decides it, and its mirrors are the
       `composeWarnings` contract's single-argument signature, Table C's `expect`
       row, its reconciliation row, the stray-edit acceptance criterion, the wiring
-      gate's arity assertion, and `WP-dream-promote-in-workspace`'s row G8
-      consequence (a). **No surface may describe any byte of the existing file as
-      being carried, preserved or appended to**
+      gate's arity assertion, the Context paragraph's render-versus-commit
+      sentence, the pre-promotion-window residual under Implementation notes, and
+      `WP-dream-promote-in-workspace`'s row G8 consequence (a). **No surface may
+      describe any byte of the existing file as being carried, preserved or
+      appended to, and no surface may state the COMMIT half as a flat
+      present-tense guarantee** — until row G8 lands the commit path is the
+      current wholesale stage, and the residual is where that is said
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
       `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
       validator's counting loop)
 - [ ] The two literal worked files under "Exact contracts" (they ARE Table A rendered)
 - [ ] Implementation notes (the render-is-the-trigger decision, the EP2
       residual, the uncommitted-until-next-run residual **and its pre-/post-promote
-      commit owners**, the adopted-vault path residual)
-- [ ] Security checklist (the sanitizer sentence and the three residuals)
+      commit owners**, **the pre-promotion-window residual**, the adopted-vault
+      path residual)
+- [ ] Security checklist (the sanitizer sentence and the four residuals)
 
 ## Implementation notes & constraints
 
@@ -515,6 +529,44 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   carrying the written Buffer through the pipeline — dissolved with direction A**
   (round 2, finding 2): no buffer crosses the pipeline, because the decided bytes
   are recomputed at commit time from the pinned ledger.
+- **Named residual — in the pre-promotion window this file's integrity is the
+  vault's, not the code's (round 4, finding 1; owner-ruled 2026-08-30).** **The
+  window** runs from this package landing until `WP-dream-promote-in-workspace`
+  lands. Inside it the pipeline is the current one: the brain writes the vault
+  directly, this package's three refresh points write the same tree, and the next
+  run's `precommitSessionEdits` (`src/cli/dream.js:507`) stages every surviving
+  working-tree change with `git add -A` (`validate.js:125`) before the commit. So
+  during the window, bytes that something other than `composeWarnings` left in
+  `reports/warnings.md` on disk — a user's edit, or the brain's, since a model that
+  can write the vault can write any path in it — can be committed verbatim.
+  **The exposure, stated plainly: during the window this file's integrity level is
+  the same as any vault note's.** The RENDER half of the trust construction holds
+  from day one — nothing on disk can reach the composed bytes, because
+  `composeWarnings` is never shown the file — but the COMMIT half, "no byte from
+  disk enters Wienerdog's own record", holds with full force only once row G8 is
+  the commit path. **The discharge event is G8 itself, not a later hardening
+  pass:** `WP-dream-promote-in-workspace` carries
+  `depends_on: WP-quarantine-warnings-file`, its row G6 removes
+  `precommitSessionEdits`, its row G8 makes the commit a render-versus-HEAD
+  reconciliation, and **its acceptance criterion "The dream commit contains the
+  promoted paths, the report, and the code-owned `reports/warnings.md` whenever its
+  canonical render differs from HEAD" already carries this exact case** in its
+  closing paragraph: with a stray edit **anywhere** in the file on disk, the commit
+  carries the canonical render, none of the edited bytes appear in it, and the edit
+  stays in the working tree, uncommitted and undeleted. **Why the window is
+  accepted rather than closed (owner's reasoning, recorded so nobody re-opens it):**
+  in the current pipeline the brain can write EVERY vault file — that is precisely
+  the architecture the promote family exists to end — so the marginal exposure this
+  package adds is one more file, and one the brain is never told about (the
+  "the dream's model never learns this file exists" rule above, gated by the
+  verification step that greps `skills/wienerdog-dream/SKILL.md`). **The rejected
+  alternative is a transitional canonical re-stage guard:** re-render this one path
+  with `composeWarnings` and re-stage those bytes immediately before the current
+  validator commits, or reject every non-canonical change to it. It would close the
+  window, and it is rejected as **throwaway machinery** — a second commit-time write
+  path, with its own failure policy and its own gates, built and deleted inside a
+  single epic, bought for marginal exposure. **Do not build it, and do not soften
+  row G8 on the strength of it.**
 - **Two alternatives to dropping the Run log were rejected by the owner
   (2026-08-30), and they are recorded so a later reader does not re-propose them.**
   Round 3 found that carrying the on-disk log forward makes it user-controlled
@@ -571,8 +623,10 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       forward-schema record cannot choose the document's bytes.
 - [ ] Nothing here reads transcript **content**. The ledger holds paths,
       fingerprints and reason classes only.
-- [ ] Three residuals, all named under Implementation notes: the commit may be one
-      run late; refresh point 1 is inside the EP2 window; the fixed path in an
+- [ ] Four residuals, all named under Implementation notes: the commit may be one
+      run late; **in the pre-promotion window the file's integrity level is any
+      vault note's, discharged when `WP-dream-promote-in-workspace`'s row G8
+      lands**; refresh point 1 is inside the EP2 window; the fixed path in an
       adopted vault with a relocated `reports_dir`.
 
 ## Acceptance criteria
