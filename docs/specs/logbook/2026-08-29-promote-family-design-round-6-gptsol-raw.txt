@@ -1,0 +1,86 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip 3e0b930
+Round: 6
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty before and after, byte-identical;
+nothing created, edited, deleted, staged, committed or stashed.
+
+ROUND-5 FINDING: *** NOT CONFIRMED FIXED OVERALL. ***
+  "The report package's cause-specific acceptance assertion is corrected, but
+  STALE POSITIVE LIVE-VAULT INVARIANTS REMAIN on the partial-publish arm,
+  including in the pipeline's operative commit contract."
+
+MECHANICAL
+  Acceptance-criteria counts: 23 / 10 / 24 — UNCHANGED (counted within their
+    actual sections).
+  61 citations introduced or changed since 4f1f050 enumerated; every cited range
+    endpoint checked against its source with indentation at both ends —
+    "endpoints resolve and are structurally sound." ENDPOINT STREAK HOLDS (4th round).
+  Final absence check for "byte-equal to what the vault then holds" -> ONE
+    occurrence remains, in-workspace:458, INSIDE A PROHIBITION rather than a
+    positive assertion (correct).
+  ESCALATION: NOT TRIGGERED. "Both findings are contradictions inside existing
+    contracts, not facts with nowhere to go on the shape and not facts a consumer
+    must re-derive."
+
+VERDICT: needs-attention
+
+FINDING 1 [high, contract-defect] confidence 0.99
+  The pipeline still equates partial-publish bytes with the current vault state.
+  docs/specs/WP-dream-promote-in-workspace.md:308
+
+  G8 still says that on `accounting.published:false` the body "IS in the vault"
+  and that the arm's `bytes` are "the bytes the vault holds." THAT IS FALSE FOR
+  BOTH REFUSAL CAUSES the revised report criterion now distinguishes. An `expect`
+  conflict means intervening bytes currently occupy the target; a symlink refusal
+  leaves a symlink there.
+  The same stale invariant remains in G11 at :311 and in the pipeline acceptance
+  criterion at :648-666, which says the vault is not byte-unchanged "because the
+  body is in it." The report row itself also says "the body IS in the vault" at
+  report:295 before correctly explaining that an `expect` conflict means the
+  opposite.
+  An implementer can follow the report criterion and G8's returned-buffer rule
+  correctly, OR follow the pipeline's current-vault assertion, but cannot satisfy
+  both. THIS IS THE SAME FALSE INVARIANT ROUND 5 IDENTIFIED, SURVIVING THROUGH
+  REWORDED MIRRORS RATHER THAN BEING ELIMINATED.
+
+  RECOMMENDATION: Sweep every partial-publish mirror and replace current-state
+  claims with the EVENT that is actually guaranteed: the first write published
+  the body, and `report.bytes` is that first write's returned buffer. State that
+  the current target is REFUSAL-CAUSE-SPECIFIC and is not represented by
+  `report.bytes`: intervening bytes for an `expect` conflict, a symlink for the
+  symlink refusal. Update G8, G11, the pipeline acceptance criterion and the
+  report row TOGETHER.
+
+FINDING 2 [medium, contract-defect] confidence 1.0
+  The first inline quotation of the shipped pin changes the quoted bytes.
+  docs/specs/WP-dream-promote-in-workspace.md:307
+
+  G7 labels its text a quotation of
+  docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387, but CHANGES SOURCE
+  TEXT TO UPPERCASE: `PINNED HERE` instead of `pinned here`; `EVERY BYTE OUTSIDE
+  THE ANGLE-BRACKET PLACEHOLDERS IS LITERAL` instead of `Every byte outside the
+  angle-bracket placeholders is literal`; and alters the casing around the `<n>`
+  clause. The semantic pin is recognizable and the cited range resolves cleanly,
+  but THE QUOTED BYTES DO NOT MATCH THEIR SOURCE EXACTLY. That matters here
+  because this is the family's FIRST EXCEPTION to cite-never-restate and the
+  review explicitly requires the quotation to be checked byte-for-byte.
+
+  RECOMMENDATION: Either quote the three source fragments with their exact
+  spelling and capitalisation, using ellipses only between exact fragments, or
+  LABEL THE CURRENT TEXT AS A PARAPHRASE and retain the path/range as the
+  authoritative source. DO NOT CALL ALTERED TEXT A QUOTATION.
+
+RELAY NOTE, added at adjudication and not part of the reviewer's output:
+  Both findings independently reproduced before acceptance.
+  Finding 1: /usr/bin/grep -rn "the bytes the vault holds\|IS in the vault\|body
+  is in it" over the three specs returns in-workspace:308, in-workspace:665,
+  report:295, report:387.
+  Finding 2: the source reads "pinned here, not illustrated" and "Every byte
+  outside the angle-bracket placeholders is literal"; G7 renders both in caps.
+  THE RELAY'S OWN ROUND-5 VERIFICATION WAS TOO NARROW and is recorded as such:
+  it grepped the exact phrase "byte-equal to what the vault then holds" in the
+  REPORT spec alone and read 0 as "fixed". The claim survived in other words in
+  another spec — the precise failure spec-authoring.md:56-63 names ("sweep for
+  the CLAIM, not for any wording of it, and across every spec in the family").
