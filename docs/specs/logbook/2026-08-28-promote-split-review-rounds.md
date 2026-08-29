@@ -1129,3 +1129,64 @@ newest text. Counts unchanged — module **23/3**, report **9/2**, pipeline
 **24/6**; no tripwire fires.
 
 **One more undirected round, per the HEAVY rule. That round is the measurement.**
+
+## Round (f) — the partial withdrawal, and what a retry cost
+
+Raw: `2026-08-29-promote-split-round-f-raw.md`. **Sixteen priors genuinely
+fixed; round (e)'s B ruled re-worded but still defective. One B, no A, zero
+scope objections.**
+
+**The first agent on this round died mid-response to a connection error and
+returned nothing.** The checkout was verified clean at `8fefc80` before
+re-dispatching — the dead run honoured its read-only contract. **The retry
+dispatch added one instruction: budget the run, prioritise newest text → prior
+re-audit → everything else, and land a complete report on fewer checks rather
+than an exhaustive investigation that never returns.** It finished in **41 tool
+calls against the previous rounds' 80+, with every decisive probe still run.**
+Recorded because it is a cheap, repeatable lever, not a one-off.
+
+### The finding — a PARTIAL WITHDRAWAL, and all three parts are this author's
+
+**I withdrew the derived-set mechanism in Table N's preamble and left it
+load-bearing in three other places:** N4 conditioned its guarantee on "the
+derived value set", Table R's row repeated it, and the Mirrored Surface Checklist
+forbade hand lists *because* the set was derived. **A reviewer could therefore not
+establish N4 at all — its stated prerequisite is one the same table says does not
+exist in this runtime.**
+
+**And the headline universal contradicted Table N's own rows.** "Every string the
+composer interpolates" against `labels`, a string classified as needing nothing:
+follow the rows and you violate the universal; follow the universal and you
+violate the rows. **A universal its own classification contradicts is not a strong
+rule, it is an unbuildable one.**
+
+**The third part was established by PROBE, not argument, and it corrected my
+test design:** adding a channel already routed through a shared fail-closed
+neutraliser **correctly stays GREEN**. So "add a channel" was never the
+discriminating mutation — **"add an UNWIRED interpolation" is.** My RED direction
+would have been satisfiable by a mutation that proves nothing.
+
+### The fix
+
+| # | Correction |
+|---|---|
+| 1 | the universal now quantifies over **attacker-influenceable OR UNCLASSIFIED** interpolated strings, with the contradiction it replaces stated |
+| 2 | N4's prerequisites are now **the ones that exist** — N1's order, N2's fail-closed default, the acceptance criterion — and it names the withdrawn mechanism as withdrawn |
+| 3 | Table R's row defers to N4's own prerequisites rather than restating them |
+| 4 | the checklist forbids hand lists because **a list in a citing surface goes stale — measured, two did** |
+| 5 | the RED direction is now an **unclassified, unneutralised** interpolation, exercised on both paths, with the probe result recorded so nobody re-derives it |
+
+Grep confirms **zero** residual dependencies on the withdrawn mechanism. Counts
+unchanged: module **23/3**, report **9/2**, pipeline **24/6**; no tripwire fires.
+
+### The lesson, which is the reviewer's and is worth keeping
+
+> **Replacing a mechanism with an observable property requires removing the old
+> mechanism from every LOAD-BEARING MIRROR, not only from the preamble.**
+
+This is the third time this arc has paid for the same shape — a canonical cell
+rewritten while a surface that depends on it keeps the old basis. The standing
+sweep rule ("after rewriting a canonical cell, re-read that cell whole for a
+sentence the rewrite falsified") is necessary but was not sufficient here,
+because the falsified sentences were in OTHER cells that cited it. **The sweep
+must follow the citations outward, not stop at the cell.**

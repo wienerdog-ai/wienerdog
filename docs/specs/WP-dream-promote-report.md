@@ -182,9 +182,16 @@ only as strong as the list".**
 **THE CONTRACT IS AN OBSERVABLE PROPERTY, AND THE MECHANISM IS THE
 IMPLEMENTER'S (owner ruling, 2026-08-29):**
 
-> **Every string the report composer interpolates has passed redact-then-sanitize
-> before composition, and a string the implementation has not classified FAILS
-> CLOSED — it is neutralised, or composition refuses.**
+> **Every interpolated string that is attacker-influenceable OR UNCLASSIFIED has
+> passed redact-then-sanitize before composition. A string the implementation
+> has not classified FAILS CLOSED — it is neutralised, or composition refuses.**
+
+**The quantifier is deliberate and was corrected once (round (f)):** an earlier
+form said "every string", which **contradicted this table's own rows** — `labels`
+and `lines` are classified as needing nothing, so an implementation following the
+rows violated the universal and one following the universal violated the rows. A
+universal its own classification contradicts is not a strong rule, it is an
+unbuildable one.
 
 **How that is achieved is not specified here.** An earlier form of this block
 claimed the value set was "derived from the return shape" so that a new channel
@@ -217,7 +224,7 @@ pass-through — the defect both prior A-bands shared.
 | N1 — **THE ORDER: redact first, then sanitise** | EP2's context-dependent detectors need the RAW bytes, separators included, and `sanitizeProjectName` replaces every character outside `[\p{L}\p{N}\p{M} ._-]` — `=` and `:` among them. **Measured:** `refused token=abcdefghijkl` sanitises to `refused token_abcdefghijkl`, and the detector that fires on the first does not fire on the second. **The justification for the reverse order, corrected to what was actually measured (round (d)):** it is NOT that the redaction placeholder survives the sanitiser unchanged — measured, `[REDACTED:generic-secret]` becomes `REDACTED_generic-secret_`. **It is that sanitising a placeholder cannot restore the secret the redactor already removed.** The earlier "sanitizer-neutral" wording was asserted from reading rather than running, and is withdrawn |
 | N2 — **The default is FAIL CLOSED, and it is the enforcement** | an unclassified string is neutralised or composition refuses. **A universal that depends on someone remembering to extend a list is what failed twice; a default that must be argued DOWN cannot fail the same way.** This row is the whole contract in one line, and everything above it is classification that makes the common cases explicit |
 | N3 — **Scope: wherever the section is composed** | the normal second write and Table R's fallback alike, since the same interpolation happens in both |
-| N4 — **What the contract buys** | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** This sentence is load-bearing and it has been FALSE twice — once under an unordered rule, once under an incomplete set. It is true only while N1's order and the derived value set both hold, and the acceptance criterion asserts THIS TABLE rather than an enumeration |
+| N4 — **What the contract buys** | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** This sentence is load-bearing and it has been FALSE twice — once under an unordered rule, once under an incomplete set. **Its prerequisites are the ones that exist: N1's ORDER, N2's FAIL-CLOSED DEFAULT, and the acceptance criterion — not the withdrawn "derived value set", which round (f) found this row still leaning on after the preamble had retired it** |
 
 ### Table R — the report's publish decision
 
@@ -245,7 +252,7 @@ naming: the only difference from the normal second write is that the base is
 | Rule | Value |
 |---|---|
 | Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
-| The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and it is true only while N1's order and N4's derived value set both hold. This row does not restate it |
+| The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (Table Q, rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
@@ -287,9 +294,10 @@ left for a gate to refuse.
       redaction-lines row, the `records` input in `### Exact contracts`, and the
       code-authored-section criterion. **Three prohibitions, each earned by a
       finding: no surface may state a neutralisation rule without its ORDER; no
-      surface may carry a hand-listed value set, because the set is DERIVED from
-      the return shape; and no surface may restate N4's justification, which has
-      been false twice and is true only while N1 and the derived set both hold.**
+      surface may carry a hand-listed value set, because a list in a citing surface
+      goes stale — measured, two did (round (e)); and no surface may restate
+      N4's justification, which has been false twice and whose prerequisites N4
+      itself names.**
 - [ ] **The redaction lines** — Table R's redaction-lines row and the module
       half's **Table Q**, which owns the metadata they carry. **This package
       cites Table Q and never restates the quarantine lifecycle.**
@@ -364,12 +372,16 @@ left for a gate to refuse.
       a value carrying both markdown-active text and a context-dependent secret
       is composed into the report, and the raw secret bytes appear nowhere in the
       published bytes — on the normal second write AND on the fallback.
-      **RED, and this is the direction that makes the property real: ADD A NEW
-      INTERPOLATED CHANNEL AND THE TEST MUST FAIL UNTIL THAT CHANNEL IS WIRED
-      THROUGH THE NEUTRALISATION.** A channel the implementation has not
-      classified must be a test failure, not a silent pass-through. **That is the
-      whole contract; an implementation whose test passes with an unclassified
-      channel present has not built it, whatever its internal structure.**
+      **RED, and this is the direction that makes the property real: add an
+      UNCLASSIFIED, UNNEUTRALISED composer interpolation, exercise it with the
+      hostile fixture on both the normal and the fallback path, and the test must
+      FAIL until that interpolation is neutralised or composition refuses.**
+      **The mutation is "unwired", not merely "new" — established by probe rather
+      than argument (round (f)): a new channel already routed through a shared
+      fail-closed neutraliser correctly stays GREEN, so "add a channel" alone
+      does not discriminate.** **That is the whole contract; an implementation
+      whose test passes with an unwired interpolation present has not built it,
+      whatever its internal structure.**
       **Three further RED directions, each a failure this loop measured:**
       (i) the sanitiser skipped; (ii) the redact arm skipped; (iii) **sanitiser
       FIRST** — the round (c) A, which has both arms and still leaks; (iv)
