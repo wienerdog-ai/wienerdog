@@ -268,6 +268,16 @@ fallback behaviour changes across four gates; (vi) the pipeline package inherits
 this contract; (vii) the gate order is mirrored in the tests and the dream
 report.
 
+### Contract table(s)
+
+`N/A as a single heading` — each dense contract below has its own NAMED
+canonical table instead, so a row is addressable by letter across the whole
+family (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to
+owners). The heading stays in place rather than being deleted, per
+`docs/runbooks/spec-authoring.md`: a section's absence must be visible and
+checkable. **Pre-existing in all three specs of this family; noted by the
+round-zero pass of 2026-08-29 and closed then.**
+
 ### Table C — the promotion decision
 
 The three-way state triple per relative path: **baseline** (what the sibling's
@@ -448,7 +458,11 @@ arm that can follow the preservation, and four rounds plus one blind measurement
 found the same thing — a verdict-only interface silently drops all of it.
 
 **RECONCILED 2026-08-29, after two PR-gate rounds put five findings on this one
-contract** (logbook: `2026-08-29-promote-module-pr-gates.md`). What changed, and
+contract** (logbook: `2026-08-29-promote-module-pr-gates.md`). **MERGE-ORDER
+DEPENDENCY, stated so a maintainer merging in the wrong order sees it: that
+logbook entry lives on branch `wp/dream-promote-module` (commit `3e37237`) and
+is NOT on `main`. If this amendment merges first, the citation dangles until
+that branch lands.** What changed, and
 the boundary the pass drew: **this table owns what the EP2 gate's RESULT carries
 into promotion and what promotion does with it. It does not own the durable
 lifecycle behind that result.** The retention prune, the identity-gated deletion

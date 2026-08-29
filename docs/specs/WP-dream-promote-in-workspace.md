@@ -270,6 +270,16 @@ is the inheritance ledger — what the code this package replaces owns today, an
 which Table G row takes each piece — extracted by the ADR-0031 circuit-breaker
 after four findings in two rounds lived in the gap between them.
 
+### Contract table(s)
+
+`N/A as a single heading` — each dense contract below has its own NAMED
+canonical table instead, so a row is addressable by letter across the whole
+family (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to
+owners). The heading stays in place rather than being deleted, per
+`docs/runbooks/spec-authoring.md`: a section's absence must be visible and
+checkable. **Pre-existing in all three specs of this family; noted by the
+round-zero pass of 2026-08-29 and closed then.**
+
 ### Table G — the pipeline: wiring, the reap precondition, and the abort paths
 
 | # | Fact / rule | Value |

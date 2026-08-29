@@ -185,6 +185,16 @@ Activation (ADR-0031, 2-of-7 — four are true): (i) an interface is extended;
 (ii) a report outcome taxonomy is introduced; (iv) fallback behaviour is this
 package's whole subject; (vi) the pipeline package inherits the contract.
 
+### Contract table(s)
+
+`N/A as a single heading` — each dense contract below has its own NAMED
+canonical table instead, so a row is addressable by letter across the whole
+family (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to
+owners). The heading stays in place rather than being deleted, per
+`docs/runbooks/spec-authoring.md`: a section's absence must be visible and
+checkable. **Pre-existing in all three specs of this family; noted by the
+round-zero pass of 2026-08-29 and closed then.**
+
 ### The report row — the body is an ordinary promotion candidate
 
 Moved here whole from the module half's Table D by the T1 cut. It is stated as

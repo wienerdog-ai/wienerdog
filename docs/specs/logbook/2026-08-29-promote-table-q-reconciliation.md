@@ -9,7 +9,9 @@ related_wps: [WP-dream-promote-module, WP-dream-promote-report, WP-dream-promote
 # The Table Q reconciliation pass
 
 The ADR-0031 reconciliation both PR gates recommended
-(`2026-08-29-promote-module-pr-gates.md`). **Nine rounds across this family had
+(`2026-08-29-promote-module-pr-gates.md` — **that entry lives on branch
+`wp/dream-promote-module` at commit `3e37237`, not on `main`; if this amendment
+merges first the citation dangles until that branch lands**). **Nine rounds across this family had
 landed on one question — what the EP2 secret gate produces besides a verdict,
 and who carries each part of it downstream.** Table Q, extracted in pass (b),
 had settled the SUCCESS arm and left the failure arms, the invariant's evidence
