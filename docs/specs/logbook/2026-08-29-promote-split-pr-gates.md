@@ -122,3 +122,27 @@ repo — and `gh pr view 30` in the resolved one returns an unrelated work packa
 **That is a live trap for every future session and agent in this checkout**, and
 it is the reason the gate could not read the PR body. Recorded here rather than
 dismissed with the objection.
+
+## THIRD GATE RUN on `351bbfd` — THE READING PINNED BEFORE IT RUNS
+
+**Owner ruling, 2026-08-29.** Both gates re-run on the same tip, and **the
+interpretation is fixed now so it cannot be chosen after seeing the findings** —
+the same discipline this family applied to round 4's classification.
+
+| The run returns | Reading | Consequence |
+|---|---|---|
+| **clean, or C-band ONLY** | the same-tip rule is **SATISFIED** | the merge decision follows |
+| **any B-band** | not noise | **returns to the OWNER together with the materiality question — NOT an automatic fourth iteration** |
+
+**The grounds, as ruled:** **zero A across two full gate rounds**, and
+**decreasing amplitude** — first pass 12 findings filed with one root cause,
+second pass no A and no B, its findings confined to this record's own over-claims
+and a stale PR body. **What remains is the injection baseline**, and **its owner
+is the post-merge implementation defence line**, not another spec iteration.
+
+**Why the B branch is not automatic.** Three consecutive fix-and-regate cycles
+have each produced defects in the fixes themselves, at a rate this program
+measures at 0.5–0.9 per fix. **A fourth iteration is therefore not free and not
+obviously convergent**, so a B-band finding is a decision about materiality — is
+this worth another cycle's injected defects — and that decision is the owner's,
+not the author's.
