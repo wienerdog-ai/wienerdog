@@ -93,9 +93,10 @@ take it.
   row Q1 names. **It composes and publishes no report**, takes no `records`, and
   its return carries no `report` field. Those are added here.
 - `src/core/dream/vault-write.js` — `writeIntoVault`, the only route into the
-  vault. Its `expect` guard (Table H, H5) and its returned bytes (H6) are what
+  vault. Its `expect` guard (the primitive's H5) and its returned bytes (the
+  primitive's H6) are what
   make the second write and the fallback safe.
-- `src/core/dream/validate.js:1374-1408` — today's report handling: the brain
+- `src/core/dream/validate.js:1374-1409` — today's report handling: the brain
   writes the body into the VAULT and code appends its enforcement section to
   that same file, interpolating two brain-influenceable values per line
   (`:1385-1386`). `:1392-1409` is the shipped "Redacted in place" section.
@@ -195,13 +196,23 @@ package's whole subject; (vi) the pipeline package inherits the contract.
 
 ### Contract table(s)
 
-`N/A as a single heading` — each dense contract below has its own NAMED
-canonical table instead, so a row is addressable by letter across the whole
-family (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to
-owners). The heading stays in place rather than being deleted, per
+`N/A — this spec's dense contracts are two NAMED canonical tables (N and R)
+plus the report row, which is an UNLETTERED contract table, rather than one
+unnamed table under this heading.` The report row is the section headed
+"The report row" below. Naming a table is what makes its rows
+addressable by letter across the whole family
+(`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to owners),
+**and the report row is deliberately outside that scheme — the map lists it
+separately, as "Tables N, R and the report row", and this spec claims no
+letter for it.**
+The heading stays in place rather than being deleted, per
 `docs/runbooks/spec-authoring.md`: a section's absence must be visible and
-checkable. **Pre-existing in all three specs of this family; noted by the
-round-zero pass of 2026-08-29 and closed then.**
+checkable. **The named-table substitution is pre-existing in all three specs of
+this family — noted by the round-zero pass of 2026-08-29 and closed then. What
+changed on 2026-08-29 is that each spec now states its OWN tables here:** until
+then all three carried one byte-identical paragraph, registered by no Mirrored
+Surface Checklist, and its claim was false in one of them. **Here specifically it claimed every contract below
+was addressable by letter, which the report row is not.**
 
 ### The report row — the body is an ordinary promotion candidate
 
@@ -210,7 +221,7 @@ a row because the module half's Table D owns the gates it refers to:
 
 | Contract | Today | The rule here | Position | Refusal remedy |
 |---|---|---|---|---|
-| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against the gate rows above: three of the four do not match a path under `reports_dir` and pass it through; the table above is what says which gate applies where.** **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (Table H rows H5/H6), never an in-place append. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (H5's `expect` guard, H3's symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4 |
+| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1408` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against `WP-dream-promote-module`'s Table D: three of its four gates do not match a path under `reports_dir` and pass it through, and that table — not this one, and not anything above this line — is what says which gate applies where.** (Corrected 2026-08-29: this cell was moved here whole by the T1 cut and kept saying "the table above", which in this spec resolves to the Deliverables table.) **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** After promotion, code appends its own measured accounting to the promoted report — a SECOND write through the primitive, with `expect` set to the bytes the first publish returned (the PRIMITIVE's rows H5 and H6), never an in-place append. **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (its H5 `expect` guard, its H3 symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4 |
 
 ### Table N — the neutralisation contract: which channels, which transformation, in which order
 
@@ -254,7 +265,7 @@ pass-through — the defect both prior A-bands shared.
 | Channel (a field of the return shape or of `records`) | Origin | Attacker-influenceable? | Transformation |
 |---|---|---|---|
 | `refused[].rel` | the brain chose the path | **YES** | **redact, then sanitise** |
-| `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and the primitive's H7/H9 naming a surviving object | **YES** | **redact, then sanitise** |
+| `refused[].reason` | code-composed, but embeds brain-chosen path text — C1's allowlist refusal, and the primitive's rows H7 and H9 naming a surviving object | **YES** | **redact, then sanitise** |
 | `redacted[].rel` | the brain chose the path | **YES — and this is the channel round (d) found leaking**, because the redaction line existed while the list named only the refusal fields | **redact, then sanitise** |
 | `preserved[].artifact`, wherever a preservation record travels — on `redacted[]`, on `refused[]`, and on the refused `report` arm | the quarantine basename, DERIVED from the brain-chosen path (module half, Table Q rows Q2 and Q9) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
 | `preserved[].location` | the state-relative directory the GATE reports for that copy — one of the two places the glossary's **secret quarantine** names, a code-owned closed set (module half, Table Q row Q9) | **NO** | none — **and stated rather than omitted**, for the reason the `labels` row gives: a channel with no row is indistinguishable from a channel nobody thought about |
@@ -292,11 +303,11 @@ naming: the only difference from the normal second write is that the base is
 | R1 | ABSENT | the code section alone | absent | published |
 | R2 | PRESENT and byte-equal to what the fallback read | the read bytes + this run's section appended | the read bytes | published; run 1's report preserved intact |
 | R3 | PRESENT but DIVERGED from any expectation — the user edited it since run 1 | **the bytes ACTUALLY there** + this run's section appended | the bytes read now | published. **The fallback never reconstructs or "corrects" existing content** — R3 is the same rule as R2, stated separately only because the instinct to repair a diverged file is what would break it |
-| R4 | mutates between the read and the publish — **or the primitive refuses the write for ANY other reason: a symlinked target under H3, containment, policy, any H-rule** | — | the read bytes | **refused.** The enforcement record then goes back to the caller in `report.record`, for the run's log and output, NOT the vault. **NAMED RESIDUAL, accepted by ruling:** in this narrow window an overwrite would be the worse failure, because it would clobber the user's live edit. **Every refusal path converges on this ONE outcome — the vault object is left untouched, the complete enforcement record is delivered to the caller, and the refusal names its reason.** A symlinked report target is additionally a suspicious state, and surfacing it beats overwriting anything. Rejected for the record: **writing through the symlink** (overwrites a different user note — the acceptance criterion below rightly goes RED on it); **replacing the symlink with a regular file** (a code decision mutating the user's vault structure); **a different filename** (a new product surface) |
+| R4 | mutates between the read and the publish — **or the primitive refuses the write for ANY other reason: a symlinked target under the primitive's H3, containment, policy, any of its H-rules** | — | the read bytes | **refused.** The enforcement record then goes back to the caller in `report.record`, for the run's log and output, NOT the vault. **NAMED RESIDUAL, accepted by ruling:** in this narrow window an overwrite would be the worse failure, because it would clobber the user's live edit. **Every refusal path converges on this ONE outcome — the vault object is left untouched, the complete enforcement record is delivered to the caller, and the refusal names its reason.** A symlinked report target is additionally a suspicious state, and surfacing it beats overwriting anything. Rejected for the record: **writing through the symlink** (overwrites a different user note — the acceptance criterion below rightly goes RED on it); **replacing the symlink with a regular file** (a code decision mutating the user's vault structure); **a different filename** (a new product surface) |
 
 | Rule | Value |
 |---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and the primitive's H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and the primitive's rows H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines | one line per entry of `redacted[]`, carrying the path, the scrubbed-line count, the labels, and **that entry's preservation record read field by field — the `artifact`, the `location` and the `remediation`** (module half, Table Q rows Q1–Q3 and Q9). **Table Q owns why this is data-loss-critical and what each field means; this row restates neither, and in particular it does not decide the guidance — `remediation` carries it.** Composed wherever the enforcement section is composed (Table N, row N3) |
@@ -325,8 +336,11 @@ left for a gate to refuse.
 - [ ] Implementation notes and the Security checklist
 - [ ] Out of scope (what the module half, the pipeline half and the
       residue-lifecycle successor own)
-- [ ] **The package note and the dispatch-precondition block** — the note
-      mirrors the citation of the canonical table-letter map and the consumed-by-nothing
+- [ ] **The package note, the dispatch-precondition block and
+      `### Contract table(s)`** — all three cite the canonical table-letter map;
+      the `### Contract table(s)` line additionally names THIS spec's own tables
+      and is the surface a moved table falsifies first (registered 2026-08-29).
+      The note mirrors the citation of the canonical table-letter map and the consumed-by-nothing
       rule; the dispatch block mirrors the pinned base and the containment
       citation
 - [ ] **The `report` union's arms** — `### Exact contracts`, Table R's four
@@ -405,7 +419,7 @@ left for a gate to refuse.
       user-edited bytes.
 - [ ] **Every report write goes through the primitive** — the promoted body, the
       appended accounting and the fallback publish alike. A symlinked report
-      target is refused (Table H, H3), not written through.
+      target is refused (Table H, the PRIMITIVE's row H3), not written through.
 - [ ] **A refusal must cost the user nothing**: on every refusal path the vault
       object is byte-unchanged and the complete record still reaches the caller.
 
@@ -434,8 +448,8 @@ left for a gate to refuse.
       a normal promotion.
 - [ ] **Every unpublished-body path enters the fallback.** Not only a gate
       refusal: with a **C4** conflict (the user creates a report at that path
-      during the run) and with an **H5** refusal (the target changes between
-      decision and publish), the fallback fires in both cases. Proven RED
+      during the run) and with a **PRIMITIVE's H5** refusal (the target changes
+      between decision and publish), the fallback fires in both cases. Proven RED
       against an implementation whose trigger is the gate-refusal case alone,
       which preserves the report and drops the record.
 - [ ] **A refused path's preserved copy is announced, and so is the REPORT's

@@ -40,9 +40,14 @@ pipeline.
 **Table letters are family-wide, and this family is not the only one that has
 them.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — shipped, `Done`,
 and the canonical owner of the EP2 secret gate's durable quarantine lifecycle —
-carries its own Tables **B, H, J, K, N, P, Q, R and T** in its own letter-space
-(measured: `grep -E '^### Table [A-Z]'` over that spec). **THIS TABLE IS THE ONE
-PLACE THE COLLIDING LETTERS ARE LISTED.** No spec in this family restates the
+carries **NINE tables of its own**, lettered **B, H, J, K, N, P, Q, R and T**
+in its own letter-space (measured: `grep -E '^### Table [A-Z]'` over that spec).
+**FIVE of those nine collide with a letter this family uses, and the table
+immediately below is the one place that COLLISION SET is listed — nine is the
+count of that spec's tables, five is the count of the collisions, and nothing
+else on this page states either number** (clarified 2026-08-29, after a
+coherence pass found a reader could take "the colliding letters" off the
+nine-item list two lines above). No spec in this family restates the
 list — a member list in a citing surface is the defect this family already
 measured twice, and on 2026-08-29 the round-zero pass found four surfaces giving
 three different answers, the canonical one among the wrong ones. Every collision:
