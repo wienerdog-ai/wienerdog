@@ -1,0 +1,75 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip 1757e8e
+Round: 3 (first round against the owner-ruled EP2 disposition shape)
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty before and after, byte-identical.
+
+ROUND-2 FINDINGS: BOTH CONFIRMED FIXED.
+  Finding 1 (third carrier gap) — "confirmed fixed as filed: every preserving EP2
+    arm now carries the typed record, including hard withhold and the refused
+    report arm."
+  Finding 2 (bare colliding H-row citations) — "confirmed fixed: the colliding
+    H-row citations are owner-qualified." Command 27: every live-spec occurrence
+    names the primitive owner; no round-2 bare colliding-row citation remains.
+
+MECHANICAL RESULTS
+  Command 20: acceptance-criteria counts module 23/23, report 10/10,
+    pipeline 24/24 — UNCHANGED, no surface growth.
+  Command 23: endpoint/indentation verification across all changed citation
+    ranges — "the deletion and must-survive ranges close the constructs claimed
+    by the specs."
+
+VERDICT: needs-attention
+SUMMARY: "NO-SHIP: the new record has the right field but assigns it to a
+producer that cannot know its final value. Round 2 finding 1 is confirmed fixed
+as filed: every preserving EP2 arm now carries the typed record, including hard
+withhold and the refused report arm. Round 2 finding 2 is confirmed fixed: the
+colliding H-row citations are owner-qualified. The replacement shape nevertheless
+fails the escalation test because downstream promotion must re-derive or rewrite
+remediation after the gate returned it."
+
+FINDING 1 [high] rank 1, confidence 0.99
+  classification: contract-defect / SHAPE-ESCALATION
+  The gate cannot report final remediation before promotion determines the outcome
+  docs/specs/WP-dream-promote-module.md:539-546
+
+  Q2 requires every preservation-record field to be reported by the EP2 gate, and
+  Q9 requires `remediation` to be `restore-or-delete` when sanitized content is
+  ultimately promoted but `delete` when that same redacted candidate is later
+  refused. The gate runs BEFORE merge checks, post-merge gates, pair refusal, and
+  the primitive's `expect`/resolved-path refusals, so IT CANNOT KNOW WHICH
+  REMEDIATION IS FINAL when it returns the record. A redaction followed by a later
+  refusal therefore forces promotion either to overwrite/re-derive `remediation`
+  from the final arm — violating the rule that consumers only READ gate-reported
+  fields — or to preserve the gate's provisional `restore-or-delete`, GIVING THE
+  USER INCORRECT RECOVERY GUIDANCE for content that never entered the vault.
+  This is the stated escalation condition: a consumer must re-derive a
+  preserved-copy fact instead of reading a producer-authoritative value.
+
+  RECOMMENDATION: Return this to the owner for a two-phase typed contract rather
+  than patching an arm. Keep ONE final disposition record, but distinguish
+  gate-known preservation identity (`artifact`, `location`) from the FINALIZATION
+  step that assigns `remediation` only after the publish/refuse outcome is known.
+  Define exactly one owner for that transition and make the final
+  returned/report-consumed shape require all three fields. Do not claim that the
+  pre-merge gate reported `remediation` unless the gate is moved to a point where
+  it can actually know the final outcome.
+
+EXECUTION RECORD (28 commands, all exit 0):
+  git status --porcelain (before) -> empty; branch docs/promote-table-q-reconciliation; tip 1757e8e
+  cat docs/runbooks/review-prompts/adversarial.md
+  git log --oneline 60539fe..HEAD; git diff --unified=80 60539fe..HEAD over the four scoped files
+  python extraction of every changed file:line citation and endpoint indentation
+  cat of all three specs and the family map
+  /usr/bin/grep preservation-shape sweep; contract/criterion indexes for all three specs
+  nl -ba/sed extraction of the three exact-contract blocks and the three acceptance-criteria blocks
+  /usr/bin/grep trace of report redaction/preservation paths and report-outcome accounting
+  python acceptance-count check + /usr/bin/grep H7/H9 sweep  -> 23/23, 10/10, 24/24
+  python extraction of every changed abbreviated :line citation
+  nl -ba inspection of changed endpoints in validate.js, src/cli/dream.js, digest.js
+  python endpoint/indentation verification across all changed ranges
+  /usr/bin/grep remediation-production and outcome-transition sweep
+  /usr/bin/grep preservation acceptance-coverage sweep
+  /usr/bin/grep final H7/H9 qualification check -> all owner-qualified
+  git status --porcelain (after) -> empty, byte-identical
