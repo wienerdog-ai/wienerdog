@@ -280,29 +280,59 @@ condition.
 table already owns "first match decides", and until this pass no surface ordered
 the two sets against each other at all.** The implementation settled it and only
 the code said so, which is the mirror-promoted-to-primary inversion ADR-0031
-exists to prevent. The order is: **C1 and C2 are evaluated before any gate
-runs**; the four gates are then positioned by Table D **relative to the merge**,
-which happens inside C6, so C3–C8 interleave with them rather than preceding
-them. C1 first, because a path the allowlist can never admit must be refused
-with THAT reason rather than with a gate's. C2 before the gates, because a
-`deleted` record has no after-bytes to scan and a gate handed one would be
-judging nothing. **Table D's "here it runs FIRST" of EP2 orders EP2 among the
-four gates and does not order it against this table.**
+exists to prevent. The order is: **C1's CANDIDATE-DECIDABLE half and C2 are
+evaluated before any gate runs**; the four gates are then positioned by Table D
+**relative to the merge**, which happens inside C6, so C3–C8 interleave with them
+rather than preceding them. C1 first, because a path the allowlist can never
+admit must be refused with THAT reason rather than with a gate's. C2 before the
+gates, because a `deleted` record has no after-bytes to scan and a gate handed
+one would be judging nothing. **Table D's "here it runs FIRST" of EP2 orders EP2
+among the four gates and does not order it against this table.**
+
+**C1 HAS TWO HALVES, and only the first can precede the gates — corrected
+2026-08-29, after a design round found the unconditional form false.** Row C9's
+allowlist is applied by the primitive to the RESOLVED path, never to the
+candidate, and where it is applied is part of the rule. So the
+**candidate-decidable half** — the tier and `reports_dir` prefixes, the `.md`
+extension, the instruction-file basenames and the denied segments, all readable
+off the candidate path — is evaluated up front and refuses before any gate runs.
+The **resolved-path half** is the primitive's `admit` call at publish time, and
+it can deny a candidate the first half admitted: C9's measured case is a
+pre-existing vault symlink that lands a lexically admitted
+`01-Projects/alias/evil.md` inside a denied directory. **That half is a
+publish-time refusal, exactly like the `expect` guard's, and it arrives AFTER
+EP2 has run.** No surface may state C1 as wholly preceding the gates. Deciding
+it earlier is not available to this module: resolving the path here would be the
+second containment implementation the Dispatch precondition forbids, and asking
+the primitive for a resolve-and-admit answer without publishing is a new
+cross-package operation, which is an owner's call and not a patch.
 
 **Two consequences, both of them product behaviour, both stated here rather than
-left to the code.** (i) A path C1 refuses never reaches the secret gate, so it
-never increments `secretDisposition.withheld` — and per Table E only `withheld`
-defers a transcript, so a note that is unpromotable at any destination no longer
-holds its transcript back to be re-refused on every subsequent run. (ii) The
-gate is not CALLED for such a path, so **it performs no quarantine preservation
-for one**: a hard secret the brain writes into `.claude/settings.json` leaves no
-recoverable copy and is discarded with the workspace, where under the shipped
-validator it left one. **Ruled the right trade, and recorded as a behaviour
-change rather than as an omission** — the content is brain-authored on a path
-promotion can never accept, the workspace is destroyed either way, and the
-alternative mints a durable artifact for a note the product will never take
-while holding that note's transcript forever. The refusal states the absence
-positively rather than by silence: its `artifact` is `null` (Table Q, row Q8).
+left to the code.** (i) A path refused by C1's **candidate-decidable** half
+never reaches the secret gate, so it never increments
+`secretDisposition.withheld` — and only `withheld` defers a transcript
+(`### Exact contracts`), so a note that is unpromotable at any destination no
+longer holds its transcript back to be re-refused on every subsequent run. **The
+same conclusion holds for a resolved-only refusal, by a different route and
+stated rather than assumed:** the gate did run for it, but a path EP2 withholds
+never reaches publish at all, so a refusal whose reason is C1's always sits on
+an EP2 verdict of pass or redact and increments `withheld` for nobody. (ii) For
+the **candidate-decidable** half the gate is not CALLED, so **it performs no
+quarantine preservation**: a hard secret the brain writes into
+`.claude/settings.json` leaves no recoverable copy and is discarded with the
+workspace, where under the shipped validator it left one. **Ruled the right
+trade, and recorded as a behaviour change rather than as an omission** — the
+content is brain-authored on a path promotion can never accept, the workspace is
+destroyed either way, and the alternative mints a durable artifact for a note
+the product will never take while holding that note's transcript forever. The
+refusal states the absence positively rather than by silence: its `artifact` is
+`null` (Table Q, row Q8). **The resolved-only half is the opposite case, and row
+Q8 owns it:** the gate ran, it may already have preserved an unredacted copy,
+and the refusal carries that copy's basename in `refused[].artifact`. **Measured
+against the shipped implementation on `wp/dream-promote-module`: a resolved-only
+denial makes one EP2 gate call and returns a refusal whose artifact is
+non-null.** Stating (ii) unconditionally was false for that half, and is what
+the design round of 2026-08-29 found.
 
 **Rejected here so it is not re-derived: moving C4, C8 and the
 missing-baseline case ahead of EP2 as well.** It would remove three of the
@@ -442,7 +472,7 @@ letter**, and the canonical map records the collision
 | Q5 | **Deleting a redundant copy — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table R consequence 2** (that spec's own letter-space), which owns the byte-identity guard, both keep-combinations and their reason suffix, and which is fault-injected and mutation-covered there. **Restated nowhere here.** Until this reconciliation pass this row carried a summary of that rule and an acceptance criterion for it — in a package whose Deliverables cannot reach the state directory at all (Q7), against a shipped, `Done` owner that forbids restatement. A pointer is the only form that cannot drift |
 | Q6 | **Retention of `redacted/` — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table N** (that spec's own letter-space), which states in its own header that every retention fact is decided there and that **no surface may restate a number from it** — the cap, the trigger, the candidate set, the ordering, the cap-yields precedence, the overshoot's lifetime and its best-effort failure. **Restated nowhere here.** Until this reconciliation pass this row restated five of those seven facts, including the cap's literal value, and omitted two; the one open gap in that contract has its own package, `WP-ep2-retention-prune-timing-test`. **`state/quarantine/` itself is unbounded and that is decided there too** |
 | Q7 | **Where the preservation happens, where it does not, and WHO CAN EVIDENCE WHAT** | the GATE preserves (Table D), because it is the party holding the pre-change bytes. **This module never touches the state directory**, which is also why rows Q5 and Q6 are pointers and why the durable lifecycle behind them belongs to the package Q4 cites. What this module does is CARRY Q1's fields into the accounting and the report (Q8), and **refuse to publish when the redact arm reports no preserved artifact.** **That refusal is a SANITY CHECK on the gate's own result, not Q4's enforcement, and calling it the latter would be the weakening Q4 forbids:** this module cannot read the artifact, so it cannot tell "a copy exists and matches" from "a copy exists and does not" — only the gate holds both sides of that comparison, and only the gate and the pipeline's teardown destroy anything. **A match-verdict field on Q1 was considered and REJECTED:** it would put a second party's judgment on evidence only the first party has, and would duplicate a test that is already decided, asserted and mutation-covered in the package Q4 cites |
-| Q8 | **A REDACTION CAN BE FOLLOWED BY A REFUSAL, and the artifact then travels TYPED on the refused arm — never in prose** | the gate preserves and reports `artifact` BEFORE this module knows whether the path will publish, because Table D positions EP2 ahead of the merge. Everything downstream of EP2 can still refuse the path: the C3–C8 state checks, a conflicting merge, any of the three post-merge gates, the skill/ledger pair refusal, and the primitive's `expect` guard. The copy is on disk by then, `state/quarantine/redacted/` announces nothing (Q3), and the path is not in `redacted[]` — so with no carrier the artifact's name leaves the return entirely and the copy becomes an unannounced file holding unredacted secret-shaped content. **Therefore `refused[]` is `{rel, reason, artifact}`, with `artifact` REQUIRED AND NULLABLE** (Table S, row S3): the basename the gate reported when a copy was preserved for that path, `null` when none was — a positive statement of absence rather than a missing field, because an optional field spanning both cases is the defect row S2 already records one field over. **The reason string does NOT name the artifact, and no surface may make prose the carrier.** The shipped mitigation did exactly that and produced its own defect inside one review round: the pair refusal embeds its sibling's reason, so the SIBLING's copy was named first and a report composed by reading the name back out would have pointed the user at the wrong file — the same class of harm Q3 calls data loss, one file over. **One fact, one field, one place.** What the report SAYS about it is `WP-dream-promote-report`'s Table R; returning it is not delivering it |
+| Q8 | **A REDACTION CAN BE FOLLOWED BY A REFUSAL, and the artifact then travels TYPED on the refused arm — never in prose** | the gate preserves and reports `artifact` BEFORE this module knows whether the path will publish, because Table D positions EP2 ahead of the merge. Everything downstream of EP2 can still refuse the path: the C3–C8 state checks, a conflicting merge, any of the three post-merge gates, the skill/ledger pair refusal, the primitive's `expect` guard, and **the primitive's application of C9's `admit` to the RESOLVED path — the resolved-only half of C1, which Table C's header separates out precisely because it CANNOT precede the gates.** That last route is the one the 2026-08-29 design round found, and it is why this row rather than Table C's header is the home for a refusal that carries an artifact. The copy is on disk by then, `state/quarantine/redacted/` announces nothing (Q3), and the path is not in `redacted[]` — so with no carrier the artifact's name leaves the return entirely and the copy becomes an unannounced file holding unredacted secret-shaped content. **Therefore `refused[]` is `{rel, reason, artifact}`, with `artifact` REQUIRED AND NULLABLE** (Table S, row S3): the basename the gate reported when a copy was preserved for that path, `null` when none was — a positive statement of absence rather than a missing field, because an optional field spanning both cases is the defect row S2 already records one field over. **The reason string does NOT name the artifact, and no surface may make prose the carrier.** The shipped mitigation did exactly that and produced its own defect inside one review round: the pair refusal embeds its sibling's reason, so the SIBLING's copy was named first and a report composed by reading the name back out would have pointed the user at the wrong file — the same class of harm Q3 calls data loss, one file over. **One fact, one field, one place.** What the report SAYS about it is `WP-dream-promote-report`'s Table R; returning it is not delivering it |
 
 ### Table S — the decided bytes, and what may be derived from them
 
@@ -499,7 +529,9 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 - [ ] **Table Q — the EP2 result, and this family's share of the quarantine
       lifecycle.** Its mirrors are the `gates` paragraph and the `@returns`
       block in `### Exact contracts`, Table D's EP2 row, Table C's header
-      paragraph (which states the consequence of C1 preceding the gates),
+      paragraphs (which state the consequences of C1's two halves — the
+      candidate-decidable one preceding the gates, the resolved-only one landing
+      after them on row Q8's arm),
       `WP-dream-promote-report`'s Table R redaction-lines row AND its
       preserved-copy-on-a-refusal row, and `WP-dream-promote-in-workspace`'s
       rows G5 and V3. **Prohibitions, each earned: no surface may reduce the
@@ -512,6 +544,15 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       retention prune, the identity-gated deletion and the preservation-failure
       abort are `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s, cited by
       spec path because its table letters collide with this family's.**
+- [ ] **Table C's ORDERING RULING — where its rows sit against Table D's four
+      gates, and C1's two halves.** Decided in Table C's header, which is the
+      canonical statement. Its mirrors are **Table D's preamble sentence**
+      ("this table orders the gates against each other and against the merge,
+      and it does NOT order them against Table C's rows"), **rows C1 and C9**,
+      Table Q **row Q8**'s route list, and the resolved-path acceptance
+      criterion. **No surface may state C1 as wholly preceding the gates, and
+      none may claim a C1 refusal is always artifact-free** — the resolved-only
+      half runs after EP2 and can carry one.
 - [ ] **Table S — the decided bytes.** Its mirrors are the `@returns` shape
       (including the refused arm's `artifact`, whose presence row S3 permits and
       row Q8 requires), Table E's staged-bytes handoff row, and
@@ -626,11 +667,16 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       `reports_dir` is the worked example, since it is admitted — both spellings
       name ONE directory and both ADMIT. No false refusal, and no
       implementation may derive two directories from one name.
-- [ ] **Policy is judged on the RESOLVED path.** With a pre-existing vault
-      symlink `01-Projects/alias` → a directory C9 denies (`../.claude`, and a
-      vault-root target), a brain-written `01-Projects/alias/evil.md` is
-      refused and the victim directory gains nothing. Proven RED against an
-      implementation that hands the primitive the candidate path.
+- [ ] **Policy is judged on the RESOLVED path, and that refusal carries its
+      artifact.** With a pre-existing vault symlink `01-Projects/alias` → a
+      directory C9 denies (`../.claude`, and a vault-root target), a
+      brain-written `01-Projects/alias/evil.md` is refused and the victim
+      directory gains nothing. Proven RED against an implementation that hands
+      the primitive the candidate path. **Asserted again with the same fixture
+      after an EP2 REDACT verdict**, because this is C1's resolved-only half and
+      the gate has already run: the refusal's `artifact` is the basename the
+      gate reported, not `null` (Table C's header, Table Q row Q8). Proven RED
+      against an implementation that treats every C1 refusal as artifact-free.
 - [ ] **The merge never touches the user's live note.** On a conflicting
       three-way state the vault file is byte-identical to its `vault-now`
       version afterwards and contains no conflict marker.
