@@ -1,0 +1,314 @@
+Gate: ROUND ZERO — template conformance + internal coherence pass
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at tip 06a92a7
+Round: 0 (peer of the adversarial round 1)
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty before and after.
+NOTE: the tip moved during the run (this session committed the round-1 raw
+output, c1d9c00). The reviewer verified with `git diff --quiet 06a92a7..HEAD --`
+over all five analysed files that each is byte-identical to 06a92a7; all
+findings stand.
+
+JOB 1 — TEMPLATE CONFORMANCE
+
+All template sections PRESENT in all three specs (module / report /
+in-workspace) EXCEPT:
+
+J1-1 (all three, structural). `### Contract table(s)` is silently absent in all
+  three; each substitutes named `### Table C/D/E/Q/S/N/R/G/V` headings under
+  `## Contract reference`. The substitution is almost certainly intended, but
+  spec-authoring.md:25-27 is categorical: "A template section is never deleted
+  silently: where a conditional section legitimately does not apply, one line
+  stays in its place — `N/A — <one-line reason>`." PRE-EXISTING, not introduced
+  by the amendment.
+
+Non-findings recorded so they are not re-raised: all three add a
+`## Dispatch precondition` section not in the template (an addition, not a
+deletion); all three drop the template's parenthetical authoring hints.
+
+Runbook rules the template does not carry:
+  :7-14  spec states the contract, never the tests -> BORDERLINE, self-declared
+         (all three prescribe literal test NAMES and name the exception in place)
+  :20-24 universals quantify over a named checkable set -> OK
+  :25-27 no silent section deletion -> VIOLATED (J1-1)
+  :28-31 a new verification step is trusted only after a real green and red
+         -> cannot be checked from the tree (PR-body obligation)
+  :32-37 the broken state includes the DELIVERABLE-ABSENT case; guard negated
+         greps -> VIOLATED in WP-dream-promote-report (see C7)
+  :38-46 evidence reaches only as far as it reaches -> one violation (N1)
+  :47-50 a fact is stated once, in the owning surface -> C2, C3, H1, H2
+  :51-55 after rewriting a canonical cell, re-read that cell WHOLE -> H1
+  :56-63 sweep for the CLAIM, family-wide -> C2, H1, H3
+
+JOB 2 — INTERNAL COHERENCE
+
+CONTRACT DEFECTS
+
+C1  The range designated for DELETION contains one of the three behaviours
+    designated MUST-SURVIVE.
+    WP-dream-promote-in-workspace.md:205 (Deliverables), :277 (G7), :317 (V3),
+    :492-512 (acceptance criterion).
+    Measured against src/core/dream/validate.js:
+      preservation-failure abort  -> 1296-1323
+      identity-gated deletion     -> 1338-1360
+      retention prune             -> 1365-1366
+    The Deliverables row and row G7 both direct the implementer to remove
+    :1324-1364. LINES 1338-1360 ARE INSIDE IT. An implementer following the
+    Deliverables literally deletes the very behaviour the acceptance criterion
+    asserts survives.
+    Two consequential statements are geometrically false as written:
+      :500     "The three behaviours the revert core sits between" — a range
+               cannot sit between three things, and one of the three is
+               CONTAINED in it, not adjacent.
+      :511-512 "the three regions are neighbours in one function" — 1338-1360
+               is not a neighbour of 1324-1364; it is a subset.
+    Of the three, the identity-gated deletion is the only one given NO line
+    citation. The unlocated member is the one inside the delete range.
+
+C2  A stale mirror of the shape this amendment changed.
+    WP-dream-promote-report.md:136-140 still says the module half's @returns
+    names `refused:Array<{rel, reason}>`. The amendment changed it to
+    {rel, reason, artifact:string|null} (module:223-224), and the report's own
+    new Table R row and criterion both read refused[].artifact. This block sits
+    three lines above "it is cited here and not restated", is the only surviving
+    statement of the old shape in the family (grep '{rel, reason}' returns
+    exactly this hit), and was not touched by the diff.
+
+C3  Table N has no channel row for refused[].artifact.
+    WP-dream-promote-report.md:221-230. Table N is declared "the neutralisation
+    contract: which channels, which transformation, in which order". It has rows
+    for refused[].rel/.reason, redacted[].rel/.artifact/.labels/.lines,
+    records[].path/.reason and a fail-closed catch-all. The amendment introduces
+    refused[].artifact as a new interpolated channel (rendered by the new Table R
+    row, :268) and adds no row. This reproduces one field over the exact defect
+    Table N's redacted[].rel row records, and the reason its labels row gives:
+    "a channel with no row is indistinguishable from a channel nobody thought
+    about." The N2 fail-closed default keeps the property TRUE, but Table N is
+    the declared owner of the channel list and the list is now incomplete.
+
+C4  The report union's refused arm has no artifact carrier, and Q8's own hazard
+    applies to it.
+    report:151-164; module:445 (Q8), :460 (S3). Q8's argument is that a path EP2
+    redacts can afterwards be refused, the copy is already on disk, and with no
+    typed carrier the name leaves the return entirely. The fix was applied to
+    refused[] ONLY. The report body is subject to the identical sequence: the
+    report row (:180) states three of the four gates pass a reports_dir path
+    through — i.e. EP2 is the one gate that DOES judge it, so it can REDACT it —
+    and Table R's trigger (:241-244) explicitly includes downstream refusals.
+    The report's refused arm remains {outcome:'refused', reason, record}, and the
+    new Table R row scopes itself to "one line per entry of refused[]", which the
+    report is not a member of.
+
+C5  An assertion citing a table that does not contain the rule.
+    module:294-295 (added line): "...it never increments
+    secretDisposition.withheld — and PER TABLE E only withheld defers a
+    transcript". Table E is :391-400 and contains ZERO occurrences of
+    "transcript" (verified). The rule is decided in ### Exact contracts,
+    :245-249. The citation names the wrong owner.
+
+C6  A logbook citation to a file that does not exist.
+    module:417 and logbook/2026-08-29-promote-table-q-reconciliation.md:12, both
+    citing 2026-08-29-promote-module-pr-gates.md. Repo-wide search returns only
+    these two references. The file that exists is
+    2026-08-29-promote-split-pr-gates.md. Both citations are new in this
+    amendment, and one is the sole provenance for the "two PR-gate rounds put
+    five findings on this one contract" claim.
+    [RELAY NOTE, added at adjudication and NOT part of the reviewer's output:
+     the cited file DOES exist — on branch wp/dream-promote-module (commit
+     3e37237), not on this branch, which is cut from main. Verified with
+     git ls-tree on both branches. This is a real cross-branch merge-order
+     dependency rather than a fabricated citation, and is dispositioned as such.]
+
+C7  Two non-discriminating verification steps, on a premise MEASURED FALSE.
+    report:443-447 says "The deliverable test file exists today (a modify
+    deliverable), so no guard is needed for its existence — but the pattern must
+    actually match something", then runs two UNGUARDED
+    `npm test -- --test-name-pattern` commands. Measured in this tree:
+    tests/unit/dream-promote.test.js DOES NOT EXIST, and a --test-name-pattern
+    matching nothing exits 0 while printing "tests 108 / pass 108" (control run
+    with zzz-no-such-test-zzz reproduces both). Nothing in either command
+    enforces "the pattern must actually match something". Both steps are green
+    right now against a state in which the deliverable was never written — the
+    precise failure mode spec-authoring.md:32-37 exists to prevent, and which
+    the module and in-workspace specs guard against by hand. The stated ground
+    for omitting the guard is itself false.
+
+C8  The G7 criterion's RED proof covers two of the three behaviours it protects.
+    in-workspace:509-512: "Proven RED against an extraction that deletes THE
+    ABORT OR THE PRUNE along with the adjacent revert core." The identity-gated
+    deletion — the only one of the three actually inside the delete range (C1) —
+    has no RED proof. The criterion cannot discriminate the failure it is most
+    likely to encounter.
+
+COHERENCE DEFECTS
+
+H1  Table Q's ownership claim is made twice and unmade once, in the same section.
+    module:402 (heading) "and the quarantine lifecycle behind it"; :408 "this
+    table owns the EP2 gate's OUTPUT and the durable lifecycle it drives";
+    :418-420 "It does not own the durable lifecycle behind that result."
+    The heading and the lead-in were not swept. The same spec's Out-of-scope
+    bullet (:803-811) and MSC entry (:499) carry the corrected framing, and
+    report:466-468 was swept — so the sweep reached three sibling surfaces and
+    missed the two closest to the change. spec-authoring.md:51-55 verbatim.
+
+H2  Q4 is called a pointer in three places and an owner in two.
+    Pointer: module:423 ("rows Q4, Q5 and Q6 are pointers at it and restate none
+    of it"), :807-808, report:476. Owner: module:441 (Q4's own cell states the
+    invariant in full and says "What is THIS family's, and is genuinely new");
+    in-workspace:363-365 ("Table Q row Q4, which owns the invariant as it binds
+    THIS family"). Q5 and Q6 self-label "this row is a POINTER"; Q4 does not, and
+    correctly so — it is a hybrid. The three surfaces that sweep it in with
+    Q5/Q6 are wrong.
+
+H3  Three different counts of the letter collision, none of them right.
+    Measured canonical `### Table X` headings in
+    docs/specs/done/WP-secret-fence-ep2-redact-arm.md: B, H, J, K, N, P, Q, R, T
+    (nine). Family letters from the map's own ownership table: A, B, F, H, C, D,
+    E, Q, S, N, R, G, V. ACTUAL COLLISIONS: B, H, N, Q, R — FIVE.
+      family-map.md:43       says "Tables B, H, J, K, N, Q, R and T" -> omits P
+      family-map.md:44,47-52 says "Four of those collide", lists N,Q,R,H
+                             -> omits B, which collides with
+                                WP-dream-workspace-retarget's Table B, named
+                                three lines above in the map's own table
+      module:428-429         says "Tables B, K, N, Q, R and T" -> omits H, J, P;
+                             names only N,Q,R as colliding
+      in-workspace:317,:371 and report:319-320 say "N, Q and R" -> omit H and B
+    Four surfaces introduced by one amendment give three different answers, and
+    the canonical one is itself wrong.
+
+H4  The H collision is unlisted, and the family cites H7/H9 BARE — the two row
+    ids that exist in BOTH letter-spaces.
+    EP2's Table H has rows H1-H9 including H7 ("REGISTRATION IS A PRESENCE TEST")
+    and H9 ("THE STEP PRINTS WHAT IT CHECKED"). The primitive's Table H also has
+    H7 (the staging object) and H9 (directory unwind). Bare, un-path-qualified
+    citations of both sit at module:318, :530-531, :592-593; report:224, :264;
+    in-workspace:278. Because H is missing from every collision list a reader is
+    given, nothing warns them. THIS IS THE ONE PLACE THE AMENDMENT'S NEW RULE IS
+    ACTUALLY NEEDED AND IS NOT APPLIED.
+    (Verified clean: every citation of the EP2 package for tables N, Q, R and B
+    IS path-qualified or explicitly marked "that spec's own letter-space" —
+    module:422,:441,:443,:706; in-workspace:317,:370,:505,:662; report:319,:475.)
+
+H5  A wrong row cited as the surface that lists the consumers.
+    in-workspace:360-361: "rows G8 and G10, and row S5 in
+    WP-dream-promote-module, which lists them." S5 is the SCOPE row; S6 is "The
+    downstream consumers, named". S5's own text records that "An earlier form of
+    this row listed two consumers" and that this was the defect — so the citation
+    reinstates exactly the confusion S5 was written to close. Pre-existing
+    (context line in the diff), but one line above a bullet the amendment rewrote.
+
+H6  Two line-range boundaries land in the wrong construct (checked at BOTH ends
+    against src/core/dream/validate.js):
+      :1293-1323 (abort)       start 1293 = `redactFellThrough = true;`, the last
+                               statement of the redact arm's fall-through,
+                               followed by two closing braces; the abort's inputs
+                               are 1296-1297 and its `if` is 1298
+                               -> STARTS 3-5 LINES INSIDE THE PRECEDING CONSTRUCT
+      :1324-1364 (revert core) start 1324 = `if (tracked) {` correct; end 1364 =
+                               `  }` at 2-space indent, the ENCLOSING FOR LOOP's
+                               closing brace (body is 4-space; 1363 is
+                               `secretReverts += 1;`)
+                               -> ENDS ONE LINE PAST THE CONSTRUCT; deleting the
+                                  range literally is a syntax error
+      :669-738 (quarantine)    both ends valid; 9 lines wider than "the
+                               preserving call"
+      :906-946 (prune)         clean
+      :1365-1366, :1385-1386, :1392-1409, :1211  clean
+    Aside, not amendment-changed: module:144 cites the shipped redact arm as
+    :1269-1291; 1291 is `continue;` and 1292 is the closing brace, so that range
+    also ends one line inside its construct.
+
+H7  A rule attributed to a header that carries it in the footer.
+    module:443 (Q6) says Table N "states in its own header that every retention
+    fact is decided there and that no surface may restate a number from it."
+    Measured: WP-secret-fence-ep2-redact-arm.md:1755 (header) carries "Every
+    retention fact is decided here"; "None may restate a number from this table"
+    is at :1813, AFTER the rows.
+    (The rest of Q6 checks out: Table N has exactly seven rows N1-N7 matching the
+    seven facts Q6 names, and the pre-amendment Q6 did restate five of them
+    including the literal cap 50.)
+
+H8  An MSC mirror list not updated for a mirror the same amendment added.
+    report:303-305 lists Table N's registered mirrors as "Table R's gate rule
+    (2), Table R's observable-property row, the redaction-lines row, the records
+    input...". The new Table R preserved-copy row (:268) ends with "Neutralised
+    at composition exactly like every other channel (Table N)" — it is a Table N
+    mirror by its own text, and it is not registered. _TEMPLATE.md:90-91 applies.
+
+H9  A new canonical ruling with no MSC entry at all.
+    The amendment adds a genuinely new contract at module:279-290 — the ordering
+    of Table C's rows against Table D's four gates — and gives it a mirror at
+    :339-342. No MSC entry registers the pair. Table C's header appears in the
+    checklist only as a MIRROR OF TABLE Q (:501-502), and only for "the
+    consequence of C1 preceding the gates", not for the ordering ruling itself.
+
+WORDING NITS
+
+N1  module:423-425: "Rows Q5 and Q6 kept their numbers deliberately — other
+    packages cite Q-rows by number, and a renumber would silently retarget those
+    citations." Measured: outside the module, the family cites Q1-Q3, Q4 and Q8.
+    NO PACKAGE CITES Q5 OR Q6. The general premise is true; it does not reach the
+    rows it is offered for (spec-authoring.md:38-46).
+
+N2  module:428 and family-map.md:88 name the EP2 package by bare WP id, while the
+    rule they state (map:53-56) is "every citation of that package from this
+    family names the SPEC PATH". Harmless — no table letter involved — but the
+    rule's own statement does not obey it.
+
+N3  module:441-442 (Q5) declares "Restated nowhere here" and then enumerates "the
+    byte-identity guard, BOTH keep-combinations and their reason suffix". "Both"
+    is a count read out of the owner (EP2 spec:858, "the TWO combinations where
+    it keeps the copy"). A pointer that carries a number is a pointer that can
+    drift.
+
+RUNNABLE CRITERIA — MEASURED
+
+WP-dream-promote-module's implementation lives on wp/dream-promote-module and is
+NOT PRESENT in this tree; tests/unit/dream-promote.test.js and
+tests/unit/dream-pipeline.test.js do not exist here. Rows marked (*) report the
+pre-implementation guard behaviour only; post-implementation behaviour cannot be
+evaluated from this branch and was not guessed.
+
+ #  criterion                                                spec        exit  discriminates?
+ 1  test -f dream-promote.test.js && pattern "dream-promote" module        1   YES on ABSENT (*)
+ 2  npm test                                                 all           1   N/A — pre-existing local
+                                                                               adopt-e2e failure, pinned-
+                                                                               claude-path mismatch
+                                                                               (exec-identity.js:490);
+                                                                               diff is docs-only
+ 3  npm run lint                                             all           0   green (232 specs, 4 agents)
+ 4  test -f ... && pattern "claim-2b-merge-cwd"              module        1   YES on ABSENT only (*)
+ 5  test -d src && ! grep require(.*promote                  module,report 0   YES
+ 6  test -f GLOSSARY.md && grep '**promotion**'              module        1   YES — correctly red here
+ 7  pattern "dream-promote" (UNGUARDED)                      report        0   NO — finding C7
+ 8  pattern "report-fallback" (UNGUARDED)                    report        0   NO — finding C7
+ 9  test -f dream-pipeline.test.js && pattern                in-workspace  1   YES on ABSENT only (*)
+10  pattern "dream-validate"                                 in-workspace  0   WEAK — matches 190 real
+                                                                               tests, green before and
+                                                                               after; a regression guard,
+                                                                               not a criterion
+11  test -f ... && pattern "claim-1-pipeline"                in-workspace  1   YES on ABSENT only (*)
+12  test -f ... && pattern "claim-2b-pipeline"               in-workspace  1   YES on ABSENT only (*)
+13  test -f dream.js && ! grep precommitSessionEdits         in-workspace  1   YES
+14  test -f dream.js && grep assertCleanTree                 in-workspace  0   presence-only by design
+15  test -f adr/0012 && grep -i promot                       in-workspace  1   YES
+ -  G7's "EP2 durable lifecycle SURVIVES"                    in-workspace  n/a  NO — finding C8
+
+CONTROL MEASUREMENT, since two findings rest on it:
+  npm test -- --test-name-pattern "zzz-no-such-test-zzz"  -> EXIT 0, "tests 108 / pass 108"
+The module and in-workspace specs' own comment ("A --test-name-pattern with ZERO
+matching tests exits 0 (measured, Node 24)") is CONFIRMED; the report spec's
+ground for omitting the guard is REFUTED.
+
+TREE STATE
+  BEFORE  git status --porcelain -> (empty)   tip 06a92a7
+  AFTER   git status --porcelain -> (empty)   tip c1d9c00 (moved by this session's
+                                              own raw-output commit; all five
+                                              analysed files verified byte-identical
+                                              to 06a92a7)
+  Nothing modified, staged, committed or stashed by the reviewer.
+  Scratch: /tmp/rz-promote/ (outside the repo).
+
+CATEGORIES WITH NO FINDINGS: MSC entries naming a mirror that no longer exists
+(all named mirrors resolve); path-qualification of EP2 citations for letters
+N/Q/R/B (clean — the gap is H only, finding H4).
