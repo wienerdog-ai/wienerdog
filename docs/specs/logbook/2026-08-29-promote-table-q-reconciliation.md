@@ -710,3 +710,180 @@ round; LIGHT is verified mechanically and does not extend the loop.
 acceptance-criteria counts are 23 / 10 / 24 (module / report / pipeline),
 unchanged across the shape implementation. A round-3 fix that moves them is
 growing the surface and owes an explicit justification.
+
+---
+
+## ROUND 3 — the shape's first round, its escalation, the owner's ruling, and the sweep
+
+**Both raw outputs committed before adjudication, per `docs/runbooks/codex-review.md`.**
+
+| Round | Gate | Raw output | Commit that introduced it |
+|---|---|---|---|
+| **3** | adversarial DESIGN review (`docs/runbooks/review-prompts/adversarial.md`), backend gptsol (codex/gpt-5.6-sol via llmp) | `docs/specs/logbook/2026-08-29-promote-family-design-round-3-gptsol-raw.txt` | `474110a172c3e1b724f676185b6ae6d8104adbf2` |
+| **3** | internal coherence, fresh general-purpose executor with no part in drafting, relaying or reviewing | `docs/specs/logbook/2026-08-29-promote-family-design-round-3-coherence-raw.txt` | `dd958b370865afe0613bed7aa3a36e24c17d984a` |
+
+Both read tip `1757e8e`. The coherence pass recorded that HEAD moved to `474110a`
+mid-pass and verified `git diff --quiet 1757e8e..HEAD` over all five analysed
+files, so every finding holds at both tips.
+
+### THE OWNER'S RULING ON THE ESCALATION
+
+The adversarial round escalated under the re-stated criterion's condition 1 —
+*a fact that has nowhere to go ON the record, or a consumer that must re-derive
+rather than read.* Its claim: `remediation` cannot be gate-reported, because EP2
+runs before the merge and the outcome that decides the value is not known yet,
+so promotion must either overwrite the gate's value or ship wrong recovery
+guidance. **The ruling, reproduced because the sweep is only checkable against
+it:**
+
+> `artifact` and `location` are **gate-reported**; `remediation` is assigned
+> **at outcome time**, and its named owner is **the MODULE**. Q2's "every field"
+> claim narrows accordingly.
+>
+> **One addition: the shape's contract states provenance PER FIELD — who fills
+> it, and when — so that shared filling does not become the next ambiguity.**
+
+**The addition is the ruling, and the sweep treated it as such.** The defect
+round 3 found was not a wrong field. It was an IMPLICIT provenance claim — "every
+field of a record entry is reported by the gate" — that turned out false for one
+of three fields. A record filled by two parties at two times, with only a
+sentence about the record as a whole, reproduces that defect on the next field
+anyone adds. **So provenance is now a stated property of EACH FIELD, in three
+places that cannot drift apart:**
+
+1. **Row Q9 states it per field**, each field's statement opening with
+   `— FILLED BY <party>, AT <time>` and the row's own header saying that a field
+   added without both is incomplete.
+2. **The TYPE carries the same split.** `### Exact contracts` declares
+   `GateReportedCopy` (`{artifact, location}` — what the gate returns) and
+   `PreservedCopy` (`GateReportedCopy & {remediation}` — what `promote()`
+   returns). A field sits in the base when the gate fills it and in the
+   extension when the module does, so no field's filler is left to prose.
+3. **The Mirrored Surface Checklist forbids** adding a field to Q9 without
+   stating who fills it and when, and forbids any surface claiming a provenance
+   for the record AS A WHOLE.
+
+**What the ruling does NOT change, stated because a careless wording inverts
+it:** `remediation` is still a READ for every downstream surface. Rows Q7 and Q9
+say why in as many words — **the module is where that fact FIRST EXISTS, not a
+consumer re-deriving a value the gate already returned, because the gate returns
+none.** Q9's no-re-derivation rule binds the surfaces DOWNSTREAM of `promote()`'s
+return, and what it forbids them is a SECOND, independent statement of a fact the
+record already carries. Assigning it once, in one place, at the only moment its
+value is knowable, is exactly what makes every other surface a reader.
+
+**Row Q9's own `WHY THE GATE CANNOT FILL IT` paragraph carries the reviewer's
+argument**, so the reasoning is in the contract rather than only in this record:
+a gate-filled value would be a guess that is wrong on exactly the
+redact-then-refuse route, and telling a user to `restore` content the vault
+never took is worse guidance than none.
+
+### PER-FINDING DISPOSITION — ROUND 3, BOTH GATES
+
+**Adversarial (gptsol) — one finding, the escalation.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | the gate cannot report final `remediation` before promotion determines the outcome | **ESCALATED, RULED, IMPLEMENTED — and the reviewer's recommendation was taken in substance, not in form.** It asked for "a two-phase typed contract... distinguish gate-known preservation identity (`artifact`, `location`) from the FINALIZATION step that assigns `remediation`... define exactly one owner for that transition". That is what the `GateReportedCopy` → `PreservedCopy` split plus row Q9's per-field provenance is, with the module named as the one owner and outcome time named as the one moment. **What was NOT taken: its "do not claim that the pre-merge gate reported `remediation`" framed as a reason to move the gate.** The gate stays pre-merge and brain-scoped by standing owner ruling; the claim is dropped instead. **And the ruling's own addition went further than the finding:** the finding named one field, the ruling made provenance a per-FIELD property of the shape, because the next field would otherwise repeat the defect |
+
+**Internal coherence — eleven findings, batched deliberately.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| F1 | the report union's PUBLISHED arms carry no `preserved`, though EP2 can redact the body and publish it sanitized | **FIXED as ordinary work under the re-stated criterion — the fact has somewhere to go ON the record — and the root cause was one surface deeper than the finding.** Row Q8 quantified over "any arm that can carry a REFUSAL reached after EP2 ran", which never described this family's own redact arm: it PUBLISHES. Q8 now quantifies over **any arm that can exist after EP2 preserved something for that path, refusing and publishing alike**, and `preserved` is on ALL THREE arms of the report union — the union discriminates on OUTCOME, and preservation is orthogonal to outcome. Swept: Q8, Table S row S3, the module's Table Q MSC entry, the report's `### Exact contracts`, Table N's channel enumeration (`:270`), Table R's preserved-copy row (source scope, composition scope and the render-exactly-once partition, which is now over WHERE THE ENTRY SITS rather than over the outcome), Table R's redaction-lines row, the announcement criterion and two report MSC entries. **One thing the row now states that it could not before:** the report arm's line names the path and the entry's fields and nothing else, because the union carries no scrubbed-line count or labels for the body |
+| F2 | the two-entry keep case is attributed to an arm the shipped gate cannot reach | **FIXED at both wrong surfaces, and the measurement is the owner's, re-verified here.** `validate.js:1269` (`if (!hasHardFinding(findings)) {`) gates the ENTIRE redact arm and `redactCopy` is assigned at `:1276` inside it, so a hard finding leaves `redactCopy` null, `:1338 if (redactCopy)` never fires, and **a hard secret yields exactly one entry, always.** The two-entry case is the redact arm's FALL-THROUGH (`:1293` → `:1297` → `:1338-1360`). Both criteria now assert the WITHHOLD arm on **both routes** and say which one can produce two entries; each is additionally proven RED against a fixture that builds the two-entry case on the hard-secret route, since only a fake gate can. `in-workspace.md`'s G7 criterion and row Q9 described it correctly and are unchanged |
+| F3 | entry order in that same case contradicts row Q9 | **FIXED in the same sentences as F2.** Measured write order: redact-shelf copy `:1276`, withheld copy `:1297` — the REDACT copy is FIRST. Row Q9 fixes entries "in the order the gate wrote them"; both surfaces called the redact-arm copy the SECOND entry. They now name the redact-shelf copy first and cite Q9 for the rule |
+| F4 | the pipeline's Out-of-scope bullet contradicts the ruling it landed, and is a sixth carrying surface absent from the new MSC entry's five | **FIXED, both halves.** The bullet said row G7's criterion asserts the durable behaviours SURVIVE the extraction and that it "may not change what they do" — contradicted by G7, V3, the MSC entry and the G7 criterion, all rewritten in the previous window to land the carrier change. It now says the criterion asserts the extraction preserves their DECISIONS, and names the one owner-authorized exception. **And it is registered as the sixth mirror** in the carrier-change MSC entry that listed five |
+| F5 | the module's Out-of-scope bullet carries the pre-ruling premise the pipeline narrowed | **FIXED to the pipeline's own wording** — "preserves their DECISIONS", with the one owner-authorized carrier change named and the decision itself stated as untouched |
+| F6 | a range one line short of its construct, live in two contract surfaces while two siblings carry the corrected value | **FIXED at both, re-measured at both ends.** `:1398` is `if (secretRedacted.length > 0) {` at indent 2 and `:1409` is its closing brace at indent 2; `:1410` is blank and `:1411` opens Step 5, so Step 4 runs `:1374-1409`. All four live spec sites now read `:1374-1409` (`module:447`→`:463`, `report:224`→`:235`, `report:99`, `in-workspace:343`, at this commit's tip). **`report:224` had been rewritten in the previous window — the P-1 "the table above" fix — and kept the stale range, which is the whole lesson: a cell being edited for one reason is where a stale citation survives a sweep** |
+| F7 | remediation guidance restated in the surface that says it does not decide it | **FIXED at the two restating surfaces; the OWNER is left alone.** `report.md`'s preserved-copy row restated the values and their provenance rationale — re-creating, in the one cell that says the guidance is not decided there, the second independent statement the field exists to remove. It now reads the field and points at row Q9 for everything else. Table S row **S3** stopped enumerating Q9's three fields and states the property it actually owns (no field of an entry is content). **Row Q9 itself is the decider and keeps its statement**, which the finding lists as "same class" but which is the canonical surface |
+| F8 | the report's Table N mirror list names one surface twice | **FIXED.** The redaction-lines row appeared twice with different parenthetical scopes; merged into one member, and the miscount is named in place |
+| F9 | record vs entry | **FIXED.** `preserved` is an array; the record has no fields, its ENTRIES do. Table R's redaction-lines row now says each ENTRY of that path's record is read field by field, and says that how many entries an arm holds is row Q9's |
+| F10 | the Deliverables cell reintroduces the containment framing its three siblings were swept out of | **FIXED.** "sits inside that span's middle" → the measured geometry the three siblings carry: between the refusal-reason suffixes (`:1333-1337`) and the `reverted[]` accounting (`:1361-1363`), inside the same per-path loop (`:1233-1364`) |
+| F11 | a criterion in a package that composes no report asserts a report line | **FIXED by moving the ASSERTION to where the line is composed, not by adding one.** The module's criterion now asserts `promote()`'s returned `redacted[]` entry — the collision fixture and the un-hardcoded `location` assert the same two properties on the RECORD instead of on a line — and it gains a third RED, against a return whose entries reach the caller without `remediation`. The report's announcement criterion absorbs the redaction lines, and its MSC entry no longer delegates their assertion to a package whose Deliverables compose no report. **No criterion was added anywhere: 23 / 10 / 24 after the sweep, counted** |
+
+### THE CORRECTED P-4 ENTRY — a disposition that claimed a fix that was not there
+
+**The round-2 disposition for P-4 above reads "FIXED at all three sites
+(`:1450-1458` twice-cited as `:1450-1457`, and `:1374-1409` cited as
+`:1374-1408` in two specs), each re-verified by indentation."** Measured against
+the tree at `1757e8e`, **that second half was false.** What actually happened:
+
+- `:1450-1458` — **genuinely fixed**, and re-verified again here (`:1450` is
+  `return {` and `:1458` its `};`).
+- `:1374-1408` → `:1374-1409` — **fixed at TWO of the four sites that carried
+  it**, `report:99` and `in-workspace:343`. `module:447` and `report:224` were
+  left at `:1374-1408` and stayed there through the round. The claim "at all
+  three sites" also miscounted the sites: this citation lives at four.
+- **`report:224` was itself rewritten in the same window** for round-2's P-1 and
+  kept the stale range — the diff added a line to that cell and did not touch
+  the citation two words away.
+
+**Corrected here rather than in place**, because a dated execution record is not
+a living surface and the correction belongs where it can be read against the
+finding. **A disposition record that claims a fix which is not in the tree is
+worse than one that admits a miss:** it is the surface a later round trusts
+instead of measuring, and it converts a one-line stale citation into a reason not
+to look. The lesson is narrower than "sweep harder": **every site of a changed
+citation must be enumerated BEFORE the sweep and counted after it** — the same
+derive-the-complete-set-first discipline this record already credits for round
+zero's H4, applied to citations rather than to claims.
+
+### STOP-CRITERION COMPLIANCE, CHECKED CONDITION BY CONDITION
+
+1. *A carrier gap the ruled shape CANNOT express.* **Fired once, on the
+   adversarial finding, and it was the correct call:** `remediation`'s producer
+   was not a missing field but a wrong claim about who produces the fields the
+   shape already had. It went to the owner and came back as a ruling. **F1 did
+   NOT fire it** — the fact had somewhere to go on the record, which is
+   precisely the test the re-stated condition installed to replace occurrence
+   counting, and the fix was one field on two arms plus a sweep.
+2. *A fix that re-imports an excluded property.* **None.** The typedef split
+   adds no filesystem discipline, no report rule and no lifecycle fact; it
+   states which party fills a field the record already carried.
+3. *Growing the verification surface to hold a finding about the verification
+   surface.* **None. No acceptance criterion was added, moved between packages
+   as a new one, or deleted: 23 / 10 / 24, counted after the sweep.** F11 is the
+   one that looks like it should have grown the surface and did not — the
+   assertion moved into an existing criterion in the package that composes the
+   line, and the module's criterion was restated rather than dropped.
+4. *A cross-family duplicate.* **None.** The provenance statement names the
+   parties in THIS family; the durable lifecycle stays cited by spec path.
+
+### WEIGHTED CLOSURE — WHERE THIS LEAVES THE LOOP
+
+**The loop is NOT closed, and the reason is the ruling itself.** The
+adversarial finding was HEAVY by any reading — it changed what an implementer
+builds, adding a type and an assignment step — and F1 and F2 are heavy too: F1
+adds a field to two arms, F2 corrects a fixture two criteria mandate. **Under
+the pinned rule a HEAVY fix lands and then takes a fresh full round**, so a
+round 4 is owed before `Ready`.
+
+**One measurement to carry into it, so it is not re-derived:** the counts are
+still **23 / 10 / 24**, unchanged across the shape implementation, the round-2
+sweep and this one.
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **The `GateReportedCopy` typedef is mine, not the ruling's.** The ruling
+  required the contract to state provenance per field; a prose statement in row
+  Q9 would have satisfied it literally. I added the type split as well, because
+  a rule that only prose carries is the shape this family has now watched drift
+  four times. **If it is one surface too many, the smaller form is row Q9's
+  per-field statement alone, and the cost is that an implementer can write a
+  gate fake that returns `remediation` without the type objecting.**
+- **F7 lists row Q9 itself as "same class", and I did not treat it as a
+  finding.** Q9 is the decider; a decider stating what it decides is not a
+  restatement. If that reading is wrong, the surface to reverse it on is this
+  bullet.
+- **F1's fix widened row Q8's quantifier, which is a bigger change than the
+  finding asked for.** The finding asked for a field on two arms. I changed the
+  rule those arms are covered by, because the narrow rule was also wrong about
+  `redacted[]` — a published arm that has carried the record since the shape
+  ruling. **That is a second defect the round did not report**, and it is fixed
+  here rather than deferred.
+- **The report body's redaction has no line count or labels anywhere**, because
+  the `report` union carries neither. The preserved-copy row now says the line
+  names the path and the entry's fields only. **Named rather than fixed:** adding
+  `lines`/`labels` to the published arms is a contract change the round did not
+  ask for and the ruling did not cover.

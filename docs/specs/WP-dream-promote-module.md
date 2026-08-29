@@ -187,10 +187,9 @@ under "Discovered issues" in the PR body.
 /** @typedef {{artifact:string, location:string}} GateReportedCopy
  *  ONE copy the EP2 gate preserved for one candidate, AS THE GATE RETURNS IT —
  *  the fields only the gate can know. The gate's arms carry
- *  `Array<GateReportedCopy>`.
- *
- *  @typedef {GateReportedCopy & {remediation:'restore-or-delete'|'delete'}}
- *           PreservedCopy
+ *  `Array<GateReportedCopy>`. */
+
+/** @typedef {GateReportedCopy & {remediation:'restore-or-delete'|'delete'}} PreservedCopy
  *  THE SAME COPY AS `promote()` RETURNS IT — the gate's fields plus the one
  *  this module assigns once the path's outcome is known. **The split is the
  *  TYPE carrying PROVENANCE: a field sits in `GateReportedCopy` when the GATE
