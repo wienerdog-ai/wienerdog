@@ -175,3 +175,41 @@ is mostly a DELETION — see the report handed to the owner with this record.
   package whose Table N is a different Table N is exactly the correct-looking
   wrong reference this family keeps producing. Recording it in the map was part
   of the ruling, not follow-up.
+
+## Design-review loop: STOP CRITERION, pinned BEFORE round 1
+
+**Pinned by the relay before the first adversarial round, which is where this
+rule belongs and where the PR-gate loop on `WP-dream-promote-module` failed to
+put it.** That loop ran two rounds without an agreed finish line; this one does
+not start until the finish line exists.
+
+**What closes the loop.** A round that finds nothing about the PRODUCT — the
+contracts an implementer builds against, what a user or a consuming model
+observes. Findings about the specs' own verification machinery at that point are
+fixed inside the existing surface or accepted as named residuals; they do not
+extend the loop.
+
+**What escalates instead of iterating.**
+
+1. **A third round landing again on the EP2-result family** — what the secret
+   gate produces besides a verdict, and who carries each part. Nine rounds have
+   now landed there. A tenth is not a review finding, it is evidence that the
+   contract wants a different shape, and it goes to the owner as a design
+   question rather than a patch.
+2. **Any finding whose honest fix RE-IMPORTS a property this family was re-cut
+   to exclude** — the report, the commit, the pipeline, or the vault-write
+   primitive's filesystem discipline. That is a contract change wearing a
+   patch's clothes and it is the owner's act, however small the diff looks.
+3. **Any finding that requires GROWING the verification surface to hold a
+   finding about the verification surface.** Measured in this repo: each fix
+   injects 0.5–0.9 new defects, so a growing surface refills the defect supply
+   and the loop cannot converge. Fix inside the existing surface or name the
+   residual.
+4. **A second cross-family duplicate.** The pass found that Q5/Q6 restated a
+   shipped `Done` package's canonical tables. If another surface in this family
+   turns out to restate an owned contract, the question is no longer "fix this
+   spec" but "why does this family keep copying contracts it does not own".
+
+**Weighted closure applies as written:** a HEAVY finding (one that changes what
+an implementer builds) lands its fix and then takes a fresh full round; a LIGHT
+one (machinery, wording, a mirror walk) is verified mechanically and does not.
