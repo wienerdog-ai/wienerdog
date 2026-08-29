@@ -1113,3 +1113,322 @@ change on the module half plus one new carrier on the report half.
   announcement criterion goes RED on a composer that renders both lines for the
   same copy — because the honest failure mode of a re-cut partition is
   double-announcement, not silence.
+
+---
+
+## ROUND 4 — the union's escalation, the owner's two rulings, and the sweep
+
+**The gates, their raw output and the commit each was committed in — both
+committed BEFORE adjudication, per `docs/runbooks/codex-review.md`:**
+
+| Gate | Raw output | Commit | Analysed at |
+|---|---|---|---|
+| Adversarial DESIGN review (gptsol, codex/gpt-5.6-sol via llmp) | `docs/specs/logbook/2026-08-29-promote-family-design-round-4-gptsol-raw.txt` | `3c0bd19` | `36cfc23` |
+| INTERNAL COHERENCE pass (fresh general-purpose executor) | `docs/specs/logbook/2026-08-29-promote-family-design-round-4-coherence-raw.txt` | `81457b2` | `36cfc23` |
+
+Both passes confirm the mechanical baseline: acceptance criteria **23 / 10 / 24**,
+unchanged; whole-file checkbox counts unchanged; every citation introduced or
+changed since `1757e8e` correct at BOTH endpoints. Round 3's
+remediation-provenance finding is CONFIRMED FIXED. The adversarial pass raised
+**A1 as an OWNER ESCALATION** under this record's own stop criterion, condition 1,
+and **B1** as a contract defect; the coherence pass raised **F-1 … F-8** plus two
+observations.
+
+### THE OWNER'S RULINGS
+
+**A1 — ESCALATION ACCEPTED, and the ruling separates form from property.**
+
+> The FORM is yours. The PROPERTY is ruled: **no real outcome is silent**, and
+> the failed second write's accounting **goes to the run's log per the standing
+> R6-2 rule**.
+
+**B1 — SPLIT IN TWO.**
+
+> The spec states the SHIPPED TRUTH NOW — it counts **added lines**, and **the
+> gap is named in place**. The counting change is **routed to the pipeline
+> package as a named input**.
+
+### THE R6-2 CITATION, RESOLVED — and the trap in applying it
+
+Table letters and row ids collide across this repo, so the citation was resolved
+rather than passed on. The rule the ruling means is **this family's own**, at
+`docs/specs/logbook/2026-08-21-dream-promote-pair-review-rounds.md:881`:
+
+> **GENERALISE R4.** Any primitive refusal of the report write — `expect`, a
+> symlinked target under H3, any H-rule — converges on one outcome: **vault
+> object untouched, the COMPLETE record to the run's log and output, reason
+> named.**
+
+Not the `R6-2` of `WP-a10-escape-harness.md:92`, and not the ones in the a9/a10
+round records: different letter-spaces, different subjects.
+
+**THE TRAP, and it decided the wording of every surface below.** R6-2's *rule* is
+what the owner applied — the complete record reaches the run's log and output and
+the reason is named, so no outcome is silent. R6-2's *outcome clause* says
+"**vault object untouched**", and in A1's state the vault object is **not**
+untouched: the first write published the body; only the accounting write failed.
+R6-2 and Table R's row R4 were both written for a refusal of THE report write,
+which assumes the WHOLE write. **Applying either verbatim would have put a false
+clause about the user's vault into the contract**, and the next round would have
+filed it. So: the RULE is carried, the outcome clause is explicitly scoped away
+from the new state, and the new state states POSITIVELY what the vault holds.
+
+### THE A1 FORM CHOSEN — a required discriminated field on the `promoted` arm
+
+**`accounting:{published:true} | {published:false, reason:string}`**, on the
+`promoted` arm ALONE, required, with the contract DECIDED in
+`WP-dream-promote-report`'s **report row** — the row that already owns the two
+writes — and the TYPE declared in that spec's `### Exact contracts`.
+
+**Why a field and not a fourth arm, argued rather than preferred:**
+
+1. **The union's discriminant is the BODY's outcome, and the second write's fate
+   is a different axis.** This family has already ruled once that a fact
+   orthogonal to the discriminant is a FIELD, not an arm — that is round 3's F1
+   and the whole reason `preserved` sits on every arm. A fourth arm would encode
+   two axes in one discriminant, which is the shape that argument rejected.
+2. **A fourth arm would widen row Q10's carriers.** A new arm meaning "the body's
+   sanitized bytes published, but the section did not" is an arm on which a
+   redaction accounting is owed, so `redaction` would have to travel there too —
+   past the `promoted`-alone scope row Q10 states by measurement, and past the
+   Mirrored Surface Checklist prohibition that forbids widening it without that
+   measurement. The field keeps `redaction` exactly where the disclosure-parity
+   ruling put it: the arm is still `promoted` because **the body did publish**,
+   on both forms of `accounting`.
+3. **The scope is by MEASUREMENT, exactly as `redaction`'s is.** `promoted` is the
+   only arm whose sequence is TWO primitive writes. Table R's fallback publishes
+   in ONE write and `refused` publishes nothing, so on those a refusal IS the arm
+   and row R4 governs it. A field on one precisely defined arm is the narrow true
+   scope; a field on the union would be symmetry rather than measurement.
+4. **Every "on every arm" enumeration in three specs stays true.** A fourth arm
+   would have re-swept `preserved`-on-every-arm, the announcement criterion's
+   three-arm walk, Table N's arm-quantified channel rows and the family map. The
+   field costs none of that.
+
+**WHAT THE FORM CARRIES — the five facts the reviewer enumerated, each in a named
+field:** the published body bytes → `report.bytes`; the complete enforcement
+record → `report.record`; the primitive's refusal reason → `accounting.reason`;
+the preservation metadata → `report.preserved`; the redaction accounting where it
+applies → `report.redaction`, unchanged.
+
+**PER-FIELD PROVENANCE, stated in prose AND carried by the type:**
+
+| Field | Filler | Moment | How the TYPE carries it |
+|---|---|---|---|
+| `accounting.published` | **THIS PACKAGE** (`WP-dream-promote-report`) | at SECOND-WRITE time — `true` when the primitive returned for that write, `false` when it refused | the literal discriminant |
+| `accounting.reason` | **ORIGINATES WITH THE VAULT-WRITE PRIMITIVE** (Table H, its row H7, which returns `{written:false, reason}`) and is **CARRIED UNCHANGED** by this package | at SECOND-WRITE time | it exists on the `published:false` form ALONE — the form on which the primitive refused |
+
+**The type carries provenance by DISCRIMINATION rather than by a base/extension
+split, and it is stated rather than left to symmetry** — the same move row Q10
+made for `RedactionAccounting`. The `GateReportedCopy`/`PreservedCopy` split
+exists because ONE shape carries two parties' fields at once; here the
+primitive's field exists on exactly the form where the primitive spoke, and a
+single `reason` spanning both states would be the guarantees-nothing shape row S2
+records.
+
+**WHAT THE VAULT HOLDS, which the ruling required the new state to say.**
+`report.bytes` is the bytes the vault holds for the report path: the SECOND
+write's returned buffer on `published:true`, the FIRST write's on
+`published:false`. Never a fresh read and never the composed-but-unpublished
+section. **This also closes a seam row S1 left open** — "the exact buffer
+`writeIntoVault` returned for it" is singular, and the report path is the one
+path two writes can each return a buffer for. Row **S5** now hands that choice to
+the report package by pointer (it already puts the two-write sequence there); the
+report row decides it. No Table S row was added and none was restated.
+
+**IS THIS STATE "PUBLISHED" FOR THE DISCLOSURE PURPOSE? Yes, and deliberately.**
+Row Q10's carrier rule is keyed on THIS CANDIDATE'S SANITIZED BYTES HAVING
+PUBLISHED, which is true on both forms — so `redaction` stays required and
+nullable on `promoted`, and Q10's carriers are not widened. **What the
+`published:false` form loses is not the accounting but its delivery INTO THE
+VAULT:** the write that was refused is the very one carrying the redaction line
+and every preserved-copy line, so on that form `report.record` is the only route
+those lines take to the user. That is precisely the sense in which the ruled
+property — no real outcome is silent — is satisfied by R6-2's rule.
+
+**DOWNSTREAM, because an outcome nothing handles is silent by another route.**
+`WP-dream-promote-in-workspace` row **G8** commits the report path from the arm's
+`bytes` on BOTH forms — a commit that skips it drops a published, gated file out
+of the run's one commit, and a commit that manufactures the missing section
+commits bytes no gate judged. Row **G11** delivers `report.record` on the
+`published:false` form exactly as it delivers R4's, naming
+`accounting.reason`; it differs from R4's delivery in one respect, stated in
+place: here something IS committed. Row **V4** records both deliveries.
+
+### B1 — THE SHIPPED TRUTH HERE, THE COUNTING CHANGE ROUTED THERE
+
+**Here, now (row Q10).** `lines` is how many of the run's ADDED LINES the scrub
+RAN OVER — `addedLineNumbers.length` (`validate.js:1286`) — **and the gap is
+named in place**: `scrubAddedLines` rewrites EVERY added line as
+`scanAndRedact(line).text` (`:838-840`), and a clean added line is rewritten
+byte-identically, so the count can exceed the number of lines whose bytes
+changed. Ten added lines with one secret report ten. **The shipped report line
+already renders exactly this value** (`:1401`, `` `${r.lines} line(s) scrubbed` ``),
+so the row is the spec catching up to the product rather than a new inaccuracy,
+and the word "scrubbed" on that line is the product's. Until the narrowing lands,
+**no surface in this family may describe `lines` as a count of CHANGED lines.**
+
+**Routed (row G7).** `WP-dream-promote-in-workspace` owns
+`src/core/dream/validate.js` as a modify deliverable and extracts this gate, so
+the change is a **NAMED INPUT** to that package: the extracted EP2 gate returns,
+as the accounting's `lines`, the number of added lines whose POST-REDACTION bytes
+DIFFER from their captured bytes. The row states it as an input, not as work this
+pass performs, and says so. **No acceptance criterion was added for it**, and the
+omission is deliberate and recorded in the row: this pass routes the change, and
+growing that package's verification surface for work it has not been given is
+what this record's stop criterion, condition 3, forbids. The criterion lands with
+the counting change.
+
+### PER-FINDING DISPOSITION — ROUND 4, BOTH GATES
+
+| # | Gate | Verdict | What was done |
+|---|---|---|---|
+| **A1** | adversarial | **ESCALATED, RULED, FIXED** | the `accounting` field above, its owner (the report row), its per-field provenance, its type, its acceptance case, and G8/G11/V4 downstream. R4's and R6-2's untouched-vault clause scoped away from it rather than copied onto it |
+| **B1** | adversarial | **RULED, SPLIT, BOTH HALVES DONE** | row Q10 states the shipped truth and names the gap; row G7 carries the counting change as a named input |
+| **F-1** | coherence | **FIXED** | row Q7 said the module carries the record "into the accounting and the report" while three surfaces — one written in the same window — say it composes no report. Now: into its OWN RETURN, which is what the accounting and the report are BUILT FROM, "this module composing neither of them", with the old wording quoted as corrected history |
+| **F-2** | coherence | **FIXED** | the Out-of-scope bullet attributed "preserves their DECISIONS, nothing more" to rows G7 and V3 and the G7 criterion; measured, the words are the pipeline package's Mirrored Surface Checklist entry (`in-workspace:404`). The quotation is re-attributed to its real owner and the three operative surfaces are described as carrying the narrowing WITHOUT that phrasing |
+| **F-3** | coherence | **FIXED** | the orphaned "Asserted a THIRD time" in the announcement criterion — a sweep removed its predecessor. The ordinal is dropped rather than renumbered ("Asserted on the WITHHOLD arm too"), because an ordinal in a criterion this long is a count waiting to be falsified again |
+| **F-4** | coherence | **FIXED, and the rule is now checkable** | "every field this family adds" is falsified by this family's own fields (`report.bytes`, `redacted[].rel`, `records[].path` and kin state neither filler nor moment, and none is owed one). Narrowed at both sites to **every field of a shape that CARRIES ONE PARTY'S FACTS TO ANOTHER** — row Q9's record, row Q10's accounting, and this pass's own `accounting` field, whose `reason` is the primitive's. The narrow form is what makes "who fills this, and when" a real question rather than a ritual |
+| **F-5** | coherence | **FIXED (registration)** | the report's Current-state description of `promote()`'s return is a Table Q mirror, was edited in this window, and was registered by neither checklist. Registered in BOTH — the module's Table Q entry and the report's own Current-state item — and the paragraph itself now says so |
+| **F-6** | coherence | **FIXED** | "its two typedefs" where three are declared, the count stale on arrival because `GateReportedCopy` was added in the same window. The prohibition now names all three, and records why the neighbouring "six shapes" count is nonetheless right: this package READS six and must never write out the seventh |
+| **F-7** | coherence | **FIXED on the SIDE THAT WAS MISSING, not in the checklist** | the checklist claimed the partition is stated by "both rows" while only the preserved-copy row stated it. The redaction-lines row now states its side — render exactly once, the partition is over whether the path HAS an accounting — so the checklist's two-sided claim is TRUE rather than weakened. Weakening it would have left a sweeper checking one side of a two-sided rule |
+| **F-8** | coherence | **FIXED** | "the one arm rows Q1 and Q10 name": Q1 names a GATE arm, Q10 names three carriers. The Current-state sentence now says what it means — the accounting is on every entry of `redacted[]`, required and non-null; row Q10 owns fields, provenance and carriers; row Q1 decides only the gate arm |
+| obs. 1 | coherence | **CORRECTED BY APPENDING** — see the next subsection | |
+| obs. 2(a) | coherence | **FIXED** | row Q9's broken `location` sentence (a dropped clause) — "the two places a preserved copy can sit are the two SHELVES of the glossary's **secret quarantine**" |
+| obs. 2(b) | coherence | **FIXED** | the unbalanced bold run in the T3 tripwire bullet |
+| obs. 2(c) | coherence | **FIXED** | the `awk` description said the command "finds exactly one consumer"; re-run, it prints NINE lines mentioning `reason`, exactly one of which CONSUMES it (`:1361`). The description now states the command's OUTPUT and the conclusion separately. The substantive claim holds |
+
+### THE CORRECTED CITATION COUNT — appended, not rewritten, exactly as P-4 was
+
+Round 3's `### COUNTS, EACH ONE COUNTED` says of row Q10's six new citations that
+"each appears exactly once across the three specs, verified by grep". **Measured
+at `36cfc23`, that is wrong for two of the six: `:1276` appears 3× and `:1297`
+appears 2×**, all inside `WP-dream-promote-module.md` — row Q10 plus the Q8
+acceptance criterion added in the same window by round 3's F2. **The correction is
+appended here rather than edited into that section**, which is how the P-4
+disposition was corrected and for the same reason: a record that silently rewrites
+its own measurement teaches the next sweep to trust a number nobody can re-derive.
+
+**No contract consequence:** the two surfaces cite the same code lines for
+different facts, so there is no second carrier and no drifting restatement. The
+count was wrong, not the citations.
+
+**Enumerated before this pass's sweep and counted after it, at the tip this
+section is committed in:**
+
+| Citation | Sites before | Sites after | Where |
+|---|---|---|---|
+| `validate.js:1276` | 3 | 3 | module (row Q10 ×1, Q8 criterion ×2) — unchanged by this pass |
+| `validate.js:1297` | 2 | 2 | module (row Q10 ×1, Q8 criterion ×1) — unchanged by this pass |
+| `validate.js:1267` | 1 | 1 | module row Q10 |
+| `validate.js:1287` | 1 | 1 | module row Q10 |
+| `validate.js:1283-1292` | 1 | 1 | module row Q10 |
+| `validate.js:1286` | 1 | **2** | module row Q10, **and pipeline row G7 (new — B1's routed input)** |
+| **`validate.js:838-840`** (NEW) | 0 | **2** | module row Q10, pipeline row G7 |
+| **`validate.js:1401`** (NEW) | 0 | **2** | module row Q10, pipeline row G7 |
+
+**Both new citations verified at BOTH ends against the construct and its
+indentation:** `:838-840` is the `for (const l of addedLineNumbers)` loop whose
+body is `lines[l - 1] = scanAndRedact(lines[l - 1]).text;`, opening and closing
+brace included; `:1401` is the single template line the shipped report renders.
+**Two sites each is deliberate and is not a restatement:** the module row states
+the FIELD's shipped meaning and the pipeline row states the CHANGE it must build,
+and neither could cite the other's evidence without the reader having to leave the
+one-document boundary.
+
+### COUNTS, EACH ONE COUNTED
+
+- **Acceptance criteria: 23 / 10 / 24, UNCHANGED**, counted with `awk` over each
+  spec's `## Acceptance criteria` span after the sweep.
+- **A1's acceptance case did not move the count, and that is an argument rather
+  than luck.** The case went into the criterion that already existed for it —
+  "Every report refusal delivers the record" — which was itself carrying the
+  defect: its universal ("the vault object is byte-unchanged") is FALSE of the
+  second-write refusal, so a new criterion would have left a false one standing
+  beside it. The criterion is now partitioned into **(a)** the report write
+  refused and **(b)** the first publish succeeding while the second write is
+  refused, with four REDs on (b). **This is the extraction move applied to a
+  criterion: pull the contract into one place, fix the mirrors, register the new
+  one** — not surface growth.
+- **New tables: none. New rows: none.** One new FIELD on one existing arm.
+- **`npm run lint` passes:** markdownlint 0 errors over 556 files, frontmatter
+  check 232 specs / 4 agents.
+
+### STOP-CRITERION COMPLIANCE — the re-stated criterion, REVIEWED against these rulings
+
+**Reviewed condition by condition, and the review itself is the record the
+constraint asked for.**
+
+1. *A carrier gap the ruled shape CANNOT express.* **FIRED, correctly, and was
+   ruled.** This is the one condition written to catch exactly what A1 found: a
+   real outcome fact with nowhere to go ON the shape. The reviewer escalated
+   rather than proposing a repair, the owner ruled the property and left the form
+   to the architect, and the fix is a field on a precisely defined arm. **The
+   condition survives this round unchanged** — it did its job, and nothing about
+   the ruling narrows it.
+2. *A fix that re-imports an excluded property.* **None.** `accounting` adds no
+   filesystem discipline (the primitive's refusal is cited, never described), no
+   quarantine-lifecycle fact, and no new report rule beyond the outcome of a
+   write the report row already owned. B1's routed input adds no property to the
+   module half at all.
+3. *Growing the verification surface to hold a finding about it.* **None, and it
+   was consulted twice** — once to keep A1's case inside the existing criterion,
+   and once to decline an acceptance criterion for B1's routed counting change in
+   the package that has not yet been given the work.
+4. *A cross-family duplicate.* **None.** Nothing here restates
+   `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`; F-2's fix removes a
+   quotation this family was attributing to surfaces that do not carry it, which
+   is the same class one step milder.
+
+**Weighted closure.** A1 is a **HEAVY** fix — it changed what an implementer
+builds — so it lands its fix and **takes a fresh full round**. B1's first half and
+F-1 … F-8 are LIGHT and verified mechanically. **The owner ratifications carried
+into round 3 are carried into round 5 unchanged**, and one is added: **the A1 form
+is ratified — a field on the `promoted` arm, not a fourth union arm.** A finding
+re-proposing the arm is a scope objection, not a defect, unless it shows a
+published-body outcome the field cannot express.
+
+### DIVERGENCE THIS PASS ADDS AGAINST PR #31 — incremental, and it is small
+
+**On the module half's SHAPE: nothing new.** A1 touched no field of `promote()`'s
+return — the `accounting` field is on the report union, which the report package
+adds and which no branch has implemented. B1 changed no value: row Q10 now
+DESCRIBES what the shipped gate already computes (`addedLineNumbers.length`)
+instead of describing something else, so whoever folds PR #31 back finds the row
+agreeing with the code where it previously did not.
+
+**Two items to carry forward, neither of them a correction to PR #31:**
+
+1. **One prose pointer on the module half** — row S5 now says which package
+   decides WHICH of the report path's two returned buffers travels in
+   `report.bytes`. Nothing in `promote.js` changes.
+2. **One FUTURE divergence, flagged now so it is not discovered late** — the
+   counting change routed to row G7. When the pipeline package builds it, the
+   extracted EP2 gate's `lines` stops being `addedLineNumbers.length` and becomes
+   the count of added lines whose post-redaction bytes differ. **That is a change
+   to shipped behaviour** (the report line's number will drop on notes with clean
+   added lines) and it belongs to that package, not to this one and not to PR #31.
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **The field-versus-arm choice is the whole of A1, and I chose the form the
+  owner left open.** The four arguments are above; the strongest is that a fourth
+  arm would have forced `redaction` past the `promoted`-alone scope that the
+  disclosure-parity ruling settled one round earlier. If the owner prefers the
+  arm, the reversal is one arm in `### Exact contracts`, one sentence in row Q10's
+  scope, one prohibition in two checklists, and a re-sweep of every "on every arm"
+  enumeration in three specs — which is the cost the field avoids.
+- **`report.bytes` on `published:true` now means the SECOND write's buffer, and
+  that is a decision row S1 did not make.** I placed it in the report row and
+  pointed row S5 at it rather than widening Table S, because S5 already puts the
+  two-write sequence in that package. A reviewer could reasonably argue Table S
+  should decide it; the counter-argument is that the module half never performs
+  the second write.
+- **F-4's narrowing invents a phrase — "a shape that carries one party's facts to
+  another".** It is checkable and it covers exactly the three shapes that need the
+  rule, but it is a NEW piece of vocabulary in a family that already has many. If
+  it does not earn its keep, the fallback is to enumerate the three shapes and
+  drop the general form.
+- **F-7 was fixed by adding prose to a row rather than by weakening a checklist
+  claim**, which grows the redaction-lines row a little further. The row was
+  already the longest in Table R.
