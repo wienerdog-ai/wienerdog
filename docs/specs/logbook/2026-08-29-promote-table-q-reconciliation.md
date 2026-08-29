@@ -887,3 +887,229 @@ sweep and this one.
   names the path and the entry's fields only. **Named rather than fixed:** adding
   `lines`/`labels` to the published arms is a contract change the round did not
   ask for and the ruling did not cover.
+
+---
+
+## THE DISCLOSURE-PARITY RULING — round 3's named residual, crossed by the owner
+
+**This is not a round.** Round 3 closed with a residual I named and did not fix:
+*"The report body's redaction has no line count or labels anywhere... adding
+`lines`/`labels` to the published arms is a contract change the round did not ask
+for and the ruling did not cover."* I stopped at the contract boundary, correctly.
+**The owner then crossed it, and the ruling is reproduced because the sweep below
+is only checkable against it:**
+
+> **(1) The report's published arms get the redaction facts.** The report body is
+> an ordinary candidate; **parity of disclosure is owed to it.** The fact travels
+> as a **field of the disposition shape**, in one sweep.
+>
+> **(2) The `GateReportedCopy` / `PreservedCopy` typedef split is RATIFIED** —
+> per-field provenance lives in the type, not only in prose.
+
+**The stop criterion re-stated before round 3 was reviewed against this ruling by
+the owner and STANDS UNCHANGED.** Its condition 1 already says that a new
+preserved-copy fact becoming a FIELD is ordinary work rather than an escalation,
+which is exactly what this is. Recorded here so the review is on the record and
+the criterion is not re-derived.
+
+### WHAT THE RULING SETTLED, AND THE ONE THING IT LEFT TO MEASUREMENT
+
+Settled: the gap closes, and it closes as **a field of the disposition shape** —
+not two loose fields on the report union, not a second carrier beside row Q9's
+record. Left open: **WHERE** the scrubbed-line count and the detector labels sit,
+under three constraints — an ordinary note's redaction line and the report body's
+must be composed from the SAME shape, nothing may re-derive either value, and the
+ratified per-field provenance rule applies to whatever is added.
+
+**The asymmetry the ruling flagged is real and the measurement resolves it
+against the record.** `lines` and `labels` are per-PATH; row Q9's record is
+per-COPY. Two measurements decide it, both taken from the shipped gate rather
+than from the shape's symmetry:
+
+1. **The case with the MOST preserved copies has NO accounting at all.** When the
+   redact arm falls through to the withhold, the gate has written a redact-shelf
+   copy (`validate.js:1276`) and then a withheld one (`:1297`) and pushed no
+   accounting — the push happens only on the branch where the scrub is verified
+   and staged (`:1283-1292`, verified at both ends: `:1283` is the `else if` head
+   at indent 8, `:1292` its close at indent 8). **A field on the record would be
+   null on BOTH entries of the two-entry case.**
+2. **On the ordinary redact arm one accounting would have to be duplicated onto
+   every entry of that path's record** — the two-carriers-for-one-fact shape row
+   Q8 exists to close.
+
+**So the honest answer is the one the ruling's own escape clause anticipated: they
+are per-path and NOT per-copy.** The report arm gets the same per-path carrier an
+ordinary note has, and the record is left alone. **One scrub, one path, one
+accounting: row Q9 answers WHICH COPIES the gate wrote, row Q10 answers WHAT THE
+SCRUB DID.**
+
+### WHERE THE FACTS NOW LIVE, AND THE PROVENANCE ASSIGNED TO EACH
+
+**A new typedef `RedactionAccounting` (`{lines, labels}`), declared ONCE in
+`WP-dream-promote-module`'s `### Exact contracts` and carried as ONE field named
+`redaction`.** One field rather than two, per the ruling's own prohibition: the
+two values are present together or not at all, and two loose nullable fields make
+that an invariant the TYPE cannot express — row S2's failure mode, one field over.
+A shape declared once is also what makes the two redaction lines composable from
+the same shape, which is constraint (a).
+
+**New Table Q row Q10 owns it, and states provenance PER FIELD**, opening each
+field with the same `— FILLED BY <party>, AT <time>` form row Q9 uses:
+
+| Field | Provenance | Evidence |
+|---|---|---|
+| `lines` | **FILLED BY THE EP2 GATE, AT GATE TIME** | `validate.js:1286` — `addedLineNumbers.length`, pushed only on `:1283-1292` |
+| `labels` | **FILLED BY THE EP2 GATE, AT GATE TIME** | `validate.js:1267` and `:1287` — code-owned label names, never the matched bytes |
+
+**Both are gate-filled, so there is NO base/extension split for this shape — and
+row Q10 says so rather than leaving it to symmetry.** The
+`GateReportedCopy`/`PreservedCopy` split exists because that record has TWO
+fillers; this one has one. **Leaving that unstated would have invited exactly the
+symmetry-driven finding the ratified split was meant to prevent** — a reviewer
+asking where `GateReportedRedaction` is. The module passes the object through and
+completes nothing on it, which is why row Q7's list of what this module does is
+unchanged.
+
+**Carriers, and the nullability per carrier:** REQUIRED and NON-NULL on the
+gate's redact arm and on every `redacted[]` entry (membership of either IS the
+redaction); REQUIRED and NULLABLE on the `report` union's **`promoted` arm
+alone**, `null` stating positively that the gate did not redact the body.
+
+### THE ONE PLACE I NARROWED THE RULING'S LITERAL WORDING, AND THE ARGUMENT
+
+The ruling says **"the report's published arms"** — plural, and in this union's
+own vocabulary that is `promoted` AND `fallback`. **I put the field on `promoted`
+alone, and the reason is parity itself.** Measured against Table R: `fallback`
+means the brain's body was **NOT** published and the code section was published in
+its place; `refused` means nothing was written at all. On both, a scrubbed-line
+count would describe bytes no vault holds — **and that is precisely what an
+ordinary note redacted and then refused reports, namely nothing:** it lands in
+`refused[]`, which has no accounting field. **Putting the field on both published
+arms would have handed the report body a disclosure its ordinary-note analogue is
+not given, in the very pass that exists to make the two equal.**
+
+**The arm is doing contract work, which is the second reason.** A field that only
+the `promoted` arm can carry makes "an accounting exists only where the sanitized
+candidate published" a rule the TYPE enforces rather than one prose asserts —
+row S2's standing lesson in this family: *a rule the type cannot express is a rule
+an implementation can satisfy and still break.*
+
+**This is the deviation to reverse if it is wrong**, and the smaller change is to
+add `redaction` to the `fallback` arm as well; the cost is a redaction line for a
+body whose sanitized bytes are in no vault, and an asymmetry against `refused[]`.
+
+**NAMED RESIDUAL, argued rather than slipped:** on a redact-then-refuse — an
+ordinary note's or the body's — the count and the labels are lost, so the user
+learns WHICH file holds the unredacted copy (row Q9's record travels on every
+refusing arm) but not WHAT KIND of secret the detectors matched. **That loss is
+PRE-EXISTING and this ruling did not reach it.** Closing it later is one field on
+`refused[]` and on the report's refusing arms plus one sweep — ordinary work under
+the standing criterion's condition 1, not an escalation. It is recorded on row Q10
+so it is found rather than rediscovered.
+
+### THE SWEEP, SURFACE BY SURFACE
+
+**`WP-dream-promote-module`** — the `RedactionAccounting` typedef (new, in
+`### Exact contracts`); the `gates` paragraph; the `@returns` shape for
+`redacted[]` and its prose; Table Q's preamble (a paragraph recording the ruling
+and the measurement that moved the field off the record); rows **Q1** (the redact
+arm's shape, and it stops defining `lines`/`labels` inline) and **Q3** (cites
+Q10); the new row **Q10**; the Table Q Mirrored Surface Checklist entry — mirrors
+plus **three new prohibitions**: no loose fields and no field-of-an-entry and no
+re-derivation, no field added to Q10 without its filler and moment, and no
+widening of Q10's carriers without the measurement; and the redaction acceptance
+criterion.
+
+**`WP-dream-promote-report`** — Current state; the base-shape naming block (**five
+named shapes to six** — `RedactionAccounting` joins `PreservedCopy`); the `report`
+union, whose combined `'promoted'|'fallback'` arm splits into two so the field can
+sit on one, plus its prose; Table N's preamble field names and its **two channel
+rows for `redaction.labels` and `redaction.lines`, requantified over both
+carriers**; Table R's **redaction-lines row** (two sources, one shape) and its
+**preserved-copy row**, whose PARTITION is re-cut from *"where the entry sits"* to
+*"whether that path has a redaction accounting"* — the old form sent the
+`promoted` arm's copies to the wrong row — and whose *"the union carries no
+scrubbed-line count and no labels"* sentence is now false and is replaced by the
+partition's consequence; **three** Mirrored Surface Checklist entries; the
+announcement criterion; and the Out-of-scope bullet.
+
+**`WP-dream-promote-in-workspace`** — **checked and unchanged, deliberately.**
+`grep -n "redacted\[\]\.lines\|redacted\[\]\.labels\|scrubbed-line count\|detector
+labels"` over all three specs returns one pipeline hit, row **V3**, whose
+"the per-redaction report line carrying path, scrubbed-line count, labels and
+artifact name" is an inventory of the SHIPPED behaviour the extraction must
+preserve — still true, and not a statement of this contract.
+
+**Two surfaces checked against the new field and deliberately NOT edited**, so the
+next round does not re-derive the check: **row S4** ("every fact a consumer
+DERIVES about a published path is derived from these bytes") is not contradicted —
+the accounting is not derived at all, it is reported and read, and Q10's
+no-re-derivation rule is strictly stronger than S4's no-fresh-read rule; **row
+S3**'s "no field of an ENTRY is content" is about preservation-record entries, and
+the accounting is not an entry. Table N classifies both of its fields.
+
+### COUNTS, EACH ONE COUNTED
+
+- **Acceptance criteria: 23 / 10 / 24 (module / report / pipeline), UNCHANGED**,
+  counted with `awk` over each spec's `## Acceptance criteria` span after the
+  sweep. **No criterion was added.** The announcement criterion gained the second
+  source and two REDs; the module's redaction criterion gained a field name and a
+  citation. **The count did not move, so no justification is owed** — the standing
+  measurement survives a fourth window.
+- **New tables: none. New rows: one** (Q10) — the same cost the shape ruling paid
+  for Q9, and the surface accounting frozen in this record stays frozen.
+- **New citations: six, all in row Q10** (`validate.js:1267`, `:1276`, `:1283-1292`,
+  `:1286`, `:1287`, `:1297`), **enumerated before the sweep and counted after it**:
+  each appears exactly once across the three specs, verified by grep. **`:1283-1292`
+  was verified at BOTH ends by indentation** — the narrower lesson the corrected
+  P-4 entry above records, applied to the citations this pass created rather than
+  only to the ones it moved.
+- `npm run lint` passes: markdownlint 0 errors over 556 files, frontmatter check
+  232 specs.
+
+### STOP-CRITERION COMPLIANCE, CHECKED CONDITION BY CONDITION
+
+1. *A carrier gap the ruled shape CANNOT express.* **Did not fire, and the owner
+   said so before the work started.** The fact had somewhere to go — it became a
+   field, in one sweep. **What it did NOT become is a field of row Q9's record,
+   and that is a measurement rather than a preference:** the largest-record case
+   has no accounting at all.
+2. *A fix that re-imports an excluded property.* **None.** `RedactionAccounting`
+   adds no filesystem discipline, no lifecycle fact and no report rule; it names
+   two values the shipped gate already produces.
+3. *Growing the verification surface to hold a finding about it.* **None. No
+   criterion added, none moved between packages, none deleted.**
+4. *A cross-family duplicate.* **None.** Both fields are this family's gate
+   result, not the `Done` package's durable lifecycle.
+
+### DIVERGENCE THIS PASS ADDS AGAINST PR #31, incremental to the list already handed over
+
+**One item, and it is additive rather than a correction.** The shipped gate
+already computes both values and already composes the shipped redaction line from
+them (`validate.js:1284-1289` and `:1392-1409`). What diverges is the SHAPE they
+travel in and the second source that now composes the same line: `lines` and
+`labels` become one `redaction` field on the redact arm and on `redacted[]`
+entries, and `WP-dream-promote-report`'s `promoted` arm carries the same field.
+**Nothing about the shipped gate's behaviour changes** — no new value is computed
+and none is dropped. Whoever folds PR #31 back reads this as a field-grouping
+change on the module half plus one new carrier on the report half.
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **The narrowing to the `promoted` arm is the one place I did not implement the
+  ruling as literally stated**, and it is argued above rather than absorbed. If
+  the owner meant both published arms, the reversal is one field on `fallback`
+  and one sentence in row Q10.
+- **Splitting the union's `'promoted'|'fallback'` arm in two is a shape change the
+  ruling did not ask for**, and it is what makes the narrowing type-enforced
+  rather than prose-enforced. Row S2's "a rule the type cannot express" lesson is
+  the whole argument; if it is one surface too many, the smaller form keeps the
+  combined arm and states the scope in prose, and the cost is an implementation
+  that can put an accounting on `fallback` without the type objecting.
+- **Table R's partition changed meaning, and that is the surface most likely to
+  be missed by a reader who knows the old form.** It is now over whether the path
+  has an accounting, not over where the entry sits. Both rows state it, the
+  Mirrored Surface Checklist registers it as a mirror in its own right, and the
+  announcement criterion goes RED on a composer that renders both lines for the
+  same copy — because the honest failure mode of a re-cut partition is
+  double-announcement, not silence.
