@@ -1432,3 +1432,312 @@ agreeing with the code where it previously did not.
 - **F-7 was fixed by adding prose to a row rather than by weakening a checklist
   claim**, which grows the redaction-lines row a little further. The row was
   already the longest in Table R.
+
+---
+
+## ROUND 5 — the C4 ruling, the twin-sweep discipline, and the first overlap between the gates
+
+**The gates, their raw output and the commit each was committed in — both
+committed BEFORE adjudication, per `docs/runbooks/codex-review.md`:**
+
+| Gate | Raw output | Commit | Analysed at |
+|---|---|---|---|
+| Adversarial DESIGN review (gptsol, codex/gpt-5.6-sol via llmp) | `docs/specs/logbook/2026-08-29-promote-family-design-round-5-gptsol-raw.txt` | `aa4a157` | `4f1f050` |
+| INTERNAL COHERENCE pass (fresh general-purpose executor) | `docs/specs/logbook/2026-08-29-promote-family-design-round-5-coherence-raw.txt` | `96e72f4` | `4f1f050` |
+
+Both passes confirm the mechanical baseline: acceptance criteria **23 / 10 / 24**,
+unchanged; **citation endpoints clean for the SECOND consecutive round** (19
+distinct ranges verified at both ends by indentation against the live tree).
+Round 4's **B1 is CONFIRMED FIXED**. Round 4's **A1 is NOT confirmed genuinely
+fixed** — the adversarial gate accepted the carrier, the reason propagation, the
+G8/G11 routing and the prohibition against copying R4's untouched-vault clause,
+and rejected one invariant the fix introduced. That rejection is C5.
+
+**The trend broke.** Rounds found 21 → 15 → 11 → 8; this pass found **13** —
+five contract defects, five coherence defects, three nits.
+
+### THE OWNER'S RULING ON C4 — the authorization is NOT granted
+
+> The G7 input becomes explicitly **PENDING**: it states that unblocking requires
+> an owner decision against the pinned format in
+> `WP-secret-fence-ep2-redact-arm:1373-1387`, **and quotes the pin**. The
+> Out-of-scope bullets name it as a **second, PENDING exception**. If I authorize
+> it at the pipeline round, the settlement happens via an **amendment to that
+> `Done` spec**, exactly as the carrier change's did.
+
+**The contradiction the ruling closes.** Round 4 routed the `lines` narrowing to
+the pipeline's row **G7** as a NAMED INPUT. Measured by the coherence pass: the
+value it changes is PINNED in a shipped `Done` package —
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387` states that the
+report's redaction line is built "from exactly this template", that "every byte
+outside the angle-bracket placeholders is literal", and that `<n>` is
+`addedLineNumbers.length`. Meanwhile the two Out-of-scope bullets governing
+changes to that package each asserted **exactly ONE authorized exception** — the
+carrier change. **An implementer reading Out of scope refused the input as
+unauthorized; one reading G7 shipped it.** That is the defect, and it is a
+contradiction between two surfaces of this family rather than a question about
+the shipped package.
+
+**HOW THE PENDING STATE IS EXPRESSED — three moves, not one.**
+
+1. **The blocker is QUOTED where the instruction lives, not only cited.** Row G7
+   now carries the pin's own words inline — "The line format is PINNED HERE, not
+   illustrated … EVERY BYTE OUTSIDE THE ANGLE-BRACKET PLACEHOLDERS IS LITERAL …
+   where `<n>` is `addedLineNumbers.length`" — so a reader of that row cannot
+   reach "ship it" without meeting the reason not to. The quotation is
+   **owner-directed** and is deliberately not a second decider: the format stays
+   that package's, and this family cites it by spec path.
+2. **The instruction is put in the conditional and the fallback is stated
+   operatively.** The row says the gate **WOULD** return the narrowed count, that
+   unblocking **requires an owner decision against that pin**, and that **until
+   that decision an implementer of this package BUILDS THE SHIPPED COUNT AND NOT
+   THIS ONE**. A pending input with no instruction for the pending state is the
+   same silence one level up.
+3. **Both Out-of-scope bullets now name TWO exceptions with DIFFERENT statuses.**
+   `WP-dream-promote-in-workspace`'s reads "TWO EXCEPTIONS, AND THEY DO NOT HAVE
+   THE SAME STATUS — ONE AUTHORIZED, ONE PENDING", with (i) the carrier change
+   and (ii) this one; `WP-dream-promote-module`'s Out-of-scope bullet carries the
+   same two-status split. **Neither surface can now be read as a refusal of work
+   the other authorizes.**
+
+**And the settlement route is written down** — in row G7, in both Out-of-scope
+bullets and in row Q10: if the owner authorizes it at the pipeline round, the
+settlement is an **amendment to that `Done` spec**. Nobody has to rediscover
+what "authorized" would mean.
+
+**The counting change was neither shipped nor deleted.** It stays a named input,
+with its blocker attached, in every surface that would otherwise have to
+re-derive its status.
+
+### THE TWIN-SWEEP DISCIPLINE, APPROVED AT THIS ROUND AND APPLIED TO IT
+
+> When a ruling touches a row that has a **structural twin**, the twin is swept
+> in the same pass. The twin set is: the **paired row**, that row's **acceptance
+> criterion**, and the **Out-of-scope bullet that carries its authorization**.
+
+**It is not advice, and the evidence is this round's own shape.** The coherence
+pass's own reading: four of the five contract defects are one-surface-short
+sweeps of round 4's rulings, and in three of them the missed surface is the
+structural twin of one that WAS swept — the preserved-copy row beside the
+redaction-lines row (C2); the G11 acceptance criterion beside rows G8/G11/V4
+(C3); the Out-of-scope bullets that carried the PREVIOUS ruling's authorization
+and not this one's (C4). **Each missed surface is one of the three kinds the
+discipline names.**
+
+**It is PROCESS discipline, not verification surface** — it adds no acceptance
+criterion and no test — so stop-criterion condition 3 does not bite. Checked
+explicitly, because that condition has already declined two additions in this
+arc.
+
+**WHAT THE WALK CAUGHT THAT THE FINDING LIST DID NOT NAME.** Every row touched in
+this pass was walked through the three questions. Two surfaces came out of it
+that no finding asked for:
+
+1. **`WP-dream-promote-module`'s row Q10 — the PAIRED ROW of the pipeline's row
+   G7.** C4 mentioned Q10 only to observe that it does not cite the shipped
+   package; its remedy was framed around G7 and the two Out-of-scope bullets. But
+   Q10 is where the input is ROUTED FROM, and it read "NARROWING IT IS ROUTED,
+   NOT PERFORMED HERE" — routed-and-coming. Left alone, the module half would
+   have said the change is on its way while the pipeline half said it is blocked:
+   **the identical two-surfaces-disagreeing shape C4 filed, reconstructed one
+   package over.** Q10 now states the input as PENDING, cites the pin by path and
+   names the amendment route.
+2. **The Table Q PREAMBLE — the paired surface of the checklist prohibition H1
+   corrected.** H1 asked only that the prohibition bind the same three shapes the
+   preamble binds. But C1's ruling gave the third shape a single owner in another
+   spec, and the preamble is the surface that BINDS the rule for the family. It
+   now says where that shape's provenance is DISCHARGED, so the single-owner
+   ruling is legible from the rule's own surface. **Without it, C1's fix lived
+   entirely inside the report spec and the module half still implied the rule was
+   satisfied wherever someone chose to satisfy it.**
+
+**Two more the walk reached and deliberately left alone, recorded so the next
+sweep does not re-open them:**
+
+- **`WP-dream-promote-module`'s "every published outcome carries its decided
+  bytes" criterion** carries the same phrase C5 killed — "byte-equal to what the
+  vault then holds". **Left standing, and it is not the same claim:** there the
+  subject is a SUCCESSFUL single publish, "then" is the publish moment, and no
+  second write intervenes. C5's falsity comes from a refusal whose own cause is
+  that the vault changed. Editing it would have been sweeping a phrase rather
+  than a contract.
+- **`WP-dream-promote-report`'s Out-of-scope bullet for the EP2 durable
+  lifecycle** carries no authorization clause and needs none: that package
+  touches no `validate.js` byte, and its redaction-lines row already defers the
+  count's MEANING wholly to row Q10, so the pending narrowing reaches it through
+  its owner and not as a second statement.
+
+### PER-FINDING DISPOSITION — ROUND 5, BOTH GATES, ALL THIRTEEN
+
+| # | Gate | Verdict | What was done |
+|---|---|---|---|
+| **C5** | **BOTH** — adversarial Finding 1 and coherence C5 | **RULED BY MEASUREMENT, FIXED ON FOUR SURFACES** | `report.bytes` on `accounting.published:false` was the first write's returned buffer AND "byte-equal to what the vault then holds". The second is false on BOTH cases the criterion mandates: an `expect` conflict MEANS the target no longer holds those bytes (the primitive's H5 — that is why it refused), and a symlinked target is a symlink. `bytes` KEEPS its definition, because row G8 needs the decided bytes; every live-vault equality claim is REMOVED; the acceptance assertion is SPLIT BY REFUSAL CAUSE — on the `expect` conflict the vault retains the intervening user bytes while `report.bytes` retains the first-write body, asserted as an INEQUALITY with two REDs; on the symlinked target only the not-written-through and the buffer identity are asserted. **Row S1's own qualifier — "the only bytes the vault is KNOWN TO HOLD AT PUBLISH TIME" — is restored to all four surfaces that dropped it.** A prohibition is added |
+| **C1** | coherence | **RULED, ONE OWNER PICKED** | `### Exact contracts` said the report row owns the per-field provenance; the report row said `### Exact contracts` does; both wrote it out in full. **The REPORT ROW's RULE CELL is the owner** — it already owns the two writes, and round 4's own ruling record put the contract there with the TYPE declared in `### Exact contracts`. That block is reduced to the type and a pointer; the scope-by-measurement argument moves to the owner with the provenance. The checklist entry NAMES the owner between the mirrors instead of listing both, and **gains the per-field-provenance prohibition it lacked** though the module's Table Q preamble asserts the rule binds this field |
+| **C2** | coherence | **FIXED, and the twin's sentence REGISTERED** | the preserved-copy row's travel enumeration still said "when every write was refused"; on the partial form the first write SUCCEEDED. It now names both refusal states. **Its structural twin one row above received exactly this sentence in the same window and this row did not** — the discipline's first instance. The twin's new sentence was itself an unregistered mirror; **both are now registered** in the checklist's `accounting` mirror list |
+| **C3** | coherence | **FIXED BY PARTITION, no count movement** | the G11 acceptance criterion asserted the retired untouched-vault universal over exactly the two cases round 4's A1 gave to the partial publish, and demanded "nothing is staged or committed" where row G8 requires the commit. It is now partitioned **(a)** the one-write path's write refused (`refused`, Table R's R4) and **(b)** the body published and the second write refused (`promoted` + `published:false`), with (a)'s byte-unchanged and nothing-committed clauses **asserted NOT to hold** on (b), and a RED for an implementation that applies them there. **The partition mirrors the report spec's own, made for the same reason one round earlier** |
+| **C4** | coherence | **ESCALATED, RULED, IMPLEMENTED AS PENDING** | see the ruling above — quoted pin, conditional instruction with a stated fallback, two-status Out-of-scope on both bullets, amendment route written down, and row Q10 swept as G7's paired row |
+| **H1** | coherence | **FIXED** | the Q-preamble binds the per-field-provenance rule to THREE shapes and the checklist prohibition bound it to ONE, both written in the same window — so the report's `accounting` dropped out of the family-wide prohibition on the one surface that carries prohibitions. The prohibition now names all three and states where the third is discharged |
+| **H2** | coherence | **FIXED** | G7's "and nothing else" universal was left standing with the named input appended AFTER it. The exception is now **announced before the universal closes**, which is exactly the form the carrier change in the same cell already had — the contrast is named in place |
+| **H3** | coherence | **FIXED — six surfaces, enumerated** | the named input reached row G7 alone. It now reaches the Deliverables `Notes` cell for `src/core/dream/validate.js`, Current state's validate.js bullet, row G7, Table V row V3, the Out-of-scope bullet (as the second, PENDING exception) and a new checklist entry that registers the set and forbids presenting it as authorized work |
+| **H4** | coherence | **FIXED BOTH WAYS — registration AND criteria, no count movement** | the pipeline spec registered NONE of the A1 contract (`grep -c accounting` over its checklist and its criteria both 0) while the report checklist declared G8/G11/V4 its mirrors. A checklist entry registers this side with four prohibitions. **On the criteria: they are OWED, and both fold into criteria that already owned their subject** — see the count argument below |
+| **H5** | coherence | **FIXED** | criterion 4's channel disjunction said "the arm that publishes nothing"; after A1 `record` is also the channel on an arm that DID publish. It now names both arms, and is registered as an `accounting` mirror |
+| **N1** | coherence | **FIXED by classification, not by rule** | `accounting.reason` had no Table N row though that table's own ground is that a channel with no row is indistinguishable from one nobody thought about. It is classified **YES, by derivation** — the same classification `refused[].reason` carries, and for the same reason — with its actual delivery channel named (the run's log and output, row G11, because the write carrying the section is the one that was refused). **No rule changed and no criterion was added:** the fail-closed default already reaches it, and the code-authored-section criterion already quantifies over "every channel Table N classifies as attacker-influenceable" |
+| **N2** | coherence | **FIXED by dropping the count** | G11 said "Two obligations" and listed five. **Dropped rather than renumbered, exactly as round 4's F-3 dropped an orphaned ordinal** — the count was already wrong before this window and a later pass added an item without touching it, which is what a hand-maintained count inside a cell this long does |
+| **N3** | coherence | **FIXED** | case (a) was titled "THE REPORT WRITE IS REFUSED" — singular, in a criterion whose whole subject is that the path has TWO writes, and nothing in (a) said it meant Table R's fallback write. It is now named as the one-write path's write, with its return value (`refused`) stated |
+
+### COUNTS, EACH ONE COUNTED — AND WHY NOTHING MOVED
+
+- **Acceptance criteria: 23 / 10 / 24, UNCHANGED**, re-counted with `awk` over
+  each spec's `## Acceptance criteria` span after the sweep.
+- **C3 did not move the count, and that is an argument.** The fix is the same
+  move round 4 made on the report spec's own refusal criterion: the criterion
+  that carried the defect was the criterion the new case belongs in, because its
+  universal was FALSE of that case. A new criterion would have left a false one
+  standing beside it. **Pull the contract into one place, partition it, register
+  the mirrors** — the extraction move applied to a criterion, not surface growth.
+- **H4 did not move it either, and this was the deliberate decision the
+  constraint asked for. THE OBLIGATIONS ARE OWED A CRITERION — they are not
+  declared deliberately absent — and both fold into criteria that already owned
+  their subject.** G11's obligation lands in the report-refusal criterion via
+  C3's partition. **G8's lands in "The commit carries the decided bytes, not a
+  fresh read"**, whose subject is exactly *which bytes enter the commit for a
+  path this run published*; the report path on the partial form is that question
+  asked about one more path, with two REDs (skips the path / manufactures the
+  missing section). **Why owed rather than deliberately absent:** the test that
+  separates them is whether this package has been GIVEN the work. G8 and G11
+  carry obligations this package must BUILD — an unasserted obligation in a
+  package that must build it is the silent-outcome failure A1 was escalated
+  over, one level up. G7's counting input is the opposite: the package has not
+  been given it, and now cannot be until an owner decision. **Its absence stays
+  deliberate and is stated in two surfaces; theirs would not have been.**
+- **New tables: none. New rows: ONE** — Table N's `accounting.reason`
+  classification row, which is classification rather than contract and adds no
+  assertion.
+- **New checklist entries: TWO**, both in `WP-dream-promote-in-workspace` (the
+  pending input; the partially published report). Both are registrations of
+  contracts that already existed.
+- **`npm run lint` passes:** markdownlint 0 errors over 556 files, frontmatter
+  check 232 specs / 4 agents.
+
+### CITATIONS — ENUMERATED BEFORE THE SWEEP, COUNTED AFTER IT
+
+Endpoints have been clean for two rounds. No citation was CHANGED this pass;
+three were re-used at new sites and one is new. **The new range was verified at
+both ends with `sed -n l` before it was written down.**
+
+| Citation | Sites before | Sites after | Where |
+|---|---|---|---|
+| `validate.js:1286` | 2 | **4** | module row Q10; pipeline row G7, **the validate.js Deliverables `Notes` cell (new)**, **Current state's validate.js bullet (new)** |
+| `validate.js:838-840` | 2 | **3** | module row Q10; pipeline row G7, **Current state (new)** |
+| `validate.js:1401` | 2 | **3** | module row Q10; pipeline row G7, **Current state (new)** |
+| **`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`** (NEW) | 0 | **7** | module row Q10 and its Out-of-scope bullet; pipeline row G7 (which QUOTES it), the Deliverables `Notes` cell, Table V row V3, the Out-of-scope bullet, the new checklist entry |
+
+**Endpoint verification of the new range:** `:1373` opens the pinned-format
+paragraph (`**The line format is pinned here, not illustrated.** One line per
+redacted file,`) and `:1387` closes the `where <n> is …` paragraph on a sentence
+end (`of \`quarantinePreserve\`'s return, never the object itself.`). Both
+checked with `sed -n l` against the live file.
+
+**Seven sites for one citation is deliberate and is not a restatement:** every
+one of them is a POINTER to the blocker, and the blocker's content is quoted in
+exactly ONE of them (row G7), by the owner's instruction. A surface that names
+the pending exception without naming what blocks it is the surface a future
+round reads as an instruction to ship.
+
+### STOP-CRITERION COMPLIANCE — the re-stated criterion, REVIEWED against this pass
+
+**Reviewed condition by condition, and the review is the record the constraint
+asked for.**
+
+1. *A carrier gap the ruled shape CANNOT express.* **Not fired, and the
+   adversarial gate said so explicitly** — its escalation test returned NOT
+   TRIGGERED, on the ground that "no new fact lacks a field and no consumer is
+   forced to re-derive one", and that C5 is an internally impossible vault-state
+   assertion rather than a missing carrier. **That reading is accepted.** C5 is a
+   false invariant inside an existing field, not a fact with nowhere to go.
+2. *A fix that re-imports an excluded property.* **None.** C5's fix cites the
+   primitive's H3 and H5 as CAUSES and describes no filesystem discipline; C4
+   adds no quarantine-lifecycle fact and changes nothing the shipped package
+   decides; C3 and H4 add no report rule — they assert what rows G8 and G11
+   already carried.
+3. *Growing the verification surface to hold a finding about it.* **None, and it
+   was consulted three times** — to keep C3's case inside the existing criterion;
+   to fold H4's G8 obligation into the decided-bytes criterion rather than adding
+   one; and to decline (again, and now doubly) a criterion for G7's pending
+   input. **The twin-sweep discipline was itself checked against this condition
+   and passes: it adds process, not assertions.**
+4. *A cross-family duplicate.* **The one place this pass came close, and it was
+   ruled.** Quoting the pin is a quotation of a shipped package's own words in a
+   family whose standing rule is to cite that package by path and never restate
+   it. **It is owner-directed, it is the BLOCKER being named rather than the
+   contract being re-decided, the format stays that package's, and it appears in
+   exactly one surface** — the other six point at it. Recorded here rather than
+   left implicit, because a later round that finds a quotation of that spec in
+   this family should find this paragraph before filing it.
+
+**Weighted closure.** C4 is a **HEAVY** ruling — it changes what an implementer
+of the pipeline package builds today (the shipped count, not the narrowed one) —
+so it lands its fix and **takes a fresh full round**. C1 and C5 are HEAVY on the
+report spec for the same reason: C5 changes an acceptance assertion an
+implementer would have failed to satisfy, and C1 moves where a contract is
+decided. C2, C3, H1–H5 and N1–N3 are LIGHT and verified mechanically.
+
+**Owner ratifications carried forward, unchanged:** the record shape; round-2
+coherence C-2's fix; arm-dependent remediation; **the A1 form (a field on the
+`promoted` arm, not a fourth union arm)**. **One is added: the twin-sweep
+discipline** — a ruling that touches a row sweeps the paired row, that row's
+acceptance criterion, and the Out-of-scope bullet carrying its authorization, in
+the same pass. A finding that a twin was missed is an ordinary defect; a finding
+that the discipline should not exist is a scope objection.
+
+### DIVERGENCE THIS PASS ADDS AGAINST PR #31 — incremental, and it is one item
+
+**On the module half's SHAPE: nothing.** C1 and C5 touch the report union, which
+the report package adds and no branch has implemented. C3, H4 and the checklist
+entries are pipeline-side. H1, H2, N1, N2 and N3 change no value.
+
+**The one item, and it is a REVERSAL of a divergence round 4 flagged.** Round 4
+recorded a FUTURE divergence: when the pipeline package builds the routed
+counting change, `lines` stops being `addedLineNumbers.length`. **That future
+divergence is now BLOCKED, not scheduled.** Until the owner rules against the pin
+in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`, the pipeline
+package builds the SHIPPED count, so the specs and the shipped gate agree and
+whoever folds PR #31 back has nothing to reconcile on this field. **If the owner
+later authorizes it, the divergence returns — and it will arrive as an amendment
+to that `Done` spec rather than as a spec sentence somebody has to notice.**
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **The pin is quoted in a family whose standing rule is never to restate that
+  package.** The owner directed the quotation and the reasoning is above, but it
+  is the first time this family has put that spec's words inside its own
+  surfaces, and it creates a byte that can go stale if the pin is ever amended.
+  **The mitigation chosen is that only ONE surface carries the words and six
+  carry pointers** — if the pin moves, there is one place to fix. A reviewer who
+  thinks even one is too many has a real argument, and the fallback is a citation
+  plus the single sentence "that spec pins `<n>` as `addedLineNumbers.length`".
+- **C1 was decided by precedent rather than by measurement.** The report row won
+  because round 4's own ruling record put the contract there. The counter-case is
+  that `### Exact contracts` is the TYPE surface and per-field provenance is a
+  type-adjacent fact — which is how the module half carries it, in table rows
+  beside the typedef. If the owner prefers that, the reversal is one block and
+  one pointer.
+- **The report row keeps growing.** It absorbed the scope measurement, the
+  provenance and the type-discrimination argument this pass. It is now the
+  longest cell in the spec, and "the owner surface absorbs everything" is a
+  failure mode of the contract-density pattern, not a success of it. **If it is
+  touched again, the honest move is a lettered table for the report row rather
+  than a fifth paragraph** — and the map's line about the report row being
+  deliberately outside the letter scheme is what would have to change first.
+- **H4's fold is the judgement I am least certain of.** Putting the report path's
+  partial-publish commit inside "the commit carries the decided bytes" is right
+  by subject, but that criterion is now asserting three path classes. A reviewer
+  could reasonably say the report path on a partial publish deserves its own
+  criterion; the counter-argument is that a separate criterion asserting the same
+  contract in a second place is exactly the shape the count freeze exists to
+  prevent.
+- **The trend broke and I do not think this pass reverses it.** Four of five
+  contract defects were incomplete sweeps of the previous round's rulings, and
+  the discipline the owner approved is aimed precisely at that. **Whether it
+  works is a measurement the next round makes, not an argument this section can
+  win.**
