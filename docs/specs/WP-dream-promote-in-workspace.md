@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-in-workspace
 title: Rewire the dream pipeline onto the workspace and promotion
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive, WP-dream-promote-module, WP-dream-promote-report]

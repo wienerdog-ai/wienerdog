@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-report
 title: Promote the dream report and deliver the enforcement record
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive, WP-dream-promote-module]
