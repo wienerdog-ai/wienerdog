@@ -501,10 +501,16 @@ left for a gate to refuse.
       **Proven RED against a composer that renders the report body's copies on
       the refused arm alone**, which is the arm-scoping F1 found and which
       leaves the ordinary redact-and-publish case unannounced.
-      **Asserted a third time on the HARD-WITHHOLD arm**, where the gate refuses
-      for a hard secret and the record can hold TWO entries — the withheld copy
-      and the redact arm's kept copy — and both are named, each with its own
-      `location`. Proven RED against a composer that renders redaction lines
+      **Asserted a third time on the WITHHOLD arm, on both of its routes
+      (round 3's F2, measured against the shipped gate):** for a HARD secret
+      the gate skips the redact arm entirely, so the record holds exactly one
+      entry and one copy is named; on the redact arm's FALL-THROUGH — a soft
+      finding whose scrub did not complete — the gate preserved a redact-shelf
+      copy and then a withheld one, and when it reports that it KEPT the
+      redact-shelf copy the record holds TWO entries, both named, each with its
+      own `location`, **and rendered in the record's own order — the
+      redact-shelf copy first, the withheld copy second** (module half, Table Q
+      row Q9: the order is the order the gate wrote them). Proven RED against a composer that renders redaction lines
       only, which leaves an unredacted copy unannounced — the data-loss shape
       row Q3 names — **and separately RED against a composer that handles
       `refused[]` but not the report arm**, which is the same omission one

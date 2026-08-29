@@ -889,12 +889,25 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       the gate reported, field for field. Asserted on three routes, chosen
       because they refuse at three different points: a post-merge gate, the
       skill/ledger pair refusal, and the primitive's `expect` guard. **Asserted
-      a fourth time on the HARD-WITHHOLD arm**, which is the arm the shape
+      a fourth time on the WITHHOLD arm**, which is the arm the shape
       ruling of 2026-08-29 added and the one whose absence ended the design
-      loop: a path EP2 refuses for a hard secret returns the record for the copy
-      the gate preserved, and — when the gate also reports that it KEPT the
-      redact arm's copy — a SECOND entry for that copy, with its own `location`.
-      Proven RED against a refuse arm that carries no record. A path refused
+      loop, **and asserted there on BOTH of its routes, because only one of
+      them can produce two entries (round 3's F2, measured against the shipped
+      gate):** (a) a HARD secret, which skips the redact arm entirely
+      (`validate.js:1269` gates the whole arm on `!hasHardFinding`, and the
+      copy is written inside it at `:1276`), so the gate preserved exactly one
+      copy and the record holds **exactly one entry, always**; and (b) the
+      redact arm's FALL-THROUGH — a soft finding whose scrub did not complete,
+      so the arm preserved its copy first (`:1276`) and the withhold below
+      preserved a second (`:1297`) — where, **when the gate also reports that
+      it KEPT the redact arm's copy**, the record holds TWO entries, each with
+      its own `location`. **Their ORDER is the order the gate wrote them (row
+      Q9), which is measured: the REDACT-shelf copy is written first and is the
+      FIRST entry; the withheld copy is second.** Proven RED against a refuse
+      arm that carries no record, **and separately RED against a fixture that
+      builds the two-entry case on the hard-secret route** — the real gate
+      cannot reach it there, so a test that does has proved something only a
+      fake gate can do. A path refused
       with no preservation, and a path refused before EP2 ran at all, each
       return `preserved: []`. **Proven RED against a return whose refused arm
       has no `preserved` field, and separately against one that omits the field
