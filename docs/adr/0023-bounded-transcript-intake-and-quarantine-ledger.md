@@ -238,12 +238,7 @@ deferral still records nothing at all.
 
 ### Amendment 2 (2026-08-29) — the quarantine surface splits: a durable vault record, plus a digest banner that is an exact count on a bounded window
 
-Status: **PROPOSED — awaiting owner signature.** The owner ratified this design
-on 2026-08-29 (issue #165 walkthrough); this file records it as PROPOSED until
-the owner replaces this line by hand with `Status: **ACCEPTED — OWNER-SIGNED
-<date>.**` **No agent may write that line.** Until it carries a signature, the
-implementing work packages are not dispatchable (each states this as a dispatch
-precondition).
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-29.**
 
 **What went wrong.** Decision §2's last bullet fixed the *channel* — "a fixed,
 code-owned, secret-free digest banner derived from the ledger … re-rendered every
