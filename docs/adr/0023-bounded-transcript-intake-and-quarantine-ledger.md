@@ -284,18 +284,23 @@ Amended as follows.
    banner** — `displayName`-sanitized basenames plus code-owned reason labels,
    never transcript content, never a full path, never brain-writable. **This file
    is the enumeration's one home.** Two sections: *Current conditions* (what is in quarantine now, grouped by reason;
-   containing nothing time-varying, so the file changes **exactly** when the
-   quarantine set changes and a git-backed vault shows a meaningful diff at that
-   moment and no other) and an append-only *Run log* of dated deltas (a run that
-   changes nothing appends nothing). **One reconciliation trigger, write-if-absent
+   containing nothing time-varying, so the file changes **exactly** when its
+   RENDERED CONTENT changes and a git-backed vault shows a meaningful diff at that
+   moment and no other) and an append-only *Run log* of dated set-MEMBERSHIP
+   deltas (a run that changes nothing appends nothing). **One reconciliation trigger, write-if-absent
    (owner-ruled 2026-08-29):** a dream run that ends with at least one active
    quarantine and **no** warnings file on disk writes the file, even when that run
    consumed nothing and the quarantine set did not change — so a missing file is
    healed by the next run rather than by the next set *change*, which is what makes
    `doctor`'s "the next dream run writes it" literal and what gives an install
    holding only pre-existing quarantines the file at all. An *existing* file is
-   still rewritten only when the set changes (no churn), and a write-if-absent
-   write appends **nothing** to the Run log, which stays delta-only. The vault is
+   still rewritten only when its rendered content changes — the set gaining or
+   losing a member, **or a member's reason or size changing under the same key**,
+   which a membership-only test misses and which would otherwise leave the file
+   stale indefinitely (no churn either way: the section renders nothing
+   time-varying). A write with no membership delta — a content-only refresh or a
+   write-if-absent reconciliation — appends **nothing** to the Run log, which
+   stays delta-only. The vault is
    the system's own durable record and is git-versioned by design; the managed
    block is re-rendered by every sync and, for most users, is not under version
    control, so it can never carry this.

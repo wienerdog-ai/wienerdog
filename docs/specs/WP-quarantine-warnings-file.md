@@ -41,10 +41,12 @@ original ADR conflated. That *something entered quarantine* is an EVENT — news
 and news belongs in the digest for a bounded window. That *things are in
 quarantine* is STANDING STATE — a durable coverage fact about what the dream could
 not see, and standing state belongs in a pull-based durable surface. The vault is
-git-versioned by design, so a file that changes **exactly** when the quarantine set
-changes (plus one reconciliation write when the file is missing — Table B's
+git-versioned by design, so a file that changes **exactly** when its rendered
+content changes (plus one reconciliation write when the file is missing — Table B's
 refresh point 3) gives the user a permanent, diffable record the managed block can
-never give. This package builds that file.
+never give. **Table C owns that trigger and is the only place it is decided**; the
+*Run log* is the surface that tracks set MEMBERSHIP, and the two are deliberately
+not the same test. This package builds that file.
 
 **It is the family's root, because the enumeration has exactly one home and this
 is it.** ADR-0023 Amendment 2 states the principle: the full list of quarantined
@@ -166,7 +168,7 @@ layout. There is no `tests/unit/dream-warnings.test.js`.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/warnings.js | renders the file (**Table A**) and performs one refresh (**Tables B, C**); pure of policy beyond Table C's `admit`. **Exports the vault-relative path as a constant** — Table A's path row — which `WP-doctor-quarantine-counts` imports rather than retyping |
+| create | src/core/dream/warnings.js | renders the file (**Table A**) and performs one refresh (**Tables B, C**); pure of policy beyond Table C's `admit`. **Exports the vault-relative path as a constant** — Table A's path row — which `WP-doctor-quarantine-counts` imports rather than retyping. **Also exports `renderConditions`**, the pure Current-conditions renderer that IS the rewrite trigger's snapshot (**Table C**), so the trigger has a seam the wiring gate can call directly |
 | modify | src/core/dream/ledger.js | **one addition only:** an exported reader that yields the quarantine size, per **Table A**'s size row. `activeQuarantines`, `quarantineBannerLine`, `displayName` and every record-writing function keep their exact current behaviour and signatures |
 | modify | src/cli/dream.js | the run-start snapshot and the **three** refresh call sites **Table B** names. Nothing else in the run changes |
 | modify | src/core/dream/validate.js | **one line only** — the note-count exclusion in **Table D**. No other behaviour, no other step |
@@ -182,17 +184,32 @@ If a further file appears necessary, that is a finding, not a fix: record it und
 ### Exact contracts
 
 ```js
+/** The deterministic snapshot the write decision compares (Table C). TWO fields
+ *  because they answer two different questions: `keys` decides whether the Run
+ *  log gains a line (a membership delta), `conditions` decides whether the file
+ *  is rewritten at all (a change in anything Current conditions RENDERS).
+ *  @typedef {{keys:Set<string>, conditions:string}} WarningsSnapshot */
+
+/** The rendered `## Current conditions` block for a ledger — the section's body
+ *  alone, without its heading and without the Run log. PURE: no filesystem, no
+ *  clock, no argument but the ledger, so two calls on one ledger are byte-equal.
+ *  It is the snapshot's `conditions` field AND the document's own middle, which
+ *  is what makes "the trigger sees everything the file shows" true by
+ *  construction rather than by a list somebody has to keep in sync.
+ *  @param {object} ledger @returns {string} */
+function renderConditions(ledger)
+
 /** Refresh the vault warnings file for one moment of one dream run. Reads the
  *  file, decides per Table C, and publishes through writeIntoVault. Never
  *  throws: every failure is reported by return.
- *  @param {{vaultDir:string, ledger:object, previous:Set<string>, date:string}} o
- *    previous  the quarantine key set as of the last successful refresh in this
- *              process (Table B row 1 supplies the run-start value)
+ *  @param {{vaultDir:string, ledger:object, previous:WarningsSnapshot, date:string}} o
+ *    previous  the snapshot as of the last successful refresh in this process
+ *              (Table B row 1 supplies the run-start value)
  *    date      'YYYY-MM-DD', the run's date — the ONLY clock this module reads
- *  @returns {{written:boolean, current:Set<string>, reason?:string}}
- *    current   the set the caller must carry forward as `previous` — the NEW set
- *              on a successful write, and the UNCHANGED `previous` otherwise, so
- *              a refused write is retried at the next refresh */
+ *  @returns {{written:boolean, current:WarningsSnapshot, reason?:string}}
+ *    current   the snapshot the caller must carry forward as `previous` — the NEW
+ *              one on a successful write, and the UNCHANGED `previous` otherwise,
+ *              so a refused write is retried at the next refresh */
 function refreshWarnings(o)
 ```
 
@@ -278,7 +295,7 @@ never retyped (Table A's path row).
 | **No stored `reason` string is ever rendered** | the unrecognized group uses a fixed heading. `readLedger` deliberately does not validate individual records, so rendering a stored string would let stored data choose the document's bytes |
 | Size (`over-ceiling` group only) | the fingerprint's first `:`-separated field as an integer, rendered as the suffix `— <X.X> MB (<bytes> bytes)` after an em-dash-spaced separator, with `X.X` = `bytes / 1048576` to one decimal. Absent, non-numeric, negative or not a safe integer → the entry renders with **no** size suffix |
 | Sort within a group | by `displayName` ascending; equal names render identical text, so the bytes are deterministic either way |
-| **Nothing time-varying may appear above `## Run log`** | no timestamp, no run count, no "last checked". This is what makes "an existing file's bytes change exactly when the set changes" true (the one other write is Table C row 3's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it |
+| **Nothing time-varying may appear above `## Run log`** | no timestamp, no run count, no "last checked". This is what makes "an existing file's bytes change exactly when its RENDERED CONTENT changes" true (the one other write is Table C row 4's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it: `renderConditions` is a pure function of the ledger, so an unchanged ledger yields a byte-equal snapshot and no rewrite |
 | Run log entry | `- <date> — <E> session transcript(s) started being skipped; <L> stopped.` where `<date>` is the run's `date` argument, `<E>` is the size of `entered` and `<L>` the size of `left`. No reason breakdown: the Current conditions block in the **same commit** carries the grouping, and one label map is one thing to keep in sync instead of two |
 | Run log order | append-only, oldest first; the new entry goes last. Two runs on one date make two entries |
 | How the existing log survives a rewrite | everything after the **first** line whose entire content is `## Run log`, with leading blank lines stripped, is carried through verbatim. That marker line absent (file missing, or a user mangled it) → the carried log is empty |
@@ -305,28 +322,39 @@ The withheld copies are in state/quarantine/: restore what you meant to keep and
 
 | Fact / rule | Value |
 |---|---|
-| Run-start snapshot | taken from the ledger at `src/cli/dream.js:375`, immediately after `migrateFromWatermarks` and before `collectExtracts`. Migration seeds only `baseline_mtime`, never a `files` record, so taking it before or after is identical — after is stated so there is one answer |
+| Run-start snapshot | the FULL `WarningsSnapshot` (both fields — `keys` and `renderConditions(ledger)`), taken from the ledger at `src/cli/dream.js:375`, immediately after `migrateFromWatermarks` and before `collectExtracts`. Migration seeds only `baseline_mtime`, never a `files` record, so taking it before or after is identical — after is stated so there is one answer. **Taking only the key set here is the round-1 defect**: a record rewritten under the SAME key with a different reason or a different fingerprint leaves the key set identical, and a membership-only trigger then never rewrites the file |
 | Refresh point 1 | inside the `sel.newlyQuarantined.length > 0 && !dryRun` block at `:443-447`, immediately after the existing `regenerateDigest()` call. **This is the point that serves the adopt-with-history first run**, whose "nothing fresh" return at `:467-470` never reaches point 2's neighbourhood with a commit. That run then also passes point 3 on its way out, which is a no-op because point 1 has just written the file |
 | Refresh point 2 | immediately after the existing final `regenerateDigest()` at `:625`. This is the only point at which a quarantine that **left** the set, or a `secret-revert-exhausted` quarantine that **entered** it at `:604`, is knowable |
-| Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 3 already decides what this call does: it writes only when the file is absent and the current set is non-empty, and it appends no run-log entry |
+| Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 4 already decides what this call does: it writes only when the file is absent and the current set is non-empty, and it appends no run-log entry |
 | Why point 3 exists at all (owner-ruled 2026-08-29) | `WP-doctor-quarantine-counts` ships a byte-gated message promising *"that file is not there yet; the next dream run writes it"*. Without a write-if-absent trigger that promise is false for an idle run, which is exactly the upgrade shape: 191 historical quarantines already in the ledger, quiet nights, no file. The owner ruled the mechanism in rather than hedging the message |
 | Why these three, and no others | points 1 and 2 are already the two points at which the run refreshes its other ledger-derived durable surface, `state/digest.md` — one rule, two surfaces, nothing that can drift out of step. Point 3 is **not** a set-change point and refreshes nothing else: it is a reconciliation on the one run shape that reaches neither of the others. The capacity-wedge path (`:451-464`) is not a refresh point — it throws |
-| Carrying the set forward | the caller keeps one mutable snapshot, seeded at run start and replaced by each call's returned `current`. A second refresh in the same run therefore sees an empty delta and writes nothing. Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3, and in both the second call is a no-op unless the first was refused |
+| Carrying the snapshot forward | the caller keeps one mutable `WarningsSnapshot`, seeded at run start and replaced by each call's returned `current`. A second refresh in the same run therefore sees an empty membership delta **and** a byte-equal `conditions`, so it writes nothing. Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3, and in both the second call is a no-op unless the first was refused or the ledger changed between them |
 | Dry run | writes nothing. Point 1 is already inside a `!dryRun` guard; point 2 is unreachable on a dry run (`:474-477` returns first); **point 3 needs an explicit `!dryRun` guard** — step 7's return at `:467-470` comes BEFORE step 8's dry-run return, so it is reachable on a preview run. That guard is the one new guard this package adds |
 | A refresh failure never fails the dream | `refreshWarnings` never throws, and a `written:false` result prints one `wienerdog: dream — …` console line and is otherwise ignored. The ledger still holds the condition, `doctor` still reports the counts, and the digest banner still raises it — what is lost is the enumeration, until the next refresh |
 
 ### Table C — the write decision
 
-Let `entered = current \ previous` and `left = previous \ current`, over the sets
-of `ledger.files` **keys** whose record is a plain object with `outcome ===
-'quarantined'`.
+**Two comparisons, not one, and each answers its own question.** MEMBERSHIP:
+`entered = current.keys \ previous.keys` and `left = previous.keys \
+current.keys`, over the sets of `ledger.files` **keys** whose record is a plain
+object with `outcome === 'quarantined'`. CONTENT: `current.conditions !==
+previous.conditions`, a byte comparison of the rendered Current conditions block.
+**Membership decides the Run log; content decides the rewrite.** Membership alone
+cannot decide the rewrite: the same key re-quarantined with a different reason, a
+changed fingerprint, or a different rendered size leaves `entered` and `left`
+both empty while the document the user reads goes stale indefinitely.
 
-| `entered`/`left` | File on disk | Action |
-|---|---|---|
-| either non-empty | absent or present | **write**, with a new run-log entry |
-| both empty | present | **no write at all** — this is "a run that changes nothing appends nothing" |
-| both empty | absent, and the current set is **non-empty** | **write**, with **no** run-log entry — this is **write-if-absent**, the reconciliation Table B's refresh point 3 exists to reach (a lost, deleted, refused or never-written file) |
-| both empty | absent, and the current set is **empty** | **no write** — a vault that has never had a quarantine gets no file |
+| # | `entered`/`left` | `conditions` | File on disk | Action |
+|---|---|---|---|---|
+| 1 | either non-empty | any | absent or present | **write**, with a new run-log entry |
+| 2 | both empty | **changed** | present | **write**, with **no** run-log entry — a content-only refresh: the set did not change, so there is no delta to log, but what the file SHOWS did change and the file must say so |
+| 3 | both empty | unchanged | present | **no write at all** — this is "a run that changes nothing appends nothing" |
+| 4 | both empty | any | absent, and the current set is **non-empty** | **write**, with **no** run-log entry — this is **write-if-absent**, the reconciliation Table B's refresh point 3 exists to reach (a lost, deleted, refused or never-written file) |
+| 5 | both empty | any | absent, and the current set is **empty** | **no write** — a vault that has never had a quarantine gets no file |
+
+Rows 1 and 2 both write; only row 1 appends. A membership delta always writes
+even when `conditions` is byte-equal (two different keys can render the same
+name, reason and size), because the Run log still owes that run its line.
 
 | Fact / rule | Value |
 |---|---|
@@ -335,9 +363,9 @@ of `ledger.files` **keys** whose record is a plain object with `outcome ===
 | `expect` | the exact bytes read from the file immediately before composing, when the read succeeded; **omitted** when the read failed with ENOENT. Never `null` — the primitive rejects it |
 | A read failure that is not ENOENT | no write, `{written:false, reason}`. Never guess at the file's content |
 | `previous` on a refused write | unchanged, so the next refresh retries — that is why `current` is a return value and not an argument the module mutates |
-| **An EXISTING file is still rewritten only when the set changes** | row 2. Write-if-absent adds a trigger for the **absent** case only, so the no-churn property is untouched: a file on disk changes its bytes and its mtime exactly when the quarantine set changes, and a run that changes nothing leaves it alone |
-| **Write-if-absent fires at most once** | its own write makes the file present, so the very next idle run takes row 2 and writes nothing. It fires again only if the file goes missing again |
-| **A write-if-absent write appends NOTHING to the run log** | the set did not change, so there is no delta to record and the append-only log stays delta-only. A reader who sees Current conditions with no matching Run log entry is looking at a reconciliation, which is correct |
+| **An EXISTING file is rewritten only when its RENDERED CONTENT changes** | rows 2 and 3 together. The no-churn property survives the widening intact — `renderConditions` is pure and Table A forbids anything time-varying above `## Run log`, so a run over an unchanged ledger produces a byte-equal snapshot and no write. What changed from the round-1 text is the TRIGGER, not the property: bytes and mtime change exactly when the rendered content changes, which is a superset of "when the set changes" and is the set of moments at which the file would otherwise be lying |
+| **Write-if-absent fires at most once** | its own write makes the file present, so the very next idle run takes row 3 and writes nothing. It fires again only if the file goes missing again |
+| **A write with no membership delta appends NOTHING to the run log** | rows 2 and 4 alike: the set did not change, so there is no delta to record and the append-only log stays delta-only. A reader who sees Current conditions with no matching Run log entry is looking at a reconciliation (row 4) or a content-only refresh (row 2), both of which are correct. **The Run log's contract is unchanged by finding 1** — a dated line still means, and only means, that the membership of the quarantine set moved |
 | What a deleted file costs | Table A's carry rule: the `## Run log` marker is gone with the file, so the reconciliation starts a fresh, empty log. The Current conditions block is fully re-derivable from the ledger; the historical deltas are not, and they are not reconstructed |
 
 ### Table D — the validator's note count
@@ -372,16 +400,26 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       `ledger.js` row cites Table A's size row, the `warnings.js` row its path row,
       the `dream.js` row Table B's three refresh points)
 - [ ] Acceptance criteria that assert Tables A-E, including the write-if-absent
-      criterion that asserts Table B's point 3 with Table C's row 3
+      criterion that asserts Table B's point 3 with Table C's row 4, and the
+      content-only criterion that asserts Table C's row 2
 - [ ] Verification commands (the header/heading gate asserts Table A; the wiring
-      gate asserts Table A's path row and Table B's three call sites; the GLOSSARY
-      gate asserts Table E)
+      gate asserts Table A's path row, Table B's three call sites and Table C's
+      snapshot trigger; the GLOSSARY gate asserts Table E)
+- [ ] **The rewrite trigger.** Table C decides it — a membership delta OR a changed
+      `conditions` snapshot — and its mirrors are the `renderConditions` and
+      `refreshWarnings` contracts under "Exact contracts", Table A's
+      no-time-varying row, Table B's run-start and carry-forward rows, the
+      second-run acceptance criterion, and the wiring gate's snapshot assertions.
+      **No surface may say the file is rewritten "when the SET changes"** — that is
+      the round-1 wording a same-key reason change falsifies; the trigger is the
+      rendered content, and the SET is what the Run log tracks
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
       `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
       validator's counting loop)
 - [ ] The two literal worked files under "Exact contracts" (they ARE Table A rendered)
-- [ ] Implementation notes (the EP2 residual, the uncommitted-until-next-run
-      residual, the adopted-vault path residual)
+- [ ] Implementation notes (the snapshot-is-the-rendered-block decision, the EP2
+      residual, the uncommitted-until-next-run residual **and its pre-/post-promote
+      commit owners**, the adopted-vault path residual)
 - [ ] Security checklist (the sanitizer sentence and the three residuals)
 
 ## Implementation notes & constraints
@@ -391,13 +429,31 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   `skills/wienerdog-dream/SKILL.md`; do not add it to any prompt. It is code-owned,
   and the brain writing into it would destroy the trust construction that makes it
   safe to point the user at.
+- **The snapshot's `conditions` field IS the rendered block, not a tuple of the
+  facts it shows (decided here, 2026-08-29).** The alternative — carrying
+  `(key, reason, displayName, size)` per record — is a second structure that has to
+  be kept in step with the renderer by hand, and the failure mode is silent: add a
+  rendered fact (a future group, a remediation line) and forget the tuple, and the
+  trigger goes blind to it in exactly the way round 1 found. Comparing the rendered
+  bytes makes "the trigger sees everything the file shows" true by construction.
+  It is affordable because `renderConditions` is pure and the block is small — one
+  short line per quarantine.
 - **Named residual — the file can ride the next run's commit rather than this
-  one's.** Refresh point 2 is after `validateAndCommit`, and the adopt-with-history
-  run returns at `:467-470` with no commit at all. In both cases the file sits
-  uncommitted in the vault until the next run's `precommitSessionEdits(vaultDir)`
-  (`:507`) sweeps it in. The *diff* is still exactly right — it just lands one
-  commit late. Do not add a second commit: ADR-0012 fixes one dream run to one
-  commit.
+  one's, and WHO sweeps it in changes with the promotion rewrite.** Refresh point 2
+  is after `validateAndCommit`, and the adopt-with-history run returns at
+  `:467-470` with no commit at all. In both cases the file sits uncommitted in the
+  vault at the end of the run. **Pre-promotion (the tree this spec is written
+  against): the next run's `precommitSessionEdits(vaultDir)` (`:507`) sweeps it
+  in** — current behaviour, unchanged by this package.
+  **Post-promotion: `WP-dream-promote-in-workspace` removes that call (its row G6),
+  and its row G8 owns committing this file instead** — G8's commit contract names
+  `reports/warnings.md` explicitly alongside the promoted paths and the report, and
+  that spec now carries `depends_on: WP-quarantine-warnings-file` so the handoff
+  cannot land in the wrong order. Without that inheritance the file would stay
+  uncommitted forever once the rewrite landed (round 1, finding 3; owner-ruled
+  direction 1, 2026-08-29). Either way the *diff* is exactly right — it just lands
+  one commit late. Do not add a second commit: ADR-0012 fixes one dream run to one
+  commit, and do not edit the promotion spec from this package.
 - **Named residual — refresh point 1 is inside the EP2 window.** A file written at
   point 1 on a run that goes on to commit is staged before Step 3's secret gate and
   is scanned like any other change. Its content is code-owned labels, integers,
@@ -452,11 +508,22 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       fingerprint is absent, malformed, negative or non-numeric renders with no size
       suffix and does not throw.
 - [ ] With no quarantine at all and no file, nothing is written and no `reports/`
-      directory is created (Table C row 4).
-- [ ] A second dream run that changes nothing, with the file **present**, writes
-      nothing: the file's bytes and its mtime are unchanged, and `git status` in the
-      vault is clean (Table C row 2).
-- [ ] **Write-if-absent (Table B refresh point 3, Table C row 3).** A fully idle run
+      directory is created (Table C row 5).
+- [ ] A second dream run that changes nothing — same keys, same reasons, same
+      fingerprints — with the file **present**, writes nothing: the file's bytes and
+      its mtime are unchanged, and `git status` in the vault is clean (Table C row 3).
+      **Its converse rides here: the content-only rewrite (Table C row 2).** With the
+      key set UNCHANGED and the file present, each of these three ledger changes
+      rewrites Current conditions to match the new ledger and appends **no** run-log
+      entry: (a) the same key re-quarantined under a DIFFERENT reason
+      (`over-ceiling` → `read-error`, the transition round 1 proved reachable —
+      `selectState` answers `select` on a changed fingerprint, so an
+      already-quarantined file is re-selected and re-recorded under its own key);
+      (b) the same key whose FINGERPRINT changed while the reason stayed the same;
+      (c) the same `over-ceiling` key whose rendered SIZE changed. The membership
+      case and the content-only case are asserted separately, because only the first
+      appends to the Run log.
+- [ ] **Write-if-absent (Table B refresh point 3, Table C row 4).** A fully idle run
       — nothing fresh to consume, no new quarantine, no commit, i.e. the
       `sel.entries.length === 0` return at `src/cli/dream.js:467-470` — writes
       `reports/warnings.md` when the ledger holds at least one active quarantine and
@@ -464,7 +531,7 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       ledger, and **no** run-log entry is appended. The same idle run repeated
       immediately after writes nothing at all (the trigger fires at most once), the
       same idle run with the file already present writes nothing, an idle run with an
-      empty quarantine set writes nothing (Table C row 4), and `--dry-run` on this
+      empty quarantine set writes nothing (Table C row 5), and `--dry-run` on this
       path writes nothing.
 - [ ] A run in which a quarantine **leaves** the set rewrites Current conditions and
       appends an entry whose `stopped` count is exact; a run in which one enters and
@@ -506,9 +573,12 @@ npm run lint
 node -e "const t=require('fs').readFileSync('src/core/dream/warnings.js','utf8');const need=['# Wienerdog warnings','Do not edit it','## Current conditions','## Run log','No session transcripts are being skipped.','The session file is bigger than Wienerdog will read','The session file has too many lines to read','The session file could not be read','were withheld by the secret check too many times in a row','Skipped for a reason this version does not recognize','session transcript(s) started being skipped'];const miss=need.filter(s=>!t.includes(s));if(miss.length){console.error('MISSING: '+miss.join(' | '));process.exit(1);}console.log('WARNINGS TEMPLATE OK');"
 # Tables A + B + C gate — the module publishes through the primitive, EXPORTS the
 # one fixed path as a constant (so consumers import rather than retype), reads no
-# clock of its own, and the run calls it at all THREE of Table B's refresh points
-# (the third is write-if-absent, on the idle-run return).
-node -e "const fs=require('fs');const m=require('./src/core/dream/warnings.js');const t=fs.readFileSync('src/core/dream/warnings.js','utf8');const d=fs.readFileSync('src/cli/dream.js','utf8');const bad=[];if(!t.includes('writeIntoVault'))bad.push('does not use writeIntoVault');if(Object.values(m).filter((v)=>v==='reports/warnings.md').length!==1)bad.push('the vault-relative path is not exported exactly once as a constant');if(/Date\.now\(\)|new Date\(\)/.test(t))bad.push('reads a clock');const calls=(d.match(/refreshWarnings\(/g)||[]).length;if(calls!==3)bad.push('expected 3 refreshWarnings call sites in dream.js (Table B), got '+calls);if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('WARNINGS WIRING OK');"
+# clock of its own, the run calls it at all THREE of Table B's refresh points
+# (the third is write-if-absent, on the idle-run return), and the rewrite trigger
+# is Table C's CONTENT snapshot rather than key membership: the last three
+# assertions build one-key ledgers that differ only in reason or only in size and
+# require the snapshot to move. They are the executable form of round 1's finding.
+node -e "const fs=require('fs');const m=require('./src/core/dream/warnings.js');const t=fs.readFileSync('src/core/dream/warnings.js','utf8');const d=fs.readFileSync('src/cli/dream.js','utf8');const bad=[];if(!t.includes('writeIntoVault'))bad.push('does not use writeIntoVault');if(Object.values(m).filter((v)=>v==='reports/warnings.md').length!==1)bad.push('the vault-relative path is not exported exactly once as a constant');if(/Date\.now\(\)|new Date\(\)/.test(t))bad.push('reads a clock');const calls=(d.match(/refreshWarnings\(/g)||[]).length;if(calls!==3)bad.push('expected 3 refreshWarnings call sites in dream.js (Table B), got '+calls);const L=(reason,fp)=>({version:1,baseline_mtime:{claude:null,codex:null},files:{'/x/rollout-a.jsonl':{fingerprint:fp,outcome:'quarantined',reason:reason,updated_at:'2026-08-29',harness:'codex'}}});if(typeof m.renderConditions!=='function')bad.push('renderConditions is not exported (Table C rewrite trigger has no seam)');else{const base=m.renderConditions(L('over-ceiling','52428800:1:1:1'));if(m.renderConditions(L('over-ceiling','52428800:1:1:1'))!==base)bad.push('renderConditions is not deterministic on one ledger');if(m.renderConditions(L('read-error','52428800:1:1:1'))===base)bad.push('a same-key REASON change does not move the snapshot (Table C row 2)');if(m.renderConditions(L('over-ceiling','51404120:2:1:1'))===base)bad.push('a same-key SIZE change does not move the snapshot (Table C row 2)');}if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('WARNINGS WIRING OK');"
 # Table E gate — the replacement sentence occurs exactly once (whitespace-flattened,
 # so a hard wrap cannot hide it) and the old one is gone. The literal travels through
 # a quoted heredoc, so no inline-quoting accident can change what is matched.
@@ -524,7 +594,9 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'warnings.md' skills/wiener
   failure rather than printing something a reader must judge. Paste a real green on
   the finished state AND a real red from a deliberately broken state (one heading
   reworded; a `Date.now()` added to the module; a refresh call site deleted from
-  `dream.js`; the GLOSSARY sentence reworded;
+  `dream.js`; a `renderConditions` narrowed to the key list, so a reason or size
+  change no longer moves the snapshot — the round-1 defect itself; the GLOSSARY
+  sentence reworded;
   `warnings.md` mentioned in the dream SKILL.md), so a check that cannot fail is
   caught before anyone believes it. The deliverable-absent case is guarded: the two
   node gates throw on a missing file, and the negated grep is preceded by `test -f`.
@@ -552,7 +624,13 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'warnings.md' skills/wiener
 0. **DISPATCH PRECONDITION.** ADR-0023's Amendment 2 (2026-08-29) carries the
    owner's hand-written `Status: **ACCEPTED — OWNER-SIGNED <date>.**` line in
    place of its `PROPOSED` line. This package has no work-package dependency: it
-   is the family's root, and its three siblings depend on it.
+   is the family's root, and its three siblings depend on it. **A fourth dependent
+   sits outside this epic:** `WP-dream-promote-in-workspace` now carries
+   `depends_on: WP-quarantine-warnings-file`, because its row G8 inherits
+   committing the file this package creates once its row G6 removes
+   `precommitSessionEdits` (the uncommitted-until-next-run residual above). That
+   changes nothing here — this package still ships first and is dispatchable
+   today — but it is why this spec must land before that one.
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled
    `feat(dream): write a durable quarantine warnings file into the vault (WP-quarantine-warnings-file)`.

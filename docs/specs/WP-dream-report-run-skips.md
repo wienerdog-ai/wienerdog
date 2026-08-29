@@ -22,11 +22,15 @@ epic: quarantine-surface
 > report's composition out of `src/core/dream/validate.js` and into
 > `promote()`, and explicitly retires "today's report handling"
 > (`WP-dream-promote-report`, Deliverables note). This package therefore states
-> its contract as **what the report must say**, and treats its Deliverables rows
-> and every call-site citation as **PROVISIONAL**: at dispatch they are
-> re-derived against the tree the implementer will actually find, and the
-> re-derivation is recorded in the dispatch message. See Definition of done
-> item 0.
+> its contract as **what the report must say**, and marks the Deliverables rows
+> and call-site citations that the rewrite moves as **PROVISIONAL**. **A
+> PROVISIONAL marker is discharged by revising THIS SPEC before dispatch — never
+> by a dispatch message.** `scripts/boundary-check.js` enforces the permission
+> boundary from the Deliverables table in this file, so a message that "replaces"
+> a row changes nothing a CI job can see. wd-architect re-derives the marked rows
+> and citations against the then-current tree, deletes the markers, and commits
+> that revision; the dispatch message then records only that revision's SHA and a
+> one-line summary of what moved. See Definition of done item 0.
 
 ## Context (read this, nothing else)
 
@@ -73,7 +77,8 @@ home — and this section points there and counts.
 
 ## Current state
 
-**PROVISIONAL — re-derive at dispatch (see the notice above).** As of `dcd5777`:
+**PROVISIONAL — re-derived INTO this section at dispatch (see the notice above).**
+As of `dcd5777`:
 
 - The report's two code-appended sections are written inside
   `validateAndCommit` (`src/core/dream/validate.js:1374-1409`): the file is created
@@ -84,11 +89,20 @@ home — and this section points there and counts.
 - **`validateAndCommit` receives no transcript or quarantine information at all.**
   Its `o` at the call site (`src/cli/dream.js:572-580`) is
   `{vaultDir, scratchDir, date, expectedScratch, scratchBaseline, layout, stateDir}`.
-- Everything this package needs is live in `src/cli/dream.js` at that moment,
-  produced by `collectExtracts` at `:377` (JSDoc `src/core/dream/scratch.js:81-102`):
-  `sel.newlyQuarantined` (`Array<{harness, path, mtimeMs, size, dev, ino, reason}>`),
-  `sel.dropped` (`Array<{harness, session_id, bytes}>`), `sel.truncated`, and the
-  in-memory `ledger`.
+- Two of the three counts are live in `src/cli/dream.js` at that moment, produced
+  by `collectExtracts` at `:377` (JSDoc `src/core/dream/scratch.js:81-102`):
+  `sel.newlyQuarantined` (`Array<{harness, path, mtimeMs, size, dev, ino, reason}>`)
+  and `sel.dropped` (`Array<{harness, session_id, bytes}>`); `sel.truncated` and the
+  in-memory `ledger` are there too.
+- **The third is not, and that is the one addition this package makes to
+  `collectExtracts`.** Today the function discards which discovered files it
+  skipped: it computes `selectState` for every discovered file and keeps only the
+  `'select'` ones (`src/core/dream/scratch.js:106` and `:110`), so nothing outside
+  that filter ever learns how many files answered `'skip-quarantined'`. Table B's
+  `stillQuarantined` row adds that count to the return. **The in-memory ledger
+  cannot substitute for it** — the run-start ledger's active-quarantine set is a
+  different number, for the three reasons Table B's "why not the run-start set"
+  row enumerates.
 - `WP-dream-promote-report` adds a `records?: Array<{path:string, reason:string}>`
   input to `promote()` for "code-owned accounting the CALLER produced before
   promotion". **That field is not this package's channel**: its members land in the
@@ -103,17 +117,21 @@ home — and this section points there and counts.
 <!-- Always allowed without listing, per scripts/boundary-check.js: this spec file
      itself, package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
 
-**PROVISIONAL — re-derive at dispatch.** The rows below name the surfaces as they
-stand at `dcd5777`; the dispatch message replaces them with the post-promotion
-equivalents and records the substitution.
+**PROVISIONAL rows are re-derived INTO THIS TABLE before dispatch (see the notice
+above), because this table — not a dispatch message — is what
+`scripts/boundary-check.js` enforces.** The marked rows name the surfaces as they
+stand at `dcd5777`; the rows marked **stable** are not moved by the promotion
+rewrite and are not re-derived.
 
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/dream/ledger.js | one exported pure formatter for the section, per **Table A**. It belongs beside `secretRevertSummaryLine`, which it mirrors; nothing else in the module changes |
-| modify | src/core/dream/validate.js | thread the counts in (**Table B**) and append the section. **At dispatch this row is expected to become `src/core/dream/promote.js`** |
+| modify | src/core/dream/scratch.js | **STABLE — one addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes. Stable because `WP-dream-promote-in-workspace`'s Out of scope states that `src/core/dream/scratch.js` is not modified by the rewrite |
+| modify | src/core/dream/validate.js | thread the counts in (**Table B**) and append the section. **PROVISIONAL — at dispatch this row is expected to become `src/core/dream/promote.js`** |
 | modify | src/cli/dream.js | pass the counts **Table B** names; nothing else in the run changes |
 | modify | tests/unit/ledger.test.js | cover the formatter only |
-| modify | tests/unit/dream-validate.test.js | cover the appended section. **At dispatch this row is expected to become `tests/unit/dream-promote.test.js`** |
+| modify | tests/unit/dream-collect.test.js | **STABLE** — cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
+| modify | tests/unit/dream-validate.test.js | cover the appended section. **PROVISIONAL — at dispatch this row is expected to become `tests/unit/dream-promote.test.js`** |
 | modify | tests/integration/dream.test.js | extend the quarantine-run coverage to the report |
 
 If a further file appears necessary, that is a finding, not a fix: record it under
@@ -166,28 +184,45 @@ the report composer owns the document. Two conditions, so the discipline applies
 
 ### Table B — the three counts
 
-| Count | Definition | Source at `dcd5777` (PROVISIONAL) |
+| Count | Definition | Source at `dcd5777` — PROVISIONAL unless the cell says STABLE |
 |---|---|---|
 | `newlyQuarantined` | transcripts this run recorded as `quarantined` for the first time | `sel.newlyQuarantined.length` (`src/cli/dream.js:377`, used `:427`, `:444`) |
-| `stillQuarantined` | active quarantines this run did **not** create — i.e. the size of the quarantine set as of the run-start ledger, before this run's own records | derived from the ledger read at `src/cli/dream.js:373-375`, the same run-start snapshot `WP-quarantine-warnings-file` takes |
+| `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; the next row says why that number is a different one | **STABLE** — a new count `collectExtracts` returns, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:106` and `:110`). `sel.skippedQuarantined`, read at `src/cli/dream.js:377` beside the fields the run already uses |
 | `capacityDeferred` | valid transcripts that did not fit `dream_max_input_bytes` and carry **no** ledger record, so they are retried next run (ADR-0023 §2, "no negative record at all") | `sel.dropped.length` (`src/cli/dream.js:416-422`) |
 
 | Fact / rule | Value |
 |---|---|
+| **Why `stillQuarantined` is NOT the run-start set's size (round 1, finding 2)** | because a prior quarantine whose file CHANGED is re-selected: `selectState` compares the record's fingerprint and answers `'select'` when it differs (`src/core/dream/ledger.js:187`), and the sticky `secret-revert-exhausted` arm at `:184` is the only quarantine that ignores the fingerprint. Three demonstrated miscounts follow from the run-start reading, and all three are gone under the selection reading: **(a) double-counting** — a changed prior quarantine re-quarantined this run lands in `newlyQuarantined` AND in the run-start set, which the overlap row below claimed impossible; **(b) a false skip** — a changed prior quarantine consolidated successfully this run is still reported as skipped again; **(c) a phantom** — a prior quarantine whose file was deleted is no longer discovered, was skipped by nothing, and is still counted. The report is durable, so each of these preserves a false coverage story for as long as the vault lives |
 | Truncated sessions are **not** counted | `sel.truncated` sessions **were** consolidated, from their newest bytes. Counting them as "could not consolidate" would be false, and the run already reports them on their own console line (`:410-415`) |
-| Overlap is impossible by construction | the three sets are disjoint: a newly-quarantined transcript is not in the run-start set, and a capacity-deferred one has no record at all |
+| Overlap is impossible by construction | **and the construction is now the reason, not a hope**: all three counts are drawn from ONE discovery pass and are keyed on that pass's `selectState` outcome, which returns exactly one value per file. `stillQuarantined` counts the `'skip-quarantined'` files; `newlyQuarantined` and `capacityDeferred` are both drawn from the `'select'` files, and are disjoint from each other because every `'select'` file takes exactly one exclusive arm — the pre-read ceiling quarantines it before the byte budget is allocated (`scratch.js:119`), or the allocation loop quarantines it on a parse outcome (`:191`), or defers it (`:185`, `:194`), and each arm `continue`s. A file counted twice would need two selection outcomes in one discovery pass, which the function does not produce |
 | `secret-revert-exhausted` quarantines minted at `:604` | **not** counted in `newlyQuarantined`. That path runs after the report is composed, and it already has its own dedicated console summary (`secretRevertSummaryLine`) and its own permanent digest banner. Do not reorder the run to reach it |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (each row cites the table that decides it, and each
-      carries its PROVISIONAL marker)
-- [ ] Acceptance criteria that assert Tables A and B
+      carries its **PROVISIONAL** or **STABLE** marker)
+- [ ] Acceptance criteria that assert Tables A and B, including the five
+      `stillQuarantined` cases
 - [ ] Verification commands (the section gate asserts Table A)
 - [ ] Current-state description (the report's current writers, what
-      `validateAndCommit` does and does not receive, why `records` is not the channel)
+      `validateAndCommit` does and does not receive, why `records` is not the
+      channel, and the count `collectExtracts` discards today)
 - [ ] The worked example under "Exact contracts" (it is Table A rendered)
 - [ ] Implementation notes (the integers-only rule and the named residual)
+- [ ] **Where `stillQuarantined` comes from.** Table B's row decides it — the
+      discovered files whose `selectState` answered `'skip-quarantined'` — and its
+      mirrors are the `scratch.js` and `dream-collect.test.js` Deliverables rows,
+      the Current-state bullet naming the discarded count, the disjointness row,
+      the five acceptance cases, and the Out-of-scope bullet that bounds the
+      `scratch.js` change. **No surface may define it from the run-start ledger's
+      active set** — that is the round-1 reading, and it double-counts, false-skips
+      and phantom-counts
+- [ ] **The PROVISIONAL mechanism.** The READ-THIS notice, the Deliverables
+      preamble and Definition of done item 0(c) all say the same thing: the marker
+      is discharged by a committed revision of THIS SPEC, and the dispatch message
+      records only that revision's SHA. **No surface may say a dispatch message
+      substitutes a Deliverables row** — `scripts/boundary-check.js` reads the
+      table, not the message
 
 ## Implementation notes & constraints
 
@@ -232,7 +267,21 @@ the report composer owns the document. Two conditions, so the discipline applies
       drops others for capacity appends exactly Table A's section with all three
       bullets and the pointer line, byte-exact.
 - [ ] Each count is exact against Table B's definitions, and a count of 0 omits its
-      bullet while the others still render.
+      bullet while the others still render. **`stillQuarantined` is asserted on
+      these five cases, which are what separate the selection reading from the
+      run-start-ledger reading (round 1, finding 2):** (a) an UNCHANGED prior
+      quarantine is counted once, in `stillQuarantined` only; (b) a prior
+      quarantine whose FINGERPRINT CHANGED and which this run consolidated
+      successfully is counted in NONE of the three; (c) a prior quarantine whose
+      fingerprint changed and which this run RE-QUARANTINED is counted in
+      `newlyQuarantined` only, never in both; (d) a capacity-deferred transcript is
+      counted in `capacityDeferred` only; (e) a prior quarantine whose file no
+      longer exists is discovered by nothing and is counted in NONE of the three.
+      The disjointness Table B claims is asserted directly: the three counts sum to
+      no more than the number of discovered files, and no file contributes twice.
+      **Case (c) is the one that goes green under both readings for the wrong
+      reason unless the double-count itself is asserted** — assert the sum, not
+      only the individual counts.
 - [ ] A run with all three counts at 0 appends nothing: the report has no
       `## Sessions this run could not consolidate` heading and is otherwise
       byte-identical to before this change.
@@ -259,8 +308,8 @@ npm test -- --test-name-pattern "dream-integration"
 npm test
 npm run lint
 # Table A gate — the section renders byte-exact, is empty at zero, and is built from
-# integers alone. (At dispatch, point the require at whichever module ends up owning
-# the formatter; the assertions do not change.)
+# integers alone. (The dispatch-time re-derivation points this require at whichever
+# module ends up owning the formatter, in this file; the assertions do not change.)
 node -e "const l=require('./src/core/dream/ledger.js');const f=l.runSkipSummarySection;const bad=[];const full=f({newlyQuarantined:3,stillQuarantined:191,capacityDeferred:2});for(const s of ['## Sessions this run could not consolidate','3 session transcript(s) were skipped for the first time this run.','191 session transcript(s) were already being skipped and were skipped again.','2 session transcript(s) did not fit this run','Which sessions, and why: reports/warnings.md in your vault.'])if(!full.includes(s))bad.push('MISSING: '+s);if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');if(f({newlyQuarantined:0,stillQuarantined:0,capacityDeferred:0})!=='')bad.push('the all-zero case is not empty');const hostile=f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',capacityDeferred:-1});if(/passwd|1\\.5|-1/.test(hostile))bad.push('a non-integer argument reached the output: '+JSON.stringify(hostile));if(hostile.includes('already being skipped'))bad.push('a non-integer count rendered its bullet instead of being read as 0');const partial=f({newlyQuarantined:3,stillQuarantined:0,capacityDeferred:0});if(partial.includes('already being skipped'))bad.push('a zero count still rendered its bullet');if(!partial.includes('reports/warnings.md'))bad.push('the pointer line is missing from a partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
 # Table A gate — the dream skill is not told about the section.
 test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' skills/wienerdog-dream/SKILL.md
@@ -286,22 +335,32 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
 - Reordering the run, moving `validateAndCommit`'s single commit, or adding a
   second one (ADR-0012).
 - Any change to `skills/wienerdog-dream/SKILL.md` or to any prompt.
-- Any change to `src/core/dream/scratch.js`, `collectExtracts`'s return shape, or
-  the ledger's on-disk schema.
+- Any change to `src/core/dream/scratch.js` **beyond the single added return field
+  Table B's `stillQuarantined` row names**: no change to `selectState`, to which
+  files are selected, parsed, quarantined, deferred or truncated, to any existing
+  returned field's shape, or to the ledger's on-disk schema. The addition is a
+  count the function already has the information to produce and currently throws
+  away.
 - Re-opening ADR-0023's intake caps, its no-record-for-capacity-deferral rule, or
   Amendment 1.
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION — three parts, all recorded in the dispatch message.**
-   (a) ADR-0023's Amendment 2 (2026-08-29) carries the owner's hand-written
+0. **DISPATCH PRECONDITION — three parts.** (a) ADR-0023's Amendment 2
+   (2026-08-29) carries the owner's hand-written
    `Status: **ACCEPTED — OWNER-SIGNED <date>.**` line in place of its `PROPOSED`
    line. (b) `WP-quarantine-warnings-file` and `WP-dream-promote-in-workspace` are
    both `Done` on `main`. (c) **Every PROVISIONAL marker in this spec has been
-   discharged**: the Deliverables rows, the Current-state citations and Table B's
-   source column are re-derived against the tree the implementer will find, and the
-   substitutions are written into the dispatch message. A spec dispatched with a
-   live PROVISIONAL marker is a spec bug, not an implementer problem.
+   discharged BY A COMMITTED REVISION OF THIS SPEC.** wd-architect re-derives the
+   marked Deliverables rows, the Current-state citations, Table B's Source column
+   and the verification commands against the tree the implementer will find,
+   deletes every PROVISIONAL marker, and commits that revision on `main`. **The
+   dispatch message records that revision's SHA and a one-line summary of what
+   moved, and nothing else** — it cannot substitute a Deliverables row, because
+   `scripts/boundary-check.js` enforces the table in this file and a PR touching a
+   file the table does not list is rejected whatever the message said. A spec
+   dispatched with a live PROVISIONAL marker is a spec bug, not an implementer
+   problem.
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled
    `feat(dream): account for a run's skipped sessions in its report (WP-dream-report-run-skips)`.
