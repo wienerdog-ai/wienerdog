@@ -60,7 +60,11 @@ are invisible there today, and each is a different fact about coverage:
 ADR-0023 Amendment 2 (2026-08-29) makes this the fourth of the four surfaces the
 quarantine record now has, and it obeys the same one-home principle they do: **the
 full enumeration lives in `reports/warnings.md` and nowhere else, so this section
-carries exact counts and a pointer.** Its three siblings all describe **standing
+carries exact counts and a pointer to it.** This section is the only one of the
+four that also counts something that file cannot name — the capacity-deferred
+transcripts, which ADR-0023 §2 keeps no record of — so the pointer here rides the
+two quarantine counts alone, and Table A's pointer row is the one place that is
+decided. Its three siblings all describe **standing
 state** — what is quarantined *now* (`reports/warnings.md` lists it;
 `wienerdog doctor` and the digest banner count it and point there). This one is
 the only surface that describes **one run**: what *that night* could not see. The dream reports are the vault's build history,
@@ -73,7 +77,8 @@ no reason string. The precedent is `secretRevertSummaryLine`
 every argument that is not a non-negative safe integer renders as `0`, "which is
 what makes it STRUCTURALLY impossible for a basename, a path or a matched value to
 enter this line". The names live in `reports/warnings.md` — the enumeration's one
-home — and this section points there and counts.
+home — and this section counts, and points there for the sessions that file
+actually holds (Table A's pointer row).
 
 ## Current state
 
@@ -158,11 +163,25 @@ and deferred 2 for capacity renders exactly:
 - 191 session transcript(s) were already being skipped and were skipped again.
 - 2 session transcript(s) did not fit this run's input budget and will be retried next run.
 
-Which sessions, and why: reports/warnings.md in your vault.
+Which sessions are being skipped, and why: reports/warnings.md in your vault.
 ```
 
 A run with all three counts at zero appends nothing at all — no heading, no
 "none" line.
+
+Second worked example — a **capacity-only** run (`newlyQuarantined` 0,
+`stillQuarantined` 0, `capacityDeferred` 2) renders exactly:
+
+```markdown
+## Sessions this run could not consolidate
+
+- 2 session transcript(s) did not fit this run's input budget and will be retried next run.
+```
+
+**No pointer line** — `reports/warnings.md` lists the sessions being skipped, and
+a capacity-deferred transcript is not one of them: it carries no ledger record at
+all, so that file is structurally incapable of naming it. Table A's pointer row
+decides this.
 
 ## Contract reference
 
@@ -175,9 +194,10 @@ the report composer owns the document. Two conditions, so the discipline applies
 | Fact / rule | Value |
 |---|---|
 | Heading | `## Sessions this run could not consolidate` |
-| Body | one bullet per **non-zero** count, in the order of the worked example, each byte-exact as shown; then a blank line and the pointer line byte-exact as shown. **One pointer, not two** — `wienerdog doctor` is not named: it reports the same counts this section just gave, and only `reports/warnings.md` answers "which ones" |
+| Body | one bullet per **non-zero** count, in the order of the worked example, each byte-exact as shown; then, **only when the pointer row below says it renders**, a blank line and that pointer line byte-exact |
+| **Pointer line — the text, and the ONLY condition under which it renders** | The text is byte-exact `Which sessions are being skipped, and why: reports/warnings.md in your vault.` It renders **if and only if `newlyQuarantined` or `stillQuarantined` is non-zero** — it rides the two QUARANTINE counts and nothing else. **Why `capacityDeferred` cannot carry it:** `reports/warnings.md` is a render of the ledger's active quarantines (`WP-quarantine-warnings-file`), and a capacity-deferred transcript carries **no ledger record at all** (ADR-0023 §2, Table B's `capacityDeferred` row), so that file is structurally incapable of naming it — pointing a capacity-only report there sends the user to a file containing none of the events the report just counted. Hence the wording: the sessions the pointer promises are the ones **being skipped**, which is the warnings file's own term for its contents (its empty form reads `No session transcripts are being skipped.`), and which is the vocabulary of exactly the two bullets the pointer rides on. The capacity bullet makes its own honest promise instead — retried next run — and needs no destination, because no record is kept. **One pointer, not two** — `wienerdog doctor` is never named here: it reports the same counts this section just gave, and only `reports/warnings.md` answers "which ones" |
 | Zero case | all three counts 0 → the function returns `''` and **nothing is appended** — no heading, no "none" line. This section is news; a run with nothing to report says nothing |
-| Partial case | a count of 0 omits its bullet; the pointer line still renders whenever the heading does |
+| Partial case | a count of 0 omits its bullet, and the remaining bullets render unchanged. The pointer line does **not** follow the heading — it follows the pointer row's condition: **a capacity-only section (the only non-zero count is `capacityDeferred`) has the heading, its one bullet, and no pointer line at all**. Every other non-empty combination carries the pointer, because at least one quarantine count is non-zero |
 | Built from integers alone | every argument that is not a non-negative safe integer renders as `0`. No basename, no path, no reason string, no session id reaches this section — the names live in `reports/warnings.md`, the enumeration's one home |
 | Placement in the report | appended by code, after the brain-authored body, alongside the other code-appended sections. Its position relative to them is the implementer's choice; it is appended exactly once per run |
 | The brain is not told about it | `skills/wienerdog-dream/SKILL.md` is **not** a deliverable. The model does not author this section, and telling it the section exists invites it to write one |
@@ -207,7 +227,17 @@ the report composer owns the document. Two conditions, so the discipline applies
 - [ ] Current-state description (the report's current writers, what
       `validateAndCommit` does and does not receive, why `records` is not the
       channel, and the count `collectExtracts` discards today)
-- [ ] The worked example under "Exact contracts" (it is Table A rendered)
+- [ ] The two worked examples under "Exact contracts" (they are Table A rendered:
+      the all-three case, and the capacity-only case that carries no pointer)
+- [ ] **When the pointer line renders.** Table A's pointer row decides it — if and
+      only if `newlyQuarantined` or `stillQuarantined` is non-zero — and its
+      mirrors are Table A's Body and Partial-case rows, the capacity-only worked
+      example, the Context paragraph's rides-the-two-quarantine-counts sentence,
+      the integers-only paragraph under Context, the capacity-only acceptance
+      criterion, and the section gate's capacity-only assertion. **No surface may
+      tie the pointer to the heading, to "any non-zero count", or to
+      `capacityDeferred`** — those transcripts have no ledger record (ADR-0023 §2),
+      so `reports/warnings.md` cannot name them (round 5, finding 2)
 - [ ] Implementation notes (the integers-only rule and the named residual)
 - [ ] **Where `stillQuarantined` comes from.** Table B's row decides it — the
       discovered files whose `selectState` answered `'skip-quarantined'` — and its
@@ -282,6 +312,11 @@ the report composer owns the document. Two conditions, so the discipline applies
       **Case (c) is the one that goes green under both readings for the wrong
       reason unless the double-count itself is asserted** — assert the sum, not
       only the individual counts.
+- [ ] **A capacity-only run — `capacityDeferred` non-zero, both quarantine counts
+      0 — appends the heading and its one bullet and NO pointer line**: the
+      rendered section contains no `reports/warnings.md` anywhere, byte-exact as
+      the second worked example. The file cannot name a capacity-deferred
+      transcript, because ADR-0023 §2 keeps no record of one.
 - [ ] A run with all three counts at 0 appends nothing: the report has no
       `## Sessions this run could not consolidate` heading and is otherwise
       byte-identical to before this change.
@@ -307,10 +342,11 @@ npm test -- --test-name-pattern "dream-validate"
 npm test -- --test-name-pattern "dream-integration"
 npm test
 npm run lint
-# Table A gate — the section renders byte-exact, is empty at zero, and is built from
-# integers alone. (The dispatch-time re-derivation points this require at whichever
+# Table A gate — the section renders byte-exact, is empty at zero, emits no pointer
+# on a capacity-only run, and is built from integers alone. (The dispatch-time
+# re-derivation points this require at whichever
 # module ends up owning the formatter, in this file; the assertions do not change.)
-node -e "const l=require('./src/core/dream/ledger.js');const f=l.runSkipSummarySection;const bad=[];const full=f({newlyQuarantined:3,stillQuarantined:191,capacityDeferred:2});for(const s of ['## Sessions this run could not consolidate','3 session transcript(s) were skipped for the first time this run.','191 session transcript(s) were already being skipped and were skipped again.','2 session transcript(s) did not fit this run','Which sessions, and why: reports/warnings.md in your vault.'])if(!full.includes(s))bad.push('MISSING: '+s);if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');if(f({newlyQuarantined:0,stillQuarantined:0,capacityDeferred:0})!=='')bad.push('the all-zero case is not empty');const hostile=f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',capacityDeferred:-1});if(/passwd|1\\.5|-1/.test(hostile))bad.push('a non-integer argument reached the output: '+JSON.stringify(hostile));if(hostile.includes('already being skipped'))bad.push('a non-integer count rendered its bullet instead of being read as 0');const partial=f({newlyQuarantined:3,stillQuarantined:0,capacityDeferred:0});if(partial.includes('already being skipped'))bad.push('a zero count still rendered its bullet');if(!partial.includes('reports/warnings.md'))bad.push('the pointer line is missing from a partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
+node -e "const l=require('./src/core/dream/ledger.js');const f=l.runSkipSummarySection;const bad=[];const full=f({newlyQuarantined:3,stillQuarantined:191,capacityDeferred:2});for(const s of ['## Sessions this run could not consolidate','3 session transcript(s) were skipped for the first time this run.','191 session transcript(s) were already being skipped and were skipped again.','2 session transcript(s) did not fit this run','Which sessions are being skipped, and why: reports/warnings.md in your vault.'])if(!full.includes(s))bad.push('MISSING: '+s);if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');if(f({newlyQuarantined:0,stillQuarantined:0,capacityDeferred:0})!=='')bad.push('the all-zero case is not empty');const hostile=f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',capacityDeferred:-1});if(/passwd|1\\.5|-1/.test(hostile))bad.push('a non-integer argument reached the output: '+JSON.stringify(hostile));if(hostile.includes('already being skipped'))bad.push('a non-integer count rendered its bullet instead of being read as 0');const partial=f({newlyQuarantined:3,stillQuarantined:0,capacityDeferred:0});if(partial.includes('already being skipped'))bad.push('a zero count still rendered its bullet');if(!partial.includes('reports/warnings.md'))bad.push('the pointer line is missing from a partial render');const capOnly=f({newlyQuarantined:0,stillQuarantined:0,capacityDeferred:2});if(capOnly.includes('reports/warnings.md'))bad.push('a capacity-only section emitted the warnings pointer; capacity-deferred transcripts have no ledger record, so that file cannot name them');if(!capOnly.includes('did not fit this run'))bad.push('the capacity-only section lost its own bullet');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
 # Table A gate — the dream skill is not told about the section.
 test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' skills/wienerdog-dream/SKILL.md
 ```
@@ -318,8 +354,9 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
 - The last two are NEW steps and each is an ASSERTION: it exits non-zero on failure
   rather than printing something a reader must judge. Paste a real green on the
   finished state AND a real red from a deliberately broken state (one bullet
-  reworded; the all-zero case made to render a heading; the section added to
-  SKILL.md), so a check that cannot fail is caught before anyone believes it. The
+  reworded; the all-zero case made to render a heading; the pointer line tied to
+  the heading so a capacity-only run emits it; the section added to SKILL.md), so
+  a check that cannot fail is caught before anyone believes it. The
   deliverable-absent case is covered: the node gate throws when the formatter is
   missing, and the negated grep is preceded by `test -f`.
 

@@ -271,7 +271,12 @@ routed both down the push channel.
 **And one principle governs every surface below: the full enumeration has exactly
 ONE home — the vault warnings file. Every other surface (the digest banner,
 `wienerdog doctor`, the dream report) carries exact counts plus a pointer to it,
-and never a list.** A second enumeration is not a second safety net: it is a
+and never a list.** **The pointer promises only what that file can deliver:** it
+accompanies counts of QUARANTINED sessions, which the file names. The dream
+report additionally counts capacity-deferred transcripts, for which §2 keeps no
+record at all, so the file cannot name them and that count travels without a
+pointer (`WP-dream-report-run-skips`). A second enumeration is not a second
+safety net: it is a
 second thing to keep in sync, offered in a surface with no durability advantage
 over the first. Counts are always read from the **ledger**, which is ground truth;
 the warnings file is derived from it and may legitimately lag by one dream run, so
@@ -282,16 +287,23 @@ Amended as follows.
 1. **A durable, code-owned warnings file in the vault, `reports/warnings.md`.**
    Generated from the ledger alone, with the **same trust construction as the
    banner** — `displayName`-sanitized basenames plus code-owned reason labels,
-   never transcript content, never a full path, never brain-writable. **This file
-   is the enumeration's one home.** It is a **pure, stateless render of the
+   never transcript content, never a full path, and never brain-authored,
+   because **the dream's model is never told this file exists**. That last one is
+   a rule about what the brain is TOLD, not a filesystem permission: in the
+   current pipeline a model that can write the vault can write any path in it.
+   **This file is the enumeration's one home.** It is a **pure, stateless render of the
    ledger**: one section, *Current conditions* (what is in quarantine now,
    grouped by reason), containing nothing time-varying **anywhere in the file**,
    so the file changes **exactly** when its rendered content changes and a
    git-backed vault shows a meaningful diff at that moment and no other.
-   **Nothing on disk is ever carried into a write or into a commit** — every byte
-   Wienerdog writes or commits for this path is composed from the ledger alone —
-   so nothing a user or another process leaves in the file can be laundered into
-   Wienerdog's own record. **The DATED history is the vault's git log** (dropped
+   **Nothing on disk is ever carried into a write** — every byte Wienerdog writes
+   for this path is composed from the ledger alone, because the composer is never
+   shown the file — so nothing a user or another process leaves in it can be
+   laundered into Wienerdog's own **render**. The same holds of the dream COMMIT
+   **once `WP-dream-promote-in-workspace`'s row G8 is the commit path**; until
+   then the current wholesale-staging pipeline still commits what is on disk, and
+   that window — its exposure and its discharge — is the accepted transitional
+   residual recorded under `WP-quarantine-warnings-file`'s Implementation notes. **The DATED history is the vault's git log** (dropped
    the file's own run log, owner-ruled 2026-08-30, after an external review found
    the on-disk carry to be user-controlled commit input): the vault is
    git-versioned by design, so every rewrite commit **is** the dated delta, and
