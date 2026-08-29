@@ -176,8 +176,12 @@ below, and that is the only one it writes out.
  *            **The refused arm also carries `preserved` — the module half's
  *            PRESERVATION RECORD, REQUIRED and possibly EMPTY, for the same
  *            reason its `refused[]` carries one (its Table Q row Q8, which owns
- *            the rule, and row Q9, which owns an entry's fields; neither is
- *            restated here, and `PreservedCopy` is that spec's typedef).** The
+ *            the rule, and row Q9, which owns an entry's fields and which party
+ *            fills each of them; neither is restated here, and `PreservedCopy`
+ *            is that spec's typedef). **Every field of an entry is a READ in
+ *            this package — `remediation` included, which the module half
+ *            ASSIGNS at outcome time because the gate reports no value for it
+ *            (that spec's row Q9). Entries reach this package complete.** The
  *            report body is a promotion candidate under `reports_dir`, and the
  *            report row below records that EP2 is the one gate that judges a
  *            path there — so the gate can REDACT the body, preserve an
@@ -269,7 +273,7 @@ pass-through — the defect both prior A-bands shared.
 | `redacted[].rel` | the brain chose the path | **YES — and this is the channel round (d) found leaking**, because the redaction line existed while the list named only the refusal fields | **redact, then sanitise** |
 | `preserved[].artifact`, wherever a preservation record travels — on `redacted[]`, on `refused[]`, and on the refused `report` arm | the quarantine basename, DERIVED from the brain-chosen path (module half, Table Q rows Q2 and Q9) | **YES, by derivation** — the primitive's own sanitising of the name is not this contract's guarantee, and a value derived from attacker text is treated as attacker text | **redact, then sanitise** |
 | `preserved[].location` | the state-relative directory the GATE reports for that copy — one of the two places the glossary's **secret quarantine** names, a code-owned closed set (module half, Table Q row Q9) | **NO** | none — **and stated rather than omitted**, for the reason the `labels` row gives: a channel with no row is indistinguishable from a channel nobody thought about |
-| `preserved[].remediation` | one of two code-owned values decided per arm (module half, Table Q row Q9) | **NO** | none — same reason |
+| `preserved[].remediation` | one of two code-owned values the MODULE half ASSIGNS at outcome time, the gate reporting none (module half, Table Q row Q9, which owns the per-field provenance) | **NO** | none — same reason |
 | `redacted[].labels` | detector names from a code-owned closed set | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
 | `redacted[].lines` | a count | **NO** | none — same reason |
 | `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
@@ -381,7 +385,8 @@ left for a gate to refuse.
       half's **Table Q**, which owns the metadata both carry (rows Q1–Q3 for the
       first, rows Q8 and Q9 for the second, and row Q9 for every field of every
       entry). **No surface here may decide a copy's remediation guidance: it is
-      READ from the entry's `remediation`.** **This package cites Table Q and never
+      READ from the entry's `remediation`, which the module half ASSIGNS at
+      outcome time (its Table Q row Q9 owns who fills each field and when).** **This package cites Table Q and never
       restates the quarantine lifecycle** — and the DURABLE half of that
       lifecycle is not even the module half's: the retention prune, the
       identity-gated deletion and the preservation-failure abort are decided in
