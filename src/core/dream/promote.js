@@ -65,6 +65,11 @@ const { WienerdogError } = require('../errors');
 const { getPaths } = require('../paths');
 const { spawnPinnedSync, loadPins } = require('../exec-identity');
 const { writeIntoVault } = require('./vault-write');
+// The family's ONE containment answer — kernel-faithful resolution plus
+// `(dev, ino)` identity. Imported, never re-implemented: every string answer to
+// "is this path inside that directory" was measured wrong, in both directions,
+// and eleven review rounds went into the one that holds.
+const { isAtOrBeneath } = require('./workspace');
 
 /**
  * The CURRENT harness instruction-file basenames, canonicalised and
@@ -381,16 +386,35 @@ function constructMergeEnv(root) {
  * here is a copy in a directory this call made, and the user's note is never
  * one of them.
  *
- * The cwd is that same temp directory, which is outside the workspace by
- * construction — this module's share of CLAIM 2b — and outside any repository
- * under the ordinary temp root.
+ * The cwd is that same temp directory, and CLAIM 2b — this module's share — is
+ * that it is never at or beneath the workspace root. That is CHECKED, not
+ * assumed: `os.tmpdir()` honours the ambient `TMPDIR`, which the dream already
+ * passes through to the brain (`brain.js:225`), so an environment pointing it
+ * into the workspace would put the merge's cwd inside the very directory the
+ * claim excludes — and then workspace-local repository discovery could reach a
+ * security decision. Found by the PR-review gate, reproduced, and closed here.
+ *
+ * The check uses the family's single containment helper rather than a second
+ * implementation of the rule, and the failure is LOUD: a per-path refusal would
+ * reach the user as "your edit conflicted", which is false, and would degrade
+ * every divergent-edit promotion for as long as the misconfiguration lasted.
+ * Nothing is half-done when it throws — this runs in the decision phase, before
+ * any vault byte is written.
  * @param {{baseBytes: Buffer, oursBytes: Buffer, theirsBytes: Buffer,
- *          spawnGit: typeof spawnGitForMerge}} o
+ *          workspaceDir: string, spawnGit: typeof spawnGitForMerge}} o
  * @returns {{clean: true, bytes: Buffer}|{clean: false, reason: string}}
+ * @throws {WienerdogError} when the temp root lands at or beneath the workspace
  */
 function threeWayMerge(o) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-promote-merge-'));
   try {
+    if (isAtOrBeneath(root, o.workspaceDir)) {
+      throw new WienerdogError(
+        'promote: the three-way merge needs a working directory outside the workspace, but the ' +
+          `temp root resolved inside it (${root}). The merge's exit code is a security decision ` +
+          'and must not be made from a directory the run itself writes — check `TMPDIR`.'
+      );
+    }
     const env = constructMergeEnv(root);
     const ours = path.join(root, 'ours');
     const base = path.join(root, 'base');
@@ -727,6 +751,7 @@ function promote(o) {
           baseBytes: recordBaseline,
           oursBytes: vaultNow,
           theirsBytes: candidate,
+          workspaceDir,
           spawnGit,
         });
         if (!merged.clean) {

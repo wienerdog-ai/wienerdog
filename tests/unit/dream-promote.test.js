@@ -32,6 +32,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { promote, makeAdmit, spawnGitForMerge, isLosslessUtf8 } = require('../../src/core/dream/promote');
+const { isAtOrBeneath } = require('../../src/core/dream/workspace');
 const { captureBaseline, computeDelta } = require('../../src/core/dream/delta');
 const { defaultLayout } = require('../../src/core/layout');
 const { getPaths } = require('../../src/core/paths');
@@ -642,6 +643,49 @@ test('dream-promote claim-2b-merge-cwd: the merge is never given a cwd at or ben
   // something the sibling's Table F measures to be unestablishable. The
   // criterion is the cwd assertion, and this is it.
   promotionFor(res, NOTE);
+});
+
+test('dream-promote claim-2b-merge-cwd: an ambient TMPDIR inside the workspace is refused, not obeyed', () => {
+  // FOUND BY THE PR-REVIEW GATE (round 1, P1) and reproduced. `os.tmpdir()`
+  // honours the ambient TMPDIR, which the dream already passes through to the
+  // brain, so an environment pointing it into the workspace put the merge's cwd
+  // inside the directory CLAIM 2b excludes. The claim is now checked rather
+  // than assumed, and the failure is loud — a per-path refusal would have
+  // reached the user as "your edit conflicted", which is false.
+  const sc = scenario({
+    vault: { [NOTE]: 'one\ntwo\nthree\nfour\nfive\n' },
+    brain: { [NOTE]: 'ONE\ntwo\nthree\nfour\nfive\n' },
+  });
+  put(sc.vaultDir, NOTE, 'one\ntwo\nthree\nfour\nFIVE\n');
+
+  /** @type {string[]} */
+  const cwds = [];
+  const saved = process.env.TMPDIR;
+  try {
+    process.env.TMPDIR = sc.workspaceDir;
+    assert.ok(
+      isAtOrBeneath(os.tmpdir(), sc.workspaceDir),
+      'the fixture must really point the temp root into the workspace, or this asserts nothing'
+    );
+    assert.throws(
+      () =>
+        run(sc, {
+          spawnGit: (o) => {
+            cwds.push(o.cwd);
+            return { status: 0 };
+          },
+        }),
+      (err) => err instanceof WienerdogError && /outside the workspace/.test(err.message)
+    );
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved;
+  }
+
+  // The refusal happens BEFORE the spawn, so the offending cwd never reaches git.
+  assert.deepEqual(cwds, [], 'no merge ran from inside the workspace');
+  // And it happens in the decision phase, so nothing was half-published.
+  assert.deepEqual(get(sc.vaultDir, NOTE), B('one\ntwo\nthree\nfour\nFIVE\n'));
 });
 
 test('dream-promote E: the compare→promote window is narrowed — a change at the re-read abandons the write', () => {
