@@ -656,3 +656,57 @@ the coherence pass's four no-finding categories were not re-run.
 - **The withheld shelf's shipped digest banner still offers RESTORE for a copy
   this record marks `delete`.** Named as a residual on row Q9 rather than fixed:
   `src/core/digest.js` is in no Deliverables table in this family.
+
+## STOP CRITERION, RE-STATED before round 3
+
+**Re-stated because a HEAVY fix landed**, as the runbook requires — the owner's
+ruled EP2 disposition shape changed what an implementer builds, so the round-1
+criterion no longer describes the situation. Two of its four escalation
+conditions were written against a defect class the ruling has now closed by
+design, and leaving them standing would let a finding about the NEW shape read
+as evidence against a shape that was never tried.
+
+**Owner ratifications carried into this round** (both settled, neither reopenable
+by a finding — a reviewer disagreeing files a scope objection):
+
+- the record is `{artifact, location, remediation}`; `location` is ratified, and
+  the rejected alternative (per-shelf named slots) stays rejected because it
+  bakes the durable two-shelf layout into this family's type;
+- round-2 coherence C-2's fix stands — its omission from the ruling's LIGHT list
+  was not deliberate;
+- remediation is arm-dependent and the two shipped surfaces do NOT conflict;
+  a finding re-raising that conflict is a category error, measured twice.
+
+**What closes the loop.** A round that finds nothing about the PRODUCT. Findings
+about the specs' own verification machinery are fixed inside the existing surface
+or accepted as named residuals; they do not extend the loop.
+
+**What escalates instead of iterating.**
+
+1. **A carrier gap that the ruled shape CANNOT express.** This replaces the old
+   condition 1, which counted occurrences. Counting is now the wrong test: the
+   shape exists precisely so a new preserved-copy fact becomes a FIELD rather
+   than a fifth carrier, so another missing-carrier finding is ordinary work —
+   add the field, sweep once. What escalates is a fact that has nowhere to go
+   ON the record: a per-arm value the record cannot hold, or a consumer that
+   must re-derive rather than read. That would mean the shape is wrong, not
+   incomplete, and it is the owner's.
+2. **Any finding whose honest fix RE-IMPORTS a property this family was re-cut
+   to exclude** — the report, the commit, the pipeline, or the vault-write
+   primitive's filesystem discipline. Unchanged.
+3. **Any finding that requires GROWING the verification surface to hold a
+   finding about the verification surface.** Unchanged, and it has already bitten
+   once this arc: the mechanical bare-row-id check was declined under it, and the
+   advisory-rule residual was named instead.
+4. **A cross-family duplicate** — a surface restating a contract an owning
+   package forbids restating. Unchanged. `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`
+   is the package this family keeps copying from; the `location` field exists
+   partly so the report composer does not hardcode what that package owns.
+
+**Weighted closure, unchanged:** HEAVY lands its fix and takes a fresh full
+round; LIGHT is verified mechanically and does not extend the loop.
+
+**One measurement to carry into the round, so it is not re-derived:** the
+acceptance-criteria counts are 23 / 10 / 24 (module / report / pipeline),
+unchanged across the shape implementation. A round-3 fix that moves them is
+growing the surface and owes an explicit justification.
