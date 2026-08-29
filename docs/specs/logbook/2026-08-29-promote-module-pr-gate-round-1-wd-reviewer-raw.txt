@@ -1,0 +1,191 @@
+Gate: PR review (spec fidelity), backend wd-reviewer
+PR: felho/wienerdog#31, branch wp/dream-promote-module
+Reviewed tip: 9d8daf3 (the branch advanced twice during the read; the reviewer
+re-ran every mechanical check on 9d8daf3 and said so unprompted).
+Round: 1
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain byte-identical (empty) before and after.
+
+VERDICT: REQUEST-CHANGES
+
+Mechanical verification (all re-run on 9d8daf3):
+  boundary-check.js x 5 changed files       -> all exit=0 (incl. the always-allowed logbook .txt)
+  npm test --test-name-pattern dream-promote -> exit=0, 140 pass / 0 fail
+  npm test                                   -> exit=1, 2165 pass / 1 fail (adopt-e2e)
+      INDEPENDENTLY VERIFIED PRE-EXISTING: reviewer cloned the repo to /tmp,
+      checked out merge base dcd5777, ran the file -> fails identically
+      (4 pass / 1 fail, same test, same claude-pin-drift error).
+  npm run lint                               -> exit=0
+  npm test --test-name-pattern claim-2b-merge-cwd -> exit=0, both cwd tests green
+  consumed-by-nothing grep                   -> exit=0
+  glossary grep                              -> exit=0
+  Boundary: CLEAN. validate.js and src/cli/dream.js untouched.
+
+Per-acceptance-criterion verdict: 19 MET, 1 PARTIALLY MET (#12), 2 NOT MET
+(#17 Q4 three-state case, #18 Q5/Q6), 1 MET-with-named-exception (#23).
+
+FINDINGS
+
+F1 [contract] BLOCKER - a redaction that is later refused silently loses the
+   quarantine artifact name, which Q3 calls the user's only route back to
+   their copy.
+   promote.js:898-905 (redacted.push / redactions++ reached ONLY after a
+   successful publish) vs :875 and :892 (both refusal paths push {rel, reason}).
+   Reproduced by the reviewer. A path the EP2 gate redacts - meaning the gate
+   has ALREADY written an unredacted copy into state/quarantine/redacted/ - and
+   which is then refused by a post-merge gate, by pair atomicity, or by the
+   expect guard, returns:
+       promoted: []   redacted: []
+       refused: [{ rel: "01-Projects/a/n.md", reason: "tier-3 floor: refused after redaction" }]
+       secretDisposition: { withheld: 0, redactions: 0 }
+   The artifact name is gone from the return entirely. Per Table Q row Q3,
+   "Losing the line loses the copy in practice, which is why this is a
+   data-loss row and not a reporting nicety." WP-dream-promote-report cannot
+   compose that line from a value this module does not return.
+   NOT THE IMPLEMENTER'S TO FIX: Table S row S3 and the @returns block both fix
+   refused[] as {rel, reason}, and the deliverable test asserts that key set
+   exactly (dream-promote.test.js:778). The type the spec mandates cannot
+   express "refused, but a durable artifact exists".
+   ROUTE TO wd-architect: reconcile Table Q (Q1/Q3) with Table S (S3) /
+   ### Exact contracts - either a third arm, or an explicit Q-row ruling that a
+   redact-then-refuse cannot happen, or an artifact carrier on the refused arm
+   that S3's no-bytes rule tolerates.
+
+F2 [criteria] BLOCKER - Q4's named non-obvious case is unassertable against
+   Table Q's own gate interface.
+   Spec :616-623 requires "the refusal names which of the three states it
+   found... Asserted separately for the case that makes it non-obvious: a copy
+   exists but does NOT match the current bytes... the criterion goes RED against
+   an implementation that treats any saved copy as sufficient."
+   promote.js:680-685 checks only that verdict.artifact is a non-empty string -
+   precisely "treats any saved copy as sufficient". It CANNOT do better: Table Q
+   row Q1's taxonomy carries {redact, sanitizedBytes, lines, labels, artifact}
+   and has NO field expressing whether the preserved copy byte-matches the bytes
+   that are there now, and row Q7 forbids this module from touching the state
+   directory to find out. The single error message also does not distinguish
+   three states.
+   The implementer did NOT record this one.
+   ROUTE TO wd-architect: either Q1 gains a match-verdict field, or the
+   criterion moves to the package that owns the gate.
+
+F3 [criteria] BLOCKER (confirming the implementer's resolution b - reviewer
+   agrees it is right) - Q5/Q6 have acceptance criteria in a spec whose
+   Deliverables cannot reach them.
+   Spec :624-629 requires the redacted/ prune and the byte-identity deletion
+   rule. Row Q7 states the gate preserves and "This module never touches the
+   state directory"; validate.js is out of boundary. Two criteria with no
+   implementable surface is a spec bug, not an implementer omission.
+   ROUTE TO wd-architect. Leaving them unimplemented and raising a discovered
+   issue was the correct call.
+
+F4 [quality] SHOULD-FIX - the "every write goes through the primitive" test
+   cannot detect a bypass that is also omitted from the return.
+   dream-promote.test.js:583-607. The assertion is
+   deepEqual(throughSeam.sort(), published), where published is derived from
+   res.promoted/res.redacted. A hypothetical direct writeFileSync that does NOT
+   also record an outcome leaves both sides equal and the test green. The
+   criterion says "failing if ANY vault content write bypasses it." Strengthen
+   by walking the vault tree after the run and asserting the set of files whose
+   bytes differ from the pre-run vault equals throughSeam. (The PR body's RED
+   proof used a bypass that WAS reported, so it did not surface this.)
+
+F5 [contract] SHOULD-FIX - Table C's stated evaluation order is not the order
+   implemented, in two places.
+   Spec :267: "Rows C1-C8 are the evaluated conditions, top to bottom, first
+   match decides."
+   Implemented order is C2 -> EP2 -> C1 -> C3-C8:
+   (a) promote.js:605 - C2 (deleted) is evaluated BEFORE C1. A brain that
+       deletes a non-admitted baseline file is refused with "promotion never
+       deletes" where C1-first yields "not admitted". Outcome identical, reason
+       not. NOT RECORDED in the PR body's Decisions.
+   (b) promote.js:709 - C1 (admit) runs AFTER the secret gate (:638). This one
+       IS recorded (Decision 4) and the reasoning is defensible, but it has an
+       observable consequence on a typed pipeline signal the spec calls out by
+       name: a secret (or binary content, :627) on a path C1 would never admit
+       still increments secretDisposition.withheld, and per Table E "ONLY
+       withheld defers a transcript". A .gitignore with a NUL byte defers a
+       transcript today.
+   Where C1 sits relative to the four gates is genuinely underspecified - Table C
+   orders C1-C8 among themselves, Table D orders the gates among themselves, and
+   no surface orders the two sets against each other. THIS IS THE SPEC'S TO
+   SETTLE (wd-architect), and the settlement should state explicitly whether a
+   never-admissible path feeds secretDisposition. C2-before-C1 is separately
+   just wrong against the table as written.
+
+F6 [convention] SHOULD-FIX - the round-1 fix falsified a Current-state
+   statement in the spec, which is now mirror drift.
+   Spec :129-131: "src/core/dream/workspace.js - createWorkspace,
+   destroyWorkspace and the exported containment helper isAtOrBeneath. This
+   module calls none of them."
+   After 9d8daf3, promote.js:70 does require('./workspace') and :411 calls
+   isAtOrBeneath(root, o.workspaceDir).
+   THE FIX ITSELF IS CORRECT AND THE REVIEWER ENDORSES IT. os.tmpdir() honours
+   ambient TMPDIR, the dream already passes TMPDIR through to the brain, and the
+   merge exit code is a security decision - so the cwd had to be CHECKED.
+   Importing the family's single containment helper is exactly right; the
+   Implementation-notes prohibition is on BUILDING a second containment check
+   (:483-486), which this does not do. Signature order verified:
+   isAtOrBeneath(candidate, root) at workspace.js:186, called correctly. The
+   throw is inside threeWayMerge's try, so the finally still removes the temp
+   root - no residue. The regression test at :648 restores TMPDIR in a finally
+   and self-checks its own fixture.
+   But the spec sentence is now false, and this family's own rule is that a
+   mirror falling out of agreement with the code is a finding.
+   wd-architect should amend :130 to authorise the import explicitly (otherwise
+   the next round's re-verifier reads it as an out-of-scope dependency).
+
+F7 [quality] NIT - the resolved-path test asserts the outcome but not the
+   mechanism.
+   dream-promote.test.js:287-307 asserts only that a refusal exists and that the
+   victim directory gained nothing. The reviewer verified out-of-band that the
+   refusal really comes from admit on the resolved rel (reason observed:
+   ".claude/evil.md was refused by the caller's policy: not admitted: path
+   segment `.claude` ..."), but the test would stay green if the primitive's
+   symlink refusal (H3) fired instead. Assert the reason names the RESOLVED path
+   (.claude/evil.md) to make it discriminate as the criterion intends.
+
+F8 [quality] NIT - layout is the one required input not validated.
+   promote.js:540-554 validates vaultDir, workspaceDir, baseline, delta, gates
+   and throws. A missing or malformed layout instead flows into makeAdmit,
+   produces an empty admittedDirs, and silently refuses EVERY path with "not
+   under a writable vault tier directory" - a run that promotes nothing and
+   looks like policy rather than a caller bug. Fail loud like the other five.
+
+F9 [quality] NIT - PR body is stale against the reviewed tip.
+   It records 898 lines (now 923), four changed files (now five), and
+   verification output from db86d3e. Definition of done item 1 requires the
+   pasted output to match. Also relevant per this repo's own history: BOTH PR
+   GATES MUST BE CLEAN ON THE SAME TIP - the gptsol round-1 gate ran on
+   db86d3e/b4a9e24, this gate ran on 9d8daf3. The T3 tripwire measurement needs
+   re-reporting (923 total / ~400 code); reporting it remains the implementer's
+   only obligation, and no cut is theirs to make.
+
+CONTRACT-DENSITY / CLOSED-CONTRACT DRIFT CHECK (ADR-0031)
+
+Four of this round's findings land on ONE contract family: the EP2 gate's result
+and what carries it downstream - F1 (Q1/Q3 have no carrier in the return once a
+redaction is refused), F2 (Q1 has no field for Q4's three states), F3 (Q5/Q6
+have criteria but no surface), plus the @param/Table D disagreement the
+implementer already raised. Table Q was itself extracted in pass (b) BECAUSE
+four rounds kept landing on "what the EP2 gate produces besides a verdict" - and
+it is still incomplete: it settled the SHAPE of the success arm and left the
+failure arms, the invariant's evidence, and the lifecycle rows without owners
+inside this boundary. RECOMMEND a canonical-extraction/reconciliation pass on
+Table Q against Table S and ### Exact contracts, deciding in one sitting: the
+redact-then-refuse arm, Q4's evidence field, and whether Q5/Q6 belong here at all.
+
+No closed contract was silently reinterpreted and no mirror was promoted to
+primary: Table H's containment and publish discipline are cited, never restated;
+admit/expect match the primitive's signature exactly (two-state expect,
+string|null admit - verified against the primitive's Done spec); Table D's
+per-gate input enumerations are each passed in full; the merge takes the delta
+primitive's constructed-environment recipe faithfully (promote.js:355-386). The
+one drift is F6, and it was introduced by a correct fix rather than by a
+reinterpretation.
+
+RECOMMENDATION
+
+Route F1, F2, F3, F5, F6 to wd-architect as one spec amendment. F4, F7, F8 are
+the implementer's on re-dispatch; F9 is a PR-body refresh. Merging as-is would
+ship a module whose acceptance criteria are, on the spec's own terms, two short -
+and would ship a real (if narrow) data-loss path on the redact-then-refuse arm.
