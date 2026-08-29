@@ -35,6 +35,35 @@ own Mirrored Surface Checklists — the discipline was present and was not run.
 **Dispatch order is `depends_on`:** workspace → primitive → module → report →
 pipeline.
 
+## The letter-space COLLISION this family must cite around
+
+**Table letters are family-wide, and this family is not the only one that has
+them.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — shipped, `Done`,
+and the canonical owner of the EP2 secret gate's durable quarantine lifecycle —
+carries its own Tables **B, H, J, K, N, Q, R and T** in its own letter-space.
+Four of those collide with this family's, and the collisions are not harmless:
+
+| Letter | In THIS family | In `WP-secret-fence-ep2-redact-arm` |
+|---|---|---|
+| **N** | the neutralisation contract (`WP-dream-promote-report`) | the retention contract for `state/quarantine/redacted/` |
+| **Q** | the EP2 gate's result and what promotion does with it (`WP-dream-promote-module`) | the shipped user-facing claims about what EP2 does with a finding |
+| **R** | the report's publish decision (`WP-dream-promote-report`) | the redact arm's outcome matrix |
+| **H** | the vault-write primitive's filesystem discipline (`WP-dream-vault-write-primitive`) | what a DEFINITION is versus a REGISTRATION |
+
+**THE RULE THAT FOLLOWS: every citation of that package from this family names
+the SPEC PATH, never a bare table letter.** A bare "Table N" inside a promote
+spec means the neutralisation contract, and a reader who follows it to the
+retention contract has been sent to the wrong document by a correct-looking
+reference. The rule became load-bearing on 2026-08-29, when the Table Q
+reconciliation pass turned three of the module half's rows into pointers at that
+package (logbook: `2026-08-29-promote-table-q-reconciliation.md`).
+
+**The collision is recorded, not resolved.** Renaming letters in a `Done` spec
+would rewrite a closed record, and renaming them here would invalidate every
+cross-package citation already written. Naming the hazard and mandating
+path-qualified citations is the cheaper half, and it is the same shape as the
+`WP-dream-baseline-delta-primitive` Table C note in the table above.
+
 ## Who cites this, and what is NOT covered
 
 **Cited by the three live specs** — `WP-dream-promote-module`,
@@ -50,3 +79,15 @@ packages own, in prose, by hand. Those are mirrors and they can drift — one
 already did, saying "Table G" where this map says "G and V". **A cut updates this
 table AND sweeps the Out-of-scope bullets;** the map removes the letter-division
 restatements, not every ownership sentence in the family.
+
+**A contract can also leave the family entirely, and that is swept the same
+way.** On 2026-08-29 the Table Q reconciliation pass found that the EP2 gate's
+DURABLE quarantine lifecycle — the retention prune, the identity-gated deletion
+of a redundant copy and the preservation-failure abort — was restated in
+`WP-dream-promote-module`'s Table Q rows Q5 and Q6 while its canonical owner is
+the shipped `WP-secret-fence-ep2-redact-arm`, whose own Table N forbids
+restating it by name. **No letter moved between the three live packages, so the
+ownership table above is unchanged** — what changed is that all three specs'
+Out-of-scope sections now name that lifecycle as outside the family. The lesson
+is the general one: a stale ownership sentence is not always about a table this
+map lists.
