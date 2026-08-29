@@ -179,14 +179,27 @@ hand-maintained list was rejected for the reason the second finding's own lesson
 line states — "an 'every interpolated value' rule plus an explicit named list is
 only as strong as the list".**
 
-**THE VALUE SET IS DERIVED FROM THE RETURN SHAPE, NEVER HAND-LISTED.** The
-channels below are exactly the string-typed fields of `promote()`'s return and
-of its `records` input that the report interpolates. **A new channel cannot come
-into existence without appearing as a field of that shape, and therefore cannot
-come into existence without a row here.** This is the same discipline as the
-module half's Table S row S5 — form, not memory — and it is what the previous two
-findings lacked: both were channels that existed while the list did not mention
-them.
+**THE CONTRACT IS AN OBSERVABLE PROPERTY, AND THE MECHANISM IS THE
+IMPLEMENTER'S (owner ruling, 2026-08-29):**
+
+> **Every string the report composer interpolates has passed redact-then-sanitize
+> before composition, and a string the implementation has not classified FAILS
+> CLOSED — it is neutralised, or composition refuses.**
+
+**How that is achieved is not specified here.** An earlier form of this block
+claimed the value set was "derived from the return shape" so that a new channel
+could not exist without a row. **That was a MECHANISM prescribed from reading, and
+it does not work in this repo: the contract is JSDoc in plain JavaScript, where
+type information does not exist at runtime, and an actual returned object exposes
+only the fields populated on that execution — not every declared field, and not
+every arm of the report union.** The claim is withdrawn; the property below is
+what replaces it, and it is checkable without prescribing how.
+
+**The rows below are the CLASSIFICATION, not the enforcement.** They say which
+channels are attacker-influenceable and what each therefore needs. The
+enforcement is the fail-closed default plus the acceptance criterion, which is
+what makes an unclassified channel a test failure rather than a silent
+pass-through — the defect both prior A-bands shared.
 
 | Channel (a field of the return shape or of `records`) | Origin | Attacker-influenceable? | Transformation |
 |---|---|---|---|
@@ -197,12 +210,12 @@ them.
 | `redacted[].labels` | detector names from a code-owned closed set | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
 | `redacted[].lines` | a count | **NO** | none — same reason |
 | `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
-| every remaining string field of the return shape | — | **treated as YES until a row here says otherwise** | **redact, then sanitise.** The default is the safe direction: an unclassified channel is neutralised, never passed through |
+| **any string the composer interpolates that is not classified above** | — | **treated as YES — the classification is not a permission list** | **redact-then-sanitise, or composition REFUSES. This is the fail-closed default and it is the contract's actual enforcement**, not a note about the rows above: a channel nobody classified must not be able to reach the report unneutralised, and that is exactly how both prior A-bands leaked |
 
 | Rule | Value |
 |---|---|
 | N1 — **THE ORDER: redact first, then sanitise** | EP2's context-dependent detectors need the RAW bytes, separators included, and `sanitizeProjectName` replaces every character outside `[\p{L}\p{N}\p{M} ._-]` — `=` and `:` among them. **Measured:** `refused token=abcdefghijkl` sanitises to `refused token_abcdefghijkl`, and the detector that fires on the first does not fire on the second. **The justification for the reverse order, corrected to what was actually measured (round (d)):** it is NOT that the redaction placeholder survives the sanitiser unchanged — measured, `[REDACTED:generic-secret]` becomes `REDACTED_generic-secret_`. **It is that sanitising a placeholder cannot restore the secret the redactor already removed.** The earlier "sanitizer-neutral" wording was asserted from reading rather than running, and is withdrawn |
-| N2 — **The default is neutralise** | the last row above is the contract's closure: a string channel this table has not classified is neutralised. **A universal that depends on someone remembering to extend a list is what failed twice; a default that must be argued DOWN cannot fail the same way** |
+| N2 — **The default is FAIL CLOSED, and it is the enforcement** | an unclassified string is neutralised or composition refuses. **A universal that depends on someone remembering to extend a list is what failed twice; a default that must be argued DOWN cannot fail the same way.** This row is the whole contract in one line, and everything above it is classification that makes the common cases explicit |
 | N3 — **Scope: wherever the section is composed** | the normal second write and Table R's fallback alike, since the same interpolation happens in both |
 | N4 — **What the contract buys** | **the code-authored section can never carry bytes any gate would refuse, so no gate exemption exists and none is needed.** This sentence is load-bearing and it has been FALSE twice — once under an unordered rule, once under an incomplete set. It is true only while N1's order and the derived value set both hold, and the acceptance criterion asserts THIS TABLE rather than an enumeration |
 
@@ -231,7 +244,7 @@ naming: the only difference from the normal second write is that the base is
 
 | Rule | Value |
 |---|---|
-| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **The set is NAMED, not gestured at: `r.path` AND `r.reason` — for this module's own records AND for the caller's `records` (`### Exact contracts`), which are neutralised identically because they carry brain-chosen path text too** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
+| Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and it is true only while N1's order and N4's derived value set both hold. This row does not restate it |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
 | The redaction lines | one line per redaction, carrying the path, the scrubbed-line count, the labels and the **artifact name the gate returned** (Table Q, rows Q1–Q3). **Table Q owns why this is data-loss-critical and this row does not restate it.** |
@@ -295,11 +308,13 @@ left for a gate to refuse.
 
 ## Security checklist
 
-- [ ] **The code-authored section is neutralised at composition time**, for
-      BOTH channels (`r.path` and `r.reason`) and for the caller's `records`,
-      through BOTH the shipped sanitizer and EP2's redact arm. That universal is
-      what justifies having no gate exemption, so an unneutralised channel would
-      make the justification false.
+- [ ] **The code-authored section is neutralised at composition time — Table N
+      owns which channels, what transformation and in what order, and this item
+      does not restate its members.** What this item asserts is the consequence:
+      **the no-gate-exemption justification is true only while Table N's property
+      holds**, and an unclassified channel reaching the report unneutralised
+      makes it false. **This item hand-listed two channels until round (e), and
+      that list was stale against Table N's own rows** — which is why it cites.
 - [ ] **The preserved region is not re-gated.** Gates guard content ENTERING the
       vault, not content residing in it; re-scanning bytes already in the vault
       protects nothing and can destroy the enforcement record or mutate
@@ -343,30 +358,28 @@ left for a gate to refuse.
       whose EXISTING bytes contain secret-shaped text is republished
       byte-identical, and no gate withholds, redacts or alters it. Proven RED
       against an implementation that scans the whole composed content.
-- [ ] **The code-authored section cannot carry refusable bytes — asserted
-      against TABLE N, not against a list (rounds (c) and (d)).** The test is
-      driven from the table: **for EVERY channel Table N marks
-      attacker-influenceable, the same case runs** — a value carrying both
-      markdown-active text and a context-dependent secret is composed into the
-      report, and the raw secret bytes appear nowhere in the published bytes, on
-      the normal second write AND on the fallback. **The channels are enumerated
-      from `promote()`'s return shape at test time, not typed into the test**, so
-      a field added later without a Table N row fails the test rather than
-      silently escaping it — which is the defect that produced round (d).
-      **Four RED directions, each a real failure this loop measured:**
+- [ ] **The code-authored section cannot carry refusable bytes — the criterion
+      asserts Table N's PROPERTY, and how it is achieved is not asserted.**
+      **GREEN:** for every channel Table N classifies as attacker-influenceable,
+      a value carrying both markdown-active text and a context-dependent secret
+      is composed into the report, and the raw secret bytes appear nowhere in the
+      published bytes — on the normal second write AND on the fallback.
+      **RED, and this is the direction that makes the property real: ADD A NEW
+      INTERPOLATED CHANNEL AND THE TEST MUST FAIL UNTIL THAT CHANNEL IS WIRED
+      THROUGH THE NEUTRALISATION.** A channel the implementation has not
+      classified must be a test failure, not a silent pass-through. **That is the
+      whole contract; an implementation whose test passes with an unclassified
+      channel present has not built it, whatever its internal structure.**
+      **Three further RED directions, each a failure this loop measured:**
       (i) the sanitiser skipped; (ii) the redact arm skipped; (iii) **sanitiser
       FIRST** — the round (c) A, which has both arms and still leaks; (iv)
-      **`refused[].rel` and `refused[].reason` neutralised while
-      `redacted[].rel` is not** — the round (d) A, which passes every
-      refusal-shaped case.
+      **the refusal fields neutralised while `redacted[].rel` is not** — the
+      round (d) A, which passes every refusal-shaped case.
       **The secret values must be context-dependent** — at least
       `token=abcdefghijkl` and `client_secret: abcdefghijkl` — because a
       prefix-shaped secret survives the sanitiser intact and is caught in either
       order, so a test built only from one goes green on the leaking
       implementation.
-      **Channels Table N marks NOT influenceable are asserted too**, by showing
-      the test's enumeration covers them and records why they need nothing — an
-      unclassified channel must be impossible to leave unnoticed.
 - [ ] **Every report refusal delivers the record.** For an `expect` conflict AND
       for a symlinked report target, the outcome is the same three things: the
       vault object is byte-unchanged, the COMPLETE enforcement record is

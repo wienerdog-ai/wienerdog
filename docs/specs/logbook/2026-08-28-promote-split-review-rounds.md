@@ -1050,3 +1050,82 @@ Module **23/3**, report **9/2**, pipeline **24/6**. Lint 0; G- and V-row order
 checks pass. No tripwire fires.
 
 **Next: one more undirected round on the whole family, per the HEAVY rule.**
+
+## Round (e) — the closing shape, one B, and the synthesis
+
+Raw: `2026-08-29-promote-split-round-e-raw.md`. Undirected, whole family.
+**ALL SIXTEEN priors genuinely fixed — the first round of the loop in which none
+was re-opened. One B-band, no A, zero scope objections.**
+
+### The finding, and it landed on the extraction itself
+
+**Table N claimed a MECHANISM it did not have.** "The value set is derived from
+the return shape, so a new channel cannot exist without a row" — **not derived.**
+A hand-maintained list with a prose catch-all, and nothing connecting the rows to
+`promote()` or to what the composer interpolates. **The criterion was worse: it
+required channels "enumerated from the return shape at test time", which cannot
+be done** — the contract is JSDoc in plain JavaScript, where types do not exist at
+runtime, and a returned object exposes only the fields populated on that
+execution, not every declared field or union arm. The reviewer ran two probes to
+establish that rather than arguing it.
+
+**The proof it was not operating was already in the file, and it is this
+author's:** Table R's rule and the Security checklist both still hand-listed
+`r.path` and `r.reason`, omitting the two channels the same pass had just added.
+**A stale hand-listed set inside the pass whose purpose was to end hand-listed
+sets.** Verified at `:234` and `:298-302` before adjudicating.
+
+**What that means, stated plainly: a list that can go stale was replaced by a
+list that can go stale PLUS a claim that it cannot — which is worse, because the
+claim suppresses the checking.**
+
+### Owner ruling — THE SYNTHESIS
+
+Option (a), an executable registry, was **rejected as code-structure
+prescription**. Option (b), withdrawing the derivation claim and keeping an
+explicit enumeration, was **rejected as re-opening the recurrence**. The ruling
+is the third thing:
+
+> **The contract states the OBSERVABLE PROPERTY — every string the composer
+> interpolates has passed redact-then-sanitize, and an unregistered string FAILS
+> CLOSED — and the mechanism is the implementer's.**
+
+**The criterion asserts the property in BOTH directions**, and the second is what
+makes it real: **adding a channel must turn the test RED until that channel is
+wired through the neutralisation.** An implementation whose test passes with an
+unclassified channel present has not built the contract, whatever its internal
+structure.
+
+**This is the round-4 CUT lesson applied to its own extraction** — state what must
+be observably true, never how to achieve it — **and it is the same move that made
+Table S hold.** The rows of Table N are now explicitly the CLASSIFICATION; the
+fail-closed default is the enforcement.
+
+**Both stale mirrors ride the same pass:** Table R's rule and the Security
+checklist now CITE Table N instead of restating members, each saying that its
+former list was stale the day it was written.
+
+### OWNERSHIP CORRECTION — owned by the advisor
+
+**The "derived from the return shape" mechanism was prescribed in the
+owner-channel relay, asserted from reading, in a plain-JS repo where JSDoc types
+do not exist at runtime.** It is recorded against the advisor.
+
+**This is the SECOND advisor-injected claim in two rounds** — the first being the
+"sanitizer-neutral placeholder" sentence. Both are the same error class as the
+A-bands they accompanied: **a property of shipped code or of a language runtime,
+asserted from reading rather than running.** Two instances in two rounds is a
+pattern in the advisory channel specifically, and it is written down as one
+rather than as two isolated corrections.
+
+### Classification and the trend
+
+**New-design defect by the remedy test; the family trigger does not fire; the
+drained reading stands.**
+
+**The layered trend reads as a CLOSING SHAPE, and the owner named it as the
+test:** 16/16 priors genuine, zero re-opened, and a single B confined to the
+newest text. Counts unchanged — module **23/3**, report **9/2**, pipeline
+**24/6**; no tripwire fires.
+
+**One more undirected round, per the HEAVY rule. That round is the measurement.**
