@@ -44,9 +44,20 @@ not see, and standing state belongs in a pull-based durable surface. The vault i
 git-versioned by design, so a file that changes **exactly** when its rendered
 content changes (plus one reconciliation write when the file is missing — Table B's
 refresh point 3) gives the user a permanent, diffable record the managed block can
-never give. **Table C owns that trigger and is the only place it is decided**; the
-*Run log* is the surface that tracks set MEMBERSHIP, and the two are deliberately
-not the same test. This package builds that file.
+never give. **Table C owns that trigger and is the only place it is decided.**
+This package builds that file.
+
+**The file keeps no history of its own, and that is deliberate (owner-ruled
+2026-08-30).** It is a **pure, stateless render of the ledger**: the header
+paragraph plus `## Current conditions`, and nothing else. Nothing on disk is ever
+read forward into a write or into the dream commit, so no byte a user or another
+process leaves in the file can be laundered into Wienerdog's own record. The
+**dated** history an earlier draft kept in a `## Run log` section comes for free
+from where it already lives: **the vault is git-versioned by design, so every
+rewrite commit IS the dated delta**, and the dream report's per-run counts
+(`WP-dream-report-run-skips`) carry the per-run story. Two alternatives were
+weighed and rejected; they are recorded under Implementation notes so nobody
+re-proposes them.
 
 **It is the family's root, because the enumeration has exactly one home and this
 is it.** ADR-0023 Amendment 2 states the principle: the full list of quarantined
@@ -168,9 +179,9 @@ layout. There is no `tests/unit/dream-warnings.test.js`.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/warnings.js | renders the file (**Table A**) and performs one refresh (**Tables B, C**); pure of policy beyond Table C's `admit`. **Exports the vault-relative path as a constant** — Table A's path row — which `WP-doctor-quarantine-counts` imports rather than retyping. **Also exports `renderConditions`**, the pure Current-conditions renderer that IS the rewrite trigger's snapshot (**Table C**), so the trigger has a seam the wiring gate can call directly, **and `composeWarnings`**, the pure whole-document composer that is the family's ONLY assembler of these bytes — **Table C's single-composer row** names its two callers, the second of which is post-promotion and outside this package |
+| create | src/core/dream/warnings.js | renders the file (**Table A**) and performs one refresh (**Tables B, C**); pure of policy beyond Table C's `admit`. **Exports the vault-relative path as a constant** — Table A's path row — which `WP-doctor-quarantine-counts` imports rather than retyping. **Also exports `composeWarnings`**, the pure whole-document render — a function of the LEDGER ALONE — that is the family's ONLY assembler of these bytes and is simultaneously the rewrite trigger's seam (**Table C**), so the wiring gate can call it directly. **Table C's single-composer row** names its two callers, the second of which is post-promotion and outside this package |
 | modify | src/core/dream/ledger.js | **one addition only:** an exported reader that yields the quarantine size, per **Table A**'s size row. `activeQuarantines`, `quarantineBannerLine`, `displayName` and every record-writing function keep their exact current behaviour and signatures |
-| modify | src/cli/dream.js | the run-start snapshot and the **three** refresh call sites **Table B** names. Nothing else in the run changes |
+| modify | src/cli/dream.js | the **three** refresh call sites **Table B** names, and nothing else. **No run-start snapshot and no carried state** — Table B's no-carried-state row: each call takes only `{vaultDir, ledger}` |
 | modify | src/core/dream/validate.js | **one line only** — the note-count exclusion in **Table D**. No other behaviour, no other step |
 | modify | docs/GLOSSARY.md | **one sentence** in the **vault write** entry — the exact replacement is in **Table E**. No other entry |
 | create | tests/unit/dream-warnings.test.js | cover the acceptance criteria below (the implementer designs the cases) |
@@ -184,64 +195,41 @@ If a further file appears necessary, that is a finding, not a fix: record it und
 ### Exact contracts
 
 ```js
-/** The deterministic snapshot the write decision compares (Table C). TWO fields
- *  because they answer two different questions: `keys` decides whether the Run
- *  log gains a line (a membership delta), `conditions` decides whether the file
- *  is rewritten at all (a change in anything Current conditions RENDERS).
- *  @typedef {{keys:Set<string>, conditions:string}} WarningsSnapshot */
-
-/** The rendered `## Current conditions` block for a ledger — the section's body
- *  alone, without its heading and without the Run log. PURE: no filesystem, no
- *  clock, no argument but the ledger, so two calls on one ledger are byte-equal.
- *  It is the snapshot's `conditions` field AND the document's own middle, which
- *  is what makes "the trigger sees everything the file shows" true by
- *  construction rather than by a list somebody has to keep in sync.
- *  @param {object} ledger @returns {string} */
-function renderConditions(ledger)
-
-/** Compose the CANONICAL bytes of the whole warnings file for one moment of one
- *  run — the header paragraph, the `## Current conditions` block and the
- *  `## Run log`, assembled per Table A. PURE: no filesystem, no clock, no
- *  argument but these four, so two calls on equal arguments are byte-equal.
+/** Compose the CANONICAL bytes of the whole warnings file for a ledger — the
+ *  header paragraph and the `## Current conditions` block, assembled per Table A.
+ *  **PURE, and pure of the LEDGER ALONE: no filesystem, no clock, no second
+ *  argument.** Two calls on one ledger are byte-equal, and — the property the
+ *  whole design now rests on — **no byte that is on disk can influence the
+ *  result, because the function is never shown it.**
  *  **It is the family's ONLY composer of this document, and that is a contract,
- *  not a convenience (Table C's single-composer row).** Both callers use it and neither assembles
- *  bytes of its own: `refreshWarnings` below (Table B's three refresh points),
- *  and the dream commit's reconciliation in `WP-dream-promote-in-workspace`'s
- *  row G8, third clause, which renders the committed bytes from this function
- *  and never re-reads the path.
- *  @param {{ledger:object, existing:Buffer|null, previous:WarningsSnapshot, date:string}} o
- *    existing  the bytes currently at `reports/warnings.md`, or `null` when the
- *              file is absent or unreadable. Table A's carry rule reads the
- *              `## Run log` out of exactly these bytes and nothing else
- *    previous  the snapshot to take the MEMBERSHIP delta against; a non-empty
- *              delta is what appends the one new run-log entry (Table C row 1),
- *              and an empty one appends nothing (rows 2 and 4)
- *  @returns {{bytes:Buffer|null, current:WarningsSnapshot}}
- *    bytes     the whole file; `null` — meaning "this state has no canonical
- *              file at all" — when the ledger holds no active quarantine AND
- *              `existing` is null (Table C row 5)
- *    current   the snapshot for this ledger
- *  **This function DECIDES NOTHING.** Whether a composed byte string is written
- *  is Table C's; whether it enters the dream commit is row G8's. */
-function composeWarnings(o)
+ *  not a convenience (Table C's single-composer row).** Both callers use it and
+ *  neither assembles bytes of its own: `refreshWarnings` below (Table B's three
+ *  refresh points), and the dream commit's reconciliation in
+ *  `WP-dream-promote-in-workspace`'s row G8, third clause, which renders the
+ *  committed bytes from this function and never re-reads the path.
+ *  Because the render is total, it is ALSO the rewrite trigger's seam: Table C
+ *  compares its output to the bytes on disk, so "the trigger sees everything the
+ *  file shows" is true by construction rather than by a list kept in sync.
+ *  @param {object} ledger @returns {Buffer} the whole file, always — an empty
+ *    quarantine set renders the "no session transcripts are being skipped" form,
+ *    never `null`. **WHETHER that render is written or committed is not this
+ *    function's** — Table C decides the write, row G8 decides the commit, and
+ *    both of them own the never-had-a-quarantine case. */
+function composeWarnings(ledger)
 
 /** Refresh the vault warnings file for one moment of one dream run. Reads the
  *  file, composes with `composeWarnings`, decides per Table C, and publishes
  *  through writeIntoVault. Never throws: every failure is reported by return.
- *  @param {{vaultDir:string, ledger:object, previous:WarningsSnapshot, date:string}} o
- *    previous  the snapshot as of the last successful refresh in this process
- *              (Table B row 1 supplies the run-start value)
- *    date      'YYYY-MM-DD', the run's date — the ONLY clock this module reads
- *  @returns {{written:boolean, current:WarningsSnapshot, reason?:string}}
- *    current   the snapshot the caller must carry forward as `previous` — the NEW
- *              one on a successful write, and the UNCHANGED `previous` otherwise,
- *              so a refused write is retried at the next refresh */
+ *  Holds no state between calls — there is nothing to carry, because the
+ *  decision is a byte comparison against the file itself.
+ *  @param {{vaultDir:string, ledger:object}} o
+ *  @returns {{written:boolean, reason?:string}} a refused write is simply
+ *    retried at the next refresh point, which re-reads and re-decides */
 function refreshWarnings(o)
 ```
 
 A worked file, rendered in full. Two `over-ceiling` records (sizes 52 428 800 and
-51 404 120) and one `read-error` record, on a vault whose earlier run log has one
-entry:
+51 404 120) and one `read-error` record:
 
 ```markdown
 # Wienerdog warnings
@@ -260,15 +248,11 @@ below changes.
 ### The session file could not be read — 1
 
 - rollout-2026-04-10t00-33-07-019d7460-b3e7-7fc2-bb7b-f2cb54c285b4.jsonl
-
-## Run log
-
-- 2026-08-17 — 191 session transcript(s) started being skipped; 0 stopped.
-- 2026-08-29 — 3 session transcript(s) started being skipped; 191 stopped.
 ```
 
-The same file once every quarantine has cleared (the Run log is what makes this
-state meaningful rather than empty):
+The same file once every quarantine has cleared. **The file is not deleted and it
+does not go blank: it says so, in words** — and because the vault is git-versioned,
+that rewrite is itself the dated record that the last quarantine cleared:
 
 ```markdown
 # Wienerdog warnings
@@ -280,12 +264,6 @@ below changes.
 ## Current conditions
 
 No session transcripts are being skipped.
-
-## Run log
-
-- 2026-08-17 — 191 session transcript(s) started being skipped; 0 stopped.
-- 2026-08-29 — 3 session transcript(s) started being skipped; 191 stopped.
-- 2026-09-02 — 0 session transcript(s) started being skipped; 3 stopped.
 ```
 
 ## Contract reference
@@ -313,7 +291,7 @@ never retyped (Table A's path row).
 | Fact / rule | Value |
 |---|---|
 | Vault-relative path | the fixed literal `reports/warnings.md`, **exported from this module as a named constant** — it is the one place the path is decided, and `WP-doctor-quarantine-counts` imports it. Retyping it in a second module is drift waiting to happen; the only other occurrences in the codebase are inside fixed English sentences (the digest banner, the dream report), each pinned by its own package's byte-exact gate. **Layout-independent on purpose:** it is not a dream report, so it does not live under `layout.reports_dir` (`reports/dreams` by default), and `src/core/vault-snapshot.js` scopes routine snapshots by `'reports/dreams'` newest-N — a warnings file inside that dir would displace a dream report from a routine's window |
-| Document shape | the two literal worked examples under "Exact contracts" ARE the shape: `# Wienerdog warnings`, the fixed two-sentence header paragraph byte-for-byte as shown, `## Current conditions`, the block below, `## Run log`, the entries. Exactly one blank line between every block; the file ends with exactly one `\n` |
+| Document shape | the two literal worked examples under "Exact contracts" ARE the shape: `# Wienerdog warnings`, the fixed two-sentence header paragraph byte-for-byte as shown, `## Current conditions`, the block below. **That is the whole document — there is no second section** (owner-ruled 2026-08-30; the earlier `## Run log` is dropped, and its dated history now comes from the vault's git log). Exactly one blank line between every block; the file ends with exactly one `\n` |
 | Current conditions, empty | the single line `No session transcripts are being skipped.` |
 | Current conditions, non-empty | one `### <heading> — <N>` per non-empty reason group, in the row order of the next table, each followed by a blank line and one markdown list entry per member |
 | Which records are members | every entry of `ledger.files` that is a plain object with `outcome === 'quarantined'`. Nothing else |
@@ -321,10 +299,8 @@ never retyped (Table A's path row).
 | **No stored `reason` string is ever rendered** | the unrecognized group uses a fixed heading. `readLedger` deliberately does not validate individual records, so rendering a stored string would let stored data choose the document's bytes |
 | Size (`over-ceiling` group only) | the fingerprint's first `:`-separated field as an integer, rendered as the suffix `— <X.X> MB (<bytes> bytes)` after an em-dash-spaced separator, with `X.X` = `bytes / 1048576` to one decimal. Absent, non-numeric, negative or not a safe integer → the entry renders with **no** size suffix |
 | Sort within a group | by `displayName` ascending; equal names render identical text, so the bytes are deterministic either way |
-| **Nothing time-varying may appear above `## Run log`** | no timestamp, no run count, no "last checked". This is what makes "an existing file's bytes change exactly when its RENDERED CONTENT changes" true (the one other write is Table C row 4's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it: `renderConditions` is a pure function of the ledger, so an unchanged ledger yields a byte-equal snapshot and no rewrite |
-| Run log entry | `- <date> — <E> session transcript(s) started being skipped; <L> stopped.` where `<date>` is the run's `date` argument, `<E>` is the size of `entered` and `<L>` the size of `left`. No reason breakdown: the Current conditions block in the **same commit** carries the grouping, and one label map is one thing to keep in sync instead of two |
-| Run log order | append-only, oldest first; the new entry goes last. Two runs on one date make two entries |
-| How the existing log survives a rewrite | everything after the **first** line whose entire content is `## Run log`, with leading blank lines stripped, is carried through verbatim. That marker line absent (file missing, or a user mangled it) → the carried log is empty |
+| **Nothing time-varying may appear ANYWHERE in the file** | no timestamp, no date, no run count, no "last checked" — and, since 2026-08-30, no run log either. **The rule used to be scoped to "above `## Run log`"; dropping that section makes it total, which is strictly stronger and now trivially true**: the whole document is a pure function of the ledger. This is what makes "an existing file's bytes change exactly when its RENDERED CONTENT changes" true (the one other write is Table C row 3's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it: `composeWarnings` is a pure function of the ledger, so an unchanged ledger yields byte-equal output and no rewrite |
+| **Nothing on disk is carried forward** | a rewrite REPLACES the file with `composeWarnings(ledger)` in full. No section, line or byte of the previous file survives into the new one, and none survives into the dream commit. **This is the property that killed the run log** (round 3, finding 1): a carried section is user-controlled input to a code-owned document, and the only cheap way to be sure a user's bytes never enter Wienerdog's own commit is never to read them |
 
 Reason → heading, in emission order:
 
@@ -348,58 +324,65 @@ The withheld copies are in state/quarantine/: restore what you meant to keep and
 
 | Fact / rule | Value |
 |---|---|
-| Run-start snapshot | the FULL `WarningsSnapshot` (both fields — `keys` and `renderConditions(ledger)`), taken from the ledger at `src/cli/dream.js:375`, immediately after `migrateFromWatermarks` and before `collectExtracts`. Migration seeds only `baseline_mtime`, never a `files` record, so taking it before or after is identical — after is stated so there is one answer. **Taking only the key set here is the round-1 defect**: a record rewritten under the SAME key with a different reason or a different rendered SIZE leaves the key set identical, and a membership-only trigger then never rewrites the file. **"a different fingerprint" is deliberately NOT the wording** (round 2, finding 1): `mtimeMs`, `dev` and `ino` are fingerprint components that render nothing, so a change in them must move the snapshot not at all |
+| **No run-start snapshot, and no carried state at all (owner-ruled 2026-08-30)** | earlier drafts had `dream.js` take a `WarningsSnapshot` at `:375` and thread it through the refresh points. **There is nothing left to thread.** The write decision is a byte comparison between `composeWarnings(ledger)` and the file on disk (Table C), and both operands are read at the moment of the decision, so no state crosses call sites, no argument is carried, and a refused write needs no bookkeeping to be retried — the next refresh point simply re-reads and re-decides. Round 1's defect (a same-key reason or size change moving nothing) and round 2's converse (an `mtimeMs`-only change moving something) are both still excluded, now by construction: the operand IS the rendered document, which is neither the key set nor the fingerprint |
 | Refresh point 1 | inside the `sel.newlyQuarantined.length > 0 && !dryRun` block at `:443-447`, immediately after the existing `regenerateDigest()` call. **This is the point that serves the adopt-with-history first run**, whose "nothing fresh" return at `:467-470` never reaches point 2's neighbourhood with a commit. That run then also passes point 3 on its way out, which is a no-op because point 1 has just written the file |
 | Refresh point 2 | immediately after the existing final `regenerateDigest()` at `:625`. This is the only point at which a quarantine that **left** the set, or a `secret-revert-exhausted` quarantine that **entered** it at `:604`, is knowable |
-| Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 4 already decides what this call does: it writes only when the file is absent and the current set is non-empty, and it appends no run-log entry |
+| Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 3 already decides what this call does: it writes only when the file is absent and the current set is non-empty |
 | Why point 3 exists at all (owner-ruled 2026-08-29) | `WP-doctor-quarantine-counts` ships a byte-gated message promising *"that file is not there yet; the next dream run writes it"*. Without a write-if-absent trigger that promise is false for an idle run, which is exactly the upgrade shape: 191 historical quarantines already in the ledger, quiet nights, no file. The owner ruled the mechanism in rather than hedging the message |
 | Why these three, and no others | points 1 and 2 are already the two points at which the run refreshes its other ledger-derived durable surface, `state/digest.md` — one rule, two surfaces, nothing that can drift out of step. Point 3 is **not** a set-change point and refreshes nothing else: it is a reconciliation on the one run shape that reaches neither of the others. The capacity-wedge path (`:451-464`) is not a refresh point — it throws |
-| Carrying the snapshot forward | the caller keeps one mutable `WarningsSnapshot`, seeded at run start and replaced by each call's returned `current`. A second refresh in the same run therefore sees an empty membership delta **and** a byte-equal `conditions`, so it writes nothing. Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3, and in both the second call is a no-op unless the first was refused or the ledger changed between them |
+| What a second refresh in one run does | nothing, unless the ledger moved or the first write was refused — and it needs no memory to get that right. The first write leaves the file holding exactly `composeWarnings(ledger)`, so the second call's comparison is byte-equal and it writes nothing (Table C row 2). Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3 |
 | Dry run | writes nothing. Point 1 is already inside a `!dryRun` guard; point 2 is unreachable on a dry run (`:474-477` returns first); **point 3 needs an explicit `!dryRun` guard** — step 7's return at `:467-470` comes BEFORE step 8's dry-run return, so it is reachable on a preview run. That guard is the one new guard this package adds |
 | A refresh failure never fails the dream | `refreshWarnings` never throws, and a `written:false` result prints one `wienerdog: dream — …` console line and is otherwise ignored. The ledger still holds the condition, `doctor` still reports the counts, and the digest banner still raises it — what is lost is the enumeration, until the next refresh |
 
 ### Table C — the write decision
 
-**Two comparisons, not one, and each answers its own question.** MEMBERSHIP:
-`entered = current.keys \ previous.keys` and `left = previous.keys \
-current.keys`, over the sets of `ledger.files` **keys** whose record is a plain
-object with `outcome === 'quarantined'`. CONTENT: `current.conditions !==
-previous.conditions`, a byte comparison of the rendered Current conditions block.
-**Membership decides the Run log; content decides the rewrite.** Membership alone
-cannot decide the rewrite: the same key re-quarantined with a different reason or
-a different rendered size leaves `entered` and `left`
-both empty while the document the user reads goes stale indefinitely.
-**The converse bounds it just as hard:** a fingerprint component that is NOT
-rendered — `mtimeMs`, `dev`, `ino`, or a size on a group that renders none —
-moves nothing the file shows, so it triggers no rewrite at all. The trigger is
-the RENDERED CONTENT, which is neither the key set nor the fingerprint.
+**ONE comparison, and it is a byte comparison against the file itself.** Let
+`render = composeWarnings(ledger)` — the whole document, a pure function of the
+ledger (`### Exact contracts`). The refresh writes when, and only when, the file
+does not already hold exactly those bytes:
 
-| # | `entered`/`left` | `conditions` | File on disk | Action |
-|---|---|---|---|---|
-| 1 | either non-empty | any | absent or present | **write**, with a new run-log entry |
-| 2 | both empty | **changed** | present | **write**, with **no** run-log entry — a content-only refresh: the set did not change, so there is no delta to log, but what the file SHOWS did change and the file must say so |
-| 3 | both empty | unchanged | present | **no write at all** — this is "a run that changes nothing appends nothing" |
-| 4 | both empty | any | absent, and the current set is **non-empty** | **write**, with **no** run-log entry — this is **write-if-absent**, the reconciliation Table B's refresh point 3 exists to reach (a lost, deleted, refused or never-written file) |
-| 5 | both empty | any | absent, and the current set is **empty** | **no write** — a vault that has never had a quarantine gets no file |
+| # | File on disk | Ledger's active quarantine set | Action |
+|---|---|---|---|
+| 1 | present, bytes **≠** `render` | any | **write** `render` |
+| 2 | present, bytes **=** `render` | any | **no write at all** — nothing the file shows has changed |
+| 3 | absent | **non-empty** | **write** `render` — this is **write-if-absent**, the reconciliation Table B's refresh point 3 exists to reach (a lost, deleted, refused or never-written file) |
+| 4 | absent | **empty** | **no write** — a vault that has never had a quarantine gets no file |
 
-Rows 1 and 2 both write; only row 1 appends. A membership delta always writes
-even when `conditions` is byte-equal (two different keys can render the same
-name, reason and size), because the Run log still owes that run its line.
+**Row 4 is the only place the set size is consulted at all**, and it exists to
+answer exactly one question: may this run CREATE the file? Once the file exists,
+its content is decided by the render and nothing else — which settles the
+empty-set-with-existing-file case as row 1: the last quarantine clearing rewrites
+the file to `No session transcripts are being skipped.` **The file is never
+deleted and never left saying something false.** Deleting it was rejected: on a
+git-versioned vault the rewrite is a meaningful, dated diff, while a deletion
+throws away the pointer three other surfaces promise the user is there.
+
+**Why this is one comparison and not two (owner-ruled 2026-08-30).** Earlier
+drafts ran a MEMBERSHIP test (`entered`/`left` over the quarantine keys) beside a
+CONTENT test, because a `## Run log` section needed dated membership deltas.
+That section is gone, and with it the membership computation, the carried
+snapshot and the whole `WarningsSnapshot` type: **nothing else consumed
+`entered`/`left`.** The dream console lines and the dream report's counts
+(`WP-dream-report-run-skips`) are computed from `sel` — the selection outcomes
+`collectExtracts` returns — never from a before/after set difference here, so
+they are untouched. Both bounds round 1 and round 2 established survive
+unchanged, now by construction rather than by a second test: a same-key reason or
+size change moves the render and rewrites; an `mtimeMs`-, `dev`- or `ino`-only
+change moves nothing rendered and writes nothing.
 
 | Fact / rule | Value |
 |---|---|
-| **The single-composer row — one function assembles this document, and NOTHING else may** | `composeWarnings` (`### Exact contracts`) composes the whole file: the fixed header, the Current-conditions block and the carried Run log with at most one appended entry. **It has exactly TWO callers, both named here so a third is a finding rather than a fix:** (1) `refreshWarnings`, at Table B's three refresh points; (2) **the dream commit's reconciliation** — `WP-dream-promote-in-workspace`'s row G8, third clause, which renders the committed bytes from this function post-promotion. The rule exists because the two callers must produce BYTE-EQUAL output for the same moment: the commit-time render must carry the same header, the same Current conditions AND the same Run log (which `renderConditions` alone does not cover — it renders the middle section only) as a refresh write would. Two composers cannot be kept byte-equal by review; one function makes it true by construction, and the wiring gate asserts both the export and the single assembly site |
-| **The PINNED state — which ledger AND which snapshot the two callers render from, and why they agree** | **Two arguments are pinned, not one.** (1) The LEDGER: both render from **the run's in-memory `ledger` binding**, which between refresh point 1 and the run's commit is **not mutated at all**. Measured on the current tree: the only assignments to that binding are `src/cli/dream.js:375` (post-migration, before the run-start snapshot), `:444` (recording `sel.newlyQuarantined`, inside refresh point 1's own block) and `:599-607` (`recordProcessed` / `recordSecretDeferred` / `recordSecretExhausted`), and **the last of those is after `validateAndCommit` at `:572-580`**. So the ledger point 1 rendered from and the ledger the commit renders from are the same object in the same state, and the two renders agree by construction rather than by timing luck. **The RULE is "the ledger as it stands at commit construction"; the measurement is what makes that byte-agree with point 1 today.** A future change that mutates the quarantine set between the two does not break the contract — the commit then carries the newer document and refresh point 2 brings the disk file to it later in the same run — but it does break the agreement, so it is a change that must be made deliberately. **A post-commit ledger change (a `secret-revert-exhausted` quarantine minted at `:604`) is deliberately OUTSIDE the pinned state**: refresh point 2 writes it to disk after the commit, and it rides the NEXT run's commit reconciliation — the one-run lag, now bounded to one commit instead of forever. (2) The SNAPSHOT: both pass the **same carried `previous`** the run holds at that moment — Table B's carry-forward row's single mutable value, seeded at run start and replaced by each refresh's returned `current`. Passing anything else (an empty snapshot, a re-derived one) would make the commit-time render append a run-log entry the on-disk file does not have, which is the one way these two renders can disagree. **The refused-point-1 case falls out correctly and is worth stating:** `previous` is then still the run-start value, so the commit-time render composes the entry point 1 failed to write and the commit carries the right document; refresh point 2, later in the same run, retries the write and brings the disk file to the same bytes |
-| **The reconciliation reads; it never writes** | the commit-time render composes bytes for the COMMIT and writes nothing to disk. **Table B's three refresh points stay the only writers of `reports/warnings.md`**, and this package adds no fourth write site — post-promotion or not. So a stray user edit to this code-owned file is never overwritten by the commit path: it stays as an uncommitted working-tree modification until a refresh point legitimately rewrites the file, and what the commit carries is the canonical render either way (`WP-dream-promote-in-workspace` row G8, third clause, owns that branch) |
+| **The single-composer row — one function assembles this document, and NOTHING else may** | `composeWarnings` (`### Exact contracts`) composes the whole file — the fixed header and the Current-conditions block — from the ledger alone. **It has exactly TWO callers, both named here so a third is a finding rather than a fix:** (1) `refreshWarnings`, at Table B's three refresh points; (2) **the dream commit's reconciliation** — `WP-dream-promote-in-workspace`'s row G8, third clause, which renders the committed bytes from this function post-promotion. The rule exists because the two callers must produce BYTE-EQUAL output for the same ledger: the commit-time render must carry the same header and the same Current conditions as a refresh write would. Two composers cannot be kept byte-equal by review; one function makes it true by construction, and the wiring gate asserts the export, its single argument and the single assembly site |
+| **The PINNED state — ONE argument, the ledger** | both callers render from **the run's in-memory `ledger` binding**, which between refresh point 1 and the run's commit is **not mutated at all**. Measured on the current tree: the only assignments to that binding are `src/cli/dream.js:375` (post-migration), `:444` (recording `sel.newlyQuarantined`, inside refresh point 1's own block) and `:599-607` (`recordProcessed` / `recordSecretDeferred` / `recordSecretExhausted`), and **the last of those is after `validateAndCommit` at `:572-580`**. So the ledger point 1 rendered from and the ledger the commit renders from are the same object in the same state, and the two renders agree by construction rather than by timing luck. **The RULE is "the ledger as it stands at commit construction"; the measurement is what makes that byte-agree with point 1 today.** A future change that mutates the quarantine set between the two does not break the contract — the commit then carries the newer document and refresh point 2 brings the disk file to it later in the same run — but it does break the agreement, so it is a change that must be made deliberately. **A post-commit ledger change (a `secret-revert-exhausted` quarantine minted at `:604`) is deliberately OUTSIDE the pinned state**: refresh point 2 writes it to disk after the commit, and it rides the NEXT run's commit reconciliation — the one-run lag, now bounded to one commit instead of forever. **A SECOND pinned argument used to be needed and no longer exists** (owner ruling, 2026-08-30): with the run log gone the render takes no snapshot and no date, so there is nothing else for the two callers to agree about and nothing either of them can pass differently. That also disposes of round 3's finding 2, which was that the `date` argument was unpinned across the two callers — there is no date argument |
+| **The reconciliation reads the LEDGER; it reads no file and it writes none** | the commit-time render composes bytes for the COMMIT from the ledger and writes nothing to disk. **Table B's three refresh points stay the only writers of `reports/warnings.md`**, and this package adds no fourth write site — post-promotion or not. So a stray user edit to this code-owned file is never committed and never silently absorbed: it is not in the composed bytes (they never saw it), the commit carries the canonical render, and the edit survives as an uncommitted working-tree modification until a refresh point legitimately rewrites the whole file (`WP-dream-promote-in-workspace` row G8, third clause, owns the commit branch) |
 | Publish call | `writeIntoVault({vaultDir, rel: 'reports/warnings.md', bytes, admit, expect})` — this package is that primitive's first production caller |
 | `admit` | admits the resolved vault-relative path `reports/warnings.md` and **nothing else**; every other value returns a refusal reason. The policy is the caller's by the primitive's contract |
-| `expect` | the exact bytes read from the file immediately before composing, when the read succeeded; **omitted** when the read failed with ENOENT. Never `null` — the primitive rejects it |
+| `expect` | the exact bytes read from the file for the comparison, when the read succeeded; **omitted** when the read failed with ENOENT. Never `null` — the primitive rejects it. **Those bytes are used for the row-1/row-2 comparison and as the primitive's premise, and for nothing else — no part of them reaches the composed document** |
 | A read failure that is not ENOENT | no write, `{written:false, reason}`. Never guess at the file's content |
-| `previous` on a refused write | unchanged, so the next refresh retries — that is why `current` is a return value and not an argument the module mutates |
-| **An EXISTING file is rewritten only when its RENDERED CONTENT changes** | rows 2 and 3 together. The no-churn property survives the widening intact — `renderConditions` is pure and Table A forbids anything time-varying above `## Run log`, so a run over an unchanged ledger produces a byte-equal snapshot and no write. What changed from the round-1 text is the TRIGGER, not the property: bytes and mtime change exactly when the rendered content changes, which is a superset of "when the set changes" and is the set of moments at which the file would otherwise be lying |
-| **Write-if-absent fires at most once** | its own write makes the file present, so the very next idle run takes row 3 and writes nothing. It fires again only if the file goes missing again |
-| **A write with no membership delta appends NOTHING to the run log** | rows 2 and 4 alike: the set did not change, so there is no delta to record and the append-only log stays delta-only. A reader who sees Current conditions with no matching Run log entry is looking at a reconciliation (row 4) or a content-only refresh (row 2), both of which are correct. **The Run log's contract is unchanged by finding 1** — a dated line still means, and only means, that the membership of the quarantine set moved |
-| What a deleted file costs | Table A's carry rule: the `## Run log` marker is gone with the file, so the reconciliation starts a fresh, empty log. The Current conditions block is fully re-derivable from the ledger; the historical deltas are not, and they are not reconstructed |
+| A refused write | nothing to record: the file simply still does not hold the render, so the next refresh point's comparison decides to write again |
+| **An EXISTING file is rewritten only when its RENDERED CONTENT changes** | rows 1 and 2 together. The no-churn property is now a tautology: `composeWarnings` is pure of the ledger and Table A forbids anything time-varying anywhere in the file, so a run over an unchanged ledger produces byte-equal output and takes row 2. What changed from the round-1 text is the TRIGGER, not the property: bytes and mtime change exactly when the rendered content changes, which is a superset of "when the set changes" and is the set of moments at which the file would otherwise be lying |
+| **Write-if-absent fires at most once** | its own write makes the file present, so the very next idle run takes row 2 and writes nothing. It fires again only if the file goes missing again |
+| What a deleted file costs | **nothing durable.** The document is fully re-derivable from the ledger, so refresh point 3 recreates it on the next run (row 3), and the dated history was never in the file — it is in the vault's git log, which a working-tree deletion does not touch |
 
 ### Table D — the validator's note count
 
@@ -433,22 +416,23 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       `ledger.js` row cites Table A's size row, the `warnings.js` row its path row,
       the `dream.js` row Table B's three refresh points)
 - [ ] Acceptance criteria that assert Tables A-E, including the write-if-absent
-      criterion that asserts Table B's point 3 with Table C's row 4, and the
-      content-only criterion that asserts Table C's row 2
+      criterion that asserts Table B's point 3 with Table C's row 3, and the
+      no-churn criterion that asserts Table C's row 2
 - [ ] Verification commands (the header/heading gate asserts Table A; the wiring
       gate asserts Table A's path row, Table B's three call sites and Table C's
-      snapshot trigger; the GLOSSARY gate asserts Table E)
-- [ ] **The rewrite trigger.** Table C decides it — a membership delta OR a changed
-      `conditions` snapshot — and its mirrors are the `renderConditions` and
+      one-argument render; the GLOSSARY gate asserts Table E)
+- [ ] **The rewrite trigger.** Table C decides it — the render differs from the
+      bytes on disk — and its mirrors are the `composeWarnings` and
       `refreshWarnings` contracts under "Exact contracts", Table A's
-      no-time-varying row, Table B's run-start and carry-forward rows, the
-      second-run acceptance criterion, and the wiring gate's snapshot assertions.
+      no-time-varying row, Table B's no-carried-state row, the
+      second-run acceptance criterion, and the wiring gate's render assertions.
       **No surface may say the file is rewritten "when the SET changes"** — that is
-      the round-1 wording a same-key reason change falsifies; the trigger is the
-      rendered content, and the SET is what the Run log tracks. **Nor may any
+      the round-1 wording a same-key reason change falsifies. **Nor may any
       surface say "when the FINGERPRINT changes"** — that is the round-2 wording an
       `mtimeMs`-only change falsifies in the other direction, and it would demand a
-      rewrite the no-churn property forbids
+      rewrite the no-churn property forbids. **And no surface may reintroduce a
+      membership (`entered`/`left`) test, a carried snapshot, or a second
+      section** — that is round 3's defect, dropped by the owner on 2026-08-30
 - [ ] **The single composer and the commit-time render.** Table C's
       single-composer row and its pinned-state row decide them, and their mirrors
       are the `composeWarnings` contract under "Exact contracts", the `warnings.js`
@@ -461,11 +445,18 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       commit-time bytes as anything but `composeWarnings`' output over the pinned
       ledger** — an authorship test ("the run wrote it") is the round-2 defect, and
       a second composer is how the committed and the written bytes drift apart
+- [ ] **Nothing on disk enters a write or the commit.** Table A's
+      nothing-carried-forward row decides it, and its mirrors are the
+      `composeWarnings` contract's single-argument signature, Table C's `expect`
+      row, its reconciliation row, the stray-edit acceptance criterion, the wiring
+      gate's arity assertion, and `WP-dream-promote-in-workspace`'s row G8
+      consequence (a). **No surface may describe any byte of the existing file as
+      being carried, preserved or appended to**
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
       `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
       validator's counting loop)
 - [ ] The two literal worked files under "Exact contracts" (they ARE Table A rendered)
-- [ ] Implementation notes (the snapshot-is-the-rendered-block decision, the EP2
+- [ ] Implementation notes (the render-is-the-trigger decision, the EP2
       residual, the uncommitted-until-next-run residual **and its pre-/post-promote
       commit owners**, the adopted-vault path residual)
 - [ ] Security checklist (the sanitizer sentence and the three residuals)
@@ -477,15 +468,16 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   `skills/wienerdog-dream/SKILL.md`; do not add it to any prompt. It is code-owned,
   and the brain writing into it would destroy the trust construction that makes it
   safe to point the user at.
-- **The snapshot's `conditions` field IS the rendered block, not a tuple of the
-  facts it shows (decided here, 2026-08-29).** The alternative — carrying
-  `(key, reason, displayName, size)` per record — is a second structure that has to
-  be kept in step with the renderer by hand, and the failure mode is silent: add a
-  rendered fact (a future group, a remediation line) and forget the tuple, and the
-  trigger goes blind to it in exactly the way round 1 found. Comparing the rendered
-  bytes makes "the trigger sees everything the file shows" true by construction.
-  It is affordable because `renderConditions` is pure and the block is small — one
-  short line per quarantine.
+- **The trigger's operand IS the rendered document, not a tuple of the facts it
+  shows (decided 2026-08-29, widened to the whole file 2026-08-30).** The
+  alternative — carrying `(key, reason, displayName, size)` per record — is a
+  second structure that has to be kept in step with the renderer by hand, and the
+  failure mode is silent: add a rendered fact (a future group, a remediation line)
+  and forget the tuple, and the trigger goes blind to it in exactly the way round 1
+  found. Comparing the rendered bytes to the bytes on disk makes "the trigger sees
+  everything the file shows" true by construction. It is affordable because
+  `composeWarnings` is pure and the document is small — one short line per
+  quarantine.
 - **Named residual — the file can ride the next run's commit rather than this
   one's, and WHO sweeps it in changes with the promotion rewrite.** Refresh point 2
   is after `validateAndCommit`, and the adopt-with-history run returns at
@@ -523,10 +515,26 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   carrying the written Buffer through the pipeline — dissolved with direction A**
   (round 2, finding 2): no buffer crosses the pipeline, because the decided bytes
   are recomputed at commit time from the pinned ledger.
+- **Two alternatives to dropping the Run log were rejected by the owner
+  (2026-08-30), and they are recorded so a later reader does not re-propose them.**
+  Round 3 found that carrying the on-disk log forward makes it user-controlled
+  input to a code-owned commit. (a) **Move the file out of the vault, into the
+  state directory, where `0600` protects it.** Rejected: `0600` guards OTHER
+  users, and the threat here is a same-user process, which writes the state
+  directory exactly as it writes the vault — the exposure is location-independent
+  — while the property that makes this file worth having, a git-versioned durable
+  record the user can diff and keep, would be lost outright. (b) **Keep the log
+  but validate its grammar before trusting it** (parse each carried line against
+  the entry format, drop anything that does not match). Rejected as workable but
+  not worth it: it is a parser, a grammar and a failure policy of new machinery,
+  bought for a section that duplicates what the vault's git history already
+  provides for free. **Dropping the section makes both round-3 findings dissolve
+  at the root rather than be answered** — there is no carry to authenticate and no
+  date to pin — and it removes surface rather than adding it.
 - **Named residual — refresh point 1 is inside the EP2 window.** A file written at
   point 1 on a run that goes on to commit is staged before Step 3's secret gate and
-  is scanned like any other change. Its content is code-owned labels, integers,
-  dates and `displayName` output; only the last is attacker-influenceable, and a
+  is scanned like any other change. Its content is code-owned labels, integers
+  and `displayName` output; only the last is attacker-influenceable, and a
   basename that tripped an entropy rule would cost a redaction or a withhold **of
   Wienerdog's own warnings file** — non-destructive (the ledger is untouched,
   `doctor` still reports the counts) and self-healing at the next set change. Do NOT
@@ -538,10 +546,11 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   (a `<reports_dir>/warnings.md`) collides with `vault-snapshot.js`'s hardcoded
   `'reports/dreams'` newest-N scoping. A `warnings_file` layout key is the future
   fix if anyone asks for it; do not add one here.
-- The `date` argument is the run's date, already computed in `dream.js`. **Do not
-  read a clock inside the module** — a module whose output depends on
-  `Date.now()` cannot be tested for byte-exactness and violates Table A's
-  no-time-varying-content rule by accident.
+- **The module takes no date and reads no clock.** There is no `date` argument
+  anywhere in its interface any more (the run log was the only thing that wanted
+  one), and `Date.now()` / `new Date()` must not appear inside it: a module whose
+  output depends on the time cannot be tested for byte-exactness and would violate
+  Table A's no-time-varying-content rule by accident.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -577,53 +586,56 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       fingerprint is absent, malformed, negative or non-numeric renders with no size
       suffix and does not throw.
 - [ ] With no quarantine at all and no file, nothing is written and no `reports/`
-      directory is created (Table C row 5).
+      directory is created (Table C row 4).
 - [ ] A second dream run that changes nothing — same keys, same reasons, same
       fingerprints — with the file **present**, writes nothing: the file's bytes and
-      its mtime are unchanged, and `git status` in the vault is clean (Table C row 3).
-      **Its converse rides here: the content-only rewrite (Table C row 2).** With the
-      key set UNCHANGED and the file present, each of these three ledger changes
-      rewrites Current conditions to match the new ledger and appends **no** run-log
-      entry: (a) the same key re-quarantined under a DIFFERENT reason
+      its mtime are unchanged, and `git status` in the vault is clean (Table C row 2).
+      **Its converse rides here (Table C row 1).** With the key set UNCHANGED and the
+      file present, each of these two ledger changes rewrites the file to match the
+      new ledger: (a) the same key re-quarantined under a DIFFERENT reason
       (`over-ceiling` → `read-error`, the transition round 1 proved reachable —
       `selectState` answers `select` on a changed fingerprint, so an
       already-quarantined file is re-selected and re-recorded under its own key);
-      (b) the same `over-ceiling` key whose rendered SIZE changed. The membership
-      case and the content-only case are asserted separately, because only the first
-      appends to the Run log. **And the negative case rides here too, because it is
+      (b) the same `over-ceiling` key whose rendered SIZE changed.
+      **And the negative case rides here too, because it is
       the same contract seen from the other side (round 2, finding 1):** a same-key
       record whose fingerprint changed in `mtimeMs`, `dev` or `ino` ONLY — nothing
-      rendered moving — writes **nothing at all** (Table C row 3), because those
+      rendered moving — writes **nothing at all** (Table C row 2), because those
       components are not rendered and the trigger is the rendered content. A
       criterion demanding a rewrite on ANY fingerprint change would contradict
       Table C and force churn the no-churn property forbids.
-- [ ] **Write-if-absent (Table B refresh point 3, Table C row 4).** A fully idle run
+- [ ] **Write-if-absent (Table B refresh point 3, Table C row 3).** A fully idle run
       — nothing fresh to consume, no new quarantine, no commit, i.e. the
       `sel.entries.length === 0` return at `src/cli/dream.js:467-470` — writes
       `reports/warnings.md` when the ledger holds at least one active quarantine and
-      the file is absent. Its Current conditions block matches Table A for that
-      ledger, and **no** run-log entry is appended. The same idle run repeated
+      the file is absent. The written bytes match Table A for that
+      ledger. The same idle run repeated
       immediately after writes nothing at all (the trigger fires at most once), the
       same idle run with the file already present writes nothing, an idle run with an
-      empty quarantine set writes nothing (Table C row 5), and `--dry-run` on this
+      empty quarantine set writes nothing (Table C row 4), and `--dry-run` on this
       path writes nothing.
-- [ ] A run in which a quarantine **leaves** the set rewrites Current conditions and
-      appends an entry whose `stopped` count is exact; a run in which one enters and
-      one leaves reports both counts in one entry.
-- [ ] The existing Run log survives every rewrite verbatim, including when Current
-      conditions collapses to the empty line; a file whose `## Run log` marker line
-      has been removed by hand is rewritten with an empty carried log rather than
-      throwing.
+- [ ] **The last quarantine clearing rewrites the file rather than deleting it**
+      (Table C row 1): a run after which the ledger holds no active quarantine, with
+      the file present, leaves `reports/warnings.md` in place holding exactly Table
+      A's empty form — `No session transcripts are being skipped.` — and the file is
+      never unlinked on any path.
+- [ ] **Nothing on disk can reach the written bytes (Table A's nothing-carried-forward
+      row; round 3, finding 1).** With arbitrary extra markdown appended to a present
+      `reports/warnings.md` — a forged heading, a fabricated log section, any bytes at
+      all, anywhere in the file — the next refresh replaces the file with exactly
+      `composeWarnings(ledger)` and none of those bytes survive into it. Asserted
+      directly on the composer as well: its output for a ledger is identical no matter
+      what the file on disk contains, because it is never given the file.
 - [ ] A run in which two refresh points fire — point 1 then point 2, or point 1
-      then point 3 — produces exactly one run-log entry (Table B, carrying the set
-      forward).
+      then point 3 — writes at most once: the second call finds the file already
+      holding the render and takes Table C row 2.
 - [ ] `--dry-run` writes no vault file and leaves `git status` clean.
 - [ ] A refused publish (a symlink at `reports/warnings.md`; an `expect` mismatch)
       leaves the dream exit code and every other output unchanged, prints one console
       line, and is retried on the next refresh rather than being recorded as done.
-- [ ] A hostile basename (newline, `> [!warning]`, a `## Run log` line, `..`, a path
+- [ ] A hostile basename (newline, `> [!warning]`, a level-2 heading line, `..`, a path
       separator) reaches the file only in `displayName` form, on one line, and cannot
-      create a heading, a group, or a second Run log section.
+      create a heading, a group, or a second section.
 - [ ] Table D: a commit that includes `reports/warnings.md` does not count it as a
       note in the `dream: <date> — N notes, M skills` message, and the counts for
       every other path class are unchanged.
@@ -631,17 +643,13 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       the **vault write** entry is otherwise unchanged.
 - [ ] The vault-relative path is exported from `src/core/dream/warnings.js` as a
       single named constant, and the module reads no clock of its own.
-- [ ] **One composer, and `refreshWarnings` is one of its two callers (Table C's
-      single-composer row).** `composeWarnings` is exported and pure: called twice
-      with equal `{ledger, existing, previous, date}` it returns byte-equal
-      `bytes`, touching no file and reading no clock. **The agreement is asserted
-      directly:** for a ledger, an existing file and a snapshot, the bytes
-      `refreshWarnings` publishes are byte-identical to `composeWarnings`' return
-      for the same inputs — header, Current conditions and carried Run log alike.
-      `composeWarnings` returns `bytes: null` exactly when the ledger holds no
-      active quarantine and `existing` is null (Table C row 5), and it appends a
-      run-log entry exactly when the membership delta is non-empty (Table C row 1).
-      **This is what the post-promotion commit-time render depends on**
+- [ ] **One composer, of one argument, and `refreshWarnings` is one of its two
+      callers (Table C's single-composer row).** `composeWarnings` is exported and
+      pure: called twice with the same ledger it returns byte-equal bytes, taking
+      no second argument, touching no file and reading no clock. **The agreement is
+      asserted directly:** for a ledger, the bytes `refreshWarnings` publishes are
+      byte-identical to `composeWarnings(ledger)` — header and Current conditions
+      alike. **This is what the post-promotion commit-time render depends on**
       (`WP-dream-promote-in-workspace` row G8, third clause): a second composer
       anywhere would let the committed bytes and the written bytes disagree.
 - [ ] Running the dream twice over an unchanged corpus is idempotent for this file:
@@ -657,22 +665,22 @@ npm test -- --test-name-pattern "dream-integration"
 npm test
 npm run lint
 # Table A gate — the fixed header and every group heading exist byte-exact in the source.
-node -e "const t=require('fs').readFileSync('src/core/dream/warnings.js','utf8');const need=['# Wienerdog warnings','Do not edit it','## Current conditions','## Run log','No session transcripts are being skipped.','The session file is bigger than Wienerdog will read','The session file has too many lines to read','The session file could not be read','were withheld by the secret check too many times in a row','Skipped for a reason this version does not recognize','session transcript(s) started being skipped'];const miss=need.filter(s=>!t.includes(s));if(miss.length){console.error('MISSING: '+miss.join(' | '));process.exit(1);}console.log('WARNINGS TEMPLATE OK');"
+node -e "const t=require('fs').readFileSync('src/core/dream/warnings.js','utf8');const need=['# Wienerdog warnings','Do not edit it','## Current conditions','No session transcripts are being skipped.','The session file is bigger than Wienerdog will read','The session file has too many lines to read','The session file could not be read','were withheld by the secret check too many times in a row','Skipped for a reason this version does not recognize'];const miss=need.filter(s=>!t.includes(s));if(miss.length){console.error('MISSING: '+miss.join(' | '));process.exit(1);}console.log('WARNINGS TEMPLATE OK');"
 # Tables A + B + C gate — the module publishes through the primitive, EXPORTS the
 # one fixed path as a constant (so consumers import rather than retype), reads no
-# clock of its own, the run calls it at all THREE of Table B's refresh points
-# (the third is write-if-absent, on the idle-run return), and the rewrite trigger
-# is Table C's CONTENT snapshot rather than key membership: the snapshot
-# assertions build one-key ledgers that differ only in reason or only in size and
-# require the snapshot to MOVE, and one that differs only in mtime and requires it
-# to STAY — the executable form of round 1's finding and of round 2's finding 1,
-# which is the same contract seen from the other side. The last block asserts
-# Table C's single-composer row: `composeWarnings` is exported, is deterministic,
-# answers `bytes:null` for the never-had-a-quarantine state, and the document's
-# header literal occurs exactly ONCE in the module — one composer, one assembly
-# site, which is what keeps the post-promotion commit-time render (row G8's third
-# clause) byte-equal to what a refresh writes.
-node -e "const fs=require('fs');const m=require('./src/core/dream/warnings.js');const t=fs.readFileSync('src/core/dream/warnings.js','utf8');const d=fs.readFileSync('src/cli/dream.js','utf8');const bad=[];if(!t.includes('writeIntoVault'))bad.push('does not use writeIntoVault');if(Object.values(m).filter((v)=>v==='reports/warnings.md').length!==1)bad.push('the vault-relative path is not exported exactly once as a constant');if(/Date\.now\(\)|new Date\(\)/.test(t))bad.push('reads a clock');const calls=(d.match(/refreshWarnings\(/g)||[]).length;if(calls!==3)bad.push('expected 3 refreshWarnings call sites in dream.js (Table B), got '+calls);const L=(reason,fp)=>({version:1,baseline_mtime:{claude:null,codex:null},files:{'/x/rollout-a.jsonl':{fingerprint:fp,outcome:'quarantined',reason:reason,updated_at:'2026-08-29',harness:'codex'}}});if(typeof m.renderConditions!=='function')bad.push('renderConditions is not exported (Table C rewrite trigger has no seam)');else{const base=m.renderConditions(L('over-ceiling','52428800:1:1:1'));if(m.renderConditions(L('over-ceiling','52428800:1:1:1'))!==base)bad.push('renderConditions is not deterministic on one ledger');if(m.renderConditions(L('read-error','52428800:1:1:1'))===base)bad.push('a same-key REASON change does not move the snapshot (Table C row 2)');if(m.renderConditions(L('over-ceiling','51404120:2:1:1'))===base)bad.push('a same-key SIZE change does not move the snapshot (Table C row 2)');if(m.renderConditions(L('over-ceiling','52428800:999:1:1'))!==base)bad.push('an mtime-only fingerprint change MOVES the snapshot (round 2, finding 1 — mtime renders nothing)');}const prev={keys:new Set(),conditions:''};if(typeof m.composeWarnings!=='function')bad.push('composeWarnings is not exported (Table C single-composer row)');else{const led=L('over-ceiling','52428800:1:1:1');const c1=m.composeWarnings({ledger:led,existing:null,previous:prev,date:'2026-08-29'});const c2=m.composeWarnings({ledger:led,existing:null,previous:prev,date:'2026-08-29'});if(!c1||!c1.bytes)bad.push('composeWarnings returned no bytes for a non-empty ledger');else if(Buffer.compare(Buffer.from(c1.bytes),Buffer.from(c2.bytes))!==0)bad.push('composeWarnings is not deterministic on equal arguments');const c3=m.composeWarnings({ledger:{version:1,baseline_mtime:{claude:null,codex:null},files:{}},existing:null,previous:prev,date:'2026-08-29'});if(!c3||c3.bytes!==null)bad.push('composeWarnings must return bytes:null for an empty set with no existing file (Table C row 5)');}const heads=(t.match(/# Wienerdog warnings/g)||[]).length;if(heads!==1)bad.push('the document header literal occurs '+heads+' time(s) in warnings.js — ONE composer means ONE assembly site (Table C single-composer row)');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('WARNINGS WIRING OK');"
+# clock of its own, and the run calls it at all THREE of Table B's refresh points
+# (the third is write-if-absent, on the idle-run return). The rest asserts Table
+# C's single composer, which is also the rewrite trigger's operand:
+# `composeWarnings` is exported, takes exactly ONE parameter — the ledger, so no
+# on-disk byte, no carried snapshot and no date can enter the render (round 3's
+# two findings, dissolved rather than answered) — is deterministic, MOVES on a
+# same-key reason or size change and STAYS on an mtime-only one (round 1's finding
+# and round 2's finding 1, the same contract from both sides), renders the
+# explicit empty form rather than nothing for an empty set, emits no run-log
+# section, and assembles the document at exactly ONE site in the module, which is
+# what keeps the post-promotion commit-time render (row G8's third clause)
+# byte-equal to what a refresh writes.
+node -e "const fs=require('fs');const m=require('./src/core/dream/warnings.js');const t=fs.readFileSync('src/core/dream/warnings.js','utf8');const d=fs.readFileSync('src/cli/dream.js','utf8');const bad=[];if(!t.includes('writeIntoVault'))bad.push('does not use writeIntoVault');if(Object.values(m).filter((v)=>v==='reports/warnings.md').length!==1)bad.push('the vault-relative path is not exported exactly once as a constant');if(/Date\.now\(\)|new Date\(\)/.test(t))bad.push('reads a clock');const calls=(d.match(/refreshWarnings\(/g)||[]).length;if(calls!==3)bad.push('expected 3 refreshWarnings call sites in dream.js (Table B), got '+calls);const L=(reason,fp)=>({version:1,baseline_mtime:{claude:null,codex:null},files:{'/x/rollout-a.jsonl':{fingerprint:fp,outcome:'quarantined',reason:reason,updated_at:'2026-08-29',harness:'codex'}}});if(typeof m.composeWarnings!=='function')bad.push('composeWarnings is not exported (Table C single-composer row)');else{if(m.composeWarnings.length!==1)bad.push('composeWarnings declares '+m.composeWarnings.length+' parameters — the render must be a pure function of the LEDGER ALONE, so that no byte on disk, no carried snapshot and no date can enter it (round 3)');const R=(l)=>Buffer.from(m.composeWarnings(l)).toString('utf8');const base=R(L('over-ceiling','52428800:1:1:1'));if(!base.includes('# Wienerdog warnings'))bad.push('composeWarnings did not render the document header');if(R(L('over-ceiling','52428800:1:1:1'))!==base)bad.push('composeWarnings is not deterministic on one ledger');if(R(L('read-error','52428800:1:1:1'))===base)bad.push('a same-key REASON change does not move the render (Table C row 1)');if(R(L('over-ceiling','51404120:2:1:1'))===base)bad.push('a same-key SIZE change does not move the render (Table C row 1)');if(R(L('over-ceiling','52428800:999:1:1'))!==base)bad.push('an mtime-only fingerprint change MOVES the render (round 2, finding 1 — mtime renders nothing)');const empty=R({version:1,baseline_mtime:{claude:null,codex:null},files:{}});if(!empty.includes('No session transcripts are being skipped.'))bad.push('an empty quarantine set does not render the explicit empty form — a cleared quarantine must rewrite the file to say so, never blank it or delete it (Table C row 1)');if(/## Run log|started being skipped/.test(base+empty))bad.push('the render still emits a run-log section — dropped, owner-ruled 2026-08-30');}const heads=(t.match(/# Wienerdog warnings/g)||[]).length;if(heads!==1)bad.push('the document header literal occurs '+heads+' time(s) in warnings.js — ONE composer means ONE assembly site (Table C single-composer row)');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('WARNINGS WIRING OK');"
 # Table E gate — the replacement sentence occurs exactly once (whitespace-flattened,
 # so a hard wrap cannot hide it) and the old one is gone. The literal travels through
 # a quoted heredoc, so no inline-quoting accident can change what is matched.
@@ -688,10 +696,13 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'warnings.md' skills/wiener
   failure rather than printing something a reader must judge. Paste a real green on
   the finished state AND a real red from a deliberately broken state (one heading
   reworded; a `Date.now()` added to the module; a refresh call site deleted from
-  `dream.js`; a `renderConditions` narrowed to the key list, so a reason or size
-  change no longer moves the snapshot — the round-1 defect itself; a
-  `renderConditions` widened to the whole fingerprint, so an mtime-only change
-  moves it — round 2's finding 1; `composeWarnings` unexported, or a second
+  `dream.js`; a `composeWarnings` narrowed to the key list, so a reason or size
+  change no longer moves the render — the round-1 defect itself; a
+  `composeWarnings` widened to the whole fingerprint, so an mtime-only change
+  moves it — round 2's finding 1; a `composeWarnings` given a second parameter,
+  which is how an on-disk byte gets back into the render — round 3's finding 1;
+  a `composeWarnings` that returns nothing for an empty set instead of the
+  explicit empty form; `composeWarnings` unexported, or a second
   assembly of the header added to the module; the GLOSSARY
   sentence reworded;
   `warnings.md` mentioned in the dream SKILL.md), so a check that cannot fail is

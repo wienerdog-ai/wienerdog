@@ -138,6 +138,31 @@ at `:467-470` without any commit at all — so one refresh point cannot serve bo
 > refresh rule" argument still holds for points 1 and 2, which are the set-change
 > points; point 3 is a reconciliation and refreshes nothing else.
 
+A second amendment reaches the same passage, from the trust side rather than the
+coverage side.
+
+> **Amended 2026-08-30, external review round 3 (owner-ruled). The `## Run log`
+> section is dropped, so the phrase "appends no run-log entry" above no longer
+> describes anything.** Round 3 attacked the section from the trust side: to
+> survive a rewrite the log had to be read back off disk and carried forward, and
+> a carried section is **user-controlled input to a code-owned commit** — anything
+> a user or another process put below the marker would ride into the dream commit,
+> falsifying the stray-edit safety claim. A second finding rode along: the
+> composer's `date` argument was not pinned across its two callers. The owner
+> dropped the section rather than authenticating the carry, and both findings
+> dissolve at the root: **the warnings file is now a pure, stateless render of the
+> ledger — header plus `## Current conditions`, nothing else — and nothing on disk
+> is ever read into a write or a commit.** The dated history is not lost; it moves
+> to where it already existed for free. **The vault is git-versioned by design, so
+> every rewrite commit IS the dated delta**, and the dream report's own-run counts
+> (`WP-dream-report-run-skips`) carry the per-run story. Two alternatives were
+> weighed and rejected: relocating the file to the state directory (`0600` guards
+> other users, not a same-user process, so the exposure is location-independent —
+> and the git-backed durable record would be lost), and grammar-validating the
+> carried log (workable, but new machinery for a section that duplicated git
+> history). Refresh point 3 and the write-if-absent reasoning above are otherwise
+> unchanged; what it writes is simply the full render.
+
 **An unrecognized reason class is counted with the informational group but never
 decays.** The ratified design named three intake reasons as informational and one
 as actionable, and said nothing about a fourth arriving later. Folding an unknown
