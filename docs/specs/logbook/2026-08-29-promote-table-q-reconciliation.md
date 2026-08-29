@@ -363,3 +363,82 @@ round falsified — **Q-C's "other packages cite Q-rows by number" (N1) and Q-E'
 "a path C1 refuses never reaches the gate" (round 1's finding).** A dated
 execution record is not a living surface; the corrections live in the specs and
 in this round record, which is what supersedes it.
+
+## LOOP STOPPED AT ROUND 2 — escalated to the owner
+
+**The stop criterion pinned before round 1 fired on condition 1.** Not a
+judgement call made after the fact: the condition was written down, in this file,
+before the first round ran, and both round-2 passes hit it independently.
+
+| Round | Gate | Raw output | Commit |
+|---|---|---|---|
+| **2** | adversarial DESIGN review, backend gptsol | `docs/specs/logbook/2026-08-29-promote-family-design-round-2-gptsol-raw.txt` | `95fe35a` |
+| **2** | internal coherence, fresh executor | `docs/specs/logbook/2026-08-29-promote-family-design-round-2-coherence-raw.txt` | this commit's parent |
+
+**Round 1's finding is confirmed fixed** by the adversarial gate, on the text and
+without a scope objection: C1's two halves are separate, and the
+no-quarantine-artifact consequence is attached only to the half that supports it.
+That part of the pass holds.
+
+### The evidence, and why it is a shape question rather than four findings
+
+**Four times now, this family has produced a fact and decided its carrier
+separately — and each time the carrier was found missing by a review, never by
+the surface that produced the fact.**
+
+1. **PR gate, round 1.** A redaction followed by a refusal lost the quarantine
+   artifact's name: `refused[]` was `{rel, reason}` and had nowhere to put it.
+2. **PR gate, round 2.** The prose mitigation for (1) named the *sibling's* copy
+   first on the pair route — a structured fact encoded into free text, which
+   composed wrongly within one review round.
+3. **Design round 2, adversarial.** Table D says **both** EP2 arms preserve to
+   quarantine and that what they produce "travels back in the gate's result".
+   Q1's taxonomy gives the refuse arm `{refuse, reason}` — **no `artifact`** —
+   while Q8 requires that field "when a copy was preserved for that path" and
+   forbids prose as the carrier. **A contract that requires what its own
+   taxonomy cannot deliver.**
+4. **Design round 2, coherence.** `validate.js:1358`, inside the span the
+   pipeline spec marks MUST SURVIVE (`:1338-1360`), appends the copy's location
+   to `reason`; `:1361` is the sole consumer of `reason` in that loop and sits in
+   the range the same rows delete. **The surviving branch's only announcement
+   channel is removed by the rows that mandate its survival.** Verified by
+   `awk 'NR>=1233 && NR<=1364 && /reason/'` — one consumer, line 1361.
+
+Each was absorbable alone. Together they are one root cause: **the EP2 gate's
+OUTPUT has never had a single owned shape.** Table Q was extracted because four
+rounds landed there; it settled the success arm and left the failure arms. This
+pass added a typed carrier to one refused arm, and rounds found the next two arms
+within one cycle. A fifth field on a fifth arm is the treadmill this criterion
+exists to stop.
+
+### The question for the owner
+
+**One EP2 disposition shape that carries preservation output on every
+preservation-producing arm** — hard withhold included — then propagated in one
+sweep through Q1, `refused[]`, the report arm, Table N's channels, Table R's
+lines, and the acceptance criteria.
+
+Two sub-questions the rounds surfaced that the shape must answer:
+
+- **Does the payload distinguish remediation?** The adversarial gate reports that
+  Table R assigns **delete** guidance to a refused brain-authored copy while the
+  shipped hard-withhold banner offers **restore** guidance. *(Relay note: this
+  half is the reviewer's, reported as such — it was not independently verified
+  here.)*
+- **What carries consequence 2's keep-suffix** once `reverted[]` goes? It cannot
+  be `refused[].artifact`: Q8 scopes that to the redact-then-refuse arm, and the
+  suffix belongs to a branch owned by a shipped `Done` package.
+
+### What is NOT waiting on that ruling
+
+Round 2's mechanical findings are LIGHT and independently fixable once the shape
+is ruled — bare colliding H-row citations in `WP-dream-promote-report.md`
+(`:95`, `:286`, `:388`, `:417`) and two in the module (`:367`, `:436`), the
+9-vs-5 letter-list ambiguity, the MSC gaps (H-7 to H-9), and the nits. They are
+recorded in the raw output and deliberately NOT patched here: sweeping citations
+into a shape that is about to change is how the same surface gets rewritten
+twice.
+
+**Nothing merges on this branch until the ruling lands.** `WP-dream-promote-module`'s
+implementation (PR #31) is unaffected in its shipped behaviour — the divergence
+is the typed carrier, which is exactly what the ruling decides.
