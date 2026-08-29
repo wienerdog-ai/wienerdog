@@ -209,3 +209,34 @@ review loop (F-numbers, R-numbers) were dropped from the tables where they named
 rounds of a loop these specs did not run; the RULINGS they carried are kept
 verbatim with their dates, because those are owner decisions and survive the
 split. The pre-split logbook keeps the full round history.
+
+## THE CANONICAL TABLE-LETTER MAP — one surface, cited by all five specs
+
+**Extracted here after the spec-fidelity gate found it restated in three specs
+with TWO of them stale** (both said "four packages" after the T1 cut made five;
+one omitted `WP-dream-promote-report` from its own enumeration; one contradicted
+itself by saying "four" above a list of five). Both stale specs registered this
+exact surface in their own Mirrored Surface Checklists, **so the discipline that
+should have caught it was present and was not run** — which is the argument for
+not relying on it a fourth time.
+
+`docs/runbooks/spec-authoring.md`: *"A fact is stated once, in the surface that
+owns it; every other surface cites the owner instead of restating. A place that
+keeps going stale predicting another surface's content stops predicting and
+points."* **This is that surface.** Every spec in the family cites it and none
+restates it.
+
+| Package | Owns | Ships |
+|---|---|---|
+| `WP-dream-workspace-retarget` | Tables **A, B, F** | Done |
+| `WP-dream-vault-write-primitive` | Table **H** | Done |
+| `WP-dream-baseline-delta-primitive` | its own Table C (a different letter-space) | Done |
+| `WP-dream-promote-module` | Tables **C, D, E, Q, S** | consumed by nothing |
+| `WP-dream-promote-report` | Tables **N, R** and the report row | consumed by nothing |
+| `WP-dream-promote-in-workspace` | Tables **G, V** | wires the run |
+
+**Five packages carry family-wide letters** (the delta primitive predates the
+convention and its Table C is its own). **Dispatch order is `depends_on`:
+workspace → primitive → module → report → pipeline.**
+
+**A cut that moves a table updates THIS TABLE, and nothing else needs editing.**

@@ -23,16 +23,12 @@ consumed by nothing; Table G becomes the pipeline package.** The split's input
 record is `2026-08-28-promote-split-inputs.md` and the split's own decisions are
 recorded in `2026-08-28-promote-split.md`.
 
-**Contract table letters are family-wide, across four packages.**
-`WP-dream-workspace-retarget` owns **Tables A, B and F**;
-`WP-dream-vault-write-primitive` owns **Table H**; this spec owns **C, D, E, Q and
-S**; `WP-dream-promote-in-workspace` owns **Table G**. **The ruling quoted
-above named four tables; S was extracted later by the ADR-0031 circuit-breaker
-(round 2) out of a contract those four already carried, so it adds no subject —
-it gives one an owner.** Every cross-package
-reference CITES its owner and never restates it — the pattern the family already
-uses for Table F and for the delta primitive's constructed-environment recipe
-(row M2).
+**Contract table letters are family-wide. The canonical map lives in ONE surface
+— `docs/specs/logbook/2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER
+MAP" — and this spec CITES it rather than restating it.** It was restated in three
+specs until the PR gate found two of them stale; a cut that moves a table now
+updates that one table and nothing else. Every cross-package reference cites its
+owner and never restates it.
 
 **This package ships consumed by nothing**, exactly as `delta.js` and
 `vault-write.js` each did at their own merge (`delta.js` has since gained one:
@@ -164,7 +160,7 @@ it, and none may attribute it to any repository-status property of the workspace
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/promote.js | three-way decide + gates + merge + publish + the report (Tables C, D, E, Q and S) |
+| create | src/core/dream/promote.js | three-way decide + gates + merge + publish, for ordinary notes (Tables C, D, E, Q and S). **NOT the report — `WP-dream-promote-report` adds it** |
 | create | tests/unit/dream-promote.test.js | Tables C, D, E, Q and S |
 | modify | docs/GLOSSARY.md | one canonical name: **promotion** |
 
@@ -407,7 +403,7 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 - [ ] Out of scope (what the pipeline package, the residue-lifecycle successor
       and audit finding C2 own)
 - [ ] **The package note and the dispatch-precondition block** — the note
-      mirrors the four-package table-letter division and the consumed-by-nothing
+      mirrors the citation of the canonical table-letter map and the consumed-by-nothing
       rule; the dispatch block mirrors the pinned base and the containment
       citation. A finding that changes either updates this section too
 - [ ] **The containment-by-citation rule** — the dispatch block, Table C rows C1
@@ -434,8 +430,10 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       name instead of reporting the one returned; and no surface may weaken Q4's
       only-copy invariant to "a copy was attempted".**
 - [ ] **Table S — the decided bytes.** Its mirrors are the `@returns` shape
-      (including the `report` union's arms), Table E's staged-bytes handoff row,
-      and `WP-dream-promote-in-workspace`'s rows G8 and G10. **Two prohibitions,
+      Table E's staged-bytes handoff row, and
+      `WP-dream-promote-in-workspace`'s rows G8 and G10. **The `report` union's
+      arms are `WP-dream-promote-report`'s and are governed by Table S from
+      there — this spec's `@returns` has no `report` arm.** **Two prohibitions,
       both earned by a round: no surface may state a decided-bytes rule that the
       TYPE does not enforce; and no surface may add a consumer of published
       bytes without adding it to row S5's list.**
@@ -581,14 +579,11 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       decision, not a mid-write crash: a partial publish (first `rename`
       succeeds, second fails) is the residue-lifecycle successor's subject
       (Out of scope) and is not asserted against here.
-- [ ] **Every vault content write goes through the primitive — the REPORT
-      included.** Asserted by substituting the primitive's seam and failing if
-      any vault content write bypasses it. **The report's own writes are
-      `WP-dream-promote-report`'s to assert; this criterion covers every write
-      this package makes.** Proven RED with a promoted note published by a
-      direct `writeFileSync`, and separately: with `reports/dreams/<date>.md`
-      pre-existing as a symlink to another vault note, the report write refuses
-      and the victim is byte-unchanged.
+- [ ] **Every vault content write goes through the primitive.** Asserted by
+      substituting the primitive's seam and failing if any vault content write
+      bypasses it. **The report's own writes are `WP-dream-promote-report`'s to
+      assert; this criterion covers every write this package makes.** Proven RED
+      with a promoted note published by a direct `writeFileSync`.
 - [ ] **The compare→promote window is narrowed.** With the vault target changed
       between the decision and the re-read, the write is abandoned and the path
       is reported refused; the vault keeps the changed bytes. The criterion
@@ -597,8 +592,7 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       stated residual and is not asserted against.
 - [ ] **Promotion accounting partitions the delta**: every record is exactly one
       of `promoted`, `redacted`, or `refused` with a reason, and the counts sum
-      to the record count. The report's own outcome is in `report`, never
-      double-counted as a promotion.
+      to the record count.
 - [ ] **The gates are judged on the evidence Table D enumerates, not on bytes
       alone (round 3, F2).** Two cases, each RED against a gate given candidate
       bytes only: **identical** candidate ledger bytes are refused or admitted

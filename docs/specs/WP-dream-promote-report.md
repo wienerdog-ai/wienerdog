@@ -22,12 +22,12 @@ FIRED"). The tripwire was pinned before any review round ran
 an execution rather than an argument under gate pressure, and it names both the
 seam and the resulting shape.
 
-**Contract table letters are family-wide, across five packages.**
-`WP-dream-workspace-retarget` owns **Tables A, B and F**;
-`WP-dream-vault-write-primitive` owns **Table H**; `WP-dream-promote-module`
-owns **C, D, E, Q and S**; **this spec owns Tables N and R and the report row**; and
-`WP-dream-promote-in-workspace` owns **Tables G and V**. Every cross-package
-reference CITES its owner and never restates it.
+**Contract table letters are family-wide. The canonical map lives in ONE surface
+— `docs/specs/logbook/2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER
+MAP" — and this spec CITES it rather than restating it.** It was restated in three
+specs until the PR gate found two of them stale; a cut that moves a table now
+updates that one table and nothing else. Every cross-package reference cites its
+owner and never restates it.
 
 **Stacked between the module and the pipeline.** The module half publishes
 ordinary notes and ships consumed by nothing. This package adds the report: the
@@ -98,6 +98,14 @@ take it.
   (`:1385-1386`). `:1392-1409` is the shipped "Redacted in place" section.
 - `src/core/digest.js:414-418` — `sanitizeProjectName`, exported at `:867`.
 - `src/core/layout.js:21-29` — the seven `LAYOUT_KEYS`, including `reports_dir`.
+- **`src/core/secret-scan.js` — `redactOnly` (`:314`), exported at `:325`, is THE
+  shipped redactor Table N's "redact" step means.** Named because the sanitiser
+  is named: an implementer told to "redact" with no function to reach for may
+  write a second detector, and this repo already warns against exactly that
+  (`src/core/transcripts/index.js:60` — "this delegates to the ONE shared
+  detector"). **Naming which shipped function is not prescribing a mechanism**;
+  the owner ruling that left the mechanism open governs how total coverage is
+  guaranteed, not which redactor exists.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -280,7 +288,7 @@ left for a gate to refuse.
 - [ ] Out of scope (what the module half, the pipeline half and the
       residue-lifecycle successor own)
 - [ ] **The package note and the dispatch-precondition block** — the note
-      mirrors the FIVE-package table-letter division and the consumed-by-nothing
+      mirrors the citation of the canonical table-letter map and the consumed-by-nothing
       rule; the dispatch block mirrors the pinned base and the containment
       citation
 - [ ] **The `report` union's arms** — `### Exact contracts`, Table R's four
@@ -382,7 +390,7 @@ left for a gate to refuse.
       does not discriminate.** **That is the whole contract; an implementation
       whose test passes with an unwired interpolation present has not built it,
       whatever its internal structure.**
-      **Three further RED directions, each a failure this loop measured:**
+      **Four further RED directions, each a failure this loop measured:**
       (i) the sanitiser skipped; (ii) the redact arm skipped; (iii) **sanitiser
       FIRST** — the round (c) A, which has both arms and still leaks; (iv)
       **the refusal fields neutralised while `redacted[].rel` is not** — the

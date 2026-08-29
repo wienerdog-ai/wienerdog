@@ -23,13 +23,12 @@ consumed by nothing; Table G — this spec — became the pipeline package.** Th
 split's input record is `2026-08-28-promote-split-inputs.md` and the split's own
 decisions are recorded in `2026-08-28-promote-split.md`.
 
-**Contract table letters are family-wide, across four packages.**
-`WP-dream-workspace-retarget` owns **Tables A, B and F**;
-`WP-dream-vault-write-primitive` owns **Table H**; `WP-dream-promote-module`
-owns **C, D, E, Q and S**, `WP-dream-promote-report` owns **Tables N and R and the
-report row**; this spec owns **G and V**. Every cross-package reference
-CITES its owner and never restates it — the pattern the family already uses for
-Table F and for the delta primitive's constructed-environment recipe.
+**Contract table letters are family-wide. The canonical map lives in ONE surface
+— `docs/specs/logbook/2026-08-28-promote-split.md`, "THE CANONICAL TABLE-LETTER
+MAP" — and this spec CITES it rather than restating it.** It was restated in three
+specs until the PR gate found two of them stale; a cut that moves a table now
+updates that one table and nothing else. Every cross-package reference cites its
+owner and never restates it.
 
 **This is the package where the family's claims become true of the running
 product.** Every entry point it needs is shipped and called by nobody —
@@ -52,10 +51,13 @@ the commit carries the DECIDED bytes.
 
 **Written against the tree at `36c2ce51562aadb3eea83ccfe51a40bc728d9680`
 (`36c2ce5`), verified as both `main` and `origin/main` at authoring time.**
-Three of the four dependencies are `Done` on that tree; `WP-dream-promote-module`
-is not yet built, and **this WP is dispatchable only after it is `Done`** — it
-consumes `promote()` and its return shape. That package's Deliverables exclude
-both files this spec cites by line, so its merge should shift nothing here —
+**Three of the FIVE dependencies are `Done` on that tree; `WP-dream-promote-module`
+AND `WP-dream-promote-report` are not yet built, and this WP is dispatchable only
+after BOTH are `Done`** — it consumes `promote()`, its return shape, the `report`
+arm the report package adds, and the `records` input row G12 fills. **Dispatching
+after the module alone would leave rows G11 and G12 consuming fields that do not
+exist yet.** Neither package's Deliverables include the files this spec cites by
+line, so their merges should shift nothing here —
 **"should" is why the re-verification below is not optional**, and any other
 merge landing in the same window shifts them for real. Before dispatch, re-run
 every `file:line` citation and
@@ -126,6 +128,10 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
   implementer reads the shipped signature from the code by path):**
   `src/core/dream/promote.js` exports `promote(o)`. It is required by nothing
   and called by nothing on the tree this WP starts from.
+- **From `WP-dream-promote-report` (`Done` at dispatch):** the same module,
+  extended — `promote()` composes and publishes the dream report, takes the
+  `records` input row G12 fills, and returns the `report` arm rows G11 and G8
+  consume. **Its `### Exact contracts` is the shape; it is cited, not restated.**
 - **From `WP-dream-workspace-retarget`, shipped:**
   `src/core/dream/workspace.js` exports `createWorkspace`, `destroyWorkspace`
   and `isAtOrBeneath`. `spawnBrain` (`src/core/dream/brain.js:384`) takes
@@ -303,7 +309,7 @@ revisited.
 | V1 | **Step 1 — scratch integrity** (`validate.js:1107-1142`) | `scratchDir`, `expectedScratch`, `scratchBaseline` | deletes any scratch file that is not an expected extract, deletes an expected extract whose content changed, and **RECORDS each as an out-of-vault violation** (`outOfVaultDetailed`), which reaches the enforcement section (`:1385-1386`) and the return (`:1450-1457`) | **row G12.** **NOT already covered by the pipeline's `scratchIntact`** (`cli/dream.js:57-78`), which only checks that expected extracts still exist and byte-match — measured, an extra `EVIL.json` passes it. The delete-and-record half has no other owner (round 3, F3) |
 | V2 | **Step 2 — per-path classification and three gates** (`:1144`) | git evidence in the vault; the four gates' own inputs | the promote/refuse decision per path | rows **G7** (the gates' extraction and evidence) and, for the decision itself, `WP-dream-promote-module`'s Tables C and D |
 | V3 | **Step 3 — the EP2 secret gate, its enforcement half, and its DURABLE LIFECYCLE** (`:1211`; revert core `:1324-1364`; quarantine `:669-738`; preservation-failure abort `:1293-1323`; retention `:906-946,1365-1366`; report metadata `:1392-1409`) | staged git diffs; the pre-change bytes it preserves; the set of artifacts this run created | withheld/redacted dispositions; **a durable quarantine artifact under a collision-resolved name; a fail-loud abort that refuses to destroy a working copy unless a durable artifact byte-identically holds the CURRENT bytes; once-per-run retention of `redacted/`; and the per-redaction report line carrying path, scrubbed-line count, labels and artifact name**; and the revert, re-stage and index-drop machinery | **rows G7 and G5**, and `WP-dream-promote-module`'s **Table Q**, which owns the whole lifecycle above and is CITED here rather than restated. The enforcement half has no subject once nothing is written to the vault, and goes. **Row G5 cites Table Q's row Q4 because under promotion the destruction risk moves to the workspace rather than vanishing. An earlier form of this row listed only "dispositions and the revert machinery" — round 4's F2, and the reason Table Q exists** |
-| V4 | **Step 4 — the dream report** (`:1374-1408`) | the run's records | the report body plus the appended enforcement section | `WP-dream-promote-module`'s Table D report row and Table R. Its REFUSED arm's delivery is **row G11** |
+| V4 | **Step 4 — the dream report** (`:1374-1408`) | the run's records | the report body plus the appended enforcement section | `WP-dream-promote-report`'s report row and Table R. Its REFUSED arm's delivery is **row G11** |
 | V5 | **Step 5 — stage and commit** (`:1411`, `git add -A` at `:1412`) | the working tree | one commit in the vault | **row G8** |
 | V6 | **Step 6 — the skill ownership registry** (`:1443-1448`) | accepted new skill drafts collected at `:1200-1205` | `state/skill-registry.json` entries | **row G10** |
 | V7 | **The RETURN, and the run's user-visible accounting** | the above | seven fields, of which the pipeline consumes five today: `secretReverts` (`cli/dream.js:592`), and `sha`, `counts.notes`, `counts.skills`, `reverted.length`, `outOfVault.length` in the summary line (`:628-631`) | `secretReverts` → **row G4**; everything else → **row G11**. **This row is why the enumeration was needed at all:** the summary line is the delivery channel V1's records and Table R's refused enforcement record both travel on, and no row owned it |
@@ -325,7 +331,7 @@ revisited.
 - [ ] Out of scope (what `WP-dream-promote-module`, the residue-lifecycle
       successor, `WP-a10-windows-reap` and audit finding C2 own)
 - [ ] **The package note and the dispatch-precondition block** — the note
-      mirrors the four-package table-letter division and the two discharged
+      mirrors the citation of the canonical table-letter map and the two discharged
       handoffs; the dispatch block mirrors the pinned base and the containment
       citation. A finding that changes either updates this section too
 - [ ] **The containment-by-citation rule** — the dispatch block and the Security
@@ -614,8 +620,8 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   (row G12); it owns neither contract.
 - **`WP-dream-promote-module`'s contracts** — Tables C, D, E, Q and S: the
   promotion decision, the allowlist, the merge, the gate inputs and order, the
-  EP2 taxonomy, the publish through the primitive, the report and its fallback,
-  and the decided bytes. This package CONSUMES `promote()` and cites those
+  EP2 taxonomy, the publish through the primitive, and the decided bytes. **The
+  report and its fallback are `WP-dream-promote-report`'s, listed above.** This package CONSUMES `promote()` and cites those
   tables; it may not restate them, re-implement any part of them, or write a
   vault content byte of its own. **Two relationships, deliberately not the same
   count:** the module names **two HANDOFFS**, discharged by rows G7 and G8 and
