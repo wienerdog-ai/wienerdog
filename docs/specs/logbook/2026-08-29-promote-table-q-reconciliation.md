@@ -1741,3 +1741,550 @@ to that `Done` spec rather than as a spec sentence somebody has to notice.**
   the discipline the owner approved is aimed precisely at that. **Whether it
   works is a measurement the next round makes, not an argument this section can
   win.**
+
+---
+
+## ROUND 6 — the report row is lettered, the mirror-walk becomes mechanical, and the loop CLOSES
+
+**The gates, their raw output and the commit each was committed in — both
+committed BEFORE adjudication, per `docs/runbooks/codex-review.md`:**
+
+| Gate | Raw output | Commit | Analysed at |
+|---|---|---|---|
+| Adversarial DESIGN review (gptsol, codex/gpt-5.6-sol via llmp) | `docs/specs/logbook/2026-08-29-promote-family-design-round-6-gptsol-raw.txt` | `d7587f2` | `3e0b930` |
+| INTERNAL COHERENCE pass (fresh general-purpose executor) | `docs/specs/logbook/2026-08-29-promote-family-design-round-6-coherence-raw.txt` | `98f0cef` | `3e0b930` (HEAD moved to `d7587f2` mid-pass; all four analysed files verified byte-identical across `3e0b930`, `d7587f2` and the worktree by `shasum -a 256`) |
+
+**The trend.** Rounds found 21 → 15 → 11 → 8 → 13 → **9** (three contract, three
+coherence, three nits). The adversarial gate filed two, both of which the
+coherence gate filed independently — the second round in a row the two gates
+overlap. **Citation endpoints: clean for the FOURTH consecutive round.**
+**Acceptance criteria: 23 / 10 / 24, unchanged.** The adversarial gate's
+escalation test returned **NOT TRIGGERED**.
+
+### THE OWNER'S THREE RULINGS
+
+---
+
+#### RULING 1 — THE REPORT ROW GETS A LETTERED TABLE
+
+**The measurement came back AT THRESHOLD and the owner accepted it.** The report
+row's rule cell: **8,082 characters** — the longest cell in the family, **1.24x
+the next** and **1.53x the longest OTHER cell in its own spec**; roughly
+**FIFTEEN separable rules across FIVE unrelated subjects**; **37 references to
+"the report row" across the family and ZERO able to sub-address a rule inside
+it**, while every peer contract of comparable density is citable by row id (R4,
+N3, Q9, Q10, S1, G7, V3). **The `accounting` contract ALONE was cited from
+ELEVEN surfaces, each of which had to scan the whole cell to find the sentence it
+pointed at.** The spec's own `### Contract table(s)` already conceded the
+category: it called the report row **"an UNLETTERED contract table"**.
+
+**Every extraction threshold this family has ever used was met or passed.** Table
+N was extracted after two consecutive rounds landed an A-band finding on ONE
+rule; Table S after two consecutive rounds landed a finding on ONE contract;
+Table V after four findings in two rounds. **The report row's rule cell took
+FOUR findings across THREE rounds** — round 4's A1, round 5's C1, round 5's C5
+and the pre-window "the table above" correction — **and in every window it GREW
+rather than split.** Round 5's own self-flag said so and named the remedy; round
+6 measured it.
+
+**WHAT WAS DONE.**
+
+- **`### Table Y` is created in `WP-dream-promote-report`**, rows **Y1–Y12**,
+  and it is the single decider of the report's second write. The cut follows the
+  coherence pass's own enumeration: its rules 3–14 become rows Y1–Y12; its rules
+  1, 2 and 15 (the body is brain-authored and gated, code does not own it, the
+  fallback trigger as a complete class) **stay in the report row, because they
+  are that row's own subject — "the body is an ordinary promotion candidate" is
+  its heading.**
+- **The report row survives as an ordinary row.** Its `Contract`, `Today`,
+  `Position` and `Refusal remedy` columns are real and unchanged in kind; its
+  rule cell becomes a row-by-row pointer at Table Y. **This is why the 35
+  surviving "report row" references did not have to be rewritten as a class** —
+  only the ones that meant the ACCOUNTING contract did, and those now name a row.
+- **`### Contract table(s)` now reads "THREE NAMED canonical tables (N, R and
+  Y)"** and records that the "deliberately outside that scheme" concession is
+  closed, with the reason.
+- **The family map's ownership row reads `Tables **N, R, Y** and the report
+  row`**, and the map — the canonical collision surface — carries the letter's
+  justification.
+
+**WHY THE LETTER `Y`, and it does not create a sixth collision.** Measured with
+`grep -rhoE '^### Table [A-Z]' docs/specs/`: the letters live ANYWHERE under
+`docs/specs/` are **A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U,
+V and W**. **I, X, Y and Z occur nowhere.** So `Y` collides with nothing in this
+family's thirteen (A, B, C, D, E, F, G, H, N, Q, R, S, V), nothing in
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s nine (B, H, J, K, N, P, Q,
+R, T), and nothing in any other spec in the tree — **the map's collision table
+stays at FIVE rows and gains none.** Of the four letters free tree-wide:
+
+- **`I` rejected** — its row ids (`I1`) are misread as `11` or `Il` in running
+  prose, and this family's rows are cited inside sentences, not in code.
+- **`X` rejected** — this family already uses `### Table X` as its METASYNTACTIC
+  placeholder for "some table"
+  (`2026-08-29-promote-family-design-round-zero-raw.txt:164`), so a real Table X
+  would collide with the family's own notation. That is a smaller hazard than a
+  cross-package letter collision and a real one all the same.
+- **`Z` left free** — it reads as "the last one", and spending it on a table that
+  is not last would make the next extraction's letter read backwards.
+- **`Y` chosen.** Zero collisions, unambiguous row ids, no borrowed semantics.
+
+**Measurement of the choice, run after the sweep:** `grep -rlE '^\| \*{0,2}Y[0-9]'
+docs/specs/` returns exactly one file, `WP-dream-promote-report.md`.
+
+---
+
+#### RULING 2 — THE MIRROR-WALK BECOMES A MECHANICAL STEP
+
+**Round 6's diagnosis, and it is the finding under the findings.** In all three
+sweep misses **the checklist had already named the mirror correctly and nothing
+walked it**:
+
+> *"IN EACH CASE THE REGISTRATION WAS ALREADY CORRECT AND THE SWEEP SIMPLY DID
+> NOT FOLLOW IT. The discipline's weakness is not its rule set; it is that
+> NOTHING MECHANICALLY WALKS THE MIRROR LISTS THE CHECKLISTS ALREADY CONTAIN."*
+
+**A CITATION CORRECTION, recorded because the record is where a wrong name gets
+fixed.** The instruction cited **"the G-order-check precedent"**. It was searched
+for across `scripts/`, `tests/`, the lint layers and the specs, and **it does not
+exist — zero hits.** No precedent by that name was applied, because none could be
+resolved. **The nearest real one, and structurally the right model, is
+`scripts/boundary-check.js`:** it parses a spec's markdown table (`## Deliverables`),
+enforces the rule mechanically, exits non-zero with the offending items named, and
+is invoked from `.github/workflows/ci.yml`. The mirror-walk is built in that
+shape. **If the owner meant something else by "the G-order-check", this paragraph
+is where to correct the naming.**
+
+**WHAT WAS BUILT: `scripts/mirror-walk.js`.** Plain Node, zero dependencies,
+JSDoc types, no build step — the repo's conventions.
+
+**WHAT IT CHECKS** (exit 1, every offender named):
+
+1. Every **table row id** named inside a Mirrored Surface Checklist entry
+   resolves to a real table row **in that entry's resolution scope**.
+2. Every **table letter** named there resolves to a real `Table X` heading in the
+   same scope, at any heading level (specs in this repo use both `###` and `####`).
+3. Every **`docs/specs/*.md` path** named there exists on disk.
+
+**RESOLUTION SCOPE, because table letters are per-spec and a tree-wide index makes
+every letter ambiguous:** an entry's references resolve against its OWN spec plus
+every spec that spec reaches — by full path, by bare WP id, or via `depends_on`.
+All three citation forms are in live use here, and a scope that missed any of them
+would report a correct sibling citation as a defect.
+
+**AND THE QUERY THAT IS THE POINT:** `--surface G8` is the **reverse index** —
+every checklist entry, across every spec, that names a given surface. **That is
+the query no human step ran, and running it on `G8` returns five entries across
+three specs.** CD-1 is exactly the defect of not having run it.
+
+**WHAT IT DOES NOT CHECK, stated in the script's own header so a green run is
+never over-read:**
+
+- **whether a surface was CORRECTLY SWEPT.** It cannot read a sweep. A green run
+  says the mirrors point at something real, and nothing more. The script's last
+  line of output says so in capitals.
+- **whether a mirror list is COMPLETE.** An UNREGISTERED mirror is invisible to
+  it; only a human or a review gate finds those.
+- **prose-named mirrors** — "the decided-bytes acceptance criterion", "Current
+  state's validate.js bullet". `--list` prints the entry so a sweeper reads them.
+- **which of two colliding owners a row id means.** Ambiguity inside a scope is
+  REPORTED, never failed: the canonical map records those collisions as resolved
+  by prose qualification, which no parser can check.
+- **ids whose letter names no table in scope.** Other specs in this repo address
+  Deliverables rows (`D1`), verification commands (`V5`) and test-index rows
+  (`T6`) with the same lexical shape. Those are SKIPPED and counted — failing
+  them would report another family's addressing scheme as this family's defect.
+
+**FIRST RUN, against the finished tree, pasted rather than described.**
+
+```
+$ node scripts/mirror-walk.js --scope dream-promote
+mirror-walk (scope: dream-promote): 53 checklist entries across 3 specs (3 scanned)
+  row references: 68   table references: 54   spec-path references: 7
+  skipped: 2 ids whose letter names no table in scope (another addressing scheme, not a mirror) — --skipped lists them
+
+AMBIGUOUS — 66 references. Reported, NEVER failed: the canonical table-letter map records these collisions as resolved by prose qualification, which no parser can check. Distinct colliding surfaces:
+  Table C → WP-dream-promote-module.md | WP-dream-baseline-delta-primitive.md | WP-dream-denied-object-disposal.md | WP-dream-fence-candidate-set.md | WP-dream-gate-inputs-baseline-delta.md   (4 entries)
+  Table D → WP-dream-promote-module.md | WP-dream-gate-inputs-baseline-delta.md   (6 entries)
+  Table E → WP-dream-promote-module.md | WP-dream-gate-inputs-baseline-delta.md   (5 entries)
+  Table H → WP-dream-vault-write-primitive.md | WP-secret-fence-ep2-redact-arm.md   (3 entries)
+  Table N → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (5 entries)
+  Table Q → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (8 entries)
+  Table R → WP-dream-promote-module.md | WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (8 entries)
+  row N3 → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
+  row Q1 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
+  row Q10 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (6 entries)
+  row Q2 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
+  row Q4 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
+  row Q8 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (6 entries)
+  row Q9 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (4 entries)
+  row R4 → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
+  row S3 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
+  row S5 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
+  row S6 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
+  (--ambiguous lists every site)
+
+Every mechanically-addressable mirror resolves. THIS DOES NOT MEAN ANY SURFACE WAS SWEPT.
+$ echo $?
+0
+```
+
+```
+$ node scripts/mirror-walk.js --surface G8 --scope dream-promote
+row G8 is named by 5 Mirrored Surface Checklist entries (scope: dream-promote):
+  docs/specs/WP-dream-promote-in-workspace.md:393
+      **The two consumers of the decided bytes** — rows G8 and G10, and row S6
+  docs/specs/WP-dream-promote-in-workspace.md:460
+      **THE PARTIALLY PUBLISHED REPORT — this side of a TWO-SIDED contract,
+  docs/specs/WP-dream-promote-module.md:784
+      **Table S — the decided bytes.** Its mirrors are the `@returns` shape
+  docs/specs/WP-dream-promote-report.md:493
+      **The `report` union's arms** — `### Exact contracts`, Table R's four
+  docs/specs/WP-dream-promote-report.md:523
+      **Table Y — the report's SECOND write and its `accounting`** (owner
+```
+
+**WHAT THE FIRST RUN FOUND, and it earned its keep on both counts.**
+
+1. **The family is GREEN — every mechanically-addressable mirror resolves, and
+   the two skipped ids are correct skips** (`M2`, `M3` in the module spec: rows
+   of an unlettered table, so their letter names no `Table M`. Observed, not
+   filed — an unlettered table with three rows is nowhere near this pass's
+   threshold, and noting it is not the same as extracting it).
+2. **The AMBIGUITY report is a measurement nobody had taken:** the family's
+   letters collide not only with the shipped EP2 package the map lists, but also
+   with **`WP-dream-gate-inputs-baseline-delta`'s Tables C, D and E** and with
+   the Table C of **`WP-dream-baseline-delta-primitive`,
+   `WP-dream-denied-object-disposal` and `WP-dream-fence-candidate-set`** —
+   four more packages, not one. **NAMED RESIDUAL, NOT
+   FILED AND NOT FIXED:** it is pre-existing, it is not created by this pass, the
+   map's collision table is explicitly scoped to the package this family CITES
+   BY PATH twenty-five times, and widening it on the closing pass would be
+   scope growth of exactly the kind this loop's stop criterion declines. **The
+   tool now measures it on every run, which is the durable form of the finding.**
+3. **Tree-wide it is RED — 12 unresolved references, ALL in `Done` specs** (stale
+   `D3`/`D4`/`D6`/`A1` row ids, and four `docs/specs/<slug>.md` paths whose specs
+   have since moved to `done/`). Those are closed records in other families.
+
+**WHY IT IS NOT WIRED INTO CI IN THIS PASS, stated rather than left as an
+omission.** Three reasons, and the first is decisive: **tree-wide the tool is red
+on twelve pre-existing stale references in closed records**, so wiring it as a
+gate today would make every PR in the repo fail for debt no PR introduced.
+Cleaning that up is a change to nine `Done` specs and belongs to a WP with its
+own Deliverables table. Second, this branch is a design-record branch, not a work
+package, and adding a repo-wide gate is not a documentation change. Third, the
+tool's reference extractor follows THIS family's citation grammar; before it
+gates the whole tree it should be measured against the others. **NAMED RESIDUAL,
+with its shape: a small WP that (i) fixes the twelve stale references, (ii) adds
+`node scripts/mirror-walk.js` to `.github/workflows/ci.yml` beside
+`boundary-check.js`, and (iii) registers the step in
+`docs/runbooks/spec-authoring.md`. Until then the walk is recorded here, exactly
+where the twin-sweep discipline was recorded and by the same reasoning** — that
+runbook carries authoring rules and has never carried this loop's process
+disciplines (verified: it contains one occurrence of "mirror", in an unrelated
+sentence).
+
+**AND THE HONEST LIMIT, because a tool is easier to over-trust than a rule.**
+Nothing here would have caught **COH-1**. That finding was a MISSING entry, and a
+missing entry is precisely what a walker of existing entries cannot see. The
+mirror-walk closes the "named but not walked" failure, which is three of round
+6's nine; it does not close "not named at all". **A rule that claims more than it
+does is the shape this family has filed findings about six times.**
+
+---
+
+#### RULING 3 — THE DESIGN LOOP CLOSES BY MATERIALITY
+
+**The reasoning is the one already proven twice in this family, and it is on
+record at `docs/specs/logbook/2026-08-29-promote-split-pr-gates.md:150-158`:**
+
+> *"Three consecutive fix-and-regate cycles have each produced defects in the
+> fixes themselves, at a rate this program measures at 0.5–0.9 per fix. **A
+> fourth iteration is therefore not free and not obviously convergent**, so a
+> B-band finding is a decision about materiality … and that decision is the
+> owner's, not the author's."*
+
+**The alternative that citation names is "the post-merge implementation defence
+line, not another spec iteration", and that is what the owner has chosen.**
+
+**The evidence from this round is that the rate is real and self-similar.** Of
+round 6's nine findings, **FIVE are defects introduced by round 5's own fixes**:
+COH-2 (the sentence replacing a stale count introduced two fresh false numbers,
+inside the sentence warning that counts go stale), COH-3 (the reduced block still
+glossing what it declared it did not), CD-3 (a row added with a classification
+and no enforcement half), NIT-2 (a prohibition written in the same window a new
+row falsified), NIT-3 (two structurally twin entries counting by different
+conventions). **A sixth, CD-1, is a fix that did not reach one of its own
+registered mirrors.** That is the 0.5–0.9-per-fix rate landing again, one round
+later, on a round whose whole subject was not letting that happen.
+
+**And this pass is not exempt from it.** It made large edits — a new twelve-row
+table, six surfaces re-pointed, seven prohibitions re-cut, a new script — and
+there is no reason to believe its own defect rate is zero. **A round 7 would
+find some of them and introduce more; the question is not whether findings
+remain but which detector is cheaper.**
+
+**THE OWNER'S RULING: the implementation is now the cheaper detector.**
+`wp/dream-promote-module` is re-shaped against these contracts, and **if that
+work hits a contract gap it escalates AS A SPEC DEFECT** — to the architect, with
+the surface named — rather than waiting for a round 7 that does not exist. **The
+loop is CLOSED. A finding against these specs is now an implementation-time
+escalation, not a review round.**
+
+**What that does NOT mean, stated because a closure is easy to over-read:** the
+specs are not declared correct, the residuals named in this record are not
+declared closed, and the two review gates on the implementation PR
+(`docs/runbooks/codex-review.md`) run exactly as they always do. **What closed is
+the DESIGN loop over the spec text, on the ground that another iteration is not
+obviously convergent and the next detector is better.**
+
+### THE STOP CRITERION, REVIEWED — and this is the round where the review matters most
+
+**Reviewed condition by condition against the re-stated criterion (before round
+3), because this is the round that closes and the record of WHY it closes is the
+point.**
+
+1. ***A carrier gap the ruled shape CANNOT express.* NOT FIRED, and the
+   adversarial gate said so explicitly** — its escalation test returned NOT
+   TRIGGERED, on the ground that "both findings are contradictions inside
+   existing contracts, not facts with nowhere to go on the shape and not facts a
+   consumer must re-derive". **Accepted.** Every one of the nine is a false or
+   incomplete statement inside a field that already exists. **The shape has now
+   survived four rounds without a carrier gap** — the strongest single argument
+   for closing.
+2. ***A fix that RE-IMPORTS an excluded property.* NONE.** CD-1's fix removes a
+   vault-state claim rather than adding one; CD-3's fix asserts neutralisation of
+   a field this family already carries and adds no filesystem discipline, no
+   report rule and no quarantine-lifecycle fact; Table Y moves text within one
+   spec and decides nothing new. **The EP2 package's durable quarantine
+   lifecycle is untouched, and containment stays the vault-write primitive's
+   Table H, cited and never restated** — re-verified in the sweep.
+3. ***Growing the verification surface to hold a finding about the verification
+   surface.* CONSULTED THREE TIMES, AND IT BIT ONCE.** It declined a new
+   criterion for CD-3 (folded into the criterion that already owns the subject —
+   the H4 move); it declined a criterion for the still-pending counting input (a
+   third refusal); **and it is the reason the mirror-walk is NOT wired into CI in
+   this pass** — a repo-wide gate added to hold a finding about the review
+   process is exactly this condition, and the residual is named instead. **The
+   script itself adds no acceptance criterion and no test: like the twin-sweep
+   discipline it is process, not assertions, so building it does not fire the
+   condition; wiring it into the gate set would.**
+4. ***A cross-family duplicate.* THE ONE PLACE THIS PASS CAME CLOSE, AND IT WAS
+   ALREADY RULED.** CD-2 required making the pin quotation verbatim — that is,
+   putting MORE of a shipped `Done` package's exact bytes into this family. **It
+   is the ruled exception of round 5's C4, it remains in exactly ONE surface
+   while eight point at it, and making it verbatim REDUCES the divergence risk
+   rather than raising it: an exact quotation is checkable against its source,
+   which a paraphrase wearing quotation marks is not.** The check is now
+   mechanical and was run (below).
+
+**Weighted closure.** Ruling 1 is **HEAVY** — it moves where a contract is
+decided and changes how eleven surfaces address it. Under the criterion a HEAVY
+fix "lands its fix and takes a fresh full round". **That round is the
+implementation, by Ruling 3.** CD-1, CD-2 and CD-3 are HEAVY on their own
+surfaces; COH-1/2/3 and NIT-1/2/3 are LIGHT and were verified mechanically.
+
+**Owner ratifications carried forward, unchanged and NOT reopenable by an
+implementation-time finding:** the record shape `{artifact, location,
+remediation}`; round-2 coherence C-2's fix; arm-dependent remediation; the A1
+form (a field on the `promoted` arm, not a fourth union arm); the C4 ruling that
+the counting change is PENDING and NOT authorized; the twin-sweep discipline.
+**Two are added: the report row's contract is Table Y's, row by row; and the
+mirror-walk is a step, run before a sweep is called complete.**
+
+### PER-FINDING DISPOSITION — ROUND 6, BOTH GATES, ALL NINE
+
+**The adversarial gate's two findings are the same defects as CD-1 and CD-2,
+filed independently — the second consecutive round in which the gates overlap.**
+The adversarial gate's Finding 1 named a wider surface set than CD-1 did (it
+reached `report.md:295`, `report.md:387` and the pipeline criterion, where CD-1
+named row G8), and **the union of the two is what was swept.**
+
+| # | Gate | Verdict | What was done |
+|---|---|---|---|
+| **CD-1** | **BOTH** — adversarial Finding 1 and coherence CD-1 | **FIXED ON SIX SURFACES, and the claim is re-grounded rather than reworded** | round 5's C5 killed "byte-equal to what the vault then holds" and the claim survived in two other wordings: "the bytes the vault holds" (row G8) and "the body IS in the vault" (four more). **The root fix is that every statement now turns on the PUBLISH EVENT — "this run's first write PUBLISHED the body" — which is the only ground the classification ever needed**, since `fallback` and `refused` are discriminated by what the run published and by nothing else. **What the target holds at the end of the run is REFUSAL-CAUSE-SPECIFIC and is now stated as such wherever it comes up: intervening bytes on an `expect` conflict, a symlink under the primitive's H3.** Six surfaces: Table Y row Y2 (the classification's ground), Table Y row Y4 (the prohibition, WIDENED to cover the second wording), Table R's row R4 narrowing clause (`it holds the published body`), Table R's preserved-copy row, row G8, row G11, and the pipeline's report-refusal criterion case (b). **Post-sweep verification: five claim-shaped patterns swept over all three specs, whitespace-flattened; ten hits remain and every one is inside a prohibition or a named withdrawal quoting the killed wording. Zero positive assertions.** |
+| **CD-2** | **BOTH** — adversarial Finding 2 and coherence CD-2 | **FIXED — the quotation is now VERBATIM** | the exact-quotation option was taken over the mark-it-a-paraphrase option, because this is the family's one ruled exception to cite-never-restate and an exception that alters the bytes it exists to reproduce has not been taken. The three fragments are exact contiguous source text, ellipses appear only BETWEEN exact fragments, the source's own bold markers are not reproduced, and the row says so. **Verified mechanically: each fragment `in` the whitespace-flattened source AND `in` the whitespace-flattened quoting spec** — the flattened comparison is the correct one because the source hard-wraps mid-fragment. **The irony was load-bearing and is recorded in place:** the mis-quoted sentence was the one saying every byte outside the placeholders is literal |
+| **CD-3** | coherence | **FIXED IN BOTH HALVES, AND THE UNIVERSAL WAS NARROWED RATHER THAN STRETCHED** | Table N's `accounting.reason` row had a classification and no enforcement, and the criterion its own checklist entry names as a mirror quantifies over "the normal second write AND the fallback" — **neither of which is the form `accounting.reason` exists on.** The diagnosis underneath the finding: **that channel is never interpolated by the SECTION COMPOSER at all** — the write that would have carried the section is the very one that was refused — **so row N2's fail-closed default, which binds "any string the COMPOSER interpolates", never reached it, and the row's claim that it did was wrong.** Fixed three ways: (i) Table N's row now states that this is the one channel the composer never interpolates, and names where the obligation is discharged; (ii) **the report's code-authored-section criterion states its DOMAIN and scopes this member OUT, with a pointer** — rejecting the alternative of stretching a universal over a member it cannot exercise, which is the shape that made row N4 false twice; (iii) **the assertion lands in `WP-dream-promote-in-workspace`'s report-refusal criterion case (b), the criterion that already owns the sentence "the run's accounting names `report.accounting.reason`", because the PIPELINE is the party that renders it.** GREEN and RED both stated, with the context-dependent secret pair the sibling criterion requires. **No count moved — see the argument below** |
+| **COH-1** | coherence | **FIXED — a new checklist entry in the MODULE spec, and the pipeline's entry now names module surfaces** | the module carried the PENDING counting input on row Q10 and Out-of-scope (ii) and registered it in NEITHER of its checklists, while the pipeline's entry named no module surface — **round 5's H4 exactly, one spec over, in the window that fixed H4.** The module gains a `THE PENDING COUNTING INPUT` entry naming its two carrying surfaces and all six on the other side; the pipeline's entry gains row Q10 and Out-of-scope (ii). **Both sides now name each other, which is what a two-sided registration is. And this is the finding the mirror-walk CANNOT catch — a missing entry is invisible to a walker of existing entries — which is why it is named as the tool's honest limit above** |
+| **COH-2** | coherence | **FIXED BY REMOVING THE NUMBERS, not by correcting them** | row G11's replacement sentence claimed the count "stood against five items" and that "a later pass added a SIXTH". Measured: it stood against FOUR for most of its wrong life, the pass that added `(i-b)` took it four→five, and **no sixth has ever existed** — two fresh false numbers, inside the sentence warning that counts beside lists go stale. **A corrected number is only a number that has not been falsified yet**, so the sentence now carries none: it states that the cell said "two" and listed more, that it was already wrong, that a later pass added an item without touching it, **and that its own first replacement introduced two false numbers of its own.** The failure is recorded in the surface that made it |
+| **COH-3** | coherence | **FIXED — the gloss is gone, and `redaction` is now actually the model it names** | `### Exact contracts` glossed the two writes ("the fate of the report's SECOND primitive write, the one that publishes the code-authored enforcement section on top of the body the first write published") two lines before claiming to declare "the TYPE and its two-arm shape, AND NOTHING ELSE" — while offering its own treatment of `redaction`, which is named without gloss, as the model. **Round 5's C1 closed the full-restatement form; the reduced form survived in the same block.** The block now declares the two-arm shape, points at Table Y, and enumerates what it does NOT restate. **Both findings on this block are recorded in it, one round apart** |
+| **NIT-1** | coherence | **FIXED — the prohibition gains its or-clause** | prohibition #7 said a surface enumerating where the record TRAVELS on a refusal "states BOTH refusal states or it is wrong". Table R's redaction-lines row enumerates ONE and is CORRECT to: its `report` source exists only on the `promoted` arm. **The scoping lived in the mirror list four lines above; the flat prohibition, which is where an implementer looks, was over-broad.** It now reads "states BOTH refusal states, OR names why its own source exists on only one", with the exemplar named |
+| **NIT-2** | coherence | **FIXED — the verb is restored to the owner row's own** | prohibition #5 said "no surface but the rule cell may STATE this field's PER-FIELD PROVENANCE", and Table N's `accounting.reason` row — added in the same window, registered as a mirror in the same entry — states it. **The owner row's verb is DECIDED; the checklist rendered it as STATE, and the weaker verb is what made the prohibition false.** It now reads DECIDE, names Table Y row Y9 as the sole decider, and says in place that a surface CITING the provenance to ground something else is not deciding it |
+| **NIT-3** | coherence | **FIXED — one convention, stated once, and the counts dropped** | two defects in one. **(a)** Row V3 carried "the carrier change reached six surfaces" — correct the day it was written, stale the moment a seventh is registered, and the exact pattern row G11 warns about one row over. Dropped, replaced by "every surface its own checklist entry registers". **(b)** The carrier-change entry EXCLUDED itself from its own ordinal while the structurally-twin pending-input entry INCLUDED itself. **The convention is now stated ONCE, in the carrier-change entry — a list names the surfaces OUTSIDE the entry, and the entry itself is always a carrier and never one of them — and the twin defers to it.** **No mirror list in that spec states a total any more, because `scripts/mirror-walk.js` walks the lists.** The distinction that survives, and it is principled: **a count of PROHIBITIONS inside one cell is re-countable in place and stays (the report's "seven"); a count of MIRROR SURFACES predicts another surface's content and goes** |
+
+### COUNTS, EACH ONE COUNTED — AND THE ONE THAT COULD HAVE MOVED
+
+- **Acceptance criteria: 23 / 10 / 24, UNCHANGED**, re-counted with a script over
+  each spec's `## Acceptance criteria` span after the sweep. **Unchanged across
+  all six rounds.**
+- **CD-3 IS THE COUNT THE CONSTRAINT ASKED ABOUT, AND IT DID NOT MOVE. The
+  argument, because "it may legitimately need a criterion" was the instruction.**
+  The obligation is **OWED** — `accounting.reason` is attacker-influenceable by
+  derivation and reaches the user, so an unasserted neutralisation is the
+  silent-outcome failure A1 was escalated over. It is not deliberately absent.
+  **But it folds into a criterion that already owns its subject, which is exactly
+  the H4 move round 5 made and the same test applies:** the pipeline's
+  report-refusal criterion case (b) already asserts what form (b) delivers to the
+  run's log and output, and **already names `report.accounting.reason` in that
+  sentence.** The neutralisation of that field is the same question asked about
+  the same field on the same channel in the same case. **A separate criterion
+  would assert a second contract about one channel in two places — the shape the
+  count freeze exists to prevent — and would leave the sibling criterion's
+  domain still silently over-quantified.** The domain sentence in the report
+  package is what makes the fold honest: **the member is removed from a universal
+  it cannot exercise AND its assertion is named, so no reader finds a gap.**
+  **The alternative was measured and rejected, not overlooked.**
+- **New tables: ONE — Table Y**, and it is an EXTRACTION: twelve rows, every one
+  of them text that already existed inside one cell of the same spec. **No rule
+  is new, no assertion is added, and no contract changed by the move.** The
+  changes to those rules are CD-1's and COH-3's, and they are subtractions.
+- **New rows outside Table Y: NONE.**
+- **New checklist entries: TWO.** `WP-dream-promote-report`'s Table Y entry —
+  which is a SPLIT of the `accounting` registration out of the `report` union's
+  entry, not a new registration — and `WP-dream-promote-module`'s pending-input
+  entry, which is COH-1's fix.
+- **New prohibitions: NONE. Three of the report's seven were RE-CUT** (NIT-1's
+  or-clause, NIT-2's verb, CD-1's second half), and the count stays seven,
+  counted against the list.
+- **`npm run lint` passes.** `npm test`: **2143 tests, 2133 pass, 1 fail** — the
+  pre-existing `adopt-e2e` failure, **byte-identical to the round-6 coherence
+  pass's own measurement**, so nothing in this pass moved it.
+
+### CITATIONS — ENUMERATED BEFORE THE SWEEP, COUNTED AFTER IT
+
+**Endpoints have been clean for four rounds and this pass does not break them.**
+No existing citation's ENDPOINTS were changed. Two citation classes moved.
+
+| Citation | Sites before | Sites after | Note |
+|---|---|---|---|
+| `validate.js:1286` | 4 | **4** | untouched |
+| `validate.js:838-840` | 3 | **3** | untouched |
+| `validate.js:1401` | 3 | **3** | untouched |
+| `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387` | 7 | **8** | **+1, and it is argued below** |
+| "the report row" (as a citable surface) | 35 in the four files | **31** | four re-pointed at Table Y; the rest are the row's own subject or historical narration |
+| `Table Y` / rows `Y1`–`Y12` | 0 | **30 `Table Y` + 43 row citations** | new |
+
+**THE PIN CITATION MOVED FROM SEVEN SITES TO EIGHT, and the eighth is COH-1's
+fix.** `WP-dream-promote-module`'s new checklist entry names the blocker by spec
+path, exactly as every other surface carrying the pending state does. **The
+content is still QUOTED in exactly ONE surface — verified: `grep -c "The line
+format is pinned here, not illustrated"` returns 1 in the pipeline spec and 0 in
+the other two.** A surface that names the pending exception without naming what
+blocks it is the surface a future round reads as an instruction to ship, which is
+why the eighth pointer is right rather than merely harmless.
+
+**Endpoints re-verified for the pin range**, because CD-2 made its bytes
+load-bearing: `:1373` opens the pinned-format paragraph and `:1387` closes the
+`where <n> is …` paragraph on a sentence end. Both unchanged from round 5, both
+re-read this pass.
+
+### DIVERGENCE AGAINST `wp/dream-promote-module` (PR #31) — THE COMPLETE LIST
+
+**This list is CUMULATIVE and supersedes the four incremental ones above.** Every
+prior pass recorded its own increment; this is the whole of it in one place,
+because the branch is folded back once and against the final text. **It is
+organised by what the folder has to DO, not by which round produced it.**
+
+**A. THE ONE REAL CORRECTION TO SHIPPED CODE — and it is mostly a DELETION.**
+The redact-then-refuse arm. `refused[]` no longer carries a prose mitigation:
+**`withPreserved`, its divergent inline copy and the `refuseRaw` machinery all
+exist ONLY to make prose carry a structured fact, and the ruling deletes them
+rather than extending them.** The fact moves onto a typed **preservation
+record** — `Array<{artifact, location, remediation}>`, one entry per copy the
+gate preserved, in the order it wrote them, REQUIRED wherever it appears and
+EMPTY when nothing was preserved. **The standalone `refused[].artifact` and
+`redacted[].artifact` are deleted with it.** Owner: `WP-dream-promote-module`'s
+Table Q rows Q1, Q8 and Q9.
+
+**B. TWO SHAPE CHANGES ON `promote()`'s RETURN, neither of which changes a
+computed value.**
+1. **The preservation record above**, replacing two loose `artifact` fields.
+2. **The redaction accounting becomes ONE named field.** `lines` and `labels`
+   become a single `redaction: {lines, labels}` on the redact arm and on
+   `redacted[]` entries. **The shipped gate already computes both values and
+   already composes the shipped report line from them (`validate.js:1284-1289`,
+   `:1392-1409`); no value is computed differently and none is dropped.** This
+   is a field-grouping change. Owner: Table Q row Q10.
+
+**C. WHAT THE SHIPPED IMPLEMENTATION GOT RIGHT AND MUST NOT BE "FIXED".** The
+ordering (Q-D/Q-E need no code change) and Q4's sanity refusal. **And the
+scrubbed-line count: `lines` STAYS `addedLineNumbers.length`.** Row Q10 now
+describes what the code does, so the row and the code agree where they
+previously did not.
+
+**D. ONE PROSE POINTER, no code effect.** Table S row S5 says which package
+decides WHICH of the report path's two returned buffers travels in
+`report.bytes`. Nothing in `promote.js` changes; **the citation was re-pointed
+this pass from "its report row" to "its Table Y, row Y3", which is a citation
+change and not a contract change.**
+
+**E. NOTHING ON THE MODULE HALF FROM THE REPORT UNION.** The `accounting` field,
+Table Y in its entirety, CD-1's re-grounding, CD-3's neutralisation assertion and
+COH-3's block reduction all live on the report union and the pipeline — **which
+the report and pipeline packages add and which NO BRANCH HAS IMPLEMENTED.** PR
+#31 has nothing to reconcile against any of it.
+
+**F. ONE FUTURE DIVERGENCE, BLOCKED RATHER THAN SCHEDULED.** The counting change
+routed to row G7 would make the extracted EP2 gate's `lines` the count of added
+lines whose post-redaction bytes DIFFER — a change to shipped behaviour, since
+the report line's number would drop on notes with clean added lines. **It is NOT
+authorized** (round 5's C4). Until an owner decision against the pin in
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`, the pipeline
+package builds the SHIPPED count, **so the specs and the shipped gate agree and
+whoever folds PR #31 back has nothing to reconcile on this field.** If it is ever
+authorized, the settlement arrives as an AMENDMENT to that `Done` spec rather
+than as a spec sentence somebody has to notice.
+
+**G. ONE NEW REPO FILE, outside PR #31's subject entirely.**
+`scripts/mirror-walk.js`. It is not in any Deliverables table, it is not wired
+into CI, and it touches no product surface — **so it neither conflicts with PR
+#31 nor needs folding into it.** Noted here only so its arrival is not
+discovered.
+
+**NOT ON THIS LIST, and deliberately:** every change of round 6 that is a
+citation re-point, a prohibition re-cut, a count removed or a false sentence
+corrected. **Those change what the specs SAY and nothing an implementer BUILDS**,
+and a divergence list that included them would bury the four items that matter.
+
+### WHAT I WOULD FLAG ABOUT MY OWN PASS
+
+- **Table Y is the largest single edit this loop has made, and it was made on the
+  pass with no round after it.** The cut is defensible — it follows the coherence
+  pass's own measured enumeration, and rules 1, 2 and 15 stayed because they are
+  the report row's own subject — **but "which rules belong to the row and which
+  to the table" is a judgment nobody will re-review.** The concrete risk is a
+  reader who goes to the report row for the second write's contract and finds a
+  pointer; the mitigation is that the pointer names all twelve rows by number and
+  subject, so the pointer is itself the index.
+- **Twelve rows is a lot of rows to author in one pass, and three of them are
+  short.** Y5, Y7 and Y8 could each have been a clause of a neighbour. **I split
+  finely on purpose** — the whole finding was that nothing could be
+  sub-addressed — **but a reviewer could reasonably say the table now has rows
+  that exist to be citable rather than because they decide something separable.**
+  Y7 is the weakest of the three.
+- **The mirror-walk has never been run in anger.** It is green on the family
+  today, but it has walked exactly one tree state, and its extractor was tuned
+  against this family's citation grammar by looking at this family's citations.
+  **A tool calibrated on its own test case is a tool whose false-negative rate is
+  unmeasured.** The honest claim is narrow: it demonstrably answers the query
+  that would have prevented CD-1, and it demonstrably cannot see COH-1.
+- **CD-3's fold is the judgement I am least certain of**, and for the same reason
+  round 5 flagged H4's: putting the reason channel's neutralisation into the
+  pipeline's report-refusal criterion is right BY SUBJECT and by who renders the
+  value, but that criterion now asserts delivery, partition, commit behaviour and
+  neutralisation. **A reviewer could say the neutralisation deserves its own
+  criterion in the package that owns Table N.** The counter-argument is that the
+  package that owns Table N does not render the value, and a criterion asserting
+  a property of output it does not produce is the shape round 3's F11 already
+  corrected once in this family.
+- **I did not widen the map's collision table**, though the mirror-walk's own
+  first run measured four more colliding packages. That is a deliberate
+  scope-growth refusal on a closing pass, and it is a judgement the owner may
+  reverse cheaply — it is one table and a handful of rows. **The argument for
+  refusing is that the map's collision table exists for the package this family
+  CITES BY PATH twenty-five times; the argument against is that a collision is
+  a collision and the map claims to list them.** I think the second argument is
+  the better one and the timing is wrong.
+- **The "G-order-check precedent" could not be resolved and I did not invent
+  one.** `boundary-check.js` was used as the model on structural grounds. If the
+  owner meant a different precedent, the script's shape is the thing to re-examine
+  first.
