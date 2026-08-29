@@ -215,3 +215,151 @@ extend the loop.
 **Weighted closure applies as written:** a HEAVY finding (one that changes what
 an implementer builds) lands its fix and then takes a fresh full round; a LIGHT
 one (machinery, wording, a mirror walk) is verified mechanically and does not.
+
+---
+
+## ROUND RECORD — the design-review pair, 2026-08-29
+
+**Two passes ran against the amendment at tip `06a92a7`, and both raw outputs
+are committed before adjudication, per `docs/runbooks/codex-review.md`.**
+
+| Round | Gate | Raw output | Commit |
+|---|---|---|---|
+| **1** | adversarial DESIGN review (`docs/runbooks/review-prompts/adversarial.md`), backend gptsol (codex/gpt-5.6-sol via llmp) | `docs/specs/logbook/2026-08-29-promote-family-design-round-1-gptsol-raw.txt` | `c1d9c006b38c2fa6b559eefc4748fa9f90bda773` |
+| **0** | template conformance + internal coherence, fresh general-purpose executor with no part in drafting, relaying or reviewing | `docs/specs/logbook/2026-08-29-promote-family-design-round-zero-raw.txt` | `41d6031a9d5d935d3d86814e2ffb8ecef4699e7c` |
+
+Round zero is a peer of round 1, not a predecessor: both read the same tip, and
+round zero verified with `git diff --quiet 06a92a7..HEAD --` that every analysed
+file was byte-identical after this session committed round 1's raw output.
+
+### THE DIAGNOSIS THE OWNER MADE, and it is the one worth keeping
+
+**Eight of the eighteen findings are one disease: an incomplete sweep.** C2, C3,
+C4, H1, H3, H4, H8 and H9 all have the same shape — the amendment changed a
+claim, or introduced a rule, and did not propagate it to every surface that
+carries it. `docs/runbooks/spec-authoring.md:56-63` already states the rule, and
+**this family has now paid for it five times.**
+
+**The most damning instance is H4, and it is worth stating in full because it is
+the shape a future round will repeat.** The amendment's own new
+path-qualified-citation rule exists precisely BECAUSE table letters collide. The
+one letter it failed to list as colliding was **H** — and H is the letter where
+this family already cites `H7` and `H9` bare, two row ids that exist in BOTH
+letter-spaces and mean different things in each. **The rule was written, and was
+not applied at the single place it was needed.** A rule authored in the same pass
+that leaves its own motivating case unfixed is not a half-fix; it is evidence
+that the pass swept for wordings it remembered writing rather than for the claim.
+
+**So the fixes were not applied one at a time.** For each changed claim the
+complete set of carrying surfaces was derived first, then swept — which is how
+the report package's stale `{rel, reason}` (C2), the module's `row S5's list`
+(the same slip as H5, one spec over, that round zero did not find), and the two
+unregistered mirrors were all closed in the same pass as their originals.
+
+### PER-FINDING DISPOSITION
+
+**Round 1 — the adversarial round (one finding).**
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | C1 cannot fully precede EP2 for resolved-path denials | **FIXED.** C1 is defined by C9, which the primitive applies to the RESOLVED path, so C1 has two halves. Table C's header now states both: the candidate-decidable half (tier prefixes, extension, instruction-file basenames, denied segments — all readable off the candidate path) refuses before any gate runs; the resolved-path half is the primitive's `admit` call at publish time and arrives AFTER EP2. Consequence (ii) is scoped to the first half; consequence (i) is kept for both, with the second half's ground stated rather than assumed (a path EP2 withholds never reaches publish, so a C1-reasoned refusal always sits on a pass-or-redact verdict). Row **Q8** gains the resolved-path route and is the home for the artifact it can carry — the reviewer's own recommendation. The resolved-path acceptance criterion now asserts the artifact on the same symlink fixture it already builds. **The reviewer's alternative — exposing a read-only resolve/admit operation from the primitive — was NOT taken: it is a cross-package contract change, blocked by this pass's own stop criterion, condition 2, and it is the owner's act.** |
+
+**Round zero — contract defects.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| C1 | the delete range contains a must-survive behaviour | **FIXED, and re-derived from the file rather than from the finding.** Measured: revert/re-stage/index-drop core `:1324-1332`; its `reverted[]` accounting `:1361-1363`; **the identity-gated deletion `:1338-1360` between them**; the abort `:1298-1323` above; the prune `:1365-1366` after the enclosing per-path loop (`:1233-1364`) closes. `:1364` is the loop's own closing brace at 2-space indent, so `:1324-1364` could not be applied literally without unbalancing the function. Swept: Current state, the Deliverables row, row G7, row V3 and the G7 criterion. The two geometrically false sentences ("sits between three things", "the three regions are neighbours") are replaced with the measured geometry. **The identity-gated deletion gained the line citation it never had** — it was the only one of the three unlocated, and the only one inside the delete range. |
+| C2 | a stale mirror of the shape the amendment changed | **FIXED.** `docs/specs/WP-dream-promote-report.md`'s base-shape citation still read `refused:Array<{rel, reason}>`, the last surviving statement of the pre-reconciliation shape in the family. Swept; `grep '{rel, reason}'` over `docs/specs/WP-*.md` is now empty. |
+| C3 | Table N has no channel row for `refused[].artifact` | **FIXED.** One row added, covering `refused[].artifact` and the report arm's `artifact` together: attacker-influenceable by derivation, redact-then-sanitise — the same classification `redacted[].artifact` already carries. N2's fail-closed default kept the property true; the finding is that Table N is the declared OWNER of the channel list and the list was incomplete. |
+| C4 | the report union's refused arm has no artifact carrier | **FIXED, and it is the heaviest finding of the pair.** Q8's argument applies verbatim one surface over: the report body is a promotion candidate under `reports_dir`, the report row records that EP2 is the one gate that judges a path there, and the body is NOT a member of `refused[]` — so a redact-then-refuse left the copy's name with nowhere to travel. The refused report arm becomes `{outcome:'refused', reason, artifact, record}`, `artifact` required and nullable; Table R's preserved-copy row and its acceptance criterion now cover both sources; Table S row **S3**, which mirrors that arm's shape from the module half, is swept. **Naming it a residual was considered and rejected: it would have declared acceptable, on the report, exactly the data loss row Q8 exists to close on every other path.** |
+| C5 | an assertion citing a table that does not contain the rule | **FIXED.** Table C's header said "per Table E only `withheld` defers a transcript"; Table E contains zero occurrences of "transcript" (verified). The rule is decided in `### Exact contracts`, and the citation now names it. |
+| C6 | a logbook citation to a file that does not exist | **NOT A DEFECT — and a real merge-order dependency.** `2026-08-29-promote-module-pr-gates.md` exists on `wp/dream-promote-module` (`3e37237`); this branch is cut from `main`. Verified on both branches with `git ls-tree`. **Both citation sites now state the dependency**, so a maintainer merging in the wrong order sees that the citation dangles until that branch lands. |
+| C7 | two verification steps that cannot fail, on a premise measured false | **FIXED.** Reproduced here: `tests/unit/dream-promote.test.js` does not exist on this branch, and `npm test -- --test-name-pattern "zzz-no-such-test-zzz"` exits 0 printing `tests 108 / pass 108`. Both pattern runs are now guarded with `test -f`, like the other two specs. **The false justification is DELETED, not reworded** — and replaced with the true one: the file is a MODIFY deliverable that exists only once `WP-dream-promote-module` has landed, which is exactly the tree where an unguarded run reads greenest. |
+| C8 | the G7 criterion's RED proof covers two of the three behaviours | **FIXED.** The criterion now proves RED once per behaviour rather than once for the set, and names the identity-gated deletion FIRST — it is the only one of the three inside the span an over-wide removal takes, and the removal range this spec itself published until today contained it. |
+
+**Round zero — coherence defects.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| H1 | Table Q's ownership claim made twice and unmade once, in one section | **FIXED.** The heading and the lead-in were the two surfaces closest to the change and the two the original sweep missed, while three sibling surfaces were corrected. Heading is now "the EP2 gate's result, and what promotion does with it"; the lead-in states the boundary and points at the paragraph and rows that draw it. |
+| H2 | Q4 called a pointer in three places and an owner in two | **FIXED.** Q4 is a HYBRID and is no longer swept in with Q5/Q6: it points at the shipped enforcement (that package's B3b and Q18) AND owns the invariant as it binds this family, which is why row G5 cites Q4 rather than the shipped package. All three "Q4, Q5 and Q6 are pointers" surfaces corrected. |
+| H3 | three different counts of the letter collision, none right | **FIXED STRUCTURALLY, not arithmetically.** Counted from the headings rather than copied: the EP2 package carries nine (`B H J K N P Q R T`); **five collide — B, H, N, Q, R.** The list now lives ONLY in the canonical map. The three specs cite the map and list nothing, and the map states the letters without stating a count, so there is no number left to drift. This is the same rule the report package's own Table R gate cell already states about member lists in citing surfaces. |
+| H4 | the H collision is unlisted, and the family cites H7/H9 BARE | **FIXED.** The map's rule now reaches ROW IDS, not only table letters, stated over the class rather than over the two ids that provoked it. All six bare sites name their owner ("the primitive's H7"). Verified: `H7` and `H9` exist in both Table H letter-spaces — the primitive's staging object and directory unwind versus the EP2 package's "registration is a presence test" and "the step prints what it checked". |
+| H5 | a wrong row cited as the surface that lists the consumers | **FIXED, PRE-EXISTING.** `S5` → `S6`. **And the sweep found the same slip unregistered in the module half** (`row S5's list` in its own Mirrored Surface Checklist), which round zero did not report; both are fixed, and both cells now say which row is the scope and which is the list. |
+| H6 | line-range boundaries landing in the wrong construct | **FIXED for the ranges the amendment made load-bearing** — the delete range and the abort (`:1293-1323` → `:1298-1323`, the construct, `:1293` being a statement inside the preceding redact arm). **Also fixed, pre-existing:** the redact arm cited as `:1269-1291` in three places, where `:1291` is `continue;` and the construct closes at `:1294`. `:669-738`, `:906-946`, `:1365-1366`, `:1385-1386`, `:1392-1409` and `:1211` were re-checked and left alone. |
+| H7 | a rule attributed to a header that carries it in the footer | **FIXED.** Verified: "Every retention fact is decided here" is at that spec's `:1755` (header), "None may restate a number from this table" at `:1813` (after the rows). Q6 no longer says both are in the header. |
+| H8 | an MSC mirror list not updated for a mirror the same amendment added | **FIXED.** Table R's preserved-copy row ends "Neutralised at composition exactly like every other channel (Table N)" — a Table N mirror by its own text. Registered. |
+| H9 | a new canonical ruling with no MSC entry at all | **FIXED.** Table C's ordering ruling now has its own checklist entry, naming its mirrors (Table D's preamble, rows C1 and C9, Q8's route list, the resolved-path criterion) and its two prohibitions. |
+
+**Round zero — nits and conformance.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| N1 | a pointer carrying a premise that does not reach the rows offered for it | **FIXED by stating the smaller claim.** Measured: nothing outside the module cites Q5 or Q6. The text no longer asserts that they are cited; it states the general rule — renumbering the rows of a table other packages cite by number retargets those citations silently, so in this family a row id is never reused and never shifted, cited or not. |
+| N2 | the rule that mandates spec paths names its target by bare WP id | **FIXED** at both sites. |
+| N3 | a pointer carrying a count read out of its owner | **FIXED.** "both keep-combinations" → "the keep-combinations". Same disease as H3, one row over. |
+| J1-1 | `### Contract table(s)` silently absent | **FIXED, RECORDED PRE-EXISTING.** Present in all three specs before this amendment; the round record does not credit it to the amendment. One `N/A as a single heading` line per spec, saying why the named-table substitution is right. |
+
+### RESIDUALS NAMED RATHER THAN FIXED
+
+**One, and it is the reviewer's own alternative rather than a finding.**
+
+1. **The resolved-path admission answer is not available to `promote()` before the
+   write.** The adversarial round offered, as its second option, exposing a
+   read-only resolve/admit operation from the vault-write primitive so C1 could
+   be decided in full ahead of EP2. **Not taken.** It is a cross-package contract
+   change to a `Done` package, which this pass's stop criterion routes to the
+   owner rather than to a patch, and the family's existing answer — do not build a
+   second containment implementation — is an eleven-round result. **The cost is
+   named where it lands:** a resolved-only denial makes a gate call and can mint a
+   quarantine artifact that a fully-pre-gate C1 would have avoided. Row Q8 carries
+   the artifact, so the cost is an extra durable file on a rare path, not a lost
+   one. **If a later round lands on this again, it is the owner's design question,
+   not a patch.**
+
+**Nothing was named a residual to avoid work, and nothing required growing the
+verification machinery.** C7's fix reused the guard shape the other two specs
+already carry; C8's fix split an existing RED into three; C4's fix added one
+field to one arm and one row to one table, both of which already existed.
+
+### WHAT THE STOP CRITERION SAYS ABOUT WHERE THIS SITS
+
+**The loop is NOT closed.** Round 1 found one PRODUCT finding (the C1 ordering
+was wrong about real behaviour), and round zero found three more (C1's delete
+range, C4's missing carrier, C7's non-discriminating steps). Under the pinned
+criterion a HEAVY finding lands its fix and then takes a fresh full round.
+**C4 and the round-1 finding are both heavy — each changes what an implementer
+builds — so a fresh adversarial round is owed before `Ready`.**
+
+**No escalation trigger fired, and each was checked:**
+
+1. *A third round landing again on the EP2-result family.* **Fired in spirit and
+   is worth the owner's eye.** Round 1's finding and round zero's C4 are both
+   about what the EP2 gate produces and who carries it — that is now eleven
+   rounds on one question. **The counter-argument for not escalating: both
+   findings were absorbed by the shape this pass already chose** (a typed,
+   required-and-nullable `artifact` on the refusing arm), extended to two routes
+   nobody had enumerated. The contract did not want a different shape; it wanted
+   the shape applied everywhere it belonged. **If a further round finds a THIRD
+   carrier gap, that is the escalation.**
+2. *A fix that re-imports an excluded property.* **Checked and refused once** —
+   the primitive resolve/admit operation, named as the residual above.
+3. *Growing the verification surface to hold a finding about it.* **Did not
+   occur.**
+4. *A second cross-family duplicate.* **None found.**
+
+### DIVERGENCE AGAINST THE SHIPPED IMPLEMENTATION
+
+Stated in the pass's return to the owner, not restated here — the record above
+changes what the specs say, and the implementation on `wp/dream-promote-module`
+is measured against the amended text by whoever folds it back.
+
+### THE EDIT MADE TO THIS RECORD'S OWN BODY
+
+**One, owner-directed:** the opening citation of
+`2026-08-29-promote-module-pr-gates.md` gained its merge-order note (C6). Every
+other statement above the `---` is left as written, including the ones this
+round falsified — **Q-C's "other packages cite Q-rows by number" (N1) and Q-E's
+"a path C1 refuses never reaches the gate" (round 1's finding).** A dated
+execution record is not a living surface; the corrections live in the specs and
+in this round record, which is what supersedes it.

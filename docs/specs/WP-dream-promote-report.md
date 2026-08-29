@@ -326,7 +326,7 @@ left for a gate to refuse.
       rows G8 and G11. **No surface may make `bytes` optional across the union,
       none may describe RETURNING the record as delivering it, and none may omit
       `artifact` from the refused arm** — it is required and nullable there for
-      the same reason it is on `refused[]` (module half, Table Q row Q8).**
+      the same reason it is on `refused[]` (module half, Table Q row Q8).
 - [ ] **Table R's four cases and its named residual** — the report row (which
       cites, never restates), and the acceptance criteria
 - [ ] **Table N — the neutralisation contract.** Its mirrors are Table R's gate
@@ -341,8 +341,11 @@ left for a gate to refuse.
       goes stale — measured, two did (round (e)); and no surface may restate
       N4's justification, which has been false twice and whose prerequisites N4
       itself names.**
-- [ ] **The redaction lines AND the preserved-copy line on a refusal** — Table
-      R's two rows for them, their two acceptance criteria, and the module
+- [ ] **The redaction lines AND the preserved-copy line on a refusal, from BOTH
+      of its sources** — Table R's two rows for them, their two acceptance
+      criteria, the refused report arm's `artifact` in `### Exact contracts`,
+      Table N's channel row for `refused[].artifact` and `report.artifact`, and
+      the module
       half's **Table Q**, which owns the metadata both carry (rows Q1–Q3 for the
       first, row Q8 for the second). **This package cites Table Q and never
       restates the quarantine lifecycle** — and the DURABLE half of that
