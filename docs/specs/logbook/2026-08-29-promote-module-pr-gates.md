@@ -547,3 +547,72 @@ cost of the append-only form, and worth knowing before the next sweep.
 | Q-4 | **Structural parser check in the lint pipeline** (an unclosed fence once swallowed 764 lines under a green lint, because every check greps) | pipeline work, not this package's |
 | Q-5 | **The branch-freeze rule** into the runbook: a branch under gate review is frozen until the verdict | process rule |
 | Q-6 | **Registering `docs/GLOSSARY.md`** and **Table D's `date` row** on the registry | both need a row-count decision the owner fixed deliberately |
+
+## Round 6 — the rubric gate clean twice, the spec's own signature short
+
+| Gate | Raw output | Introduced by | Verdict on `1ea9d37` |
+|---|---|---|---|
+| PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-6-gptsol-raw.txt` | `096385e` | **patch is correct — zero findings** |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-6-wd-reviewer-raw.txt` | `096385e` | REQUEST-CHANGES — 4 contract, 2 quality, ALL spec-side |
+
+**The extraction was verified to have lost nothing** — the gate mapped all 21
+old bullets to the 21 rows and did a token-level set difference per pair; every
+"lost" token is punctuation or a restructuring word. It also ran the registry's
+own derivation greps (21/6/15) and confirmed the extraction commit touched no
+code. And it named the form as the cause of its own findings: **three of the six
+were findable only because the section became a table.**
+
+### The finding that paid for the round
+
+**The spec's canonical signature declared SEVEN members; the module declares
+ELEVEN.** `registry` and `extractsBySession` are not conveniences — Table D's
+skill-body and ledger rows name them as gate inputs and its rule (b) states the
+values must arrive as inputs or the gate cannot be built. So `### Exact
+contracts`, **the block the first consumer builds its call from**, could not
+express what this spec's own Table D requires. Measured: `extractsBySession`
+occurs twice in the spec, both times in Table D, and zero times in that block.
+Six rounds missed it. **The module was right and the spec was short**, which is
+the opposite of every other finding in this package.
+
+Fixed by completing the type and its prose. Verified mechanically rather than by
+reading: both `@param` blocks parsed and their member sets compared — **identical,
+fifteen names including the four `gates` members.**
+
+### Dispositions
+
+| # | Finding | Band | Disposition |
+|---|---|---|---|
+| 1 | the canonical signature omitted two required gate inputs | contract | **fix** — completed to eleven members, seams marked |
+| 2 | the sitting-1 sweep certified all of `MS-02` on evidence covering its return half | criteria | **fix by narrowing** — and finding 1 is exactly what the unswept half hid |
+| 3 | the `date` gap paragraph credited `MS-13` for registering `promote.js`'s JSDoc; `MS-02` does | contract | **fix** |
+| 4 | the `date` refusal rested on an arithmetic the same commit had made derived | contract | **dissolved by finding 5's sentence**, and the reason restated |
+| 5 | the section's numerals are a derived mirror nothing obliges anyone to re-derive | quality | **fix** — the obligation is now stated, and discharged in the same edit |
+| 6 | "the typedefs name no individual field" is falsifiable — the type expression names `remediation` | quality | **fix** — one word, "in prose" |
+
+### The rule caught its own second instance again
+
+Finding 4 named the `date` refusal. Sweeping the invalidated reason found the
+**same clause inside the `docs/GLOSSARY.md` refusal**, which neither gate named.
+Both are corrected; the glossary refusal now rests only on its real reason —
+which row owns the gates' input split — and not on a row count. **A named
+instance is never the whole of the rule**, and this is the second consecutive
+round in which sweeping for the class found what the finding did not name.
+
+### The obligation that closes the count family
+
+The preamble now states that adding a row or moving a walk state **obliges
+re-running the three greps and reconciling every count and id enumeration in the
+section**, and that a row COUNT is therefore never a reason to refuse a
+registration — the denominator recomputes. That is what dissolves finding 4 at
+the root rather than patching its sentence, and it removes the constraint that
+had been standing in front of two open registration decisions.
+
+### Not taken: the signature extraction
+
+The gate recommends a further ADR-0031 pass making `promote()`'s options type a
+single canonical statement that Table D, `### Exact contracts` and the module
+JSDoc all cite. **The owner ruled it out of this PR**, and the value line is
+worth recording: completing the signature removes the divergence that produced
+two of the six findings, and a third structural pass on a spec at merge is the
+ratchet this repo has twice been burned by. The recommendation is queued, not
+refused on its merits.
