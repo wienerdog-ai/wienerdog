@@ -99,7 +99,7 @@ const DENIED_BASENAME = '.mcp.json';
 const EXTRA_TIER_DIRS = ['02-Areas', '03-Resources'];
 
 /** The vault-side ADR-0020 ledger that pairs with a `SKILL.md` in its own
- *  directory (`validate.js:397`). */
+ *  directory (`validate.js:398`). */
 const LEDGER_BASENAME = 'LEARNINGS.md';
 
 /** The skill body a `LEARNINGS.md` is validated against. */
@@ -120,7 +120,7 @@ const SKILL_BASENAME = 'SKILL.md';
  * case-insensitive — measured, a file created as `claude.md` answers to
  * `CLAUDE.md` — so a literal comparison admits `agents.override.md` while the
  * harness still loads it as an instruction file. The repo already reasons this
- * way at `validate.js:1083-1086`.
+ * way at `validate.js:1084-1087`.
  * @param {string} s @returns {string}
  */
 function fold(s) {
@@ -769,7 +769,7 @@ function promote(o) {
     // it cannot scan" (`delta.js:517-520`) — and a gate defined only over added
     // lines sees an empty scan and passes it, after which nothing else stops an
     // ordinary `.md` and it is promoted raw. Today's validator does the missing
-    // work explicitly (`validate.js:1239-1255`), so passing it would be a
+    // work explicitly (`validate.js:1240-1256`), so passing it would be a
     // regression against shipped behaviour.
     if (record.binary === true) {
       disposition.withheld += 1;

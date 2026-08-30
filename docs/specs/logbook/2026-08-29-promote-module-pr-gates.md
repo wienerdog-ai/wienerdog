@@ -157,3 +157,37 @@ tenth time.
 - **I treated "use the family's one helper" as sufficient** rather than checking
   the helper's failure direction against my use. The rule protected me from
   re-implementing containment and did not protect me from misusing it.
+
+## Rebase onto the reconciled main, 2026-08-30
+
+PR #32 merged as `68ac5e9`, so this branch rebased off `dcd5777` onto it. Ten
+commits replayed with **zero conflicts**; the two files both sides touched —
+`docs/GLOSSARY.md` and this package's spec — merged cleanly because the two
+lanes edited different regions of each.
+
+**The re-verification was unconditional, not contingent.** Only ONE cited file
+changed in the window: `WP-quarantine-warnings-file` added a `require` at
+`validate.js:16` and a counting condition at `validate.js:1430`, moving every
+line below the first by one.
+
+| What was checked | Result |
+|---|---|
+| Cited files compared byte-for-byte, authoring tree `36c2ce5` → merge base `dcd5777` | identical for all ten, so reading the base IS reading the authoring tree |
+| Cited files compared `dcd5777` → `68ac5e9` | only `src/core/dream/validate.js` differs |
+| `validate.js` citation tokens carried over | 50 — 47 in the spec, 3 in `promote.js` — naming 73 line endpoints |
+| Endpoints matched one line down | 73 of 73 |
+| Endpoints that ALSO matched in place | 0 — so no token was bumped on a coincidence |
+| Bare `:NNN` citations owned by another file | 5, re-derived from the surrounding prose and deliberately NOT bumped (`:931-989` is the audit review, `:414-418`/`:867`/`:853-863` are `digest.js`, `:32-42` is `layout.js`) |
+| Measurements re-taken | `validate.js` 1469 → 1471 lines; `vault-write.js` still 481 |
+| Every referenced spec, logbook and WP id | resolves on the new tree; `WP-quarantine-warnings-file` is now `Done` and the one sentence naming it was already tense-neutral |
+| `npm test` | 2219 pass, 1 fail — `tests/integration/adopt-e2e.test.js`, which fails identically on `68ac5e9` with this branch absent (a real `claude` on the machine defeats the fixture's pinned path). Environmental and pre-existing; recorded under Discovered issues, not fixed here |
+| `npm run lint` | passed |
+| `tests/unit/dream-promote.test.js` | 39 pass |
+
+**The lesson the bare `:NNN` form taught, recorded because it nearly cost a
+false bump:** a bare line citation inherits its file from the prose above it, so
+a mechanical sweep cannot tell `validate.js`'s from `digest.js`'s. The owner map
+had to be re-derived from the text — and it had to be re-derived a SECOND time
+after the dispatch-block note shifted every spec line by fourteen, because the
+first map was keyed by line number and silently pointed at the wrong lines. **A
+citation index keyed by position goes stale the moment you edit above it.**
