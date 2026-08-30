@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-quarantine-counts
 title: Make `wienerdog doctor` report quarantine counts by reason, and point at the one file that lists them
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-quarantine-warnings-file]

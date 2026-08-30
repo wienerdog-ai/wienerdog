@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: A dream run that skipped sessions says so in its own report
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: [WP-quarantine-warnings-file, WP-dream-promote-in-workspace]

@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-warnings-file
 title: Give quarantines a durable home in the vault — a code-owned `reports/warnings.md`
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
