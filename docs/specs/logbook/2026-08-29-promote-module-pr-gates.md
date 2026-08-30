@@ -483,3 +483,67 @@ paragraph, in the gate's report, and in this record — so they can land inside
 that pass without re-deriving anything. **Routing it is the owner's call; a
 seventh consecutive prose patch to the same section is what the repeat-kind rule
 exists to prevent.**
+
+## The checklist extraction, and what it settled
+
+Owner-ruled after round 5: the Mirrored Surface Checklist becomes an ADR-0031
+canonical table rather than taking a seventh prose patch. Run record:
+`2026-08-30-promote-module-checklist-extraction.md`.
+
+**The form.** One row per registered contract, five columns — a stable id, the
+contract, the mirror set, the prohibitions, the walk state. Tick boxes are gone;
+**the Walk state column is the only place a walk is recorded**, and the section's
+counts are now DERIVED from it by three greps printed in the preamble rather
+than asserted beside the data. That is the structural answer to the defect that
+produced this pass: a count written next to a list drifts from it, and a count
+computed from the list cannot.
+
+**Verified before accepting, and the greps were run verbatim with BOTH `grep` and
+`/usr/bin/grep`** (the shim has produced a false absence in this repo before):
+21 rows, 6 walked, 15 unwalked — the split the owner fixed, unchanged. The six
+walked rows are `MS-01`–`MS-04`, `MS-13`, `MS-16`, which are the same six the
+gate verified by position.
+
+**The three findings landed with their derived values, not re-derived.** Round
+5's finding 1 was folded in the errata form — the corrected cell names what it
+used to say and why that named no criterion the sibling spec contains. Finding 2
+now names all three surfaces that cite the `date` row plus the code that
+implements it. Finding 3 was fixed AND generalised into a registered prohibition
+on `MS-13`: **no block that disclaims restating row Q9 or Q10 may narrate a named
+field's filler or its moment in the same breath.** Applying it found a SECOND
+site the round-4 fix had missed, one block over — which is the "named instance is
+never the whole ask" rule catching its own case.
+
+**The named consumer cannot read the new form, and this is now measured rather
+than assumed.** `scripts/mirror-walk.js` is not in this tree — it is unmerged on
+`tools/mirror-walk` — and it recognises an entry only by a leading `- [ ]`, so it
+parses the table as ZERO entries. It fails LOUDLY: the vacuity guard exits 1.
+The change is confined to `checklistEntries`; verified on a scratch copy, all 21
+rows resolve with 0 unresolved and the reverse index answers correctly. **The
+table form also mitigates that script's known `stripFindingIds` defect** — `\s*`
+does not cross a `|`, so a cell boundary terminates its runaway match.
+
+**Two owner-calls the pass declined to discharge, and said so instead of
+quietly resolving them:** registering `docs/GLOSSARY.md` (it carries TWO
+contracts — the taxonomy and the gates' input split — so filing it under the
+taxonomy row would misfile half of it, and a new row breaks the fixed
+arithmetic), and registering Table D's `date` row (same arithmetic). Both are
+recorded as refusals with reasons.
+
+**One reported discovered issue was false and is not carried forward.** The run
+reported the round-4 line-number defect (`promote.js:812`/`:954`) as still live.
+Checked: the logbook was already corrected to `:819`/`:961`, and the string it
+matched sits inside the errata clause recording that correction. An errata that
+quotes what it fixed will match a grep for the thing it fixed — which is the
+cost of the append-only form, and worth knowing before the next sweep.
+
+## Queue — carried out of this work package
+
+| # | Item | Why it is queued rather than done here |
+|---|---|---|
+| Q-1 | **The claim-sweep rule** into the runbook: when correcting a claim, grep its distinguishing WORD across every surface FIRST, deal with every occurrence, then re-run the grep as proof | a process rule; the owner adds runbook lines |
+| Q-2 | **"A named instance is never the whole ask"** into the runbook beside Q-1: a gate reports what it FOUND, never the extent of what is there — after fixing any claim, sweep for THAT claim too, not only for the ones already on the list | same; this round paid for it twice |
+| Q-3 | **`mirror-walk.js`'s `checklistEntries` taught to read the table form** — delimiter row opens, pipe rows are entries, blank line closes | the script is out of this package's boundary, unmerged on `tools/mirror-walk`, and needs its own PR and gate |
+| Q-4 | **Structural parser check in the lint pipeline** (an unclosed fence once swallowed 764 lines under a green lint, because every check greps) | pipeline work, not this package's |
+| Q-5 | **The branch-freeze rule** into the runbook: a branch under gate review is frozen until the verdict | process rule |
+| Q-6 | **Registering `docs/GLOSSARY.md`** and **Table D's `date` row** on the registry | both need a row-count decision the owner fixed deliberately |
