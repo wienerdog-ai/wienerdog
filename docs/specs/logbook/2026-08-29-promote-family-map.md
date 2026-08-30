@@ -28,9 +28,15 @@ own Mirrored Surface Checklists — the discipline was present and was not run.
 | `WP-dream-workspace-retarget` | Tables **A, B, F** | Done |
 | `WP-dream-vault-write-primitive` | Table **H** | Done |
 | `WP-dream-baseline-delta-primitive` | its own Table C — a different letter-space, predating the convention | Done |
-| `WP-dream-promote-module` | Tables **C, D, E, Q, S** | Ready; ships consumed by nothing |
-| `WP-dream-promote-report` | Tables **N, R, Y** and the report row | Ready; ships consumed by nothing |
+| `WP-dream-promote-module` | Tables **C, D, E, Q, S** | Done; shipped consumed by nothing |
+| `WP-dream-promote-report` | Tables **N, R, Y, Z** and the report row | In-Review (PR #42); ships consumed by nothing |
 | `WP-dream-promote-in-workspace` | Tables **G, V** | Ready; wires the run |
+
+**The Status column is read from each spec's `status:` frontmatter and was found
+stale for two rows on 2026-08-30** — the module half had reached `Done` and the
+report half `In-Review` while both still read `Ready`. **A LIVING surface goes
+stale in the columns nobody is editing**, which is the same lesson its own
+header states about the ownership column.
 
 **Dispatch order is `depends_on`:** workspace → primitive → module → report →
 pipeline.
@@ -105,7 +111,28 @@ none.** `I` was rejected because its row ids (`I1`) are misread as `11` or `Il`
 in running prose; `X` because this family already uses `### Table X` as its
 METASYNTACTIC placeholder for "some table", so a real one would collide with the
 family's own notation; `Z` was left free because it reads as "the last one" and
-this is not the last table this family will name.
+this is not the last table this family will name — **a reservation the NEXT
+paragraph spends, on 2026-08-30.**
+
+**`Z` WAS ADDED ON 2026-08-30 AND ADDS NO COLLISION — and it SPENDS the
+reservation the paragraph above records.** `WP-dream-promote-report` gained
+**Table Z** — the report path's derivation, its identity and its per-consumer
+authority — by owner ruling, after escalation trigger (i) fired on PR #42
+(`2026-08-30-promote-report-pr-gates.md`). Measured with
+`grep -rhoE '^### Table [A-Z]' docs/specs/` **at `0d27dc5`**: the letters live
+anywhere under `docs/specs/` were A, B, C, D, E, F, G, H, J, K, L, M, N, O, P,
+Q, R, S, T, U, V, W and Y, with **I, X and Z free**. `I` and `X` stay rejected on
+the grounds recorded above. **The reservation on `Z` is spent deliberately, and
+the trade is recorded rather than left implicit:** it was a reading convenience
+with no consumer, weighed against a contract that two independent review gates
+proved is not inferable — and **this family's letter space does not END at `Z`**:
+a further table takes a DELIBERATE collision under the path-qualified-citation
+rule below, which is already how this family lives beside
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. **`Z` collides with nothing
+in that package's nine letters, nothing elsewhere in this family, and nothing
+else in the tree — so the collision table above stays at five rows and gains
+none.** Why a new letter rather than rows in Tables R or Y, which would have cost
+none, is Table Z's own preamble's and is not restated here.
 
 **THE RULE THAT FOLLOWS: every citation of that package from this family names
 the SPEC PATH, never a bare table letter.** A bare "Table N" inside a promote
