@@ -128,7 +128,7 @@ normalizer used for Windows-safe paths.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/adapters/codex.js | append the pointer lines to the block body; fix the false hook-trust notice |
+| modify | src/adapters/codex.js | supply `pointerLine` to `buildCodexBlock`, which **places it before the stable identity** (Table E, E7a); fix the false hook-trust notice |
 | modify | src/adapters/shared.js | `buildPointerLines(digestAbsPath)` |
 | modify | tests/golden/codex-adapter/AGENTS.md | block with the pointer lines |
 | modify | tests/unit/codex-adapter.test.js | pointer content, E7a order, the E7b adaptive budget, idempotence, notice wording |
@@ -142,9 +142,17 @@ normalizer used for Windows-safe paths.
 ### Exact contracts
 
 ```js
-/** The constant pointer paragraph appended to a managed block on a harness with no
- *  import mechanism (Table F). Pure — no fs, no clock. The output depends ONLY on the
- *  path, so a re-sync produces identical bytes.
+/** The constant pointer paragraph for a harness with no import mechanism (Table F).
+ *  Pure — no fs, no clock. The output depends ONLY on the path, so a re-sync produces
+ *  identical bytes.
+ *
+ *  This function does NOT append anything and does not know the block's shape. It
+ *  RETURNS the paragraph, which the caller passes as `buildCodexBlock`'s `pointerLine`
+ *  argument; `buildCodexBlock` (owned by WP-digest-stable-volatile-split, Table E E7)
+ *  places it in the E7a priority order — preamble, banners, POINTER, stable identity.
+ *  The pointer sits BEFORE the identity, never appended after it, because identity is
+ *  the only component allowed to truncate under the E7b budget and a pointer that
+ *  truncates away is worse than no pointer (finding T6).
  *  @param {string} digestAbsPath absolute path to <core>/state/digest.md
  *  @returns {string} */
 function buildPointerLines(digestAbsPath)
@@ -158,7 +166,7 @@ any Wienerdog warnings — is kept current at `<DIGEST_ABS_PATH>`. Read that fil
 need it; the text above this line is only as fresh as the last `wienerdog sync`.
 ```
 
-The block body becomes: the stable digest text, one blank line, then this paragraph.
+`buildCodexBlock` places this paragraph **before** the stable identity, per Table E E7a: preamble, banners, this paragraph, then the identity. It is never appended after the identity.
 
 **The corrected Step-2 notice** replaces the existing one verbatim:
 
@@ -350,3 +358,10 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
   pre-existing user `AGENTS.md` content. **S6:** `depends_on` gained
   `WP-refusal-banner-delivery` — this spec's AC-11 un-skips the end-to-end test that spec
   creates, which is not orderable without the dependency being declared.
+- **2026-08-30 — Codex round-4 finding T6 (owner: ACCEPTED).** The Deliverables row and
+  the `buildPointerLines` contract still said the pointer is **appended** to the block
+  body after the stable digest — wording that predates round 3's R9/E7a reordering, which
+  put the pointer **before** the identity precisely so it can never be the component that
+  truncates. Both rewritten: `buildPointerLines` *returns* the paragraph and knows nothing
+  about the block's shape; `buildCodexBlock` receives it as `pointerLine` and places it in
+  the E7a priority order. Every "append" and "stable-then-pointer" phrasing is gone.

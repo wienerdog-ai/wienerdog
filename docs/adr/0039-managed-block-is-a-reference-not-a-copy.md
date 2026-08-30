@@ -349,11 +349,11 @@ ADR-0021, ADR-0028 and ADR-0035 need no amendment. ADR-0035 is cited for why an
 unchanged: the decision of 2026-08-30 stands as signed. This amendment records the
 round-2 **and round-3** corrections to it and is not itself in force until signed.)
 
-Three adversarial Codex design reviews of this ADR and its spec chain found
-twenty-three issues in total — seven in round 1 (**F1–F7**, below), nine in round 2
-(**R1–R9**), and seven in round 3 (**S1–S7**, at the end of this amendment). The owner
-accepted all twenty-three, and in round 2 **reversed** one of his own round-1 rulings.
-The dispositions follow. Four are corrections
+Four adversarial Codex design reviews of this ADR and its spec chain found thirty
+issues in total — seven in round 1 (**F1–F7**, below), nine in round 2 (**R1–R9**),
+seven in round 3 (**S1–S7**), and seven in round 4 (**T1–T7**, at the end of this
+amendment). The owner accepted all thirty, and in round 2 **reversed** one of his own
+round-1 rulings. The dispositions follow. Four are corrections
 to this ADR — two of them to claims that were simply **wrong** — and they are marked in
 place in the sections they affect, so no reader of §2–§5 can act on a superseded
 statement without seeing the correction beside it.
@@ -457,23 +457,27 @@ rebuild (B1a) and the alerts compaction (F6's compare-and-retry) each had a wind
 between the final `readdir`/`stat` and the rename. Compare-and-retry **narrows** its
 window rather than closing it, and would have left the codebase carrying two
 differently-shaped half-guards for one problem. **The owner reversed the F6 ruling** in
-favour of a **single launcher-owned lock**: `<core>/state/launcher.lock/`, acquired by
-atomic `fs.mkdirSync` (`EEXIST` = held), released by `rmdirSync` in a `finally`, with a
-10 000 ms mtime staleness takeover retried once — the same shape as the dream lock in
+favour of a **single launcher-owned lock**, in the shape of the dream lock in
 `src/core/dream/lock.js` (**WP-008**), which likewise treats an expired holder as dead
-rather than blocking forever. The launcher is synchronous, so the bounded wait
-(5 attempts × 200 ms) sleeps via `Atomics.wait` on a `SharedArrayBuffer`. It guards two
-regions and no more: the alerts append-plus-compaction, and every banner-directory
-mutation plus its rebuild.
+rather than blocking forever. It guards two regions and no more: the alerts
+append-plus-compaction, and every banner-directory mutation plus its rebuild.
+
+*⚠ The round-2 algorithm — `launcher.lock/`, `rmdirSync` release, 10 s staleness,
+5 × 200 ms wait — is **superseded**, twice: by S1/S2 below (token ownership,
+rename-based stale break, 30 s staleness, 35 s wait) and by T1/T5 (commit-time fence,
+`launcher.lock.v1/`). The canonical algorithm lives in exactly one place,
+`WP-launcher-refusal-banner` Table L; this paragraph records the decision, not the
+mechanism.*
 
 The rule that keeps the lock from becoming its own failure mode: **fail-loud is never
 sacrificed to the lock.** A writer that cannot acquire still appends its alert record
-atomically and still writes its own banner entry — it skips only the *derived* work
-(compaction, rebuild). **Accepted residual:** after such a fallback the concatenated
-banner file may be one mutation behind, and `alerts.jsonl` may exceed its bound, until
-the next lock-holding mutation; both are self-correcting and neither loses a record. The
-app-side `appendAlert` does **not** take this lock, so its own residual
-(`src/core/alerts.js` lines 87–88) is unchanged — a boundary, not coverage. A lock
+atomically and still writes its own banner entry — it skips only the *derived* work.
+**Accepted residual:** after such a fallback `alerts.jsonl` may exceed its bound until
+the next lock-holding mutation; self-correcting, and no record is lost.
+
+*⚠ Two clauses here are **superseded**: the fallback no longer skips the banner rebuild
+(S2b — it rebuilds unlocked), and the app-side `appendAlert` **does** now take the lock
+(S3 — round 2's "boundary, not coverage" was simply the wrong boundary).* A lock
 directory created and removed inside one synchronous call starts no process, so
 **ADR-0004 is preserved**.
 
@@ -639,3 +643,86 @@ contended, crashed-holder, slow-holder and exhausted-wait cases explicitly (it i
 `WP-launcher-refusal-banner` under Table L); and an **AC-to-Deliverables satisfiability
 map** produced before hand-off, which in round 3 caught three unsatisfiable criteria that
 no reviewer had flagged.
+
+#### Round 4 of review — findings T1–T7 (2026-08-30)
+
+Seven findings, all accepted, no ruling changes. **Five of the seven (T2, T3, T4, T6,
+T7) are mirror drift or dependency errors introduced by the previous rounds' own
+corrections** — not new design faults, but places where a canonical table moved and one
+of its mirrors did not. Only T1 is a genuine mechanism defect, and T5 is a residual the
+owner accepts rather than engineers away.
+
+**T1 — the lock protected the window but not the commit.** Round 3 added token
+ownership at *release*; nothing checked ownership at the moment that matters, the
+**destructive rename**. A holder evicted mid-work still held a fully prepared temp file,
+and its `renameSync` would land a **pre-successor snapshot** on top of `alerts.jsonl` —
+deleting every record the successor had appended in the meantime. The same applies to a
+stalled `clearAlerts` rewrite and to the banner rebuild. **Resolution:** a **commit-time
+fence** — immediately before any destructive rename of a guarded file, re-read
+`<lock>/owner`, re-compare the token, and on mismatch or `ENOENT` remove the temp and
+**abort the rewrite**. Aborting costs nothing: the append already landed before
+compaction began, and the banner rebuild is self-healing. **Accepted residual:** a holder
+that passes the fence and is evicted in the microseconds before its rename can still
+clobber — the same class as the residual `src/core/alerts.js` documents at lines 87–88,
+and reaching it requires a >30 s stall mid-compaction plus a microsecond-wide window.
+
+**T2 — the Exact contracts section contradicted its own table.** `writeRefusalBanner`'s
+JSDoc still said the acquisition-failure path "skips ONLY the rebuild", which S2b had
+already reversed to *rebuild unlocked*. This is the most dangerous shape of drift in the
+whole chain: an implementer reads the **signature**, not the table three sections above
+it, so the superseded behaviour is what would have been built.
+
+**T3 — a superseded algorithm survived two rewrites by being a copy.**
+`WP-launcher-alert-bound`'s C8d restated the lock's mechanism inline (bare `rmdirSync`,
+10 s, 5 × 200 ms). S1/S2 rewrote the protocol and T1/T5 amended it again; the copy was
+updated by neither. It is now a **pointer row** that names Table L and the exported
+primitives and restates no mechanism at all, and its acceptance criteria read the
+constants **from the launcher's exports** rather than from literals. That this happened
+*inside a chain that cites ADR-0031 in six specs* is the finding worth keeping: a
+canonical table only prevents drift for facts that are actually referenced rather than
+copied, and "a table plus a checklist" does not detect a copy nobody registered.
+
+**T4 — three acceptance criteria asserted behaviour outside their spec's Deliverables.**
+Each of AC-26/26a/27 in the launcher WP bundled a source-state fact (`sync.js`, owned
+there) with a digest-content fact (`renderDigest` wiring, owned by the delivery WP). The
+AC-to-Deliverables map introduced in round 3 passed them because it matched at *spec*
+granularity while the defect was inside a single criterion. Split; the map is now run at
+clause granularity.
+
+**T5 — an interrupted update can put two protocol versions on one lock.** The vendored
+`<core>/launcher/launch.js` is a byte copy of `src/scheduler/launcher.js`, but during an
+interrupted update the two sides can differ. **Accepted as a residual, with a cheap
+guard:** the lock directory name carries the protocol version (`launcher.lock.v1/`), and
+any protocol change bumps it. Mismatched sides therefore use different directories — they
+cannot corrupt each other's lock state, they simply do not exclude each other for the
+duration of the interrupted update, both still **append atomically** so no record is
+lost, and the next clean run self-heals the derived files. The rejected alternative is
+worth recording: making the app side **load the out-of-tree launcher** would guarantee
+one protocol, and would invert the trust direction — the app tree would execute the very
+file whose purpose is to be verified *before* the app tree runs, outside the app release
+digest's coverage of `src/`. A divergence residual is cheaper than an inverted trust
+boundary.
+
+**T6 — the Codex pointer contract predated its own reordering.** R9/E7a moved the
+pointer line **before** the stable identity, precisely so it can never be the component
+that truncates; the Deliverables row and `buildPointerLines`' contract still described
+it as **appended** after the stable digest. Rewritten so `buildPointerLines` returns the
+paragraph and knows nothing about block shape, and `buildCodexBlock` places it.
+
+**T7 — a missing dependency would have reopened F1 as a scheduling bug.**
+`WP-managed-block-by-reference` de-registers the Claude Code SessionStart hook but
+declared no dependency on the WP that creates the import target, nor on the WP that wires
+the hook channel it replaces. Shipped early, its second import line would point at a file
+that never exists — and a missing import target is skipped **silently**. Both added, with
+an explicit rollout order: the hook channel lands first, the import lines take over, the
+hook is de-registered last.
+
+**The process change this round forces.** Rounds 2, 3 and 4 each shipped fix-induced
+defects, and round 4's were almost entirely **drift between a table and its mirrors**
+rather than bad decisions. The AC-to-Deliverables map (round 3) and the state-machine
+argument (round 4) both worked and neither could catch this class. So round 5 adds a
+**mechanical reconciliation**: every constant and verb of a multi-spec contract is
+grepped across every file in the chain and listed against its canonical row before
+hand-off. It found six live sites still naming the unversioned lock directory minutes
+after T5 was applied — drift introduced *by the fix for the drift finding*, which is
+exactly the point.

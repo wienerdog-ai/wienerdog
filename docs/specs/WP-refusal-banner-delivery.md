@@ -286,6 +286,12 @@ local fact stated once, in Exact contracts.
       into `sync.js` and `dream.js` and does not reimplement them (B18a, Table L L8a).
 - [ ] AC-14 — The hook still reads the **concatenated file only** and performs no
       `readdir` — the "read one file, no computation" property is unchanged (B18).
+- [ ] AC-15 — **An unclean `sync` renders the banner (round-5 T4, moved here).** When
+      `sync` reports a descriptor-write failure, a non-empty `heal.failed`, or
+      `catchup: {ok:false}`, the digest it renders **carries** the refusal banner.
+      `WP-launcher-refusal-banner` AC-26/AC-26a assert the matching source-state half
+      (the entries survive); this WP owns the `renderDigest` wiring, so the
+      digest-content half of that contract is asserted here (Table B, B17/B17a).
 - [ ] AC-12 — **End-state chain assertion (round-2 finding F1).** With `app/current`
       unresolvable, the launcher refusing, and the **full** chain applied — that is,
       with the Claude Code SessionStart hook **de-registered** as
@@ -364,3 +370,8 @@ grep -n "readdir\|refusal-banner/" templates/hooks/session-start.sh
   **directory** and rebuild the concatenated file under the lock on drift. Every `sync`
   and every `dream` therefore repairs it. New B18a/L8a; new AC-13 and AC-14; `sync.js`
   and `dream.js` Deliverables notes updated.
+- **2026-08-30 — Codex round-4 finding T4 (owner: ACCEPTED).** New **AC-15**: an unclean
+  `sync` — a descriptor-write failure, a non-empty `heal.failed`, or `catchup:{ok:false}` —
+  renders a digest that **carries** the refusal banner. That assertion moved here from
+  `WP-launcher-refusal-banner`, which owns `sync.js` (and therefore the entries-survive
+  half) but not the `renderDigest` wiring that decides what the digest contains.

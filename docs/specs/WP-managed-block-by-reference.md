@@ -4,7 +4,7 @@ title: Make the Claude Code managed block a reference to the digest instead of a
 status: Draft
 model: opus
 size: M
-depends_on: [WP-memory-import-hermetic-canary]
+depends_on: [WP-memory-import-hermetic-canary, WP-launcher-refusal-banner, WP-refusal-banner-delivery]
 adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0031, ADR-0032, ADR-0035, ADR-0038, ADR-0039]
 epic: digest-delivery
 ---
@@ -250,6 +250,23 @@ exactly what `buildBlock(buildReferenceBody(digestAbsPath, bannerAbsPath))` prod
 The second target is normally **absent** on disk, and is skipped silently when it is
 (Table D, D2a/D2b).
 
+### Rollout order (why the two new dependencies exist)
+
+Added in round 5 (finding T7). This WP **de-registers the Claude Code SessionStart
+hook** and replaces it with two import lines. That is only safe once both halves of the
+banner mechanism exist, and in this order:
+
+1. `WP-launcher-refusal-banner` — creates `state/refusal-banner.md`, the file D2a's
+   second import line points at. Without it the import target never exists, and a
+   missing target is skipped **silently**, so the failure would be invisible.
+2. `WP-refusal-banner-delivery` — wires the hook prepend and the `renderDigest` fold.
+   **The hook channel lands first and carries the banner for the whole interval before
+   this WP**; de-registering the hook before that wiring exists would leave a window
+   with no banner channel at all — the F1 contradiction, reintroduced as a scheduling
+   bug rather than a design one.
+3. **This WP** — the import lines take over for Claude Code, and only then is the hook
+   de-registered. Codex keeps the hook permanently.
+
 ### Blocked-by (research gates)
 
 | Gate | Blocked until | Why |
@@ -468,3 +485,12 @@ grep -n "copyHookScript(startSrc" src/adapters/claude.js
     loaded, recorded*, or *loaded, and `WP-hermetic-user-memory-suppression` merged*.
   - Golden, `buildReferenceBody`'s signature, AC-2 and the verification greps updated
     for the two-import block shape.
+- **2026-08-30 — Codex round-4 finding T7 (owner: ACCEPTED).** This WP `depends_on` only
+  the canary, yet it **de-registers the Claude Code SessionStart hook** — which is the
+  banner's only delivery channel until the import lines exist. Shipping it before
+  `WP-launcher-refusal-banner` (which creates the import target) or before
+  `WP-refusal-banner-delivery` (which wires the hook channel) would have reopened the F1
+  contradiction as a *scheduling* bug: the second import line would point at a file that
+  never exists, and a missing import target is skipped **silently**. Both added to
+  `depends_on`, with an explicit **Rollout order** section stating that the hook channel
+  lands first and the hook is de-registered last.
