@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-digest-block-drift
 title: Report managed-block drift against the current digest in wienerdog doctor
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,37 @@ epic: digest-delivery
 ---
 
 # WP-doctor-digest-block-drift: Report managed-block drift against the current digest in `wienerdog doctor`
+
+> **Archived 2026-08-30, post-merge.** Shipped in PR #48 (`231bfd4`;
+> implementation `4d1d53c`, tests `bd7e610`, review findings 2+3 in `3ca445a`),
+> after wd-reviewer APPROVE. The spec text below carries **one dated erratum**,
+> folded in during this archive pass, plus one note recording a fact that was
+> checked and found correct.
+>
+> **Erratum, 2026-08-30 (post-merge) — Verification step 3's prose header.** It
+> read *"The four exact message strings live in exactly one place each"*, which
+> contradicts this spec's own canonical **Table D** and its own inlined
+> `digestBlockChecks` body: rows **D3** (`file` absent or unreadable) and **D4**
+> (`file` has no sentinel line) both emit `no Wienerdog block in ${file}`, from
+> two separate branches — the `readFileSync` catch and the `span === null`
+> arm. The header now reads *"Each of the four strings has a single source;
+> `no Wienerdog block in` is emitted from the two branches Table D rows D3 and
+> D4 share."* Confirmed against the shipped `src/cli/doctor.js` on `231bfd4`:
+> `matches the current digest` × 1, `is out of date — run` × 1,
+> `no Wienerdog block in` × **2** (lines 264 and 277),
+> `ambiguous wienerdog managed-block markers` × 0 (reused from `shared.js`, as
+> intended). **Only the prose claimed the wrong thing** — the command under it
+> is a plain `grep -n` that asserts no count, so nothing executable was ever
+> wrong and no shipped behaviour is affected. Table D was right all along; the
+> header was a fifth, unregistered mirror of it that nobody added to the
+> Mirrored Surface Checklist.
+>
+> **Note, 2026-08-30 — not an erratum, deliberately.** The implementer's PR-body
+> "Decisions made" flagged this spec's Current-state fixture fact —
+> *`init --yes --fresh-vault` writes `state/digest.md` (481 bytes)* — as possibly
+> stale. It is not. Re-measured on the merged tree (`231bfd4`): **exactly 481
+> bytes**. The fact stands as written; this note exists so nobody files a
+> spurious erratum against it later.
 
 ## Context (read this, nothing else)
 
@@ -352,7 +383,10 @@ here on the spot.
       problem is a warn") — rows D1 and D9.
 - [ ] **Acceptance criteria** AC1–AC8 — one per row D1, D3, D4, D5, D6, D7, D8, D9.
 - [ ] **Verification commands / greps** in "Verification steps" — the exact message
-      strings of rows D3, D5, D6, D7.
+      strings of rows D3, D5, D6, D7, **and the prose headers above them**: a header
+      that counts or characterises the strings is a mirror of Table D and moves with
+      it. *Registered 2026-08-30, post-Done: step 3's header was exactly such a
+      mirror, was not on this list, and drifted — see the erratum under the H1.*
 - [ ] **Current-state description** (the `locateManagedBlock` JSDoc quote, the
       thrown-message code block, the fixture facts) — rows D5 and D7.
 - [ ] **`tests/unit/doctor.test.js`** case list — every row D1, D3–D9.
@@ -452,7 +486,8 @@ catch (e) { console.log("ambiguous message:", e.message); }'
 #    writer (baseline on 0410e3a with the insertion applied: 99/99).
 node --test tests/unit/doctor.test.js tests/unit/claude-adapter.test.js tests/unit/codex-adapter.test.js
 
-# 3. The four exact message strings live in exactly one place each.
+# 3. Each of the four strings has a single source; `no Wienerdog block in` is
+#    emitted from the two branches Table D rows D3 and D4 share.
 grep -n "matches the current digest" src/cli/doctor.js
 grep -n "is out of date — run" src/cli/doctor.js
 grep -n "no Wienerdog block in" src/cli/doctor.js
