@@ -1,0 +1,122 @@
+Gate: spec-fidelity (wd-reviewer), PR #31 round 3
+Tip reviewed: 6ec1ab5 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Provenance note: the harness neutralised instruction-shaped control characters in
+this agent's output, rewriting "<" as "&lt;" inside the quoted JSDoc and type
+expressions. The text below is otherwise verbatim as received; no character has
+been restored, because restoring it would be a reconstruction rather than a record.
+
+---
+
+Review complete. Repo untouched (`git status --porcelain` empty before and after; HEAD still `6ec1ab5`).
+
+## REQUEST-CHANGES
+
+**Same-tip verdict on `6ec1ab5`.** One contract-band finding; the re-verification itself is sound and every citation resolves.
+
+---
+
+### What I executed
+
+| Command | Result |
+|---|---|
+| `node --test tests/unit/dream-promote.test.js` | **39 pass, 0 fail**, exit 0 |
+| `test -f … && npm test -- --test-name-pattern "dream-promote"` | 148 pass, 0 fail, exit 0 |
+| `test -f … && npm test -- --test-name-pattern "claim-2b-merge-cwd"` | 112 pass, 0 fail, exit 0 |
+| `npm test` | **2219 pass, 1 fail, 9 skipped** |
+| `npm run lint` | **passed** (markdownlint 573 files 0 errors; shellcheck clean; frontmatter 236 specs / 4 agents) |
+| `test -d src && ! grep -rqn "require(.*promote" src/ …` | exit 0 (also re-run with `/usr/bin/grep -a` — shim-proof, same result) |
+| `test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" …` | exit 0 |
+
+**Pre-existing failure reproduced.** I exported `68ac5e9` to `/tmp` (`git archive`, `promote.js` absent) and ran `tests/integration/adopt-e2e.test.js`: identical `WienerdogError: refusing to run claude … pinned command path is /Users/felho/.local/share/fnm/…/claude`. Environmental, branch-independent, and unreachable from this PR since `promote.js` has zero production consumers. Not a finding.
+
+**Non-vacuity proven** (in a `/tmp` export, never the repo): planting `require('./promote')` in `delta.js` reddens the consumed-by-nothing grep (exit 1); deleting the deliverables reddens the guarded pattern run (exit 1); reverting `GLOSSARY.md` to `68ac5e9` reddens the glossary grep (exit 1).
+
+---
+
+### 1. Verification of the re-verification — every claim confirmed
+
+I re-derived each number against the tree rather than trusting the text.
+
+- **Insertion points**: `require` at new `:16`, counting condition at new `:1430`. Both exactly as stated.
+- **50 carried-over tokens.** Raw extraction: 22 explicit `validate.js:NNN` (19 spec + 3 `promote.js`) + 35 bare `:NNN` = 57; minus the 5 other-file bares (`:931-989` audit review, `:414-418`/`:867`/`:853-863` `digest.js`, `:32-42` `layout.js`) and the 2 insertion-point descriptors = **50. Split 47 spec / 3 `promote.js` — confirmed.**
+- **73 endpoints**: 84 raw − 9 other-file − 2 descriptors = **73. Confirmed.**
+- **73/73 matched one line down, 0 matched in place.** I compared `68ac5e9`'s line *N* against `dcd5777`'s *N−1* and *N* for every endpoint. No coincidental bump.
+- **Five bares correctly NOT bumped.** I resolved each: `:853-863` is `listSecretQuarantine`, `:414-418` `sanitizeProjectName`, `:867` its export, `:32-42` `defaultLayout()`, `:931-989` audit finding M10. The owner map is right.
+- **Ten cited files byte-identical.** All ten identical `36c2ce5`→`dcd5777`; only `validate.js` differs `dcd5777`→`68ac5e9`. (`vault-write.js` still 481 lines; `validate.js` 1469→1471.)
+
+### 2. Independent citation re-check — all resolve
+
+Every endpoint lands on what the prose claims. Spot-checks that could have hidden a swap: `:341`/`:398`/`:399` are inside `skillBodyViolation` (321–423) and `:556`/`:590`/`:601`/`:607` inside `ledgerViolation` (517–624) — **not transposed**. `:1287` is literally `lines: addedLineNumbers.length`; `:1402` is the shipped `${r.lines} line(s) scrubbed` template; `:1270` is `if (!hasHardFinding(findings)) {`; `:1277`/`:1298` are the redact-shelf and withheld `quarantinePreserve` calls; `:670-739` spans the quarantine block through the close of `quarantinePreserve` and does contain the collision loop (724–727) and the `{name, bytes}` return (732).
+
+### 3. Boundary — clean
+
+Diff touches `src/core/dream/promote.js`, `tests/unit/dream-promote.test.js`, `docs/GLOSSARY.md` (all three in Deliverables) plus five `docs/specs/logbook/` files and the spec itself (always-allowed). **No stray file.**
+
+---
+
+## Findings
+
+**1. [contract] `src/core/dream/promote.js:619-641` — the public `@returns` JSDoc declares the retired, pre-reconciliation return shape. The implementation is correct; only its type surface is stale.**
+
+The code builds the right thing — `promote.js:1002-1005` annotates and `:1017`, `:1037-1041`, `:1047-1053` construct:
+- `redacted[]` = `{rel, bytes, redaction: RedactionAccounting, preserved: PreservedCopy[]}`
+- `refused[]` = `{rel, reason, preserved: PreservedCopy[]}`
+
+But the `@returns` block still reads:
+
+```js
+ * @returns {{promoted:Array&lt;{rel:string, bytes:Buffer}&gt;,
+ *            redacted:Array&lt;{rel:string, bytes:Buffer,
+ *                            lines:number, labels:string, artifact:string}&gt;,
+ *            refused:Array&lt;{rel:string, reason:string}&gt;,
+ *            secretDisposition:{withheld:number, redactions:number}}}
+```
+
+Three concrete defects:
+- **`:621`** declares the flat `lines` / `labels` / `artifact` triple. Table Q row **Q10** rules the accounting is ONE field named `redaction` ("WHY ONE FIELD AND NOT TWO"), and row **Q8** says of the flat `artifact` field: "**That field no longer exists.**" It also omits `preserved` entirely.
+- **`:622`** declares `refused:Array&lt;{rel:string, reason:string}&gt;`, contradicting the spec's `### Exact contracts` (`refused:Array&lt;{rel:string, reason:string, preserved:Array&lt;PreservedCopy&gt;}&gt;`), Table S row **S3** ("`refused[]` is `{rel, reason, preserved}`") and Table Q row **Q8** (`preserved` REQUIRED, possibly empty).
+- **`:633`** prose repeats it: "`refused[]` is `{rel, reason}` and carries NO bytes". **`:637-641`** prose attributes the accounting to "Table Q row Q1" (Q10 owns it) and names "the artifact name the gate RETURNED" as a field of `redacted[]`.
+
+The correctly-declared typedefs at `:539-558` are used at `:1002` and `:1004` but never reached the public signature — commit `9993cc5` ("carry the preserved copy typed, not in prose") changed the shape and the `@returns` was not swept with it.
+
+Why contract-band under the obligation test: CLAUDE.md forbids TypeScript in `src/`, so this JSDoc **is** the module's type contract, and two other packages must agree with it — Table S row **S6** names `WP-dream-promote-in-workspace`'s G8 (dream commit) and G10 (registry) as the consumers, and `WP-dream-promote-report` extends this exact union. A consumer coding against `:619-623` would look for `entry.artifact` and `entry.lines` (gone) and would not know `refused[]` carries `preserved` — which is precisely the data-loss route row Q8 exists to close.
+
+This is my round-2 finding **N3** ("stale `decisions` JSDoc — this project's only type surface") recurring on the module's public return. It also means the spec's **Mirrored Surface Checklist** item "`### Exact contracts`' signature and its return shape" (`docs/specs/WP-dream-promote-module.md:683`) was not actually walked — every box in that checklist is still unchecked.
+
+**Fix**: replace `:619-623` with the spec's `### Exact contracts` `@returns` verbatim (using the `RedactionAccounting` and `PreservedCopy` typedefs already declared at `:555`/`:548`); correct `:633` to `{rel, reason, preserved}`; rewrite `:637-641` to cite **Q10** for the `redaction` field and drop the `artifact` clause. No behaviour change.
+
+**2. [criteria] `docs/specs/WP-dream-promote-module.md:62-65` and `docs/specs/logbook/2026-08-29-promote-module-pr-gates.md:170-171` — "moving every line below the first by one" is not true of the file, only of the citation set.** C-band. There were **two** insertions, so the real map is: old 1–15 → +0, old 16–1428 → **+1**, old 1429–1469 → **+2** (the file grew by 2, which the spec's own 1469→1471 states). No citation is affected — the highest carried endpoint is 1410, below the +2 zone — so the bump is correct; only the stated method is over-general. Worth one clause because the sibling spec fell into exactly this trap: `WP-dream-promote-in-workspace.md:319` cites `validate.js:1427-1429`, which sits astride the second insertion and maps to the **non-contiguous** new 1428, 1429, 1431.
+
+**3. [quality] `docs/specs/WP-dream-promote-module.md:1136` — the `--exclude='promote.js'` flag and its stated rationale are vacuous on the delivered code.** C-band. The spec says the module "is excluded, since a JSDoc line in it would otherwise redden this". Measured: `/usr/bin/grep -ran "require(.*promote" src/ --include='*.js'` returns **nothing at all**, with or without the exclude. The assertion is still non-vacuous (proven above), but the exclude weakens it for free — it would also mask a genuine `require('./promote')` in any future file named `promote.js`. Either drop the flag or correct the rationale.
+
+---
+
+## Cross-package consistency (step 3) — this spec is clean
+
+Every outbound citation resolves and agrees. Table **Y** and row **Y3** exist (`WP-dream-promote-report.md:301`, `:357`) and back-cite S5 — two-sided registration intact. **G5/G7/G8/G10** exist and say what is claimed; G8's third clause is the `reports/warnings.md` render-vs-HEAD reconciliation, cited by Table E without restatement. G7 quotes the `:1373-1387` pin byte-exactly. **Q5→Table R consequence 2** and **Q6→Table N** are genuine pointers — Q6 enumerates seven fact *categories* mapping 1:1 onto N1–N7 and never states the cap value. The family map agrees: module owns **C, D, E, Q, S**; report owns **N, R, Y**; pipeline owns **G, V**. `WP-quarantine-warnings-file` is `Done` and both sentences naming it are tense-correct. **No mirror drift and no closed-contract drift inside this spec** — Q10 restates only the *routing* of a pending input, which G7 independently confirms as unauthorized on both sides.
+
+## Discovered issues (on `main`, outside this PR's boundary — do not fix here)
+
+1. **Both sibling specs carry stale `validate.js` citations.** This PR swept itself; neither sibling was swept, so the family now disagrees with itself about the same shipped lines: `in-workspace` G7 `:1286`/`:838-840`/`:1401`, V3 `:1298-1323`/`:669-738`/`:1392-1409`, G10 `:1203`/`:300`/`:1443-1448`; `report` `:1374-1409`/`:1385-1386`. Correct values are this spec's.
+2. **`in-workspace:319`'s `:1427-1429`** needs a +2, non-contiguous remap *and* a tense fix — it says `WP-quarantine-warnings-file` "adds" an exclusion that has already landed.
+3. **Four sibling sentences assert `scripts/mirror-walk.js`, which is not in the tree** (`in-workspace:316`, `:355`, `:462`; `report:596`). It lives unmerged on `tools/mirror-walk`; the reconciliation logbook records the correction at `:2175` but the spec sentences were not swept. Load-bearing: V3 and `:462` dropped their mirror-surface counts on the strength of a walker that does not exist, so those lists are now neither counted nor walked. **This spec makes zero mirror-walk claims.**
+4. **Q10 self-contradiction, pre-existing on `main`** (`WP-dream-promote-module.md:658`): it states the `&lt;n&gt;` = `addedLineNumbers.length` rule and the every-byte-literal rule, then says it "restates neither the format nor the rules around it". The *format* half is true. Identical on `origin/main`, so not a regression from this PR — but it belongs in the next architect pass.
+
+## Round-2 findings — all seven genuinely closed
+
+| # | Status | Evidence |
+|---|---|---|
+| N1 | **Fixed, structurally** | The prose carrier is gone: `preserved` is a typed field (`:1004`, `:1017`). Pair refusal `:988-995` builds from the undecorated reason with an explicit comment that "with no artifact clause in either string there is nothing for a quoted sibling reason to drag along". |
+| N2 | **Fixed** | `GIT_CEILING_DIRECTORIES: root` at `:381` with the two-halves rationale at `:375-380`. |
+| N3 | **Fixed at the `decisions` map** (`:698-702` now carries `preserved`/`redaction`) — **but recurs on the public `@returns`; see finding 1.** |
+| N4 | **Fixed** | No duplicated refusal format string remains. |
+| N5 | **Folded in** | Table C's header (`:367-372`) now states the C1/C2-before-gates ordering and names the mirror-promoted-to-primary inversion. |
+| N6 | **Recorded** | Spec `:416` states `.claude/settings.json` "leaves no recoverable copy and is discarded with the" workspace. |
+| N7 | **Fixed** | `walkVault` (`tests/unit/dream-promote.test.js:86-96`) returns the whole tree, so the oracle asserts presence *and* absence; used 4×. |
+
+## Spec fidelity of the code — otherwise sound
+
+Zero runtime deps (`:60-72`: `node:fs`, `node:os`, `node:path` + internal modules only). JSDoc-only types, no build step. Table Q's fail-loud obligations are genuinely enforced, not merely described: `readRecord` (`:509-524`) rejects a malformed or fieldless record; the redact arm throws on absent `sanitizedBytes` (`:823`), on an **empty** preservation record (`:829-834`, Q4's only-copy invariant), and on missing scrub accounting (`:836-840`, Q10's required-non-null). `withRemediation` (`:535-537`) assigns `remediation` at outcome time only — `'delete'` on both refusal routes, `'restore-or-delete'` on the published redact arm — exactly Q9's per-field provenance.
+
+**Not escalating to wd-architect.** The spec is not at fault here: `### Exact contracts`, Table S row S3 and Table Q rows Q8/Q10 all state the correct shape unambiguously and agree with each other. Finding 1 is a mechanical sweep the implementer owes on one JSDoc block.
