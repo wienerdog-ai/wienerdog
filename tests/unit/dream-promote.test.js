@@ -1094,6 +1094,19 @@ test('dream-promote: a missing gate or malformed input throws rather than promot
       `a layout of ${JSON.stringify(bad)} must fail loud`
     );
   }
+  // `date` is validated like the other six inputs. Unvalidated, `undefined`
+  // reaches the EP2 gate, which names the preserved copy `<date>-<basename>` —
+  // so a caller bug becomes a quarantine artifact called `undefined-note.md`,
+  // and that artifact is the user's ONLY route back to the unredacted original
+  // (PR-review gate, round 3). Every other required input fails loud; this one
+  // has to as well, or the inconsistency is itself the trap.
+  for (const bad of [undefined, '', 0, null, {}]) {
+    assert.throws(
+      () => run(sc, { date: bad }),
+      (err) => err instanceof WienerdogError && /`date` must be a non-empty string/.test(err.message),
+      `a date of ${JSON.stringify(bad)} must fail loud`
+    );
+  }
   assert.throws(
     () => run(sc, { gates: gates({ secret: () => ({ maybe: true }) }) }),
     (err) => err instanceof WienerdogError && /unrecognised disposition/.test(err.message)

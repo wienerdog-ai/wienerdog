@@ -618,8 +618,10 @@ function withRemediation(record, remediation) {
  *
  * @returns {{promoted:Array<{rel:string, bytes:Buffer}>,
  *            redacted:Array<{rel:string, bytes:Buffer,
- *                            lines:number, labels:string, artifact:string}>,
- *            refused:Array<{rel:string, reason:string}>,
+ *                            redaction:RedactionAccounting,
+ *                            preserved:Array<PreservedCopy>}>,
+ *            refused:Array<{rel:string, reason:string,
+ *                           preserved:Array<PreservedCopy>}>,
  *            secretDisposition:{withheld:number, redactions:number}}}
  *   EVERY PUBLISHED ENTRY CARRIES BOTH HALVES — `rel` AND `bytes` (Table S).
  *   The bytes are the exact buffer the primitive returned: not the candidate
@@ -630,15 +632,25 @@ function withRemediation(record, remediation) {
  *   closed. The path half is required because a consumer holding bytes without
  *   a path cannot stage, count or register them.
  *
- *   `refused[]` is `{rel, reason}` and carries NO bytes: nothing was published,
- *   so there is nothing to carry, and a field that could hold the candidate
- *   would invite a consumer to commit bytes the vault never took.
+ *   `refused[]` is `{rel, reason, preserved}` and carries NO BYTES: nothing was
+ *   published, so there is nothing to carry, and a field that could hold the
+ *   candidate would invite a consumer to commit bytes the vault never took.
+ *   The no-bytes rule reaches BYTES and stops there — `preserved` names a file
+ *   the GATE already wrote outside the vault, so it is not content and cannot
+ *   be staged, committed or mistaken for a candidate (Table S, row S3).
  *
- *   `redacted[]` additionally carries the EP2 accounting of Table Q row Q1 —
- *   the scrubbed-line count, the detector labels, and the artifact name the
- *   gate RETURNED (never one predicted from the date and path, which points the
- *   user at a file that does not exist on exactly the runs where two notes
- *   collide).
+ *   `preserved` is on EVERY arm that could have a copy, `refused[]` included,
+ *   and is REQUIRED AND POSSIBLY EMPTY: "no copy exists for this path" is
+ *   stated rather than left to a missing field. It is `Array<PreservedCopy>` —
+ *   the gate's `artifact` and `location` plus the `remediation` THIS module
+ *   assigns at outcome time. Table Q rows Q8 and Q9 own why it travels and
+ *   which party fills each field; this block restates neither.
+ *
+ *   `redacted[]` additionally carries `redaction`, ONE `RedactionAccounting`
+ *   holding the scrubbed-line count and the detector labels — both filled by
+ *   the gate. Table Q row **Q10** owns it, and owns why it is one field and not
+ *   two loose ones. It is PER-PATH, not per-copy, which is why it is not a
+ *   field of the preservation record.
  *
  *   `secretDisposition` is the typed signal the pipeline's transcript-advance
  *   consumes — never a parsed refusal reason. ONLY `withheld` defers a
@@ -654,6 +666,14 @@ function promote(o) {
   }
   if (typeof workspaceDir !== 'string' || workspaceDir === '') {
     throw new WienerdogError('promote: `workspaceDir` must be a non-empty string');
+  }
+  // FAIL LOUD LIKE THE OTHERS, and this one guards a RECOVERY ROUTE. `date`
+  // reaches the EP2 gate, which names the preserved unredacted copy
+  // `<date>-<basename>`; an `undefined` here shelves the user's only way back
+  // to their original bytes under `undefined-note.md` and reports that name to
+  // them. Nothing downstream would notice — the run promotes normally.
+  if (typeof date !== 'string' || date === '') {
+    throw new WienerdogError('promote: `date` must be a non-empty string');
   }
   if (!baseline || !(baseline.files instanceof Map)) {
     throw new WienerdogError('promote: `baseline` must be a value returned by captureBaseline()');

@@ -167,8 +167,17 @@ lanes edited different regions of each.
 
 **The re-verification was unconditional, not contingent.** Only ONE cited file
 changed in the window: `WP-quarantine-warnings-file` added a `require` at
-`validate.js:16` and a counting condition at `validate.js:1430`, moving every
-line below the first by one.
+`validate.js:16` and a counting condition at `validate.js:1430`.
+
+**The shift is not uniform, and the first form of this section said it was
+("moving every line below the first by one"). The false clause is deleted
+rather than re-worded.** Two insertions make three zones: old `1`–`15` → `+0`,
+old `16`–`1428` → `+1`, old `1429`–`1469` → `+2`. Derived empirically, not
+reasoned: every old line was matched against the new file at `+0`, `+1` and
+`+2`, and the three zones came back contiguous and complete. All 73 carried
+endpoints sit in the middle zone (highest: old `1409`), so the bump is right —
+but the boundary matters, because a range citation ASTRIDE the second insertion
+maps to non-contiguous lines, and the sibling spec has exactly one.
 
 | What was checked | Result |
 |---|---|
@@ -191,3 +200,58 @@ had to be re-derived from the text — and it had to be re-derived a SECOND time
 after the dispatch-block note shifted every spec line by fourteen, because the
 first map was keyed by line number and silently pointed at the wrong lines. **A
 citation index keyed by position goes stale the moment you edit above it.**
+
+## Round 3 — both gates on the rebased tip
+
+**Stop criterion, pinned before adjudication:** this round closes when both gates
+are clean or every finding has a disposition on the SAME tip. A finding that
+would require another package to change its text escalates; an implementer-owned
+sweep does not.
+
+| Gate | Raw output | Introduced by | Verdict on `6ec1ab5` |
+|---|---|---|---|
+| PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-3-gptsol-raw.txt` | `07947f0` | patch is incorrect — 2 × P2 |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-3-wd-reviewer-raw.txt` | `07947f0` | REQUEST-CHANGES — 1 contract-band, 2 C-band |
+
+**Both gates independently confirmed the rebase re-verification** — the ten
+byte-identical files, the 50 tokens, the 73 endpoints, the 1469→1471
+measurement — each re-deriving the numbers rather than reading them.
+
+### Dispositions
+
+| # | Gate | Finding | Disposition |
+|---|---|---|---|
+| 1 | BOTH | `promote.js`'s public `@returns` declares the pre-reconciliation shape | **fix** — the two gates converged on this independently, and I reproduced it before touching anything |
+| 2 | rubric | `date` is never validated, unlike the other six required inputs | **fix** — TDD, RED first |
+| 3 | spec | "moving every line below the first by one" is over-general | **fix by DELETION**, per the owner's append-only rule |
+| 4 | spec | `--exclude='promote.js'` and its rationale are vacuous | **fix** — flag dropped |
+
+**Why finding 2 is a real defect and not a style complaint.** `date` reaches the
+EP2 gate, which names the preserved unredacted copy `<date>-<basename>`. An
+`undefined` shelves the user's ONLY route back to their original bytes under
+`undefined-note.md` and reports that name to them — and the run promotes
+normally, so nothing downstream notices. Six required inputs fail loud and the
+seventh did not; the inconsistency was itself the trap.
+
+**Finding 3 took the deletion arm on purpose.** The owner's rule of 2026-08-30 —
+record fixes are append-only, deletion or subordinate correction, never in-place
+re-wording — was issued after six consecutive in-place re-wordings each injected
+a fresh false claim. Its REASON reaches this case exactly: this is the second
+false description of the same measurement. A false generalisation has nothing to
+preserve, so it was deleted and the measured three-zone map put in its place.
+
+### What I got wrong this round
+
+- **I walked no Mirrored Surface Checklist.** Every box was empty, and the one
+  surface it names first is the one that was stale. The checklist existed, the
+  spec pointed at it, and I did not run it — which is how a type contract went
+  three commits out of date under two gates that had already passed the file.
+- **I generalised a measurement I had just made precisely.** I derived a uniform
+  `+1` from the citation set, which was true of the citations, and wrote it as
+  true of the file, which it was not. The measurement was right and the sentence
+  was wider than the measurement — the same shape as the four false revision
+  descriptions this family has already produced.
+- **I kept a flag whose rationale I never tested.** `--exclude='promote.js'`
+  claimed to prevent a redness that the delivered file cannot produce. One
+  ten-second grep would have shown it; the flag rode along because it was
+  already written.

@@ -63,7 +63,16 @@ checked at BOTH ends.**
 added two lines to `src/core/dream/validate.js` — a `require` at `:16` and a
 counting condition at `:1430` — so **every `validate.js` citation in this spec
 and in `src/core/dream/promote.js` moved by exactly one line and was bumped by
-one**, and the file's measured length went from 1469 to 1471. Method: each cited
+one**, and the file's measured length went from 1469 to 1471. **TWO insertions
+means the shift is NOT uniform over the file, and an earlier form of this note
+said it was.** Measured, the map has three zones: old `1`–`15` → `+0`, old
+`16`–`1428` → `+1`, old `1429`–`1469` → **`+2`**. Every citation carried over
+here lands in the middle zone — the highest endpoint is old `1409` — so `+1` is
+right for all of them, and the `+2` zone is named because a citation ASTRIDE the
+second insertion does not shift as a block at all: it maps to non-contiguous
+lines. `WP-dream-promote-in-workspace.md` has one (`validate.js:1427-1429`),
+which is why this is stated rather than left as an unstated boundary condition.
+Method: each cited
 line's bytes were read from the authoring tree's `validate.js` and compared
 against BOTH the same line and the next line of this tree's `validate.js`. **50
 citation tokens carry over from the authoring tree — 47 in this spec and 3 in
@@ -679,10 +688,28 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables-table `Notes` cells (each cites its owning table)
-- [ ] `### Exact contracts`' signature and its return shape
-- [ ] Acceptance criteria that assert Tables C, D, E, Q and S
-- [ ] Verification steps (the assertions mirror Tables C, D, E, Q and S)
+- [x] Deliverables-table `Notes` cells (each cites its owning table)
+- [x] `### Exact contracts`' signature and its return shape
+- [x] Acceptance criteria that assert Tables C, D, E, Q and S
+- [x] Verification steps (the assertions mirror Tables C, D, E, Q and S)
+
+**Walked 2026-08-30, after the PR-review gate found that it had NOT been —
+every box was still empty, and the one surface the walk would have caught was
+stale.** `promote.js`'s public `@returns` still declared the pre-reconciliation
+shape (loose `lines`/`labels`/`artifact` on `redacted[]`, no `preserved` on
+`refused[]`) three commits after the typed record landed. In a repo that forbids
+TypeScript in `src/`, that JSDoc IS the module's type contract, so a consumer
+coding against it would look for fields that no longer exist and would not know
+`refused[]` carries the only route back to a quarantined original.
+
+**The sweep behind the fix, because fixing the named instance is the failure
+mode this repo keeps paying for:** the retired shape was grepped for by FIELD,
+not by sentence — `artifact:`, `lines:` and `labels:` across `promote.js` and
+its test. Every surviving occurrence is the CORRECT shape (`artifact`/`location`
+inside a `GateReportedCopy`, `lines`/`labels` inside a `RedactionAccounting`);
+the spec's `### Exact contracts`, its acceptance criteria and the Deliverables
+notes were each re-read and already state the settled shape. **One stale
+surface, now fixed; the mirror is otherwise consistent.**
 - [ ] Current-state description (the validator's four gates, the delta
       primitive's binary record, the shipped sanitizer, the skill's report
       requirement)
@@ -1119,9 +1146,13 @@ npm run lint
 test -f tests/unit/dream-promote.test.js && npm test -- --test-name-pattern "claim-2b-merge-cwd"
 # Consumed by nothing: no production code requires the new module. This is a
 # grep over a directory that MUST exist, so guard the absence case first — grep
-# on a missing path exits 2, which `!` would turn into a false green. The module
-# itself is excluded, since a JSDoc line in it would otherwise redden this.
-test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js' --exclude='promote.js'
+# on a missing path exits 2, which `!` would turn into a false green. NO
+# `--exclude` (PR-review gate, round 3): an earlier form excluded `promote.js`
+# on the stated ground that "a JSDoc line in it would otherwise redden this",
+# and the delivered module contains no such line — measured, the grep is empty
+# with or without the flag. The flag bought nothing and cost the one case that
+# matters most: a genuine `require('./promote')` inside a file of that name.
+test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js'
 test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" docs/GLOSSARY.md
 ```
 
