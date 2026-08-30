@@ -10,6 +10,7 @@ const { readDreamConfig } = require('../core/dream/config');
 const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
 const ledgerLib = require('../core/dream/ledger');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
+const { refreshWarnings, WARNINGS_REL } = require('../core/dream/warnings');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
@@ -406,6 +407,25 @@ async function run(argv, opts = {}) {
       writeFilePrivate(digestDest, digest); // atomic 0600 (audit A5, WP-126)
     };
 
+    // The vault's durable record of what the dream could NOT see
+    // (WP-quarantine-warnings-file, ADR-0023 Amendment 2). The digest banner is
+    // news for a bounded window; this file is standing state, and the vault is
+    // git-versioned, so every rewrite is itself the dated delta.
+    //
+    // A refresh failure NEVER fails the dream: the ledger still holds the
+    // condition, `doctor` still reports the counts, the banner still raises it,
+    // and the next refresh point re-reads and re-decides. A deliberate no-op
+    // carries no reason and says nothing — only a real failure is narrated.
+    /** @param {{written:boolean, reason?:string}} r */
+    const reportWarningsRefresh = (r) => {
+      if (r.reason) {
+        console.log(
+          `wienerdog: dream — could not update ${WARNINGS_REL} in your vault (${r.reason}); ` +
+            'the skipped sessions are still recorded and this is retried on the next run.'
+        );
+      }
+    };
+
     // 5. Surface capacity events plainly — a size event must NEVER be silent.
     for (const t of sel.truncated) {
       console.log(
@@ -444,6 +464,11 @@ async function run(argv, opts = {}) {
       for (const q of sel.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
       ledgerLib.writeLedger(paths.state, ledger);
       regenerateDigest();
+      // Refresh point 1 — the same moment the other ledger-derived durable
+      // surface is refreshed, so the two cannot drift out of step. This is also
+      // the point that serves the adopt-with-history first run, which returns
+      // below without ever making a commit.
+      reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
     }
 
     // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
@@ -466,6 +491,14 @@ async function run(argv, opts = {}) {
     // 7. Genuinely nothing new → no brain, no commit.
     if (sel.entries.length === 0) {
       console.log('wienerdog: nothing new to dream.');
+      // Refresh point 3 — write-if-absent reconciliation, and the one refresh
+      // point that is NOT a set-change point. A fully idle run reaches neither
+      // of the others (point 1 needs a new quarantine; point 2 is past this
+      // return), so without this an install whose quarantines are ALL
+      // pre-existing — the upgrade shape — would never get the file at all.
+      // Its own guard: this return comes BEFORE step 8's dry-run return, so a
+      // preview run reaches it and must still write nothing.
+      if (!dryRun) reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
       return;
     }
 
@@ -623,6 +656,11 @@ async function run(argv, opts = {}) {
     // 15. Regenerate the injected session digest (atomic temp + rename),
     //     including the durable quarantine banner from the current ledger.
     regenerateDigest();
+    // Refresh point 2 — the only point at which a quarantine that LEFT the set,
+    // or a secret-exhausted one that ENTERED it in step 14, is knowable. It is
+    // after the commit, so such a change rides the next run's commit; the diff
+    // is exactly right either way.
+    reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
 
     // 16. Summary.
     const shaShort = res.sha ? res.sha.slice(0, 7) : '(none)';

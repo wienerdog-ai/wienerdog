@@ -1222,3 +1222,9 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   an eleven-round loop. It did not lower the bar: the same round the gate
   accepted one shape as unreachable, it found a genuinely reachable blocker.
 
+- quarantine-surface: the gptsol reviewer emitted Hungarian finding bodies when the orchestrating session ran in Hungarian — pin "Respond in English" in every dispatch (recurred once with a Claude architect agent's report; file contents stayed English).
+- quarantine-surface: restate owner rulings WITH their carved exceptions in reviewer scope text — round 4's unrecognized-reason finding was manufactured entirely by an imprecise ruling statement.
+- quarantine-surface: mirror sweeps need an explicit file list including the ADR, and must run the whole-set grep, never only the reviewer's cited lines (revision 7 found a fifth site the four citations missed).
+- quarantine-surface: summary prose that RESTATES a contract breeds recurring findings; rewriting summaries to DEFER to one canonical row killed the class (rounds 5-6).
+- quarantine-surface: the same-kind escalation rule paid off twice — the design answer (commit-time reconciliation; dropping the run log) was simpler than the accumulating patches it replaced.
+- quarantine-surface: grep-based mirror walks are blind to intra-cell falsification and vocabulary-shifted restatement — the PR-gate reviewer must read whole cells (wd-reviewer's class diagnosis on PR #33).

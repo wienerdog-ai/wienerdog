@@ -61,6 +61,13 @@ writing. Read both before drafting.
   concept (one pattern over the claim's shape, whitespace-flattened so a
   hard wrap cannot hide a hit), then verify each hit is corrected text
   or a named withdrawal.
+- CLAUDE.md's `feat|fix|docs|test|chore(scope): message (WP-<slug>)` governs
+  IMPLEMENTATION commits, which are one work package by construction. An
+  architect's docs-only commit that spans several work packages at once — a
+  family split, a review-round sweep, a gate-finding revision — has no single
+  slug to name, so it carries the epic or the issue as its scope instead
+  (`docs(specs): … (issue #165)`, `docs(specs): … (quarantine-surface)`). One
+  work package touched, one slug; several, the stream they belong to.
 - The worked example of these rules is
   `docs/specs/done/WP-daily-summary-per-line-framing.md`. Every other
   spec under `done/` predates them: those are RECORDS of what shipped,

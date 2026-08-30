@@ -13,6 +13,7 @@ const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
 const { parse, coerceScalar } = require('../frontmatter');
 const { scanAndRedact, hasHardFinding } = require('../secret-scan');
 const { displayName } = require('./ledger');
+const { WARNINGS_REL } = require('./warnings');
 
 // The four identity files the digest injects (direct children of identity_dir).
 // A0 pre-use freeze (WP-109): the dream may not auto-change these until a
@@ -1426,6 +1427,7 @@ function validateAndCommit(o) {
     if (status[0] !== 'A' && status[0] !== 'M') continue; // count added/modified only
     if (rel.startsWith(layout.skills_dir + '/')) skills++;
     else if (rel.startsWith(layout.reports_dir + '/')) continue;
+    else if (rel === WARNINGS_REL) continue; // code-owned, layout-independent: not a note
     else notes++;
   }
 
