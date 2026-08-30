@@ -62,7 +62,7 @@ against itself; this is that lesson applied.
 | 1 | Codex rubric (gptsol) | `aea77ef` | patch is incorrect | 2 (both P2, both PRODUCT) | `2026-08-30-promote-report-pr-gate-round-1-gptsol-raw.txt` @ `80e0f84` |
 | 1 | spec fidelity (wd-reviewer) | `aea77ef` | REQUEST-CHANGES | 9 | `2026-08-30-promote-report-pr-gate-round-1-wd-reviewer-raw.txt` @ `410b67c` |
 | 2 | spec fidelity (wd-reviewer) | `795f904` | REQUEST-CHANGES | 4 (1 BLOCKER, 1 product, 2 residual) | `2026-08-30-promote-report-pr-gate-round-2-wd-reviewer-raw.txt` @ `c43d63c` |
-| 2 | Codex rubric (gptsol) | `795f904` | _running_ | _running_ | _pending_ |
+| 2 | Codex rubric (gptsol) | `795f904` | patch is incorrect | 2 (both P2, both PRODUCT) | `2026-08-30-promote-report-pr-gate-round-2-gptsol-raw.txt` @ `1952499` |
 
 Raw output is committed BEFORE it is read or judged, and each row cites the raw
 file's path AND the SHA of the commit that introduced it. A row without that SHA
@@ -152,8 +152,8 @@ consecutive rounds land findings of the same KIND.*
 
 | | Round 1 | Round 2 |
 |---|---|---|
-| Gate | Codex rubric | spec fidelity |
-| Findings on **report-path derivation and identity** | 2 of 2 | 3 of 4 |
+| Gate | Codex rubric | **BOTH** |
+| Findings on **report-path derivation and identity** | 2 of 2 (rubric) | 2 of 2 (rubric) + 3 of 4 (spec fidelity) |
 
 - **Round 1**: `reportRel` built by a naive join (empty segment → the primitive
   throws); the body matched by literal `===` (NFC/NFD → the report written twice).
@@ -250,3 +250,37 @@ what the trigger exists to prevent.
 consumed-by-nothing grep exits 0 in both rounds), the PR is unmergeable with both
 gates requesting changes, and `reports_dir` is a hand-edited config key whose
 default (`reports/dreams`) is unaffected by either defect.
+
+## THE SECOND OVERLAP MEASUREMENT — the gates CONVERGED, and that settles the escalation
+
+**Round 2: 6 findings filed across the two gates (2 + 4), of which TWO are
+shared — and they are the same two.** Both gates independently filed the dot
+segment and the folded-identity over-match, at the same two code locations, in
+the same round, having run different probes.
+
+| | Findings filed | Shared |
+|---|---|---|
+| Module half, rounds 1–2 | 18 | **0** |
+| This package, round 1 | 11 | **0** |
+| **This package, round 2** | **6** | **2 — both PRODUCT defects** |
+
+**Why this is decision-grade rather than a curiosity.** Every prior measurement
+in this family showed total separation, and the round-1 record concluded from it
+that the two gates cover disjoint failure modes. That conclusion still holds —
+but convergence carries information the separation did not: **when both gates,
+running different methods, land on the same two lines, the defect is in the
+ARTIFACT rather than in either reviewer's lens.**
+
+It also removes the one reading that could have kept the loop running. A single
+gate repeating a finding is consistent with that gate having a fixed idea; two
+independent gates reaching it from different probes is not. **The escalation is
+therefore not one reviewer's judgement about my fix — it is a measurement, taken
+twice, that the caller-side path contract does not exist and cannot be inferred
+correctly.** The rubric gate even names the same remedy shape as the
+spec-fidelity gate — "normalize or reject dot segments … as is already done for
+empty segments", "detect multiple matching records" — which is precisely the
+contract the owner question asks to have pinned.
+
+Both gates also independently confirmed that **round 1's two fixes are genuinely
+gone**, so the escalation is about the REMAINDER of the contract, not about a
+regression.
