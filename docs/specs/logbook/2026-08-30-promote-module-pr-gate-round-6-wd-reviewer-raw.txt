@@ -1,0 +1,77 @@
+Gate: spec-fidelity (wd-reviewer), PR #31 round 6
+Tip reviewed: 1ea9d37 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Provenance note: the harness neutralised instruction-shaped control characters,
+rewriting "&" as "&amp;" inside quoted shell commands. The text below is
+otherwise verbatim as received; no character has been restored, because
+restoring it would make this file a reconstruction rather than a record.
+
+---
+
+Read-only invariant held: `git status --porcelain` empty and byte-identical before and after; HEAD unmoved at `1ea9d37`. All writes were under `/tmp` (`/tmp/wd-old-spec.md`, `/tmp/wd-base` export of `68ac5e9`, four logs).
+
+## What I ran (all with `WIENERDOG_LOADER_NOOP=1`, from `/Users/felho/dev/repos-to-learn-from/wienerdog`)
+
+| Command | Exit | Result |
+|---|---|---|
+| `node --test tests/unit/dream-promote.test.js` | **0** | 39 pass, 0 fail |
+| `npm run lint` | **0** | markdownlint 0 errors / 574 files, shellcheck clean, frontmatter 236 specs / 4 agents |
+| `npm test` | 1 | 2229 tests, **2219 pass, 1 fail, 9 skipped**. Sole failure `tests/integration/adopt-e2e.test.js:72` — pinned-`claude`-path refusal |
+| `git archive 68ac5e9 → /tmp/wd-base`, `node --test tests/integration/adopt-e2e.test.js` | 1 | **REPRODUCED on the merge base without this branch.** 5 tests, 4 pass, 1 fail, same test. Environmental, not a finding |
+| `test -f … &amp;&amp; npm test -- --test-name-pattern "dream-promote"` | **0** | 148 pass, 0 fail |
+| `test -f … &amp;&amp; npm test -- --test-name-pattern "claim-2b-merge-cwd"` | **0** | 112 pass, 0 fail |
+| `test -d src &amp;&amp; ! grep -rqn "require(.*promote" src/ --include='*.js'` | **0** | green |
+| `test -f docs/GLOSSARY.md &amp;&amp; grep -q "\*\*promotion\*\*" docs/GLOSSARY.md` | **0** | green |
+| `node scripts/boundary-check.js docs/specs/WP-dream-promote-module.md $(git diff --name-only 68ac5e9..1ea9d37)` | **0** | **Boundary clean** — 16 files: 3 Deliverables, the spec itself, 12 under `docs/specs/logbook/` |
+| The three preamble greps, verbatim | 0 | **21 / 6 / 15**, exactly as printed |
+
+`gh pr view 31` does not resolve on this remote, so I could not read the PR body; every finding below is derived from the tree.
+
+## The extraction — verified mechanically
+
+**Counts.** The three greps at `:715-717` return 21 / 6 / 15. The six `WALKED` rows are `MS-01`–`MS-04`, `MS-13`, `MS-16` — the same six round 5 verified by position (1, 2, 3, 4, 13, 16), confirmed against its raw output at `:31`. The `UNWALKED` enumeration at `:804` matches the column exactly (8+2+5=15).
+
+**Nothing was lost in translation.** I mapped all 21 old bullets to the 21 rows in order and did a token-level set difference per pair. Every "lost" token is a punctuation-attached duplicate or a restructuring word (`mirrors`, `Prohibitions`, `criteria.`). **No mirror and no prohibition was dropped**, including the dense `MS-13` cell (673→851 tokens, losses: `Its`, `Prohibitions`, `are`, `each`, `lifecycle.`, `mirrors`). `MS-08`'s trailing "A finding that changes either updates this section too" was promoted into a real prohibition cell, not deleted. The three `—` prohibition cells (`MS-01`, `MS-02`, `MS-19`) correspond to bullets that carried none.
+
+**The four round-5 dispositions.** All verified:
+1. `MS-13`'s enumeration is now `Q1–Q3, Q8, Q9 and Q10`, and `origin/main:docs/specs/WP-dream-promote-report.md:736` literally reads "module half, Table Q rows Q1–Q3, Q8, Q9 and Q10" — the citation resolves. The only surviving occurrence of `Q3, Q8 and Q10` outside logbook evidence is inside the errata clause on `:737`. Same for the two old GLOSSARY strings: one occurrence, `:819`, inside its errata clause.
+2. Three citing surfaces, measured: `:270`, `promote.js:680-681`, `test:1098`. My independent grep for `` `date` row `` across the spec and both deliverables returns exactly those three plus the gap paragraph's own self-references. All five code citations resolve at both ends (`promote.js:673-681`, `:682` = the pattern, `:683` = the `YYYY-MM-DD` text; `test:1097-1100`, `:1109` = the regex assertion).
+3. Both sites confirmed clean: `remediation` no longer appears in the `gates` paragraph or the `@returns` block — the only occurrence in `### Exact contracts` is the `PreservedCopy` type expression at `:228`. The prohibition's scope clause correctly exempts Table Q's preamble and the acceptance criteria.
+4. `promote.js:819` and `:961` both resolve to the `date,` argument of the EP2 and skill-body gate calls.
+
+**`scripts/mirror-walk.js`** — claim verified on `tools/mirror-walk`: `checklistEntries` (`:135-153`) matches only `/^- \[[ x]\]/`, so the table yields zero entries, and the vacuity guard at `:219-225` exits 1. It fails loud, not silently green. Out of Deliverables; not this PR's defect.
+
+---
+
+# REQUEST-CHANGES
+
+Every finding below is **spec-side**. The shipped code is correct against the tables; none of these are the implementer's to guess at. **Route all of them to wd-architect.** This is round 6 on the same WP with the same surface family recurring — see the density note at the end.
+
+1. **[contract]** `docs/specs/WP-dream-promote-module.md:255-261` vs `src/core/dream/promote.js:577-584` — **`MS-02`'s registered mirror pair still diverges, and `MS-02` is certified `WALKED`.** The spec's `### Exact contracts` `@param` is a *closed* object-literal type that lists seven members and ends at `gates}}`. The shipped JSDoc declares eleven:
+
+   ```
+   spec  :  {{vaultDir, workspaceDir, date, baseline, delta, layout, gates}} o
+   module:  {{vaultDir, workspaceDir, date, baseline, delta, layout,
+              gates:{secret,skillBody,tier3,ledger},
+              registry?, extractsBySession?, writeFile?, spawnGit?}} o
+   ```
+
+   `registry` and `extractsBySession` are not implementer conveniences: Table D's skill-body row (`:515`) and ledger row (`:517`) name them as gate inputs, and rule (b) at `:518` states "the values must arrive as inputs or the gate cannot be built." The spec's own canonical signature therefore does not carry what its own Table D requires, and the first consumer (`WP-dream-promote-in-workspace`) will build its call from `### Exact contracts`. `gates` is additionally bare in the spec and structurally typed in the module. **The module is right; the spec is short.** Fix in the spec: extend the `@param` type to the eleven members, marking `writeFile`/`spawnGit` as test seams, and add the two required members to the block's prose the way `delta`, `date` and `gates` are covered.
+
+2. **[criteria]** `:757-764` — **the sitting-1 certification is wider than its evidence, and finding 1 is what it missed.** The paragraph describes a sweep "by FIELD, not by sentence — `artifact:`, `lines:` and `labels:`", which is the `@returns` half of `MS-02`'s contract, and then concludes "**One stale surface, and no second one inside MS-01 through MS-04**" — a claim over the whole of `MS-02` ("`### Exact contracts`' signature *and* its return shape"). The signature half was never swept. Either widen the sweep and re-derive the sentence, or narrow the sentence to the return shape it actually covers.
+
+3. **[contract]** `:846-849` — **internal contradiction, introduced by this commit.** The `date` gap paragraph justifies treating `promote.js` JSDoc as a registered mirror with: "since MS-13 registers the `gates` paragraph and the three typedefs, **all of which live there**" (= in `promote.js`). But `MS-13`'s own cell at `:737` qualifies those surfaces as "in `### Exact contracts`", and the walk paragraph at `:773` calls them "**MS-13's in-spec mirrors**". The row that actually registers the `promote.js` JSDoc is **`MS-02`** (`:726`, "and the JSDoc in `src/core/dream/promote.js` that ships them, registered 2026-08-30"), added by this same pass. The conclusion is true; the citation names the wrong row and mislocates `MS-13`'s registered surfaces. Fix: cite `MS-02`.
+
+4. **[contract]** `:849-852` — **the `date` refusal rests on a reason this same commit invalidated.** It reads: "It is not registered as a row because the owner's ruling for the walk pass fixed the arithmetic at SIX OF TWENTY-ONE, and adding a twenty-second row would have made that count wrong in the same breath as writing it." That was true of the tick-box form the commit deleted. As of `1ea9d37` the counts are **derived** by the three greps at `:715-717`, which recompute on any row addition; registering an `UNWALKED` `MS-22` would change only a derived denominator and would leave the owner's ruling ("exactly these two of the seventeen get walked") true. This is the hunted shape — a rationale carried forward unrevised past the change that falsified it — in the one paragraph that explains why a known gap stays open. **My judgment on the two refusals:** recording them was the right disposition for `docs/GLOSSARY.md`, whose refusal has a second, independent reason (`:822-827`: the file carries two contracts and no row owns the gate-input split — a genuine design call, and the file has already produced two false canonical claims, so leaving it unregistered is a real but owner-owned risk). The **`date` refusal has no such second half** and should be re-decided: either register the row, or restate the refusal on a reason the extraction did not undermine.
+
+5. **[quality]** `:711-712` against `:747`, `:804`, `:826`, `:850` — **the section's own counts are an unregistered mirror set.** The preamble claims "every count of walked or unwalked rows in the paragraphs below is DERIVED from this column rather than asserted beside it." The provenance claim is honest and the greps are a real gain, but the numerals still exist as literals at four prose sites plus the id enumeration at `:804`, and nothing in the section obliges anyone to re-run the three greps when a row is added or a walk is recorded. They agree today; they are exactly what will drift next. One sentence after the grep block fixes it — and it also dissolves finding 4's constraint at its root, which is why I would take it over adding an `MS-22`.
+
+6. **[quality]** `:737` — **"the `PreservedCopy` and `RedactionAccounting` typedefs name no individual field and stand" is falsifiable by grep.** `PreservedCopy`'s type expression at `:228` names `remediation`, and its prose at `:229-230` states that field's filler and its moment ("the gate's fields plus the one this module assigns once the path's outcome is known") inside a block that does disclaim ("this typedef states the TYPE and restates none of Q9's rules", `:234`). The exemption is correct — a typedef cannot declare a type without naming its fields — but its stated predicate is not, and a future editor applying the rule as written to a new typedef would get the wrong answer. Fix is one word: "name no individual field **in prose**".
+
+---
+
+**Contract-density / closed-contract drift check (ADR-0031).** No settled canonical contract was silently reinterpreted by `1ea9d37` and no mirror was promoted to primary: Table Q (Q1/Q8/Q9/Q10), Table S (S1–S6), Tables C/D/E and the three typedef type expressions are byte-identical to `1ee8bc7`; the commit touched only the checklist section and two prose blocks in `### Exact contracts`, both by removal. The extraction itself is the right instrument and it worked — the form change is what made findings 1, 3 and 5 findable, and the token-level diff proves no contract was lost. **But findings 1, 2, 3 and 6 all land on one family: `### Exact contracts` and the `promote.js` JSDoc that mirrors it, i.e. `MS-02`'s and `MS-13`'s shared habitat — the second consecutive round to land there (round 5's finding 3 was the `@returns`).** That is the signal. **Recommend a canonical-extraction pass on `promote()`'s signature**: one canonical statement of the full options type — a lettered row or a single fenced block — that Table D's gate rows, `### Exact contracts` and the module JSDoc all cite rather than each restating. Two of the six findings above exist only because the signature is stated twice in full and the two statements are allowed to differ.
+
+**Main-side discovered issues:** none got worse. `WP-dream-promote-report.md:736` on `main` carries the enumeration the walk claims, and `origin/main` is unmoved at `68ac5e9`. The one main-side citation-precision item the walk records at `:800-803` I did not re-derive; nothing I read contradicts it.
+
+**Same-tip verdict: REQUEST-CHANGES on `1ea9d37`.** Findings 1–4 are contract-band and spec-authored; 5 and 6 are quality. No implementer action; hand the whole set to wd-architect.

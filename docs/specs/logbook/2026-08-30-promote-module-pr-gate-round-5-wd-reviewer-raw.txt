@@ -1,0 +1,103 @@
+Gate: spec-fidelity (wd-reviewer), PR #31 round 5
+Tip reviewed: d548f5a (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Provenance note: the harness neutralised instruction-shaped control characters,
+rewriting "<" as "&lt;" and "&" as "&amp;" inside quoted code and commands. The
+text below is otherwise verbatim as received; no character has been restored,
+because restoring it would make this file a reconstruction rather than a record.
+
+---
+
+Read-only invariant held: `git status --porcelain` empty and byte-identical before and after, HEAD unmoved at `d548f5a`. Here is my report.
+
+## What I ran (all with `WIENERDOG_LOADER_NOOP=1`, all from `/Users/felho/dev/repos-to-learn-from/wienerdog`)
+
+| Command | Result |
+|---|---|
+| `git status --porcelain` before and after | empty, byte-identical. HEAD unmoved at `d548f5a`. Only writes were `/tmp/wd-r5-npmtest.log`, `/tmp/wd-status-*.txt`, and a `node -e` probe run from `/tmp` |
+| `node --test tests/unit/dream-promote.test.js` | **39 pass, 0 fail** |
+| `npm run lint` | **passed** (markdownlint 0 errors / 573 files, shellcheck clean, frontmatter 236 specs / 4 agents) |
+| `npm test` | **2219 pass, 1 fail, 9 skipped.** The single failure is `tests/integration/adopt-e2e.test.js:72` — `refusing to run claude: ... pinned command path is /Users/felho/.local/share/fnm/.../claude`. **Reproduced, and it is the described environmental one.** I did not re-run it on `68ac5e9`; the reason it cannot be this branch's is stronger than a bisect: the failure is in `spawnBrain`→`resolvePinnedSpawn`, and `promote.js` is proven consumed by nothing (grep below), so no byte of this branch is on that path |
+| `npm test -- --test-name-pattern "claim-2b-merge-cwd"` (with the `test -f` guard) | **112 pass, 0 fail** |
+| `test -d src &amp;&amp; ! grep -rqn "require(.*promote" src/ --include='*.js'` | exit **0** (green) |
+| `test -f docs/GLOSSARY.md &amp;&amp; grep -q "\*\*promotion\*\*" docs/GLOSSARY.md` | exit **0** |
+| `node scripts/boundary-check.js docs/specs/WP-dream-promote-module.md $(git diff --name-only 68ac5e9..d548f5a)` | exit **0**, no output. **Boundary clean** — 13 files: three listed (`docs/GLOSSARY.md`, `src/core/dream/promote.js`, `tests/unit/dream-promote.test.js`), the spec itself, nine under `docs/specs/logbook/` |
+| Regex probe (`/tmp`, `node -e`) | `2026-08-29` and `9999-99-99` ACCEPTED; `2026-08-29\n`, `2026-08-29 `, `2026/08/30`, `../etc`, `2026-8-3`, `2026-08-29\n../etc` all **rejected**. I expected JS `$` to leak a trailing newline the way Perl/Python do — **it does not**, and the check disproved my hypothesis rather than confirming it |
+
+# REQUEST-CHANGES
+
+## Status of my seven round-4 findings — all seven verified fixed
+
+1. **`:80`'s "so the shift is uniform" — GENUINELY FIXED, by deletion.** `grep -n uniform docs/specs/WP-dream-promote-module.md` returns exactly **one** line, `:67`, which is the correction ("the shift is NOT uniform"). The clause was replaced, not supplemented. This is the shape the round-4 disposition promised and the first of the seven windows that delivered it.
+2. **The checklist — arithmetic verified mechanically, and the walk verified by spot-check.** Counted, not read: the section holds **21** items, **6** ticked, **15** unticked, and the ticked ones sit at positions **1, 2, 3, 4, 13, 16** — where 13 is *Table Q* and 16 is *Table S*. The enumeration "5 through 12, 14, 15, and 17 through 21" is exactly the unticked set (8+2+5=15). No off-by-one, no widening. I spot-checked the walk rather than trusting it, and it was **genuinely performed**: row G10 in `WP-dream-promote-in-workspace.md:318` really does say "`id` and `created` are derived from the DECIDED BYTES" and derives newness "for a path the promotion outcome shows PUBLISHED" — which is the `rel`-and-`bytes` claim the walk makes about it; `WP-dream-promote-report.md:191` really does carry "`preserved` is on EVERY ARM of this union"; rows G5/G7/G8/V3 all resolve. One defect in it, finding 1 below.
+3. **GLOSSARY "only three" — FIXED.** Four outcomes, count dropped, scrubbed arm added in the plain-language register.
+4. **GLOSSARY "the four quality gates" — FIXED.** Scoped to skill-body/Tier-3/ledger with the secret scan split out. The only surviving occurrence of either old string anywhere is `WP-dream-promote-module.md:931`, which quotes both as history inside the registry-gap paragraph — correctly framed, not a residual.
+5. **The `date` shape — see the judgment section below. Broadly right.**
+6. **The `@returns` Q9 narration — FIXED, exactly as recommended.** `promote.js` now reads "It is `Array&lt;PreservedCopy&gt;`, whose two-typedef split above carries the per-field provenance." Citation, not narration.
+7. **"EVERY arm" — FIXED.** Now "on BOTH of these arms, `refused[]` included", matching the canonical at `:314`.
+
+## Judgment on finding 5's fix (the `date` shape)
+
+**Is Table D the right owner?** Yes. `date` is handed to two gates — `gates.secret` at `promote.js:816` and `gates.skillBody` at `:958` — and Table D owns what the gates are handed. Table E owns the write and Table Q owns the gate's output, so neither fits; Table D is the only lettered table this spec owns that `date` touches.
+
+**Is the row a citation rather than a restatement?** Yes, and every citation resolves on this tree. `validate.js:683` is `* atomic write (tmp + rename), name `&lt;date&gt;-&lt;sanitized-basename&gt;` with a` — the composition it claims. `validate.js:693` is `* @param {string} date  the dream run date (YYYY-MM-DD)` — the declaration it claims. The durable lifecycle is routed to `WP-secret-fence-ep2-redact-arm.md` rows Q5/Q6 rather than restated, and the report path is routed to `WP-dream-promote-report`'s report row. The corroboration clause also checks out, and it is the claim I most expected to be a mis-attribution: `validate.js:282` (`if (k === 'updated') return cur.updated === date;`) sits in `promotionFieldOk`, called at `:389`, which is inside `skillBodyViolation` (`:321`–`:517`; the only intervening definitions are at `:424`, `:456`, `:488`, all after `:389`) — and `skillBodyViolation`'s 6th parameter is `date`. The attribution to the skill-body guard is **correct**.
+
+**Is the pattern stated exactly once canonically?** Yes. Table D's row is the only surface that states the rule. `### Exact contracts` (`:265-268`) says "this block states none of that row's rule"; `promote.js:677` says "this check states none of that rule"; the test comment at `:1098` cites the row. The regex appears once as code (`promote.js:679`) — implementation of a contract, not a second statement of it.
+
+**Is the strength right?** Yes, measured both directions. Nothing the shipped code produces is rejected: `src/cli/dream.js:37` `resolveDate` builds `${getFullYear()}-${padStart(2,'0')}-${padStart(2,'0')}`, and `src/core/vault.js:17` `today()` uses `toISOString().slice(0,10)` — both always match. And the allowlist does not leak: I probed the trailing-newline case specifically because JS `$` is a classic false friend, and it rejects. The row's claim that the pattern "admits no separator in either direction, no `.` and no `..`, on every platform" holds as written.
+
+---
+
+## Findings
+
+**1. [contract] `docs/specs/WP-dream-promote-module.md:740-741` — item *Table Q*'s mirror list disagrees with the mirror it names, and `d548f5a` ticked the box as CLEARED over it. This is the exact failure mode: the correction stands BESIDE the false claim.**
+
+The item describes one of its mirrors as **"its criterion asserting Q3, Q8 and Q10"**. The criterion it names is `docs/specs/WP-dream-promote-report.md:734-736`, which asserts **"module half, Table Q rows Q1–Q3, Q8, Q9 and Q10"**. I checked for a second candidate: within that spec's acceptance criteria (`:705`+) the only Q-row citations are `:736` (Q1–Q3, Q8, Q9, Q10), `:750` (row Q10), `:793` (row Q9) and `:795` (row Q3). There is no criterion asserting "Q3, Q8 and Q10". The item's text is stale.
+
+What makes this a finding rather than pre-existing noise is that **the walk itself produced the correct value**: `:900` reports "its criterion asserting rows Q1–Q3, Q8, Q9 and Q10". So the architect read the real surface, wrote the true enumeration into the walk paragraph, left the false one in the item, and flipped `- [ ]` to `- [x]`. The registry now carries two contradicting descriptions of one mirror, one of them certified CLEARED. Band: contract — the item's description of its mirror must agree with the mirror for the registry to do its job, and `scripts/mirror-walk.js` (named at `:927` as the machine walker that will consume this list) would read the stale half.
+
+**Fix:** at `:740-741`, replace `its criterion` / `asserting Q3, Q8 and Q10` with `its criterion` / `asserting rows Q1–Q3, Q8, Q9 and Q10`. No design judgment in it — the walk already derived the value, one paragraph below.
+
+**2. [contract] `docs/specs/WP-dream-promote-module.md:937-943` — the second registry-gap paragraph says the `date` row has "one mirror". Measured, it has three, and two of them are in the deliverable code. The paragraph is, by its own sentence, the only thing protecting them.**
+
+The paragraph closes: "until it happens the row and its one mirror are protected by nothing but this paragraph." Grepping for surfaces that cite the row returns **three**:
+
+- `docs/specs/WP-dream-promote-module.md:267` — `### Exact contracts`' `date` line (the one the paragraph names)
+- `src/core/dream/promote.js:677` — the check-site comment ("...are Table D's `date` row's; this check states none of that rule")
+- `tests/unit/dream-promote.test.js:1098` — the test comment ("against a SHAPE rather than mere non-emptiness (Table D's `date` row)")
+
+Beyond the citations, the contract's literal content lives on two further code surfaces: the pattern at `promote.js:679` and the `YYYY-MM-DD` error text at `:680`, asserted as a regex at `tests/unit/dream-promote.test.js:1109`.
+
+This is not a vocabulary quibble about what counts as a mirror. This spec's own practice counts JSDoc prose in `promote.js` as a registered mirror — item *Table Q* registers "the `gates` paragraph" and the three typedefs, all of which live in `promote.js`. So "one mirror" is an undercount, and it errs in the unsafe direction: a future editor of the row is told exactly one surface needs sweeping when four carry the contract, including both deliverables. Band: contract — the paragraph is the registry stand-in, and other surfaces must agree with the row for the system to be correct.
+
+**Fix:** at `:937-943`, name all three citing surfaces (`### Exact contracts`' `date` line, `promote.js`'s check-site comment, the test's comment) and note that the pattern and the error text are the code's implementation of the row. **This does not disturb the six-of-twenty-one arithmetic the paragraph exists to protect** — the paragraph is prose, not a checklist item, so naming three mirrors adds no twenty-second entry. The owner's-call routing stays as written.
+
+**3. [quality] `docs/specs/WP-dream-promote-module.md:322-328` — round-4 finding 6's rule was applied to the code and not to the canonical block the code mirrors.**
+
+Finding 6 named a rule: do not narrate row Q9's per-field provenance in a block that disclaims restating it. `promote.js` was fixed. The spec's `### Exact contracts` `@returns` block — the canonical form of that same JSDoc — still narrates it at `:322-323`: "**Every entry this module RETURNS is COMPLETE — the gate's fields plus the `remediation` this module assigns**", and then at `:326-328`: "row Q9 owns an entry's fields AND which party fills each of them ... this block restates none of the four." Same shape, one surface over, and the side effect is that the code now cites where its canonical block narrates, while checklist item 2 ("`### Exact contracts`' signature and its return shape") is ticked.
+
+Band C, not contract, and the reason matters: both surfaces describe the same shape, so nothing downstream computes a wrong answer, and there is a defensible reading under which the spec's sentence is a statement of the COMPLETENESS rule (its actual subject — "so every surface downstream only ever READS") rather than of per-field provenance. It is also weaker than the instance finding 6 named, which enumerated `artifact` and `location`. I raise it because the rule reached two surfaces and the fix took one; whether the spec sentence needs the same treatment is the architect's call, not mine.
+
+**4. [quality] `docs/specs/logbook/2026-08-29-promote-module-pr-gates.md` — two `promote.js` citations in the new architect section resolve to the wrong lines.**
+
+The section says `date` is handed "`promote.js:812` to the EP2 gate, `:954` to the skill-body guard". Measured: `:812` is `baselineBytes: recordBaseline,` and `:954` is the comment line `// single run.`. The `date` arguments are at **`:816`** and **`:958`**. Both citations land inside the correct call expression, so the claim is true and only the line numbers are off. Band: low — logbook-only, and the logbook is a historical record rather than a contract surface. I raise it only because this project's dispatch precondition re-runs every `file:line` citation and a citation that does not resolve blocks a dispatch.
+
+---
+
+## Contract-density observation (ADR-0031) — and the escalation
+
+**Two of my three substantive findings this round land inside the Mirrored Surface Checklist, and round 4's finding 2 did too.** That is the "findings that keep landing on the same contract family across rounds" trigger, and it is now three rounds deep on one section.
+
+The section is a ~250-line prose registry: 21 items, each a bulleted paragraph whose mirror list and prohibition set are hand-maintained English. Finding 1 is a stale mirror list; finding 2 is an undercounted mirror set. Neither is a thinking error — both are what hand-maintained prose lists do. **This section is itself the contract-dense prose that ADR-0031 says should be a canonical table**, and the spec already names the consumer that will need it in tabular form: `scripts/mirror-walk.js` at `:927`.
+
+**Recommend routing to wd-architect for a canonical-extraction pass on the Mirrored Surface Checklist** — one row per item, one column for the mirror set, one for the prohibitions, one for walk state — rather than another round of prose repair. Per my standing rule, five rounds with findings on one WP means the spec is the bug, and this section is where the bug lives. Findings 1 and 2 have their correct values already derived (in the walk paragraph, and in this report), so they can land in that same pass without re-deriving anything.
+
+## Closed-Contract Drift Check (one paragraph, per ADR-0031)
+
+`d548f5a` adds one new canonical contract and ticks two process boxes — both the natural habitat of a silent reinterpretation — and I found none. The Table D `date` row **creates** a contract where none existed (the routed spec fault) rather than reinterpreting a settled one; it changes no fact in Tables C, E, Q or S, and it does not promote any mirror to primary — `### Exact contracts`, `promote.js` and the test each explicitly disclaim stating the rule and point at the row. The two ticks alter no contract text. The one drift I found (finding 1) is inside the registry that tracks mirrors, not inside a settled contract's facts, and the one mis-attribution the walk itself turned up (`WP-dream-promote-report.md:92`, Q1 where Q8 owns the return arms) was correctly filed as a Discovered issue rather than fixed across the boundary. **Of my four `main`-side discovered issues from earlier rounds, none got worse on this tip.**
+
+## Verdict
+
+**REQUEST-CHANGES on `d548f5a`** — on findings 1 and 2, both contract-band, both in the spec.
+
+**The shipped code is clean and I would approve it as it stands.** `src/core/dream/promote.js` and `tests/unit/dream-promote.test.js` match Tables C, D, E, Q and S; the boundary is clean; every acceptance command I re-ran is green; the `date` contract is correctly owned, correctly cited, stated once, and its strength verified in both directions. Findings 1 and 2 are text repairs to the spec's registry with the correct values already in hand — they do not need a design round, but per the escalation above they should land inside the canonical-extraction pass rather than as a seventh consecutive prose patch to the same section.

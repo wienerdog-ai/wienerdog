@@ -1,0 +1,88 @@
+Gate: spec-fidelity (wd-reviewer), PR #31 round 7 — CLOSING ROUND
+Tip reviewed: d13f192 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Provenance note: the harness neutralised instruction-shaped control characters,
+rewriting "&" as "&amp;" and "<"/">" as "&lt;"/"&gt;" inside quoted commands and
+type expressions. The text below is otherwise verbatim as received; no character
+has been restored, because restoring it would make this file a reconstruction
+rather than a record.
+
+---
+
+All checks complete. Working tree byte-identical (`git status --porcelain` empty before and after).
+
+# APPROVE
+
+**Same-tip verdict on `d13f192`.** All six round-6 findings verified fixed; the two refusal rewrites verified as *replacements*, not additions-beside. Nothing above C-band. Per the owner's pinned reading: same-tip achieved, merge decision follows.
+
+## What I ran
+
+| Command | Exit |
+|---|---|
+| `WIENERDOG_LOADER_NOOP=1 node --test tests/unit/dream-promote.test.js` | **0** — 39 tests, 39 pass, 0 fail |
+| `WIENERDOG_LOADER_NOOP=1 npm run lint` | **0** — markdownlint 574 files 0 errors; shellcheck clean; frontmatter 236 specs / 4 agents |
+| `npm test` | **1** — 2229 tests, 2219 pass, **1 fail** |
+| `test -f tests/unit/dream-promote.test.js &amp;&amp; npm test -- --test-name-pattern "dream-promote"` | **0** — 148/148 |
+| `test -f … &amp;&amp; npm test -- --test-name-pattern "claim-2b-merge-cwd"` | **0** — 112/112 |
+| `test -d src &amp;&amp; ! grep -rqn "require(.*promote" src/ --include='*.js'` | **0** (re-confirmed with `/usr/bin/grep`, not the shim) |
+| `test -f docs/GLOSSARY.md &amp;&amp; grep -q "\*\*promotion\*\*" docs/GLOSSARY.md` | **0** |
+| `node scripts/boundary-check.js` on the 18-file changed set | **PASS** |
+
+**The `npm test` failure reproduces on the merge base.** I exported `68ac5e9` to `/tmp/wdrev7/base` via `git archive` (no checkout, no worktree) and ran `tests/integration/adopt-e2e.test.js` there: same single failure, `adopt-e2e: init → adopt → sync → dream through mapped tiers, one revertable commit`, 4 pass / 1 fail. Environmental, pre-existing, not this branch's.
+
+## Boundary
+
+Clean. 18 changed files = 3 Deliverables (`src/core/dream/promote.js`, `tests/unit/dream-promote.test.js`, `docs/GLOSSARY.md`) + the spec itself + 14 under `docs/specs/logbook/`, which `scripts/boundary-check.js:54` always allows. *(My first `boundary-check` invocation reported a failure — that was my own unquoted `$FILES` expansion passing one newline-joined argument. Re-run with proper argv: PASS.)*
+
+## Contract fidelity — finding 1, verified by parsing
+
+Not by reading. I extracted both `@param` blocks by brace-balance and split members at depth 0 (honoring `&lt;&gt;` so `Map&lt;string,object&gt;` isn't split on its comma):
+
+```
+SPEC top-level (11): vaultDir workspaceDir date baseline delta layout gates registry extractsBySession writeFile spawnGit
+MOD  top-level (11): (identical, same order)
+SPEC gates (4): secret skillBody tier3 ledger      MOD gates (4): identical
+TOTAL names: 15 / 15
+```
+
+Whitespace-normalized, the two type expressions are **byte-identical**. I then extended the check past the assignment to the rest of MS-02's mirror set — `@returns` and all three typedefs — parsed and compared the same way: `GateReportedCopy` IDENTICAL, `PreservedCopy` IDENTICAL, `RedactionAccounting` IDENTICAL, `@returns` IDENTICAL. **MS-02's registered mirror pair is now fully congruent.** The "an earlier form stopped at `gates}}` and listed seven" claim checks out against `096385e`.
+
+Cross-package: neither sibling restates the options list — `WP-dream-promote-report.md:161` uses a `&lt;the module half's parameters&gt;` placeholder under an explicit anti-restatement ruling at `:141-158`, and `WP-dream-promote-in-workspace.md:244-248` cites by path. `extractsBySession` and `registry?` occur **zero** times in both siblings. Completing 7→11 created no cross-package divergence and owes no new registration. The family map (`logbook/2026-08-29-promote-family-map.md`) registers table letters only — no signature mirror exists at family level.
+
+Registry greps re-run by me: `21` / `6` / `15` — the derived numerals agree, 6+15=21.
+
+## Conventions
+
+Zero runtime deps (no code changed); JSDoc not TS; installer surface untouched so idempotence/reversibility unaffected; all 21 commits conventional with the `(WP-dream-promote-module)` suffix; `promotion` is the glossary term used throughout.
+
+---
+
+## Findings — all C-band residuals, none blocking
+
+1. **[quality] `docs/specs/WP-dream-promote-module.md:271-272` vs `:278-279` — the new prose disclaims a rule it states four lines earlier.** The ELEVEN-MEMBERS paragraph states Table D's rule (b): *"that table's rule (b) states that the values must arrive as inputs or the gate cannot be built."* The `registry` entry then reads: *"Table D owns why it must be an input and this block states none of that rule."* The disclaimer is false of its own block. Both sibling disclaimers in the same block are true and are the model — `date` at `:288-290` (*"this block states none of that row's rule"*) and `gates` at `:306` (*"this block restates neither"*) each disclaim something the block genuinely does not state. Fix either half: drop the rule-(b) restatement so the citation stands alone, or drop the `states none of that rule` clause. The module's own JSDoc at `promote.js:611-614` states the rule and carries **no** disclaimer, which is the internally consistent form. Banded quality, not contract: the claim is about this block only — no external surface must agree with it, and MS-02's contract is "signature and return shape", which is verified identical.
+
+2. **[quality] `:275-276` — missing sentence terminator, and the paragraph is indistinguishable from a member entry.** Line `:275` ends *"…no caller in the product supplies them"* with no period, and `:276` begins *"registry the ownership-registry snapshot…"*. Both sit at the same four-space indent after `*`, so the block reads as one run-on: *"…supplies them registry the ownership-registry snapshot…"*. Add the period. Secondary, same edit: `registry` and `extractsBySession` are described *before* `delta`/`date`/`gates`, while the type declares them *after* `gates`; `promote.js` lists all eleven in declaration order. Reordering costs nothing and removes the reason the paragraph and the entries blur together.
+
+3. **[criteria] `:757` vs `:795-801` — finding 2's fix landed in the paragraph, not in the column the section declares canonical.** MS-02's walk cell still reads `WALKED 2026-08-30 (sitting 1)` unqualified, while `:797-799` now says *"The SIGNATURE half of `MS-02` was not swept in that sitting."* `:779-780` states the rule this violates: *"The Walk-state column says so, and no sentence below reaches past it."* A sentence below now does. This is the hunted class applied to the fix for finding 2 itself — the correction placed beside the certification rather than in it. Either qualify the cell, or record the signature half as walked by round 6 (which it was) and say so in the cell's provenance. **Banded C deliberately, not contract:** I verified MS-02's entire mirror set is now identical across spec and module, so no substantive coverage is missing — this is bookkeeping only, and the derived counts (21/6/15) and the `MS-01 through MS-04, then MS-13 and MS-16` enumeration all still agree with the column either way.
+
+4. **[quality] `:797-798` — the narrowing understates what it withdrew, and leaves three cells with no stated evidence.** The sentence describes the retired claim as *"a claim over the whole of `MS-02`"*, but the string it quotes and replaces — *"no second one inside MS-01 through MS-04"* — was a claim over **four** rows. After narrowing to *"no second one IN THE RETURN SHAPE"*, the spec states no evidence at all for MS-01's, MS-03's and MS-04's `WALKED (sitting 1)` cells, where before it stated (over-broad) evidence. Either name what backs those three, or widen the narrowed sentence to say the field sweep covered only return-shape fields across all four.
+
+5. **[quality] `:891-893` — the errata's subordinate characterization of MS-13 is wider than the row.** *"an earlier form credited `MS-13`, whose registered surfaces are the ones in `### Exact contracts`"*. MS-13's mirror set at `:768` also registers Table D's EP2 row and Table C's header paragraphs — both in this spec, both outside `### Exact contracts` — plus a long cross-package list. The operative correction is **true and verified** (MS-02's cell at `:757` does name `src/core/dream/promote.js`'s JSDoc; MS-13's does not), so the finding-3 fix stands; only the parenthetical over-reaches. Narrow it to "whose in-spec `### Exact contracts` surfaces are the `gates` paragraph, the three typedefs and the `@returns` block, none of which is `promote.js`'s JSDoc."
+
+6. **[quality] `:271-272` — the compression of rule (b) dropped the scoping the module keeps, in the one block where the scope matters.** `promote.js:611-614` says the rule *"forbids **a gate** substituting a vault re-read or a git query for any input it names, so a run-level value **a gate** needs has to arrive as an input"* — scoped to the gate's signature. The spec's compressed form, *"the values must arrive as inputs or the gate cannot be built"*, sits three lines under `registry?:object, extractsBySession?:Map&lt;…&gt;` in a block whose subject is `promote()`'s option list, where it reads as "these two options are required." They are not: `promote.js:714-715` defaults them to `null` and `new Map()`. Restore the gate-scoping. **Explicitly not banded contract:** the defaults are fail-closed (per Table D `:538`, an empty extracts map means a ledger entry naming an absent session is refused), and `WP-dream-promote-in-workspace` builds its call by citing Table D rather than the member list, so system correctness does not turn on which reading a consumer takes.
+
+7. **[quality] `docs/specs/logbook/2026-08-29-promote-module-pr-gates.md:556` vs `:580-587` — the round-6 header count disagrees with its own disposition table.** The header says *"REQUEST-CHANGES — 4 contract, 2 quality"*; the table bands finding 2 `criteria`, giving 3 contract + 1 criteria + 2 quality. **This is my defect, inherited faithfully:** my round-6 raw output at `…round-6-wd-reviewer-raw.txt:77` wrote *"Findings 1–4 are contract-band"* while tagging #2 `[criteria]` at `:61`. The disposition table is the accurate surface; fix the header to "3 contract, 1 criteria, 2 quality". Flagging it because band counts are load-bearing for this repo's routing pin.
+
+---
+
+## Closed-contract drift check (ADR-0031)
+
+No settled canonical contract was silently reinterpreted and no mirror was promoted to primary. The signature completion **narrowed** a divergence rather than reopening a decided one: the module was already correct, the spec caught up, and the change is additive to a type whose consumers cite it by name rather than copy it. Table D's rule (a)/(b) row, Table Q rows Q9/Q10, and Table S rows S2/S3 are untouched and their mirror sets still agree. The count family is now genuinely closed structurally — the preamble at `:740-749` registers the numerals as derived and obliges re-derivation, and I confirmed the three greps still produce 21/6/15.
+
+One drift note, below finding threshold: the new **"ELEVEN MEMBERS"** at `:266` is itself an unregistered numeral mirroring the type expression three lines above it — the same hazard the same commit just registered for the walk table. It is adjacent to what it counts, so I did not file it; if a twelfth member ever lands, that word is the thing that goes stale first.
+
+The **ADR-0031 signature extraction** stays queued, not re-raised — recorded at `logbook/…-pr-gates.md:558-565` ("Not taken: the signature extraction") with the value line intact.
+
+My `main`-side discovered issues: none got worse. The `docs/GLOSSARY.md` residual the spec already names at `:852-872` is unchanged in scope — the surviving *"judge the bytes that would actually land"* clause is a timing contrast, not an exhaustiveness claim, so it is not false as written, and this commit neither widened nor narrowed the registry gap around it.
+
+**Files:** `/Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/WP-dream-promote-module.md`, `/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js`, `/Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/logbook/2026-08-29-promote-module-pr-gates.md`. All seven findings are spec/logbook-side; **no implementer action and no code change is called for.** Route the set to wd-architect as a text pass, or land them at the owner's discretion — none blocks the merge.

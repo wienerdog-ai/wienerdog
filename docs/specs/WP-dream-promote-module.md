@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-module
 title: Build the promotion module — decide, gate, merge and publish, consumed by nothing
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive]
@@ -58,6 +58,33 @@ implementer will find (`docs/specs/README.md` → Dispatch-time re-verification)
 A citation that does not resolve blocks the dispatch. **Range citations are
 checked at BOTH ends.**
 
+**RE-VERIFIED ON REBASE, 2026-08-30, against `68ac5e9` (`main` after PR #32).**
+`WP-quarantine-warnings-file` landed between the authoring tree and this one and
+added two lines to `src/core/dream/validate.js` — a `require` at `:16` and a
+counting condition at `:1430` — so **every `validate.js` citation in this spec
+and in `src/core/dream/promote.js` moved by exactly one line and was bumped by
+one**, and the file's measured length went from 1469 to 1471. **TWO insertions
+means the shift is NOT uniform over the file, and an earlier form of this note
+said it was.** Measured, the map has three zones: old `1`–`15` → `+0`, old
+`16`–`1428` → `+1`, old `1429`–`1469` → **`+2`**. Every citation carried over
+here lands in the middle zone — the highest endpoint is old `1409` — so `+1` is
+right for all of them, and the `+2` zone is named because a citation ASTRIDE the
+second insertion does not shift as a block at all: it maps to non-contiguous
+lines. `WP-dream-promote-in-workspace.md` has one (`validate.js:1427-1429`),
+which is why this is stated rather than left as an unstated boundary condition.
+Method: each cited
+line's bytes were read from the authoring tree's `validate.js` and compared
+against BOTH the same line and the next line of this tree's `validate.js`. **50
+citation tokens carry over from the authoring tree — 47 in this spec and 3 in
+`promote.js` — naming 73 line endpoints; all 73 matched one line down and NONE
+matched in place**, both ends of every range included, and no citation was
+bumped on a coincidence. **No other cited file changed** —
+`delta.js`, `workspace.js`,
+`brain.js`, `layout.js`, `digest.js`, `vault-write.js`, the dream `SKILL.md`,
+`CURRENT-IMPLEMENTATION-REVIEW.md` and `WP-secret-fence-ep2-redact-arm.md` are
+byte-identical between the two trees, so their citations, and the bare `:NNN`
+citations that belong to them, were deliberately NOT bumped.
+
 **Containment semantics are stated by CITATION, and no surface here paraphrases
 a path-containment rule (owner ruling, 2026-08-28).** The shipped truth is
 kernel-faithful resolution plus `(dev, ino)` identity. It is owned by **Table H**
@@ -99,10 +126,13 @@ the caller's premise still holds, and returns the bytes it published.
 
 **This package builds the decision layer between them.** Given the run's
 constructed baseline, the delta of what the brain wrote, and the live vault, it
-decides per path what happens — promote, promote a merged version, or
-refuse-and-report — runs the four policy gates on the bytes that would actually
-be published, publishes what survives through the primitive, and composes the
-dream report's enforcement record. **Filtering out becomes promoting in.** It
+decides per path what happens — promote, promote a merged version, promote a
+scrubbed version, or refuse-and-report — runs four policy gates, publishes what
+survives through the primitive, and composes the dream report's enforcement
+record. **The gates do NOT share one input:** the secret scan judges what the
+BRAIN wrote, before the merge; the other three judge the MERGED bytes that would
+actually be published. **Table D owns that split and this summary states none of
+its rule.** **Filtering out becomes promoting in.** It
 ships with no caller: `WP-dream-promote-in-workspace` is the package that makes
 it true of the running product.
 
@@ -127,30 +157,36 @@ it, and none may attribute it to any repository-status property of the workspace
   dispatch, and from its spec's `### Exact contracts` block, rather than
   restated here** (`docs/specs/done/WP-dream-vault-write-primitive.md`).
 - `src/core/dream/workspace.js` — `createWorkspace`, `destroyWorkspace` and the
-  exported containment helper `isAtOrBeneath`. This module calls none of them;
-  the containment helper is named only as the implementation of the rule the
-  Dispatch precondition cites.
+  exported containment helper `isAtOrBeneath`. This module calls neither
+  lifecycle function. **It DOES call `isAtOrBeneath`, and only there: to check
+  that the merge's temp root is not at or beneath the workspace (Table C, row
+  M2's cwd clause).** Amended after the PR-review gate found that
+  `os.tmpdir()` honours the ambient `TMPDIR` — which the dream already passes
+  through to the brain (`brain.js:225`) — so CLAIM 2b had to be CHECKED rather
+  than assumed. **This is a CONSUMER of the family's one containment rule, not
+  a second implementation of it**, which is what the Implementation-notes
+  prohibition forbids; the rule itself is still owned by Table H.
 - `src/core/dream/delta.js` — `captureBaseline` and `computeDelta`, git-free,
   spawns nothing. **`computeDelta` still has no consumer**; this module is the
   first code to read its records, and the pipeline package is the first to call
   it. A binary record deliberately carries no line numbers, so the consumer
   "withholds what it cannot scan" (`delta.js:517-520`) — Table D turns that into
   a refusal.
-- `src/core/dream/validate.js` (1469 lines) — the four gates as they exist
+- `src/core/dream/validate.js` (1471 lines) — the four gates as they exist
   today, all deriving their evidence from git in the vault: ledger validation
-  (`ledgerViolation`, `:1156`), the ADR-0020 skill-body guard
-  (`skillBodyViolation`, `:1187`) and the Tier-3 floor (`tier3Decision`,
-  `:1194`) inside Step 2's per-path classification (`:1144`); the EP2 secret
-  gate as Step 3 (`:1211`), whose shipped redact arm is at `:1269-1294`, whose
-  separate counters are at `:1064-1072`, whose unscannable-binary refusal is at
-  `:1239-1255`, and whose revert, re-stage and index-drop core is at
-  `:1324-1332`. **None of these is modified here** — Table D states the input
+  (`ledgerViolation`, `:1157`), the ADR-0020 skill-body guard
+  (`skillBodyViolation`, `:1188`) and the Tier-3 floor (`tier3Decision`,
+  `:1195`) inside Step 2's per-path classification (`:1145`); the EP2 secret
+  gate as Step 3 (`:1212`), whose shipped redact arm is at `:1270-1295`, whose
+  separate counters are at `:1065-1073`, whose unscannable-binary refusal is at
+  `:1240-1256`, and whose revert, re-stage and index-drop core is at
+  `:1325-1333`. **None of these is modified here** — Table D states the input
   and order this module applies to
   the gates it is HANDED, and extracting the real gate functions into that shape
   is the pipeline package's work. Step 4 appends the enforcement section to the
-  dream report (`:1374`), interpolating two brain-influenceable values per line
-  (`:1385-1386`). The repo already reasons about case-insensitive
-  instruction-file matching at `:1083-1086`.
+  dream report (`:1375`), interpolating two brain-influenceable values per line
+  (`:1386-1387`). The repo already reasons about case-insensitive
+  instruction-file matching at `:1084-1087`.
 - `src/core/digest.js` — `sanitizeProjectName` (`:414-418`), exported at `:867`.
   **Named here only because the T1 cut moved its consumer**: the sanitizer
   neutralises the report's code-authored section, which is
@@ -222,7 +258,27 @@ under "Discovered issues" in the PR body.
  *           baseline:import('./delta').Baseline,
  *           delta:ReturnType<import('./delta').computeDelta>,
  *           layout:import('../layout').VaultLayout,
- *           gates}} o
+ *           gates:{secret:Function, skillBody:Function, tier3:Function,
+ *                  ledger:Function},
+ *           registry?:object, extractsBySession?:Map<string,object>,
+ *           writeFile?:typeof writeIntoVault,
+ *           spawnGit?:typeof spawnGitForMerge}} o
+ *    **ELEVEN MEMBERS, and the type is CLOSED (corrected 2026-08-30, round 6's
+ *    finding 1).** An earlier form stopped at `gates}}` and listed seven, which
+ *    left this block — the surface the first consumer builds its call from —
+ *    unable to express what Table D's own rows require. `registry` and
+ *    `extractsBySession` are NOT conveniences: the skill-body row and the
+ *    ledger row name them as gate inputs, and that table's rule (b) states that
+ *    the values must arrive as inputs or the gate cannot be built. `gates` is
+ *    structurally typed here for the same reason its four members are named in
+ *    Table D. `writeFile` and `spawnGit` are TEST SEAMS with real defaults, and
+ *    are optional precisely because no caller in the product supplies them
+ *    registry the ownership-registry snapshot, threaded to the two gates whose
+ *           Table D rows name it — the skill-body guard and the ledger
+ *           validator. Table D owns why it must be an input and this block
+ *           states none of that rule
+ *    extractsBySession this run's extracts keyed by session, threaded to the
+ *           ledger validator under the same rule
  *    delta  the run's classified changes, computed by the CALLER. Passed in
  *           rather than computed here because the caller needs the same result
  *           for its own non-vacuity decision (`WP-dream-promote-in-workspace`,
@@ -230,7 +286,10 @@ under "Discovered issues" in the PR body.
  *           would let the two answers disagree
  *    date   the run's date, which names the report `<reports_dir>/<date>.md`
  *           (Tables D and R). Supplied rather than derived so the module reads
- *           no clock
+ *           no clock. **Its SHAPE, and what this module must check before it
+ *           hands the value to any gate, are Table D's `date` row's — `string`
+ *           is all the TYPE can carry, and this block states none of that
+ *           row's rule**
  *    gates  the four decision functions of Table D, injected rather than
  *           imported so `promote.js` does not depend on `validate.js`. Their
  *           inputs differ BY GATE, and Table D owns them: the EP2 secret gate
@@ -240,12 +299,11 @@ under "Discovered issues" in the PR body.
  *           authorizing input. The three post-merge gates return a refusal
  *           reason or null; the EP2 gate returns the ADR-0034 taxonomy, and
  *           **every arm of it that preserved anything carries the GATE's half
- *           of the PRESERVATION RECORD — `Array<GateReportedCopy>`, the fields
- *           the gate fills. This module completes each entry with
- *           `remediation` at the point it records that path's outcome, which
- *           is why what it RETURNS is `Array<PreservedCopy>`. Table Q rows Q1
- *           and Q9 own that shape and its per-field provenance, and this block
- *           does not restate their rules. The REDACT arm additionally carries
+ *           of the PRESERVATION RECORD — `Array<GateReportedCopy>` — while what
+ *           this module RETURNS is `Array<PreservedCopy>`, and the two-typedef
+ *           split above is what carries the per-field provenance between them.
+ *           Table Q rows Q1 and Q9 own that shape and which party fills each
+ *           field, and this block restates neither. The REDACT arm additionally carries
  *           `redaction`, a complete `RedactionAccounting` — both of its fields
  *           are the gate's, so this module passes the object through and
  *           completes nothing on it (row Q10).**
@@ -283,9 +341,10 @@ under "Discovered issues" in the PR body.
  *    gate wrote: the copy behind an ordinary redaction, the copy written before
  *    a redaction was followed by a refusal, and the copies the withhold arm
  *    produces and keeps. The reason string carries none of them.
- *    **Every entry this module RETURNS is COMPLETE — the gate's fields plus
- *    the `remediation` this module assigns — so every surface downstream of
- *    this return only ever READS.** Table Q
+ *    **Every entry this module RETURNS is COMPLETE — it is a `PreservedCopy`
+ *    and not a `GateReportedCopy`, and the two-typedef split above is what
+ *    carries the per-field provenance — so every surface downstream of this
+ *    return only ever READS.** Table Q
  *    row Q1 owns which arms carry it, row Q9 owns an entry's fields AND which
  *    party fills each of them, row Q8
  *    owns why a refusing arm carries it at all, and Table S row S3 owns why a
@@ -296,7 +355,7 @@ under "Discovered issues" in the PR body.
  *    consumes (`WP-dream-promote-in-workspace`, Table G) — never a parsed
  *    refusal reason. ONLY `withheld`
  *    defers a transcript; `redactions` is accounting (the sanitized note WAS
- *    promoted, so its transcript was consumed — `validate.js:1064-1072`).
+ *    promoted, so its transcript was consumed — `validate.js:1065-1073`).
  *    Named `withheld`, not `reverts`: promotion never wrote the bytes, so
  *    there is nothing to revert */
 function promote(o)
@@ -424,7 +483,7 @@ prescription this table would have to keep true for the life of the module.
 | C6 | delta status is `modified` and `vault-now` differs from `baseline`, and the three-way merge exits clean | **promote the MERGED bytes** |
 | C7 | delta status is `modified`, `vault-now` differs, and the merge conflicts | **refuse-and-report. The note stays in the USER's live version** |
 | C8 | delta status is `modified` and the path is gone from `vault-now` (the user deleted it during the run) | **refuse-and-report** — modify/delete is a conflict, and the user's deletion wins |
-| C9 | **the promotion allowlist — this spec's `admit`, applied by the primitive to the RESOLVED path, and evaluated once on the candidate before that** | **Where it is applied is part of the rule.** C9 is handed to `writeIntoVault` as its `admit` callback, and the primitive calls it with the path the write actually resolves to, never the candidate path (Table H, the PRIMITIVE's row H1). **The DEFINITIVE application is that one.** The same predicate is ALSO evaluated on the candidate path before any gate runs, which is what makes row C1 orderable ahead of Table D — a denial the candidate form can decide is refused there, with C1's reason, and never reaches a gate. **The two are one predicate applied twice, not two rules: the candidate pass may only REFUSE, never admit**, because a candidate it admits can still resolve into a denied directory and the primitive is the party that finds out. Table C's header owns that ordering and its consequences (added 2026-08-29; the header previously stated C1 as wholly pre-gate, which this cell's "never the candidate path" clause contradicted). Measured motivation: a pre-existing vault symlink — `01-Projects/alias` → `../reports/dreams`, or → `../.claude` — makes a lexically admitted `01-Projects/alias/evil.md` land in a denied directory, and vault containment alone cannot see it because the resolved target is still inside the vault. **Matching is CANONICALISED then CASE-FOLDED, in that order:** the primary filesystem is case-insensitive — measured, a file created as `claude.md` answers to `CLAUDE.md` — so a literal comparison admits `agents.override.md` while the harness still loads it as an instruction file (the repo reasons this way already at `validate.js:1083-1086`). Case folding alone is not enough either: macOS enumerates decomposed names while accepting composed ones, and measured, `nfc.toLowerCase() === nfd.toLowerCase()` is FALSE for the same directory inode — so an instruction-file basename spelled composed and the same name spelled decomposed are one file that rule (c)'s deny-list would match in one form and miss in the other. **Every comparison in this row — the tier prefixes, the ADMITTED `reports_dir` prefix, the basenames and the segment names — normalises to NFC first**, and so does every layout value it compares against. With that settled, a path is admitted when ALL hold: (a) it is under one of the layout's writable tier directories — `identity_dir`, `daily_dir`, `projects_dir`, `skills_dir`, `inbox_dir` (`layout.js:21-29`; `daily_filename` is not a directory) — or under `02-Areas/` or `03-Resources/`; **or under the layout's `reports_dir` — which is ADMITTED, not denied (owner ruling, 2026-08-27). The shipped skill requires the brain to author the report (`skills/wienerdog-dream/SKILL.md:409-425`), so the report is brain content and must be admitted here;** (b) its final component ends in `.md`; (c) its basename is not one of the current harness instruction-file shapes — `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md` — at any depth, AND no path segment is `.claude` or `.codex`, AND the basename is not `.mcp.json`. (a) and (b) are a positive allowlist and close the class M7's remediation asks for — a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json` and an Obsidian plugin binary are all outside it without anyone enumerating them. (c) is a **named deny-list of the CURRENT conventions: the product itself already treats `AGENTS.override.md` as a live shadowing convention (`src/adapters/codex.js`), and `CLAUDE.local.md` / recursively-discovered `.claude/**` are current Claude conventions — so `.md` is not a safe content-only extension, and this list is stated as one that will not cover the NEXT convention.** It exists because (a) and (b) cannot reach an instruction file written inside a tier directory |
+| C9 | **the promotion allowlist — this spec's `admit`, applied by the primitive to the RESOLVED path, and evaluated once on the candidate before that** | **Where it is applied is part of the rule.** C9 is handed to `writeIntoVault` as its `admit` callback, and the primitive calls it with the path the write actually resolves to, never the candidate path (Table H, the PRIMITIVE's row H1). **The DEFINITIVE application is that one.** The same predicate is ALSO evaluated on the candidate path before any gate runs, which is what makes row C1 orderable ahead of Table D — a denial the candidate form can decide is refused there, with C1's reason, and never reaches a gate. **The two are one predicate applied twice, not two rules: the candidate pass may only REFUSE, never admit**, because a candidate it admits can still resolve into a denied directory and the primitive is the party that finds out. Table C's header owns that ordering and its consequences (added 2026-08-29; the header previously stated C1 as wholly pre-gate, which this cell's "never the candidate path" clause contradicted). Measured motivation: a pre-existing vault symlink — `01-Projects/alias` → `../reports/dreams`, or → `../.claude` — makes a lexically admitted `01-Projects/alias/evil.md` land in a denied directory, and vault containment alone cannot see it because the resolved target is still inside the vault. **Matching is CANONICALISED then CASE-FOLDED, in that order:** the primary filesystem is case-insensitive — measured, a file created as `claude.md` answers to `CLAUDE.md` — so a literal comparison admits `agents.override.md` while the harness still loads it as an instruction file (the repo reasons this way already at `validate.js:1084-1087`). Case folding alone is not enough either: macOS enumerates decomposed names while accepting composed ones, and measured, `nfc.toLowerCase() === nfd.toLowerCase()` is FALSE for the same directory inode — so an instruction-file basename spelled composed and the same name spelled decomposed are one file that rule (c)'s deny-list would match in one form and miss in the other. **Every comparison in this row — the tier prefixes, the ADMITTED `reports_dir` prefix, the basenames and the segment names — normalises to NFC first**, and so does every layout value it compares against. With that settled, a path is admitted when ALL hold: (a) it is under one of the layout's writable tier directories — `identity_dir`, `daily_dir`, `projects_dir`, `skills_dir`, `inbox_dir` (`layout.js:21-29`; `daily_filename` is not a directory) — or under `02-Areas/` or `03-Resources/`; **or under the layout's `reports_dir` — which is ADMITTED, not denied (owner ruling, 2026-08-27). The shipped skill requires the brain to author the report (`skills/wienerdog-dream/SKILL.md:409-425`), so the report is brain content and must be admitted here;** (b) its final component ends in `.md`; (c) its basename is not one of the current harness instruction-file shapes — `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md` — at any depth, AND no path segment is `.claude` or `.codex`, AND the basename is not `.mcp.json`. (a) and (b) are a positive allowlist and close the class M7's remediation asks for — a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json` and an Obsidian plugin binary are all outside it without anyone enumerating them. (c) is a **named deny-list of the CURRENT conventions: the product itself already treats `AGENTS.override.md` as a live shadowing convention (`src/adapters/codex.js`), and `CLAUDE.local.md` / recursively-discovered `.claude/**` are current Claude conventions — so `.md` is not a safe content-only extension, and this list is stated as one that will not cover the NEXT convention.** It exists because (a) and (b) cannot reach an instruction file written inside a tier directory |
 | M1 | Merge mechanics | **Merge on a COPY; promote only on a clean merge.** Measured on git 2.50.1: `git merge-file` exits 1 and writes conflict markers **INTO the target** — for a divergent edit and for modify/delete alike — so merging on the user's live note would violate the very guarantee refuse-and-report exists to keep. Clean divergent edits exit 0 with correct merged bytes |
 | M2 | The merge's git invocation | The merge exit code is a security decision (clean → promote), so the invocation takes the dependency's **constructed-environment** discipline verbatim (`WP-dream-baseline-delta-primitive`, its own Table C — a different spec's letter-space, not row C1-C9 here): an environment BUILT from nothing rather than filtered, config and attribute roots pointed at directories this run created empty, a cwd outside any repository, and the verified absolute executable via `spawnPinnedSync` (`src/core/exec-identity.js`). **This spec does not restate that recipe — the dependency owns it, and its spec is a Done record on main: `docs/specs/done/WP-dream-baseline-delta-primitive.md`, Table C.** Measured here as corroboration, not as the guarantee: an armed `merge=` driver via `core.attributesFile` does not reach `merge-file`, and a hostile global config did not move an exit code. That enumeration is not trusted — this program's record at enumerating git's influence channels is 0 for 4, which is precisely why the answer is construction rather than a blocklist. **Named residual, inherited:** absolute verified invocation prevents PATH selection of an impostor; it does not freeze the executable's bytes. **The cwd rule is also this module's share of CLAIM 2b** (sibling Table F, row 2b) — the merge is the only git this module runs, and it never runs it with a cwd at or beneath the workspace root. The product-wide form of that claim is the pipeline package's |
 | M3 | Repository attribute sensitivity | **DISCHARGED here, as the dependency required.** The dependency named this as the successor's obligation. Discharged structurally: classification is `computeDelta`, which is git-free and reads no attributes; the workspace contains no `.git` (sibling Table A, Postcondition 1); and the only git this package runs against workspace content is the merge, under the constructed roots above. There is no path by which a repository attribute reaches a promotion decision |
@@ -436,7 +495,7 @@ Steps 2 and 3). Under this design none of them consults git: the secret gate
 judges the brain's added lines against the baseline, and the other three judge
 the MERGED candidate bytes — which include the user's diverging edits, and are
 therefore exactly what would be promoted. The **order inverts** relative to
-today: today the secret gate runs LAST (`:1211`, after Step 2's three); here it
+today: today the secret gate runs LAST (`:1212`, after Step 2's three); here it
 runs FIRST. **FIRST AMONG THESE FOUR — this table orders the
 gates against each other and against the merge, and it does NOT order them
 against Table C's rows.** That cross-ordering is decided in Table C's header
@@ -446,7 +505,7 @@ paragraph and is not restated here.
 gates are injected (`### Exact contracts`), so this package proves the order and
 the input routing against injected gates, and never touches `validate.js`.
 Extracting the real four into this input shape, and deleting the enforcement
-half that reverts and re-stages (`:1324-1332`), is
+half that reverts and re-stages (`:1325-1333`), is
 `WP-dream-promote-in-workspace`'s work under its own boundary — **a named
 handoff, not an omission.**
 
@@ -454,8 +513,8 @@ The EP2 gate is not a two-value gate. Per binding ADR-0034 its disposition is a
 **taxonomy**, not `reason|null`: a context-free high-entropy hit is REDACTED,
 not refused — the unredacted copy is preserved to quarantine, the added lines
 are scrubbed, the sanitized candidate is promoted, the redaction is reported,
-and it is counted separately from a hard refusal (`validate.js:1269-1294` is the
-shipped redact arm, `:1064-1072` its separate counters). So EP2 returns one of
+and it is counted separately from a hard refusal (`validate.js:1270-1295` is the
+shipped redact arm, `:1065-1073` its separate counters). So EP2 returns one of
 {pass, refuse-with-reason, redact-with-sanitized-bytes}; the other three gates
 stay `reason|null`.
 
@@ -464,7 +523,7 @@ no line numbers for a binary record — deliberately, so the consumer "withholds
 what it cannot scan" (`delta.js:517-520`) — and an EP2 gate defined only over
 added lines would see an empty scan and pass it, after which nothing else stops
 an ordinary `.md` and it is promoted raw. Today's validator does the missing
-work explicitly (`validate.js:1239-1255`: binary staged content "cannot be
+work explicitly (`validate.js:1240-1256`: binary staged content "cannot be
 secret-scanned; not committed"), so passing it would be a regression against
 shipped behaviour. **A delta record marked binary, or carrying bytes that are
 not lossless UTF-8, is refused by EP2 with that reason** — the empty scan is
@@ -472,14 +531,15 @@ never evidence of safety.
 
 | Gate | Today | Decision input here | Position | Refusal remedy |
 |---|---|---|---|---|
-| EP2 secret gate (ADR-0034) | `validate.js:1211` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | **per ADR-0034's taxonomy:** a hard secret → withhold from promotion + preserve to quarantine; a context-free high-entropy hit → **redact** (scrub the added lines, preserve the unredacted copy to quarantine, promote the sanitized candidate, report it, count it separately). Both quarantine writes are the GATE's own act, not this module's — **and what they PRODUCE travels back in the gate's result on the PRESERVATION RECORD, which every preserving arm carries — this one included: Table Q rows Q1 and Q9 own that shape, and the only-copy invariant Q4 binds every party that could destroy a working copy.** **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1324-1332` is its revert core) has no subject and goes — in the pipeline package. **No line count is stated here** |
-| Skill-body guard (ADR-0020) | `validate.js:1187` `skillBodyViolation(vaultDir, rel, change, layout, registry, date)`, which additionally reads `HEAD:<rel>` (`:340`) and `HEAD:<ledgerRel>` (`:398`) | **the merged candidate skill bytes, the BASELINE skill bytes, the BASELINE ledger bytes, the ownership-registry snapshot, `rel`, `layout`, and the run date.** **Its authorizing input is the BASELINE ledger, never the post-brain one** — otherwise the brain authorizes its own skill rewrite within a single run. The two `HEAD:` reads become baseline reads; nothing else about the gate changes | AFTER the merge | refuse-and-report; the note stays in the user's live version |
-| Tier-3 floor | `validate.js:1194` `tier3Decision(vaultDir, rel)`, which reads the file | **the merged candidate bytes, plus `rel` and `layout`** — enough to establish whether the gate applies at all. The frozen A0 profile it consults is process state, not run evidence, and is unchanged | AFTER the merge | refuse-and-report |
-| Ledger validation | `validate.js:1156` `ledgerViolation(vaultDir, rel, change, layout, registry, extractsBySession)`, which additionally reads `HEAD:<rel>` (`:555`) and this run's extracts (`:600`) | **the merged candidate ledger bytes, the BASELINE ledger bytes, the paired SKILL.md bytes selected by the atomicity row's pair decision, the ownership-registry snapshot, THIS RUN'S EXTRACTS keyed by session, `rel`, and `layout`** | AFTER the merge | refuse-and-report |
-| **The gates' evidence is enumerated, not summarised — and WHY (round 3, F2)** | — | — | — | an earlier form of the three rows above said "the merged candidate bytes" and stopped. **Measured, that is false of all three:** the skill guard takes a registry snapshot and the run date, the ledger validator takes a registry snapshot and `extractsBySession`, and both read committed baselines. **Their verdicts are therefore NOT functions of the candidate bytes** — identical ledger bytes must be refused or admitted depending on whether the named session appears in this run's extracts and invoked the parent skill (`validate.js:589-606`). A spec that understated this would let an extraction preserve the byte checks and silently drop ADR-0020's ownership, history and invocation-binding controls, while passing every case the spec listed. **Two rules follow: (a) each gate receives every value its row names, and (b) NO gate may substitute a vault re-read or a git query for any of them** — G7 forbids the git route and Table S row S4 forbids the re-read route, so the values must arrive as inputs or the gate cannot be built |
+| EP2 secret gate (ADR-0034) | `validate.js:1212` — `git add -A` then `git diff --cached --numstat` per path | the delta's `addedLineNumbers` and derived scan text over the workspace's after-bytes vs the baseline — exactly the bytes this run is responsible for, which is the same property the staged-diff form had | **BEFORE the merge** | **per ADR-0034's taxonomy:** a hard secret → withhold from promotion + preserve to quarantine; a context-free high-entropy hit → **redact** (scrub the added lines, preserve the unredacted copy to quarantine, promote the sanitized candidate, report it, count it separately). Both quarantine writes are the GATE's own act, not this module's — **and what they PRODUCE travels back in the gate's result on the PRESERVATION RECORD, which every preserving arm carries — this one included: Table Q rows Q1 and Q9 own that shape, and the only-copy invariant Q4 binds every party that could destroy a working copy.** **There is nothing to revert**, because nothing was written to the vault: the enforcement half that reverts, re-stages and drops index entries (`:1325-1333` is its revert core) has no subject and goes — in the pipeline package. **No line count is stated here** |
+| Skill-body guard (ADR-0020) | `validate.js:1188` `skillBodyViolation(vaultDir, rel, change, layout, registry, date)`, which additionally reads `HEAD:<rel>` (`:341`) and `HEAD:<ledgerRel>` (`:399`) | **the merged candidate skill bytes, the BASELINE skill bytes, the BASELINE ledger bytes, the ownership-registry snapshot, `rel`, `layout`, and the run date.** **Its authorizing input is the BASELINE ledger, never the post-brain one** — otherwise the brain authorizes its own skill rewrite within a single run. The two `HEAD:` reads become baseline reads; nothing else about the gate changes | AFTER the merge | refuse-and-report; the note stays in the user's live version |
+| Tier-3 floor | `validate.js:1195` `tier3Decision(vaultDir, rel)`, which reads the file | **the merged candidate bytes, plus `rel` and `layout`** — enough to establish whether the gate applies at all. The frozen A0 profile it consults is process state, not run evidence, and is unchanged | AFTER the merge | refuse-and-report |
+| Ledger validation | `validate.js:1157` `ledgerViolation(vaultDir, rel, change, layout, registry, extractsBySession)`, which additionally reads `HEAD:<rel>` (`:556`) and this run's extracts (`:601`) | **the merged candidate ledger bytes, the BASELINE ledger bytes, the paired SKILL.md bytes selected by the atomicity row's pair decision, the ownership-registry snapshot, THIS RUN'S EXTRACTS keyed by session, `rel`, and `layout`** | AFTER the merge | refuse-and-report |
+| **The gates' evidence is enumerated, not summarised — and WHY (round 3, F2)** | — | — | — | an earlier form of the three rows above said "the merged candidate bytes" and stopped. **Measured, that is false of all three:** the skill guard takes a registry snapshot and the run date, the ledger validator takes a registry snapshot and `extractsBySession`, and both read committed baselines. **Their verdicts are therefore NOT functions of the candidate bytes** — identical ledger bytes must be refused or admitted depending on whether the named session appears in this run's extracts and invoked the parent skill (`validate.js:590-607`). A spec that understated this would let an extraction preserve the byte checks and silently drop ADR-0020's ownership, history and invocation-binding controls, while passing every case the spec listed. **Two rules follow: (a) each gate receives every value its row names, and (b) NO gate may substitute a vault re-read or a git query for any of them** — G7 forbids the git route and Table S row S4 forbids the re-read route, so the values must arrive as inputs or the gate cannot be built |
+| **The `date` INPUT'S SHAPE — decided here, because this table owns what the gates are HANDED (added 2026-08-30, routed by the PR gate's round-4 finding 5 as a SPEC FAULT)** | — | — | — | **`date` must match `/^\d{4}-\d{2}-\d{2}$/`, and `promote()` refuses to run on any other value** — thrown with the module's other argument checks, never a per-path refusal, because a malformed `date` is a caller bug and not a policy outcome. **The shape is a contract rather than an implementer's guess because `date` reaches two consumers that BUILD A NAME OUT OF IT, and both are owned elsewhere: this row CITES them and restates neither.** (i) The EP2 gate composes the quarantine artifact's basename `<date>-<sanitized-basename>` — **only the basename half is sanitized, so `date` is an UNSANITIZED path component** (`src/core/dream/validate.js:683`, whose own `@param` at `:693` already declares `YYYY-MM-DD`); that artifact's durable lifecycle is `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s (rows Q5 and Q6). (ii) The same value names the report `<reports_dir>/<date>.md`, which `WP-dream-promote-report`'s report row owns. **Why the total pattern and not the weaker "no path separators":** the pattern is a POSITIVE ALLOWLIST — it admits no separator in either direction, no `.` and no `..`, on every platform, and nobody has to enumerate what a path separator is; enumerating is exactly what row C9 rejects for the same reason, and what this program's string-level path reasoning has measured is the containment lesson the Dispatch precondition cites. The pattern also MATCHES what both cited surfaces already spell rather than merely permitting it — **a module looser than its own consumer's declared contract is the gap this row closes**. **It is a SHAPE and not a calendar: `9999-99-99` passes, and nothing in this family needs it not to.** **Corroboration, not a second owner:** the skill-body guard's row above already names the run date among its inputs, and there it is compared against a note's `updated` frontmatter (`validate.js:282`), which the vault writes in the same spelling — so the pattern is also what keeps that comparison meaningful |
 | **Why this order** | — | — | — | EP2 runs first and scans the BRAIN's added bytes because those are what the run authored and is responsible for (ADR-0034 is about the AI's accidental persistence); the other three gates run after the merge because a Tier-3/skill/ledger judgment must be made on the MERGED bytes, which are exactly what would be promoted — a gate judging pre-merge bytes would not be judging what is promoted, and that is a data-loss contract, not an implementation detail. **Owner-ruled correction:** the earlier rationale — "scanning the merged bytes would force discarding the user's diverging edits" — is FALSE, because refuse-and-report (C7) already leaves the user's live version untouched. EP2 is pre-merge and brain-scoped by CHOICE, not by that false necessity, and the consequence is a named residual (Security checklist): a secret the USER writes into their own note during the run rides a clean C6 merge into the dream commit unscanned. That is the user's own content in their own vault — the dream commits it but did not author it — and making the secret gate refuse or redact a user's own note was ruled the worse trade |
 | **Atomicity: the skill-guard ↔ ledger pair** | — | — | — | the pair promotes **atomically at the DECISION**: both outcomes are decided before either is written, so a policy failure on one refuses BOTH — the guard authorizes the skill from the ledger and the ledger is validated from the skill, and promoting one while refusing the other would leave the vault inconsistent. Enforced by Table E's decide-then-write ordering. **This does NOT claim write-atomicity across the two paths**: if the first `rename` succeeds and the second fails (ENOSPC/EIO/kill), the vault holds a half-applied pair. Same-directory `rename` is atomic for ONE path, not across two, and rollback/crash-replay of a partial publish is the residue-lifecycle successor's subject, named in Out of scope — this row claims decision-atomicity and says so |
-| The dream report | `validate.js:1374-1409` | **MOVED — `WP-dream-promote-report` owns the report row, Table Y and Table R.** What stays true here and matters to the gates: the brain writes `<reports_dir>/<date>.md` in the WORKSPACE, C9 admits `reports_dir`, and **three of the four gates above do not match a path under `reports_dir` and pass it through** — the gate rows are what say which gate applies where. Everything else about the report, including the second write and the fallback, is that package's | judged with the rest | that package's |
+| The dream report | `validate.js:1375-1410` | **MOVED — `WP-dream-promote-report` owns the report row, Table Y and Table R.** What stays true here and matters to the gates: the brain writes `<reports_dir>/<date>.md` in the WORKSPACE, C9 admits `reports_dir`, and **three of the four gates above do not match a path under `reports_dir` and pass it through** — the gate rows are what say which gate applies where. Everything else about the report, including the second write and the fallback, is that package's | judged with the rest | that package's |
 
 ### Table R — MOVED to `WP-dream-promote-report`
 
@@ -623,15 +683,15 @@ list here was one of four surfaces giving three different answers.
 | # | Fact / rule | Value |
 |---|---|---|
 | Q1 | **The taxonomy, and WHICH ARMS CARRY THE PRESERVATION RECORD** | `{ok}` \| `{refuse, reason, preserved}` \| `{redact, sanitizedBytes, redaction, preserved}`. **`redaction` is the REDACTION ACCOUNTING — row Q10 decides its fields, WHO fills each and WHEN, and which shapes may carry it; this row restates none of that.** What THIS row decides about it is that it is on the redact arm ALONE: the other two arms have no `redaction` field at all, because no scrub happened on them. **An earlier form of this row defined `lines` and `labels` inline, which made this the second surface deciding them once the report half needed the same shape** (2026-08-29, the disclosure-parity ruling). **`preserved` is the PRESERVATION RECORD — row Q9 decides its entries, its fields, and WHICH PARTY fills each field and when; this row restates none of that. On these GATE arms it carries the gate-filled fields only (`Array<GateReportedCopy>`), because the gate reports no `remediation`; this module completes every entry before the record leaves `promote()`.** What THIS row decides is which arms carry it: **`{ok}` has no `preserved` field at all** (nothing was preserved and nothing may be inferred), **the redact arm carries it**, and **the refuse arm carries it too — the hard withhold included.** It is REQUIRED wherever it appears and EMPTY when that arm preserved nothing, which is a positive statement of absence rather than a missing field (row S2's lesson). **The gap this closes, stated because it is what ended a nine-round loop:** until 2026-08-29 this row gave the refuse arm `{refuse, reason}` while Table D said BOTH quarantine writes are the gate's own act and that what they produce travels back in the gate's result — so row Q8 required a field the taxonomy could not deliver, and a contract that requires what its own taxonomy cannot produce is not implementable |
-| Q2 | **THE GATE-FILLED FIELDS ARE REPORTED, NEVER PREDICTED** | the preserving call resolves collisions itself and returns the name it actually used (`validate.js:669-738`), so row Q9's `artifact` is that returned name and its `location` is the directory the gate says it wrote to. A caller that reconstructs either — the name from the date and the path, or the directory from a layout this module does not own (row Q7) — points the user at a file that does not exist, on exactly the runs where two notes collide. **This row exists because the pre-pass-(b) interface had no field for the name at all**, so the only available implementation was to guess. **SCOPE — narrowed by owner ruling on 2026-08-29, round 3, and this is the only thing that changed: this prohibition binds THE FIELDS THE GATE FILLS, which row Q9 names as `artifact` and `location`. It does NOT reach `remediation`, for which the gate reports no value at all** — that field is ASSIGNED by this module at outcome time, and row Q9 owns who fills each field and when. **An earlier form of this row said "every field of it", which asserted of the whole entry a provenance one of its fields does not have** — a false universal that would have sent an implementer looking for a gate value that is not there, and that is the defect the per-field statement in row Q9 exists to make impossible for the next field anyone adds |
-| Q3 | **For a copy on the REDACTED shelf, the report line is the user's ONLY route back to it** | `state/quarantine/redacted/` deliberately carries no digest banner — measured in the banner's own source, which excludes that subdirectory and says the dream report announces it instead (`src/core/digest.js:847-849`, and `listSecretQuarantine` at `:853-863` is what builds the list) — so nothing else announces the file. Table R's report therefore carries one line per preserved copy, naming the path and the entry's fields, and for a redaction the `redaction` accounting row Q10 owns as well — the shape shipped today at `validate.js:1392-1409`. **Losing the line loses the copy in practice, which is why this is a data-loss row and not a reporting nicety.** **This row does NOT make the same claim for the WITHHELD shelf, and measuring that was part of the shape ruling:** a withheld copy is announced by that same shipped state-driven banner (`digest.js:817-822`). It is on the record anyway, and row Q9 says on what ground — contract coherence and typed composition, not an unannounced file |
-| Q4 | **THE ONLY-COPY INVARIANT — the highest-damage item the measurement found (I067)** | **nothing may destroy the working copy of a note unless some durable artifact byte-identically holds THE BYTES THAT ARE THERE NOW.** Not an earlier version: the note's owner can have saved it mid-run, and a copy of what it used to be is not a copy of what they wrote. **The SHIPPED enforcement of it — the fail-loud abort (`validate.js:1298-1323`), the condition that fires it and every field of the message it raises — is decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`** (that spec's own letter-space: its Table B row B3b decides the condition, its Table Q row Q18 decides the message), **is asserted and mutation-covered there, and is restated NOWHERE here.** An earlier form of this row summarised that message as distinguishing three states; measured against the owner, the message decides FOUR fields and its identity disposition has three values of its own — so the summary was both weaker than the thing it summarised and already drifting from it. **What is THIS family's, and is genuinely new:** under promotion the destruction risk moves but does not vanish — the workspace, not the vault, is what teardown removes — so **the invariant binds the pipeline's teardown too, and `WP-dream-promote-in-workspace` row G5 cites this row.** No surface may weaken it to "a copy was attempted" |
+| Q2 | **THE GATE-FILLED FIELDS ARE REPORTED, NEVER PREDICTED** | the preserving call resolves collisions itself and returns the name it actually used (`validate.js:670-739`), so row Q9's `artifact` is that returned name and its `location` is the directory the gate says it wrote to. A caller that reconstructs either — the name from the date and the path, or the directory from a layout this module does not own (row Q7) — points the user at a file that does not exist, on exactly the runs where two notes collide. **This row exists because the pre-pass-(b) interface had no field for the name at all**, so the only available implementation was to guess. **SCOPE — narrowed by owner ruling on 2026-08-29, round 3, and this is the only thing that changed: this prohibition binds THE FIELDS THE GATE FILLS, which row Q9 names as `artifact` and `location`. It does NOT reach `remediation`, for which the gate reports no value at all** — that field is ASSIGNED by this module at outcome time, and row Q9 owns who fills each field and when. **An earlier form of this row said "every field of it", which asserted of the whole entry a provenance one of its fields does not have** — a false universal that would have sent an implementer looking for a gate value that is not there, and that is the defect the per-field statement in row Q9 exists to make impossible for the next field anyone adds |
+| Q3 | **For a copy on the REDACTED shelf, the report line is the user's ONLY route back to it** | `state/quarantine/redacted/` deliberately carries no digest banner — measured in the banner's own source, which excludes that subdirectory and says the dream report announces it instead (`src/core/digest.js:847-849`, and `listSecretQuarantine` at `:853-863` is what builds the list) — so nothing else announces the file. Table R's report therefore carries one line per preserved copy, naming the path and the entry's fields, and for a redaction the `redaction` accounting row Q10 owns as well — the shape shipped today at `validate.js:1393-1410`. **Losing the line loses the copy in practice, which is why this is a data-loss row and not a reporting nicety.** **This row does NOT make the same claim for the WITHHELD shelf, and measuring that was part of the shape ruling:** a withheld copy is announced by that same shipped state-driven banner (`digest.js:817-822`). It is on the record anyway, and row Q9 says on what ground — contract coherence and typed composition, not an unannounced file |
+| Q4 | **THE ONLY-COPY INVARIANT — the highest-damage item the measurement found (I067)** | **nothing may destroy the working copy of a note unless some durable artifact byte-identically holds THE BYTES THAT ARE THERE NOW.** Not an earlier version: the note's owner can have saved it mid-run, and a copy of what it used to be is not a copy of what they wrote. **The SHIPPED enforcement of it — the fail-loud abort (`validate.js:1299-1324`), the condition that fires it and every field of the message it raises — is decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`** (that spec's own letter-space: its Table B row B3b decides the condition, its Table Q row Q18 decides the message), **is asserted and mutation-covered there, and is restated NOWHERE here.** An earlier form of this row summarised that message as distinguishing three states; measured against the owner, the message decides FOUR fields and its identity disposition has three values of its own — so the summary was both weaker than the thing it summarised and already drifting from it. **What is THIS family's, and is genuinely new:** under promotion the destruction risk moves but does not vanish — the workspace, not the vault, is what teardown removes — so **the invariant binds the pipeline's teardown too, and `WP-dream-promote-in-workspace` row G5 cites this row.** No surface may weaken it to "a copy was attempted" |
 | Q5 | **Deleting a redundant copy — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table R consequence 2** (that spec's own letter-space), which owns the byte-identity guard, the keep-combinations and their reason suffix, and which is fault-injected and mutation-covered there. **Restated nowhere here.** Until this reconciliation pass this row carried a summary of that rule and an acceptance criterion for it — in a package whose Deliverables cannot reach the state directory at all (Q7), against a shipped, `Done` owner that forbids restatement. A pointer is the only form that cannot drift |
 | Q6 | **Retention of `redacted/` — NOT this family's contract, and this row is a POINTER** | decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, **Table N** (that spec's own letter-space), which states that every retention fact is decided there and forbids **any surface restating a number from it** — the cap, the trigger, the candidate set, the ordering, the cap-yields precedence, the overshoot's lifetime and its best-effort failure. **Restated nowhere here.** Until this reconciliation pass this row restated five of those seven facts, including the cap's literal value, and omitted two; the one open gap in that contract has its own package, `WP-ep2-retention-prune-timing-test`. **`state/quarantine/` itself is unbounded and that is decided there too** |
 | Q7 | **Where the preservation happens, where it does not, and WHO CAN EVIDENCE WHAT** | the GATE preserves (Table D), because it is the party holding the pre-change bytes. **This module never touches the state directory**, which is also why rows Q5 and Q6 are pointers and why the durable lifecycle behind them belongs to the package Q4 cites. What this module does is three things: CARRY Q1's fields — the preservation record included — into its OWN RETURN, which is what the accounting and the report are BUILT FROM (Q8 and Q9), this module composing neither of them (`### Exact contracts`, Deliverables — **corrected 2026-08-29, round 4's F-1: this cell said "into the accounting and the report", which claimed of this package the very composition three other surfaces here deny it**); **ASSIGN the one field of that record the gate cannot fill, `remediation`, at the point this module records the path's outcome** (row Q9 owns the per-field provenance and its permitted values, and this row restates neither); and **refuse to publish when the redact arm reports an EMPTY preservation record.** **ASSIGNING IS NOT RE-DERIVING, and the distinction is the one row Q9's no-re-derivation rule turns on:** this module is where `remediation` FIRST EXISTS, because the gate returned no value for it, so there is nothing here to re-derive FROM. The prohibition binds the surfaces DOWNSTREAM of this module's return, and what it forbids them is a SECOND statement of a fact the record already carries. **That refusal is a SANITY CHECK on the gate's own result, not Q4's enforcement, and calling it the latter would be the weakening Q4 forbids:** this module cannot read a preserved copy, so it cannot tell "a copy exists and matches" from "a copy exists and does not" — only the gate holds both sides of that comparison, and only the gate and the pipeline's teardown destroy anything. **A match-verdict field on Q1 was considered and REJECTED:** it would put a second party's judgment on evidence only the first party has, and would duplicate a test that is already decided, asserted and mutation-covered in the package Q4 cites |
 | Q8 | **A REFUSAL REACHED AFTER EP2 RAN CARRIES THE GATE'S PRESERVATION RECORD — typed, never in prose** | the gate preserves and reports BEFORE this module knows whether the path will publish, because Table D positions EP2 ahead of the merge. Everything downstream of EP2 can still refuse the path: the C3–C8 state checks, a conflicting merge, any of the three post-merge gates, the skill/ledger pair refusal, the primitive's `expect` guard, and **the primitive's application of C9's `admit` to the RESOLVED path — the resolved-only half of C1, which Table C's header separates out precisely because it CANNOT precede the gates.** That last route is the one the 2026-08-29 design round found, and it is why this row rather than Table C's header is the home for what such a refusal carries. The copies are on disk by then, a copy on the redacted shelf is announced by nothing else (Q3), and the path is not in `redacted[]` — so with no carrier their names leave the return entirely and an unredacted copy of secret-shaped content becomes a file nothing points at. **Therefore `refused[]` is `{rel, reason, preserved}` (Table S, row S3), where `preserved` is row Q9's record: REQUIRED, and EMPTY when the gate preserved nothing for that path or never ran for it** — a positive statement of absence rather than a missing field, because an optional field spanning both cases is the defect row S2 already records one field over. **The reason string names no copy, and no surface may make prose the carrier.** The shipped mitigation did exactly that and produced its own defect inside one review round: the pair refusal embeds its sibling's reason, so the SIBLING's copy was named first and a report composed by reading the name back out would have pointed the user at the wrong file — the same class of harm Q3 calls data loss, one file over. **One fact, one field, one place.** **THE RULE IS ABOUT THE SHAPE, NOT ABOUT ONE ARRAY: any arm of this family's return that can exist AFTER EP2 PRESERVED SOMETHING for that path carries the record the same way, required and possibly empty — a REFUSING arm and a PUBLISHING one alike.** **Widened from "any arm that can carry a refusal" by round 3's F1, and the narrow form was wrong about this package's own return:** the redact arm PUBLISHES a sanitized note and has carried the record since the shape ruling, so a rule quantified over refusals never described it. The other arms are not in this package — **EVERY arm of `WP-dream-promote-report`'s `report` union**, whose body is a promotion candidate under `reports_dir` that EP2 judges: the gate can redact the body and see the SANITIZED body publish (`outcome:'promoted'`), or withhold it and see the fallback publish (`outcome:'fallback'`), or preserve a copy for a body that is then refused (`outcome:'refused'`) — and all three preserved a copy that nothing else announces. That package's `### Exact contracts` owns its union's shape and this row is the rule it applies. **Scoping this row to `refused[]` alone left the report's own copy unannounced for one round** (round-zero pass, 2026-08-29), **and scoping it to REFUSALS left the report's two published arms uncovered for one more** (round 3) — the same omission twice, one surface over each time. What the report SAYS about a copy is `WP-dream-promote-report`'s Table R; returning it is not delivering it. **THE NARROWING THIS ROW USED TO CARRY IS HISTORY, and is recorded so it is not re-derived:** until the shape ruling this row scoped a single `artifact` field to the redact-then-refuse arm, which is why a review correctly concluded that consequence 2's keep-suffix could not ride it. That field no longer exists. **Row Q9's fields are not scoped by this row** — they carry whatever the gate preserved, on whichever arm |
-| Q9 | **THE PRESERVATION RECORD — one entry per preserved copy; every fact about a copy is a FIELD of it, and every field states WHO FILLS IT AND WHEN** | `Array<{artifact:string, location:string, remediation:'restore-or-delete'\|'delete'}>`, one entry per copy the EP2 gate preserved for that candidate, in the order the gate wrote them. **This row is the single place a copy's facts are decided — AND the single place each field's PROVENANCE is decided: WHO fills it and WHEN. Every field below states both, and a field added to this record without stating both is incomplete.** **Why provenance is per FIELD rather than per record (owner ruling, 2026-08-29, round 3):** this record is filled by TWO parties at TWO times, and until round 3 the contract said so nowhere — row Q2 claimed the whole entry was gate-reported, which measured false for one field. A record whose fields are filled by two parties at two times, with only a sentence about the record as a whole, produces that defect again on the next field anyone adds. **Every surface DOWNSTREAM of `promote()`'s return READS a field off an entry; none re-derives one, and none adds a carrier beside it.** **`artifact` — FILLED BY THE EP2 GATE, AT GATE TIME.** The copy's basename as the gate reported it: the preserving call resolves collisions itself and returns the name it actually used, so the name is reported and never predicted (row Q2). **`location` — FILLED BY THE EP2 GATE, AT GATE TIME.** The state-relative DIRECTORY that copy sits in, again as the gate reported it and under the same prohibition (row Q2) — composed with `artifact` it is the path the user needs, and it is REPORTED rather than constructed here because this module never touches the state directory (row Q7): the two places a preserved copy can sit are the two shelves of the glossary's **secret quarantine**, and their layout, retention and disposal are `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s (rows Q5 and Q6). **`remediation` — FILLED BY THIS MODULE, AT OUTCOME TIME. The gate reports no value for it** (owner ruling, 2026-08-29, round 3). It is what the report tells the user to do with that copy, and it takes exactly two values: **`restore-or-delete`**, for a copy that is the pre-scrub original of content this run PROMOTED in sanitized form, which is the redact arm's value and the guidance the shipped redact-in-place report section carries (`validate.js:1398-1409`); and **`delete`**, for a copy belonging to a path nothing was promoted for, which is every refusing arm's value on both shelves — the note never entered the vault, the workspace is destroyed with the run, and what the copy holds is brain-authored text the product refused. **WHY THE GATE CANNOT FILL IT:** EP2 runs BEFORE the merge (Table D), so at the moment it preserves a copy the candidate's outcome is not decided — everything in row Q8's route list can still refuse the path afterwards. A gate-filled value would be a guess that is wrong on exactly the redact-then-refuse route, and telling a user to `restore` content the vault never took is worse than telling them nothing. **The value is knowable at exactly one moment, which is when this module records the path's outcome, so that is where it is assigned.** **AND THIS MODULE IS NOT A CONSUMER RE-DERIVING IT — the distinction the rule above turns on, stated because a careless wording makes the module look like the violator.** The module is where `remediation` FIRST EXISTS: the gate returned nothing to re-derive from. The no-re-derivation rule binds the surfaces downstream of this module's RETURN — this family's report and pipeline halves included — and what it forbids them is a SECOND, independent statement of a fact the record already carries. Assigning it once, in one place, at the only moment its value is knowable, is precisely what makes every other surface a reader. **A FIELD IS STILL THE RIGHT SHAPE, and the reason is unchanged:** its value is a function of the ARM today, and a surface that recomputed it from the outcome would be writing that second statement — which is exactly how a design round came to read two correct surfaces as a contradiction when, measured, they were each right about their own arm. A field makes the difference visible, and makes a future arm with a third value a change to this row rather than a sweep. **HOW MANY ENTRIES an arm carries is not decided here:** the redact arm preserves one copy, a refusing arm carries an entry for each copy the gate preserved AND KEPT, and which copies those are on any given run — including whether the redact arm's copy survives a withhold — is decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` and read off the record here. **NAMED RESIDUAL, and it is outside this family's boundary:** the withheld shelf also carries a shipped, state-driven digest banner whose guidance is restore-or-delete (`src/core/digest.js:817-822`), so under promotion that banner will offer restore for a copy this record marks `delete`. `src/core/digest.js` is in no Deliverables table in this family and is not changed here; reconciling the banner with promotion's provenance is not this family's act, and naming it beats discovering it |
-| Q10 | **THE REDACTION ACCOUNTING — one PER-PATH fact in ONE field, both halves gate-filled, and NOT a field of row Q9's record** | `{lines:number, labels:string}` — the `RedactionAccounting` typedef of `### Exact contracts`, carried as ONE field named `redaction`. **`lines` — FILLED BY THE EP2 GATE, AT GATE TIME.** How many of the run's ADDED LINES that path's scrub RAN OVER (`validate.js:1286`, `addedLineNumbers.length`), pushed only on the branch where the scrub is verified and staged (`:1283-1292`). **THIS IS THE SHIPPED TRUTH, AND THE GAP IS NAMED IN PLACE (owner ruling, 2026-08-29, round 4's B1).** `scrubAddedLines` rewrites EVERY added line as `scanAndRedact(line).text` (`:838-840`), and a clean added line is rewritten BYTE-IDENTICALLY — so this value counts the lines the scrub PROCESSED and can exceed the number of lines whose bytes actually CHANGED: ten added lines carrying one secret report ten. **The shipped report line already renders exactly this value** (`:1401`, `` `${r.lines} line(s) scrubbed` ``), so this row is the spec catching up to the product rather than a new inaccuracy, and the word "scrubbed" on that line is the product's. **NARROWING IT IS ROUTED, NOT PERFORMED HERE — AND THE ROUTED INPUT IS NOW PENDING RATHER THAN MERELY UNBUILT (owner ruling, 2026-08-29, round 5's C4: the authorization is NOT granted):** the change — the gate returning the number of added lines whose POST-REDACTION bytes DIFFER from their captured bytes — is a NAMED INPUT to `WP-dream-promote-in-workspace`'s row **G7**, the package that owns `src/core/dream/validate.js` and extracts this gate, **and it is BLOCKED there on an owner decision against a value PINNED in a shipped `Done` package**: `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387` pins the dream report's redaction line and states that `<n>` is `addedLineNumbers.length`, with every byte outside the placeholders literal. **Row G7 QUOTES that pin in place; this row cites it by path and restates neither the format nor the rules around it. If the owner authorizes the change at the pipeline round, the settlement is an amendment to that `Done` spec.** Until that decision, **no surface in this family may describe `lines` as a count of CHANGED lines** and the SHIPPED count is what an implementer builds; when it lands, the change is to this field's meaning and not to its shape, its filler or its carriers. **`labels` — FILLED BY THE EP2 GATE, AT GATE TIME.** What the detectors matched, as code-owned label names joined into one string, and NEVER the matched bytes (`validate.js:1267` and `:1287`). **NO SURFACE MAY RE-DERIVE EITHER, and no later party could:** only the gate holds the pre-scrub bytes and the added-line set it judged (Table D's EP2 row), so a value recomputed downstream is a different value wearing the same name. **NO GATE/MODULE SPLIT HERE, unlike row Q9's record, and it is stated rather than left to symmetry:** both fields have ONE filler at ONE moment, so the `GateReportedCopy`/`PreservedCopy` split that carries per-field provenance in the TYPE has nothing to express — this module passes the object through untouched and completes nothing on it (row Q7's list of what this module does is unchanged by this row). **WHY THIS IS PER-PATH AND NOT A FIELD OF ROW Q9's RECORD — measured, and this is the question the disclosure-parity ruling left open.** (i) The case with the MOST preserved copies has NO accounting at all: when the redact arm FALLS THROUGH to the withhold, the gate has already written a redact-shelf copy (`validate.js:1276`) and then writes a withheld one (`:1297`), and it pushes no accounting, because the push happens only on the successful-scrub branch — so a field on the record would be null on BOTH entries of the two-entry case. (ii) On the ordinary redact arm one accounting would have to be duplicated onto every entry of that path's record, which is the two-carriers-for-one-fact shape row Q8 exists to close. **One scrub, one path, one accounting: row Q9's record answers WHICH COPIES the gate wrote, and this row answers WHAT THE SCRUB DID.** **WHY ONE FIELD AND NOT TWO (owner ruling, 2026-08-29):** the two values are present together or not at all, and two loose nullable fields make that an invariant the TYPE cannot express — the failure mode row S2 records one field over. A named shape declared ONCE is also what lets an ordinary note's redaction line and the report body's be composed from the SAME shape. **WHERE IT MAY TRAVEL — and this scope is ARGUED, because the ruling settled the parity and left the location open.** On the GATE's redact arm and on every `redacted[]` entry it is REQUIRED and NON-NULL: membership of either IS the redaction. On `WP-dream-promote-report`'s `report` union it is REQUIRED and NULLABLE on the **`promoted` arm alone**, `null` being the positive statement that the gate did not redact the body (row S2's lesson). **The report body is an ordinary promotion candidate — that package's report row carries the sentence as its own heading — and parity of disclosure is owed to it**, so the accounting reaches the body's disposition exactly where it reaches an ordinary note's: **on the arm that means THIS CANDIDATE'S SANITIZED BYTES WERE PUBLISHED.** Measured against that package's Table R, `promoted` is the only such arm — `fallback` means the brain's body was NOT published and the code section was published in its place, and `refused` means nothing was written at all. **Putting the field on BOTH published arms was considered and REJECTED on that measurement:** on `fallback` and on `refused` a scrubbed-line count would describe bytes no vault holds, which would hand the report body a disclosure its ordinary-note analogue is not given — an ordinary note redacted and then refused lands in `refused[]`, which carries its copies on row Q9's record and no accounting — in the very pass that exists to make the two equal. **NAMED RESIDUAL, argued rather than slipped:** on a redact-then-refuse, an ordinary note's or the body's, the count and the labels are lost, so the user learns WHICH file holds the unredacted copy and not WHAT KIND of secret the detectors matched. That loss is PRE-EXISTING, is not created here, and the disclosure-parity ruling did not reach it; closing it later is one field on `refused[]` and on the report's refusing arms plus one sweep — ordinary work under this family's stop criterion, not an escalation |
+| Q9 | **THE PRESERVATION RECORD — one entry per preserved copy; every fact about a copy is a FIELD of it, and every field states WHO FILLS IT AND WHEN** | `Array<{artifact:string, location:string, remediation:'restore-or-delete'\|'delete'}>`, one entry per copy the EP2 gate preserved for that candidate, in the order the gate wrote them. **This row is the single place a copy's facts are decided — AND the single place each field's PROVENANCE is decided: WHO fills it and WHEN. Every field below states both, and a field added to this record without stating both is incomplete.** **Why provenance is per FIELD rather than per record (owner ruling, 2026-08-29, round 3):** this record is filled by TWO parties at TWO times, and until round 3 the contract said so nowhere — row Q2 claimed the whole entry was gate-reported, which measured false for one field. A record whose fields are filled by two parties at two times, with only a sentence about the record as a whole, produces that defect again on the next field anyone adds. **Every surface DOWNSTREAM of `promote()`'s return READS a field off an entry; none re-derives one, and none adds a carrier beside it.** **`artifact` — FILLED BY THE EP2 GATE, AT GATE TIME.** The copy's basename as the gate reported it: the preserving call resolves collisions itself and returns the name it actually used, so the name is reported and never predicted (row Q2). **`location` — FILLED BY THE EP2 GATE, AT GATE TIME.** The state-relative DIRECTORY that copy sits in, again as the gate reported it and under the same prohibition (row Q2) — composed with `artifact` it is the path the user needs, and it is REPORTED rather than constructed here because this module never touches the state directory (row Q7): the two places a preserved copy can sit are the two shelves of the glossary's **secret quarantine**, and their layout, retention and disposal are `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s (rows Q5 and Q6). **`remediation` — FILLED BY THIS MODULE, AT OUTCOME TIME. The gate reports no value for it** (owner ruling, 2026-08-29, round 3). It is what the report tells the user to do with that copy, and it takes exactly two values: **`restore-or-delete`**, for a copy that is the pre-scrub original of content this run PROMOTED in sanitized form, which is the redact arm's value and the guidance the shipped redact-in-place report section carries (`validate.js:1399-1410`); and **`delete`**, for a copy belonging to a path nothing was promoted for, which is every refusing arm's value on both shelves — the note never entered the vault, the workspace is destroyed with the run, and what the copy holds is brain-authored text the product refused. **WHY THE GATE CANNOT FILL IT:** EP2 runs BEFORE the merge (Table D), so at the moment it preserves a copy the candidate's outcome is not decided — everything in row Q8's route list can still refuse the path afterwards. A gate-filled value would be a guess that is wrong on exactly the redact-then-refuse route, and telling a user to `restore` content the vault never took is worse than telling them nothing. **The value is knowable at exactly one moment, which is when this module records the path's outcome, so that is where it is assigned.** **AND THIS MODULE IS NOT A CONSUMER RE-DERIVING IT — the distinction the rule above turns on, stated because a careless wording makes the module look like the violator.** The module is where `remediation` FIRST EXISTS: the gate returned nothing to re-derive from. The no-re-derivation rule binds the surfaces downstream of this module's RETURN — this family's report and pipeline halves included — and what it forbids them is a SECOND, independent statement of a fact the record already carries. Assigning it once, in one place, at the only moment its value is knowable, is precisely what makes every other surface a reader. **A FIELD IS STILL THE RIGHT SHAPE, and the reason is unchanged:** its value is a function of the ARM today, and a surface that recomputed it from the outcome would be writing that second statement — which is exactly how a design round came to read two correct surfaces as a contradiction when, measured, they were each right about their own arm. A field makes the difference visible, and makes a future arm with a third value a change to this row rather than a sweep. **HOW MANY ENTRIES an arm carries is not decided here:** the redact arm preserves one copy, a refusing arm carries an entry for each copy the gate preserved AND KEPT, and which copies those are on any given run — including whether the redact arm's copy survives a withhold — is decided in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` and read off the record here. **NAMED RESIDUAL, and it is outside this family's boundary:** the withheld shelf also carries a shipped, state-driven digest banner whose guidance is restore-or-delete (`src/core/digest.js:817-822`), so under promotion that banner will offer restore for a copy this record marks `delete`. `src/core/digest.js` is in no Deliverables table in this family and is not changed here; reconciling the banner with promotion's provenance is not this family's act, and naming it beats discovering it |
+| Q10 | **THE REDACTION ACCOUNTING — one PER-PATH fact in ONE field, both halves gate-filled, and NOT a field of row Q9's record** | `{lines:number, labels:string}` — the `RedactionAccounting` typedef of `### Exact contracts`, carried as ONE field named `redaction`. **`lines` — FILLED BY THE EP2 GATE, AT GATE TIME.** How many of the run's ADDED LINES that path's scrub RAN OVER (`validate.js:1287`, `addedLineNumbers.length`), pushed only on the branch where the scrub is verified and staged (`:1284-1293`). **THIS IS THE SHIPPED TRUTH, AND THE GAP IS NAMED IN PLACE (owner ruling, 2026-08-29, round 4's B1).** `scrubAddedLines` rewrites EVERY added line as `scanAndRedact(line).text` (`:839-841`), and a clean added line is rewritten BYTE-IDENTICALLY — so this value counts the lines the scrub PROCESSED and can exceed the number of lines whose bytes actually CHANGED: ten added lines carrying one secret report ten. **The shipped report line already renders exactly this value** (`:1402`, `` `${r.lines} line(s) scrubbed` ``), so this row is the spec catching up to the product rather than a new inaccuracy, and the word "scrubbed" on that line is the product's. **NARROWING IT IS ROUTED, NOT PERFORMED HERE — AND THE ROUTED INPUT IS NOW PENDING RATHER THAN MERELY UNBUILT (owner ruling, 2026-08-29, round 5's C4: the authorization is NOT granted):** the change — the gate returning the number of added lines whose POST-REDACTION bytes DIFFER from their captured bytes — is a NAMED INPUT to `WP-dream-promote-in-workspace`'s row **G7**, the package that owns `src/core/dream/validate.js` and extracts this gate, **and it is BLOCKED there on an owner decision against a value PINNED in a shipped `Done` package**: `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387` pins the dream report's redaction line and states that `<n>` is `addedLineNumbers.length`, with every byte outside the placeholders literal. **Row G7 QUOTES that pin in place; this row cites it by path and restates neither the format nor the rules around it. If the owner authorizes the change at the pipeline round, the settlement is an amendment to that `Done` spec.** Until that decision, **no surface in this family may describe `lines` as a count of CHANGED lines** and the SHIPPED count is what an implementer builds; when it lands, the change is to this field's meaning and not to its shape, its filler or its carriers. **`labels` — FILLED BY THE EP2 GATE, AT GATE TIME.** What the detectors matched, as code-owned label names joined into one string, and NEVER the matched bytes (`validate.js:1268` and `:1288`). **NO SURFACE MAY RE-DERIVE EITHER, and no later party could:** only the gate holds the pre-scrub bytes and the added-line set it judged (Table D's EP2 row), so a value recomputed downstream is a different value wearing the same name. **NO GATE/MODULE SPLIT HERE, unlike row Q9's record, and it is stated rather than left to symmetry:** both fields have ONE filler at ONE moment, so the `GateReportedCopy`/`PreservedCopy` split that carries per-field provenance in the TYPE has nothing to express — this module passes the object through untouched and completes nothing on it (row Q7's list of what this module does is unchanged by this row). **WHY THIS IS PER-PATH AND NOT A FIELD OF ROW Q9's RECORD — measured, and this is the question the disclosure-parity ruling left open.** (i) The case with the MOST preserved copies has NO accounting at all: when the redact arm FALLS THROUGH to the withhold, the gate has already written a redact-shelf copy (`validate.js:1277`) and then writes a withheld one (`:1298`), and it pushes no accounting, because the push happens only on the successful-scrub branch — so a field on the record would be null on BOTH entries of the two-entry case. (ii) On the ordinary redact arm one accounting would have to be duplicated onto every entry of that path's record, which is the two-carriers-for-one-fact shape row Q8 exists to close. **One scrub, one path, one accounting: row Q9's record answers WHICH COPIES the gate wrote, and this row answers WHAT THE SCRUB DID.** **WHY ONE FIELD AND NOT TWO (owner ruling, 2026-08-29):** the two values are present together or not at all, and two loose nullable fields make that an invariant the TYPE cannot express — the failure mode row S2 records one field over. A named shape declared ONCE is also what lets an ordinary note's redaction line and the report body's be composed from the SAME shape. **WHERE IT MAY TRAVEL — and this scope is ARGUED, because the ruling settled the parity and left the location open.** On the GATE's redact arm and on every `redacted[]` entry it is REQUIRED and NON-NULL: membership of either IS the redaction. On `WP-dream-promote-report`'s `report` union it is REQUIRED and NULLABLE on the **`promoted` arm alone**, `null` being the positive statement that the gate did not redact the body (row S2's lesson). **The report body is an ordinary promotion candidate — that package's report row carries the sentence as its own heading — and parity of disclosure is owed to it**, so the accounting reaches the body's disposition exactly where it reaches an ordinary note's: **on the arm that means THIS CANDIDATE'S SANITIZED BYTES WERE PUBLISHED.** Measured against that package's Table R, `promoted` is the only such arm — `fallback` means the brain's body was NOT published and the code section was published in its place, and `refused` means nothing was written at all. **Putting the field on BOTH published arms was considered and REJECTED on that measurement:** on `fallback` and on `refused` a scrubbed-line count would describe bytes no vault holds, which would hand the report body a disclosure its ordinary-note analogue is not given — an ordinary note redacted and then refused lands in `refused[]`, which carries its copies on row Q9's record and no accounting — in the very pass that exists to make the two equal. **NAMED RESIDUAL, argued rather than slipped:** on a redact-then-refuse, an ordinary note's or the body's, the count and the labels are lost, so the user learns WHICH file holds the unredacted copy and not WHAT KIND of secret the detectors matched. That loss is PRE-EXISTING, is not created here, and the disclosure-parity ruling did not reach it; closing it later is one field on `refused[]` and on the report's refusing arms plus one sweep — ordinary work under this family's stop criterion, not an escalation |
 
 ### Table S — the decided bytes, and what may be derived from them
 
@@ -649,179 +709,198 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 | S1 | **What "the decided bytes" ARE** | for any path this module publishes and REPORTS in its return (row S5's scope), the exact buffer `writeIntoVault` returned for it (Table H, the PRIMITIVE's row H6). Not the candidate this module composed, not a read of the target afterwards, and not a digest of either. They are the only bytes any gate judged and the only bytes the vault is known to hold at publish time |
 | S2 | **Every published outcome carries them, and the SHAPE is what guarantees it — not the prose** | **published entries are `{rel, bytes}` — BOTH halves required, not the bytes alone (pass (c)).** A consumer that receives bytes without a path cannot stage, count or register them, and this row said "`.bytes` is required" for one round while nothing required `rel`, which is the same defect one field over. `promoted[].bytes` and `redacted[].bytes` are required fields, and `report` is a DISCRIMINATED UNION whose published arms (`promoted`, `fallback`) require `bytes` while the refused arm cannot carry them. **Stated as a shape rule because twice now the prose was right and the type was not:** a return of paths alone (round 1), then an OPTIONAL `bytes` spanning success and refusal (round 2) — the second conforms to its own interface while omitting the bytes on exactly the branch that enters the commit. A rule the type cannot express is a rule an implementation can satisfy and still break |
 | S3 | **A refused outcome carries no BYTES, and must not — but it does carry the PRESERVATION RECORD** | nothing was published, so there is nothing to carry, and a field that could hold the candidate would invite a consumer to commit bytes the vault never took. `refused[]` is `{rel, reason, preserved}`; the report's refused arm is `{outcome:'refused', reason, preserved, record}` — that arm's shape, and its union's, are `WP-dream-promote-report`'s `### Exact contracts`, which owns them, and **`preserved` is on EVERY arm of that union**, carried for the same reason and under the same rule (Table Q row Q8). This row's no-bytes prohibition reaches only the refused arm, which is the only one with no bytes to carry. **NO FIELD OF AN ENTRY IS CONTENT**: an entry names and classifies a file the GATE already wrote into the state directory, so it cannot be staged, committed, hashed into the vault or mistaken for a candidate, and the no-bytes rule does not exclude it. **This row enumerates none of row Q9's fields and decides none of them — including which party fills each, which is Q9's per-field provenance.** It is **required and possibly EMPTY**, so "no copy exists for this path" is stated rather than left to a missing field, which is row S2's own lesson applied one field over. **Table Q row Q8 owns WHY the record travels on this arm and row Q9 owns an entry's fields; this row restates neither.** What this row decides is that S3's prohibition is about bytes and stops there |
-| S4 | **EVERY fact a consumer derives about a published path is derived FROM these bytes** | and this is deliberately broader than "the staged content". A frontmatter field, a length, a digest, a registry entry — each is derived from the returned buffer, never from a fresh read of the vault path. **Re-reading re-opens the window the publish closed:** a user save landing after the publish would decide what gets committed, hashed or registered, and none of it was gated. **This generalisation is what round 2's F1 needed** — its registry entry reads `id` and `created` out of a promoted `SKILL.md`, and today's code reads them from the vault path (`validate.js:1203`), which is correct only because today the brain wrote that path directly |
+| S4 | **EVERY fact a consumer derives about a published path is derived FROM these bytes** | and this is deliberately broader than "the staged content". A frontmatter field, a length, a digest, a registry entry — each is derived from the returned buffer, never from a fresh read of the vault path. **Re-reading re-opens the window the publish closed:** a user save landing after the publish would decide what gets committed, hashed or registered, and none of it was gated. **This generalisation is what round 2's F1 needed** — its registry entry reads `id` and `created` out of a promoted `SKILL.md`, and today's code reads them from the vault path (`validate.js:1204`), which is correct only because today the brain wrote that path directly |
 | S5 | **SCOPE, stated before the list, because round 3's F4 showed the list without it was false** | this table governs the bytes `promote()` RETURNS to its caller — the downstream consumers of its result. **It does NOT govern this module's own internal use of a `writeIntoVault` return**, of which there is exactly one: the report's second write, whose `expect` is the buffer the first report publish returned. That handoff is owned by `WP-dream-promote-report` — its **report row** and its **Table R**, which state it operatively — and NOT by this spec's two placeholders for them, which point onward and decide nothing (corrected 2026-08-29: this cell pointed at the placeholders, so its target was itself a pointer). Naming the rule here as well would be the restatement this family's citation rule forbids. **An earlier form of this row listed two consumers while S1 quantified over "any path this module publishes", which the internal report handoff falsified** — the scope sentence is what makes the list true rather than the list being widened. **AND THE REPORT PATH IS THE ONE PATH FOR WHICH TWO PRIMITIVE WRITES CAN EACH RETURN A BUFFER, so WHICH of them travels to the caller in `report.bytes` is that package's decision too — its **Table Y, row Y3** decides it, and this row does not** (registered 2026-08-29, round 4's A1; that contract became a lettered table on 2026-08-30, so this citation names a ROW). What row S1 requires of either answer is unchanged: a buffer the primitive returned, never a fresh read |
 | S6 | **The downstream consumers, named — S4's universal quantifies over THIS list** | two, both in `WP-dream-promote-in-workspace`: the dream commit (row G8) and the skill-ownership registry (row G10). **A downstream consumer that needs a byte, a field or a digest of a published path and is not in this list is a finding, not a fix** — it means an obligation this family owns has no owner, which is exactly how round 2's R2-1 arose |
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables-table `Notes` cells (each cites its owning table)
-- [ ] `### Exact contracts`' signature and its return shape
-- [ ] Acceptance criteria that assert Tables C, D, E, Q and S
-- [ ] Verification steps (the assertions mirror Tables C, D, E, Q and S)
-- [ ] Current-state description (the validator's four gates, the delta
-      primitive's binary record, the shipped sanitizer, the skill's report
-      requirement)
-- [ ] Implementation notes (the merge-on-a-copy trap, the injected gates)
-- [ ] Out of scope (what the pipeline package, the residue-lifecycle successor
-      and audit finding C2 own)
-- [ ] **The package note, the dispatch-precondition block and
-      `### Contract table(s)`** — all three cite the canonical table-letter map;
-      the `### Contract table(s)` line additionally names THIS spec's own tables
-      and is the surface a moved table falsifies first (registered 2026-08-29).
-      The note mirrors the citation of the canonical table-letter map and the consumed-by-nothing
-      rule; the dispatch block mirrors the pinned base and the containment
-      citation. A finding that changes either updates this section too
-- [ ] **The containment-by-citation rule** — the dispatch block, Table C rows C1
-      and C9, Table E's publish row, and the Security checklist. **No surface
-      here may paraphrase a path-containment rule; each cites Table H.**
-- [ ] **Every surface that states what a claim establishes** — the Context
-      paragraph, rows M2 and M3, the Security checklist, and the acceptance
-      criteria. **No surface may say the workspace is not a git repository
-      without qualification, none may claim M10's closure (it is the pipeline
-      package's), and none may restate Table F's content instead of citing it.**
-- [ ] **The EP2 disposition taxonomy** — the `promote()` return shape, Table D's
-      EP2 row and its preamble, the promotion-accounting row, and the
-      redact acceptance criterion. **No surface may reduce EP2 to `reason|null`
-      or drop the `redacted` outcome or `secretDisposition`.**
-- [ ] **What the T1 cut removed** — Table R, Table D's report row and the seven
-      report criteria are `WP-dream-promote-report`'s. **Their placeholders here
-      cite that package; no surface may restate a report rule, and none may
-      claim a report outcome in this package's accounting.**
-- [ ] **Table Q — the EP2 result, and this family's share of the quarantine
-      lifecycle.** Its mirrors are the `gates` paragraph, the
-      `GateReportedCopy` and `PreservedCopy` typedefs (which are where the TYPE
-      carries row Q9's per-field provenance), the `RedactionAccounting` typedef
-      (row Q10's, and the one place the TYPE says the accounting has a single
-      filler) and the `@returns` block in
-      `### Exact contracts`, Table D's EP2
-      row, Table C's header paragraphs (which state the consequences of C1's two
-      halves — the candidate-decidable one preceding the gates, the
-      resolved-only one landing after them on row Q8's arm),
-      `WP-dream-promote-report`'s Table R redaction-lines row, its
-      preserved-copy row, its Table N channel rows for the record's
-      three fields AND its two rows for the accounting's fields, its criterion
-      asserting Q3, Q8 and Q10, AND the `preserved` on
-      EVERY arm of its `report` union in that spec's `### Exact contracts`
-      together with the `redaction` on that union's `promoted` arm, and
-      `WP-dream-promote-in-workspace`'s rows G5, G7 and V3 and row G7's
-      acceptance criterion, **and that report package's Current-state
-      description of `promote()`'s RETURN, which paraphrases which arms carry
-      the record and the accounting (registered 2026-08-29 by round 4's F-5,
-      having been an unregistered mirror since it was written; that spec's own
-      Current-state checklist item names it too).** **Prohibitions, each earned: no surface may reduce
-      the redact arm to a verdict plus bytes; no surface may PREDICT any field
-      of a record entry instead of reporting what the gate returned (row Q2);
-      no surface may weaken Q4's only-copy invariant to "a copy was attempted";
-      no surface may make the refusal REASON the carrier for a preserved copy
-      (row Q8 — a prose carrier named the wrong file's copy within one round of
-      being written); NO SURFACE MAY ADD A SECOND CARRIER BESIDE THE RECORD OR
-      RE-DERIVE A FIELD OF IT — a new fact about a preserved copy becomes a
-      field on row Q9, which is the whole of the 2026-08-29 shape ruling;
-      **no field may be added to row Q9 without stating WHO FILLS IT AND
-      WHEN**, and no surface may claim a provenance for the record AS A WHOLE
-      (round 3: "every field is gate-reported" was such a claim, and it was
-      false of `remediation`); no surface may describe this module's ASSIGNMENT
-      of `remediation` as a consumer re-deriving a gate value — the gate
-      reports none, and the no-re-derivation rule binds the surfaces
-      downstream of `promote()`'s return;
-      **no surface may carry the REDACTION ACCOUNTING as loose fields beside a
-      disposition, or as a field of a preservation-record entry, or re-derive
-      either of its values — one scrub, one path, one `redaction` field
-      (row Q10); no field may be added to row Q10 without stating WHO FILLS IT
-      AND WHEN, which is row Q9's rule applied to the SECOND of the **THREE**
-      shapes that carry ONE PARTY'S FACTS TO ANOTHER — **not to every field
-      this family adds, a
-      universal this family's own fields falsify (round 4's F-4)**.
-      **THREE, and the count is this table's own preamble's: row Q9's record,
-      row Q10's accounting, and `WP-dream-promote-report`'s `accounting` field,
-      whose `reason` is the vault-write primitive's. The third shape's
-      per-field provenance is DECIDED in that spec's **Table Y, row Y9** — its
-      report row's rule cell until 2026-08-30, when the contract was extracted
-      into a lettered table — and is neither owned nor restated here; what binds family-wide, and what this
-      prohibition carries, is that a field of ANY of the three added without
-      its filler and its moment is incomplete.** **The preamble bound the rule
-      to three shapes and this prohibition bound it to one, both written in the
-      same window — round 5's H1, and the effect was that the report's field
-      dropped out of the family-wide prohibition on the one surface that
-      carries prohibitions;**
-      and no surface may widen row Q10's carriers past the `promoted` arm of
-      the report union without the measurement that row states**;
-      and NO SURFACE IN THIS FAMILY MAY RESTATE THE DURABLE LIFECYCLE — the
-      retention prune, the identity-gated deletion and the preservation-failure
-      abort are `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s, cited by
-      spec path because its table letters collide with this family's.**
-- [ ] **THE PENDING COUNTING INPUT — this side of a TWO-SIDED registration,
-      which this spec registered NOWHERE for a round (round 6's COH-1).** The
-      input is row Q10's routed narrowing of `lines`, **NOT authorized** (owner
-      ruling, 2026-08-29, round 5's C4): unblocking it needs an owner decision
-      against the pin in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`,
-      and the settlement, if there is one, is an amendment to that `Done` spec.
-      **This spec carries the pending state on row Q10 and on Out-of-scope
-      bullet (ii); its mirrors on the other side are
-      `WP-dream-promote-in-workspace`'s row G7 (which QUOTES the pin), that
-      spec's Deliverables `Notes` cell for `src/core/dream/validate.js`, its
-      Current-state validate.js bullet, its Table V row V3, its Out-of-scope
-      bullet for the EP2 gate's durable quarantine lifecycle, and its checklist
-      entry for the pending counting input, which is the registration on that
-      side.** **No surface here may present the change as authorized or coming;
-      none may describe `lines` as a count of CHANGED lines while it is
-      pending; and none may add an acceptance criterion for it before the
-      decision — the criterion lands with the change.** **The failure this
-      entry closes is exact: the state was carried in TWO of this spec's
-      surfaces and registered in NEITHER of its checklists, while the pipeline's
-      own entry named no surface here — which is round 5's H4 one spec over, in
-      the very window that fixed H4.**
-- [ ] **Table C's ORDERING RULING — where its rows sit against Table D's four
-      gates, and C1's two halves.** Decided in Table C's header, which is the
-      canonical statement. Its mirrors are **Table D's preamble sentence**
-      ("this table orders the gates against each other and against the merge,
-      and it does NOT order them against Table C's rows"), **rows C1 and C9**,
-      Table Q **row Q8**'s route list, and the resolved-path acceptance
-      criterion. **No surface may state C1 as wholly preceding the gates, and
-      none may claim a C1 refusal always carries an empty preservation record**
-      — the resolved-only half runs after EP2 and can carry entries.
-- [ ] **Table S — the decided bytes.** Its mirrors are the `@returns` shape
-      (including the refused arm's `preserved`, whose presence row S3 permits
-      and row Q8 requires), Table E's staged-bytes handoff row, and
-      `WP-dream-promote-in-workspace`'s rows G8 and G10. **The `report` union's
-      arms are `WP-dream-promote-report`'s and are governed by Table S from
-      there — this spec's `@returns` has no `report` arm.** **Two prohibitions,
-      both earned by a round: no surface may state a decided-bytes rule that the
-      TYPE does not enforce; and no surface may add a consumer of published
-      bytes without adding it to row S6's list** — S5 is the SCOPE row, S6 is the
-      list, and the same one-row slip was live in
-      `WP-dream-promote-in-workspace` until 2026-08-29.**
-- [ ] **The primitive seam** — the package note, Table E's publish row, C9's
-      application clause, the staged-bytes handoff row, and their acceptance
-      criteria. **No surface may describe filesystem discipline as this spec's
-      (it is Table H's), and none may show a vault write that does not go
-      through `writeIntoVault`.**
-- [ ] **The refusal-leftover bound** — Table C's C1 row and the Security
-      checklist. **Both sides are cited — the PRIMITIVE's H9 for directories,
-      the PRIMITIVE's H7 for the staging object, each named with its owner
-      because Table H's letter collides — and NEITHER is counted here: that
-      spec's own H7 acceptance criterion is the single counting surface.**
-- [ ] **The two HANDOFFS** — the gate-extraction handoff in Table D's preamble
-      and Table E's staged-bytes row. Both name `WP-dream-promote-in-workspace`
-      as the package that discharges them, both are repeated in Out of scope's
-      first bullet, and neither has an acceptance criterion HERE — by design,
-      since this package ships neither the extraction nor a commit
-- [ ] **The commit SET, and that it is stated by CLASS.** Table E's staged-bytes
-      row decides it — three classes, each with its own decided-byte source — and
-      its mirrors are Table C's C1 row, Out of scope's pipeline bullet, and
-      `WP-dream-promote-in-workspace`'s row G8 and its acceptance criterion.
-      **No surface may state the commit as "only promoted paths"**: the
-      code-owned `reports/warnings.md` is in the set, is not a `promote()`
-      outcome, and its bytes are row G8's commit-time render — outside Table S,
-      which governs only the bytes `promote()` RETURNS (round 2 of the
-      quarantine-surface review, finding 4)
-- [ ] **The narrowed window and the decision-atomicity** — Table D's "Why this
-      order" and atomicity rows, Table E's window row, the Security checklist's
-      named residual, Out of scope's partial-publish line, and their acceptance
-      criteria. **No surface may call the window "closed" or claim cross-path
-      write-atomicity, and none may re-assert the withdrawn "scanning merged
-      forces discarding the user edit" rationale.**
+**The table below is the CANONICAL registry — one row per registered contract,
+and the single place a mirror set, a prohibition or a walk state is decided.**
+It replaces the prose bullet list that carried these same 21 items until
+2026-08-30. The PR-review gate landed findings inside this section in three
+consecutive rounds — a stale mirror list and an undercounted mirror set, which
+is what a ~250-line hand-maintained prose registry produces rather than a
+thinking error — and read the section itself as the contract-dense prose
+ADR-0031 says to extract (round 5's escalation; raw output in
+`docs/specs/logbook/2026-08-30-promote-module-pr-gate-round-5-wd-reviewer-raw.txt`).
+
+**How to read it.** The `#` column is each row's stable id; every paragraph
+below addresses rows by that id and by name, never by position. The **Walk
+state** column is the ONLY place a walk is recorded — there are no tick boxes
+any more — and every count of walked or unwalked rows in the paragraphs below is
+DERIVED from this column rather than asserted beside it:
+
+```
+grep -c '^| MS-' docs/specs/WP-dream-promote-module.md                       # 21 rows
+grep -c '^| MS-.*| WALKED 2026-08-30' docs/specs/WP-dream-promote-module.md  # 6
+grep -c '^| MS-.*| UNWALKED |' docs/specs/WP-dream-promote-module.md         # 15
+```
+
+**THE NUMERALS BELOW ARE A DERIVED MIRROR OF THIS COLUMN, AND RE-RUNNING THE
+THREE GREPS IS PART OF ANY EDIT THAT ADDS A ROW OR RECORDS A WALK.** The counts
+are computed here and then written out as digits in the paragraphs below —
+which makes those digits a mirror like any other, and mirrors drift. So the
+obligation is stated rather than left to care: **add a row, or move a row's walk
+state, and you re-run the three greps and reconcile every count and every id
+enumeration in this section before you finish.** (Registered 2026-08-30, round
+6's finding 5.) **This is also why a row COUNT is never a reason to refuse a
+registration:** the denominator recomputes, so a new `UNWALKED` row costs a
+re-run of three greps and falsifies nothing.
+
+A `—` under **Prohibitions** means the row registers a mirror set and no
+prohibition. It never means none has been looked for.
+
+| # | The contract this row registers | Mirror set — every surface that must agree with it | Prohibitions — what no surface may say | Walk state |
+|---|---|---|---|---|
+| MS-01 | Deliverables `Notes` cells defer to the table that owns each rule | every `Notes` cell of the `## Deliverables` table — each cites its owning table rather than restating it | — | WALKED 2026-08-30 (sitting 1) |
+| MS-02 | `### Exact contracts`' signature and its return shape | `### Exact contracts`' `@param` block, its `@returns` block and its three typedefs — **and the JSDoc in `src/core/dream/promote.js` that ships them, registered 2026-08-30 because it is the surface sitting 1 actually walked and found stale, and it was named on no row before** | — | WALKED 2026-08-30 (sitting 1) |
+| MS-03 | Acceptance criteria that assert Tables C, D, E, Q and S | every criterion under `## Acceptance criteria` that asserts a fact of Table C, D, E, Q or S | — | WALKED 2026-08-30 (sitting 1) |
+| MS-04 | Verification steps — the assertions mirror Tables C, D, E, Q and S | every command under `## Verification steps` whose assertion mirrors a row of Table C, D, E, Q or S | — | WALKED 2026-08-30 (sitting 1) |
+| MS-05 | Current-state description | the `## Current state` section — the validator's four gates, the delta primitive's binary record, the shipped sanitizer, and the skill's report requirement | — | UNWALKED |
+| MS-06 | Implementation notes | `## Implementation notes & constraints` — the merge-on-a-copy trap and the injected gates | — | UNWALKED |
+| MS-07 | Out of scope | `## Out of scope` — what the pipeline package, the residue-lifecycle successor and audit finding C2 own | — | UNWALKED |
+| MS-08 | The citation of the canonical table-letter map (registered 2026-08-29) | the package note, the `## Dispatch precondition` block and `### Contract table(s)` — all three cite the canonical table-letter map. The `### Contract table(s)` line additionally names THIS spec's own tables and is the surface a moved table falsifies first. The note mirrors the citation of the map and the consumed-by-nothing rule; the dispatch block mirrors the pinned base and the containment citation | **No finding may change the note or the dispatch block without updating this row in the same pass.** | UNWALKED |
+| MS-09 | The containment-by-citation rule | the `## Dispatch precondition` block, Table C rows C1 and C9, Table E's publish row, and the `## Security checklist` | **No surface here may paraphrase a path-containment rule; each cites Table H.** | UNWALKED |
+| MS-10 | Every surface that states what a claim establishes | the Context paragraph, rows M2 and M3, the `## Security checklist`, and the acceptance criteria | **No surface may say the workspace is not a git repository without qualification, none may claim M10's closure (it is the pipeline package's), and none may restate Table F's content instead of citing it.** | UNWALKED |
+| MS-11 | The EP2 disposition taxonomy | the `promote()` return shape, Table D's EP2 row and its preamble, the promotion-accounting row, and the redact acceptance criterion | **No surface may reduce EP2 to `reason\|null` or drop the `redacted` outcome or `secretDisposition`.** | UNWALKED |
+| MS-12 | What the T1 cut removed — Table R, Table D's report row and the seven report criteria are `WP-dream-promote-report`'s | their placeholders in this spec, each of which cites that package | **No surface may restate a report rule, and none may claim a report outcome in this package's accounting.** | UNWALKED |
+| MS-13 | **Table Q — the EP2 result, and this family's share of the quarantine lifecycle** | the `gates` paragraph, the `GateReportedCopy` and `PreservedCopy` typedefs (which are where the TYPE carries row Q9's per-field provenance), the `RedactionAccounting` typedef (row Q10's, and the one place the TYPE says the accounting has a single filler) and the `@returns` block in `### Exact contracts`, Table D's EP2 row, Table C's header paragraphs (which state the consequences of C1's two halves — the candidate-decidable one preceding the gates, the resolved-only one landing after them on row Q8's arm), `WP-dream-promote-report`'s Table R redaction-lines row, its preserved-copy row, its Table N channel rows for the record's three fields AND its two rows for the accounting's fields, **its criterion asserting rows Q1–Q3, Q8, Q9 and Q10** (`docs/specs/WP-dream-promote-report.md:736`; **corrected 2026-08-30 — this cell said "asserting Q3, Q8 and Q10", which names no criterion that spec contains, while the walk paragraph below had already derived the true enumeration: round 5's finding 1**), AND the `preserved` on EVERY arm of its `report` union in that spec's `### Exact contracts` together with the `redaction` on that union's `promoted` arm, and `WP-dream-promote-in-workspace`'s rows G5, G7 and V3 and row G7's acceptance criterion, **and that report package's Current-state description of `promote()`'s RETURN, which paraphrases which arms carry the record and the accounting (registered 2026-08-29 by round 4's F-5, having been an unregistered mirror since it was written; that spec's own Current-state checklist item names it too)** | **Each earned: no surface may reduce the redact arm to a verdict plus bytes; no surface may PREDICT any field of a record entry instead of reporting what the gate returned (row Q2); no surface may weaken Q4's only-copy invariant to "a copy was attempted"; no surface may make the refusal REASON the carrier for a preserved copy (row Q8 — a prose carrier named the wrong file's copy within one round of being written); NO SURFACE MAY ADD A SECOND CARRIER BESIDE THE RECORD OR RE-DERIVE A FIELD OF IT — a new fact about a preserved copy becomes a field on row Q9, which is the whole of the 2026-08-29 shape ruling; no field may be added to row Q9 without stating WHO FILLS IT AND WHEN**, and no surface may claim a provenance for the record AS A WHOLE (round 3: "every field is gate-reported" was such a claim, and it was false of `remediation`); no surface may describe this module's ASSIGNMENT of `remediation` as a consumer re-deriving a gate value — the gate reports none, and the no-re-derivation rule binds the surfaces downstream of `promote()`'s return; **no surface may carry the REDACTION ACCOUNTING as loose fields beside a disposition, or as a field of a preservation-record entry, or re-derive either of its values — one scrub, one path, one `redaction` field (row Q10); no field may be added to row Q10 without stating WHO FILLS IT AND WHEN, which is row Q9's rule applied to the SECOND of the THREE shapes that carry ONE PARTY'S FACTS TO ANOTHER — not to every field this family adds, a universal this family's own fields falsify (round 4's F-4). THREE, and the count is this table's own preamble's: row Q9's record, row Q10's accounting, and `WP-dream-promote-report`'s `accounting` field, whose `reason` is the vault-write primitive's. The third shape's per-field provenance is DECIDED in that spec's Table Y, row Y9** — its report row's rule cell until 2026-08-30, when the contract was extracted into a lettered table — **and is neither owned nor restated here; what binds family-wide, and what this prohibition carries, is that a field of ANY of the three added without its filler and its moment is incomplete. The preamble bound the rule to three shapes and this prohibition bound it to one, both written in the same window — round 5's H1, and the effect was that the report's field dropped out of the family-wide prohibition on the one surface that carries prohibitions;** and no surface may widen row Q10's carriers past the `promoted` arm of the report union without the measurement that row states; **and NO SURFACE IN THIS FAMILY MAY RESTATE THE DURABLE LIFECYCLE — the retention prune, the identity-gated deletion and the preservation-failure abort are `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`'s, cited by spec path because its table letters collide with this family's.** **AND NO BLOCK THAT DISCLAIMS RESTATING ROW Q9 OR ROW Q10 MAY NARRATE A NAMED FIELD'S FILLER OR ITS MOMENT IN THE SAME BREATH** — saying that the `GateReportedCopy`/`PreservedCopy` split CARRIES the provenance is a citation and is allowed; naming `remediation` (or any other field) and saying who fills it, or when, is the restatement row Q9 owns. This binds the disclaiming blocks only: Table Q's own preamble DECIDES the provenance and an acceptance criterion ASSERTS it, and neither disclaims. Applied 2026-08-30 to the `gates` paragraph and the `@returns` block of `### Exact contracts`, one round after the identical rule was applied to `promote.js`; the `PreservedCopy` and `RedactionAccounting` typedefs name no individual field IN PROSE and stand (round 5's finding 3, banded C and ruled here). **Those two edits REMOVED narration and changed no declared shape, so this row's walk state is unaffected by them.** | WALKED 2026-08-30 (sitting 2) |
+| MS-14 | **THE PENDING COUNTING INPUT — this side of a TWO-SIDED registration, which this spec registered NOWHERE for a round (round 6's COH-1).** The input is row Q10's routed narrowing of `lines`, **NOT authorized** (owner ruling, 2026-08-29, round 5's C4): unblocking it needs an owner decision against the pin in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`, and the settlement, if there is one, is an amendment to that `Done` spec. **The failure this row closes is exact: the state was carried in TWO of this spec's surfaces and registered in NEITHER of its checklists, while the pipeline's own entry named no surface here — which is round 5's H4 one spec over, in the very window that fixed H4.** | this spec's row Q10 and its Out-of-scope bullet (ii); and, on the other side, `WP-dream-promote-in-workspace`'s row G7 (which QUOTES the pin), that spec's Deliverables `Notes` cell for `src/core/dream/validate.js`, its Current-state validate.js bullet, its Table V row V3, its Out-of-scope bullet for the EP2 gate's durable quarantine lifecycle, and its checklist entry for the pending counting input, which is the registration on that side | **No surface here may present the change as authorized or coming; none may describe `lines` as a count of CHANGED lines while it is pending; and none may add an acceptance criterion for it before the decision — the criterion lands with the change.** | UNWALKED |
+| MS-15 | **Table C's ORDERING RULING — where its rows sit against Table D's four gates, and C1's two halves.** Decided in Table C's header, which is the canonical statement | **Table D's preamble sentence** ("this table orders the gates against each other and against the merge, and it does NOT order them against Table C's rows"), **rows C1 and C9**, Table Q **row Q8**'s route list, and the resolved-path acceptance criterion | **No surface may state C1 as wholly preceding the gates, and none may claim a C1 refusal always carries an empty preservation record** — the resolved-only half runs after EP2 and can carry entries. | UNWALKED |
+| MS-16 | **Table S — the decided bytes** | the `@returns` shape (including the refused arm's `preserved`, whose presence row S3 permits and row Q8 requires), Table E's staged-bytes handoff row, and `WP-dream-promote-in-workspace`'s rows G8 and G10. **The `report` union's arms are `WP-dream-promote-report`'s and are governed by Table S from there — this spec's `@returns` has no `report` arm.** | **Two prohibitions, both earned by a round: no surface may state a decided-bytes rule that the TYPE does not enforce; and no surface may add a consumer of published bytes without adding it to row S6's list** — S5 is the SCOPE row, S6 is the list, and the same one-row slip was live in `WP-dream-promote-in-workspace` until 2026-08-29. | WALKED 2026-08-30 (sitting 2) |
+| MS-17 | The primitive seam | the package note, Table E's publish row, C9's application clause, the staged-bytes handoff row, and their acceptance criteria | **No surface may describe filesystem discipline as this spec's (it is Table H's), and none may show a vault write that does not go through `writeIntoVault`.** | UNWALKED |
+| MS-18 | The refusal-leftover bound | Table C's C1 row and the `## Security checklist` | **Both sides are cited — the PRIMITIVE's H9 for directories, the PRIMITIVE's H7 for the staging object, each named with its owner because Table H's letter collides — and NEITHER is counted here: that spec's own H7 acceptance criterion is the single counting surface.** | UNWALKED |
+| MS-19 | **The two HANDOFFS** — the gate-extraction handoff in Table D's preamble and Table E's staged-bytes row. Both name `WP-dream-promote-in-workspace` as the package that discharges them, and **neither has an acceptance criterion HERE — by design, since this package ships neither the extraction nor a commit** | Table D's preamble, Table E's staged-bytes row, and Out of scope's first bullet, where both are repeated | — | UNWALKED |
+| MS-20 | **The commit SET, and that it is stated by CLASS.** Table E's staged-bytes row decides it — three classes, each with its own decided-byte source | Table C's C1 row, Out of scope's pipeline bullet, and `WP-dream-promote-in-workspace`'s row G8 and its acceptance criterion | **No surface may state the commit as "only promoted paths"**: the code-owned `reports/warnings.md` is in the set, is not a `promote()` outcome, and its bytes are row G8's commit-time render — outside Table S, which governs only the bytes `promote()` RETURNS (round 2 of the quarantine-surface review, finding 4) | UNWALKED |
+| MS-21 | The narrowed window and the decision-atomicity | Table D's "Why this order" and atomicity rows, Table E's window row, the `## Security checklist`'s named residual, Out of scope's partial-publish line, and their acceptance criteria | **No surface may call the window "closed" or claim cross-path write-atomicity, and none may re-assert the withdrawn "scanning merged forces discarding the user edit" rationale.** | UNWALKED |
+
+**WALK OF 2026-08-30 — SIX ROWS OF 21, IN TWO SITTINGS: MS-01 through MS-04,
+then MS-13 (*Table Q*) and MS-16 (*Table S*). The Walk-state column says so, and
+no sentence below reaches past it.** The
+PR-review gate found this registry had never been walked at all: every one of
+its 21 rows was unwalked, and the surface MS-02 names was stale. `promote.js`'s
+public `@returns` still declared the pre-reconciliation shape (loose
+`lines`/`labels`/`artifact` on `redacted[]`, no `preserved` on `refused[]`)
+three commits after the typed record landed. In a repo that forbids TypeScript
+in `src/`, that JSDoc IS the module's type contract, so a consumer coding
+against it would look for fields that no longer exist and would not know
+`refused[]` carries the only route back to a quarantined original.
+
+**The sweep behind that fix went by FIELD, not by sentence** — `artifact:`,
+`lines:` and `labels:` across `promote.js` and its test. Every surviving
+occurrence is the CORRECT shape (`artifact`/`location` inside a
+`GateReportedCopy`, `lines`/`labels` inside a `RedactionAccounting`), and the
+gate re-ran that sweep independently and agreed. **One stale surface, and no
+second one IN THE RETURN SHAPE** — narrowed 2026-08-30 (round 6's finding 2)
+from "no second one inside MS-01 through MS-04", which was a claim over the
+whole of `MS-02` on evidence covering only its `@returns` half. **The SIGNATURE
+half of `MS-02` was not swept in that sitting, and round 6 found a divergence
+there** — the block declared seven members where the module declares eleven.
+That is fixed in `### Exact contracts`; the sentence is narrowed so the next
+reader does not inherit a certification the sweep never earned.
+
+**THE SECOND SITTING, 2026-08-30 — MS-13 AND MS-16, AND NO OTHER.** An earlier
+form of this paragraph said "the mirror is otherwise consistent" — a claim over
+21 rows backed by evidence from four, which is the same widening this package
+has now produced four times; the owner then ruled that exactly these two of the
+seventeen get walked, because they are the two that register the repaired
+`@returns` as a mirror. Both were resolved mirror by mirror against what
+`promote.js` now declares —
+`{promoted:[{rel,bytes}], redacted:[{rel,bytes,redaction,preserved}],
+refused:[{rel,reason,preserved}], secretDisposition:{withheld,redactions}}` —
+and **both CLEARED: every mirror the two rows name either agrees with that
+shape or is a pure citation that decides none of it.** MS-13's in-spec
+mirrors — the `gates` paragraph, the three typedefs, the `@returns` block,
+Table D's EP2 row and Table C's header paragraphs — carry
+`Array<GateReportedCopy>` on the GATE's arms and `Array<PreservedCopy>` on this
+module's return, which is what the annotation declares. Its cross-package
+mirrors were read on `main`: `WP-dream-promote-report`'s Table N rows for
+`preserved[].artifact`, `preserved[].location`, `preserved[].remediation`,
+`redaction.labels` and `redaction.lines`; its Table R redaction-lines and
+preserved-copy rows; its criterion asserting rows Q1–Q3, Q8, Q9 and Q10; the
+`preserved` on EVERY arm of its `report` union together with the `redaction` on
+that union's `promoted` arm; and its Current-state description of this module's
+return. `WP-dream-promote-in-workspace`'s rows G5, G7 and V3 and row G7's
+acceptance criterion were read the same way — G7's owner-authorized carrier
+change puts the kept copy on a record entry whose `artifact` and `location` the
+GATE fills and whose `remediation` this module fills, which is row Q9 exactly.
+MS-16's mirrors — the `@returns` shape including `refused[].preserved`,
+Table E's staged-bytes handoff row, and rows G8 and G10 — agree with rows S2 and
+S3 as written; **row G10 is the mirror that would have caught the pass-(c)
+defect**, because it derives a registry entry's `id` and `created` from the
+decided bytes of a path the promotion outcome shows PUBLISHED, which needs BOTH
+`rel` and `bytes` on a published entry and not the bytes alone. **One
+citation-precision defect was found on `main` and is recorded as a Discovered
+issue rather than fixed** — both sibling specs are outside this PR's boundary —
+and it does not disagree with the annotation: the report package's Current-state
+paragraph attributes "the arms that carry the preservation record" to row Q1,
+which decides that for the GATE's three arms, where the rule for THIS module's
+RETURN arms is row Q8's (with Table S row S3 for `refused[]`).
+
+**FIFTEEN ROWS REMAIN UNWALKED — MS-05 through MS-12, MS-14, MS-15, and MS-17
+through MS-21 — and nothing above reaches them.** They are the machine walker's
+(`scripts/mirror-walk.js`, which `WP-dream-promote-in-workspace` names as the
+surface built because a registered mirror went unwalked). No sentence in this
+section certifies them, and none may be added that does without the walk behind
+it. **That walker cannot yet read this registry: it recognises a checklist entry
+only by a leading `- [ ]` / `- [x]` bullet, so the table above parses as zero
+entries. Teaching it to accept a row whose Walk-state cell holds the state is a
+change to that script, tracked on branch `tools/mirror-walk` and outside this
+package's Deliverables.**
+
+**One registry GAP, recorded because the registry cannot catch what it does not
+name:** `docs/GLOSSARY.md` is a Deliverable of this package and mirrors both the
+EP2 outcome taxonomy and the gates' input split, and it appears on NO row of
+this table. That is why two false canonical claims in it — an outcome count that
+omitted `redacted`, and "the four quality gates judge the bytes that would
+actually land", which is false of the pre-merge secret scan — survived three
+review rounds. **The 2026-08-30 extraction pass deliberately did NOT discharge
+it, and the reason is a design call the owner has to make:** the file carries TWO
+contracts, and only one of them — the taxonomy — is MS-11's; the gates' input
+split is Table D's and this table has no row that owns it. Registering the whole
+file on MS-11 would put a gate-input claim under a row whose contract is the
+taxonomy. **The refusal rests on THAT and on nothing else** — an earlier form
+added "and giving the split its own row would make the six-of-twenty-one
+arithmetic above wrong", which the derived counts falsify exactly as they
+falsify the same clause in the `date` gap below (round 6's finding 4 named the
+`date` paragraph; this one carried the same reason and is corrected with it,
+because a named instance is never the whole of the rule). **Registering
+`docs/GLOSSARY.md` is therefore an owner's call, not a quiet addition — and the
+question it turns on is WHICH row owns the gates' input split, not how many rows
+this table has.**
+
+**A SECOND registry gap, opened deliberately on 2026-08-30 and named rather than
+left to be discovered:** Table D's `date` row is a contract whose mirrors are on
+NO row of this table. **THREE surfaces CITE the row — not the ONE this paragraph
+used to claim — and its literal content additionally lives in the deliverable
+code.** The three citations are `### Exact contracts`' `date` line,
+`src/core/dream/promote.js`'s check-site comment (`:673-681` — "are Table D's
+`date` row's; this check states none of that rule") and
+`tests/unit/dream-promote.test.js`'s comment (`:1097-1100` — "against a SHAPE
+rather than mere non-emptiness (Table D's `date` row)"). Beyond the citations the
+row's literal content lives in the code itself: the pattern at `promote.js:682`
+and the `YYYY-MM-DD` error text at `:683`, asserted as a regex at
+`tests/unit/dream-promote.test.js:1109`. **An earlier form of this paragraph said
+the row had "one mirror", and that undercount erred in the unsafe direction** —
+it told a future editor of the row that ONE surface needed sweeping when three
+cite it and the shipped code carries its literal content — and of the THREE
+files involved, two (`promote.js` and its test) are this package's own
+deliverables (round 5's finding 2, whose measurement
+this paragraph now carries; this spec's own practice already counts `promote.js`
+JSDoc as a registered mirror — **`MS-02` registers it by name** (corrected
+2026-08-30, round 6's finding 3: an earlier form credited `MS-13`, whose
+registered surfaces are the ones in `### Exact contracts`)). It is not
+registered as a row because **the walk ruling the owner fixed was about WHICH
+rows get walked, not about how many rows exist** — and the counts are derived
+by the greps above, so a twenty-second `UNWALKED` row would change a computed
+denominator and falsify nothing (restated 2026-08-30, round 6's finding 4: the
+earlier reason was that a twenty-second row would break a SIX-OF-TWENTY-ONE
+count, which the same commit that wrote it had already made derived).
+Naming these surfaces in prose adds no row either way. **Registering
+the `date` row is therefore an owner's call, not a quiet addition**, and until it
+happens the row, the three surfaces that cite it and the code that implements it
+are protected by nothing but this paragraph.
 
 ## Implementation notes & constraints
 
@@ -1028,12 +1107,12 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
       loop, **and asserted there on BOTH of its routes, because only one of
       them can produce two entries (round 3's F2, measured against the shipped
       gate):** (a) a HARD secret, which skips the redact arm entirely
-      (`validate.js:1269` gates the whole arm on `!hasHardFinding`, and the
-      copy is written inside it at `:1276`), so the gate preserved exactly one
+      (`validate.js:1270` gates the whole arm on `!hasHardFinding`, and the
+      copy is written inside it at `:1277`), so the gate preserved exactly one
       copy and the record holds **exactly one entry, always**; and (b) the
       redact arm's FALL-THROUGH — a soft finding whose scrub did not complete,
-      so the arm preserved its copy first (`:1276`) and the withhold below
-      preserved a second (`:1297`) — where, **when the gate also reports that
+      so the arm preserved its copy first (`:1277`) and the withhold below
+      preserved a second (`:1298`) — where, **when the gate also reports that
       it KEPT the redact arm's copy**, the record holds TWO entries, each with
       its own `location`. **Their ORDER is the order the gate wrote them (row
       Q9), which is measured: the REDACT-shelf copy is written first and is the
@@ -1095,9 +1174,13 @@ npm run lint
 test -f tests/unit/dream-promote.test.js && npm test -- --test-name-pattern "claim-2b-merge-cwd"
 # Consumed by nothing: no production code requires the new module. This is a
 # grep over a directory that MUST exist, so guard the absence case first — grep
-# on a missing path exits 2, which `!` would turn into a false green. The module
-# itself is excluded, since a JSDoc line in it would otherwise redden this.
-test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js' --exclude='promote.js'
+# on a missing path exits 2, which `!` would turn into a false green. NO
+# `--exclude` (PR-review gate, round 3): an earlier form excluded `promote.js`
+# on the stated ground that "a JSDoc line in it would otherwise redden this",
+# and the delivered module contains no such line — measured, the grep is empty
+# with or without the flag. The flag bought nothing and cost the one case that
+# matters most: a genuine `require('./promote')` inside a file of that name.
+test -d src && ! grep -rqn "require(.*promote" src/ --include='*.js'
 test -f docs/GLOSSARY.md && grep -q "\*\*promotion\*\*" docs/GLOSSARY.md
 ```
 

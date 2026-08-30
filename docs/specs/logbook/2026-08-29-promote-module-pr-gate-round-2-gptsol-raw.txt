@@ -1,0 +1,42 @@
+Gate: PR review (rubric), backend gptsol (codex/gpt-5.6-sol via llmp)
+PR: felho/wienerdog#31, branch wp/dream-promote-module
+Reviewed tip: 16c98e9
+Round: 2
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+
+EXECUTION RECORD:
+git status --porcelain (before): exit 0; output <empty>
+git rev-parse/diff/log inspection: exit 0
+git diff against dcd5777989559cb3a1ab8ce201177cccd7aff338: exit 0
+git diff db86d3e..HEAD: exit 0
+node --test --test-name-pattern='ambient TMPDIR inside the workspace' tests/unit/dream-promote.test.js: exit 0
+node heredoc symlinked-TMPDIR containment repro: exit 0
+node heredoc preliminary relative-TMPDIR probe: exit 1 (probe assertion was incorrect; superseded by corrected repro)
+node heredoc corrected relative-TMPDIR containment-bypass repro: exit 0
+node --test tests/unit/dream-promote.test.js: exit 0 (35 passed, 0 failed)
+npm run lint: exit 0 (markdownlint and frontmatter passed; shellcheck and PSScriptAnalyzer unavailable and skipped)
+git status --porcelain (after): exit 0; output <empty>
+Before/after git status --porcelain: byte-identical and empty
+Round 1 P1 confirmed fixed: NO - the absolute-TMPDIR repro is blocked, but a
+relative TMPDIR still bypasses the containment check.
+
+{
+  "findings": [
+    {
+      "title": "[P1] Reject relative merge temp roots before containment",
+      "body": "When `TMPDIR` is relative, `os.tmpdir()` and `mkdtempSync()` can return a relative `root`, while `isAtOrBeneath()` deliberately returns false for every non-absolute candidate. Reproduced from a process cwd containing `workspace/` with `TMPDIR=workspace`: the check passed and the spawn seam received `workspace/wd-promote-merge-*`, whose real path was beneath `workspaceDir`. This still lets the merge exit code be decided from inside the workspace, violating CLAIM 2b (`docs/specs/WP-dream-promote-module.md:290`); resolve or canonicalize `root` before checking it, or fail loudly when it is not absolute.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js",
+        "line_range": {
+          "start": 409,
+          "end": 411
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The exact absolute-TMPDIR regression test now passes, and the new ordering, preservation annotation, and layout validation did not expose another actionable defect. However, the containment mechanism remains bypassable with a relative TMPDIR, so round 1's security-relevant P1 is not genuinely closed.",
+  "overall_confidence_score": 0.99
+}
