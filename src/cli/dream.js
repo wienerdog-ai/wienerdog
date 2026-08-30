@@ -285,14 +285,34 @@ function commitNamedSet(o) {
     // that landed after the publish, or the code-owned warnings file this commit
     // renders without writing — shows up as exactly what it is: an uncommitted
     // working-tree modification, neither committed nor discarded.
+    // THE WHOLE INDEX ENTRY, NOT ITS BLOB. Comparing only the sha was measured to
+    // lose two shapes of the user's staged work: a staged DELETION has no index
+    // entry at all (so a sha check sees `null` and refreshes over it), and a
+    // staged MODE change keeps the same sha (so a sha check sees agreement and
+    // overwrites 100755 with 100644). Presence and mode are staged state too.
+    /** `<mode> <sha> <stage>\t<path>` → `<mode> <sha>`, or null when absent. */
+    const entryOf = (out) => {
+      const t = String(out || '').trim();
+      if (t === '') return null;
+      const f = t.split(/\s+/);
+      return `${f[0]} ${f[1]}`;
+    };
     for (const e of entries) {
-      const staged = g(['ls-files', '--stage', '--', e.rel], { allowFail: true });
-      const stagedSha = String(staged.stdout || '').trim().split(/\s+/)[1] || null;
-      const atOldHead = g(['rev-parse', `${head}:${e.rel}`], { allowFail: true });
-      const oldSha = atOldHead.status === 0 ? String(atOldHead.stdout).trim() : null;
-      // The index still describes the old HEAD for this path (or held nothing at
-      // all) → safe to move it forward. Otherwise it holds the USER's own work.
-      if (stagedSha !== null && stagedSha !== oldSha) continue;
+      const idx = entryOf(g(['ls-files', '--stage', '--', e.rel], { allowFail: true }).stdout);
+      const atHead = g(['ls-tree', head, '--', e.rel], { allowFail: true });
+      const old = atHead.status === 0 ? entryOf(atHead.stdout) : null;
+      // Refresh ONLY where the index still describes the old HEAD exactly —
+      // including both being absent, which is the ordinary case for a path this
+      // run added. Any divergence is the user's own staged state and it stands;
+      // `git status` then shows their staged change against the new HEAD, which
+      // is the truth.
+      //
+      // NAMED RESIDUAL, stated rather than hidden: the compare and the update are
+      // two commands, so a `git add` landing between them is still overwritten.
+      // Git offers no compare-and-swap on the index, so this narrows the window
+      // rather than closing it — the same component-swap class this program
+      // already carries as a residual on its write primitive.
+      if (idx !== old) continue;
       const upd = g(['update-index', '--add', '--cacheinfo', e.mode, e.sha, e.rel], { allowFail: true });
       if (upd.status !== 0) {
         // NEVER SILENT. `update-ref` has already moved HEAD, so a failure here —
@@ -324,11 +344,14 @@ function commitNamedSet(o) {
  * criterion does not reach it: this pipeline is the party that renders it, and
  * this is where the classification is enforced.
  *
- * REDACT FIRST, THEN SANITISE — the order is not interchangeable and the reason
- * is measured: EP2's context-dependent detectors need the RAW bytes, separators
- * included, and `sanitizeProjectName` replaces `=` and `:` among others, so
- * `token=abcdefghijkl` sanitises to `token_abcdefghijkl`, on which the detector
- * does not fire.
+ * REDACT FIRST, THEN SANITISE — the order is `WP-dream-promote-report`'s **Table
+ * N row N1** and is CITED, never restated. This is the second rendering site of
+ * that one contract (Table N names this package as the renderer of both
+ * `report.reason` and `accounting.reason`, because the section composer never
+ * touches either value), so two carriers is the design — but the ORDER
+ * RATIONALE and its measurement belong to N1 alone. Restating them here is what
+ * would falsify twice the day the order is re-decided; the consolidation of the
+ * two carriers is routed to a successor.
  * @param {unknown} value @returns {string}
  */
 function neutralise(value) {
@@ -960,6 +983,14 @@ async function run(argv, opts = {}) {
         res = promote({
           vaultDir, workspaceDir, date, baseline, delta, layout,
           gates, registry, extractsBySession, records,
+          // JS-only test seam, forwarded rather than invented: `promote()` already
+          // documents `writeFile` as the vault-write primitive's injection point.
+          // The pipeline needs it because the report's SECOND write — the one whose
+          // refusal produces the `promoted`-with-`published:false` arm — cannot be
+          // made to fail from outside `promote()`: it targets a path the first
+          // write just published, inside the same synchronous call. Production
+          // passes no opts, so the real primitive always runs.
+          ...(opts.writeFile ? { writeFile: opts.writeFile } : {}),
         });
       } catch (err) {
         // ROW G5's SECOND teardown exception, and it is the only-copy invariant

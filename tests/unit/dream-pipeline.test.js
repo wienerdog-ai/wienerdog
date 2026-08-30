@@ -847,3 +847,505 @@ test('dream-pipeline: a NON-REGULAR scratch entry is recorded, not silently swep
   assert.deepEqual(seen, ['link.json', 'plain.json', path.join('sub', 'nested.json')].sort(),
     'the symlink is enumerated alongside the regular files');
 });
+
+// ── Gate round 1's six assertion gaps ────────────────────────────────────────
+//
+// Each of these had a criterion in the spec and an implementation in `src/`, and
+// nothing in between. The gate's own grouping is the lesson: a criterion list is
+// not self-checking, so "the code is there" and "the behaviour is proven" are
+// different claims and only one of them was true.
+//
+// The workspace-write seam below is how a test plays the brain. `reapGroup`
+// fires after the brain has settled and BEFORE `computeDelta`, so anything
+// written to the workspace there is indistinguishable, to the rest of the run,
+// from something the brain wrote — which is exactly what these criteria need.
+
+/** @param {ReturnType<typeof setup>} ctx @param {Record<string,string|null>} files */
+function brainWrites(ctx, files) {
+  return async () => {
+    const ws = workspaceOf(ctx);
+    for (const [rel, content] of Object.entries(files)) {
+      const abs = path.join(ws, rel);
+      if (content === null) {
+        fs.rmSync(abs, { force: true }); // a deletion the brain made
+        continue;
+      }
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, content);
+    }
+    return { reaped: true };
+  };
+}
+
+const SKILL_BODY = (id) => [
+  '---', `name: ${id}`, `id: ${id}`, 'created: 2026-07-02', 'origin: dream',
+  'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false', '---', '', 'A well-supported skill.', '',
+].join('\n');
+
+test('dream-pipeline: a promoted NEW dream-created skill gets its registry entry, from the DECIDED bytes (row G10)', async () => {
+  const ctx = setup();
+  // AN EXISTING TRACKED SKILL THE RUN WILL GENUINELY PROMOTE, which is what
+  // makes the negative below discriminate. An earlier form seeded the skill but
+  // NOT the registry, so the modification was refused by the skill-body guard
+  // ("not in the ownership registry, fail closed") and went unregistered for a
+  // reason that had nothing to do with the added-only rule — a vacuous negative
+  // that stayed green with that rule deleted.
+  //
+  // So: the skill IS in the registry, and the brain's change is a BARE PROMOTION
+  // (status incubating -> active plus the `updated` stamp), which the guard
+  // admits with no qualifying learning. It therefore passes every gate, reaches
+  // `promoted[]`, and is excluded from registration ONLY because its delta status
+  // is `modified` rather than `added`.
+  const EXISTING = (status, updated) => [
+    '---', 'name: existing', 'id: existing', 'created: 2026-07-01', 'origin: dream',
+    `status: ${status}`, ...(updated ? [`updated: ${updated}`] : []),
+    'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false', '---', '', 'body', '',
+  ].join('\n');
+  writeFile(ctx.vault, '05-Skills/existing/SKILL.md', EXISTING('incubating'));
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'an existing registered skill']);
+  // The registry's `created` is deliberately DIFFERENT from the file's. The
+  // skill-body guard compares `id` to the registry and `created` to the BASELINE,
+  // never registry-`created` to the file — so this passes every gate, and it is
+  // what makes the negative observable: `recordSkills` overwrites the entry
+  // wholesale, so if this run registered the modification the value would become
+  // the file's `2026-07-01`. It staying `2026-01-01` is the proof it did not.
+  require('../../src/core/dream/skill-registry').recordSkills(ctx.state, [
+    { rel: '05-Skills/existing/SKILL.md', id: 'existing', created: '2026-01-01' },
+  ]);
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx, {
+        '05-Skills/new-skill/SKILL.md': SKILL_BODY('new-skill'),
+        '05-Skills/wienerdog-shipped/SKILL.md': SKILL_BODY('wienerdog-shipped'),
+        // A MODIFICATION of a registered tracked skill — a bare promotion, so it
+        // is ADMITTED and lands in `promoted[]`.
+        '05-Skills/existing/SKILL.md': EXISTING('active', DATE),
+        '05-Skills/weak-skill/SKILL.md': [
+          '---', 'name: weak-skill', 'confidence: 0.4', 'recurrence: 1',
+          'derived_from_untrusted: false', '---', '', 'weak', '',
+        ].join('\n'),
+      }),
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  const reg = JSON.parse(fs.readFileSync(path.join(ctx.state, 'skill-registry.json'), 'utf8'));
+
+  // The accepted new dream-created skill IS registered, and its id/created come
+  // from the bytes promotion decided — never from a re-read of the vault path.
+  const entry = reg.skills['05-Skills/new-skill/SKILL.md'];
+  assert.ok(entry, `no registry entry: ${JSON.stringify(Object.keys(reg.skills))}`);
+  assert.equal(entry.id, 'new-skill');
+  assert.equal(entry.created, '2026-07-02');
+  assert.ok(headBytes(ctx.vault, '05-Skills/new-skill/SKILL.md'), 'and it really was committed');
+
+  // The three negatives, in the same criterion. The MODIFICATION of an existing
+  // tracked skill is the third: registration is for NEW dream-created skills, and
+  // a revision of one already in the vault is registered by nobody.
+  assert.equal(reg.skills['05-Skills/wienerdog-shipped/SKILL.md'], undefined, 'a shipped wienerdog-* skill is registered by nobody');
+  assert.equal(reg.skills['05-Skills/weak-skill/SKILL.md'], undefined, 'a REFUSED skill is registered by nobody');
+  // NON-VACUITY: the modification really was PROMOTED, so the only thing keeping
+  // it out of the registry is the added-only rule.
+  assert.ok(
+    headBytes(ctx.vault, '05-Skills/existing/SKILL.md').toString('utf8').includes('status: active'),
+    'the bare promotion was committed — the negative below is about registration, not refusal'
+  );
+  assert.equal(
+    reg.skills['05-Skills/existing/SKILL.md'].created, '2026-01-01',
+    'its registry entry is the ORIGINAL one — this run did not re-register the modification'
+  );
+});
+
+test('dream-pipeline: a REDACTED acceptance is registered too — the sanitized bytes are the decided bytes (row G10)', async () => {
+  const ctx = setup();
+  // The criterion names this as its own case: registration keys off the run's
+  // delta status `added` for a path the promotion outcome shows PUBLISHED —
+  // ORDINARY OR REDACTED ALIKE. A redacted acceptance publishes the SANITIZED
+  // bytes, so `id` and `created` must come from those, not from the raw note.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx, {
+        '05-Skills/redacted-skill/SKILL.md': [
+          '---', 'name: redacted-skill', 'id: redacted-skill', 'created: 2026-07-02',
+          'origin: dream', 'confidence: 0.9', 'recurrence: 3',
+          'derived_from_untrusted: false', '---', '',
+          'ref xY9kQ2mZ7pL4vB8nR3sT6wA1 in prose', '',
+        ].join('\n'),
+      }),
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  const rel = '05-Skills/redacted-skill/SKILL.md';
+  const committed = headBytes(ctx.vault, rel);
+  assert.ok(committed, 'the sanitized skill was promoted and committed');
+  assert.ok(!committed.toString('utf8').includes('xY9kQ2mZ7pL4vB8nR3sT6wA1'), 'the blob is gone from the committed bytes');
+  const reg = JSON.parse(fs.readFileSync(path.join(ctx.state, 'skill-registry.json'), 'utf8'));
+  const entry = reg.skills[rel];
+  assert.ok(entry, `a REDACTED acceptance is registered: ${JSON.stringify(Object.keys(reg.skills))}`);
+  assert.equal(entry.id, 'redacted-skill');
+  assert.equal(entry.created, '2026-07-02');
+});
+
+test('dream-pipeline: the counts keep their exact semantics on a discriminating input (row G11, Table V row V7)', async () => {
+  const ctx = setup();
+  // A skills-dir file that is NOT SKILL.md is a SKILL for counting purposes —
+  // the plausible misreading is to count only SKILL.md, and a fixture with zero
+  // skills cannot tell the two apart.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx, {
+        '05-Skills/new-skill/SKILL.md': SKILL_BODY('new-skill'),
+        '05-Skills/new-skill/REFERENCE.md': '---\nconfidence: 0.9\nrecurrence: 3\nderived_from_untrusted: false\n---\n\nnotes\n',
+        'README.md': null, // a deletion — refused, so it reaches no counting rule
+      }),
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  const msg = git(ctx.vault, ['log', '-1', '--pretty=%s']).trim();
+  const m = /(\d+) notes, (\d+) skills/.exec(msg);
+  assert.ok(m, msg);
+  assert.equal(Number(m[2]), 2, 'BOTH skills-dir files count as skills, not only SKILL.md');
+  assert.match(r.output, new RegExp(`${m[1]} notes, ${m[2]} skills`), 'the summary carries the same counts as the commit message');
+
+  // THE DELETION CLAUSE IS STATED AS WHAT IT ACTUALLY IS, and the correction is
+  // the point. It read "a deletion — counted in neither", which was VACUOUS:
+  // promotion never deletes, so a deleted path is REFUSED and never reaches the
+  // counting loop at all. It could not discriminate any counting rule, and a
+  // clause that cannot fail is not a clause. What IS true and IS checkable is
+  // that the vault keeps its version and the path is not in the commit.
+  assert.ok(headBytes(ctx.vault, 'README.md'), 'the vault keeps its version — promotion never deletes');
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(!named.includes('README.md'), 'and the refused deletion is not in the commit');
+});
+
+test('dream-pipeline: the code-owned warnings file is counted as NEITHER a note nor a skill (row G11)', async () => {
+  const ctx = setup();
+  plantOverCeiling(ctx, 'huge');
+  // `reports/warnings.md` sits OUTSIDE both the skills and the reports
+  // directories, so the counting rule as stated would count row G8's
+  // reconciliation of it as a user note. The exclusion is INHERITED from
+  // `WP-quarantine-warnings-file`'s Table D, not invented here, and a pipeline
+  // that re-derives the rule without it reports the code-owned file as one extra
+  // note in the user's own git history.
+  const r = await runDream(ctx);
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(named.includes(WARNINGS_REL), `precondition: the commit carries it — ${named.join(', ')}`);
+
+  // Two notes and the report are in this commit alongside it; the warnings file
+  // adds to NEITHER count.
+  const msg = git(ctx.vault, ['log', '-1', '--pretty=%s']).trim();
+  const m = /(\d+) notes, (\d+) skills/.exec(msg);
+  assert.ok(m, msg);
+  const notesCounted = Number(m[1]);
+  const userNotes = named.filter(
+    (rel) => rel !== WARNINGS_REL && !rel.startsWith('reports/') && !rel.startsWith('05-Skills/')
+  ).length;
+  assert.equal(notesCounted, userNotes, `the warnings file is not among the ${notesCounted} notes counted`);
+  assert.equal(Number(m[2]), 0, 'and it is not a skill either');
+});
+
+test('dream-pipeline: a REDACTED transcript IS marked processed — only `withheld` defers (row G4)', async () => {
+  const ctx = setup();
+  // A context-free high-entropy blob is REDACT severity, so the sanitized note
+  // is PROMOTED and its transcript was therefore consumed. Inverting this
+  // re-does consumed work and mints a second quarantine artifact.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: brainWrites(ctx, {
+        '03-Resources/entropy.md': '---\ntype: note\nderived_from_untrusted: false\n---\n\nref xY9kQ2mZ7pL4vB8nR3sT6wA1 in prose\n',
+      }),
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  const ledger = ledgerLib.readLedger(ctx.state);
+  const rec = Object.entries(ledger.files).find(([k]) => k.endsWith('inj.jsonl'));
+  assert.ok(rec, 'the transcript is in the ledger');
+  assert.equal(rec[1].outcome, 'processed', 'a redacted run CONSUMED its transcript — redactions never defer');
+  // And the sanitized bytes are what landed, not the raw ones.
+  const committed = headBytes(ctx.vault, '03-Resources/entropy.md');
+  assert.ok(committed, 'the sanitized note was promoted');
+  assert.ok(!committed.toString('utf8').includes('xY9kQ2mZ7pL4vB8nR3sT6wA1'), 'the blob is gone from the committed bytes');
+});
+
+test('dream-pipeline: a REFUSED report reaches the user with its COMPLETE record, and nothing is committed for it (row G11)', async () => {
+  const ctx = setup();
+  const reportRel = `reports/dreams/${DATE}.md`;
+  // A SYMLINKED report target — one of the two refusal causes the criterion
+  // names. Planted at the reap seam, i.e. after the workspace was built (so the
+  // report is an `added` path there) and before promotion runs, which is the
+  // only window in which the vault-write primitive meets it.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: async () => {
+        const abs = path.join(ctx.vault, reportRel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        try { fs.symlinkSync('/tmp/somewhere-else.md', abs); } catch { /* already planted */ }
+        return { reaped: true };
+      },
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // THE RECORD REACHES THE USER, and on this arm it reaches them through no
+  // other channel: returning it is not delivering it.
+  assert.match(r.output, /the report could not be written to your vault/, `the refusal is announced: ${r.output}`);
+  assert.match(r.output, /the complete record of this run follows/, 'and the record is delivered');
+  assert.match(r.output, /Refused by policy/, 'the record carries its enforcement section');
+  assert.match(r.output, /injected/, 'naming what this run refused');
+
+  // NOTHING is staged or committed for the report on this arm — there are no
+  // bytes to commit.
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(!named.includes(reportRel), `the report path is not in the commit: ${named.join(', ')}`);
+  // The vault object is byte-unchanged: still the symlink the test planted.
+  assert.ok(fs.lstatSync(path.join(ctx.vault, reportRel)).isSymbolicLink(), 'the vault object is untouched');
+});
+
+test('dream-pipeline: the report refusal REASON is neutralised where this package renders it (row G11)', async () => {
+  const ctx = setup();
+  // `report.reason` / `report.accounting.reason` ORIGINATE WITH THE VAULT-WRITE
+  // PRIMITIVE and quote the target they could not write, so Table N classifies
+  // them attacker-influenceable BY DERIVATION. The write that would have
+  // composed them is the one that was refused, so the report package's
+  // code-authored-section criterion does not reach them: THIS package renders
+  // them, so this is where the classification is enforced.
+  //
+  // THE HOSTILE BYTES MUST BE IN THE PATH THE REASON QUOTES. An earlier form of
+  // this test put them in a symlink's TARGET, which the reason never carries —
+  // it was VACUOUS and stayed green with the reason rendered raw. The layout's
+  // `reports_dir` is a real, user-supplied route into that path.
+  const HOSTILE = 'token=abcdefghijkl client_secret: abcdefghijkl';
+  writeFile(ctx.core, 'config.yaml',
+    `vault: ${ctx.vault}\ndream_timeout_minutes: 5\nvault_layout:\n  reports_dir: ${HOSTILE}\n`);
+  const reportRel = `${HOSTILE}/${DATE}.md`;
+
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: async () => {
+        const abs = path.join(ctx.vault, reportRel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        try { fs.symlinkSync('/tmp/elsewhere.md', abs); } catch { /* already planted */ }
+        return { reaped: true };
+      },
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.match(r.output, /the report could not be written to your vault/, `the arm was reached: ${r.output}`);
+
+  // GREEN, and BOTH shapes, because a prefix-shaped secret survives the
+  // sanitiser intact and is caught in either order.
+  assert.ok(!r.output.includes('token=abcdefghijkl'), `raw assignment-shaped secret leaked: ${r.output}`);
+  assert.ok(!r.output.includes('client_secret: abcdefghijkl'), `raw prefix-shaped secret leaked: ${r.output}`);
+  // NON-VACUITY: the channel really did carry the hostile path, so the two
+  // assertions above are not green on an output that never contained it.
+  assert.match(r.output, /token_abcdefghijkl|REDACTED/, `the neutralised form is present: ${r.output}`);
+});
+
+test('dream-pipeline: teardown never destroys the last copy — the only-copy refusal RETAINS the workspace (row G5)', async () => {
+  const ctx = setup();
+  // A note whose redaction AND whose withheld preservation both fail. With the
+  // quarantine tree unwritable, the EP2 gate's preservation-failure abort fires
+  // and `promote()` throws — and at that moment the WORKSPACE holds the sole
+  // surviving copy of what the brain wrote. Removing it is the data loss the
+  // shipped abort exists to refuse (Table Q row Q4).
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      // The reap seam already fires after the brain settles and BEFORE
+      // promotion, so it is where both the brain's write and the quarantine
+      // sabotage belong. A FILE where the quarantine DIRECTORY must be makes
+      // every preservation fail — both arms — which is the cross-product the
+      // abort guards.
+      reapGroup: async () => {
+        const ws = workspaceOf(ctx);
+        fs.mkdirSync(path.join(ws, '03-Resources'), { recursive: true });
+        fs.writeFileSync(
+          path.join(ws, '03-Resources/entropy.md'),
+          '---\ntype: note\nderived_from_untrusted: false\n---\n\nref xY9kQ2mZ7pL4vB8nR3sT6wA1 in prose\n'
+        );
+        const q = path.join(ctx.state, 'quarantine');
+        fs.rmSync(q, { recursive: true, force: true });
+        fs.writeFileSync(q, 'not a directory\n');
+        return { reaped: true };
+      },
+    },
+  });
+  assert.ok(r.thrown, `the run refuses fail-loud: ${r.output}`);
+  // THE WORKSPACE IS NOT TORN DOWN, and the note's bytes are still on disk.
+  assert.ok(fs.existsSync(workspaceOf(ctx)), 'the workspace holding the sole copy survives');
+  assert.ok(
+    fs.existsSync(path.join(workspaceOf(ctx), '03-Resources/entropy.md')),
+    "the note's bytes are still there afterwards"
+  );
+  assert.equal(commitCount(ctx.vault), 1, 'and nothing was committed');
+});
+
+test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed from that arm\'s bytes, and the record is delivered (rows G8, G11)', async () => {
+  const ctx = setup();
+  const reportRel = `reports/dreams/${DATE}.md`;
+  const { writeIntoVault } = require('../../src/core/dream/vault-write');
+  // The hostile bytes ride the PATH the primitive's reason quotes, which is how
+  // Table N classifies that channel attacker-influenceable BY DERIVATION.
+  const HOSTILE = 'token=abcdefghijkl client_secret: abcdefghijkl';
+  let reportWrites = 0;
+  let conflicted = false;
+  // THE BODY PUBLISHES, THE SECOND WRITE IS REFUSED. That is the only way to
+  // reach `report.outcome === 'promoted'` with `accounting.published === false`:
+  // the two writes target the same path inside one synchronous call.
+  //
+  // AND THE REFUSAL IS A REAL ONE, raised by the real primitive on one of the two
+  // causes the criterion names. An earlier form returned a synthetic
+  // `{written:false, reason}`, which reached the arm but asserted nothing about
+  // whether the primitive would ever produce it. Here the vault file is changed
+  // between the second write's read and its publish, so the primitive's own
+  // `expect` guard refuses — and the reason it composes is the one rendered.
+  const writeFile = (o) => {
+    if (o.rel === reportRel) {
+      reportWrites += 1;
+      if (reportWrites === 2 && !conflicted) {
+        fs.writeFileSync(path.join(ctx.vault, `${HOSTILE}.md`), 'x\n'); // the hostile-named staging neighbour
+        fs.writeFileSync(path.join(ctx.vault, reportRel), 'the user saved between the two writes\n');
+        conflicted = true;
+      }
+    }
+    return writeIntoVault(o);
+  };
+  const r = await runDream(ctx, ['--yes'], { opts: { writeFile } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.equal(reportWrites, 2, 'both report writes were attempted — a vacuous pass would prove nothing');
+  assert.ok(conflicted, 'and the conflict was really injected, not stubbed');
+
+  // ROW G8: the report path IS in the run's one commit, from that arm's `bytes`
+  // — the body THIS RUN PUBLISHED. Skipping it would drop a published, gated
+  // file out of the commit; manufacturing the missing section would commit bytes
+  // no gate judged and no primitive published.
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(named.includes(reportRel), `the report path is committed on this arm: ${named.join(', ')}`);
+  const committed = headBytes(ctx.vault, reportRel).toString('utf8');
+  assert.ok(committed.includes('Consolidated recent sessions.'), 'the committed bytes are the body the first write published');
+  assert.ok(!committed.includes('Refused by policy'), 'and NOT a manufactured enforcement section');
+
+  // ROW G11 (i-b): the COMPLETE record is delivered, and the accounting names
+  // the reason — NEUTRALISED, because this package renders it and the primitive
+  // derives it from a brain-chosen path.
+  assert.match(r.output, /the report body was published, but its enforcement section was NOT/);
+  assert.match(r.output, /Refused by policy/, 'the complete record follows');
+  assert.ok(!r.output.includes('token=abcdefghijkl'), `raw assignment-shaped secret leaked: ${r.output}`);
+  assert.ok(!r.output.includes('client_secret: abcdefghijkl'), 'raw prefix-shaped secret leaked');
+  assert.match(r.output, /token_abcdefghijkl|REDACTED/, 'and the neutralised form is present — non-vacuity');
+});
+
+test('dream-pipeline: a staged DELETION and a staged MODE change both survive the index refresh (row G8)', async () => {
+  const ctx = setup();
+  const noteRel = '03-Resources/valid-note.md';
+  const idRel = '06-Identity/valid-identity.md';
+  // Both paths this run promotes already exist in the vault, so the user can
+  // have staged something of their own at each.
+  writeFile(ctx.vault, noteRel, 'the user had a version here\n');
+  writeFile(ctx.vault, idRel, 'and one here\n');
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'user versions']);
+
+  // (a) a staged DELETION — no index entry at all, which a blob-sha comparison
+  //     reads as "nothing staged" and refreshes straight over.
+  git(ctx.vault, ['rm', '-q', '--cached', noteRel]);
+  // (b) a staged MODE-ONLY change — the blob sha is unchanged, so a blob-sha
+  //     comparison reads agreement and overwrites 100755 with 100644.
+  git(ctx.vault, ['update-index', '--chmod=+x', idRel]);
+  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'precondition: the mode is staged');
+
+  const r = await runDream(ctx);
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // (a) the staged deletion is STILL staged — the run did not resurrect the path
+  //     in the user's index.
+  assert.equal(git(ctx.vault, ['ls-files', '--stage', noteRel]).trim(), '', 'the staged deletion survives');
+  // (b) the staged mode is STILL 100755.
+  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'the staged mode survives');
+  // And the commit itself is unaffected — the dream's decided bytes still landed.
+  assert.ok(headBytes(ctx.vault, noteRel).toString('utf8').includes('A legitimately-learned resource note.'));
+});
+
+test('dream-pipeline: the report refusal on an EXPECT CONFLICT — the criterion\'s other named cause (row G11 case a)', async () => {
+  const ctx = setup();
+  const reportRel = `reports/dreams/${DATE}.md`;
+  const { writeIntoVault } = require('../../src/core/dream/vault-write');
+  let conflicted = false;
+  // THE WRITE THE CRITERION NAMES is the ONE-WRITE path's write. An expect
+  // conflict on the BODY's write does not reach it: the body simply fails to
+  // promote and Table R's FALLBACK takes over, which is a different arm (proven
+  // in the test above). The single write that can refuse the whole report is the
+  // FALLBACK's own — so the body is refused first (a note appears at the report
+  // path, C4), and then the fallback's write meets a real conflict raised by the
+  // real primitive, not a stubbed `{written:false}`.
+  const writeFile2 = (o) => {
+    if (o.rel === reportRel && o.expect !== undefined && !conflicted) {
+      fs.writeFileSync(path.join(ctx.vault, reportRel), 'the user saved again, mid-publish\n');
+      conflicted = true;
+    }
+    return writeIntoVault(o);
+  };
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      writeFile: writeFile2,
+      reapGroup: async () => {
+        const abs = path.join(ctx.vault, reportRel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        fs.writeFileSync(abs, "the user's own note at the report path\n");
+        return { reaped: true };
+      },
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(conflicted, 'the conflict was really injected — a vacuous pass would prove nothing');
+
+  // THE COMPLETE RECORD still reaches the user, on the second of the two causes
+  // the criterion names.
+  assert.match(r.output, /the report could not be written to your vault/, `the refusal is announced: ${r.output}`);
+  assert.match(r.output, /the complete record of this run follows/, 'and the record is delivered');
+  assert.match(r.output, /Refused by policy/, 'carrying its enforcement section');
+  // Nothing is committed for the report on this arm, and the user's bytes stand.
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(!named.includes(reportRel), `the report path is not in the commit: ${named.join(', ')}`);
+  assert.equal(fs.readFileSync(path.join(ctx.vault, reportRel), 'utf8'), 'the user saved again, mid-publish\n');
+});
+
+test('dream-pipeline: the FALLBACK report arm — the body was refused, the record is published anyway (Table R)', async () => {
+  const ctx = setup();
+  const reportRel = `reports/dreams/${DATE}.md`;
+  // The body is refused by C4: the workspace has the report as `added` (it was
+  // not in the vault at build time), and a note appears at that path in the
+  // vault before promotion. Table R then PRESERVES BOTH VALUES — the report
+  // already in the vault AND this run's enforcement record — rather than
+  // choosing between them.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      reapGroup: async () => {
+        const abs = path.join(ctx.vault, reportRel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        fs.writeFileSync(abs, "the user's own note at the report path\n");
+        return { reaped: true };
+      },
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  const committed = headBytes(ctx.vault, reportRel);
+  assert.ok(committed, 'the fallback published, so the report path IS in the commit');
+  const text = committed.toString('utf8');
+  // BOTH values survive: the user's file is extended, never replaced or
+  // "corrected", and the run's record rides along with it.
+  assert.ok(text.includes("the user's own note at the report path"), `the vault's version is preserved: ${text}`);
+  assert.ok(text.includes('Refused by policy'), 'and this run\'s enforcement record is appended');
+  // The brain's own body did NOT displace it.
+  assert.ok(!text.includes('Consolidated recent sessions.'), "the refused body is not what landed");
+});
