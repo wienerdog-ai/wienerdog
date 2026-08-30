@@ -1,7 +1,7 @@
 ---
 id: WP-digest-line-cap-raise
 title: Raise the digest line cap so a real identity set is no longer truncated
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []

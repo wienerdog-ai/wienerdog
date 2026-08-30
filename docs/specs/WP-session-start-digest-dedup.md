@@ -1,7 +1,7 @@
 ---
 id: WP-session-start-digest-dedup
 title: Make the SessionStart hook inject the digest only when the managed block lacks it
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-doctor-digest-block-drift]
@@ -42,7 +42,7 @@ changed, an alert / quarantine / update banner toggled), and such a divergence
 persists until the user's next manual `sync` — possibly days. The cost is paid
 every session; the benefit is collected only on the sessions after such an event.
 
-**The decision (ADR-0039, proposed 2026-08-30, ratified in the review round that
+**The decision (ADR-0039, Accepted — OWNER-SIGNED 2026-08-30, ratified in the review round that
 moves this spec to `Ready`): keep both channels, stop sending the second identical
 copy.** The hook compares the digest against the managed block of every present
 harness and emits **nothing** when they already carry the same bytes. On any

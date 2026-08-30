@@ -1,7 +1,7 @@
 ---
 id: WP-doctor-digest-block-drift
 title: Report managed-block drift against the current digest in wienerdog doctor
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
