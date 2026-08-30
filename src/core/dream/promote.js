@@ -848,14 +848,14 @@ function composeRecord(o) {
  *            refused:Array<{rel:string, reason:string,
  *                           preserved:Array<PreservedCopy>}>,
  *            secretDisposition:{withheld:number, redactions:number},
- *            report:{outcome:'promoted', bytes:Buffer,
+ *            report:{outcome:'promoted', rel:string, bytes:Buffer,
  *                    redaction:RedactionAccounting|null,
  *                    preserved:Array<PreservedCopy>, record:string[],
  *                    accounting:({published:true}
  *                               |{published:false, reason:string})}
- *                  |{outcome:'fallback', bytes:Buffer,
+ *                  |{outcome:'fallback', rel:string, bytes:Buffer,
  *                    preserved:Array<PreservedCopy>, record:string[]}
- *                  |{outcome:'refused', reason:string,
+ *                  |{outcome:'refused', rel:string, reason:string,
  *                    preserved:Array<PreservedCopy>, record:string[]}}}
  *   EVERY PUBLISHED ENTRY CARRIES BOTH HALVES — `rel` AND `bytes` (Table S).
  *   The bytes are the exact buffer the primitive returned: not the candidate
@@ -925,6 +925,26 @@ function composeRecord(o) {
  *   discriminated sub-union. TABLE Y IS THE SINGLE OWNER OF THAT CONTRACT AND
  *   THIS BLOCK RESTATES NO PART OF IT — what is declared here is the TYPE and
  *   its two-arm shape, and nothing else.
+ *
+ *   `rel` is on EVERY ARM and required — the vault-relative path this arm's
+ *   outcome is ABOUT. It exists because a single owner only holds while
+ *   downstream READS the owner's value: `WP-dream-promote-in-workspace`'s row
+ *   G8 commits the report path and has no other source for it, and any source
+ *   it derived itself would be a SECOND derivation, wrong on the `promoted` arm
+ *   in exactly the runs where the two spellings differ.
+ *
+ *   **ITS MEANING IS NOT CONSTANT ACROSS THE ARMS, and that is stated here
+ *   rather than left to symmetry, per the per-field-provenance pattern
+ *   (`WP-dream-promote-module`'s Table Q preamble).** On `promoted` it is the
+ *   BODY's own `rel` — the spelling the brain wrote and both writes targeted.
+ *   On `fallback` and on `refused` it is the DERIVED path, because no body was
+ *   published on those arms and the fallback targets the derived path by
+ *   decision, not by accident: where CODE-authored content lands in the user's
+ *   vault is a code decision, and a brain-chosen spelling must not create a
+ *   second report directory. Table Z's row Z5 owns which consumer takes which
+ *   value; this block declares the field and its per-arm meaning and decides
+ *   nothing else. A consumer that assumes one value for all arms is the defect
+ *   row Z5's sixth prohibition names.
  */
 function promote(o) {
   const opts = o || {};
@@ -1006,6 +1026,78 @@ function promote(o) {
    *   redaction?:RedactionAccounting|null}>}
    */
   const decisions = new Map();
+
+  // ── TABLE Z — the report path: one derivation, one identity, one authority ─
+  //
+  // ROW Z1 — THE DERIVATION, AND ITS SINGLE OWNER. Derived ONCE per run, here,
+  // and by no other surface: `<reports_dir>/<date>.md` with every EMPTY and
+  // every `.` segment DROPPED. `date`'s shape is validated above precisely
+  // because it is an unsanitized component of this name (Table D's `date` row).
+  //
+  // ROW Z2 — THE SPLIT OF OBLIGATIONS, and it is stated in BOTH directions
+  // because it failed in both, one round each. The PRIMITIVE's row H1 requires
+  // four shapes absent from a `rel` — no segment empty, none `.`, none `..`,
+  // none containing a separator — and a violation THROWS rather than refusing,
+  // so it cannot be reported, dispositioned or survived. `isSafeRelativePath`
+  // (`layout.js:65-71`) already guarantees TWO of the four: no `..`, and
+  // nothing absolute or backslashed. THE CALLER THEREFORE CLOSES EXACTLY THE
+  // OTHER TWO — empty and `.` — and the other two need no handling here.
+  // Stating that absence matters: a reader who re-adds a `..` check writes the
+  // duplicated containment rule the spec forbids, and a reader who assumes the
+  // layout closes everything writes the defect this row exists to end.
+  // Measured, each returned UNCHANGED by `readVaultLayout`: `reports/dreams/`,
+  // `reports//dreams`, `.`, `./reports`, `reports/./dreams`.
+  //
+  // DROPPING, not throwing and not defaulting: a throw would crash every run on
+  // a legitimate config and take the whole run's enforcement record with it,
+  // and substituting the built-in default would silently move the user's
+  // reports. Only no-op segments are removed and `..` cannot be present, so
+  // this can never move the report out of the directory the user configured.
+  const reportRel = [
+    ...String(layout.reports_dir)
+      .split('/')
+      .filter((seg) => seg !== '' && seg !== '.'),
+    `${date}.md`,
+  ].join('/');
+  /**
+   * ROW Z3 — THE IDENTITY, DECIDED ONCE PER RUN. Segment-wise NFC-normalised
+   * and case-folded, the same predicate row C9 matches with and for the same
+   * measured reasons: the primary filesystem is case-insensitive, and macOS
+   * enumerates DECOMPOSED names while accepting composed ones. An identity
+   * rule, never a containment rule — containment stays the primitive's.
+   *
+   * THE MATCHING SET IS DETERMINED ONCE, OVER THE WHOLE DELTA, BEFORE ANY
+   * RECORD IS ROUTED. Evaluating the predicate independently at each routing
+   * site is how a second match silently overwrote the first, and one evaluation
+   * is what makes row Z4 statable at all.
+   * @type {string[]}
+   */
+  const reportKey = foldedSegments(reportRel).join('/');
+  const reportMatches = delta.records
+    .map((r) => r.rel)
+    .filter((rel) => foldedSegments(rel).join('/') === reportKey);
+  /**
+   * ROW Z4 — MORE THAN ONE MATCH: THE RUN HAS NO BODY. Folding is correct on a
+   * case-INsensitive volume and OVER-matches on a case-SENSITIVE one, where two
+   * spellings that fold alike are two different files. Both are supported
+   * targets, so the collision is reachable and is decided here rather than left
+   * to whichever branch runs last.
+   *
+   * The invariant this protects: EVERY delta record has EXACTLY ONE carrier in
+   * the return. Measured before row Z4 existed, two folding matches left BOTH
+   * records with NO carrier — the state this module throws for one branch
+   * earlier, reached without the throw. Refusal rather than a throw is
+   * deliberate: a throw loses the enforcement record for every other path.
+   * @type {string|null} the body's own `rel`, or `null` when there is no body
+   */
+  const bodyRel = reportMatches.length === 1 ? reportMatches[0] : null;
+  /** @param {string} rel @returns {boolean} */
+  const isReport = (rel) => bodyRel !== null && rel === bodyRel;
+  /** The collision reason, composed once so both refusal routes carry it. */
+  const collisionReason =
+    reportMatches.length > 1
+      ? `more than one candidate is the dream report for this date (${reportMatches.length} paths differ only by case or Unicode normalisation); none is promoted as the report`
+      : null;
 
   // ── Phase 1: decide. No vault byte is written in this loop. ───────────────
   for (const record of delta.records) {
@@ -1301,6 +1393,21 @@ function promote(o) {
     }
   }
 
+  // ── Phase 1d: Table Z row Z4 — the report-path collision ─────────────────
+  //
+  // Re-decided HERE rather than refused up front, for the same reason phase 1c
+  // re-decides a pair: a colliding path is an ORDINARY refused candidate, so it
+  // goes through the gates like any other and keeps whatever preservation
+  // record EP2 produced for it. Refusing before the gates ran would silently
+  // drop those copies, which is the data-loss shape row Q3 names.
+  if (collisionReason !== null) {
+    for (const rel of reportMatches) {
+      const d = decisions.get(rel);
+      if (!d) continue;
+      decisions.set(rel, { rel, refuse: collisionReason, preserved: d.preserved });
+    }
+  }
+
   // ── Phase 2: write. Every vault byte goes through the primitive. ──────────
   /** @type {Array<{rel:string, bytes:Buffer}>} */
   const promoted = [];
@@ -1309,31 +1416,6 @@ function promote(o) {
   /** @type {Array<{rel:string, reason:string, preserved:PreservedCopy[]}>} */
   const refused = [];
 
-  // The report body's path. Code-derived from the layout and the run date, so
-  // the brain cannot choose it: `date`'s shape is validated above precisely
-  // because it is an unsanitized component of this name (Table D's `date` row).
-  //
-  // EMPTY SEGMENTS ARE DROPPED, exactly as `isUnder` reads a layout directory,
-  // because `reports_dir` is a USER CONFIG value: `readVaultLayout` accepts and
-  // PRESERVES a trailing slash (`isSafeRelativePath` does not reject one), so a
-  // plain join yields `reports/dreams//<date>.md`, which the primitive's segment
-  // validation throws on — failing EVERY run, including one where the brain
-  // wrote nothing. Measured, and found by the round-1 rubric gate.
-  const reportRel = [...String(layout.reports_dir).split('/').filter((s) => s !== ''), `${date}.md`].join('/');
-  /**
-   * IDENTITY, CANONICALISED THEN CASE-FOLDED — the same predicate row C9 already
-   * matches with (`fold`), and for the same measured reasons: the primary
-   * filesystem is case-insensitive, and macOS enumerates DECOMPOSED names while
-   * accepting composed ones, so the delta can hand back an NFD spelling of the
-   * NFC path the layout holds. A literal `===` treats those as different files,
-   * which silently folds the body into `promoted[]` as an ordinary note while
-   * the fallback fires as though no body existed — the report then written
-   * twice. Found by the round-1 rubric gate; not a containment rule, which
-   * stays the primitive's (Table H).
-   * @param {string} rel @returns {boolean}
-   */
-  const reportKey = foldedSegments(reportRel).join('/');
-  const isReport = (rel) => foldedSegments(rel).join('/') === reportKey;
   /**
    * The report body's own outcome, kept OUT of the three arrays above: the body
    * is not a member of `refused[]`, and its whole disposition travels on
@@ -1477,6 +1559,7 @@ function promote(o) {
       second && second.written === true
         ? {
             outcome: 'promoted',
+            rel: reportBody.rel,
             bytes: second.bytes,
             redaction: reportRedaction,
             preserved: reportPreserved,
@@ -1492,6 +1575,7 @@ function promote(o) {
             // section never reached the vault; what the target holds now is
             // refusal-cause-specific and nothing here represents it (row Y4).
             outcome: 'promoted',
+            rel: reportBody.rel,
             bytes: reportBody.bytes,
             redaction: reportRedaction,
             preserved: reportPreserved,
@@ -1514,7 +1598,7 @@ function promote(o) {
       // Fail closed. An unreadable report path is not evidence the fallback is
       // safe, and R4's outcome is the one that holds: the vault object is left
       // untouched and the complete record goes back to the caller.
-      report = { outcome: 'refused', reason: now.error, preserved: reportPreserved, record };
+      report = { outcome: 'refused', rel: reportRel, reason: now.error, preserved: reportPreserved, record };
     } else {
       /** @type {{vaultDir:string, rel:string, bytes:Buffer, admit:Function, expect?:Buffer}} */
       const call =
@@ -1529,7 +1613,7 @@ function promote(o) {
       const res = writeFile(call);
       report =
         res && res.written === true
-          ? { outcome: 'fallback', bytes: res.bytes, preserved: reportPreserved, record }
+          ? { outcome: 'fallback', rel: reportRel, bytes: res.bytes, preserved: reportPreserved, record }
           : {
               // R4 — the file mutated between the read and the publish, or the
               // primitive refused for any other reason. The vault object is left
@@ -1537,6 +1621,7 @@ function promote(o) {
               // refusal NAMES ITS REASON. In this narrow window an overwrite
               // would be the worse failure: it would clobber the user's edit.
               outcome: 'refused',
+              rel: reportRel,
               reason: (res && res.reason) || 'the vault write was refused',
               preserved: reportPreserved,
               record,

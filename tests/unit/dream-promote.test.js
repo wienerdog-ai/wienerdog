@@ -1719,13 +1719,151 @@ test('dream-promote report-fallback: a `reports_dir` with a trailing slash still
   // the primitive's validation THROWS on, failing every run of the module,
   // including one where the brain wrote nothing. Empty segments are dropped
   // exactly as `isUnder` reads a layout directory (round-1 PR gate, gptsol P2).
-  for (const dir of ['reports/dreams/', 'reports//dreams', '/reports/dreams']) {
+  // THE CASE LIST IS EVERY VALUE `readVaultLayout` CAN RETURN UNCHANGED, and it
+  // may contain no value it CANNOT return (Table Z, prohibition (iv)). The
+  // first version of this test spent its one case on `/reports/dreams`, which
+  // `isSafeRelativePath` rejects so the key falls back to the default — an
+  // unreachable input, while all three reachable broken ones were missing. That
+  // is what let a `.` segment survive a whole round.
+  const {readVaultLayout} = require('../../src/core/layout');
+  for (const dir of ['reports/dreams/', 'reports//dreams', '.', './reports', 'reports/./dreams']) {
+    const cfgDir = tmp('cfg');
+    fs.writeFileSync(path.join(cfgDir, 'config.yaml'), `vault_layout:\n  reports_dir: ${dir}\n`);
+    assert.equal(
+      readVaultLayout(path.join(cfgDir, 'config.yaml')).reports_dir,
+      dir,
+      `${dir}: the case list may only hold values readVaultLayout returns UNCHANGED`
+    );
+
     const sc = scenario({ layout: { ...defaultLayout(), reports_dir: dir }, brain: { [NOTE]: 'fresh\n' } });
     const res = run(sc);
-    assert.equal(res.report.outcome, 'fallback', dir);
-    assert.deepEqual(get(sc.vaultDir, REPORT), res.report.bytes, `${dir}: published at the canonical path`);
+    // The derived path, per row Z1: every empty and every `.` segment dropped.
+    const derived = [...dir.split('/').filter((seg) => seg !== '' && seg !== '.'), '2026-08-29.md'].join('/');
+    assert.equal(res.report.rel, derived, `${dir}: row Z5(e) carries the derived path on this arm`);
+    // Row Z3's NAMED RESIDUAL: `isUnder` (row C9's matching) does not drop `.`,
+    // so a `.` in the layout admits nothing under the reports directory at all.
+    // The consequence is FAIL-CLOSED and the record still reaches the caller —
+    // which is what makes it a residual rather than a data loss.
+    const admits = !dir.split('/').includes('.');
+    assert.equal(res.report.outcome, admits ? 'fallback' : 'refused', dir);
+    assert.ok(res.report.record.includes(H_ENFORCE), `${dir}: the record reaches the caller either way`);
+    if (admits) assert.deepEqual(get(sc.vaultDir, derived), res.report.bytes, dir);
   }
 });
+
+test('dream-promote report-fallback: two fold-equal candidates collide — neither is the body, and every delta record keeps exactly one carrier', () => {
+  // ROW Z4. Folding is CORRECT on a case-insensitive volume and OVER-matches on
+  // a case-sensitive one, where two spellings that fold alike are two different
+  // files. Both are supported targets. The delta record is CLONED rather than
+  // written to disk, so the case does not depend on this host's case
+  // sensitivity — on a case-insensitive tmpdir the two files cannot coexist.
+  const sc = scenario({ brain: { [REPORT]: body('one'), [NOTE]: 'fresh\n' } });
+  const original = sc.delta.records.find((r) => r.rel === REPORT);
+  assert.ok(original, 'the brain wrote the report');
+  sc.delta.records.push({ ...original, rel: 'reports/Dreams/2026-08-29.md', afterBytes: B(body('two')) });
+
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) =>
+        rel.toLowerCase().startsWith('reports/')
+          ? {
+              redact: true,
+              sanitizedBytes: B('sanitized\n'),
+              redaction: { lines: 1, labels: 'high-entropy' },
+              preserved: [{ artifact: `2026-08-29-${rel.split('/')[1]}.md`, location: 'quarantine/redacted' }],
+            }
+          : { ok: true },
+    }),
+  });
+
+  // NEITHER is the body: the collision means no record was identified as one,
+  // so refusing both does not breach "the body is not a member of refused[]".
+  assert.equal(res.report.outcome, 'fallback');
+  assert.deepEqual(res.report.preserved, [], 'no body, so no body copies');
+  assert.equal(res.report.rel, REPORT, 'the fallback targets the DERIVED path (row Z5(d))');
+
+  for (const rel of [REPORT, 'reports/Dreams/2026-08-29.md']) {
+    const hit = res.refused.find((r) => r.rel === rel);
+    assert.ok(hit, `${rel} is an ordinary refused candidate`);
+    assert.match(hit.reason, /more than one candidate is the dream report/, 'the reason NAMES the collision');
+    // Refused AFTER the gates ran, so EP2's preserved copy is kept rather than
+    // silently dropped — the data-loss shape row Q3 names.
+    assert.equal(hit.preserved.length, 1, `${rel}: the gate's copy survives the collision refusal`);
+    assert.equal(hit.preserved[0].remediation, 'delete');
+  }
+
+  // THE INVARIANT ROW Z4 PROTECTS, asserted directly: before it existed BOTH
+  // records ended with no carrier at all — the state this module throws for one
+  // branch earlier, reached without the throw.
+  const carried = [...res.promoted, ...res.redacted, ...res.refused].map((r) => r.rel);
+  assert.deepEqual(
+    sc.delta.records.map((r) => r.rel).sort(),
+    carried.sort(),
+    'EVERY delta record has EXACTLY ONE carrier in the return'
+  );
+  assert.equal(new Set(carried).size, carried.length, 'and exactly one, not two');
+});
+
+test('dream-promote report-fallback: each consumer takes the path Table Z names, and `rel` carries it per arm', () => {
+  // ROW Z5. Five consumers, three answers — asserted where the two spellings
+  // actually differ, which is the only run in which the answers are separable.
+  const NFC = 'reports/dre\u00e1ms';
+  const NFD = 'reports/drea\u0301ms';
+  const derived = `${NFC}/2026-08-29.md`;
+
+  // (a)+(b)+(c)+(e) on `promoted`: the body's OWN rel. Both writes target it,
+  // the record names it, and `report.rel` carries it.
+  const scP = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  const targeted = [];
+  const resP = run(scP, { writeFile: (o) => { targeted.push(o.rel); return realWrite(o); } });
+  assert.equal(resP.report.outcome, 'promoted');
+  assert.equal(resP.report.rel, `${NFD}/2026-08-29.md`, "row Z5(e): the BODY's own rel on `promoted`");
+  assert.deepEqual(targeted, [`${NFD}/2026-08-29.md`, `${NFD}/2026-08-29.md`], 'both writes target the body');
+
+  // (d)+(e) on `fallback`: the DERIVED path. Where CODE-authored content lands
+  // is a code decision — a brain-chosen spelling must not be able to create a
+  // second report directory in the user's vault.
+  //
+  // ASSERTED ON BOTH FALLBACK SHAPES, because they reach the target through
+  // DIFFERENT code: R1 (no report for the date) publishes the section alone,
+  // while R2/R3 read the existing bytes and append. A version of this test that
+  // exercised R1 only left the read-and-append target unasserted — measured, a
+  // mutation pointing that branch at the body's path passed it.
+  for (const existing of [null, '# run one\n']) {
+    const scF = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+    if (existing !== null) put(scF.vaultDir, derived, existing);
+    const targetedF = [];
+    const readF = [];
+    const resF = run(scF, {
+      gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+      writeFile: (o) => { targetedF.push(o.rel); readF.push(o.expect === undefined ? 'R1' : 'R2/R3'); return realWrite(o); },
+    });
+    const shape = existing === null ? 'R1' : 'R2/R3';
+    assert.equal(resF.report.outcome, 'fallback', shape);
+    assert.equal(resF.report.rel, derived, `${shape}: row Z5(e) carries the DERIVED path on \`fallback\``);
+    assert.deepEqual(targetedF, [derived], `${shape}: row Z5(d) — the fallback WRITES the derived path`);
+    assert.deepEqual(readF, [shape], `${shape}: and reached it through the branch this case exercises`);
+    if (existing !== null) {
+      // The base it READ is the derived path's bytes, not the body's — R2's
+      // preservation would otherwise silently start from the wrong file.
+      assert.ok(String(get(scF.vaultDir, derived)).startsWith(existing), `${shape}: the existing report is preserved`);
+    }
+  }
+  const scF = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  const resF = run(scF, {
+    gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+  });
+  // Row Z5(c): the record names the file THE BRAIN WROTE, not the derived path.
+  // This is where the round-2 gate's own proposed fix would have gone wrong.
+  assert.ok(sectionOf(resF).includes(neutralisedNfd()), `the record names the body's path: ${sectionOf(resF)}`);
+});
+
+/** The NFD report path as the record renders it — redact-then-sanitise applied. */
+function neutralisedNfd() {
+  const {redactOnly} = require('../../src/core/secret-scan');
+  const {sanitizeProjectName} = require('../../src/core/digest');
+  return sanitizeProjectName(redactOnly('reports/drea\u0301ms/2026-08-29.md'));
+}
 
 test('dream-promote report-fallback: the body is matched by CANONICAL path identity, not by literal equality', { skip: !POSIX }, () => {
   // macOS enumerates DECOMPOSED names while accepting composed ones, so the
