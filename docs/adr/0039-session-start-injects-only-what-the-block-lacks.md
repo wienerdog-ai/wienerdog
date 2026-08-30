@@ -100,5 +100,23 @@ state resolves toward injecting.
   `session-start.sh` entry in an existing user's `hooks.json` — an entry whose
   script still exists, so neither the pruner nor the stale-hook detector would
   ever remove it.
-- ADR-0004 is untouched: this adds no process, no daemon, no telemetry. The hook
-  still runs and exits.
+- **Two residuals the owner accepted on 2026-08-30**, recorded here rather than
+  left in a PR comment. Both were Codex design-gate findings against
+  `WP-session-start-digest-dedup`; the full record is that PR's closing comment,
+  and the reasoning is in that spec's "Residuals" section. **(i) TOCTOU** — a
+  dream run that rewrites `digest.md` mid-hook can make the comparison one
+  against superseded bytes. **Parked**, under the runbook's park sub-case: every
+  honest fix is a freshness mechanism, and this decision deliberately makes no
+  freshness claim. Digest writes are atomic, so the worst case is the
+  one-session staleness window that already existed and that `sync` closes.
+  **(ii) Invalid-UTF-8 folding** — both sides decode through
+  `readFileSync(…, "utf8")`, so byte-different invalid sequences compare equal.
+  **Residual**: injecting would have delivered the identical decoded string the
+  block already carries, so the silence loses nothing.
+  *Added 2026-08-30 after this ADR's signature — a record of the owner's own
+  dispositions on PR #50, not a new decision; the Decision above is unchanged.*
+- ADR-0004's Decision line still reads "no computation at SessionStart", which
+  this decision makes literally false. **Amendment 1 is drafted in ADR-0004 and
+  is pending the owner's signature**; until then that clause stands as ratified.
+- ADR-0004's invariant itself is untouched: this adds no process, no daemon, no
+  telemetry. The hook still runs and exits.
