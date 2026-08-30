@@ -11,6 +11,9 @@ adrs: []                 # e.g. [ADR-0004] — decisions this WP must respect
 
 # WP-<slug>: <title>
 
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
 ## Context (read this, nothing else)
 
 2–4 paragraphs. What this component is, why it exists, how it fits the system.
@@ -27,8 +30,9 @@ signatures being extended, sample of existing output if relevant. For greenfield
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-<!-- Always allowed without listing: this spec file itself (the status flip)
-     and package-lock.json. Everything else must be listed. -->
+<!-- Always allowed without listing: this spec file itself (the status flip),
+     package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/.
+     Everything else must be listed. -->
 
 | Action | Path | Notes |
 |--------|------|-------|
@@ -115,7 +119,9 @@ spot (register-new-mirrors):
 ## Acceptance criteria
 
 - [ ] Objective, binary criteria only — each maps to a verification step below.
-- [ ] Running the command twice is idempotent (second run: zero changes).
+- [ ] Running the command twice is idempotent (second run: zero changes) —
+      applies when the WP ships a command or writes outside the repo; a WP
+      with no such surface marks it `N/A — <what the WP ships instead>`.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -134,3 +140,7 @@ npm run lint
 2. Conventional commits; PR titled `feat(scope): title (WP-<slug>)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+5. Both PR review gates have run on the diff and are clean or fully
+   dispositioned — they are defined in `docs/runbooks/codex-review.md`
+   and not restated here. `In-Review` marks the START of review: this
+   list is complete only when review is.

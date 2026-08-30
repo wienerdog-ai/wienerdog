@@ -12,6 +12,7 @@ const { acquireLock } = require('../../src/core/dream/lock');
 const idApprovals = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
 const { Limits } = require('../../src/core/transcripts');
+const { WARNINGS_REL } = require('../../src/core/dream/warnings');
 
 // A fully-blocked profile (the pre-0.10.0 frozen shape). seedApprovals only seeds
 // when identity-auto-activation is BLOCKED; the released profile now defaults to
@@ -173,10 +174,18 @@ function resolveOnPath(name, searchPath) {
  *  from an existing store, and the dream commits via a pinned `git`; a fake git
  *  marker would break real vault commits, so the genuine git is pinned. Replaces
  *  the deleted fake-command env seam (WP-155).
+ *
+ *  Also writes the fixture's CONTROL FILE beside the pinned command
+ *  (WP-dream-workspace-retarget, Table B's fixture-control row). Scenario
+ *  selection can no longer travel in the environment — the dream composes the
+ *  brain's env from a fixed allowlist — so it travels in a JSON file in this
+ *  temp bin dir, which is the copied fixture's own `__dirname` at run time.
  *  @param {string} root @param {string} core @param {string} fakeScriptPath
  *  @param {string} [name='claude']
+ *  @param {object} [control] written as wd-fixture-control.json; omitted → the
+ *    fixture keeps its defaults
  *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
-function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude', control) {
   // realpath FIRST (macOS /var → /private/var) so commandPath and
   // dirname(realpath) are stable and the pin's string-equality checks pass.
   const realRoot = fs.realpathSync(root);
@@ -185,6 +194,9 @@ function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
   const cmd = path.join(binDir, name);
   fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
   fs.chmodSync(cmd, 0o755);
+  const controlFile = path.join(binDir, 'wd-fixture-control.json');
+  if (control) fs.writeFileSync(controlFile, JSON.stringify(control));
+  else fs.rmSync(controlFile, { force: true }); // absent → fixture defaults
   const pins = {
     [name]: { commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString() },
   };
@@ -224,7 +236,13 @@ async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
     CLAUDE_CONFIG_DIR: ctx.claude,
     CODEX_HOME: ctx.codex,
     WIENERDOG_FAKE_TODAY: DATE,
-    ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN),
+    // The mode reaches the fixture through the control file beside the pinned
+    // command; the ambient names stay set and INERT, which is the visible proof
+    // that the channel moved. The flag path is TEST-OWNED and travels with it.
+    ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN, 'claude', {
+      mode: extraEnv.WIENERDOG_FAKE_BRAIN_MODE || '',
+      gitBreakFlag: path.join(ctx.core, 'git-break.flag'),
+    }),
     ...extraEnv,
   });
   if (extraEnv.WIENERDOG_FAKE_BRAIN_MODE === undefined) delete process.env.WIENERDOG_FAKE_BRAIN_MODE;
@@ -746,8 +764,24 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   assert.equal(thrown, null, thrown && thrown.message);
 
   // The valid neighbour was consolidated and committed; the run exited 0.
-  assert.equal(commitCount(ctx.vault), before + 1);
+  // TWO commits, and the first one is the pre-existing session-edits sweep, not
+  // a second dream commit: refresh point 1 writes the vault warnings file before
+  // the run's `precommitSessionEdits`, which commits every dirty working-tree
+  // change ahead of the brain. The dream's own commit is still exactly one.
+  assert.equal(commitCount(ctx.vault), before + 2);
+  const messages = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
+  assert.match(messages[0], /^dream: /, 'the dream commit is last');
+  assert.equal(messages[1], 'vault: session edits before dream');
   assert.match(output, /dream committed/);
+  // The vault's durable record of what could not be read.
+  const warned = fs.readFileSync(path.join(ctx.vault, WARNINGS_REL), 'utf8');
+  assert.ok(warned.includes('- huge.jsonl —'), warned);
+  // This is the one run where BOTH refresh points fire: point 1 wrote the file
+  // before the sweep, and point 2 ran after the commit over an unchanged
+  // quarantine set. Point 2 must therefore have taken Table C row 2 and written
+  // nothing — if it rewrote the file, the run would end with a dirty vault and
+  // every following night would grow another `vault: session edits` commit.
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'point 2 took row 2 — no second write');
   // The quarantine was surfaced plainly — basename + reason only.
   assert.match(output, /quarantined claude\/huge\.jsonl \(over-ceiling\); it will not be retried until it changes\./);
   assert.ok(!output.includes(path.join(ctx.claude, 'projects')), 'console line carries no full path');
@@ -785,6 +819,16 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   const digest1 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
   assert.ok(digest1.includes('huge.jsonl (over-ceiling)'), 'banner written on the quarantine-only run');
   const bytes1 = fs.readFileSync(ledgerPath, 'utf8');
+  // The vault gets its own durable record (WP-quarantine-warnings-file). This
+  // run makes NO commit, so refresh point 1 is what produced the file, and the
+  // idle return's point 3 was a no-op behind it.
+  const warnings = path.join(ctx.vault, WARNINGS_REL);
+  assert.ok(fs.existsSync(warnings), 'the vault warnings file is written on a quarantine-only run');
+  const warnBytes1 = fs.readFileSync(warnings, 'utf8');
+  assert.ok(warnBytes1.includes('### The session file is bigger than Wienerdog will read — 1'), warnBytes1);
+  assert.ok(warnBytes1.includes('- huge.jsonl —'), 'the entry names the sanitized basename');
+  assert.ok(!warnBytes1.includes(ctx.claude), 'no full transcript path in the vault file');
+  const warnMtime1 = fs.statSync(warnings).mtimeMs;
 
   // Run 2: unchanged file → skip-quarantined, no re-record, no re-alert.
   const r2 = await runDream(ctx, ['--yes']);
@@ -792,6 +836,9 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   assert.ok(!/quarantined claude/.test(r2.output), 'no re-quarantine console line');
   assert.equal(fs.readFileSync(ledgerPath, 'utf8'), bytes1, 'ledger byte-unchanged');
   assert.equal(commitCount(ctx.vault), before);
+  // Nothing the file shows changed, so it is not rewritten — not even its mtime.
+  assert.equal(fs.readFileSync(warnings, 'utf8'), warnBytes1, 'warnings file byte-unchanged');
+  assert.equal(fs.statSync(warnings).mtimeMs, warnMtime1, 'no churn on an unchanged ledger');
 
   // Run 3: the file CHANGES into a small valid transcript → retried and processed.
   const huge = path.join(ctx.claude, 'projects', 'proj', 'huge.jsonl');
@@ -808,12 +855,119 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   const r3 = await runDream(ctx, ['--yes']);
   assert.equal(r3.thrown, null, r3.thrown && r3.thrown.message);
   assert.match(r3.output, /dream committed/);
-  assert.equal(commitCount(ctx.vault), before + 1);
+  // Two commits again, for the same reason as above: the warnings file runs 1
+  // and 2 left uncommitted in the working tree is swept in by this run's
+  // `precommitSessionEdits` — the named residual, discharged one run later.
+  // The messages are what tell the pre-existing sweep apart from a second dream
+  // commit; a bare count cannot, and ADR-0012 is about the dream's own commit.
+  assert.equal(commitCount(ctx.vault), before + 2);
+  const msgs3 = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
+  assert.match(msgs3[0], /^dream: /, 'the dream commit is last');
+  assert.equal(msgs3[1], 'vault: session edits before dream');
   const ledger3 = readLedgerFile(ctx.core);
   assert.equal(ledgerRecord(ledger3, 'huge.jsonl').outcome, 'processed');
   // The banner self-clears once the file leaves quarantine.
   const digest3 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
   assert.ok(!digest3.includes('huge.jsonl (over-ceiling)'), 'banner cleared after the retry succeeded');
+  // The vault file does NOT self-clear by vanishing: the quarantine leaving the
+  // set is knowable only after the commit (refresh point 2), and what that point
+  // writes is the explicit empty form. The file is never unlinked.
+  assert.ok(fs.existsSync(warnings), 'the warnings file is rewritten, never deleted');
+  const warnBytes3 = fs.readFileSync(warnings, 'utf8');
+  assert.ok(warnBytes3.includes('No session transcripts are being skipped.'), warnBytes3);
+  assert.ok(!warnBytes3.includes('huge.jsonl'), 'the cleared quarantine is gone from the list');
+});
+
+test('dream-integration: a refresh FAILURE is reported and never fails the dream', async () => {
+  // The six lines in dream.js that turn a `reason` into a console line and
+  // otherwise swallow it are what keep a broken warnings file from taking the
+  // night's consolidation down with it. If that path ever threw instead, a user
+  // whose reports/warnings.md is a directory would get a hard-failing nightly
+  // dream with no consolidation at all — precisely the fail-safe-skip class
+  // ADR-0023 exists to prevent.
+  //
+  // A DIRECTORY at the path is the cheapest real failure: the leaf check refuses
+  // it by return, and an EMPTY untracked directory is invisible to git, so the
+  // tree stays clean and the run proceeds all the way to its commit.
+  const ctx = setup({ overCeiling: 'huge' });
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  fs.mkdirSync(path.join(ctx.vault, WARNINGS_REL), { recursive: true });
+  assert.equal(git(ctx.vault, ['status', '--porcelain', '-uall']).trim(), '', 'an empty dir is invisible to git');
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+
+  // The dream still consolidated and still committed.
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /dream committed/);
+  // And it said so, in plain language, ONCE PER REFRESH POINT THAT FAILED.
+  // This run shape fires point 1 (a new quarantine) and point 2 (after the
+  // commit), and both hit the same directory, so the line appears twice. That
+  // is the honest number and not a defect to dedupe: suppressing the second
+  // would mean remembering the first, and Table B's no-carried-state rule is
+  // that nothing crosses refresh points — each one re-reads and re-decides.
+  assert.match(output, /could not update reports\/warnings\.md in your vault/);
+  assert.equal(output.split('could not update reports/warnings.md').length - 1, 2, 'one line per failed refresh point');
+  // Everything the other surfaces promise is still true: the ledger holds the
+  // condition and the digest banner still raises it. Only the enumeration is
+  // lost, and only until the next refresh.
+  assert.equal(ledgerRecord(readLedgerFile(ctx.core), 'huge.jsonl').outcome, 'quarantined');
+  assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
+  // The thing in the way is left exactly as found — never cleared, never written through.
+  assert.ok(fs.statSync(path.join(ctx.vault, WARNINGS_REL)).isDirectory());
+});
+
+test('dream-integration: an idle run writes the vault warnings file when it is absent, then leaves it alone', async () => {
+  // Refresh point 3 (write-if-absent). The upgrade shape is an install whose
+  // quarantines are ALL pre-existing: nothing fresh to consume, no new
+  // quarantine, no commit — a run that reaches neither of the other two refresh
+  // points. Without this point the file would never appear at all.
+  const ctx = setup({ withTranscript: false, overCeiling: 'huge' });
+  const warnings = path.join(ctx.vault, WARNINGS_REL);
+  const before = commitCount(ctx.vault);
+
+  // Run 1 quarantines and writes the file; delete it to model a vault where it
+  // was lost, removed by the user, or never written by an older version.
+  await runDream(ctx, ['--yes']);
+  assert.ok(fs.existsSync(warnings));
+  fs.rmSync(warnings);
+
+  // Run 2 is FULLY idle — no new quarantine, no commit — and reconciles.
+  const r2 = await runDream(ctx, ['--yes']);
+  assert.equal(r2.thrown, null, r2.thrown && r2.thrown.message);
+  assert.match(r2.output, /nothing new to dream/);
+  assert.ok(!/quarantined claude/.test(r2.output), 'nothing entered quarantine on this run');
+  assert.equal(commitCount(ctx.vault), before, 'still no commit');
+  assert.ok(fs.existsSync(warnings), 'write-if-absent recreated it');
+  assert.ok(fs.readFileSync(warnings, 'utf8').includes('- huge.jsonl —'));
+  const mtime = fs.statSync(warnings).mtimeMs;
+
+  // Run 3, the same idle run again: the trigger fires at most once.
+  const r3 = await runDream(ctx, ['--yes']);
+  assert.equal(r3.thrown, null, r3.thrown && r3.thrown.message);
+  assert.equal(fs.statSync(warnings).mtimeMs, mtime, 'present + equal → no write at all');
+});
+
+test('dream-integration: --dry-run writes no vault warnings file, on the idle path either', async () => {
+  // Step 7's idle return comes BEFORE step 8's dry-run return, so refresh point
+  // 3 is reachable on a preview run and carries its own guard.
+  const ctx = setup({ withTranscript: false, overCeiling: 'huge' });
+  const warnings = path.join(ctx.vault, WARNINGS_REL);
+
+  // (a) A preview on a fresh install: the would-be quarantine is only diagnosed.
+  const dry1 = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry1.thrown, null, dry1.thrown && dry1.thrown.message);
+  assert.equal(fs.existsSync(warnings), false, 'no vault file on a preview run');
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'vault git status clean');
+
+  // (b) A preview on an install that ALREADY has the quarantine recorded — the
+  //     idle path, which is exactly where the new guard lives.
+  await runDream(ctx, ['--yes']);
+  fs.rmSync(warnings);
+  const dry2 = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry2.thrown, null, dry2.thrown && dry2.thrown.message);
+  assert.match(dry2.output, /nothing new to dream/);
+  assert.equal(fs.existsSync(warnings), false, 'the idle dry-run path writes nothing either');
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'vault git status still clean');
 });
 
 test('dream-integration: the one-time migration seeds the ledger baseline from watermarks.json', async () => {
@@ -1478,6 +1632,7 @@ test('dream-integration: a passing probe result is recorded in the dream run evi
   // spawnBrain threading), using the fake brain so no real claude is spawned.
   const ctx = setup();
   const { done } = spawnBrain({
+    workspaceDir: ctx.vault,
     vaultDir: ctx.vault,
     scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
     date: DATE,

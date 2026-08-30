@@ -1,0 +1,176 @@
+Gate: INTERNAL COHERENCE pass (peer of the adversarial round 4)
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at 36cfc23
+Round: 4
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only: git status --porcelain empty (0 bytes) before and after. HEAD moved
+mid-pass 36cfc23 -> 3c0bd19 (this session's round-4 adversarial raw output);
+`git diff --quiet 36cfc23..HEAD --` over all five analysed files -> exit 0,
+byte-identical at both tips. Scratch /tmp/wd-coh-pass/.
+
+FINDINGS
+
+F-1 [contract/coherence] module:615 (row Q7): the module is said to carry the
+    record "into the accounting and THE REPORT", in the same window that
+    established it composes no report.
+    Q7: "What this module does is three things: CARRY Q1's fields — the
+    preservation record included — into the accounting and the report (Q8/Q9)".
+    Contradicted by three surfaces, one written in this window:
+      module:293-294 "`report` is NOT in this package's return ... This module
+        publishes ordinary notes and composes no report."
+      module:170 (Deliverables Notes) "NOT the report"
+      module:915-916 (the redaction criterion, REWRITTEN IN THIS WINDOW by round
+        3's F11) "Asserted on what this package can build ... and NOT on a report
+        line: this module composes no report"
+    The Q7 cell was itself rewritten in this window and the clause survived the
+    rewrite. This is F11's own defect class left standing in the row that owns
+    the claim. A charitable reading ("into the data the report is built from")
+    exists; the family's own F11 disposition is what makes it a finding.
+
+F-2 [coherence] module:1083: a quotation attributed to three surfaces that do
+    not carry it. "(its rows G7 and V3 and its G7 criterion, which say
+    'preserves their DECISIONS, nothing more')".
+    /usr/bin/grep -n "nothing more" in-workspace -> ONE hit, :404, inside the
+    MSC entry at :393-404. Not row G7 (:302), not row V3 (:342), not the G7
+    criterion (:539-577). What they actually say:
+      G7 :302  "The DECISION is unchanged and stays exactly as its owner decides it"
+      V3 :342  "The extraction here must therefore PRESERVE them" — never
+               narrowed to "decisions"
+      criterion :546 opens "the EP2 gate's DURABLE lifecycle SURVIVES the same
+               edit", narrows only at :557
+    A pointer carrying a quoted premise read out of a surface other than cited.
+
+F-3 [coherence] report:567: an orphaned ordinal. "Asserted a THIRD time on the
+    WITHHOLD arm" with no first or second in the criterion. Over report:523-587,
+    grep for "a second time|a third time|first time|Asserted" returns exactly
+    two hits. The pre-window text carried "Asserted a second time for the report
+    body itself"; the sweep replaced that sentence and left "third" behind. The
+    module's parallel criterion is intact ("Asserted on three routes ... a
+    fourth time on the WITHHOLD arm", module:958-961).
+
+F-4 [coherence] module:592-593 and module:712: an ungated universal the family's
+    own surfaces contradict.
+      :592-593 "the per-field provenance rule ratified in round 3 binds EVERY
+        FIELD THIS FAMILY ADDS, not only the record's"
+      :712 "...which is row Q9's rule applied to every field this family adds"
+    Measured against the family's own fields: report.record, report.bytes,
+    report.outcome, report.reason, redacted[].rel, redacted[].bytes,
+    records[].path, records[].reason state neither a filler nor a moment. The
+    owner ruling scopes the addition to "the shape's contract". The narrow true
+    form is "every field of a disposition shape this family adds". Identical
+    shape to the universal the report package already corrected once and records
+    as unbuildable (report:281-287).
+
+F-5 [coherence, MSC gap] report:89-95: the report's Current-state description of
+    promote()'s return is a Table Q mirror, was edited in this window ("row Q1
+    names" -> "row Q1 names AND THE REDACTION ACCOUNTING on the one arm rows Q1
+    and Q10 name"), and is registered by neither checklist — not the module's
+    Table Q MSC entry (module:675-718) and not the report's own Current-state
+    item (report:374). Same class as round-2's H-9.
+
+F-6 [coherence] report:403: "its TWO typedefs" where the module declares THREE.
+    /usr/bin/grep -n "@typedef" module -> 3: GateReportedCopy (:187),
+    PreservedCopy (:192), RedactionAccounting (:203). The prohibition does not
+    reach GateReportedCopy. The module's own Table Q MSC entry names all three
+    (module:676-680). The count was rewritten in this window (old: "four
+    returned shapes"), i.e. one count was swapped for another and THE NEW ONE
+    WAS STALE ON ARRIVAL, because GateReportedCopy was added in the same window.
+
+F-7 [coherence, low] report:446-447: "both rows state it" — only one does.
+    The MSC guards the re-cut partition with "The PARTITION between the two rows
+    is a mirror in its own right AND BOTH ROWS STATE IT".
+    Measured: the preserved-copy row (report:353) states the whole partition; the
+    redaction-lines row (report:352) states only its own scope, never the
+    partition, never the render-exactly-once rule, never that every other copy is
+    the sibling row's. The checklist item protecting the partition asserts a
+    two-sided statement that exists on one side, so a sweeper ticks it wrongly.
+
+F-8 [nit] report:93-94: "the ONE ARM rows Q1 and Q10 name". Q10 names three
+    carriers; Q1 names a GATE arm, not a return arm. A readable contextual gloss,
+    but the pointer states its owner's scope as singular where it is not.
+
+MECHANICAL RESULTS
+
+OLD SHAPES — NOTHING FOUND. refused[].artifact / redacted[].artifact -> 1 hit,
+  module:556, inside "What it deleted:". The combined 'promoted'|'fallback' arm
+  -> exit 1, GONE. "every field of it" -> 2 hits, both recorded history.
+  {rel, reason} / "sanitizedBytes, lines" / "reason, artifact" /
+  "artifact, record" / redacted[].lines / redacted[].labels -> 0.
+  loose `lines`/`labels` -> only inside RedactionAccounting's definition and Q1's
+  recorded history. "where the entry sits" -> 2 hits, both as the REJECTED old
+  partition. state/quarantine in a composing role -> 0 (4 hits, all ownership
+  prose) — which is exactly what `location` exists to prevent.
+
+CITATION ENDPOINTS — NO ENDPOINT DEFECT FOUND. Every citation introduced or
+  changed since 1757e8e checked at BOTH ends by indentation: :1267, :1269, :1276,
+  :1283-1292 (and the secretRedacted.push at :1284-1289 is inside it), :1286,
+  :1287, :1297, :1324-1332, :1333-1337, :1338-1360, :1357-1359, :1361-1363,
+  :1233-1364, :1374-1409, :1392-1409, :1398-1409, :669-738 (acceptable region
+  citation, both ends construct boundaries), digest.js:817-822, :847-849,
+  :853-863. Both :1450-1458 and :1374-1409 — the two the record flags as
+  historically wrong — are CORRECT AT EVERY LIVE SITE.
+
+ACCEPTANCE-CRITERIA COUNTS — 23 / 10 / 24, UNCHANGED. No surface growth.
+
+RUNNABLE CRITERIA. Control: zzz-no-such-test-zzz -> exit 0, "tests 108 / pass
+  108 / fail 0" — the vacuous-green hazard is real, so guarded steps are
+  load-bearing. All guarded steps fire correctly (exit 1 on absent deliverable).
+  npm test -> 1 (2143 tests, 1 fail: adopt-e2e only, the stated pre-existing
+  environmental failure). npm run lint -> 0 (markdownlint 0 errors / 556 files;
+  frontmatter 232 specs, 4 agents). consumed-by-nothing grep -> 0, discriminating.
+  glossary grep -> 1, correct red for an unlanded deliverable. unguarded
+  "dream-validate" -> 0, NOT vacuous (190 matched, 190 pass). precommitSessionEdits
+  -> 1 correct red. assertCleanTree -> 0, presence check the spec already names as
+  "not a proof". adr/0012 promot -> 1 correct red.
+  CANNOT BE EVALUATED, stated plainly: all 23/10/24 acceptance criteria describe
+  tests in files not in this tree; the implementation is on wp/dream-promote-module
+  and was neither checked out nor inferred from.
+
+CATEGORIES WITH NOTHING FOUND — stated explicitly
+ 1. A surface still carrying an OLD shape — NOTHING.
+ 2. Provenance stated by proximity rather than per field — NOTHING. All five
+    fields of the two shapes carry the "— FILLED BY <party>, AT <time>" form.
+    RedactionAccounting's typedef makes a SHAPE-level provenance claim, but it is
+    deliberate, argued in Q10 ("stated rather than left to symmetry"), backed by
+    per-field statements in the owner, and registered as a Table Q mirror, so a
+    future third field would be swept. Not a finding.
+ 3. A consumer re-deriving rather than reading, or hardcoding the quarantine
+    directory — NOTHING. The deliberate asymmetry is respected: Q7, Q9 and the
+    Table Q MSC prohibition each state that the module's ASSIGNMENT of
+    remediation is the fact first existing there; no surface describes it as
+    re-derivation or lets a downstream consumer do it.
+ 4. An arm carrying a field it should not, or missing one it should — NOTHING.
+    `redaction` on exactly the gate's redact arm, every redacted[] entry, and the
+    report union's `promoted` arm; on none of fallback/refused/{ok}. `preserved`
+    on all three report-union arms, redacted[] and refused[], correctly absent
+    from {ok}/promoted[]. The union split is real in the type, so the narrowing
+    is type-enforced as claimed.
+ 5. Counts vs lists — F-3 and F-6 found; EVERY OTHER count verified by counting
+    is correct (eleven enumerated).
+ 6. MSC gaps — F-5 found (changed surface with no entry). THE OTHER DIRECTION —
+    an entry naming a mirror that no longer exists — NOTHING. Table R's partition
+    mirrors checked specifically: the partition itself is COMPLETE AND SOUND
+    (every case walked, including the unreachable promoted + redaction:null +
+    non-empty preserved combination); the only defect is F-7, the checklist's
+    claim about where it is stated.
+ 7. Assertions citing a table/row/field/file that does not contain the rule —
+    F-2 found; a dozen other new cross-references verified against their targets
+    and all hold. The family map needed no update: no letter moved.
+
+OBSERVATIONS, EXPLICITLY NOT FINDINGS
+ * The record's own measurement is wrong about two citations. It claims of Q10's
+   six new citations that "each appears exactly once across the three specs,
+   verified by grep". Measured: :1276 appears 3x and :1297 2x (Q10 plus the Q8
+   acceptance criterion at module:966-971, added in the same window by round 3's
+   F2). No contract consequence — the two surfaces cite the same code lines for
+   different facts, so there is no second carrier — but this is precisely the
+   class the record itself corrected for P-4. Filed as an observation because the
+   record's prose is context, not contract; flagged because the next round's
+   sweep discipline rests on that number.
+ * Pre-existing, out of window (unchanged bytes since 1757e8e):
+   (a) module:617 Q9's `location` sentence is grammatically broken — a dropped
+       clause, carried verbatim from before the window;
+   (b) module:778 has an unbalanced bold run which markdownlint does not catch;
+   (c) in-workspace:176-178 says the awk measurement "finds exactly one consumer"
+       — the command actually prints 9 matching lines, one of which is the
+       consumer (:1361); re-run, the substantive claim holds.

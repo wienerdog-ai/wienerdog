@@ -336,6 +336,27 @@ function activeQuarantines(ledger) {
   return out;
 }
 
+/** The SIZE a record's fingerprint carries — its first `:`-separated field
+ *  (`fingerprint()` builds `size:mtimeMs:dev:ino`, and a record holds no
+ *  separate size field). Read here rather than re-parsed by each consumer, so
+ *  the fingerprint's shape is known in exactly one module.
+ *
+ *  Fail-soft by design: the ledger is read without per-record validation, so a
+ *  corrupt, hand-edited or forward-schema record must not throw and must not
+ *  render a number it cannot prove. Anything that is not a plain run of digits
+ *  naming a non-negative SAFE integer — absent, non-numeric, negative,
+ *  fractional, or too large to be exact — yields null, and the caller renders
+ *  no size at all.
+ *  @param {unknown} rec a ledger `files` record @returns {number|null} bytes */
+function quarantineSizeBytes(rec) {
+  const fp = isPlainObject(rec) ? rec.fingerprint : undefined;
+  if (typeof fp !== 'string') return null;
+  const head = fp.split(':')[0];
+  if (!/^[0-9]+$/.test(head)) return null;
+  const n = Number(head);
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+}
+
 /** The code-owned transcript-quarantine banner, derived from the ledger ALONE:
  *  displayName output plus the code-owned reason enum, never a path, never
  *  content, never a matched value. The two sentences are partitioned by reason —
@@ -411,6 +432,7 @@ module.exports = {
   recordSecretDeferred,
   recordSecretExhausted,
   activeQuarantines,
+  quarantineSizeBytes,
   quarantineBannerLine,
   secretRevertSummaryLine,
 };

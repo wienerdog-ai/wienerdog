@@ -1,0 +1,223 @@
+Gate: INTERNAL COHERENCE pass (peer of the adversarial round 5)
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at 4f1f050
+Round: 5
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only: git status empty before and after; stash empty; nothing modified,
+staged, committed or stashed. HEAD moved mid-pass 4f1f050 -> aa4a157 (this
+session's round-5 adversarial raw output); ALL FOUR analysed files verified
+byte-identical across both tips by blob hash (cdf2ed7 / a2ee82e / cd742d3 /
+d94d926).
+
+*** THE TREND DID NOT HOLD. Rounds found 21 -> 15 -> 11 -> 8; this pass finds
+5 contract defects, 5 coherence defects, 3 nits. ***
+
+CONTRACT DEFECTS
+
+C1  `accounting`'s per-field provenance has TWO CLAIMED OWNERS AND ZERO REAL ONES.
+    report:243-245 and :316.
+    ### Exact contracts: "The report row below OWNS this contract — the two
+    writes, which buffer the vault then holds, what each field means and who
+    fills it — and none of its rules is restated here."
+    The report row: "Its per-field provenance is `### Exact contracts`' —
+    `published` filled by this package at second-write time, `reason`
+    originating with the primitive and carried unchanged — and the fields are
+    not written out again here."
+    EACH NAMES THE OTHER AS OWNER. Both then write the provenance out in full.
+    ### Exact contracts additionally writes out the second of the three things it
+    says it does not restate (:266-269, WHAT THE VAULT HOLDS), so its "none of
+    its rules is restated here" is false three ways inside its own block.
+    The family has measured this before: Q1 records "An earlier form of this row
+    defined `lines` and `labels` inline, which made this the second surface
+    deciding them" (module:621). The MSC entry (report:472-487) lists both
+    surfaces as mirrors and names no owner between them; none of its four
+    prohibitions is a per-field-provenance prohibition, while the module's Table Q
+    preamble (module:592-595) asserts the rule DOES bind this field.
+
+C2  The preserved-copy row's travel enumeration was not swept; ITS TWIN WAS.
+    report:407: "...and `report.record` when EVERY WRITE WAS REFUSED (row R4)."
+    Three surfaces landed in this same window contradict it: the report row
+    (:316), ### Exact contracts (:275-277), and acceptance criterion (b)
+    (:721-723) — all say `record` is the channel on the PARTIAL form, where the
+    first write SUCCEEDED.
+    THE TWIN ROW GOT THE FIX AND THIS ONE DID NOT: the redaction-lines row at
+    :406 was amended in this window with exactly the missing sentence ("and when
+    that second write is REFUSED the line travels in `report.record` rather than
+    into the vault"). One of a stated pair was swept.
+    Compounding: that new sentence at :406 is itself an UNREGISTERED MIRROR — the
+    MSC's `accounting` mirror list (:475-478) names eight surfaces and not the
+    redaction-lines row.
+
+C3  The G11 acceptance criterion STILL ASSERTS THE RETIRED UNIVERSAL, over
+    exactly the two cases the new outcome owns.  in-workspace:603-610:
+    "For an `expect` conflict AND for a symlinked report target, the run's log
+    and user-visible output carry the COMPLETE enforcement record and the
+    refusal's named reason, THE VAULT OBJECT IS BYTE-UNCHANGED, and nothing is
+    staged or committed for the report."
+    Its two trigger cases are verbatim the two the report spec's criterion (b)
+    (report:713-715) assigns to the partial publish. On that form row G8 (:307)
+    requires THE OPPOSITE: "This row commits the report path on BOTH forms of
+    `accounting`... A commit that SKIPS the report path on that form drops a
+    published, gated file out of the run's one commit."
+    So the criterion demands the behaviour the row it belongs to forbids, and
+    re-asserts the untouched-vault clause the prohibition was registered against.
+    Rows G8, G11 and V4 were all swept in this window. The in-workspace MSC
+    declares "Acceptance criteria that assert Table G's rows" a mirror set
+    (:359); the criterion was not swept.
+
+C4  Round 4's B1 CHANGES A VALUE PINNED IN A SHIPPED `Done` SPEC, and no surface
+    says so.  in-workspace:306, module:630.
+    docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387 pins the
+    dream-report redaction line: "The line format is PINNED HERE, not
+    illustrated... EVERY BYTE OUTSIDE THE ANGLE-BRACKET PLACEHOLDERS IS
+    LITERAL... where `<n>` is `addedLineNumbers.length`".
+    G7's named input changes exactly `<n>`: "the extracted EP2 gate returns, as
+    its redaction accounting's `lines`, THE NUMBER OF ADDED LINES WHOSE
+    POST-REDACTION BYTES DIFFER FROM THEIR CAPTURED BYTES." Neither G7 nor Q10
+    cites that spec — measured, /usr/bin/grep -c "secret-fence-ep2" on each cell
+    returns 0; both cite only validate.js:1286 and :1401.
+    Meanwhile the two Out-of-scope bullets governing changes to that package each
+    assert exactly ONE authorized exception:
+      module:1107 "The narrowing has exactly one exception, and it is authorized
+        rather than implied" — the carrier change;
+      in-workspace:729-733 "ONE EXCEPTION, owner-authorized on 2026-08-29 and not
+        this package's to widen or re-open" — the carrier change.
+    AN IMPLEMENTER READING OUT OF SCOPE REFUSES THE NAMED INPUT AS UNAUTHORIZED;
+    ONE READING G7 SHIPS IT. The contrast is exact: the carrier change — same
+    class of act, ruled the same day — was swept into six surfaces and the MSC
+    counts them ("the sixth carrying surface"). This one reached one surface.
+
+C5  "byte-equal to what the vault then holds" is FALSE ON BOTH CASES the
+    criterion mandates.  report:719-720 (operative), also :316, :266-268, :576-578.
+    Criterion (b): "`report.bytes` is the FIRST write's returned buffer and is
+    byte-equal to what the vault then holds" — asserted "on an `expect` conflict
+    AND on a symlinked target".
+      - The second write's `expect` is the first publish's returned buffer
+        (module:648, S5). By the primitive's H5
+        (done/WP-dream-vault-write-primitive.md:217) the write "is abandoned
+        unless the target still holds exactly those bytes" — so an `expect`
+        conflict MEANS the vault no longer holds them. False by construction.
+      - On the symlinked target (H3, :215) the path is a symlink, not the first
+        write's bytes.
+    The same present-tense claim is carried by the report row, ### Exact
+    contracts, and the Security checklist. Table S row S1 (module:645) has the
+    qualifier all four dropped: "the only bytes the vault is known to hold AT
+    PUBLISH TIME". HERE THE SWEEP WAS COMPLETE AND THE SWEPT CLAIM IS WRONG.
+
+COHERENCE DEFECTS
+
+H1  The Q-preamble narrowing and its MSC mirror disagree on the shape count.
+    module:592-595 binds the rule to THREE shapes (Q9's record, Q10's accounting,
+    and the report's `accounting` field); the MSC prohibition edited in the same
+    commit (module:731-733) binds it to ONE other ("row Q9's rule applied to the
+    OTHER SHAPE..."), i.e. Q10's alone. The report's `accounting` drops out of the
+    family-wide prohibition on the one surface that carries prohibitions. Both
+    halves of F-4's narrowing were written this window and do not match.
+
+H2  G7 unmakes its own "and nothing else" one sentence later. in-workspace:306:
+    "The gates' semantics are not this package's to change: the extraction moves
+    where their evidence comes from... AND NOTHING ELSE. ONE NAMED INPUT, AND IT
+    IS A SEMANTIC CHANGE..." The carrier change earlier in the same cell is
+    introduced as an announced exception; this one is appended AFTER the closing
+    universal, leaving it standing and false.
+
+H3  The G7 named input reaches only row G7. Measured: /usr/bin/grep -n
+    "POST-REDACTION\|BYTES DIFFER" in-workspace -> ONE hit, line 306. Absent from
+    the validate.js Deliverables Notes cell (:219) which enumerates everything
+    else G7 does to that file INCLUDING the one-carrier-change clause; from Table
+    V row V3 (:346) which lists "the per-redaction report line carrying path,
+    scrubbed-line count, labels and artifact name" as Step 3's output; from the
+    MSC; and from Out of scope. The carrier-change precedent shows what a
+    complete sweep of a G7 instruction looks like — six surfaces, enumerated.
+
+H4  The in-workspace spec registers NONE of the A1 contract. Measured:
+    /usr/bin/grep -c accounting over the in-workspace MSC (355-441) = 0; over its
+    acceptance criteria (491-663) = 0. The report MSC (:475-478) declares rows
+    G8, G11 and V4 its mirrors; the in-workspace side registers the relationship
+    nowhere. The family's two-sided standard was re-affirmed in this very window
+    (round 4's F-5). Additionally G8's and G11's new obligations carry no
+    acceptance criterion, and unlike G7's named input no surface says the
+    omission is deliberate.
+
+H5  Criterion 4's channel disjunction is stale. report:645-647: "the enforcement
+    section — or `report.record` ON THE ARM THAT PUBLISHES NOTHING — names the
+    report path and the entries in `report.preserved`." After A1, `record` is
+    also the channel on an arm that DID publish. Not in the MSC's `accounting`
+    mirror list either.
+
+WORDING NITS
+N1  Table N (report:358-370) scopes its channel set as "a field of the return
+    shape or of `records`" and keeps rows for preserved[].location and
+    redaction.lines on the ground that "a channel with no row is
+    indistinguishable from a channel nobody thought about". The new
+    `accounting.reason` — primitive-composed and potentially path-bearing — has
+    no row. N2's operative rule reaches only composer-interpolated strings and
+    accounting.reason is not one, so this is a header-scope mismatch rather than
+    a leak.
+N2  G11 (in-workspace:310) still opens "Two obligations it must carry" and now
+    lists (i), (i-b), (ii), (iii), (iv). The count was already 2-vs-4 before this
+    window; the pass added an item without touching the count sentence.
+N3  report:713 labels case (a) "THE REPORT WRITE IS REFUSED" — singular, in a
+    criterion whose subject is that the normal path has TWO report writes. (a) is
+    R4's fallback write; nothing in (a) says so.
+
+RUNNABLE CRITERIA
+  promote.js, dream-promote.test.js and dream-pipeline.test.js DO NOT EXIST in
+  this tree (measured by ls). Every acceptance criterion except the npm
+  test/lint pair and the two doc-anchor criteria is a test-design criterion over
+  those absent deliverables and CANNOT BE EVALUATED here; not guessed at.
+  control zzz-no-such-test-zzz -> 0, "tests 108 / pass 108 / fail 0" — confirms
+    the stated hazard.
+  npm test -> 1 (2143 tests, 2133 pass, 1 fail: adopt-e2e, the pre-existing
+    environmental one). npm run lint -> 0 (232 specs / 4 agents).
+  All six guarded pattern runs -> 1, YES (guard reddens deliverable-absent).
+  unguarded "dream-validate" -> 0 (190/190), PARTLY — matches real subtests but
+    exits 0 whether or not the WP landed.
+  consumed-by-nothing grep -> 0; green on the unbuilt tree, so no
+    deliverable-absent discrimination (the spec acknowledges this).
+  glossary grep -> 1 correct RED. precommitSessionEdits -> 1 correct RED.
+  assertCleanTree -> 0, NO — green today and green on the finished state; the
+    spec calls it "a presence check, not a proof".
+  adr/0012 promot -> 1 correct RED.
+  ACCEPTANCE-CRITERIA COUNTS RE-COUNTED MECHANICALLY: 23 / 10 / 24 — EXACT.
+
+ON THE FOLD (A1 into an existing criterion): HONEST. The false universal is
+  SCOPED rather than deleted — (a) keeps byte-unchanged to itself, (b) states
+  "The byte-unchanged assertion of (a) is asserted NOT to hold here" and reddens
+  a rollback. The two cases PARTITION every report refusal: (a) is R4 (the
+  fallback write refused, vault untouched), (b) is the normal second write after
+  a successful first; Table R's fallback is one write and `refused` publishes
+  nothing, so no third shape exists. The fold's only flaws are C5 (an assertion
+  inside (b) that cannot pass) and N3 (case (a)'s singular title).
+
+CATEGORIES WITH NOTHING FOUND — checked, clean
+ 1. ENDPOINT DEFECTS: ZERO. All 19 distinct cited ranges verified at both ends by
+    indentation against the live tree. ROUND 4'S CLEAN STREAK HOLDS — TWO ROUNDS.
+ 2. The corrected awk measurement is accurate: the command prints exactly 9
+    lines; exactly one consumes `reason` and it is :1361; the other eight
+    declare, assign, append or comment. The round-4 correction is right in both
+    the count and the classification.
+ 3. Hardcoded quarantine directory in new text: NONE (grep -c over added lines = 0).
+ 4. RE-DERIVATION: NONE. Every new consumer reads. G11 NAMES
+    report.accounting.reason; the report row states it is "carried from the
+    primitive (its row H7), never composed here" (H7 verified as the correct
+    owner of {written:false, reason}).
+ 5. Arm-enumeration falsification: NONE. The field-over-arm form kept the union
+    at three arms, so every "three outcomes" / "EVERY ARM" / "both published
+    arms" phrase remains true across all three specs.
+ 6. Untouched-vault clause as PROSE: no surviving false instance. The live
+    problem is C3, an acceptance criterion, not a prose clause.
+ 7. Counts against their lists: ALL CORRECT except H1 and nit N2.
+ 8. The map's pointers resolve; F-2's quotation is a genuine substring of the
+    in-workspace MSC entry and of no operative row — the round-4 correction is
+    accurate.
+
+READING OF THE PATTERN (reviewer's own)
+  "Four of the five contract defects are ONE-SURFACE-SHORT SWEEPS OF ROUND 4'S
+  OWN RULINGS, and in three of them the missed surface is THE STRUCTURAL TWIN of
+  one that WAS swept: the preserved-copy row beside the redaction-lines row (C2);
+  the G11 acceptance criterion beside rows G8/G11/V4 (C3); the Out-of-scope
+  bullets that carried the PREVIOUS ruling's authorization but not this one's
+  (C4). The fifth (C5) is the opposite failure — a COMPLETE sweep of a claim that
+  is WRONG. C1 is a new shape: two surfaces each deferring to the other, which no
+  prior round produced."

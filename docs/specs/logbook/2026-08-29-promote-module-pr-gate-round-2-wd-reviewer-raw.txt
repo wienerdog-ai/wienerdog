@@ -1,0 +1,233 @@
+Gate: PR review (spec fidelity), backend wd-reviewer
+PR: felho/wienerdog#31, branch wp/dream-promote-module
+Reviewed tip: 16c98e9
+Round: 2
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain byte-identical (empty) before and after.
+
+NOTE ON TRANSPORT: the harness flagged the agent's output as containing
+instruction-shaped text and neutralized the angle brackets in two placeholder
+tokens inside finding N1's remedy (rendered there as &lt;rel&gt; and
+&lt;artifact&gt;). They are prose placeholders in a suggested message format,
+not directives. Recorded here as delivered.
+
+VERDICT: REQUEST-CHANGES (spec blockers only + 2 should-fix on the new code)
+
+MECHANICAL RE-VERIFICATION, all on 16c98e9
+  boundary-check.js x 6 changed files -> all exit 0 (3 Deliverables + spec +
+      2 always-allowed logbook .txt). NEGATIVE CONTROL RUN: src/cli/dream.js
+      -> exit 1, so the check is live.
+  npm test --test-name-pattern dream-promote      -> exit 0, 143 pass / 0 fail (was 140)
+  npm test --test-name-pattern claim-2b-merge-cwd -> exit 0, both cwd tests named and green
+  npm run lint                                     -> exit 0
+  consumed-by-nothing grep                         -> exit 0
+  glossary grep                                    -> exit 0
+  npm test -> exit 1, 2178 tests, 2168 pass, 1 fail (adopt-e2e, the pre-existing
+      claude/fnm pin drift verified in round 1)
+  Boundary: CLEAN. validate.js and src/cli/dream.js untouched.
+  PR body now matches the reviewed tip (995/425 lines, six files, output
+  labelled "All at tip 16c98e9").
+
+(A)+(B) PER-ROUND-1-FINDING VERDICT
+
+  F1 redact-then-refuse loses the quarantine artifact name
+     -> PARTIALLY FIXED, correctly and honestly. See judgement below.
+  F2 Q4's three-state case unassertable against Table Q's interface
+     -> CORRECTLY ESCALATED. No code or test in 16c98e9 pretends to close it -
+        promote.js:753 still checks only "artifact is a non-empty string", and
+        the test file has exactly one Q4 test (:615), unchanged, whose name
+        still says "no artifact means nothing is promoted".
+  F3 Q5/Q6 have criteria with no implementable surface
+     -> CORRECTLY ESCALATED. No prune/retention/Q5/Q6 test exists (grep returns
+        nothing). Not silently closed.
+  F4 primitive-seam oracle derived from the return value
+     -> FIXED. dream-promote.test.js:711-721 now walks the vault tree and
+        compares changed-bytes against throughSeam; the old return-derived
+        assertion is kept IN ADDITION, not replaced. PR body reports a real RED
+        from an unreported bypass writeFileSync.
+  F5 Table C evaluation order
+     -> FIXED (a); (b) DECIDED rather than escalated - see N5.
+  F6 spec :129-131 falsified by the isAtOrBeneath import
+     -> FIXED. Spec now says "It DOES call isAtOrBeneath, and only there", names
+        the M2 cwd clause as the reason, and states it is a CONSUMER not a
+        second implementation. Verified: exactly one call site (promote.js:411).
+  F7 resolved-path test asserts outcome, not mechanism
+     -> FIXED. dream-promote.test.js:346-352 asserts /not admitted/ plus the
+        absence of the candidate prefix. Discriminator verified real: the
+        primitive's H3 reason is "... is a symlink; nothing is written through
+        one" (vault-write.js:351,359,426) and contains no "not admitted", so the
+        test now fails if H3 fires instead of the caller's policy.
+  F8 layout unvalidated
+     -> FIXED, AND SAFELY. promote.js:593-607. The six required keys were checked
+        against src/core/layout.js: readVaultLayout starts from defaultLayout()
+        and only overwrites per-key with values passing isSafeRelativePath
+        (which rejects empty), so the new validation cannot false-reject any
+        layout the product produces. daily_filename correctly excluded - C9 says
+        it is not a directory.
+  F9 PR body stale -> FIXED.
+
+  F5(a) verified against Table C's own header (spec :273-274). C1 is row one, so
+    C1-before-C2 is what the table says. Table D is genuinely untouched: its
+    Position column says EP2 runs "BEFORE the merge", not "before the
+    allowlist", and EP2 is still first among the four gates.
+  F5(b) the claimed second effect is real and proven: the new test asserts
+    secretGateSaw === 0 and secretDisposition == {withheld:0, redactions:0} for
+    a NUL-byte .gitignore. But see N5/N6.
+
+  F1 JUDGEMENT - is the partial mitigation sound, and is anything worse than
+  leaving it alone? Sound in principle: it stays inside the {rel, reason} shape
+  Table S row S3 fixes, it reuses row C1's own idiom (a refusal NAMES the
+  survivor), it is applied on all three refusal routes, and the escalation of
+  the typed carrier is exactly right. BUT ONE THING ABOUT IT IS WORSE THAN
+  LEAVING IT ALONE - finding N1. The mitigation makes the reason string the ONLY
+  channel for the artifact name, and on the pair-atomicity route that string now
+  names two artifacts with no attribution.
+
+(C) NEW FINDINGS AGAINST THE ROUND-1/ROUND-2 FIX CODE
+
+N1 [contract] SHOULD-FIX (blocker-adjacent, and it weakens the F1 mitigation) -
+   the pair-atomicity refusal names two preserved copies, unattributed, and the
+   wrong one comes first.
+   promote.js:914-919. Phase 1c builds the sibling's refusal by embedding the
+   sibling's ALREADY-DECORATED reason string, then applies withPreserved again
+   with the sibling's own artifact. Reproduced out-of-band (script run under
+   os.tmpdir(), removed; nothing written into the repo) with both halves of a
+   skill/ledger pair redacted and the ledger refused by its gate:
+
+     { rel: "05-Skills/x/LEARNINGS.md",
+       reason: "ledger fails policy (an unredacted copy was preserved as `ledger-copy.md`)" }
+     { rel: "05-Skills/x/SKILL.md",
+       reason: "paired with `05-Skills/x/LEARNINGS.md`, which was refused: ledger fails policy
+                (an unredacted copy was preserved as `ledger-copy.md`)
+                (an unredacted copy was preserved as `skill-copy.md`)" }
+
+   Because escalated blocker 1 leaves no typed carrier, the report package must
+   read the artifact name OUT OF THIS STRING - and the first match in SKILL.md's
+   reason is the OTHER FILE'S copy. Per Table Q row Q3 that string is the user's
+   only route back to their copy, so pointing them at the sibling's artifact is
+   the same class of harm the mitigation exists to prevent, just narrower. The
+   deliverable test's case (b) does not catch it because only the SKILL side is
+   redacted there.
+   REMEDY (implementer's, inside the existing shape): attribute the clause -
+   withPreserved(reason, preserved, rel) producing "an unredacted copy of
+   `<rel>` was preserved as `<artifact>`" - or build the pair refusal from the
+   sibling's UNDECORATED reason (keep a rawRefuse on the decision) so only one
+   clause is ever appended. Add a pair case where BOTH halves are redacted.
+
+N2 [contract] SHOULD-FIX - the merge-cwd fix closes one half of M2's two-half
+   cwd rule and its own reasoning applies to the other half.
+   promote.js:409-418 checks only isAtOrBeneath(root, o.workspaceDir). Table C
+   row M2 takes the delta primitive's recipe "verbatim", and that recipe
+   (docs/specs/done/WP-dream-baseline-delta-primitive.md:161) states TWO cwd
+   conditions: OUTSIDE ANY REPOSITORY - "Measured: a CWD inside a repo applies
+   that repo's .gitattributes even to operands that live OUTSIDE the repo" -
+   and, separately, this module's CLAIM 2b workspace clause. constructMergeEnv
+   (:355-378) neutralises system and global config (GIT_CONFIG_NOSYSTEM,
+   GIT_CONFIG_GLOBAL, GIT_ATTR_NOSYSTEM) but nothing stops REPOSITORY-LOCAL
+   discovery from the cwd. The round-1 fix's own premise - os.tmpdir() is
+   ambient input honouring TMPDIR - applies unchanged here: a TMPDIR inside a
+   repository leaves the merge's cwd inside a repository, and the merge exit
+   code is a security decision. M2's own posture forbids arguing this away by
+   enumeration ("this program's record at enumerating git's influence channels
+   is 0 for 4, which is precisely why the answer is construction rather than a
+   blocklist").
+   CHEAPEST REMEDY inside the constructed environment, no second discovery
+   implementation: add GIT_CEILING_DIRECTORIES: root to constructMergeEnv so the
+   upward walk cannot leave the directory this call created. If the maintainer
+   reads M2's "outside any repository" as binding only the dependency's TEST
+   helper and not this module, that reading should be written into M2 - as it
+   stands the row reads as binding.
+
+N3 [convention] SHOULD-FIX - the decisions Map's JSDoc type is now stale, and
+   its prose is false.
+   promote.js:621-623. 16c98e9 added `preserved` to four decisions.set(...)
+   calls (:826, :894, :919, and via the closure at :645) and reads it back at
+   :891, :917-918, :962, but the declared type is still
+   {rel, refuse?, candidate?, expect?, redaction?}. The comment above it -
+   "`refuse` entries carry only a reason" - is now untrue of every refusal the
+   new mechanism touches. JSDoc is this project's only type surface (CLAUDE.md:
+   "No TypeScript in src/ - JSDoc type annotations only") and no lint step
+   typechecks it, so nothing else will catch this. Add preserved?:string|null
+   and fix the sentence.
+
+N4 [quality] NIT - withPreserved() has a second, divergent copy inline.
+   promote.js:480-483 vs the closure at :645-649, which re-inlines the identical
+   template literal rather than calling the helper, and guards on
+   preserved === null where the helper guards on typeof !== 'string' || === ''.
+   Harmless today only because :753-757 already rejects a non-string/empty
+   artifact before preserved is assigned - i.e. a guarantee established 100
+   lines away. Two copies of one user-facing format string is the mirror shape
+   this repo treats as a finding; call the helper from the closure. (This is
+   also where N1's fix wants to land.)
+
+N5 [contract] SHOULD-FIX - the C1-vs-gates cross-ordering was SETTLED rather
+   than escalated, and the settlement was not written into the canonical table.
+   Round 1 routed F5(b) to wd-architect on the ground that no surface orders
+   Table C's rows against Table D's gates. 16c98e9 decided it (defensibly, on
+   Table C's "top to bottom") and recorded it in the commit message, a code
+   comment (promote.js:653-670) and PR Decision 4 - but the spec was amended in
+   this same commit for F6, so amending Table C or Table D was equally available
+   and was not done. The spec a fresh reader opens still states no
+   cross-ordering, and Table D's prose still says "here it runs FIRST" of EP2
+   without qualifying it against C1. RECOMMEND wd-architect add one sentence -
+   to Table C's header paragraph, which already owns "first match decides" -
+   stating that C1 precedes the four gates and that a never-admissible path
+   therefore does not feed secretDisposition. Until then the code is the primary
+   and the table is silent, which is the inversion ADR-0031 exists to prevent.
+
+N6 [quality] NIT - C1-first has a second observable consequence that is not
+   disclosed anywhere.
+   promote.js:670-674. The commit message and PR body record only the
+   withheld/transcript-deferral effect. The gate is now not CALLED AT ALL for a
+   non-admitted path, so the EP2 gate also no longer performs its own quarantine
+   preservation for such a path - a hard secret the brain writes into
+   .claude/settings.json used to leave a recoverable copy in the state directory
+   and now leaves none, and the workspace is destroyed. Judged the right trade
+   (the content is brain-authored, in a path that can never be promoted), but it
+   is a behaviour change on the quarantine lifecycle produced by an ordering the
+   spec does not state, and the maintainer ruling on N5 should see it. Add it to
+   PR Decision 4.
+
+N7 [quality] NIT - the new vault-tree oracle is one-directional.
+   dream-promote.test.js:715-721. `changed` is computed by walking the vault
+   AFTER the run, so a path present in vaultBefore and absent afterwards is
+   invisible to it. The criterion says "write", and C2 says promotion never
+   deletes, so this is not a gap in the criterion - but the oracle would be
+   complete, at no cost, if it also flagged keys of vaultBefore missing from the
+   post-run walk.
+
+CONTRACT-DENSITY / CLOSED-CONTRACT DRIFT CHECK (ADR-0031)
+
+Unchanged from round 1, and the pressure is CONFIRMED rather than relieved: N1
+lands on the same contract family as F1/F2/F3 - the EP2 gate's result and what
+carries it downstream. That is now FIVE findings across two rounds on one
+family, and N1 exists ONLY BECAUSE the family has no typed carrier: the
+mitigation had to encode a structured fact (which file's copy) into free prose,
+and immediately produced an ambiguous string. This strengthens, not weakens, the
+case for the reconciliation pass the round-1 output recommended over Table Q
+against Table S and ### Exact contracts.
+
+Closed-contract drift: no settled contract was silently reinterpreted. The spec
+edit at :129-137 is an authorisation, not a reinterpretation - it widens a
+Current-state statement to match reality and cites M2 as the owning row rather
+than restating containment. Table H is still cited, never restated. Two drifts
+stand: N3 (code ahead of its own JSDoc mirror) and N5 (code ahead of the
+canonical table, with the table silent). Neither is a mirror promoted to primary
+yet, but N5 is one maintainer-round away from being exactly that.
+
+OVERALL
+
+Six implementer-owned findings genuinely fixed, not re-worded - each with a
+proven RED, each verified independently here. F2 and F3 are correctly escalated
+with nothing pretending to close them. F1's partial mitigation is sound in shape
+and honestly labelled, but it introduced N1.
+
+NO, THE ESCALATED SPEC DEFECTS ARE NOT THE ONLY REMAINING BLOCKERS. N1 and N2
+are implementer-owned defects in code added by the round-1 fixes, and N1
+partially defeats the very mitigation it belongs to. Apart from N1-N4 and N7
+(all implementer's, all inside the current Deliverables), the diff is otherwise
+mergeable once the maintainer rules on F1/F2/F3 and on the N5 ordering sentence.
+
+Round count on this WP is now two. Per the standing rule, a third round landing
+again on the EP2-result family means the spec is the bug - the Table Q
+reconciliation pass should be run BEFORE a round-3 dispatch, not after it.

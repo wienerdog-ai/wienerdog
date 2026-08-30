@@ -1,0 +1,56 @@
+Round 5 — external adversarial review — reviewer: gptsol (Codex side), backend
+selected per docs/runbooks/codex-review.md "Backend selection".
+Base: wp/dream-promote-in-workspace @ af852474ed097533ddea51f6bd27b68a92d5eb7b
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value in docs/runbooks/review-prompts/adversarial.md)
+Read-only check: `git status --porcelain` byte-identical and empty before and
+after the run — VALID.
+
+VERBATIM OUTPUT BELOW.
+
+{
+  "verdict": "needs-attention",
+  "summary": "NO SHIP. The report fallback has no safe, testable publish contract, and the primitive contains contradictory refusal semantics that permit vault mutation on a refused write. F1'' is genuinely narrowed and F3'' is named as unclosed; F4'' covers the successful same-date path but not the refused-body fallback. The F5''-F9'' mechanism cut is incomplete because stale mechanism requirements remain. Executed checks: branch/HEAD/status inspection exited 0 and confirmed wp/dream-promote-in-workspace @ af852474ed097533ddea51f6bd27b68a92d5eb7b with an empty status; full numbered reads of all three scoped specs exited 0; one malformed sed chunk command exited 1 and was rerun correctly with exit 0; git diff --quiet 025021fc0fa8f871f1eb960a8ad57a14d223360e -- src exited 0; cited validate.js and SKILL.md range reads exited 0; contract greps exited 0; final status comparison exited 0 and confirmed the checkout status remained byte-identical and empty.",
+  "findings": [
+    {
+      "title": "The refused-report fallback has no non-destructive publish decision",
+      "classification": "CONTRACT defect",
+      "description": "When the brain-authored report is refused or absent, this row says code publishes a report containing its accounting section alone and claims the record always reaches the user, but it never defines the bytes or expect premise for that write. On a same-date run with an existing report, publishing the section alone with expect=vault-now replaces the previous report and loses user-visible history; using expect absent refuses because the target exists; appending or merging would be a different, unstated decision path. A concurrent save can likewise make the normal second write refuse, with no required disposition. The acceptance criteria cover a successful body-plus-append and verify the primitive seam, but do not exercise a refused body against an existing report or a refused accounting append. An implementer can therefore either lose the old report or silently lose the enforcement record while conforming to the stated happy path.",
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 254,
+      "line_end": 254,
+      "confidence": 0.98,
+      "recommendation": "Specify a complete fallback decision matrix for absent, unchanged-existing, diverged-existing, and concurrently-changed report targets. For each case, state the exact candidate bytes, expect premise, outcome/accounting, and whether any gates run. Add acceptance cases for a refused report body on a same-date second run and for refusal of the post-promotion accounting write; require preservation of the pre-run report and an explicit reported outcome."
+    },
+    {
+      "title": "The primitive's public failure contract still contradicts itself after the CUT",
+      "classification": "CONTRACT defect",
+      "description": "The exact API says substitution between creation and publish throws WienerdogError, while H7 says the module throws only for caller-contract violations and every other failure returns {written:false, reason}. The security checklist then says substitution detection is optional, and the H7 criterion requires no exception. These are mutually exclusive observable behaviours, not merely alternate syscall choices. A caller cannot know whether it must handle an exception, a refusal, or an undetected successful publish. This also shows that the dissolved mechanism text was not fully removed: stale substitution semantics survived in the exported contract.",
+      "file": "docs/specs/WP-dream-vault-write-primitive.md",
+      "line_start": 178,
+      "line_end": 203,
+      "confidence": 1,
+      "recommendation": "Choose one observable substitution outcome and state it consistently in the signature, H7, the security checklist, and acceptance criteria. Under the CUT ruling, remove the mechanism-specific throw clause unless substitution detection itself is restored as an explicit tested contract; otherwise require the ordinary {written:false, reason} refusal behaviour."
+    },
+    {
+      "title": "A refused write is allowed to mutate the vault by leaving newly created directories",
+      "classification": "CONTRACT defect",
+      "description": "H9 promises that a refusal leaves no partially-created parent chain, but its acceptance criterion explicitly requires a chain created for a later-refused write to remain in the vault. This is the characteristic family failure on an abort/refusal path: policy and expect can reject the content while the primitive has already changed the live vault. It also makes reversibility and H7's statement that nothing is partially written ambiguous. The test currently instructs the implementer to accept the opposite of the normative row.",
+      "file": "docs/specs/WP-dream-vault-write-primitive.md",
+      "line_start": 201,
+      "line_end": 301,
+      "confidence": 1,
+      "recommendation": "Decide whether directories created solely for this attempted write are rolled back on every refusal. If refusal must leave the vault unchanged, require removal of only the directories this call created when they remain empty and test expect/policy refusal after creation. If residual directories are intentionally allowed, narrow H7/H9 explicitly and account for this vault mutation in the promotion and abort contracts."
+    },
+    {
+      "title": "The mechanism cut remains prescribed on several normative surfaces",
+      "classification": "MECHANISM detail",
+      "description": "Although the spec says Table H's implementation mechanism is the implementer's choice, Current state still says this package adopts the crypto-random O_EXCL|O_NOFOLLOW shape, the platform note assigns H3's weight to a particular walk, the verification guidance demands a red result for a predictable temp, and the consumer's Table E again promises an unpredictable O_EXCL|O_NOFOLLOW temp. A safe implementation using another mechanism would violate those surfaces despite satisfying H3 and H4. This is a mechanism-level finding rather than an additional contract defect, and under the pre-agreed interpretation it signals that the artifact was not actually reduced enough for the CUT ruling to hold consistently.",
+      "file": "docs/specs/WP-dream-vault-write-primitive.md",
+      "line_start": 124,
+      "line_end": 126,
+      "confidence": 0.99,
+      "recommendation": "Escalate rather than patching individual mechanism references. If the CUT ruling stands, remove the adopted-shape statement, O_NOFOLLOW-specific normative guidance, predictable-temp deliberate-red requirement, and the consumer's restatement; retain only the observable H3/H4 properties and tests that fail unsafe behaviour rather than a particular implementation."
+    }
+  ]
+}

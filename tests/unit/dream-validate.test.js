@@ -311,6 +311,41 @@ test('dream-validate: Tier-3 gate + report follow a non-default layout, not the 
   assert.equal(res.counts.skills, 0); // both skills writes reverted
 });
 
+test('dream-validate: the vault warnings file is committed but never counted as a note', () => {
+  // WP-quarantine-warnings-file, Table D. `reports/warnings.md` is under neither
+  // skills_dir nor reports_dir, so without the exclusion a run that changes it
+  // would report one note it did not consolidate. This is a COUNTING fix only:
+  // the file is still classified "keep", still scanned, and still committed.
+  const { vault, scratch } = tempVault();
+
+  writeVault(vault, '03-Resources/valid-note.md', FM({ type: 'note', derived_from_untrusted: 'false' }));
+  writeVault(vault, 'reports/dreams/2026-07-05.md', '# report\n');
+  writeVault(vault, 'reports/warnings.md', '# Wienerdog warnings\n\n## Current conditions\n\nNo session transcripts are being skipped.\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-05', expectedScratch: [] });
+
+  assert.equal(res.counts.notes, 1, 'the warnings file and the dream report are both excluded');
+  assert.equal(res.counts.skills, 0);
+  assert.equal(git(vault, ['log', '-1', '--pretty=%s']).trim(), 'dream: 2026-07-05 — 1 notes, 0 skills');
+  // Still kept on disk and still IN the commit — only the count changed.
+  assert.ok(fs.existsSync(path.join(vault, 'reports/warnings.md')));
+  assert.equal(res.reverted.length, 0);
+  const tracked = git(vault, ['ls-tree', '-r', '--name-only', 'HEAD']);
+  assert.ok(tracked.split('\n').includes('reports/warnings.md'), 'committed, not skipped');
+});
+
+test('dream-validate: the warnings exclusion is the literal path, not a prefix or a sibling', () => {
+  // A neighbouring file under the same top-level directory is still a note: the
+  // exclusion names exactly one path.
+  const { vault, scratch } = tempVault();
+  writeVault(vault, 'reports/warnings.md', '# Wienerdog warnings\n');
+  writeVault(vault, 'reports/warnings.md.bak', 'not the warnings file\n');
+  writeVault(vault, 'reports/notes-about-warnings.md', 'also not it\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-06', expectedScratch: [] });
+  assert.equal(res.counts.notes, 2, 'only the exact path is excluded');
+});
+
 // ── precommitSessionEdits ──────────────────────────────────────────────────
 
 test('dream-validate: precommitSessionEdits is a no-op on a clean tree (no commit)', () => {
@@ -2585,4 +2620,214 @@ test('EP2 retention: a B5/B5a fall-through never prunes, and the prune stays ins
   );
   assert.ok(fs.existsSync(sibling), 'nothing outside redacted/ is ever touched');
   assert.ok(lsRedacted(f).includes('not-dated.md'), 'a non-date-prefixed file is not a candidate');
+});
+
+// ─── WP-validator-decided-bytes: refuse a malformed block AT THE DECISIONS ────
+//
+// ADR-0022 Decision 4: a malformed frontmatter block excludes the note
+// UNCONDITIONALLY — whether or not it also carries floor-passing values. The
+// refusal lives at the five security decisions, NEVER in the view: a view-level
+// guard (emptying parseFrontmatter's record on `malformed`) erases the
+// difference between a field being ABSENT and one being HIDDEN, and every
+// preservation check reads absence as agreement. AC2 below is the discrimination
+// that proves this build is not that one.
+//
+// Table C repeated byte for byte, so a reword breaks a test and not only the
+// grep in the spec's verification steps.
+
+const NodeModule = require('node:module');
+const { parse: parseShared } = require('../../src/core/frontmatter');
+
+const R1 = 'malformed frontmatter block (a duplicate key, an indented line, or a line that is not key: value)';
+const R1L = 'malformed frontmatter block in the parent skill SKILL.md (a duplicate key, an indented line, or a line that is not key: value)';
+
+/**
+ * Compile the design C1 FORBIDS, from the shipped source, by two substitutions
+ * that are each asserted to have applied: the decision-site guard is disabled
+ * and the guard is put in the view instead. Building it from the real file (not
+ * from a hand-written copy) is what keeps the discrimination honest — the
+ * mutant cannot drift away from what shipped.
+ * @returns {any} the mutant module's exports
+ */
+function forbiddenViewLevelValidator() {
+  const src = fs.readFileSync(VALIDATE_ID, 'utf8');
+  const GUARD = '  return parse(text).malformed;\n';
+  const VIEW_ANCHOR = '  const fm = parse(fileText); // shared lexer: delimiters + key-line rules\n';
+  assert.equal(src.split(GUARD).length - 1, 1, 'the decision-site guard helper moved — the mutant recipe is stale');
+  assert.equal(src.split(VIEW_ANCHOR).length - 1, 1, 'the parseFrontmatter view anchor moved — the mutant recipe is stale');
+  const mutated = src
+    .replace(GUARD, '  return false; // decision-site guard DISABLED\n')
+    .replace(VIEW_ANCHOR, VIEW_ANCHOR + '  if (fm.malformed) return {}; // the FORBIDDEN view-level guard\n');
+  const m = new NodeModule(VALIDATE_ID, null);
+  m.filename = VALIDATE_ID;
+  m.paths = NodeModule._nodeModulePaths(path.dirname(VALIDATE_ID));
+  m._compile(mutated, VALIDATE_ID);
+  // The mutant really is the forbidden shape: its view empties on malformed.
+  assert.deepEqual(m.exports.parseFrontmatter('---\nconfidence: 0.9\njunk line\n---\nb\n'), {});
+  return m.exports;
+}
+
+// The three rules that make the ONE shared strict parser report `malformed`,
+// each wrapped around three PRESENT and floor-PASSING provenance values — so an
+// accept could only come from ignoring `malformed`, never from a weak floor.
+// `junk-line` is the spec's Context repro, byte for byte.
+const MALFORMED_TIER3 = {
+  'junk-line': '---\nconfidence: 0.9\nrecurrence: 5\nderived_from_untrusted: false\njunk line\n---\nb\n',
+  'indented-line': '---\nconfidence: 0.9\nrecurrence: 5\nderived_from_untrusted: false\n  indented: x\n---\nb\n',
+  'duplicate-key': '---\nconfidence: 0.9\nrecurrence: 5\nderived_from_untrusted: false\ntag: a\ntag: b\n---\nb\n',
+};
+
+test('WP-validator-decided-bytes AC1: a malformed Tier-3 block is reverted with R1 and never reaches the commit', () => {
+  const { vault, scratch } = tempVault();
+  for (const [name, text] of Object.entries(MALFORMED_TIER3)) {
+    // Non-vacuity, per fixture: the parser calls it malformed AND the
+    // validator's view still shows three floor-passing fields, so nothing but
+    // the guard can be doing the rejecting.
+    assert.equal(parseShared(text).malformed, true, `${name} is not malformed`);
+    const view = parseFrontmatter(text);
+    assert.equal(view.derived_from_untrusted, false, `${name} view is not trusted-flagged`);
+    assert.ok(Number(view.confidence) >= 0.85 && Number(view.recurrence) >= 3, `${name} view is not floor-passing`);
+    writeVault(vault, `06-Identity/${name}.md`, text);
+  }
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  for (const name of Object.keys(MALFORMED_TIER3)) {
+    const rel = `06-Identity/${name}.md`;
+    const r = res.reverted.find((x) => x.path === rel);
+    assert.ok(r, `${rel} was not reverted`);
+    assert.equal(r.reason, R1, `${rel} reverted with the wrong reason`);
+    assert.equal(fs.existsSync(path.join(vault, rel)), false, `${rel} still on disk`);
+    assert.equal(git(vault, ['ls-files', rel]).trim(), '', `${rel} reached the commit`);
+  }
+});
+
+// ── AC2 — the discrimination against the view-level design ───────────────────
+// HEAD is malformed and carries id/origin/created plus an explicit
+// derived_from_untrusted: true. The revision omits id, origin and created but
+// carries the three floor fields, and its body change is authorized by the
+// committed ledger. The registry entry has NO id — a healthy entry would reject
+// at `cur.id !== entry.id` and hide the hole.
+const AC2_HEAD = [
+  '---', 'id: foo', 'type: skill', 'created: 2026-07-01', 'updated: 2026-07-05',
+  'origin: dream', 'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: true',
+  'junk line',
+  '---', '', 'original body', '',
+].join('\n');
+const AC2_REVISION = [
+  '---', 'type: skill', 'updated: 2026-07-11', 'revision_pattern_key: deps.module-not-found',
+  'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false',
+  '---', '', 'revised body', '',
+].join('\n');
+
+function ac2Fixture() {
+  const { root, vault, scratch } = tempVault({
+    '05-Skills/foo/SKILL.md': AC2_HEAD,
+    '05-Skills/foo/LEARNINGS.md': LEDGER_HEAD,
+  });
+  const stateDir = path.join(root, 'state');
+  recordSkills(stateDir, [{ rel: '05-Skills/foo/SKILL.md', created: '2026-07-01', id: undefined }]);
+  const entry = readRegistry(stateDir).skills['05-Skills/foo/SKILL.md'];
+  assert.equal(Object.prototype.hasOwnProperty.call(entry, 'id'), false, 'the registry entry must carry NO id');
+  writeVault(vault, '05-Skills/foo/SKILL.md', AC2_REVISION);
+  return { root, vault, scratch, stateDir };
+}
+
+test('WP-validator-decided-bytes AC2: the FORBIDDEN view-level design admits and commits the fixture; the shipped guard reverts it with R1', () => {
+  const rel = '05-Skills/foo/SKILL.md';
+
+  // (a) The design C1 forbids. It must ADMIT — if it reverts, the criterion is
+  //     vacuous again and proves nothing about where the guard lives.
+  const forbidden = forbiddenViewLevelValidator();
+  const A = ac2Fixture();
+  const resA = forbidden.validateAndCommit({
+    vaultDir: A.vault, scratchDir: A.scratch, date: '2026-07-11', expectedScratch: [], stateDir: A.stateDir,
+  });
+  assert.equal(resA.reverted.find((x) => x.path === rel), undefined,
+    'the view-level design must ADMIT this revision — otherwise AC2 discriminates nothing');
+  assert.match(fs.readFileSync(path.join(A.vault, rel), 'utf8'), /revised body/);
+  assert.match(git(A.vault, ['show', `HEAD:${rel}`]), /revised body/, 'and COMMITS it');
+
+  // (b) The shipped design: the same bytes, reverted with R1.
+  const B = ac2Fixture();
+  const resB = run(B.vault, B.scratch, B.stateDir);
+  const r = resB.reverted.find((x) => x.path === rel);
+  assert.ok(r, 'the decision-site guard must revert it');
+  assert.equal(r.reason, R1);
+  assert.match(fs.readFileSync(path.join(B.vault, rel), 'utf8'), /original body/);
+  assert.match(git(B.vault, ['show', `HEAD:${rel}`]), /original body/);
+});
+
+// ── AC3 — a malformed HEAD may not launder a lowering ────────────────────────
+// The flag line is INDENTED: that both makes the block malformed and keeps the
+// field out of the view, so before the guard the raise-only rule read the
+// absence as "not true" and let the revision lower it to false.
+const AC3_HEAD = [
+  '---', 'id: foo', 'type: skill', 'created: 2026-07-01', 'updated: 2026-07-05',
+  'origin: dream', 'confidence: 0.9', 'recurrence: 3',
+  '  derived_from_untrusted: true',
+  '---', '', 'original body', '',
+].join('\n');
+const AC3_REVISION = AC3_HEAD
+  .replace('  derived_from_untrusted: true', 'derived_from_untrusted: false')
+  .replace('updated: 2026-07-05', 'updated: 2026-07-11')
+  .replace('origin: dream\n', 'origin: dream\nrevision_pattern_key: deps.module-not-found\n')
+  .replace('original body', 'revised body');
+
+test('WP-validator-decided-bytes AC3: a malformed HEAD cannot launder a derived_from_untrusted lowering', () => {
+  // Fixture guard: HEAD really HIDES the flag (absence-as-agreement), rather
+  // than showing a `true` the existing raise-only rule would already catch.
+  assert.equal(parseShared(AC3_HEAD).malformed, true);
+  assert.equal('derived_from_untrusted' in parseFrontmatter(AC3_HEAD), false);
+  assert.equal(parseShared(AC3_REVISION).malformed, false);
+
+  const { root, vault, scratch } = tempVault({
+    '05-Skills/foo/SKILL.md': AC3_HEAD,
+    '05-Skills/foo/LEARNINGS.md': LEDGER_HEAD,
+  });
+  const stateDir = seedReg(root, '05-Skills/foo/SKILL.md', 'foo', '2026-07-01');
+  writeVault(vault, '05-Skills/foo/SKILL.md', AC3_REVISION);
+  const res = run(vault, scratch, stateDir);
+  const r = res.reverted.find((x) => x.path === '05-Skills/foo/SKILL.md');
+  assert.ok(r, 'the lowering was laundered through the malformed HEAD');
+  assert.equal(r.reason, R1);
+  assert.match(fs.readFileSync(path.join(vault, '05-Skills/foo/SKILL.md'), 'utf8'), /original body/);
+});
+
+// ── AC5 — the ledger site names the parent SKILL.md (R1L, not R1) ────────────
+const AC5_PARENT_SKILL = SKILL.replace('origin: dream\n', 'origin: dream\njunk line\n');
+
+test('WP-validator-decided-bytes AC5: the learnings-ledger site fires R1L, naming the parent SKILL.md', () => {
+  // Fixture guard: the parent's id and created still MATCH the registry, so the
+  // path-reuse checks cannot be what does the rejecting.
+  assert.equal(parseShared(AC5_PARENT_SKILL).malformed, true);
+  assert.equal(parseFrontmatter(AC5_PARENT_SKILL).id, 'foo');
+  assert.equal(parseFrontmatter(AC5_PARENT_SKILL).created, '2026-07-05');
+
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': AC5_PARENT_SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER);
+  const es = seedExtracts(root, [clean('claude:sess-a'), clean('claude:sess-b')]);
+  const res = run(vault, scratch, stateDir, es);
+  const r = res.reverted.find((x) => x.path === '05-Skills/foo/LEARNINGS.md');
+  assert.ok(r, 'the ledger was kept beside a malformed parent skill');
+  assert.equal(r.reason, R1L);
+  assert.notEqual(r.reason, R1, 'R1 would point the user at the wrong file');
+  assert.equal(fs.existsSync(path.join(vault, '05-Skills/foo/LEARNINGS.md')), false);
+});
+
+// ── AC6 — the guard does not leak below Tier-3 ───────────────────────────────
+test('WP-validator-decided-bytes AC6: a malformed Tier-1/2 note is committed exactly as it is', () => {
+  const { vault, scratch } = tempVault();
+  const note = '---\ntype: note\nderived_from_untrusted: false\njunk line\n---\n\nan ordinary resource\n';
+  const log = '---\ntype: daily\n  indented: x\n---\n\ntoday\n';
+  assert.equal(parseShared(note).malformed, true);
+  assert.equal(parseShared(log).malformed, true);
+  writeVault(vault, '03-Resources/malformed-note.md', note);
+  writeVault(vault, '01-Journal/2026-07-03.md', log);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.deepEqual(res.reverted, [], 'the guard leaked below Tier-3');
+  assert.equal(fs.readFileSync(path.join(vault, '03-Resources/malformed-note.md'), 'utf8'), note);
+  assert.equal(fs.readFileSync(path.join(vault, '01-Journal/2026-07-03.md'), 'utf8'), log);
+  assert.equal(git(vault, ['show', 'HEAD:03-Resources/malformed-note.md']), note);
+  assert.equal(git(vault, ['show', 'HEAD:01-Journal/2026-07-03.md']), log);
 });

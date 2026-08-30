@@ -1,0 +1,40 @@
+Gate: PR rubric (gptsol, codex/gpt-5.6-sol), PR #31 round 3
+Tip reviewed: 6ec1ab5 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Form: this backend returns structured JSON rather than prose. Reproduced verbatim.
+
+---
+
+{
+  "findings": [
+    {
+      "title": "[P2] Update the return annotation to match the actual result",
+      "body": "The JSDoc advertises `redacted` entries with loose `lines`, `labels`, and `artifact` fields and `refused` entries without `preserved`, while the implementation and exact work-package contract return nested `redaction` plus required preservation records. The later first consumer could therefore read nonexistent fields or drop the only recovery route for quarantined copies; update this annotation and its adjacent return-field description to the actual `redaction`/`preserved` shapes. This is part of the repository's [spec-driven implementation rule](/Users/felho/dev/repos-to-learn-from/wienerdog/CLAUDE.md#L13-L17).",
+      "confidence_score": 0.99,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js",
+        "line_range": {
+          "start": 619,
+          "end": 623
+        }
+      }
+    },
+    {
+      "title": "[P2] Reject a missing run date before invoking gates",
+      "body": "The required `date:string` input is never validated, unlike the other required arguments. When it is omitted, `undefined` is forwarded to the secret and skill-body gates and a permissive gate can still let the note publish; this was reproduced with an added note and an injected writer returning `written:true`. A malformed caller can therefore produce incorrectly named preservation artifacts or incorrect skill-date decisions instead of failing before gate side effects, so validate `date` as a non-empty string at entry as required by the [exact contract](/Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/WP-dream-promote-module.md#L245-L249) and the repository's [spec-driven rule](/Users/felho/dev/repos-to-learn-from/wienerdog/CLAUDE.md#L13-L17).",
+      "confidence_score": 0.96,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js",
+        "line_range": {
+          "start": 650,
+          "end": 657
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "Executed `WIENERDOG_LOADER_NOOP=1 node --test tests/unit/dream-promote.test.js` (exit 0, 39/39 passed), `WIENERDOG_LOADER_NOOP=1 npm run lint` (exit 0), the required boundary check (exit 0), `git diff --check origin/main...HEAD` (exit 0), and full `npm test` (exit 1 only at the documented adopt E2E failure); a targeted reproduction of that adopt failure also exited 1 with the expected pinned-path mismatch. The rebase assertions were verified: the ten claimed files were identical from `36c2ce5` to `dcd5777`, only `validate.js` changed through `68ac5e9`, its length changed 1469→1471, and the cited lines shifted by one as recorded; final `git status --porcelain` remained empty. The patch still exposes an inaccurate typed return contract and accepts a missing required run date, so it is not yet correct.",
+  "overall_confidence_score": 0.97
+}

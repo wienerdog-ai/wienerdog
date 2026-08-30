@@ -1,0 +1,52 @@
+Round 6 — external adversarial review — reviewer: gptsol (Codex side).
+Base: wp/dream-promote-in-workspace @ 4c6f645760ac76ad514b154cb885ad7daeb50ad5
+Scope: the WHOLE settled text of all three specs, not a diff.
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value in docs/runbooks/review-prompts/adversarial.md)
+Read-only check: `git status --porcelain` byte-identical and empty before and
+after — VALID.
+
+VERBATIM OUTPUT BELOW.
+
+{
+  "verdict": "needs-attention",
+  "summary": "Do not ship the specs yet: four CONTRACT defects still let implementers build materially different or unsafe behavior. Round-5 F1 is incomplete, F3 is not genuinely fixed at the directory-identity boundary, and two new internal contradictions remain. F2's single refusal shape and the F4 mechanism CUT are otherwise consistent in the reviewed text. Executed checks: read all three specs in full with cat (exit 0); inspected numbered contract ranges and cited source with sed/grep (exit 0 for the cited checks); ran an empty-directory replacement probe demonstrating deletion of a replacement inode (exit 0); verified src/ is byte-identical to 025021f with git diff --quiet (exit 0). No implementation tests were run because this target contains specs only and src/ is unchanged. The checkout began and ended with zero-byte git status --porcelain output; cmp of the before/after status files exited 0. No scope objections.",
+  "findings": [
+    {
+      "file": "docs/specs/WP-dream-vault-write-primitive.md",
+      "line_start": 212,
+      "line_end": 212,
+      "confidence": 0.98,
+      "classification": "CONTRACT defect",
+      "description": "H9 promises that refusal never removes a directory the call did not create, but its claimed structural protection only prevents removal of a non-empty replacement. A concurrent editor can rename the call-created empty directory and create a different empty directory at the same path; path-based cleanup then removes the replacement, violating the hard prohibition. The acceptance criteria only test a directory that pre-existed the call, not identity replacement during cleanup. A Node probe reproduced the observable failure: after replacing the path with a different empty inode, rmdir removed the replacement while the original survived under its new name. Because portable Node has no identity-bound rmdir, this is not fixed merely by checking emptiness or by a pre-removal inode comparison, which has its own race.",
+      "recommendation": "Make the contract implementable and testable: either narrow the settled unwind rule by naming concurrent empty-directory substitution as a residual while retaining the absolute prohibition on deleting non-empty content, or provide a platform-bounded observable guarantee that can actually bind removal to the created directory's identity. Add an acceptance case where the created directory is renamed and replaced by another empty directory before unwind."
+    },
+    {
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 256,
+      "line_end": 277,
+      "confidence": 0.97,
+      "classification": "CONTRACT defect",
+      "description": "Table R is still not exhaustive. It says the report record's only remaining refusal path is the expect guard in R4, but Table H requires the primitive to refuse symlink, containment, policy, and other filesystem failures too. A pre-existing report symlink is explicitly tested later at lines 483-490, so this is not hypothetical: R2/R3 promise publication for a present report while the primitive must refuse that same object. The contract says only R4 sends the enforcement record to log/output, leaving the other primitive refusals without a defined preservation path. Thus an implementation can preserve the old report but silently lose this run's enforcement record.",
+      "recommendation": "Define one observable fallback outcome for every written:false result from the report's normal append and fallback publish, not only expect divergence: the existing vault object remains untouched and the complete enforcement record is emitted through specified run log/output channels. Extend Table R and its acceptance criterion with at least symlink refusal and a non-expect filesystem refusal."
+    },
+    {
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 491,
+      "line_end": 506,
+      "confidence": 1,
+      "classification": "CONTRACT defect",
+      "description": "Two acceptance criteria prescribe opposite commit outcomes for the same race. Lines 491-497 require the commit to contain the previously approved bytes while retaining the user's later save in the working tree. Lines 502-506 require that same path to be dropped from the dream commit and reported. Both use a user save between publish and staging as their trigger, so an implementation cannot satisfy both.",
+      "recommendation": "Choose one product contract for the post-publish/pre-staging save race and remove the other criterion. If the intended invariant is that the commit carries exactly the primitive-returned decided bytes, retain lines 491-497 and explicitly state that the later user bytes remain as an uncommitted working-tree change. If the intended response is refusal, require dropping and reporting consistently in Table E and the earlier criterion."
+    },
+    {
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 498,
+      "line_end": 501,
+      "confidence": 0.99,
+      "classification": "CONTRACT defect",
+      "description": "The Unicode-overlap acceptance criterion still requires a markdown note to be refused when projects_dir and reports_dir are Unicode aliases for one directory. The settled report ruling now admits reports_dir, and C9 line 211 simultaneously says reports_dir is excluded, admitted, and that the old overlap concern dissolves. Under the final allowlist, the aliased directory is admitted through either role, so the required refusal has no policy basis. Implementers can reasonably produce opposite behavior depending on which sentence they follow.",
+      "recommendation": "Rewrite C9 as one unambiguous positive set that includes reports_dir and remove stale references to a reports_dir negative or exclusion. Replace the overlap refusal case with an observable normalization case that still discriminates under the settled policy, such as a Unicode-normalized instruction-file basename or .claude/.codex segment being refused regardless of normalization form."
+    }
+  ]
+}

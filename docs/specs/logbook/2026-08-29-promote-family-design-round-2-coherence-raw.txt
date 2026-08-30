@@ -1,0 +1,258 @@
+Gate: INTERNAL COHERENCE pass (peer of the adversarial round 2)
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at d172a21
+Round: 2
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only: git status --porcelain empty before and after; stash/diff/diff --cached
+all empty; no commit, stage, stash or branch change. Scratch /tmp/wd-coherence/.
+NOTE: HEAD moved mid-pass (this session committed 95fe35a, the round-2
+adversarial raw output). All five scope files verified byte-identical across
+d172a21, HEAD and the worktree; every finding stands at the current tip.
+
+CONTRACT DEFECTS
+
+C-1  The must-survive block's only output channel is deleted by the same rows
+     that mandate its survival.
+     WP-dream-promote-in-workspace.md:211 (Deliverables, NEW), :293 (G7, NEW),
+     :333 (V3, NEW), :518-537 (acceptance criterion, NEW).
+     G7 says the enforcement half goes: "the revert core at :1324-1332 ... and
+     the reverted[] accounting it feeds (:1361-1363) goes with it", while "the
+     identity-gated deletion ... (:1338-1360) ... MUST SURVIVE" and "still
+     behave as their owner decides them".
+     Measured in src/core/dream/validate.js:
+       1358|  reason += ` (the unredacted original is state/quarantine/${REDACTED_SUBDIR}/${redactCopy.name})`;
+       1361|  reverted.push({ path: rel, reason });
+     `awk 'NR>=1233 && NR<=1364 && /reason/'` over the per-path loop returns
+     EXACTLY ONE consumer of `reason`: line 1361. Line 1358 sits INSIDE the
+     must-survive span :1338-1360. So the deletion's keep-branch — the branch
+     that preserves the user's only pre-scrub copy — announces that copy through
+     a channel G7 REMOVES.
+     Not incidental: WP-dream-promote-module.md:499 (Q5, NEW) names "the
+     keep-combinations and THEIR REASON SUFFIX" as part of what the shipped
+     owner decides, and the EP2 spec's own Table Q row Q8
+     (WP-secret-fence-ep2-redact-arm.md:1639) makes the suffix "(the unredacted
+     original is state/quarantine/redacted/<basename>)" a contract item of
+     Table R consequence 2. After the mandated removal the acceptance criterion
+     at :519-520 is UNSATISFIABLE as written. Either the removal narrows, or a
+     replacement carrier is assigned — and it CANNOT be refused[].artifact,
+     because Q8 scopes that to the redact-then-refuse arm, not to consequence
+     2's keep-suffix.
+
+C-2  The refused[] preserved-copy line is newly scoped to a branch that excludes
+     the common case.
+     WP-dream-promote-report.md:294 (Table R preserved-copy row, NEW).
+     The row opens "one line per entry of refused[] whose artifact is non-null"
+     and closes "The line is composed onto the FALLBACK branch, which is the
+     branch that exists precisely because the body was not published." Table R's
+     Trigger (:267-270) governs ONLY the fallback. But refused[] entries with a
+     non-null artifact occur on runs where the report body publishes NORMALLY —
+     the ordinary path.
+     The criterion that asserts it (:421-425, NEW) is unconditional; only the
+     report-arm half (:426-429) is branch-scoped. Table N's N3 (:262) and the
+     report row (:205) say the section is composed on "the normal second write
+     and the fallback alike", but only for the neutralisation rule. ON THE
+     NORMAL BRANCH, NO SURFACE SAYS WHO WRITES THIS LINE.
+
+COHERENCE DEFECTS
+
+H-1  The new row-id rule was swept into one spec and not the sibling.
+     Rule NEW at map:66-75, restated NEW at module:487 and NEW at report:527-530
+     ("name the owner of any row id in a colliding letter").
+     module.md WAS swept — :359, :441, :601-604, :665 all rewritten from bare
+     H7/H9 to "the primitive's H7" / "the PRIMITIVE's H9".
+     report.md WAS NOT, and it is the file that ADDED the instruction:
+       :417 "with an H5 refusal (the target changes between decision and
+            publish)" — no owner in sentence or bullet. Cleanest instance.
+       :95  "Its `expect` guard (Table H, H5) and its returned bytes (H6)"
+       :388 "A symlinked report target is refused (Table H, H3)"
+       :286 "a symlinked target under H3 ... any H-rule"
+     Two survive in module.md on lines this revision rewrote: :367 (the C9 cell)
+     cites "(Table H, row H1)" and :436 cites "(Table H, H5)" — neither carries
+     the owner label the rule's own examples prescribe.
+
+H-2  Table C's header names Q8 the owner and restates the owned fact; Q8 denies
+     the header that content.
+     module:340-342 (NEW): "The resolved-only half is the opposite case, and row
+     Q8 owns it: the gate ran, it may already have preserved an unredacted copy,
+     and the refusal carries that copy's basename in refused[].artifact."
+     :502 (Q8, NEW): "...it is why THIS ROW RATHER THAN TABLE C'S HEADER is the
+     home for a refusal that carries an artifact."
+     The header cites the owner and states the owned fact in the same sentence —
+     the exact pattern spec-authoring.md:47-50 forbids, in text written to fix an
+     ownership problem.
+
+H-3  The header imports the clause the same revision identified as the
+     contradiction's source.
+     :304-306 (NEW): "Row C9's allowlist is applied by the primitive to the
+     RESOLVED path, never to the candidate, and where it is applied is part of
+     the rule. SO the candidate-decidable half ... is evaluated up front"
+     :367 (C9 cell, NEW): "(added 2026-08-29; the header previously stated C1 as
+     wholly pre-gate, which THIS CELL'S 'never the candidate path' CLAUSE
+     contradicted)"
+     The revision fixed the header's C1 claim, then copied the offending clause
+     into the header. The "So" makes candidate-time evaluation FOLLOW FROM "never
+     to the candidate" — a non-sequitur three lines before the paragraph explains
+     that the module does exactly that.
+
+H-4  The report spec's ### Exact contracts restates the module's shape and says
+     so. report:136-144, all NEW. :137-138 spell out the full return shape; :140
+     says "it is cited here and not restated"; :141-144 then say "a shape
+     restated in a citing surface, WHICH IS THE DEFECT THIS BLOCK'S OWN 'cited
+     here and not restated' SENTENCE NAMES." The block names its own defect and
+     keeps it, with no ruling recorded. Verified accurate against module:221-226
+     today — a live drift risk, not a live error.
+
+H-5  The canonical map puts a 9-item and a 5-item letter list two lines apart.
+     map:43-44 (NEW) lists NINE EP2 table letters — verified correct
+     (/usr/bin/grep -nE '^### Table [A-Z]' returns P,B,Q,N,K,R,T,H,J). :45 (NEW)
+     declares "THIS TABLE IS THE ONE PLACE THE COLLIDING LETTERS ARE LISTED" and
+     :50-56 gives FIVE collisions. The five-row table is complete and correct
+     (J,K,P,T have no counterpart in this family). But a reader counting "the
+     colliding letters" off the canonical surface can get 9 or 5 — precisely the
+     recurrence risk this page exists to close.
+
+H-6  The module's letter-space warning names a collision three lines before
+     saying it names none.
+     module:483-484 (pre-existing): "its Table N is a retention contract while
+     this family's Table N is ...". :487-491 (NEW): "WHICH letters collide is the
+     canonical map's to state, and this surface deliberately does not list them".
+     The new sentence went in; the example it contradicts stayed.
+
+H-7  Three byte-identical new blocks, registered by no MSC, carrying a claim
+     false in one of them.
+     NEW and byte-identical at module:271-279, report:188-196,
+     in-workspace:273-281. No MSC in any of the three registers them
+     (module:524-615, report:309-359, in-workspace:342+) — an edit to one goes
+     stale in two — and the block asserts "Pre-existing in all three specs of
+     this family", a cross-spec claim with no sweep behind it.
+     The claim FAILS in report.md: "each dense contract below has its own NAMED
+     canonical table instead, so a row is addressable by letter across the whole
+     family" — the very next heading (report:198) is "### The report row", an
+     UNLETTERED contract table. The family map acknowledges this by listing it
+     separately: "Tables N, R and the report row" (map:32).
+
+H-8  MSC entry names two acceptance criteria where the spec has one.
+     report:344-347 (NEW): "Table R's two rows for them, THEIR TWO ACCEPTANCE
+     CRITERIA, ...". Measured over report:392-481: exactly ONE bullet covers
+     these rows — :421. No criterion asserts the redaction-lines row (:293); the
+     only surface that does is module:764, in the other package, which the entry
+     does not name.
+
+H-9  The Table Q owner's mirror list omits two Table Q mirrors this revision
+     created.
+     module:556-574 (NEW) enumerates Table Q's cross-spec mirrors. Not listed:
+     report:252 (NEW) — the Table N channel row for refused[].artifact /
+     report.artifact, which cites "(Table Q, rows Q2 and Q8)" — and
+     report:421-436 (NEW), the criterion asserting Q3 and Q8. Both are registered
+     in report.md's own MSC under TABLE N, so a Table N sweep finds them; a
+     Table Q sweep run from the owner's list does not.
+
+WORDING NITS
+
+N-1  in-workspace:521-523 and :333 (NEW): "immediately BELOW it". The
+     abort->revert transition is literally adjacent (validate.js:1323/:1324); the
+     revert->deletion transition has five lines between it (:1333-1337). The same
+     rows insist the geometry "is stated exactly rather than approximately".
+N-2  The three new blocks write `N/A as a single heading`;
+     spec-authoring.md:25-27, which they cite, prescribes the literal
+     `N/A — <one-line reason>`.
+N-3  module:146-147 (NEW): ragged mid-sentence break left by the range edit —
+     "`:1324-1332`. **None of these is / modified here**".
+N-4  module:681: "one case per row C1-C8" is now under-specified — C1 has two
+     halves and the resolved-only half has its own criterion at :701-710.
+
+PRE-EXISTING, reported because the revision worked around them
+
+P-1  report:205 — the report row cell, moved whole from the module's Table D,
+     still says "Read this row against THE GATE ROWS ABOVE" and "THE TABLE ABOVE
+     is what says which gate applies where." Measured: the only tables before
+     line 205 in report.md are Deliverables (:118) and the row's own header
+     (:204). The gate rows are module:415-418. The prose two lines up (:200-201)
+     explains the move; the cell was not swept.
+P-2  module:521 (S5) assigns the internal writeIntoVault handoff to "Table D's
+     report row and ... Table R" — both left this package in the T1 cut; :422 and
+     :424 are MOVED placeholders. A pointer whose target is a pointer.
+P-3  module:244-246 — dropped sentence boundary: "...composes no report" runs
+     straight into "secretDisposition is the typed signal...".
+P-4  in-workspace:331 cites validate.js:1450-1457; :1457 is `secretRedactions,`,
+     one line short of the object's `};` at :1458. in-workspace:334 and
+     report:97 cite :1374-1408; :1408 is the inner `);`, one line short of the
+     block's `}` at :1409.
+
+RUNNABLE CRITERIA — exit status and discrimination
+(promote.js and dream-promote.test.js are NOT in this tree; criteria whose
+subject is the module's implementation are evaluated only for deliverable-absent
+behaviour, stated per criterion.)
+
+ step                                              spec:line       exit  discriminates?
+ guarded pattern "dream-promote"                   module:834       1    YES for absent; compliant state not evaluable here
+ npm test                                          module:835 etc   1    environmental — see note
+ npm run lint                                      module:836 etc   0    PARTIAL: markdownlint 556 files/0 errors, frontmatter
+                                                                         232 specs OK; shellcheck + PSScriptAnalyzer SKIPPED
+ guarded claim-2b-merge-cwd                        module:839       1    YES for absent
+ consumed-by-nothing grep                          module:844       0    green-on-absent by design; same with /usr/bin/grep
+ glossary grep                                     module:845       1    YES, TWO-SIDED: red here (0 matches), GREEN on
+                                                                         wp/dream-promote-module (**promotion** at :88)
+ guarded dream-promote                             report:492       1    YES for absent
+ guarded report-fallback                           report:493       1    YES for absent
+ guarded dream-pipeline                            inws:628         1    YES for absent
+ UNGUARDED pattern "dream-validate"                inws:629         0    YES today — 190/190 vs the control's 108/108, i.e. 82
+                                                                         real matches. But THE EXIT CODE CARRIES NO EVIDENCE
+                                                                         OF THAT; goes silently vacuous if names change
+ guarded claim-1-pipeline                          inws:635         1    YES for absent
+ guarded claim-2b-pipeline                         inws:636         1    YES for absent
+ ! grep precommitSessionEdits                      inws:640         1    YES — red pre-change, green once G6 lands
+ grep assertCleanTree                              inws:643         0    *** NO FOR DELIVERABLE-ABSENCE. *** Green on a tree
+                                                                         where none of the package's work is done, and it can
+                                                                         never go red for absence since src/cli/dream.js always
+                                                                         exists. The bullet at inws:656-657 ("Verify each also
+                                                                         goes red when its deliverable is ABSENT") is
+                                                                         UNSATISFIABLE for this step; its escape clause covers
+                                                                         only "the pattern runs", and the concession at
+                                                                         :663-665 addresses behaviour, not the absent case.
+                                                                         FILED AS A FINDING.
+ grep -i promot docs/adr/0012                      inws:644         1    YES — 0 occurrences today; a modify deliverable
+ CONTROL pattern "zzz-no-such-test-zzz"            —                0    reproduced: 108 tests reported passing on no match
+
+npm test failure: 1 of 2143 — tests/integration/adopt-e2e.test.js:72, "refusing
+to run claude: claude now resolves to <tmp>/.../claude, but the pinned command
+path is /Users/felho/.local/share/fnm/.../claude" (exec-identity.js:490). An
+executable-pin mismatch from this machine's install. `git diff --name-only
+main...HEAD` returns 8 files, all under docs/specs/ — the branch touches no code,
+so this is ENVIRONMENTAL, not caused by the amendment.
+
+CATEGORIES WITH NO FINDINGS — stated explicitly
+
+ * file:line / file:START-END citations introduced or changed since c1d9c00,
+   checked at BOTH ends: ALL CORRECT, NO EXCEPTIONS. Verified by indentation
+   which construct each endpoint closes. The two shapes the previous pass caught
+   are genuinely fixed: :1269-1294 now opens on `if (!hasHardFinding(findings)) {`
+   and closes on its own `}` (indent 6 both ends), and the removal range is
+   :1324-1332 — a complete if/else at indent 4 whose deletion leaves balanced
+   code, and which no longer contains the must-survive :1338-1360. Also verified:
+   :1233-1364, :1298-1323, :1338-1360, :1361-1363, :1365-1366, :669-738,
+   :906-946, :1392-1409, :1385-1386, :1239-1255, :1107-1142, :1200-1205,
+   :1443-1448, :139-149, :113-115, :300, :1203, layout.js:21-29,
+   SKILL.md:409-425. (The two short-by-one endpoints in P-4 are unchanged text.)
+ * Collision-list completeness: COMPLETE AND CORRECT. Five collisions
+   (B,H,N,Q,R) is exhaustive against every table letter in the family. No spec
+   restates the list — H-6 is a single named example, not a list.
+ * Counts vs their lists: every one checkable matched BY COUNTING — 9 EP2 letters,
+   5 collisions, 7 LAYOUT_KEYS, Q6's seven Table N subjects against EP2's N1-N7
+   IN ORDER, Q4's "FOUR fields"/"three values" against EP2's Q18, four gates,
+   "three of the four do not match reports_dir", Table S's "two consumers"
+   (G8,G10), Q1-Q8, S1-S6. The single count that would not reconcile is H-8.
+ * Pointers carrying a number/premise from their owner: ONE instance, accurate
+   today rather than drifted. module:498 (Q4, NEW) declares itself "restated
+   NOWHERE here" while carrying "the message decides FOUR fields and its identity
+   disposition has three values of its own" — verified correct against EP2's Q18.
+   Flagged only as a live drift risk of exactly the shape EP2's own B3b cell
+   records having paid for, and noting Q4 is NOT a registered mirror of Q18 the
+   way B3b is. Q5 and Q6 are clean pure pointers; every quoted string checked is
+   verbatim in its owner.
+ * Ownership collisions: NONE beyond H-2. Q4/Q5/Q6 vs the shipped package, Q8 vs
+   S3, Table N vs Table R's gate rule (2), Table C's header vs Table D's preamble
+   all partition cleanly.
+ * Scope objections against the stated rulings: NONE FILED. Q5/Q6 read as pure
+   pointers, Q4 as a hybrid, filesystem discipline and containment cited and
+   never restated, consumed-by-nothing asserted in every surface read.
