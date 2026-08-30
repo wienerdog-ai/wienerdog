@@ -324,11 +324,14 @@ function commitNamedSet(o) {
  * criterion does not reach it: this pipeline is the party that renders it, and
  * this is where the classification is enforced.
  *
- * REDACT FIRST, THEN SANITISE — the order is not interchangeable and the reason
- * is measured: EP2's context-dependent detectors need the RAW bytes, separators
- * included, and `sanitizeProjectName` replaces `=` and `:` among others, so
- * `token=abcdefghijkl` sanitises to `token_abcdefghijkl`, on which the detector
- * does not fire.
+ * REDACT FIRST, THEN SANITISE — the order is `WP-dream-promote-report`'s **Table
+ * N row N1** and is CITED, never restated. This is the second rendering site of
+ * that one contract (Table N names this package as the renderer of both
+ * `report.reason` and `accounting.reason`, because the section composer never
+ * touches either value), so two carriers is the design — but the ORDER
+ * RATIONALE and its measurement belong to N1 alone. Restating them here is what
+ * would falsify twice the day the order is re-decided; the consolidation of the
+ * two carriers is routed to a successor.
  * @param {unknown} value @returns {string}
  */
 function neutralise(value) {
