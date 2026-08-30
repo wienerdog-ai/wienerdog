@@ -6,6 +6,7 @@ const { getPaths } = require('../core/paths');
 const { detectHarnesses } = require('../core/detect');
 const { getUpdateNotice, updateCommand } = require('../core/update-check');
 const manifestLib = require('../core/manifest');
+const { buildBlock, locateManagedBlock } = require('../adapters/shared');
 
 /** @param {string} p @returns {boolean} */
 function dirExists(p) {
@@ -225,6 +226,62 @@ function staleHookChecks(paths, harnesses) {
     }
   }
   return findings;
+}
+
+/** Report whether each present harness's managed block still carries the CURRENT
+ *  digest. The digest file is rewritten by every dream run; the block is written
+ *  only by an attended `wienerdog sync`, so the two drift apart between syncs and
+ *  nothing else surfaces it. Read-only — doctor never mutates (WP-070); the
+ *  remediation is always `wienerdog sync`. Emits NOTHING when there is no digest
+ *  to compare against (a no-vault install: normal, and the vault check above
+ *  already covers it) — same convention as googleReadinessChecks, which is silent
+ *  when Google is not connected. The freshness predicate is exact: applyManagedBlock
+ *  writes buildBlock(digest) between the sentinels on every branch, so the block
+ *  text sliced at locateManagedBlock's offsets must equal buildBlock(digest).
+ *  Never throws.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @param {{claude:{present:boolean}, codex:{present:boolean}}} harnesses
+ *  @returns {{status:'ok'|'warn', msg:string}[]} */
+function digestBlockChecks(paths, harnesses) {
+  let digest;
+  try {
+    digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
+  } catch {
+    return []; // no digest → nothing to compare (no-vault install, or an
+              // unreadable file the private-modes check above already owns)
+  }
+  const want = buildBlock(digest);
+  const targets = [];
+  if (harnesses.claude.present) targets.push(path.join(paths.claudeDir, 'CLAUDE.md'));
+  if (harnesses.codex.present) targets.push(path.join(paths.codexDir, 'AGENTS.md'));
+
+  const out = [];
+  for (const file of targets) {
+    let content;
+    try {
+      content = fs.readFileSync(file, 'utf8');
+    } catch {
+      out.push({ status: 'warn', msg: `no Wienerdog block in ${file} — run 'wienerdog sync'` });
+      continue;
+    }
+    let span;
+    try {
+      span = locateManagedBlock(content, file);
+    } catch (err) {
+      // Reuse the WienerdogError text verbatim — one wording for this condition
+      // across sync and doctor, so the two surfaces can never disagree (ADR-0031).
+      out.push({ status: 'warn', msg: err.message });
+      continue;
+    }
+    if (span === null) {
+      out.push({ status: 'warn', msg: `no Wienerdog block in ${file} — run 'wienerdog sync'` });
+    } else if (content.slice(span.begin, span.end) === want) {
+      out.push({ status: 'ok', msg: `the Wienerdog block in ${file} matches the current digest` });
+    } else {
+      out.push({ status: 'warn', msg: `the Wienerdog block in ${file} is out of date — run 'wienerdog sync'` });
+    }
+  }
+  return out;
 }
 
 /** Report Google client-library readiness for a CONNECTED account. Read-only;
@@ -561,6 +618,12 @@ async function run(_argv) {
   // longer exists (e.g. a since-purged temp core merged into the real settings). Read-only;
   // warn with a manual-removal hint — we never edit a settings file we did not record.
   for (const c of staleHookChecks(paths, harnesses)) check(c.status, c.msg);
+
+  // Managed-block freshness: does each present harness's block still carry the
+  // CURRENT digest? The digest is rewritten by every dream run; the block only by
+  // an attended sync, so they drift between syncs and nothing else reports it.
+  // Read-only; silent on a no-vault install; every problem is a warn.
+  for (const c of digestBlockChecks(paths, harnesses)) check(c.status, c.msg);
 
   // Google client-library readiness for a connected account (WP-103).
   // Read-only; silent when Google is not connected; a missing library is a warn.
