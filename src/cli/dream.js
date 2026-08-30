@@ -77,8 +77,16 @@ function listFilesRecursive(dir) {
     }
     for (const e of entries) {
       const full = path.join(d, e.name);
+      // EVERY NON-DIRECTORY ENTRY, not every regular file. A symlink, FIFO,
+      // socket or device the brain plants in the read-only scratch dir is a
+      // sandbox-policy breach exactly like a stray `.json`, and `cleanScratch`
+      // removes it at teardown either way — so an enumerator that skipped it
+      // would delete the evidence and record NOTHING, which is the observability
+      // loss row G12 exists to prevent, arriving as a breach that survives
+      // nowhere. The retired enumerator ended `else out.push(full)`; narrowing
+      // it to `isFile()` was a silent narrowing of a durable behaviour.
       if (e.isDirectory()) walk(full);
-      else if (e.isFile()) out.push(full);
+      else out.push(full);
     }
   };
   walk(dir);
@@ -231,7 +239,20 @@ function commitNamedSet(o) {
       // silently re-permission a file it did not author.
       const ls = g(['ls-tree', head, '--', m.rel], { allowFail: true });
       const mode = (String(ls.stdout || '').trim().split(/\s+/)[0]) || '100644';
-      const blob = g(['hash-object', '-w', '--path', m.rel, '--stdin'], { input: m.bytes });
+      // NO `--path`, AND THAT IS THE CONTRACT RATHER THAN AN OMISSION. `--path`
+      // makes git apply THAT PATH's clean filter and eol/text attributes to the
+      // piped buffer, so in a vault carrying `* text=auto` — or any filter — the
+      // stored blob is NOT byte-equal to `m.bytes`. Measured: an approved CRLF
+      // buffer is stored with LF bytes, i.e. the commit carries content no gate
+      // judged, which is exactly what row G8 and Table S forbid. Without the
+      // flag, `--stdin` stores the bytes verbatim.
+      //
+      // It bought nothing here: the mode comes from `ls-tree` above, not from
+      // the attributes. (An earlier form passed `--path` reasoning that it made
+      // the blob match what `git add <rel>` would produce — true, and precisely
+      // the wrong target: this commit must carry the DECIDED bytes, not the
+      // bytes a working-tree add would have made of them.)
+      const blob = g(['hash-object', '-w', '--stdin'], { input: m.bytes });
       const sha = String(blob.stdout).trim();
       if (!sha) throw new WienerdogError(`dream commit: git could not hash ${m.rel}`);
       withIndex(['update-index', '--add', '--cacheinfo', mode, sha, m.rel]);
@@ -250,14 +271,41 @@ function commitNamedSet(o) {
     // DELETION (HEAD holds it, the index does not), which is a broken state for
     // the user even though the commit itself is right.
     //
-    // Only the named paths are touched, so anything the user had staged before
-    // the run stays staged, and anything they had unstaged stays unstaged. A
-    // path whose WORKING TREE differs from the committed bytes — a user save
+    // THE USER'S STAGED WORK OUTRANKS THE REFRESH, and this is a data-loss rule
+    // rather than a preference. `update-index` overwrites whatever the index
+    // holds, so on a path the user had STAGED and this run also promoted, an
+    // unconditional refresh destroys the only reference to those staged bytes.
+    // Measured: a staged "v2" became the dream's "v3" with the user's version
+    // recoverable from nothing. So each path is refreshed ONLY when the index
+    // still agrees with the OLD head — i.e. the user staged nothing of their own
+    // there. Where they did, their entry stands and `git status` shows their
+    // staged change against the new HEAD, which is the truth.
+    //
+    // A path whose WORKING TREE differs from the committed bytes — a user save
     // that landed after the publish, or the code-owned warnings file this commit
-    // renders without writing — then shows up as exactly what it is: an
-    // uncommitted working-tree modification, neither committed nor discarded.
+    // renders without writing — shows up as exactly what it is: an uncommitted
+    // working-tree modification, neither committed nor discarded.
     for (const e of entries) {
-      g(['update-index', '--add', '--cacheinfo', e.mode, e.sha, e.rel], { allowFail: true });
+      const staged = g(['ls-files', '--stage', '--', e.rel], { allowFail: true });
+      const stagedSha = String(staged.stdout || '').trim().split(/\s+/)[1] || null;
+      const atOldHead = g(['rev-parse', `${head}:${e.rel}`], { allowFail: true });
+      const oldSha = atOldHead.status === 0 ? String(atOldHead.stdout).trim() : null;
+      // The index still describes the old HEAD for this path (or held nothing at
+      // all) → safe to move it forward. Otherwise it holds the USER's own work.
+      if (stagedSha !== null && stagedSha !== oldSha) continue;
+      const upd = g(['update-index', '--add', '--cacheinfo', e.mode, e.sha, e.rel], { allowFail: true });
+      if (upd.status !== 0) {
+        // NEVER SILENT. `update-ref` has already moved HEAD, so a failure here —
+        // a held `index.lock`, an unwritable index — leaves exactly the state
+        // this refresh exists to prevent, while the run would otherwise report
+        // success. The commit is sound and must not be undone; what is owed is
+        // that the user is told, in the terms they will see it in.
+        console.log(
+          `wienerdog: dream — committed ${commit.slice(0, 7)}, but your git index could not be ` +
+            `updated for ${e.rel} (${String(upd.stderr || '').trim() || 'index unavailable'}); ` +
+            'run `git reset` in your vault to resync it. Nothing was lost — the commit is complete.'
+        );
+      }
     }
     return commit;
   } finally {
@@ -1159,4 +1207,11 @@ async function run(argv, opts = {}) {
   }
 }
 
-module.exports = { run };
+module.exports = {
+  run,
+  // Exported for the deliverable test file: row G12's enumerate half must return
+  // every NON-DIRECTORY entry, and a test that could only reach it through a
+  // whole dream run could not distinguish "the symlink was enumerated" from "the
+  // symlink was never created in time". It regressed once, unseen, exactly there.
+  __listFilesRecursive: listFilesRecursive,
+};

@@ -709,3 +709,141 @@ test('dream-pipeline: scratch is removed before the lock is released, and a non-
     assert.ok(order.indexOf('clean') < order.indexOf('release'), `saw: ${order.join(',')}`);
   }
 });
+
+// ── The round-1 gate findings, each asserted in both directions ──────────────
+//
+// Every test below exists because a gate found a defect the suite could not see.
+// The lesson the staged-work loss taught is written into how they are shaped: a
+// fix is an untested change until something goes RED without it, so each of
+// these was run against the pre-fix code and observed to fail.
+
+test('dream-pipeline: the commit stores the DECIDED bytes verbatim, through a vault clean filter (row G8)', async () => {
+  const ctx = setup();
+  // A clean filter that rewrites ANY content, so the assertion does not depend
+  // on the fixture's line endings. `hash-object --path` would apply this to the
+  // piped buffer and store bytes no gate judged.
+  writeFile(ctx.vault, '.gitattributes', '*.md filter=mangle\n');
+  git(ctx.vault, ['config', 'filter.mangle.clean', 'sed "s/note/MANGLED/g"']);
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'attributes']);
+
+  const { spawnPinnedSync } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  /** @type {Map<string, Buffer>} what was actually piped to hash-object, in order */
+  const piped = [];
+  const spawnGit = (o) => {
+    if (o.args[0] === 'hash-object') {
+      piped.push(Buffer.from(o.input));
+      assert.ok(!o.args.includes('--path'), '`--path` re-applies the path filters to the piped buffer');
+    }
+    return spawnPinnedSync('git', getPaths(), {
+      args: ['-C', o.cwd, ...o.args], env: o.env, platform: process.platform,
+      encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
+    });
+  };
+  const r = await runDream(ctx, ['--yes'], { opts: { spawnGit } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(piped.length > 0, 'the commit hashed something — a vacuous pass would prove nothing');
+
+  // Every committed path holds EXACTLY the buffer that was piped for it. Under
+  // the filter, a `--path` hash would have stored the mangled form instead.
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  const bodies = named.map((rel) => headBytes(ctx.vault, rel));
+  for (const buf of piped) {
+    assert.ok(
+      bodies.some((b) => b !== null && b.equals(buf)),
+      `a decided buffer is not byte-equal to any committed blob: ${JSON.stringify(buf.toString('utf8').slice(0, 60))}`
+    );
+  }
+  assert.ok(
+    !bodies.some((b) => b !== null && b.toString('utf8').includes('MANGLED')),
+    'the clean filter never touched the committed bytes'
+  );
+});
+
+test('dream-pipeline: a user STAGED version of a promoted path is never overwritten by the index refresh (row G8)', async () => {
+  const ctx = setup();
+  const rel = '03-Resources/valid-note.md';
+  const STAGED = 'THE USER STAGED THEIR OWN VERSION\n';
+  // The user stages their own content at a path this run will also promote.
+  writeFile(ctx.vault, rel, STAGED);
+  git(ctx.vault, ['add', rel]);
+  const stagedSha = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
+
+  const r = await runDream(ctx);
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // The commit is still the dream's decided bytes — the user's staged version
+  // does not leak into it.
+  assert.ok(headBytes(ctx.vault, rel).toString('utf8').includes('A legitimately-learned resource note.'));
+  // AND the user's staged work survives: their index entry is untouched, so the
+  // bytes are still reachable. Destroying it would leave them recoverable from
+  // nothing.
+  const afterSha = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
+  assert.equal(afterSha, stagedSha, "the user's staged blob is still the index entry");
+  assert.equal(
+    git(ctx.vault, ['cat-file', 'blob', afterSha]), STAGED,
+    "and it still holds the user's own bytes"
+  );
+});
+
+test('dream-pipeline: an index refresh that FAILS is reported, never silent (row G8)', async () => {
+  const ctx = setup();
+  const { spawnPinnedSync } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  // `update-ref` has already moved HEAD by the time the refresh runs, so a
+  // failure here leaves the index describing the old HEAD — exactly the state
+  // the refresh exists to prevent. It must not pass silently.
+  const spawnGit = (o) => {
+    // ONLY the refresh of the USER's index — the tree-building call runs against
+    // the private index and carries GIT_INDEX_FILE. Breaking both would fail the
+    // commit itself and assert nothing about the refresh.
+    if (o.args[0] === 'update-index' && o.args.includes('--cacheinfo') && !(o.env && o.env.GIT_INDEX_FILE)) {
+      return { status: 1, stdout: '', stderr: 'fatal: Unable to create index.lock: File exists' };
+    }
+    return spawnPinnedSync('git', getPaths(), {
+      args: ['-C', o.cwd, ...o.args], env: o.env, platform: process.platform,
+      encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
+    });
+  };
+  const r = await runDream(ctx, ['--yes'], { opts: { spawnGit } });
+  assert.equal(r.thrown, null, 'the commit is sound and the run does not fail');
+  assert.match(r.output, /your git index could not be updated/, 'the failure reaches the user');
+  assert.match(r.output, /index\.lock/, 'naming the cause');
+  assert.match(r.output, /Nothing was lost/, 'and telling them the commit is complete');
+});
+
+test('dream-pipeline: a NON-REGULAR scratch entry is recorded, not silently swept (row G12)', async () => {
+  const ctx = setup();
+  // A symlink planted in the read-only scratch dir is a sandbox-policy breach
+  // exactly like a stray file, and `cleanScratch` removes it at teardown either
+  // way — so an enumerator that skipped it would delete the evidence and record
+  // nothing. Planted just before the walk, through the run's own git seam.
+  let planted = false;
+  // The reap seam fires after the brain has settled and BEFORE the caller's
+  // scratch walk — the exact window a surviving process would write in.
+  const reapGroup = async () => {
+    if (!planted) {
+      try {
+        fs.symlinkSync('/etc/passwd', path.join(ctx.state, 'dream-scratch', 'EVIL.link'));
+        planted = true;
+      } catch { /* scratch not built yet on an early call */ }
+    }
+    return { reaped: true };
+  };
+  const r = await runDream(ctx, ['--yes'], { opts: { platform: 'linux', reapGroup } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  if (planted) {
+    assert.match(r.output, /EVIL\.link/, 'the symlink is recorded as an out-of-vault violation');
+  }
+  // Non-vacuity for the enumerator itself, which is the half that regressed:
+  // it must return every NON-DIRECTORY entry, not only regular files.
+  const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-enum-'));
+  fs.writeFileSync(path.join(probe, 'plain.json'), '{}');
+  fs.symlinkSync('/etc/passwd', path.join(probe, 'link.json'));
+  fs.mkdirSync(path.join(probe, 'sub'));
+  fs.writeFileSync(path.join(probe, 'sub', 'nested.json'), '{}');
+  const seen = dream.__listFilesRecursive(probe).map((f) => path.relative(probe, f)).sort();
+  assert.deepEqual(seen, ['link.json', 'plain.json', path.join('sub', 'nested.json')].sort(),
+    'the symlink is enumerated alongside the regular files');
+});
