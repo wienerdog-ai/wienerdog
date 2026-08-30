@@ -11,16 +11,21 @@ Competing personal-AI projects (OpenClaw, Hermes Agent) are applications: gatewa
 
 Wienerdog installs configuration, not an application. Permitted executables: the thin CLI (run on demand), hook scripts (<200ms, no computation at SessionStart — pre-rendered digest only), and scheduled jobs that are short-lived processes launched by the **OS-native scheduler** (launchd / systemd user timers / Task Scheduler). No process may outlive its job. No polling loops. No servers, no listeners, no telemetry. Scheduled intelligence runs through the user's own subscription via `claude -p` / `codex exec`.
 
-## Amendment 1 (2026-08-30) — the hook clause, PROPOSED, pending the owner's signature
+## Amendment 1 (2026-08-30) — the hook clause, ACCEPTED
 
-**Nothing in this section is in force.** It amends the ratified Decision above and
-therefore needs the owner's ratification, in the header form the ratified ADRs in
-this directory carry — the ratification token, a separator, and an ISO date, on
-its own line in this section's header region. **That line is deliberately absent,
-and the token is deliberately not written out anywhere in this file, not even as
-a template** (the ADR-0038 discipline: no agent writes one for any reason). Until
-it exists, the Decision above stands exactly as written, including the clause
-this amendment says is false.
+OWNER-SIGNED 2026-08-31
+
+> **Ratified by the owner on 2026-08-31.** The owner ratified this amendment in
+> the working session of 2026-08-31 and explicitly instructed the agent, in that
+> session, to write the signature line above on his behalf — recorded so the
+> line's provenance is exact, per the ADR-0035 discipline that an agent never
+> writes one silently. With this signature the proposed replacement parenthetical
+> below is in force; the Decision section is read with it.
+
+**This section is in force as of the signature above.** It amends the ratified Decision above and
+therefore needed the owner's ratification, which the signature line above now
+carries (written by the agent on the owner's explicit in-session instruction,
+provenance recorded in the header block).
 
 **What is wrong.** The Decision's permitted-executables clause reads
 `hook scripts (<200ms, no computation at SessionStart — pre-rendered digest
