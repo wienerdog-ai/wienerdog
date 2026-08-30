@@ -236,11 +236,13 @@ const MAX_INSPECT_BYTES = 4194304;
 
 /** Descriptor-based bounded read for digestBlockChecks, its only consumer —
  *  the Table C row C2 mechanism of
- *  docs/specs/done/WP-hook-doctor-inspection-read-hardening.md: open
+ *  docs/specs/WP-hook-doctor-inspection-read-hardening.md: open
  *  O_RDONLY|O_NONBLOCK|O_NOCTTY → fstat the SAME descriptor → refuse
  *  non-regular → read to EOF from the same descriptor, stopping at
  *  ceiling + 1 → close. st_size is a cheap over-cap check, never a length
- *  (Table C row C2a); only a clean ENOENT is absence (Table D).
+ *  (Table C row C2a); only a clean OPEN-time ENOENT is absence (Table D) —
+ *  an ENOENT thrown after the open succeeded is a descriptor-lifetime
+ *  anomaly (FUSE/network fs), not path absence, and stays doubt.
  *  @param {string} p
  *  @returns {{kind:'ok', content:string} | {kind:'absent'} | {kind:'nonregular'}
  *    | {kind:'overcap', size:number|null} | {kind:'unreadable', code:string}} */
@@ -248,6 +250,11 @@ function inspectRegular(p) {
   let fd = null;
   try {
     fd = fs.openSync(p, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOCTTY);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { kind: 'absent' };
+    return { kind: 'unreadable', code: (err && err.code) || 'unknown error' };
+  }
+  try {
     const st = fs.fstatSync(fd);
     if (!st.isFile()) return { kind: 'nonregular' };
     if (st.size > MAX_INSPECT_BYTES) return { kind: 'overcap', size: st.size };
@@ -263,12 +270,11 @@ function inspectRegular(p) {
     if (off > MAX_INSPECT_BYTES) return { kind: 'overcap', size: null };
     return { kind: 'ok', content: buf.subarray(0, off).toString('utf8') };
   } catch (err) {
-    if (err && err.code === 'ENOENT') return { kind: 'absent' };
+    // Post-open failures are doubt regardless of code: the path resolved, so
+    // even an ENOENT here is not the clean absence Table D row D-E1 means.
     return { kind: 'unreadable', code: (err && err.code) || 'unknown error' };
   } finally {
-    if (fd !== null) {
-      try { fs.closeSync(fd); } catch { /* ignore */ }
-    }
+    try { fs.closeSync(fd); } catch { /* ignore */ }
   }
 }
 

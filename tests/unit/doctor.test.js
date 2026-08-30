@@ -1461,3 +1461,125 @@ test('doctor structural: only a clean ENOENT is absence; the reader is descripto
   assert.match(src, /fstatSync\(fd\)/, 'fstat on the SAME descriptor');
   assert.match(src, /isFile\(\)/, 'non-regular refusal');
 });
+
+// ---- Post-open ENOENT is doubt, not absence (Codex gate FIX 1) --------------
+// Only an OPEN-time ENOENT is the clean path-absence Table D row D-E1 means.
+// An ENOENT thrown by fstat or read AFTER the open succeeded (FUSE/network
+// fs, descriptor-lifetime anomalies) must land in the doubt arm: the digest
+// warns instead of going silent, and a target warns instead of the confident
+// "no Wienerdog block … run 'wienerdog sync'". The shim injects the errno at
+// a chosen phase on descriptors opened on one path, and can also drop a
+// marker file whenever content is actually read from a watched path.
+
+/** Env additions arming the phase-error / read-marker shim.
+ *  @param {{root:string, env:NodeJS.ProcessEnv}} w
+ *  @param {{errPath?:string, errPhase?:'fstat'|'read', errCode?:string,
+ *           markPath?:string, markOut?:string}} opts */
+function phaseShimEnv(w, opts) {
+  const shim = path.join(w.root, 'phase-shim.js');
+  fs.writeFileSync(shim, [
+    "'use strict';",
+    'const fs = require("fs");',
+    'const errPath = process.env.WD_ERR_PATH;',
+    'const errPhase = process.env.WD_ERR_PHASE;',
+    'const errCode = process.env.WD_ERR_CODE || "ENOENT";',
+    'const markPath = process.env.WD_READMARK_PATH;',
+    'const markOut = process.env.WD_READMARK_OUT;',
+    'const realOpen = fs.openSync;',
+    'const errFds = new Set();',
+    'const markFds = new Set();',
+    'fs.openSync = function (p, ...rest) {',
+    '  const fd = realOpen.call(fs, p, ...rest);',
+    '  try {',
+    '    if (errPath && String(p) === errPath) errFds.add(fd);',
+    '    if (markPath && String(p) === markPath) markFds.add(fd);',
+    '  } catch (e) { /* ignore */ }',
+    '  return fd;',
+    '};',
+    'const realFstat = fs.fstatSync;',
+    'fs.fstatSync = function (fd, ...rest) {',
+    '  if (errPhase === "fstat" && errFds.has(fd)) {',
+    '    const e = new Error(errCode + " injected at fstat"); e.code = errCode; throw e;',
+    '  }',
+    '  return realFstat.call(fs, fd, ...rest);',
+    '};',
+    'const realRead = fs.readSync;',
+    'fs.readSync = function (fd, ...rest) {',
+    '  if (markFds.has(fd) && markOut) fs.appendFileSync(markOut, "content-read\\n");',
+    '  if (errPhase === "read" && errFds.has(fd)) {',
+    '    const e = new Error(errCode + " injected at read"); e.code = errCode; throw e;',
+    '  }',
+    '  return realRead.call(fs, fd, ...rest);',
+    '};',
+    'const realClose = fs.closeSync;',
+    'fs.closeSync = function (fd) { errFds.delete(fd); markFds.delete(fd); return realClose.call(fs, fd); };',
+    '',
+  ].join('\n'));
+  const env = { ...w.env, NODE_OPTIONS: `--require ${shim}` };
+  if (opts.errPath) {
+    env.WD_ERR_PATH = opts.errPath;
+    env.WD_ERR_PHASE = opts.errPhase;
+    env.WD_ERR_CODE = opts.errCode || 'ENOENT';
+  }
+  if (opts.markPath) {
+    env.WD_READMARK_PATH = opts.markPath;
+    env.WD_READMARK_OUT = opts.markOut;
+  }
+  return env;
+}
+
+for (const phase of ['fstat', 'read']) {
+  test(`doctor: post-open ENOENT at ${phase} on CLAUDE.md → doubt warn, never the confident no-block message (FIX 1, D-E1/D-E2)`, () => {
+    const w = hardenedWorld();
+    const r = runBounded(['doctor'], phaseShimEnv(w, { errPath: w.claudeMd, errPhase: phase }));
+    assertPromptOk(r);
+    assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — reading it failed (ENOENT)`), r.stdout);
+    assert.doesNotMatch(r.stdout, /no Wienerdog block in/, 'post-open ENOENT must not read as clean absence');
+  });
+
+  test(`doctor: post-open ENOENT at ${phase} on digest.md → B9 doubt warn, not silence, no target inspected (FIX 1)`, () => {
+    const w = hardenedWorld();
+    const r = runBounded(['doctor'], phaseShimEnv(w, { errPath: w.digestPath, errPhase: phase }));
+    assertPromptOk(r);
+    assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.digestPath} — reading it failed (ENOENT)`), r.stdout);
+    assert.doesNotMatch(r.stdout, /Wienerdog block in/, 'no target may be inspected without a trustworthy digest');
+  });
+}
+
+// ---- The over-cap fast path reads ZERO content bytes (Codex gate FIX 2) -----
+// The marker control first proves the shim sees ordinary content reads; the
+// over-cap runs then prove the fast path performs none.
+
+test('doctor: read-marker control — a normal target read IS observed by the shim (FIX 2 fixture sanity)', () => {
+  const w = hardenedWorld();
+  const mark = path.join(w.root, 'read-marker.log');
+  const r = runBounded(['doctor'], phaseShimEnv(w, { markPath: w.claudeMd, markOut: mark }));
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[ok] the Wienerdog block in ${w.claudeMd} matches the current digest`), r.stdout);
+  assert.ok(fs.existsSync(mark), 'the shim must record content reads on an inspected target');
+});
+
+test('doctor: over-cap CLAUDE.md fast path → B5 warn with st_size and ZERO content reads (FIX 2, A-H7 fast tier)', () => {
+  const w = hardenedWorld();
+  const size = CEILING + 7;
+  fs.writeFileSync(w.claudeMd, 'x'.repeat(size));
+  const mark = path.join(w.root, 'read-marker.log');
+  const r = runBounded(['doctor'], phaseShimEnv(w, { markPath: w.claudeMd, markOut: mark }));
+  assertPromptOk(r);
+  const line = r.stdout.split('\n').find((l) => l.includes('too large to inspect'));
+  assert.ok(line && line.includes(`${size} bytes`), r.stdout);
+  assert.ok(!fs.existsSync(mark), 'the fast path must refuse with zero content bytes read');
+});
+
+test('doctor: over-cap digest.md fast path → B9 warn and ZERO content reads of the digest (FIX 2)', () => {
+  const w = hardenedWorld();
+  fs.writeFileSync(w.digestPath, 'x'.repeat(CEILING + 1));
+  const mark = path.join(w.root, 'read-marker.log');
+  const r = runBounded(['doctor'], phaseShimEnv(w, { markPath: w.digestPath, markOut: mark }));
+  assertPromptOk(r);
+  assert.ok(
+    r.stdout.includes(`[warn] cannot inspect ${w.digestPath} — it is larger than the ${CEILING}-byte inspection ceiling`),
+    r.stdout
+  );
+  assert.ok(!fs.existsSync(mark), 'the digest fast path must refuse with zero content bytes read');
+});
