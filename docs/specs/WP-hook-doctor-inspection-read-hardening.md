@@ -72,7 +72,8 @@ against the current **digest** (`<core>/state/digest.md`):
   silent when every present harness's block already carries the same bytes and
   injects the digest otherwise (ADR-0039);
 - **`wienerdog doctor`**'s `digestBlockChecks`, which reports the same
-  comparison as an `[ok]`/`[warn]` line and never mutates.
+  comparison as an `[ok]`/`[warn]` line. Its read, memory and mutation
+  properties are Table B's — rows B6, B7 and B8 — not this paragraph's.
 
 Both were shipped assuming the paths they read are ordinary regular files of
 ordinary size. Neither assumption is enforced, and both are attacker-free
@@ -313,8 +314,10 @@ asserting 128 when the payload had grown to 138.
 # Wienerdog SessionStart hook (enrichment, not capture): injects the
 # pre-rendered digest into a new session. Several preconditions are silent by
 # design and come first: the WIENERDOG_JOB guard, a usable core path and node,
-# and a digest that is present, regular and readable. ONCE THOSE HAVE PASSED,
-# silence has exactly one remaining case: at least one harness is present AND
+# and the digest preconditions of Table A rows A-H10/A-H11 — which this comment
+# points at rather than enumerating, because an earlier enumeration omitted the
+# size gate and was wrong. ONCE THOSE HAVE PASSED, silence has exactly one
+# remaining case: at least one harness is present AND
 # every present harness CLAUDE.md / AGENTS.md already carries exactly these
 # bytes. Every other state injects — including no harness present at all
 # (ADR-0039). Fast: a few small descriptor
@@ -739,17 +742,21 @@ universal the mechanism does not earn.
   single place their shared facts are decided.** Extract when a third consumer
   appears — mechanical then, speculative now.
 - **What the duplication does and does not guarantee.** *Structurally
-  guaranteed:* Table A's rows A-H5, A-H6 and A-H7 send every hook-side refusal to
-  `inject`, and the script realises that by returning `null` from every refusal
-  path, so a hook-side reader bug cannot produce silence. The guarantee is Table
-  A's; this note names the code shape that implements it and claims nothing
-  further. *Convention, not structure:* the two
-  readers agreeing with each other. Round 4 falsified the earlier claim that the
-  hook can only become more permissive "by editing the hook" — **doctor-side
-  drift produces the same divergence**: tighten doctor's ceiling or its symlink
-  policy and the hook is instantly the more permissive of the two, with no hook
-  edit at all. Tables C and D are what keep them aligned, and they are a
-  discipline, not a mechanism.
+  guaranteed, and no wider:* **a `null` from the reader reaches `inject`.** The
+  call sites are the whole guarantee — `carries()` returns `false` on `null`, and
+  a `false` clears `allCarry`, so no refusal the reader *reports* can be
+  swallowed downstream. *NOT guaranteed:* that the reader reports one. **A reader
+  bug that FABRICATES content instead of returning `null` produces silence, and
+  round 5 proved it by mutation** — the non-regular refusal branch changed to
+  return the expected block turned a 120-byte injection into 0 bytes on a FIFO
+  target. That class is covered by the Table E gates and the AC2/AC5 fixtures,
+  **by testing, not by structure**, and saying otherwise was the defect in
+  revision 4's wording. *Convention, not structure:* the two readers agreeing
+  with each other. Round 4 also falsified the claim that the hook can only become
+  more permissive "by editing the hook" — **doctor-side drift produces the same
+  divergence**: tighten doctor's ceiling or its symlink policy and the hook is
+  instantly the more permissive of the two, with no hook edit at all. Tables C
+  and D are what keep them aligned, and they are a discipline, not a mechanism.
 - **Do not add a timeout, a retry, or a signal handler.** The fix for a blocking
   read is to *not block*: `O_NONBLOCK` plus a type check. A timeout would still
   have opened the FIFO, and it would be a process outliving its decision.
@@ -793,7 +800,7 @@ timeout-bounded child** — `spawnSync`/`execFileSync` with an explicit `timeout
 plus an assertion that it **did not** time out. A bare call would hang the suite
 instead of failing it (round 1 finding 8).
 
-- [ ] **AC1 (A-H2, A-H3, A-H4, D-E1…D-E8):** the hook injects whenever a harness
+- [ ] **AC1 (A-H2, A-H3, A-H4; Table D rows D-E1, D-E2, D-E3, D-E4, D-E5, D-E6, D-E7, D-E8):** the hook injects whenever a harness
       directory's `stat` fails with anything but a clean `ENOENT`, and treats only
       `ENOENT` as absence — **including the dual-harness case that is a real wrong
       silence today** (one harness fresh, the other's dir erroring). Deterministic
@@ -808,9 +815,15 @@ instead of failing it (round 1 finding 8).
 - [ ] **AC4 (C3, acceptance regression):** a target that is a **symlink to a
       regular file** carrying a fresh block still **silences** the hook, and is
       still inspected by doctor. The guard must not over-refuse.
-- [ ] **AC5 (A-H1, A-H7, A-H9, A-H10):** unchanged rows stay unchanged — fresh
-      block silences, over-ceiling injects with no content read, zero harnesses
-      inject, and an absent/non-regular `digest.md` stays silent.
+- [ ] **AC5 (A-H1, A-H7, A-H9, A-H10; Table C rows C2, C2b):** unchanged rows stay unchanged — fresh
+      block silences, zero harnesses inject, and an absent / non-regular /
+      over-ceiling `digest.md` stays silent. **Over-ceiling targets inject on
+      both A-H7 tiers, and both are exercised:** the **fast path**, where
+      `st_size` exceeds the ceiling and injection happens with **zero content
+      bytes read**; and the **slow path**, where an `st_size`-underreporting file
+      passes the fast check and its over-cap emerges from the `ceiling + 1`
+      bounded read. *An earlier revision asserted "no content read" universally
+      here, which is false on the slow path — round 5 caught the stale mirror.*
 - [ ] **AC6 (B2, B3, B8):** `doctor` warns and **exits** on a non-regular target
       and on a non-`ENOENT` open failure; the child does not time out. Today it
       hangs indefinitely (alive at 15 s, killed).
@@ -843,7 +856,7 @@ instead of failing it (round 1 finding 8).
       passes **byte-unchanged**.
 - [ ] **AC12 (C1, C4):** both homes of the ceiling carry the same number; a grep
       proves it.
-- [ ] **AC13 (Table E):** the fail-open contract has its canonical table here, the
+- [ ] **AC13 (Table E rows E1, E2, E3, E4, E5, E6a, E6b, E6c; E7 is stated non-greppable by its own row and is discharged by Tables A and D, not by a gate):** the fail-open contract has its canonical table here, the
       shipped script header **cites it by name**, **all eight** verification
       gates run (E1–E5 and E6a–E6c; E6 became three when round 2 found the
       single gate vacuous), and `hooks-fail-open.test.js`'s header is recorded as
@@ -877,7 +890,7 @@ instead of failing it (round 1 finding 8).
       cannot produce one, the criterion is discharged by showing the read loop
       terminates on EOF rather than on `st_size` and saying which platform could
       not be exercised.
-- [ ] **AC17 (C2c, layered defense):** the `-f` pre-filter is present in the
+- [ ] **AC17 (C2c layered defense; A-H11 the at-rest rejection; C2 the mechanism):** the `-f` pre-filter is present in the
       scaffold **and** is proven non-authoritative — a path that passes `-f` and
       is then non-regular at `fstat` is still refused. `O_NOCTTY` is present in
       both readers' flags, and a grep proves it. **AC4's symlink → regular
@@ -958,6 +971,40 @@ grep -n "writeFileSync\|mkdirSync\|chmodSync\|rmSync\|unlinkSync" src/cli/doctor
 
 # The landed quarantine WP's DOCTOR DISCIPLINE gate, verbatim from
 # docs/specs/done/WP-doctor-quarantine-counts.md, must still print OK.
+
+# Universal-claim sweep over THIS spec. Prints a classification table; a review
+# round DIFFS the table instead of rebuilding it, and the table is only worth
+# diffing because this command regenerates it. Every row outside the canonical
+# and registered buckets must be a reference or a record — never a self-claim.
+node -e '
+const fs=require("fs");
+const L=fs.readFileSync(process.argv[1],"utf8").split("\n");
+const U=/\b(never|always|cannot|can never|only|at most|exactly|impossible)\b/i;
+const D=/\b(block|blocks|blocking|swap|swapped|resident|memory|RSS|ceiling|probe|read|reads|inject|injects|silence|silent|mutat|open|descriptor|device|FIFO)\b/i;
+const a=L.findIndex((l)=>l.trim()==="#!/usr/bin/env bash");
+const b=L.findIndex((l,i)=>i>a && l.trim()==="```");
+let z=null; const Z=[];
+for (const l of L){const t=l.trim();
+  if(/^\*\*The memory contract \(row B7\)/.test(t)) z="B7";
+  else if(/^## Residuals/.test(t)) z="residuals";
+  else if(/^## /.test(t)&&z==="residuals") z=null;
+  else if(/^### /.test(t)&&z==="B7") z=null;
+  Z.push(z);}
+const m=new Map(); const add=(k,i)=>{if(!m.has(k))m.set(k,[]);m.get(k).push(i+1);};
+L.forEach((raw,i)=>{const t=raw.trim();
+  if(!U.test(t)||!D.test(t))return;
+  if(a>=0&&i>=a&&i<=b) return add("registered in-code surface (embedded script)",i);
+  if(t.startsWith("|")) return add("canonical table row",i);
+  if(t.startsWith(">")) return add("historical / round record",i);
+  if(t.startsWith("/**")||/^\*\s/.test(t)) return add("registered in-code surface (doctor JSDoc)",i);
+  if(/^- \[ \]/.test(t)) return add("acceptance criterion / checklist",i);
+  if(/^(grep|test -f|node -e|H=|npm|git|#)/.test(t)) return add("verification command",i);
+  if(Z[i]) return add("canonical prose ("+Z[i]+")",i);
+  return add("prose",i);});
+let n=0; console.log("| classification | count | lines |"); console.log("|---|---|---|");
+for(const [k,v] of m){n+=v.length; console.log(`| ${k} | ${v.length} | ${v.join(", ")} |`);}
+console.log(`| **TOTAL** | **${n}** | |`);
+' docs/specs/WP-hook-doctor-inspection-read-hardening.md
 ```
 
 Two measurements are taken by hand and pasted, because no unit test asserts
