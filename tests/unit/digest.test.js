@@ -450,7 +450,7 @@ test('renderDigest truncates over-MAX_LINES content at a line boundary with the 
     `expected <= ${DigestCaps.MAX_LINES + 1} lines (cap + marker), got ${lines.length}`
   );
   assert.equal(lines[lines.length - 1], DigestCaps.TRUNCATION_MARKER, 'last line is the marker');
-  // Line-boundary safety: every kept "- item N" line is verbatim from the source
+  // Line-boundary safety: every kept "- i N" line is verbatim from the source
   // (never a partial line split mid-content).
   for (const l of lines) {
     if (l.startsWith('- i ')) assert.ok(items.includes(l), `unexpected partial line: ${JSON.stringify(l)}`);
@@ -1362,9 +1362,8 @@ test('AC4 — under cap pressure WITH a daily entry, both caps hold and the mark
   // Fill ALL FOUR identity notes, not just one: each is capped to
   // MAX_NOTE_BYTES (8 KiB) before it joins the digest, so one fat note can
   // never approach the 32 KiB whole-digest ceiling. Enough short lines per
-  // note that the LINE cap is what trims — measured ~24.5 KiB of 32 KiB
-  // here. See the note below on
-  // why the byte path still cannot be driven all the way.
+  // note that the LINE cap is what trims — measured ~24.5 KiB of 32 KiB here.
+  // See the note below on why the byte path still cannot be driven all the way.
   for (const f of ['profile.md', 'preferences.md', 'goals.md', 'instructions.md']) {
     const note = path.join(tmp, '06-Identity', f);
     const bulk = Array.from({ length: 110 }, (_, i) => `- ${f}-${i} ${'x'.repeat(50)}`).join('\n');
