@@ -719,3 +719,345 @@ test('doctor: a MISSING secrets directory still hard-fails (exit 1) (WP-a9 keeps
   assert.equal(r.status, 1);
   assert.match(r.stdout, /\[fail\] secrets directory missing/);
 });
+
+// --- Quarantine counts (WP-doctor-quarantine-counts) ------------------------
+
+/** Write a fixed ledger under <core>/state/transcript-ledger.json.
+ *  @param {string} core @param {Record<string, object>} files */
+function seedLedger(core, files) {
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(stateDir, 'transcript-ledger.json'),
+    JSON.stringify({ version: 1, baseline_mtime: { claude: null, codex: null }, files }, null, 2)
+  );
+}
+
+/** A single quarantined ledger record for `reason`. @param {string|undefined} [reason] */
+function quarantinedRecord(reason) {
+  const rec = { fingerprint: '1:1:1:1', outcome: 'quarantined', updated_at: '2026-01-01T00:00:00.000Z', harness: 'codex' };
+  if (reason !== undefined) rec.reason = reason;
+  return rec;
+}
+
+test('doctor: no ledger file → exactly the ok line, no pointer, exit 0', () => {
+  const { env } = tempEnv();
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] no session transcripts are being skipped$/m);
+  assert.doesNotMatch(r.stdout, /which sessions, and why/);
+});
+
+test('doctor: an empty ledger → the ok line, no pointer, exit 0', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {});
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] no session transcripts are being skipped$/m);
+  assert.doesNotMatch(r.stdout, /which sessions, and why/);
+});
+
+test('doctor: a corrupt (non-JSON) ledger → the ok line, no pointer, exit 0', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'transcript-ledger.json'), '{ not valid json');
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] no session transcripts are being skipped$/m);
+  assert.doesNotMatch(r.stdout, /which sessions, and why/);
+});
+
+test('doctor: a ledger holding only processed/deferred records → the ok line, no pointer', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {
+    '/a/processed.jsonl': { fingerprint: '1:1:1:1', outcome: 'processed', updated_at: 'now', harness: 'codex' },
+    '/a/deferred.jsonl': {
+      fingerprint: '1:1:1:1',
+      outcome: 'deferred',
+      reason: 'secret-revert',
+      deferrals: 1,
+      updated_at: 'now',
+      harness: 'codex',
+    },
+  });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] no session transcripts are being skipped$/m);
+  assert.doesNotMatch(r.stdout, /which sessions, and why/);
+});
+
+test('doctor: every Table A reason class renders its exact message, in row order, with exact counts, zero-member groups omitted, and no name ever leaks', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  // A hostile key: newline, a callout, an ANSI escape, `..`, a path separator.
+  // quarantineReport never reads ledger KEYS at all (only outcome/reason), so
+  // this must not surface in any form.
+  const hostileKey = 'evil\n> [!warning] pwn\x1b[31m/../traversal' + path.sep + 'x';
+  seedLedger(core, {
+    '/a/oc1.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/oc2.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/oc3.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/tml1.jsonl': quarantinedRecord('too-many-lines'),
+    '/a/re1.jsonl': quarantinedRecord('read-error'),
+    '/a/re2.jsonl': quarantinedRecord('read-error'),
+    '/a/sre1.jsonl': quarantinedRecord('secret-revert-exhausted'),
+    [hostileKey]: quarantinedRecord('some-unrecognized-future-reason'),
+    '/a/missing-reason.jsonl': quarantinedRecord(undefined),
+    '/a/nonstring-reason.jsonl': (() => {
+      const rec = quarantinedRecord(undefined);
+      rec.reason = 42;
+      return rec;
+    })(),
+  });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const idxOC = lines.findIndex((l) => l.includes('the session file is bigger than Wienerdog will read'));
+  const idxTML = lines.findIndex((l) => l.includes('the session file has too many lines to read'));
+  const idxRE = lines.findIndex((l) => l.includes('the session file could not be read'));
+  const idxSRE = lines.findIndex((l) => l.includes('withheld by the secret check too many times in a row'));
+  const idxUnrec = lines.findIndex((l) => l.includes('are being skipped for a reason this version does not recognize'));
+  assert.ok([idxOC, idxTML, idxRE, idxSRE, idxUnrec].every((i) => i >= 0), r.stdout);
+  assert.ok(idxOC < idxTML && idxTML < idxRE && idxRE < idxSRE && idxSRE < idxUnrec, `Table A row order violated:\n${r.stdout}`);
+  assert.equal(lines[idxOC], '[warn] 3 session transcript(s) are being skipped: the session file is bigger than Wienerdog will read');
+  assert.equal(lines[idxTML], '[warn] 1 session transcript(s) are being skipped: the session file has too many lines to read');
+  assert.equal(lines[idxRE], '[warn] 2 session transcript(s) are being skipped: the session file could not be read');
+  assert.equal(
+    lines[idxSRE],
+    '[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. The withheld copies are in state/quarantine/.'
+  );
+  // hostile key (unrecognized reason) + missing reason + non-string reason = 3
+  assert.equal(lines[idxUnrec], '[warn] 3 session transcript(s) are being skipped for a reason this version does not recognize');
+  assert.doesNotMatch(r.stdout, /evil|pwn|traversal|some-unrecognized-future-reason|oc1\.jsonl|missing-reason|nonstring-reason/);
+  assert.doesNotMatch(r.stdout, /\x1b\[31m/);
+});
+
+test('doctor: counts come from the ledger, never from a stale/hand-edited/empty reports/warnings.md', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  seedLedger(core, {
+    '/a/oc1.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/oc2.jsonl': quarantinedRecord('over-ceiling'),
+  });
+  const vaultDir = path.join(root, 'vault');
+  fs.writeFileSync(path.join(vaultDir, 'reports', 'warnings.md'), ''); // stale/empty, disagrees with the ledger
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[warn\] 2 session transcript\(s\) are being skipped: the session file is bigger than Wienerdog will read$/m);
+});
+
+test('doctor: the pointer takes the info branch when reports/warnings.md is a readable non-symlink regular file, and renders exactly once', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+  const vaultDir = path.join(root, 'vault');
+  fs.writeFileSync(path.join(vaultDir, 'reports', 'warnings.md'), '# warnings');
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[info\] which sessions, and why: reports\/warnings\.md in your vault$/m);
+  assert.equal(
+    r.stdout.split('\n').filter((l) => l.includes('which sessions, and why')).length,
+    1,
+    'the pointer line must render exactly once'
+  );
+});
+
+test('doctor: the pointer warns when reports/warnings.md is absent (vault configured)', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /\[info\] which sessions/);
+  assert.match(
+    r.stdout,
+    /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet; the next dream run writes it$/m
+  );
+});
+
+test('doctor: the pointer warns when no vault is configured yet (vaultPath is null)', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /\[info\] which sessions/);
+  assert.match(
+    r.stdout,
+    /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet; the next dream run writes it$/m
+  );
+});
+
+test('doctor: the pointer warns when reports/warnings.md is a directory, not a file', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+  const vaultDir = path.join(root, 'vault');
+  fs.rmSync(path.join(vaultDir, 'reports', 'warnings.md'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(vaultDir, 'reports', 'warnings.md'), { recursive: true });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /\[info\] which sessions/);
+  assert.match(r.stdout, /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet/m);
+});
+
+test(
+  'doctor: the pinned probe warns (never [info]) when reports/warnings.md is a symlink to a good file elsewhere (case a)',
+  { skip: process.platform === 'win32' ? 'symlink test is POSIX-only' : false },
+  () => {
+    const { root, core, env } = tempEnv();
+    run(['init', '--fresh-vault', '--yes'], env);
+    seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+    const vaultDir = path.join(root, 'vault');
+    const target = path.join(vaultDir, 'reports', 'warnings.md');
+    fs.rmSync(target, { recursive: true, force: true });
+    const elsewhere = path.join(root, 'elsewhere-warnings.md');
+    fs.writeFileSync(elsewhere, '# real content, elsewhere');
+    fs.symlinkSync(elsewhere, target);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /\[info\]/, 'a symlink to a good file must not be blessed as the trusted pointer');
+    assert.match(r.stdout, /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet/m);
+  }
+);
+
+test(
+  'doctor: the pinned probe warns (never [info]) when reports/warnings.md is a dangling symlink (case b)',
+  { skip: process.platform === 'win32' ? 'symlink test is POSIX-only' : false },
+  () => {
+    const { root, core, env } = tempEnv();
+    run(['init', '--fresh-vault', '--yes'], env);
+    seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+    const vaultDir = path.join(root, 'vault');
+    const target = path.join(vaultDir, 'reports', 'warnings.md');
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.symlinkSync(path.join(root, 'nowhere', 'gone.md'), target);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /\[info\]/, 'a dangling symlink must not be blessed as the trusted pointer');
+    assert.match(r.stdout, /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet/m);
+  }
+);
+
+test(
+  'doctor: the pinned probe warns (never [info]) when reports/warnings.md will not open for reading (case c)',
+  { skip: process.platform === 'win32' ? 'chmod 000 is POSIX-only' : false },
+  (t) => {
+    const { root, core, env } = tempEnv();
+    run(['init', '--fresh-vault', '--yes'], env);
+    seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+    const vaultDir = path.join(root, 'vault');
+    const target = path.join(vaultDir, 'reports', 'warnings.md');
+    fs.writeFileSync(target, '# warnings');
+    fs.chmodSync(target, 0o000);
+    let stillOpens = false;
+    try {
+      fs.closeSync(fs.openSync(target, 'r'));
+      stillOpens = true;
+    } catch {
+      stillOpens = false;
+    }
+    if (stillOpens) {
+      fs.chmodSync(target, 0o644);
+      t.skip('this process can read a chmod 000 file (root, or a permissive filesystem) — cannot deny the owner here');
+      return;
+    }
+    const r = run(['doctor'], env);
+    fs.chmodSync(target, 0o644); // restore for cleanup
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /\[info\]/, 'an unreadable file must not be blessed as the trusted pointer');
+    assert.match(r.stdout, /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet/m);
+  }
+);
+
+test(
+  'doctor: the pinned probe warns (never [info]) when reports/warnings.md is reached through a symlinked parent directory (case d)',
+  { skip: process.platform === 'win32' ? 'symlink test is POSIX-only' : false },
+  () => {
+    const { root, core, env } = tempEnv();
+    run(['init', '--fresh-vault', '--yes'], env);
+    seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
+    const vaultDir = path.join(root, 'vault');
+    const reportsPath = path.join(vaultDir, 'reports');
+    fs.rmSync(reportsPath, { recursive: true, force: true });
+    const outside = path.join(root, 'outside-reports');
+    fs.mkdirSync(outside, { recursive: true });
+    fs.writeFileSync(path.join(outside, 'warnings.md'), '# real, but reached through a redirected parent');
+    fs.symlinkSync(outside, reportsPath);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /\[info\]/, 'a symlinked reports/ directory must not be blessed as the trusted pointer, even though the leaf itself is an ordinary readable file');
+    assert.match(r.stdout, /^\[warn\] which sessions, and why: reports\/warnings\.md in your vault — that file is not there yet/m);
+  }
+);
+
+test('doctor: the quarantine group never fails and never mutates; running it twice creates nothing', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  seedLedger(core, {
+    '/a/oc1.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/re1.jsonl': quarantinedRecord('read-error'),
+  });
+  const ledgerPath = path.join(core, 'state', 'transcript-ledger.json');
+  const before = fs.readFileSync(ledgerPath);
+  const vaultDir = path.join(root, 'vault');
+  const warningsPath = path.join(vaultDir, 'reports', 'warnings.md');
+  assert.ok(!fs.existsSync(warningsPath), 'sanity: warnings.md does not exist yet');
+
+  const r1 = run(['doctor'], env);
+  const r2 = run(['doctor'], env);
+  assert.equal(r1.status, 0);
+  assert.equal(r2.status, 0);
+  assert.doesNotMatch(r1.stdout, /\[fail\]/);
+  assert.deepEqual(fs.readFileSync(ledgerPath), before, 'doctor must never mutate the ledger');
+  assert.ok(!fs.existsSync(warningsPath), 'doctor must never create reports/warnings.md');
+});
+
+test('doctor: every quarantine-report line matches the doctor grammar — no headings, no blank lines, no indentation', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {
+    '/a/oc1.jsonl': quarantinedRecord('over-ceiling'),
+    '/a/tml1.jsonl': quarantinedRecord('too-many-lines'),
+    '/a/re1.jsonl': quarantinedRecord('read-error'),
+    '/a/sre1.jsonl': quarantinedRecord('secret-revert-exhausted'),
+  });
+  const r = run(['doctor'], env);
+  const lines = r.stdout.replace(/\n$/, '').split('\n');
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    assert.match(line, /^\[(ok|warn|info)\] /, `line violates the doctor grammar: ${JSON.stringify(line)}`);
+  }
+  // The unrecognized-reason class has zero members here: it must not print a
+  // zero-count line, and exactly the four seeded classes render.
+  assert.doesNotMatch(r.stdout, /does not recognize/);
+  assert.equal(lines.filter((l) => l.includes('are being skipped')).length, 4);
+});
+
+test('doctor: the quarantine group sits immediately after Google readiness and immediately before the update notice', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  plantDamagedToken(core, 'not json');
+  seedNewerVersion(core);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const idxGoogle = lines.findIndex((l) => l.includes('Google sign-in file looks damaged'));
+  const idxOk = lines.findIndex((l) => l === '[ok] no session transcripts are being skipped');
+  const idxUpdate = lines.findIndex((l) => l.includes('a newer Wienerdog is available'));
+  assert.ok(idxGoogle >= 0 && idxOk >= 0 && idxUpdate >= 0, r.stdout);
+  assert.equal(idxOk, idxGoogle + 1, `quarantine group must sit immediately after Google readiness, got:\n${r.stdout}`);
+  assert.equal(idxUpdate, idxOk + 1, `update notice must sit immediately after the quarantine group, got:\n${r.stdout}`);
+  // Pre-existing lines are still present and unchanged shape (byte-identical
+  // messages) when there are no quarantines: the vault-deferred warn, the
+  // manifest/config/core [ok] lines, and the harness summary.
+  assert.match(r.stdout, /^\[ok\] core directory exists \(/m);
+  assert.match(r.stdout, /^\[ok\] install manifest parses$/m);
+  assert.match(r.stdout, /^\[ok\] config\.yaml exists and is non-empty$/m);
+  assert.match(r.stdout, /^\[warn\] no memory vault yet — run \/wienerdog-setup/m);
+});
