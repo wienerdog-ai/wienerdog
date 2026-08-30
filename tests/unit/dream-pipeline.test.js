@@ -1117,3 +1117,34 @@ test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed f
   assert.ok(!r.output.includes('client_secret: abcdefghijkl'), 'raw prefix-shaped secret leaked');
   assert.match(r.output, /token_abcdefghijkl|REDACTED/, 'and the neutralised form is present — non-vacuity');
 });
+
+test('dream-pipeline: a staged DELETION and a staged MODE change both survive the index refresh (row G8)', async () => {
+  const ctx = setup();
+  const noteRel = '03-Resources/valid-note.md';
+  const idRel = '06-Identity/valid-identity.md';
+  // Both paths this run promotes already exist in the vault, so the user can
+  // have staged something of their own at each.
+  writeFile(ctx.vault, noteRel, 'the user had a version here\n');
+  writeFile(ctx.vault, idRel, 'and one here\n');
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'user versions']);
+
+  // (a) a staged DELETION — no index entry at all, which a blob-sha comparison
+  //     reads as "nothing staged" and refreshes straight over.
+  git(ctx.vault, ['rm', '-q', '--cached', noteRel]);
+  // (b) a staged MODE-ONLY change — the blob sha is unchanged, so a blob-sha
+  //     comparison reads agreement and overwrites 100755 with 100644.
+  git(ctx.vault, ['update-index', '--chmod=+x', idRel]);
+  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'precondition: the mode is staged');
+
+  const r = await runDream(ctx);
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  // (a) the staged deletion is STILL staged — the run did not resurrect the path
+  //     in the user's index.
+  assert.equal(git(ctx.vault, ['ls-files', '--stage', noteRel]).trim(), '', 'the staged deletion survives');
+  // (b) the staged mode is STILL 100755.
+  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'the staged mode survives');
+  // And the commit itself is unaffected — the dream's decided bytes still landed.
+  assert.ok(headBytes(ctx.vault, noteRel).toString('utf8').includes('A legitimately-learned resource note.'));
+});

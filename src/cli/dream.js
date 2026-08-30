@@ -285,14 +285,34 @@ function commitNamedSet(o) {
     // that landed after the publish, or the code-owned warnings file this commit
     // renders without writing — shows up as exactly what it is: an uncommitted
     // working-tree modification, neither committed nor discarded.
+    // THE WHOLE INDEX ENTRY, NOT ITS BLOB. Comparing only the sha was measured to
+    // lose two shapes of the user's staged work: a staged DELETION has no index
+    // entry at all (so a sha check sees `null` and refreshes over it), and a
+    // staged MODE change keeps the same sha (so a sha check sees agreement and
+    // overwrites 100755 with 100644). Presence and mode are staged state too.
+    /** `<mode> <sha> <stage>\t<path>` → `<mode> <sha>`, or null when absent. */
+    const entryOf = (out) => {
+      const t = String(out || '').trim();
+      if (t === '') return null;
+      const f = t.split(/\s+/);
+      return `${f[0]} ${f[1]}`;
+    };
     for (const e of entries) {
-      const staged = g(['ls-files', '--stage', '--', e.rel], { allowFail: true });
-      const stagedSha = String(staged.stdout || '').trim().split(/\s+/)[1] || null;
-      const atOldHead = g(['rev-parse', `${head}:${e.rel}`], { allowFail: true });
-      const oldSha = atOldHead.status === 0 ? String(atOldHead.stdout).trim() : null;
-      // The index still describes the old HEAD for this path (or held nothing at
-      // all) → safe to move it forward. Otherwise it holds the USER's own work.
-      if (stagedSha !== null && stagedSha !== oldSha) continue;
+      const idx = entryOf(g(['ls-files', '--stage', '--', e.rel], { allowFail: true }).stdout);
+      const atHead = g(['ls-tree', head, '--', e.rel], { allowFail: true });
+      const old = atHead.status === 0 ? entryOf(atHead.stdout) : null;
+      // Refresh ONLY where the index still describes the old HEAD exactly —
+      // including both being absent, which is the ordinary case for a path this
+      // run added. Any divergence is the user's own staged state and it stands;
+      // `git status` then shows their staged change against the new HEAD, which
+      // is the truth.
+      //
+      // NAMED RESIDUAL, stated rather than hidden: the compare and the update are
+      // two commands, so a `git add` landing between them is still overwritten.
+      // Git offers no compare-and-swap on the index, so this narrows the window
+      // rather than closing it — the same component-swap class this program
+      // already carries as a residual on its write primitive.
+      if (idx !== old) continue;
       const upd = g(['update-index', '--add', '--cacheinfo', e.mode, e.sha, e.rel], { allowFail: true });
       if (upd.status !== 0) {
         // NEVER SILENT. `update-ref` has already moved HEAD, so a failure here —
