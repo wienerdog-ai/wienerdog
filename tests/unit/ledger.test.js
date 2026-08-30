@@ -223,6 +223,54 @@ test('ledger: displayName is the shared sanitizer (folded + whitelisted) for ban
   assert.equal(ledgerLib.displayName('/tmp/proj/normal-name_1.2.jsonl'), 'normal-name_1.2.jsonl');
 });
 
+// ---- quarantineSizeBytes (WP-quarantine-warnings-file) ----
+
+test('ledger: quarantineSizeBytes reads the size out of a real record fingerprint', () => {
+  const ledger = ledgerLib.recordQuarantined(
+    { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} },
+    disc({ size: 52428800 }),
+    'over-ceiling'
+  );
+  const rec = Object.values(ledger.files)[0];
+  assert.equal(rec.fingerprint, ledgerLib.fingerprint(disc({ size: 52428800 })));
+  assert.equal(ledgerLib.quarantineSizeBytes(rec), 52428800);
+  // Zero is a size, not an absence.
+  assert.equal(ledgerLib.quarantineSizeBytes({ fingerprint: '0:1:2:3' }), 0);
+});
+
+test('ledger: quarantineSizeBytes fails soft on anything it cannot prove is a size', () => {
+  // readLedger deliberately does not validate individual records, so this reader
+  // meets corrupt, hand-edited and forward-schema records — and must never throw
+  // and never return a number it cannot prove.
+  const unusable = [
+    undefined,
+    null,
+    'not-a-record',
+    {},
+    { fingerprint: null },
+    { fingerprint: 42 },
+    { fingerprint: '' },
+    { fingerprint: 'x:1:2:3' },
+    { fingerprint: '-5:1:2:3' },
+    { fingerprint: '1.5:1:2:3' },
+    { fingerprint: ' 5:1:2:3' },
+    { fingerprint: '0x10:1:2:3' },
+    { fingerprint: '99999999999999999999:1:2:3' }, // beyond Number.MAX_SAFE_INTEGER
+  ];
+  for (const rec of unusable) {
+    assert.equal(ledgerLib.quarantineSizeBytes(rec), null, JSON.stringify(rec));
+  }
+});
+
+test('ledger: adding the size reader left activeQuarantines and the banner exactly as they were', () => {
+  // The reader is an ADDITION: no existing surface starts carrying a size.
+  let ledger = { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} };
+  ledger = ledgerLib.recordQuarantined(ledger, disc({ size: 52428800 }), 'over-ceiling');
+  const q = ledgerLib.activeQuarantines(ledger);
+  assert.deepEqual(Object.keys(q[0]).sort(), ['file', 'harness', 'reason'], 'no size field appears');
+  assert.ok(!ledgerLib.quarantineBannerLine(ledger).includes('52428800'), 'the banner still carries no size');
+});
+
 // ── WP-secret-revert-defers-ledger (ADR-0023 Amendment 1) ───────────────────
 
 const MAX = ledgerLib.SECRET_REVERT_MAX_DEFERRALS;

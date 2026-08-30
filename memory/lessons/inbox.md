@@ -868,3 +868,363 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   commands need to run AFTER the commit, not against a dirty worktree, or
   they silently report "no changes" instead of the real diff.
 
+- WP-sanitize-project-display-names: Run the repo's own lint config (`npm run lint`), never bare npx defaults — the wrong config both hid six real errors for eight rounds (an unescaped `|` silently truncates markdown table cells) and invented six false ones on a clean file.
+- WP-sanitize-project-display-names: When the input space is finite, sweep it — the full 1,114,112-code-point sweep runs in 827 ms; a sampled corpus hid a selective-rejection bug that only the full range caught (twice: in spec review, and again as mutation M9).
+- M0-process: Extract fenced blocks by script and verify the bytes (sha256, `od -c`) — never retype: editor and shell channels corrupt `\u` escapes, em dashes and indents, and a `\|` in a markdown table cell reaches `grep -E` as a literal pipe. Three measured incidents.
+- M0-process: A number may wear a "measured" label only if it comes from running the document's own command, now — a computed or remembered number survives every check except the re-run (a 44-line threshold miss shipped that way).
+- WP-daily-summary-per-line-framing: Count diff lines with `git diff --numstat`, never by `+`/`-` prefixes — a markdown bullet edit renders as `+- …`/`-- …` and prefix-parsing miscounts or zeroes it.
+- WP-daily-summary-per-line-framing: When round records and commit messages cite SHAs, sync the branch by merge, not rebase — rebase falsifies the record it tidies.
+- WP-sanitize-project-display-names: PR CI runs on `refs/pull/N/merge` (the merged tree) — a branch lagging main needs no rebase for its green to be current.
+- M0-process: A measured failure plus a measured workaround still names no cause — an A-fails/B-works pair can be confounded (it was: a stale codex broker, not the git worktree). Isolate the variable, or write "observed, cause unknown" — never land a causal claim on correlation.
+- M0-process: A subagent's end-of-turn narration ("round N is still running") is text, not state — when its message arrives, the agent has stopped; trust the harness status and the transcript mtime, never the narration.
+- M0-process: Verifying the evidence an agent hands you is not verifying its claim — read the artifact on the tree (the cell, the file), not the exhibit the agent quotes; a reported edit once verified this way had never been made.
+- WP-snapshot-read-path-hardening: this shell's `grep` is a ugrep shim with `-I`, and `tests/unit/vault-snapshot.test.js` is detected as binary (raw high bytes in fixtures), so a plain grep silently skips it. A review round concluded "no test covers this" from that false negative. After a surprisingly empty grep, re-run with `command grep -a` before building on the absence.
+- WP-snapshot-read-path-hardening: two of the loop's 29 findings were themselves wrong. The runbook's "the orchestrator spot-checks citations before anyone acts on a finding" caught both — it is not a formality.
+- WP-snapshot-read-path-hardening: a verification grep that forbids an identifier the spec's own comments are required to name will punish the correct answer. Two such greps went into the first draft; the fix was deletion, not tuning.
+- WP-snapshot-read-path-hardening: a memory bound could not be pinned as a METRIC across three rounds (aggregate or per-allocation? view or backing store? does the gate's decoded string count?), and converged in one round as a MECHANISM — allocate at the bound, hand onward a copy. When a contract family reproduces round after round, check whether the spec has drifted below its own altitude.
+- WP-snapshot-read-path-hardening: do not chain `npm run lint && git commit` in one shell line — the chain swallows the red and the commit lands anyway. Happened here; amended.
+- WP-snapshot-read-path-hardening: the ADR-0031 extraction (Table C) closed two recurring families and then introduced two self-contradictions of its own. The measured 0.5-0.9 injected-defect rate applies to a freshly extracted table too, so an extraction still owes a round.
+- WP-snapshot-read-path-hardening: a `node:test` timeout cannot bound a synchronously-blocking call (`openSync` on a FIFO) — the blocked event loop never fires the timer, so a regression hangs CI instead of going red. Run the dangerous call in a child process via `execFileSync` with a timeout: a hang becomes a failure.
+- WP-snapshot-read-path-hardening: the honest form of a mutation check runs the mutation against the test file before AND after the fix — "red now" alone does not prove the fix fixes; only the green-before/red-after pair does.
+- WP-snapshot-read-path-hardening: a wrong mutation gives false comfort — a `continue` inside a `try` still runs the `finally`, so a mutation meant to "prove" a descriptor leak never leaked, and the observed failures came from elsewhere. Verify that the mutation breaks what you intend it to break.
+- WP-snapshot-read-path-hardening: a record that claims "byte-unchanged" is falsified by any convenience abbreviation made while transcribing — eight shortened paths did it here; restored. For a file meant as evidence, "almost verbatim" is not a category.
+- `WP-frontmatter-recognition-failopen`: **zero findings is not readiness if
+  the review's focus never went there.** The digest half was called "clean
+  across three rounds" and used as the argument for shipping it; the first
+  round that actually attacked it returned two design-level findings. A
+  finding count only means something over surface the reviewer was pointed
+  at — say which surface a clean round covered, never just that it was clean.
+- `WP-frontmatter-recognition-failopen`: a claim about a specific code path
+  must be measured on *that* path. Six findings across the loop were this one
+  defect — a rationale, a banner's visibility, a corpus predicate, a partition
+  universal, a normalization order, an invisible-prefix justification.
+- `WP-frontmatter-recognition-failopen`: when the same author writes both the
+  contract and its proof, the proof inherits the contract's blind spots. Two
+  structural answers — per-cell reproduction, then a totality sweep — were each
+  defeated by the very blind spot they were built to catch. A property whose
+  oracle calls the implementation's own helper is a tautology.
+- `WP-frontmatter-recognition-failopen`: a fail-closed guard belongs at the
+  decision, not in the view it reads. Emptying a record on `malformed` erased
+  the difference between *absent* and *hidden*, and every preservation check
+  reads absence as agreement — four detected violations became zero.
+- `WP-frontmatter-recognition-failopen`: an enumeration cannot prove a
+  partition exhaustive. Three enumerated case lists were each defeated by a
+  shape outside the list; only a ruling change — recognition never widens —
+  removed the unbounded question instead of answering it again.
+- `WP-frontmatter-recognition-failopen`: do not write into the reviewed
+  checkout while a review gate is running, logbook files included. Round 7 was
+  invalidated by exactly that, and the invariant cannot tell my write from the
+  reviewer's.
+- `WP-frontmatter-recognition-failopen`: **a test that names a case does not
+  necessarily reach it.** Two of this package's assertions named a thing they
+  never touched — a fixture that produced no candidate at all, and a byte-cap
+  assertion 20% below its ceiling. Both looked like coverage and were green.
+  The only reliable check is a mutation that violates the contract: if the
+  suite stays green, the assertion is decorative.
+- `WP-frontmatter-recognition-failopen`: literal control characters do not
+  survive a copy/paste round trip. A probe silently lost its NEL/VT/FF and
+  reported a healthy-looking wrong classification. Escapes only, and print the
+  code points before asserting anything.
+- `WP-frontmatter-recognition-failopen`: `git status --short`'s `RM` is two
+  columns — a staged Rename and an unstaged Modify — never one signal. A
+  done-flip shipped as a pure rename because the `sed` after `git mv` was
+  never staged, and the "verification" grepped the working tree while the
+  claim was about the commit. Assert against the artifact the claim is
+  about: `git show` / `git diff --cached`, never the file.
+- Pipeline (maintainer): in a two-remote checkout `gh` defaults to the
+  upstream, which here is PUBLIC — every `gh pr`/`gh issue` call must carry
+  `--repo felho/wienerdog`, or a security package's PR opens in a public
+  repo. Hit twice (a gate queried upstream's PR by number; a session caught
+  it pre-flight before opening).
+- Pipeline (maintainer): push local main before opening a PR from a branch
+  based on it — an unpushed main commit under a rebased WP branch appears
+  in the PR diff and turns the boundary check red (measured on PR #9;
+  prevented by a pre-flight check on PR #11).
+- `WP-validator-decided-bytes`: **the package's one repeated defect, six times
+  over — an assertion that was read, found plausible, and never run.** The
+  charter's redaction boundary ("decimal only, cannot" → "hexadecimal only" →
+  "no class can be characterized"), AC2's fixture, AC7's idempotence line, and
+  a relay `iff`-on-length claim. Every one was written by an actor reasoning
+  from a property instead of enumerating the alphabet, and every one was caught
+  by the *next* reader running it. The gate works; the writing is what fails.
+- `WP-validator-decided-bytes`: **the sixth instance is the dangerous shape —
+  it WAS run, against the wrong tree.** A `grep -n fs.appendFileSync` executed
+  on the working tree *after* the implementation landed gave `:1388`, which is
+  a HEAD line number where the spec's convention is base-tree (`:1355`, the
+  diff adds +33). The relay produced it, the architect "confirmed" it on the
+  same post-change tree, and the PR gate caught it. Running the wrong tree is
+  not better than reading — it is worse, because the command exits 0 and
+  returns a number, so nothing looks suspicious.
+- `WP-validator-decided-bytes`: **an acceptance criterion is a claim about
+  behaviour, so it is a claim to be RUN at the moment it is written.**
+  Boilerplate copied from `_TEMPLATE.md` is the highest-risk kind, because
+  nobody treats a template line as an assertion. AC7's "second run: zero
+  changes" was false for this component from the first draft and survived round
+  0b, four adversarial rounds and dispatch-time re-verification — five gates
+  that all *read* it. Structural fix worth considering: make round 0b run every
+  acceptance criterion that has a runnable form and report its exit status;
+  AC2 and AC7 would both have died in round zero instead of at round four and
+  implementation.
+- `WP-validator-decided-bytes`: **exhaustiveness by syntax class is impossible
+  when the two predicates live on different axes.** Redaction is a predicate on
+  a literal's *characters* (an unbroken run ≥ 24 over `[A-Za-z0-9+=/]` at
+  ≥ 3.5 bits/char); `Number()` acceptance is a predicate on its *syntax*. Proof
+  in one measured pair, same syntax class, opposite outcome:
+  `10293847561029384756E+12` (3.522 bits) is redacted,
+  `102938475610293847561E12` (3.387) is clean. A charter that names classes
+  hands a successor a boundary that does not exist — state measured positives
+  as evidence and say plainly that the intersection was not enumerated.
+- `WP-validator-decided-bytes`: **a "the forbidden design must fail this test"
+  criterion is only credible if the forbidden design is COMPILED FROM THE
+  SHIPPED SOURCE.** Two asserted-unique string substitutions plus
+  `Module.prototype._compile` on the real file give a mutant that cannot
+  silently drift; a hand-written one rots into agreement. AC2 spent four design
+  rounds vacuous in the weakened "the revision is reverted" form — which both
+  designs satisfy — and only the discrimination form (forbidden ADMITS, shipped
+  REVERTS, identical bytes) catches it.
+- `WP-validator-decided-bytes`: **which malformation rule a fixture uses is a
+  security decision, not a stylistic one.** Only an *indented* line both sets
+  `malformed` and withholds the field from the view; a duplicate key keeps the
+  first value visible, so the pre-existing raise-only check does the rejecting
+  and the guard under test is never exercised.
+- `WP-validator-decided-bytes`: **put the non-vacuity assertion inside the
+  fixture loop, next to the bytes.** Asserting per case that `parse` reports
+  malformed AND that the view still shows floor-passing fields is what proves
+  the guard did the rejecting rather than a weak floor — and it survives a
+  future edit to the fixture in a way a prose comment does not.
+- `WP-validator-decided-bytes`: **write a revert reason from the reverted
+  path's point of view, not the decision's.** Two of five guarded sites parse
+  bytes that are not the reverted file's — the ledger site parses the sibling
+  `SKILL.md`, the revision guard parses HEAD. A reason written from the
+  decision would send the user to repair a file that is fine. This only becomes
+  visible when you place the check.
+- `WP-validator-decided-bytes`: **run a gate from a script, not an inline shell
+  one-liner** — the runbook's own rule, reproduced by the session relaying it.
+  `"$MAIN:src/core/dre…"` in zsh is a `:s` substitution *modifier*, so the path
+  git was asked for was silently rewritten and the dispatch gate reported
+  **12 false STALEs** on a spec that was fine. A false red is not a harmless
+  false alarm: believed, it blocks a dispatch.
+- `WP-validator-decided-bytes` (pipeline): **`gh` resolves to the wrong remote
+  in this checkout.** There are two — `origin` = `felho/wienerdog` (where the
+  work and every PR lives) and `upstream` = `wienerdog-ai/wienerdog`. Bare
+  `gh pr create` picked upstream and failed with "No commits between main
+  and …", which reads like a branch problem. Pass `--repo felho/wienerdog` on
+  every `gh` call; a "no such PR" answer against the other repo looks equally
+  plausible.
+- `WP-validator-decided-bytes` (pipeline): **verify a done-flip on the STAGED
+  diff, with rename detection on.** `c04cd08` on the predecessor landed as a
+  pure rename, 0 insertions / 0 deletions, because `git mv` staged the move
+  while the status `sed` was never `git add`-ed and the working tree was
+  checked instead. `git diff --cached --find-renames --numstat` must show
+  `1  1`, not `0  0`.
+- `WP-validator-decided-bytes` (design loop): **three narrowings in four
+  rounds, and no round was closed by a better mechanism.** Contract went
+  C1+C2+C3 → C1+C2 → C1; verification steps 4 → 3 → 2. The predecessor's record
+  predicted exactly this. Corollary that paid off: pin the fallback *before*
+  the round, and let it be a floor of shrinkage rather than a ceiling — round 1
+  falsified the first fallback's premise (it aimed at one finding; the real
+  failure was six), and going further than it pointed was right.
+- `WP-validator-decided-bytes` (discovered, not fixed): **the dream is not
+  idempotent and never was.** Step 4's enforcement append
+  (`src/core/dream/validate.js:1355` at base) is unconditional — it writes
+  `- none` when nothing was reverted — so every `validateAndCommit` run appends
+  a section and makes a commit, growing the day's report with duplicate empty
+  sections. Measured identically before and after the change. Every nightly
+  no-op run commits.
+- `WP-temp-root-wrapper` (spec loop): **the Mirrored Surface Checklist is a
+  thing to RUN after every edit wave, not a section to author.** Two stale
+  mirrors survived fix waves until the walk actually ran; the sharpened form
+  that finally produced a clean walk: when a wave CREATES a surface (splits a
+  criterion, adds a step), re-derive the governing invariant — every new step
+  has a deliberate-red, every split covers the whole input space — instead of
+  only re-reading the mirrors that already existed.
+- `WP-temp-root-wrapper`: **`find -mtime +1` means "older than 48 hours", not
+  24** — age is floored to whole 24h units before the `+1` comparison. A
+  minute-exact cutoff needs `-mmin +1440`. Measured during the host sweep:
+  the `-mtime` pass deleted 16,923 entries where the 24h intent covered 58,259.
+- `WP-temp-root-wrapper`: **"the file contains zero cleanup calls" is a false-
+  negative leak heuristic.** Audit per-file deficit (mkdtempSync count minus
+  removal-call count) instead: the worst offender (50 mkdtempSync, 1 rmSync —
+  aimed at a file, not the roots) passes the binary filter and leaks all 50.
+- `WP-temp-root-wrapper`: **on a multi-session machine, any verification that
+  counts entries in the shared `$TMPDIR` is flaky by construction** (~30k new
+  `wd-*` dirs/day here, one every few seconds). Counted asserts must run under
+  a pre-redirected private temp root; false greens (leak+delete cancelling)
+  are possible, not just false reds.
+- `WP-temp-root-wrapper`: **`VAR= cmd` sets an empty string, not unset** — an
+  env-purity assert needs `env -u VAR cmd`, and the child must discriminate
+  with `'VAR' in process.env`, not truthiness. The empty-string form passed
+  green against a wrapper that injected `''`.
+- `WP-temp-root-wrapper`: **macOS `mktemp -d` does not honor an exported
+  `TMPDIR`** — it creates siblings in the original ambient directory, while
+  Node's `os.tmpdir()` follows the export. Shell scratch dirs and Node temp
+  are two separate worlds in one verification block.
+- `WP-temp-root-wrapper`: **`set -e` alone does not fail-close a verification
+  block containing pipes** — a failing producer piped into `tail` exits 0
+  without `pipefail`. Measured: with `set -e` only, the block continued past a
+  failing wrapper and exited 0; `set -eo pipefail` is load-bearing.
+- `WP-temp-root-wrapper` (close-out): **when a spec claims a coverage universal
+  ("all four rows"), the exception set belongs in that criterion, not in the
+  canonical contract table.** Table A decides what the code must do; it does not
+  decide what is testable. Two exit-status rows here have no CI-portable case —
+  both need a genuinely unremovable directory (`chflags uchg` on macOS,
+  root-only `chattr +i` on Linux), so a case built for either of CI's two
+  runners fails on the other. Recording that in Table A would have made the
+  canonical table own a fact it cannot arbitrate.
+- `WP-temp-root-wrapper` (close-out): **a guard test that pins `package.json`
+  byte-exact is a mirrored surface and belongs on the Mirrored Surface
+  Checklist.** Executable mirrors are structurally easy to miss at authoring
+  time because they do not exist yet — they arrive with the implementation, so
+  registering them is inherently a post-merge move. Here a seventh test-running
+  npm script moves *three* surfaces, not the two the checklist listed.
+- `WP-temp-root-wrapper` (close-out): corollary to the existing
+  `WP-validator-decided-bytes` done-flip rule — because the flip's integrity
+  check is read off the staged, rename-detected diff (`1 1`, not `0 0`), it is
+  only readable when the flip commit contains **nothing but the status line**.
+  So post-merge spec amendments belong in a *separate commit on the same
+  branch*, not folded into the flip. Two prior commits in this repo folded them
+  together; nothing forbids it, but it costs the check.
+- `WP-temp-root-wrapper` (pipeline): **a subagent inherits the parent session's
+  worktree pin, and the pin governs Bash but not Read.** A worktree created
+  under `<shared-checkout>/.claude/worktrees/` is refused for a subagent's every
+  Bash call ("resolved to the shared checkout") while `Read` on the same paths
+  works — which reads like a permissions puzzle rather than a pin. Worse,
+  `EnterWorktree` **reports success** and Bash still refuses. A whole implementer
+  session was lost to this. Create implementer worktrees as **siblings** of the
+  repo root, tell the agent never to call `EnterWorktree`, and to prefix every
+  Bash call with `cd <abs worktree path> &&` (the shell cwd resets between
+  calls).
+- `WP-temp-root-wrapper` (pipeline): **reproduce a review finding before
+  accepting it — the first attempt failing is not an acquittal.** The external
+  gate reported that the failed-teardown diagnostic follows symlinks out of the
+  run root. The first reproduction did *not* trigger it, because `rmSync`
+  unlinks the escaping symlink before the diagnostic reaches it; the bug needs
+  the *link itself* to survive removal (an immutable run root). Stopping at
+  "not reproducible" would have shipped a real containment bug.
+- `WP-temp-root-wrapper` (post-merge, operational): **a wrapped run leaves ZERO
+  top-level `wd-*` residue, which turns the temp directory into an attribution
+  tool.** Any surviving top-level `wd-*` block proves a wrapper-less checkout
+  ran the suite, and the absence of `wd-tmpguard-` / `wd-testrun-` prefixes in a
+  burst rules out a post-fix producer. Measured on merge evening: two discrete
+  bursts (1,670 and 1,878 dirs) that nobody believed existed, the second with a
+  different prefix profile — i.e. a different test set — than the canonical
+  baseline.
+- `WP-temp-root-wrapper` (post-merge, operational): **the fix is per-checkout.**
+  Right after the merge, 9 of the 10 checkouts on the maintainer's machine (all
+  the `wp/*` worktrees, the war-room worktree, and the shared main checkout)
+  still lacked `tests/with-temp-root.js` and kept leaking ~1,670 directories per
+  `npm test`. A merged leak fix does not stop the leak until every live worktree
+  carries it — budget for that when judging whether a sweep "worked".
+- Pipeline (maintainer, Actions-quota condition): when GitHub Actions minutes
+  are exhausted, jobs fail in 2–4 s with **zero steps executed** and no logs, on
+  every workflow and every branch including docs-only pushes to `main` — a red
+  that says nothing about the diff. Substitute by running the blocked jobs
+  locally and posting them as `local-ci/*` commit statuses on the head SHA, plus
+  one PR comment naming what has **no** local substitute. Never substitute the
+  smoke job: `scripts/smoke-install.sh` reaches the real user-global
+  launchd/systemd label domain, which its throwaway `HOME` does not scope, and
+  running it locally on 2026-08-20 booted out the live `ai.wienerdog.dream` and
+  `ai.wienerdog.catchup` agents.
+- **WP-dream-baseline-delta-primitive:** `--test-name-pattern` matches test NAMES, not
+  file names. A spec verification step written as `npm test -- --test-name-pattern
+  "<file-slug>"` is VACUOUS — exit 0 with a broken assertion in the file — unless the
+  tests carry the `<file-slug>: ` name prefix this repo already uses everywhere. Prove
+  every new verification gate red before believing its green.
+- **WP-dream-baseline-delta-primitive:** a `grep`-based "this file must not spawn"
+  gate cannot distinguish a comment from a call, so the module cannot NAME the module
+  it must not require. Enumerating every `require(...)` in the source and pinning the
+  whole set is strictly stronger and has no such blind spot.
+- **WP-dream-baseline-delta-primitive:** a spec obligation that names a specific
+  production function must also guarantee the implementer can REACH it. Naming a
+  non-exported function while forbidding edits to its file forces a choice between a
+  drifting copy and source extraction — decide it in the spec, not in the PR.
+- **WP-dream-baseline-delta-primitive:** "my diff is a conservative SUPERSET of git's"
+  is the kind of claim that feels safe and is not. Where duplicate lines admit two
+  equally minimal alignments, neither answer contains the other — git's is not maximal
+  either — so no single alignment can promise the superset. Counterexample: before
+  `"a\na\n"`, after `"b\na\na\nb\na\n"` — git `[1,4,5]`, prefix/suffix trim
+  `[1,2,3,4]`. State the property you can PROVE (here: every line whose content is
+  absent from the baseline is reported) and prove it exhaustively; a conservatism claim
+  that was never searched for a counterexample is a fail-open hole wearing a
+  fail-closed label.
+- **WP-dream-baseline-delta-primitive:** an oracle whose failure mode is
+  indistinguishable from one of its success values is the same defect class as a gate
+  that cannot go red. `binary` was derived from git's stdout, and a git that never ran
+  yields empty stdout — which reads as "text". Assert that the oracle RAN, not only
+  what it said.
+- **WP-dream-baseline-delta-primitive:** converting a PATH-selected executable to an
+  absolute realpath does not remove the PATH-selection channel — it only moves it
+  earlier. If a repo already has a pinning discipline (here `verifyExecutable`'s owner
+  and ancestor-writability checks), a test that invents a weaker one is claiming
+  parity it does not have.
+- **WP-dream-baseline-delta-primitive:** in zsh an unquoted `$VAR` holding newlines is
+  ONE argument, not many. `node scripts/boundary-check.js <spec> $CHANGED` reports a
+  bogus boundary violation for that reason alone. Quote or use `xargs`.
+- **WP-dream-baseline-delta-primitive:** structural verification of an executable is not
+  identity pinning. Checking that a PATH candidate is a regular file, owned by you, in a
+  non-world-writable directory says it is ACCEPTABLE, never that it is the INTENDED
+  installation — and a shim in a user-owned `0700` directory satisfies all of it. If PATH
+  order can still decide, the channel is open. Resolve from fixed locations and report
+  when you could not.
+- **WP-dream-baseline-delta-primitive:** guarding one of two subprocesses is guarding
+  neither. A failed process's empty stdout reads as a legitimate "nothing here" for
+  whichever inputs legitimately produce nothing, so the vacuous cases pass first and
+  loudest.
+- **WP-dream-baseline-delta-primitive:** POSIX makes a trailing separator force directory
+  resolution, so `lstat(p)` and `lstat(p + '/')` disagree about whether `p` is a symlink.
+  Any refusal built on `lstat` must normalise first — `path.resolve` is the whole fix,
+  and without it the refusal is false for one character of caller input.
+- **WP-dream-baseline-delta-primitive:** when a fix round corrects a MIRROR, check the
+  direction. Correcting the mirror and leaving the canonical table makes the code more
+  accurate than the contract that owns it — a registered-mirror checklist detects the
+  drift but does not say which way the edit should flow.
+- **WP-dream-baseline-delta-primitive:** citing a measurement you inherited as one you
+  made is the same defect as citing evidence that does not reach its claim. Either
+  re-measure it or attribute it; "measured" is a claim about who looked.
+
+
+- `WP-dream-workspace-retarget`: a spec that renames a public option must list
+  its callers in Deliverables, or "npm test passes" and "touch ONLY these"
+  exclude each other.
+- `WP-dream-workspace-retarget`: "construct the child env from an allowlist"
+  collides with fixtures steered through the ambient env. The fix is not an env
+  name in `src/` — that is a WP-155-class production seam — but a control file
+  the installing test writes beside the pinned command, with the fixture's own
+  argv keeping precedence so a self-re-spawn cannot inherit a spawning mode.
+- `WP-dream-workspace-retarget`: a test fake that writes to `process.cwd()`
+  pollutes the repo — the run-evidence `--version` probe spawns without a `cwd`
+  and inherits the runner's.
+- `WP-dream-workspace-retarget`: `git checkout -- <file>` to undo a scripted
+  red-test mutation reverts to HEAD, not to the pre-mutation working tree, and
+  silently discarded a round of uncommitted edits. Back up the file instead.
+- `WP-dream-workspace-retarget`: when a test's own comment says "the invariant is
+  asserted on the mechanism instead", check that it actually asserts the
+  mechanism. Mine did not, and the name of the test hid it for a whole round.
+- `WP-dream-workspace-retarget`: "is this path inside that directory" is a much
+  harder question than it looks, and eleven review rounds went into it. Every
+  string answer is wrong: substring fires on `~/wienerdog-backup` beside
+  `~/wienerdog` and misses `~/Notes`; splitting on `:` breaks on a legal POSIX
+  filename; case-folding refuses every dream on a case-SENSITIVE filesystem;
+  and `path.resolve`/`fs.realpathSync` both collapse `..` before a symlink, which
+  leaks in one direction and refuses a safe child in the other. What works is
+  kernel-faithful resolution plus `(dev, ino)` — let the filesystem answer what
+  counts as the same place.
+- `WP-dream-workspace-retarget`: "it can only over-match, which is the fail-safe
+  direction" is not a safety argument. Over-refusing a gate the product must
+  pass is the product not running — the same severity as the leak it was meant
+  to prevent, and twice here it WAS the more damaging failure.
+- `WP-dream-workspace-retarget`: a refusal must cost the user nothing. A gate
+  that validates after `mkdirPrivate` has already chmodded the user's vault, and
+  a refusal path that deletes recursively destroys exactly what it refused to
+  protect.
+- `WP-dream-workspace-retarget`: asking a review gate to classify by
+  REACHABILITY — "what supported workflow produces this shape?" — is what ended
+  an eleven-round loop. It did not lower the bar: the same round the gate
+  accepted one shape as unreachable, it found a genuinely reachable blocker.
+
+- quarantine-surface: the gptsol reviewer emitted Hungarian finding bodies when the orchestrating session ran in Hungarian — pin "Respond in English" in every dispatch (recurred once with a Claude architect agent's report; file contents stayed English).
+- quarantine-surface: restate owner rulings WITH their carved exceptions in reviewer scope text — round 4's unrecognized-reason finding was manufactured entirely by an imprecise ruling statement.
+- quarantine-surface: mirror sweeps need an explicit file list including the ADR, and must run the whole-set grep, never only the reviewer's cited lines (revision 7 found a fifth site the four citations missed).
+- quarantine-surface: summary prose that RESTATES a contract breeds recurring findings; rewriting summaries to DEFER to one canonical row killed the class (rounds 5-6).
+- quarantine-surface: the same-kind escalation rule paid off twice — the design answer (commit-time reconciliation; dropping the run log) was simpler than the accumulating patches it replaced.
+- quarantine-surface: grep-based mirror walks are blind to intra-cell falsification and vocabulary-shifted restatement — the PR-gate reviewer must read whole cells (wd-reviewer's class diagnosis on PR #33).

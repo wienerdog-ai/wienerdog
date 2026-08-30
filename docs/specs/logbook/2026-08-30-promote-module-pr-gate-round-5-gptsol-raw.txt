@@ -1,0 +1,27 @@
+Gate: PR rubric (gptsol, codex/gpt-5.6-sol), PR #31 round 5
+Tip reviewed: d548f5a (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Form: this backend returns structured JSON rather than prose. Reproduced verbatim.
+
+---
+
+{
+  "findings": [
+    {
+      "title": "[P2] Distinguish the pre-merge secret gate in the summary",
+      "body": "This says all four gates run on the bytes that would actually be published, but `gates.secret` receives the brain's `afterBytes` before the vault read and merge, while only the other three gates receive the merged candidate. A successor wiring gates from this public module description could therefore scan merged user edits instead of the brain-authored delta, contradicting Table D's deliberate input split. Update this header and the identical current-state sentence in `docs/specs/WP-dream-promote-module.md:130-131` to distinguish the pre-merge secret scan from the three post-merge gates.",
+      "confidence_score": 0.99,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js",
+        "line_range": {
+          "start": 9,
+          "end": 10
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The date validation is correctly ordered and mutation-covered, the 21/6/15 checklist arithmetic is correct, the glossary and three-zone fixes are accurate, but the same false all-four-gates summary remains on two changed surfaces. Unit tests exited 0 (39/39), lint exited 0, boundary-check exited 0, and full `npm test` exited 1 only for the stated adopt-e2e environmental failure, which also reproduced at `68ac5e9`; repository status remained byte-identical and empty.",
+  "overall_confidence_score": 0.99
+}

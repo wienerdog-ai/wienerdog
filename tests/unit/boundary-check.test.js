@@ -76,3 +76,14 @@ test('allows files under a directory-style Deliverables entry', () => {
   assert.equal(bad.status, 1);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('allows a process record under docs/specs/logbook/', () => {
+  const result = run([specPath, 'docs/specs/logbook/2026-01-01-a-round-record.md']);
+  assert.equal(result.status, 0);
+});
+
+test('the logbook exception does not widen beyond that directory', () => {
+  const result = run([specPath, 'docs/specs/logbookish.md']);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /logbookish\.md/);
+});

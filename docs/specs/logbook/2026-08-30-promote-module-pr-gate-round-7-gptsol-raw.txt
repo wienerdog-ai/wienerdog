@@ -1,0 +1,13 @@
+Gate: PR rubric (gptsol, codex/gpt-5.6-sol), PR #31 round 7
+Tip reviewed: d13f192 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Form: this backend returns structured JSON rather than prose. Reproduced verbatim.
+
+---
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No findings. The spec and module signatures have identical eleven-member sets and optionality; 1ea9d37..d13f192 changes nothing under src/ or tests/, the registry greps returned 21/6/15, and the date, return-shape, gate-input-split, and glossary contracts remain consistent. The focused unit suite passed 39/39 (exit 0), lint passed (exit 0), boundary-check passed (exit 0), and full npm test exited 1 only on the stated adopt-e2e environmental failure, which reproduced at merge base 68ac5e9; repository status remained byte-identical and empty.",
+  "overall_confidence_score": 0.99
+}

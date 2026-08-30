@@ -1,0 +1,89 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip d172a21
+Round: 2
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status empty before and after, byte-identical, no mutations.
+
+ROUND-1 FINDING: CONFIRMED FIXED.
+  The candidate-decidable C1 half now precedes every gate and alone receives the
+  no-quarantine-artifact consequence. The resolved-path half is explicitly the
+  primitive's publish-time `admit` decision after EP2 and is routed through Q8
+  with a non-null artifact when EP2 already preserved one. The transcript
+  consequence is justified separately for both halves. The refused read-only
+  resolve/admit alternative is recorded as a named residual with its cost; NO
+  SCOPE OBJECTION IS FILED.
+
+*** WATCH CONDITION TRIGGERED ***
+  "the first finding is a THIRD produced fact without a carrier. This is
+  evidence that the disposition contract needs an owner-level shape decision
+  rather than another local field patch."
+
+VERDICT: needs-attention
+SUMMARY: "Do not ship: the C1 ordering defect is genuinely fixed, but the
+amended typed-carrier design still drops the actual artifact name produced by
+EP2's hard-withhold arm, triggering the stated third-occurrence design
+escalation. The mechanical row-collision rule is also violated by multiple bare
+H-row citations."
+
+FINDING 1 [high] confidence 0.99
+  CONTRACT DEFECT — THIRD CARRIER GAP: the hard-withhold artifact name cannot
+  leave the EP2 gate.
+  docs/specs/WP-dream-promote-module.md:495-502
+
+  Table D says both EP2 quarantine writes produce an actual collision-resolved
+  artifact name and that what they produce travels back in the gate result. Q1
+  instead defines the refusal arm as only `{refuse, reason}`; only the redact arm
+  carries `artifact`. A hard secret follows the refusal arm AFTER the gate has
+  preserved an unredacted copy, so `promote()` has no typed artifact name to
+  place in `refused[].artifact`. Q8 then REQUIRES that field to contain the
+  basename whenever the gate preserved a copy, while PROHIBITING recovery from
+  the reason string. The current digest can later rediscover direct quarantine
+  filenames by directory listing, but it cannot repair this per-path result
+  contract or satisfy Table R's typed report composition. Collision suffixes make
+  reconstruction unsafe. This is the THIRD instance in this family where EP2
+  produced a fact with no carrier, so it is evidence against continuing to patch
+  individual downstream arms.
+
+  RECOMMENDATION: Escalate as the stated owner-level design question. Define ONE
+  EP2 disposition shape that carries preservation output on EVERY
+  preservation-producing arm, including hard withhold, and decide whether the
+  payload must also distinguish artifact provenance/remediation — because Table R
+  currently assigns DELETE guidance to refused brain-authored copies while the
+  shipped hard-withhold banner offers RESTORE guidance. Then propagate that
+  single shape through Q1, `refused[]`, report composition, neutralisation
+  classification, and acceptance tests rather than adding another isolated field.
+
+FINDING 2 [medium] confidence 0.98
+  MECHANICAL CONTRACT DEFECT — colliding H rows are still cited without their
+  owner.
+  docs/specs/WP-dream-promote-report.md:205
+
+  The canonical map correctly computes the complete collision set as B/H/N/Q/R
+  and explicitly extends its qualification rule to ROW IDS because both Table H
+  spaces define the same-looking H identifiers differently. This report row
+  nevertheless cites `Table H rows H5/H6` BARE. The same spec also uses bare
+  H3/H5 at lines 286, 388 and 417, while the module uses bare forms such as
+  "Table H, H5" and "Table H, H6". In the vault-write primitive H5/H6 mean
+  conditional publish and returned bytes; in the EP2 spec H5/H6 mean
+  duplicate-definition rejection and boundary-correct registration. A reader
+  following the wrong H space receives a VALID-LOOKING BUT UNRELATED contract —
+  exactly the failure the new rule claims to prevent.
+
+  RECOMMENDATION: Sweep all three live specs and qualify every colliding H-row
+  citation with its owner. Add a mechanical absence check for bare row ids in
+  colliding letter spaces so the canonical rule is ENFORCEABLE rather than
+  advisory.
+
+MECHANICAL VERIFICATION PERFORMED (44 commands, C01-C44; two exited 1 on shell
+quoting/word-splitting errors, C19 and C34, both re-run corrected; no repository
+mutation):
+  - Both ends of every changed file:line and file:START-END citation inspected;
+    corrected removal ranges match their constructs.
+  - C36 full-family collision computation: family letters ABCDEFGHNQRSV; EP2
+    letters BHJKNPQRT; exact collision set BHNQR; canonical map list BHNQR;
+    MATCH CONFIRMED.
+  - C37: no second canonical collision list found (no restatement).
+  - C40/C41: H-row citation audit across the three specs and both Table H
+    letter-spaces -> finding 2.
+  - Final status byte count 0; branch and tip unchanged.

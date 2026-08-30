@@ -1,0 +1,30 @@
+Round 8 — external adversarial review — reviewer: gptsol (Codex side).
+Base: wp/dream-promote-in-workspace @ bc3d003
+Scope: the WHOLE settled text of all three specs, not a diff.
+Vendored prompt body sha256: f3b28a6c4c7501fd03ebab228050ac53c552a8f43c8aa517e924cb348aaefe0f
+(verified equal to the pinned value in docs/runbooks/review-prompts/adversarial.md)
+Read-only check: `git status --porcelain` byte-identical and empty before and
+after — VALID.
+
+VERBATIM OUTPUT BELOW.
+
+{
+  "verdict": "needs-attention",
+  "summary": "No-ship: two CONTRACT defects remain; zero MECHANISM findings, matching rounds 6 and 7. R7-1 is genuinely fixed: H9 now makes only the non-empty prohibition absolute and explicitly bounds the accepted identity residual to removal of at most a substituted empty directory, never content. R7-2 is genuinely fixed: C9 consistently normalises and admits the reports_dir prefix as part of one positive set. The intra-cell contradiction class is merely rarer, not absent: Table B still requires both six and seven behavioural reds in one canonical row. SCOPE OBJECTION: none. Executed: read all three specs in full with cat and numbered sed/nl passes (exit 0); ran focused /usr/bin/grep -a probes for retarget counts and live-writer premises (exit 0); verified src/ is byte-identical between 025021f and bc3d003 with git diff --quiet (exit 0). No product tests were run because this review is over Draft contracts with unchanged src/. git status --porcelain was empty before and after, byte-identical.",
+  "findings": [
+    {
+      "file": "docs/specs/WP-dream-promote-in-workspace.md",
+      "line_start": 254,
+      "line_end": 254,
+      "confidence": 0.97,
+      "recommendation": "CONTRACT defect: define the fallback trigger as every case where the brain-authored report body is not successfully published, not only \"when a gate refuses the body, or no body exists.\" C4/C7/C8 and the primitive's H5 can refuse a report body without a gate refusal—for example, a user creates the same-date report after baseline capture or edits it between decision and publish. Table R specifies what happens after fallback begins but no surface currently requires these refusal classes to enter it, so an implementation may preserve the user's report yet drop this run's enforcement record, violating the settled preserve-both ruling. Enumerate promotion-decision and primitive refusals in the trigger and add acceptance cases for at least a C4 conflict and an H5 refusal."
+    },
+    {
+      "file": "docs/specs/WP-dream-workspace-retarget.md",
+      "line_start": 187,
+      "line_end": 198,
+      "confidence": 1.0,
+      "recommendation": "CONTRACT defect, specifically an intra-cell contradiction: Table B establishes seven retarget sites and its runnable evidence elsewhere requires seven red mutations, but the behavioural-form row says \"six reds\" and justifies that with \"the other five sites.\" An implementer can follow this canonical cell and omit behavioural coverage for the constructed-environment site. Change the row to seven reds and six other sites, consistent with Table F, the implementation notes, acceptance criteria, and verification instructions."
+    }
+  ]
+}

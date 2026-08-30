@@ -327,7 +327,7 @@ test('uninstall reverses everything, keeping unrelated hooks and user content', 
 });
 
 test('buildCodexArgs produces the sandboxed invocation', () => {
-  const argsNoModel = buildCodexArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-03', model: null });
+  const argsNoModel = buildCodexArgs({ workspaceDir: '/v', scratchDir: '/s', date: '2026-07-03', model: null });
   const joined = argsNoModel.join(' ');
 
   assert.ok(argsNoModel.includes('exec'));
@@ -352,7 +352,7 @@ test('buildCodexArgs produces the sandboxed invocation', () => {
   assert.ok(!joined.includes('--dangerously-bypass-approvals-and-sandbox'));
   assert.ok(!joined.includes('--yolo'));
 
-  const argsModel = buildCodexArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-03', model: 'gpt-5.5' });
+  const argsModel = buildCodexArgs({ workspaceDir: '/v', scratchDir: '/s', date: '2026-07-03', model: 'gpt-5.5' });
   const i = argsModel.indexOf('--model');
   assert.ok(i !== -1);
   assert.equal(argsModel[i + 1], 'gpt-5.5');
@@ -451,6 +451,7 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
 
   const { done } = spawnBrain({
     harness: 'codex',
+    workspaceDir: vault,
     vaultDir: vault,
     scratchDir: collected.scratchDir,
     date: '2026-07-03',

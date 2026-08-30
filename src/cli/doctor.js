@@ -303,6 +303,146 @@ function googleReadinessChecks(paths) {
   ];
 }
 
+/** Table B's pinned probe for the quarantine pointer line. Proves the leaf is a
+ *  readable, non-symlink regular file reached through a parent chain that
+ *  resolves inside the vault — deliberately NOT a bare existence check (see
+ *  Current state on why `fileExists` (`:20`) is the wrong helper here): (1)
+ *  `vaultPath` must be a string; (2) build `p = path.join(vaultPath,
+ *  warningsRel)`; (3) `lstat` the exact leaf — a throw (absent leaf or
+ *  parent) takes the `warn` branch; (4) that stat's `isFile()` must be
+ *  true — `lstat` does not follow a symlink, so a symlink fails here whatever
+ *  it points at, and a dangling symlink fails here too; (5) the PARENT CHAIN
+ *  must resolve inside the vault — a `<vault>/reports` that is itself a
+ *  symlink out of the vault would otherwise pass a leaf-only probe while
+ *  `writeIntoVault` refuses that same destination; (6) the file must open for
+ *  reading — proving the open is the point, the bytes are not, so the
+ *  descriptor is closed immediately without reading anything. Only all steps
+ *  passing gives `info`; every other case, including `vaultPath === null`,
+ *  gives `warn` without throwing.
+ *  @param {string|null} vaultPath
+ *  @param {string} warningsRel  the vault-relative path constant from
+ *    `src/core/dream/warnings.js` — not retyped
+ *  @returns {{status:'info'|'warn', msg:string}} */
+function warningsPointerStatus(vaultPath, warningsRel) {
+  const pointerMsg = `which sessions, and why: ${warningsRel} in your vault`;
+  const notThereMsg = `${pointerMsg} — that file is not there yet; the next dream run writes it`;
+
+  if (typeof vaultPath !== 'string') return { status: 'warn', msg: notThereMsg };
+
+  const p = path.join(vaultPath, warningsRel);
+
+  let st;
+  try {
+    st = fs.lstatSync(p);
+  } catch {
+    return { status: 'warn', msg: notThereMsg };
+  }
+  if (!st.isFile()) return { status: 'warn', msg: notThereMsg };
+
+  try {
+    const parentReal = fs.realpathSync(path.dirname(p));
+    const expectedParent = path.join(fs.realpathSync(vaultPath), path.dirname(warningsRel));
+    if (parentReal !== expectedParent) return { status: 'warn', msg: notThereMsg };
+  } catch {
+    return { status: 'warn', msg: notThereMsg };
+  }
+
+  try {
+    const fd = fs.openSync(p, 'r');
+    fs.closeSync(fd);
+  } catch {
+    return { status: 'warn', msg: notThereMsg };
+  }
+
+  return { status: 'info', msg: pointerMsg };
+}
+
+/** Read-only. Never throws, never writes, never migrates. Counts quarantines by
+ *  reason from the ledger — the ledger is ground truth, never the vault warnings
+ *  file (`WARNINGS_REL`), which is derived from it and can legitimately lag by
+ *  one dream run (ADR-0023 Amendment 2). No basename, path, session id or stored
+ *  `reason` string is ever rendered: the unrecognized-reason row is a fixed
+ *  message, and the enumeration's one home is that vault warnings file — never
+ *  this surface.
+ *  @param {string} stateDir   the core state dir (getPaths().state)
+ *  @param {string|null} vaultPath  readVaultPath(paths.config) — null when no
+ *    vault is configured yet, which the pointer probe treats as "not there"
+ *  @returns {Array<{status:'ok'|'warn'|'info', msg:string}>} */
+function quarantineReport(stateDir, vaultPath) {
+  const { readLedger, SECRET_REVERT_EXHAUSTED_REASON } = require('../core/dream/ledger');
+  const { WARNINGS_REL } = require('../core/dream/warnings');
+
+  const ledger = readLedger(stateDir);
+  const files = (ledger && ledger.files) || {};
+
+  let overCeiling = 0;
+  let tooManyLines = 0;
+  let readError = 0;
+  let secretExhausted = 0;
+  let unrecognized = 0;
+
+  for (const rec of Object.values(files)) {
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue;
+    if (rec.outcome !== 'quarantined') continue;
+    switch (rec.reason) {
+      case 'over-ceiling':
+        overCeiling++;
+        break;
+      case 'too-many-lines':
+        tooManyLines++;
+        break;
+      case 'read-error':
+        readError++;
+        break;
+      case SECRET_REVERT_EXHAUSTED_REASON:
+        secretExhausted++;
+        break;
+      default:
+        unrecognized++;
+    }
+  }
+
+  const total = overCeiling + tooManyLines + readError + secretExhausted + unrecognized;
+  if (total === 0) {
+    return [{ status: 'ok', msg: 'no session transcripts are being skipped' }];
+  }
+
+  const out = [];
+  if (overCeiling > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${overCeiling} session transcript(s) are being skipped: the session file is bigger than Wienerdog will read`,
+    });
+  }
+  if (tooManyLines > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${tooManyLines} session transcript(s) are being skipped: the session file has too many lines to read`,
+    });
+  }
+  if (readError > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${readError} session transcript(s) are being skipped: the session file could not be read`,
+    });
+  }
+  if (secretExhausted > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${secretExhausted} session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. The withheld copies are in state/quarantine/.`,
+    });
+  }
+  if (unrecognized > 0) {
+    out.push({
+      status: 'warn',
+      msg: `${unrecognized} session transcript(s) are being skipped for a reason this version does not recognize`,
+    });
+  }
+
+  out.push(warningsPointerStatus(vaultPath, WARNINGS_REL));
+  return out;
+}
+
 /**
  * Report on an existing install. Prints one `ok`/`warn`/`fail` line per check;
  * exits 1 (via process.exitCode) if any check fails.
@@ -425,6 +565,14 @@ async function run(_argv) {
   // Google client-library readiness for a connected account (WP-103).
   // Read-only; silent when Google is not connected; a missing library is a warn.
   for (const c of googleReadinessChecks(paths)) check(c.status, c.msg);
+
+  // Quarantine counts, by reason, from the ledger — and a pointer at the one
+  // vault file that names the sessions. Never an enumeration on this surface
+  // (ADR-0023 Amendment 2).
+  for (const c of quarantineReport(paths.state, vaultPath)) {
+    if (c.status === 'info') console.log(`[info] ${c.msg}`);
+    else check(c.status, c.msg);
+  }
 
   // Cache-only update notice (no network; does not affect pass/fail). ADR-0015.
   const upd = getUpdateNotice(paths);

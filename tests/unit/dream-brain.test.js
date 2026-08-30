@@ -22,7 +22,7 @@ function flagValue(args, flag) {
 
 test('dream-brain: buildClaudeArgs composes the hermetic argv (WP-130), no model', () => {
   const args = buildClaudeArgs({
-    vaultDir: '/v',
+    workspaceDir: '/v',
     scratchDir: '/s',
     date: '2026-07-02',
     model: null,
@@ -102,7 +102,7 @@ test('dream-brain: buildClaudeArgs embeds a non-default layout, allowlist unchan
     inbox_dir: '00-Inbox',
   };
   const args = buildClaudeArgs({
-    vaultDir: '/v',
+    workspaceDir: '/v',
     scratchDir: '/s',
     date: '2026-07-03',
     model: null,
@@ -123,7 +123,7 @@ test('dream-brain: buildClaudeArgs embeds a non-default layout, allowlist unchan
 
 test('dream-brain: buildClaudeArgs includes --model when set', () => {
   const args = buildClaudeArgs({
-    vaultDir: '/v',
+    workspaceDir: '/v',
     scratchDir: '/s',
     date: '2026-07-02',
     model: 'opus',
@@ -135,7 +135,7 @@ test('dream-brain: buildClaudeArgs includes --model when set', () => {
 });
 
 test('dream-brain: a tampered/missing dream skill aborts the build (fail closed, WP-129 seam)', () => {
-  const base = { vaultDir: '/v', scratchDir: '/s', date: '2026-07-02', model: null, settingsPath: '/set.json' };
+  const base = { workspaceDir: '/v', scratchDir: '/s', date: '2026-07-02', model: null, settingsPath: '/set.json' };
   assert.throws(
     () => buildClaudeArgs({ ...base, skillSeam: { digests: { 'wienerdog-dream': 'deadbeef' } } }),
     WienerdogError
@@ -179,7 +179,11 @@ test('dream-brain: spawnBrain runs the pinned fake brain from the fresh staging 
   const fakeCmd = path.join(root, 'fake-brain.sh');
   fs.writeFileSync(
     fakeCmd,
-    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', 'printf "%s\\n%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" "$(pwd)" > "$MARKER"', 'exit 7', ''].join('\n')
+    // The marker path is BAKED IN, not read from an ambient variable: the child
+    // env is constructed (Table B site 7), so only what the test writes into the
+    // command itself reaches it. The three RUN INPUTS still come from the
+    // constructed WIENERDOG_DREAM_* values, which is what this test asserts.
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', `printf "%s\\n%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" "$(pwd)" > "${marker}"`, 'exit 7', ''].join('\n')
   );
   fs.chmodSync(fakeCmd, 0o755);
 
@@ -188,11 +192,12 @@ test('dream-brain: spawnBrain runs the pinned fake brain from the fresh staging 
   fs.mkdirSync(vaultDir);
 
   const { done } = spawnBrain({
+    workspaceDir: vaultDir,
     vaultDir,
     scratchDir,
     date: '2026-07-02',
     model: null,
-    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd), MARKER: marker },
+    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd) },
   });
 
   const result = await done;
@@ -233,6 +238,7 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
   fs.mkdirSync(vaultDir);
 
   const { done } = spawnBrain({
+    workspaceDir: vaultDir,
     vaultDir,
     scratchDir,
     date: '2026-07-04',
@@ -268,6 +274,7 @@ async function runShBrain(scriptLines) {
   const vaultDir = path.join(root, 'vault');
   fs.mkdirSync(vaultDir);
   const { done } = spawnBrain({
+    workspaceDir: vaultDir,
     vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
@@ -356,6 +363,7 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
   const logStream = fs.createWriteStream(logFile);
 
   const { done } = spawnBrain({
+    workspaceDir: vaultDir,
     vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
@@ -378,15 +386,19 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
 
 // --- A7 (WP-154): the brain is spawned by its verified pinned absolute path ---
 
-/** A fake `claude` that answers --version and records its own invoked path. */
-function writePinnableClaude(binDir) {
+/** A fake `claude` that answers --version and records its own invoked path.
+ *  The marker path is BAKED IN rather than read from an ambient variable — the
+ *  brain's child env is constructed (Table B site 7), so a test-owned path
+ *  reaches the command only by travelling with it.
+ *  @param {string} binDir @param {string} [marker] */
+function writePinnableClaude(binDir, marker) {
   const p = path.join(binDir, 'claude');
   fs.writeFileSync(
     p,
     [
       '#!/bin/sh',
       'if [ "$1" = "--version" ]; then echo "9.9.9 (Fake Claude)"; exit 0; fi',
-      'echo "$0" > "$WD_TEST_MARKER"',
+      marker ? `echo "$0" > "${marker}"` : ':',
       'exit 0',
       '',
     ].join('\n')
@@ -401,7 +413,7 @@ test('dream-brain: spawnBrain spawns the pinned ABSOLUTE claude path, never the 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-pin-'));
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
-  const fake = writePinnableClaude(bin);
+  const fake = writePinnableClaude(bin, path.join(root, 'marker.txt'));
   const marker = path.join(root, 'marker.txt');
   const vaultDir = path.join(root, 'vault');
   fs.mkdirSync(vaultDir);
@@ -410,11 +422,10 @@ test('dream-brain: spawnBrain spawns the pinned ABSOLUTE claude path, never the 
     HOME: root,
     WIENERDOG_HOME: path.join(root, 'wd'),
     PATH: `${bin}:/usr/bin:/bin`,
-    WD_TEST_MARKER: marker,
   };
   createPins(getPaths(env), { env, platform: process.platform });
 
-  const { done } = spawnBrain({ vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env });
+  const { done } = spawnBrain({ workspaceDir: vaultDir, vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env });
   const result = await done;
   assert.equal(result.code, 0);
   assert.equal(fs.readFileSync(marker, 'utf8').trim(), fs.realpathSync(fake), 'spawned by absolute realpath');
@@ -441,10 +452,10 @@ test('dream-brain: spawnBrain fails safe on pin drift — a fake claude earlier 
   const evilClaude = path.join(evil, 'claude');
   fs.writeFileSync(evilClaude, `#!/bin/sh\necho pwned > "${marker}"\nexit 0\n`);
   fs.chmodSync(evilClaude, 0o755);
-  const env = { ...pinEnv, PATH: `${evil}:${bin}:/usr/bin:/bin`, WD_TEST_MARKER: marker };
+  const env = { ...pinEnv, PATH: `${evil}:${bin}:/usr/bin:/bin` };
 
   assert.throws(
-    () => spawnBrain({ vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env }),
+    () => spawnBrain({ workspaceDir: vaultDir, vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env }),
     (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message) && /claude/.test(err.message)
   );
   assert.equal(fs.existsSync(marker), false, 'the planted fake was never executed');
@@ -458,7 +469,7 @@ test('dream-brain: a set WIENERDOG_DREAM_CMD has ZERO effect — the pinned brai
   const fakeCmd = path.join(root, 'fake-brain.sh');
   fs.writeFileSync(
     fakeCmd,
-    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', 'echo "$0" > "$WD_TEST_MARKER"', 'exit 0', ''].join('\n')
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', `echo "$0" > "${marker}"`, 'exit 0', ''].join('\n')
   );
   fs.chmodSync(fakeCmd, 0o755);
   const evil = path.join(root, 'evil.sh');
@@ -468,12 +479,13 @@ test('dream-brain: a set WIENERDOG_DREAM_CMD has ZERO effect — the pinned brai
   fs.mkdirSync(vaultDir);
 
   const { done } = spawnBrain({
+    workspaceDir: vaultDir,
     vaultDir,
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-18',
     model: null,
     // The deleted env seam is set — it must be dead: only the pinned brain runs.
-    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd), WD_TEST_MARKER: marker, WIENERDOG_DREAM_CMD: evil },
+    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd), WIENERDOG_DREAM_CMD: evil },
   });
   const result = await done;
   assert.equal(result.code, 0);

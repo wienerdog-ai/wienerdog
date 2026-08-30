@@ -1,0 +1,56 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip 06a92a7
+Scope: the Table Q reconciliation amendment across four files
+Round: 1
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty before and after, byte-identical.
+
+VERDICT: needs-attention
+SUMMARY: "Do not ship: the new ordering makes C1 depend on a resolved-path
+decision that its own contract says occurs only inside the later write
+primitive."
+
+FINDING 1 [contract-defect] confidence 0.98
+  C1 cannot precede EP2 for resolved-path denials
+  docs/specs/WP-dream-promote-module.md:283-305
+
+  The amended header requires C1 to run before every gate and concludes that
+  every C1 refusal produces no quarantine artifact. But C1 is defined by C9,
+  whose contract says admission is applied by `writeIntoVault` to the RESOLVED
+  path, never the candidate path. The same table gives the concrete
+  counterexample: a lexically admitted path can traverse a pre-existing vault
+  symlink and resolve into a denied directory. Before EP2, `promote()` cannot
+  classify that path under C1 without either duplicating the primitive's
+  resolution logic or invoking the publishing primitive before policy decisions
+  are complete. A conforming implementation must therefore violate one of the
+  contracts: run EP2 first and potentially create an artifact, perform forbidden
+  duplicate filesystem reasoning, or write before the gates finish. The claimed
+  no-artifact and transcript-advance consequences are consequently unenforceable
+  for resolved-only denials.
+
+  RECOMMENDATION: Split the decision into an explicitly candidate-decidable
+  pre-gate rejection and C9's definitive resolved-path admission. Keep only the
+  former before EP2. State that a denial discovered by the primitive after EP2
+  may retain the gate-created artifact and must flow through Q8. Alternatively,
+  expose a read-only resolution/admission operation from the primitive, but that
+  is a wider cross-package contract change.
+
+EXECUTION RECORD (45 commands, all exit 0 unless noted):
+  git status --porcelain (before) -> empty
+  cat docs/runbooks/review-prompts/adversarial.md
+  git branch --show-current && git rev-parse --short HEAD -> docs/promote-table-q-reconciliation, 06a92a7
+  git diff main..HEAD -- docs/specs/
+  nl -ba reads of all three specs, the family map, the reconciliation record,
+    and docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+  git diff --unified=0 main..HEAD over the four reviewed contract files
+  nl -ba src/core/dream/validate.js over every introduced/modified citation
+    endpoint; same for src/cli/dream.js
+  python enumeration of every citation in added diff lines
+  python exact extraction of canonical B3b, Q18 and N1-N7 rows
+  NOTE cmd 27: collision-citation sweep via the environment's grep shim
+    -> exit 2, unsupported regex parsing; REDONE with /usr/bin/grep -> exit 0
+  NOTE cmd 1: a zsh `status=$?` wrapper returned 1 (read-only variable); the
+    git output itself was empty and the check was redone correctly
+  NOTE cmd 33: /usr/bin/grep for bold canonical row syntax -> exit 1 (no match)
+  git status --porcelain (after) -> empty; BYTE-IDENTICAL: yes

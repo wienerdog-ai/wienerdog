@@ -10,6 +10,7 @@ const { readDreamConfig } = require('../core/dream/config');
 const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
 const ledgerLib = require('../core/dream/ledger');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
+const { refreshWarnings, WARNINGS_REL } = require('../core/dream/warnings');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
@@ -101,7 +102,9 @@ function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
   console.log(`  truncated to fit: ${sel.truncated.length}`);
-  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
+  // The --dry-run preview must compose the SAME write-target argument the real
+  // invocation does, or it prints a plan that is not the plan.
+  const argv = buildClaudeArgs({ workspaceDir: vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
 
@@ -141,8 +144,20 @@ async function runBrainWithWatchdog(o) {
   const reapTreeFn = seams.reapTree || reapTree;
   const reapGroupFn = seams.reapGroup || reapGroup;
   const writePrivate = seams.writeFilePrivate || writeFilePrivate;
+  // TRANSITIONAL (WP-dream-workspace-retarget, Table B last row). The brain's
+  // write target is now a WORKSPACE, and here it is still the vault — passed
+  // explicitly, so the running product stays byte-identical until
+  // WP-dream-promote-in-workspace builds the workspace in this pipeline, wires
+  // teardown into every exit path, and re-points this one argument. Re-pointing
+  // it HERE, with no promotion, would leave the dream writing notes nothing ever
+  // promotes: an inert product.
   const { child, done } = spawnBrain({
-    vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
+    // `vaultDir` is NOT a second write target — it is the run's real vault
+    // (`cfg.vault`), passed so the brain's constructed environment can keep it
+    // OUT. It must come from here: `wienerdog adopt` writes an arbitrary path
+    // into config.yaml, so `paths.vault` is a different directory on an adopted
+    // vault and sanitising against it would strip the wrong one.
+    workspaceDir: vaultDir, vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
 
   // Hand the brain's identity UP to the outer supervisor, per-run token.
@@ -392,6 +407,25 @@ async function run(argv, opts = {}) {
       writeFilePrivate(digestDest, digest); // atomic 0600 (audit A5, WP-126)
     };
 
+    // The vault's durable record of what the dream could NOT see
+    // (WP-quarantine-warnings-file, ADR-0023 Amendment 2). The digest banner is
+    // news for a bounded window; this file is standing state, and the vault is
+    // git-versioned, so every rewrite is itself the dated delta.
+    //
+    // A refresh failure NEVER fails the dream: the ledger still holds the
+    // condition, `doctor` still reports the counts, the banner still raises it,
+    // and the next refresh point re-reads and re-decides. A deliberate no-op
+    // carries no reason and says nothing — only a real failure is narrated.
+    /** @param {{written:boolean, reason?:string}} r */
+    const reportWarningsRefresh = (r) => {
+      if (r.reason) {
+        console.log(
+          `wienerdog: dream — could not update ${WARNINGS_REL} in your vault (${r.reason}); ` +
+            'the skipped sessions are still recorded and this is retried on the next run.'
+        );
+      }
+    };
+
     // 5. Surface capacity events plainly — a size event must NEVER be silent.
     for (const t of sel.truncated) {
       console.log(
@@ -430,6 +464,11 @@ async function run(argv, opts = {}) {
       for (const q of sel.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
       ledgerLib.writeLedger(paths.state, ledger);
       regenerateDigest();
+      // Refresh point 1 — the same moment the other ledger-derived durable
+      // surface is refreshed, so the two cannot drift out of step. This is also
+      // the point that serves the adopt-with-history first run, which returns
+      // below without ever making a commit.
+      reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
     }
 
     // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
@@ -452,6 +491,14 @@ async function run(argv, opts = {}) {
     // 7. Genuinely nothing new → no brain, no commit.
     if (sel.entries.length === 0) {
       console.log('wienerdog: nothing new to dream.');
+      // Refresh point 3 — write-if-absent reconciliation, and the one refresh
+      // point that is NOT a set-change point. A fully idle run reaches neither
+      // of the others (point 1 needs a new quarantine; point 2 is past this
+      // return), so without this an install whose quarantines are ALL
+      // pre-existing — the upgrade shape — would never get the file at all.
+      // Its own guard: this return comes BEFORE step 8's dry-run return, so a
+      // preview run reaches it and must still write nothing.
+      if (!dryRun) reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
       return;
     }
 
@@ -609,6 +656,11 @@ async function run(argv, opts = {}) {
     // 15. Regenerate the injected session digest (atomic temp + rename),
     //     including the durable quarantine banner from the current ledger.
     regenerateDigest();
+    // Refresh point 2 — the only point at which a quarantine that LEFT the set,
+    // or a secret-exhausted one that ENTERED it in step 14, is knowable. It is
+    // after the commit, so such a change rides the next run's commit; the diff
+    // is exactly right either way.
+    reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
 
     // 16. Summary.
     const shaShort = res.sha ? res.sha.slice(0, 7) : '(none)';

@@ -878,7 +878,7 @@ function dreamSetup() {
   const stateDir = path.join(core, 'state');
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify({ schema: 1, pins }), { mode: 0o600 });
-  return { root, home, core, vault, claude, codex, livePath };
+  return { root, home, core, vault, claude, codex, livePath, binDir };
 }
 
 /** @param {ReturnType<typeof dreamSetup>} ctx */
@@ -891,6 +891,21 @@ function tokenPidfile(ctx) {
  *  @param {ReturnType<typeof dreamSetup>} ctx
  *  @param {Record<string,string|undefined>} extraEnv @param {object} opts */
 async function runDreamLive(ctx, extraEnv, opts) {
+  // Mode and out-file reach the pinned fixture through the CONTROL FILE beside
+  // it (WP-dream-workspace-retarget, Table B's fixture-control row): spawnBrain
+  // composes the child env from a fixed allowlist, so the ambient
+  // WD_SPAWN_VARIANT_* pair no longer reaches a brain-shaped invocation. The
+  // call sites are unchanged — they still express the scenario the same way, and
+  // the ambient names stay set and inert.
+  const controlFile = path.join(ctx.binDir, 'wd-fixture-control.json');
+  if (extraEnv.WD_SPAWN_VARIANT_MODE || extraEnv.WD_SPAWN_VARIANT_OUT) {
+    fs.writeFileSync(
+      controlFile,
+      JSON.stringify({ mode: extraEnv.WD_SPAWN_VARIANT_MODE, out: extraEnv.WD_SPAWN_VARIANT_OUT })
+    );
+  } else {
+    fs.rmSync(controlFile, { force: true }); // absent → the fixture's own defaults
+  }
   const saved = {};
   for (const k of DREAM_ENV_KEYS) saved[k] = process.env[k];
   const next = {

@@ -87,6 +87,15 @@ for the un-freeze; the alternative is keeping `daily-summary-injection` closed.
   remains a named future WP that would let trusted-authored daily lines inject
   un-fenced.
 
+Amending work packages are recorded in the list under `Amended by:` below —
+one line per package, appended by the amending package itself and verified
+by that package's own gates as a pure one-line diff. Prose never restates
+membership.
+
+Amended by:
+- WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.
+- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.
+
 ## Alternatives considered
 
 - **Keep the gate closed.** Rejected for the un-freeze goal, but the owner may
@@ -96,6 +105,100 @@ for the un-freeze; the alternative is keeping `daily-summary-injection` closed.
   fix-pass (large cross-cutting contract; deferred).
 - **Secret-scan-only (status quo).** Rejected: a secret scan does not detect
   instructions; it is not an injection defense.
+
+## Amendment (2026-08-09) — the fence is per-line; the block fence of Decision 1 is withdrawn
+
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-10.**
+
+Decision 1 above wraps the daily summary between a `FENCE_OPEN` banner and a
+`FENCE_CLOSE` marker. The 2026-07-29 audit reproduced the consequence as finding
+**M2** (Major/High): the closing marker is a fixed, documented string with no
+authenticity property, so a summary line may contain it, and everything the
+attacker writes after that line reads — by this ADR's own stated semantics — as
+outside the untrusted region. The `daily-summary-injection` gate is `allowed` in
+the released profile, so this is the production default path.
+
+The decision this ADR made — the daily summary is untrusted-by-default data,
+labelled as such at the point of injection — stands. Its **mechanism** does not.
+Amended as follows:
+
+1. **Containment is per-line, not per-block.** Code prefixes every emitted line of
+   the summary with a fixed, code-owned marker. A content line that mimics a
+   marker, a banner or an end marker is itself marked and stays visibly data.
+   There is no delimiter to forge, because a summary byte can never occupy the
+   start of an emitted line.
+2. **No closing marker is emitted.** The marked region ends where marking stops.
+   `FENCE_OPEN` / `FENCE_CLOSE` are withdrawn; the constants named in Decision 1
+   no longer exist. This also removes the unterminated-region case that digest
+   truncation could produce by dropping a closing marker.
+3. **The banner is rewritten to describe the per-line rule** — that the marker is
+   added by Wienerdog and never by the content, and that a marked line is never an
+   instruction, heading or boundary whatever it appears to say.
+4. **Two containment rules are added** that the block fence never needed. First,
+   the summary is split on every character its consumers render as a line break
+   (LF, CRLF, CR, NEL, VT, FF, U+2028, U+2029), and no character that is a Unicode
+   `Cc`, `Cf` or `Cs`, or carries the `Default_Ignorable_Code_Point` property,
+   reaches an emitted line raw — TAB and the break set are the only exceptions, and
+   the union is required because categories alone miss variation selectors and the
+   Hangul filler while the property alone misses some `Cf`. Each such character
+   appears only in a fixed code-owned `<U+XXXX>` form, which is deliberately not
+   reversible. Second, the secret gate runs on the normalized, still-unmarked
+   summary, so a marker inserted after a line break cannot defeat a rule that spans
+   one. The implementing WP's Table A is the canonical statement of both.
+
+What is NOT changed: the bounded read, the provenance gate, the section-level
+secret exclusion, the capability gate, and this ADR's accepted residual — a
+labelled line is still natural-language text a model reads. Entry-level daily
+provenance remains the deferred full solution.
+
+Implemented by **WP-daily-summary-per-line-framing**.
+
+## Amendment (2026-08-14) — the chokepoint consequence is narrowed to the route `renderDigest` controls
+
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-14.**
+
+This amendment corrects nothing that is false. The Consequences sentence above
+reads "`renderDigest` is the single chokepoint for the daily `## Summary`, so
+every consumer of its output (SessionStart injection and any managed-block
+compile) inherits the fence — the fix is made once, at the source." Read
+strictly, that is TRUE: it quantifies over consumers **of `renderDigest`'s
+output**, and the route described below consumes none of it. What this
+amendment records is a NEW realization about how far the sentence's reassurance
+travels.
+
+1. **There is a second route from a daily note into a model session, and it
+   inherits nothing from this ADR's mechanism.** `src/core/vault-snapshot.js`
+   copies WHOLE daily notes — Summary included, not just the extracted
+   section — into a scheduled routine's staging directory, which the routine
+   mounts read-only. That path never calls `renderDigest`. So "the fix is made
+   once, at the source" holds for the digest and does not generalize to the
+   daily `## Summary` as such: on the snapshot route those bytes reach a
+   capability-holding model session unframed. The 2026-07-29 audit names the
+   tension at `docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:552`
+   (finding M3).
+
+2. **What is being done about it, and what is not.**
+   `WP-gate-vault-snapshot` gates that route for secrets and, on the daily-notes
+   slice, for frontmatter provenance, and adds a code-owned framing line when
+   the snapshot is mounted. It deliberately does NOT port this ADR's per-line
+   framing to whole notes: framing an entire note is a different mechanism from
+   framing an extracted section, and it belongs with the deferred entry-level
+   provenance rather than being improvised. The snapshot route therefore gains
+   no instruction-content filter, and that work package records M3 as PARTIALLY
+   closed.
+
+3. **The stale phrase in Consequences is corrected.** "Entry-level daily
+   provenance remains a named future WP" is not accurate and has not been for
+   some time: this file already states the honest position in Context and in the
+   2026-08-09 amendment's closing paragraph — entry-level daily provenance is
+   **deferred**, a cross-cutting writer-side contract needing its own ADR, not a
+   WP waiting to be picked up. The owner reaffirmed that deferral on 2026-08-14,
+   in the same sitting as the report-provenance ruling.
+
+Nothing in Decisions 1-3, in the accepted residual, or in the bounded-read and
+gate decisions is changed by this amendment.
+
+Implemented by **WP-gate-vault-snapshot**.
 
 ## Amendments
 

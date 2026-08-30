@@ -1,0 +1,59 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip 4f1f050
+Round: 5
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty BEFORE and AFTER, byte-identical
+(49 commands, all exit 0).
+
+ROUND-4 A1: *** NOT CONFIRMED GENUINELY FIXED. ***
+  "The discriminated carrier, reason propagation, G8/G11 routing, and the
+  prohibition against copying R4's untouched-vault clause are present, but the
+  new false buffer-equality invariant makes the listed `expect`-conflict outcome
+  unsatisfiable."
+ROUND-4 B1: CONFIRMED FIXED.
+  "Q10 states the shipped processed-line count and its byte-identical-line gap;
+  G7 receives the changed-line count as a named input without acceptance-criteria
+  growth."
+
+MECHANICAL
+  Acceptance-criteria counts (command 16): 23 / 10 / 24 — UNCHANGED.
+  Citation endpoints: "all introduced or changed file:line and file:START-END
+    citations resolve at both indentation-checked endpoints; ZERO ENDPOINT
+    DEFECTS." Checked with `sed -n l`: validate.js:838-840, :1233-1235, :1267,
+    :1276, :1283-1292, :1286-1287, :1297, :1324-1337, :1338-1366, :1374-1409;
+    digest.js:817-822; dream.js:628-631; SKILL.md:409-425.
+  git diff --check over the four scoped files (command 46): exit 0.
+  ESCALATION TEST: "no new fact lacks a field and no consumer is forced to
+    re-derive one. The blocking defect below is an internally impossible
+    vault-state assertion, NOT a missing carrier." -> NOT TRIGGERED.
+
+VERDICT: needs-attention
+SUMMARY: "Do not ship: A1 now has a carrier, but its published:false contract
+asserts an impossible vault state for one of its own mandatory refusal cases. B1
+is fixed, acceptance counts remain 23/10/24, and citation endpoints remain clean."
+
+FINDING 1 [contract-defect] confidence 0.99
+  A1 equates the first-write buffer with live vault bytes after an expect conflict
+  docs/specs/WP-dream-promote-report.md:266-269
+
+  The `promoted`/`published:false` form correctly carries the FIRST primitive
+  write's returned buffer, but the text ADDITIONALLY says that buffer is what the
+  vault CURRENTLY HOLDS. That cannot be true for the mandatory expect-conflict
+  case at lines 713-730: the second write refuses PRECISELY BECAUSE the target no
+  longer equals the first-write buffer, so the vault holds the intervening user
+  bytes. A symlink replacement between writes has the same problem. The
+  acceptance criterion nevertheless requires `report.bytes` to be byte-equal to
+  the vault after an expect conflict. No implementation can simultaneously
+  preserve the user's intervening edit, return the first-write buffer for G8's
+  decided-byte commit, and satisfy that equality.
+  THIS DOES NOT REVIVE R4's UNTOUCHED-VAULT CLAUSE: the body was published and
+  then superseded by a concurrent edit.
+
+  RECOMMENDATION: Keep `report.bytes` defined as the first write's returned
+  buffer on `accounting.published:false`, because G8 needs those decided bytes.
+  REMOVE every claim that it necessarily equals the live vault bytes on that
+  form. Split the acceptance assertion BY REFUSAL CAUSE: for an expect conflict,
+  assert that the vault retains the intervening user bytes while `report.bytes`
+  retains the first-write body; for a refusal where the target remains unchanged,
+  equality may be asserted only if that premise is explicitly established.

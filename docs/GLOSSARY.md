@@ -61,6 +61,52 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **capability profile** — a synonym for one specific hermetic runtime profile
   (`dream`, `daily-digest`, `inbox-triage`, `weekly-review`) as defined in
   `src/core/runtime-profile.js`.
+- **workspace** — the directory one dream run writes into: built fresh under
+  `~/.wienerdog/state/`, filled with a copy of the vault's readable content, and
+  removed when the run ends. It is meant to be the brain's only write root, so
+  the vault is never what it edits — the pipeline is switched over to it in a
+  follow-on work package, and until then the dream still writes the vault
+  directly. Copying the content in is also what makes the run's *baseline* — the
+  exact bytes present before the brain started — something Wienerdog knows
+  because it wrote them, rather than something it has to observe afterwards.
+  (Not: "sandbox" — that word means the `WIENERDOG_HOME`-redirect guard; not
+  "staging directory" — that is the empty working directory a job RUNS from; not
+  "scratch", "shadow vault", "mirror".)
+- **vault write** — the one call this family's code goes through to put a
+  content file into the vault. Three writers use it and no others: each promoted
+  note; the dream report (whose body the brain authors and to which code appends
+  its accounting section, so that one is two calls); and the vault warnings file
+  (`reports/warnings.md`), which code writes whole from the transcript
+  quarantine ledger. Git's writes to the
+  vault's own `.git` directory are not content files and are not vault writes.
+  It decides on the object the write would actually LAND on rather than on the
+  path it was handed: the destination is resolved first — a directory that is
+  really a symlink elsewhere resolves to where it points — and THAT is what the
+  caller's policy judges. It refuses to write onto or through a symlink it can
+  see, publishes so that a reader of the target never catches a half-written
+  file, abandons the write when the target no longer holds the bytes the
+  decision was made against, and returns the exact bytes it published so nothing
+  downstream re-reads the path to learn what landed. It carries no rules of its
+  own — which destinations are allowed belongs to the caller. Staying inside the
+  vault is required of every write and admits none of them by itself. (Not:
+  "publish", "atomic write", "safe write".)
+- **promotion** — the decision that takes a note the dream wrote in the
+  *workspace* and puts it into the vault, and the act of putting it there. One
+  outcome per changed path: the note is promoted as the dream wrote it; a
+  merged version of it is promoted (when you edited the same note during the
+  run and the two edits combine cleanly); a scrubbed version is promoted, with
+  the unredacted original kept aside for you (when the secret scan found
+  something it can remove line by line); or it is refused and the reason is
+  reported. Promotion never deletes a note and never overwrites a version you
+  wrote — where the two disagree and cannot be combined, your copy stays and
+  the dream's is refused. A note reaches the vault only by being *admitted*:
+  promotion allows content files in the vault's writable folders rather than
+  blocking a list of known-bad names, which is why the dream cannot leave a
+  file behind that steers a later session. Every promoted byte goes through a
+  *vault write*. The skill-body, Tier-3 and ledger gates judge the bytes that
+  would actually land, not an earlier draft of them; the secret scan judges
+  what the dream itself wrote, before your edits are merged in. (Not: "gating
+  in", "write-back", "publishing a note", "sync" — say promotion.)
 - **staging directory** — the fresh, empty, Wienerdog-owned working directory a
   hermetic job runs in (and, for a routine, its only writable output), so no
   project or local settings can be discovered under the job's working directory.

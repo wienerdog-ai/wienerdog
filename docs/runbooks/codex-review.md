@@ -1,7 +1,7 @@
 # Runbook: Codex adversarial review loop
 
-A second, independent AI reviewer (OpenAI Codex, via the `codex@openai-codex`
-Claude Code plugin) is a standard gate in the pipeline, alongside wd-reviewer.
+A second, independent AI reviewer (a non-Claude model; backends in
+"How to run it") is a standard gate in the pipeline, alongside wd-reviewer.
 Adopted 2026-07-12 after its first outing found eight real, zero hallucinated
 findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
 
@@ -25,12 +25,143 @@ findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
 ## The loop (design review)
 
 ```text
-wd-architect drafts → /codex:adversarial-review (focus text scoped to the
+wd-architect drafts → adversarial design review (focus text scoped to the
 drafted docs) → orchestrator verifies citations against the files → owner
-accepts/rejects findings → wd-architect revision pass → /codex:adversarial-review
+accepts/rejects findings → wd-architect revision pass → adversarial review
 round 2 (ask it to verify its own prior findings are fixed AND attack the new
 mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 ```
+
+### Finding disposition
+
+- Every finding gets exactly one disposition: **fix** (a genuine defect),
+  **residual** (accepted, one-line reason — the rule above), or **drop**
+  (style/preference; noted in the round record, never in the artifact).
+- The relay PROPOSES a disposition for every finding; the owner may accept
+  the proposals as a batch or override any single one. Deciding stays with
+  the owner; drafting the decisions does not.
+- A hardening proposal becomes text only on an explicit owner yes — never
+  folded in silently.
+- **Altitude guard (a drop sub-case):** a finding that lives one level
+  below its target document — an implementation detail raised against an
+  ADR, a code-level nit raised against a spec contract — is dropped, or
+  routed to the artifact that owns that level. It is never folded into the
+  higher document.
+- **Diff size does not measure contract impact (a park sub-case).** A finding
+  whose only honest fix re-imports a property the package was deliberately
+  re-cut to exclude is not a routine fix, however small the patch looks — it is
+  a contract change, and a contract change is the owner's act. Park it rather
+  than folding it. (Measured: on a package re-cut to make no freshness claim,
+  every honest fix for a baseline defect — two-pass stability check, lock,
+  re-read-and-compare — was a freshness mechanism, each a few lines, each
+  quietly rebuilding the absence that was the point.)
+- Every solution starts with the value question: what does fixing this
+  protect or earn in the product, and is that worth the fix plus the
+  maintenance it creates? "Not worth solving" is a legitimate
+  disposition — a named residual — and reaching it before the first
+  patch is cheaper than after the third round. The repeat-kind rule
+  below decides HOW to solve what recurs; this question decides
+  WHETHER.
+- The same test gates every addition to the system itself: a new rule,
+  a document, a gate, a process step earns its place by the value it
+  protects, named at the moment of adding — or it is not added. Both
+  runaway loops this repo has survived were additions that each looked
+  defensible alone and never faced the aggregate question.
+- When two consecutive rounds land findings of the same kind, the next
+  step is a design question, never another textual patch.
+- A design loop states its STOP CRITERION in the round record BEFORE
+  the first adversarial round, and re-states it whenever a HEAVY fix
+  triggers a fresh round: which outcome closes the loop, and which
+  outcome escalates — to a design question, a fallback, or an owner
+  ruling. Measured across two packages: every phase that ran under a
+  pre-pinned criterion closed within one or two rounds; every phase
+  without one drifted — the treadmill's fuel is an undefined finish
+  line. A round record with no stated criterion is a loop where this
+  rule did not run. No tooling, no hook — one more line in a record
+  that is already being written.
+- The reviewer's raw output is committed BEFORE anyone reads or judges
+  it — adjudication happens on evidence the adjudicator cannot have
+  shaped. This is what makes an after-the-fact ruling possible when a
+  gate was skipped: the record is intact. The round record cites, per
+  round, the raw file's path AND the SHA of the commit that introduced
+  it: a SHA cannot be cited before the commit exists, so a skipped
+  raw-commit is visible at the moment of adjudication — not at a later
+  audit, when the property is no longer recoverable. A round row
+  without that SHA is a round where this rule did not run. No tooling,
+  no hook — one more line in a record that is already being written.
+- `failed to load configuration: No such file or directory` means a
+  stale plugin broker, not a bad checkout. The plugin keeps one broker
+  process per workspace PATH; if that directory was deleted and
+  recreated (a worktree removed and re-added), the old broker still
+  runs in the deleted directory and every call through it fails.
+  Confirm by comparing `lsof -a -p <broker pid> -d cwd` with
+  `stat -f '%i' <path>`; fix by killing that pid and deleting its
+  `broker.json` under the plugin's state directory. The next call
+  starts a fresh broker. Worktrees themselves are fine.
+
+### Template conformance (round zero, before any review)
+
+- Before the first adversarial round, the relay diffs the spec against
+  `docs/specs/_TEMPLATE.md`'s section list and reports it in the round
+  header: every template section is either present or explicitly marked
+  `N/A — <one-line reason>`. A silently absent section blocks the round.
+- The check runs in a clean context: an executor that took no part in
+  drafting, relaying or reviewing this spec, given exactly two inputs —
+  the spec and the template. A context that helped produce the artifact
+  reads what it meant, not what is written. No external reviewer is used
+  either — this is a conformance read, not a design critique.
+
+### Internal coherence pass (round zero's peer)
+
+- Before the first external round, one internal pass reads the spec end
+  to end for contradictions: a claim made in one place and unmade in
+  another, a count that no longer matches its list, an assertion citing
+  an input that is not there. Findings get dispositions like any round's.
+  (Measured twice: 9 and 19 substantive finds that prior external rounds
+  had not caught.)
+- The same pass RUNS every acceptance criterion and verification step
+  that has a runnable form: commands executed on the tree the claim
+  names, fixtures parsed, per-criterion exit status in the round-zero
+  record. A criterion that cannot discriminate — or cannot be
+  satisfied at all — is a round-zero finding. Reading is not
+  evidence: measured in one package, a non-discriminating fixture
+  survived four read-only rounds, a template-inherited criterion was
+  unsatisfiable from the first draft, and one command was run on the
+  WRONG tree — a number from the wrong base looks like evidence and
+  is not. Runnable means runnable now, on the pinned base, with what
+  the spec itself provides.
+- A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must
+  begin and end where its construct does. Reading verifies that the named line
+  resolves; it never notices a range that ends inside the next declaration's
+  JSDoc, so this one is a check, not an attention problem. (Measured: the same
+  drift returned in three consecutive drafts of one package; applied to its
+  successor's first draft it caught three more, one wrong at both ends.)
+
+### Weighted closure
+
+- A finding is HEAVY when fixing it changes what the implementer builds
+  in the product: `src/` behavior, the ADR contract, anything a user or
+  a consuming model observes. A finding about the spec's own
+  verification machinery — tests, gates, mutation rows, wording — is
+  LIGHT. When in doubt, HEAVY.
+- HEAVY: fixes land, then a full fresh external round.
+- LIGHT: fixes land and are verified mechanically (mirror walk,
+  re-measurement); the loop closes without another external round.
+- The loop is DONE when a round finds nothing about the product.
+  Machinery findings at that point are fixed or accepted as named
+  residuals; they do not extend the loop.
+
+### The loop converges by freezing surface, not by patience
+
+- Verification machinery may GROW only to guard a product behavior, and
+  always in the smallest form that guards it. A finding about the
+  machinery itself never justifies more machinery: it is fixed within
+  the existing surface, or accepted as a named residual.
+- Why this is the convergence condition, measured: each fix injects
+  0.5-0.9 new defects. Below 1, a frozen surface makes the defect
+  supply a shrinking series — the loop ends by itself. Every round the
+  surface grows, the supply is refilled. The treadmill is the growth,
+  not the error rate.
 
 ## Dispatch-time re-verification (the last gate before an implementer starts)
 
@@ -125,13 +256,74 @@ instead of a blocked session.
 
 ## How to run it
 
-- Design review: `/codex:adversarial-review` with focus text naming the exact
-  files to review and the specific decisions to challenge; explicitly exclude
-  unrelated working-tree files (`docs/marketing/`, `memory/research/`,
-  `userreports/`). On round ≥ 2, list the prior findings and ask Codex to
-  verify each is genuinely fixed, not re-worded.
-- PR review: `/codex:review` (native, no focus text) against the PR branch.
+The gate is a contract, not a tool. Two backends can execute it; both
+receive the same inputs and owe the same report. Improvements to the
+gate are written into this contract (or the Rules below) — never into
+a backend bullet and never into the vendored prompts, so they hold for
+every backend.
+
+### The contract (backend-agnostic)
+
+- Reviewer instructions are the two vendored prompts in
+  `docs/runbooks/review-prompts/` — `adversarial.md` for design
+  review, `pr-rubric.md` for PR review. They are verbatim upstream
+  copies with a provenance header, and they are frozen: never edited,
+  only re-vendored wholesale when upstream moves, followed by a fresh
+  both-directions validation. Anything of ours rides in the focus text
+  or in this contract.
+- Design review input: the drafted docs, plus focus text naming the
+  exact files to review and the specific decisions to challenge;
+  explicitly exclude unrelated working-tree files (`docs/marketing/`,
+  `memory/research/`, `userreports/`). On round ≥ 2, list the prior
+  findings and ask the reviewer to verify each is genuinely fixed, not
+  re-worded.
+- Where a ruling makes a whole class of finding inapplicable — a package that by
+  ruling has no consumer, so it owes no locking, re-validation or generation
+  invariant — the focus text states that boundary in the reviewer's own terms
+  BEFORE the vendored prompt, and instructs the reviewer to file disagreement as
+  a scope objection in the routed section instead of counting it toward the
+  verdict. Pre-empting a category error costs nothing; routing it afterwards
+  costs the round it already consumed. (Measured: stated up front, the routed
+  section came back empty and the reviewer confirmed it had counted no such
+  finding toward the verdict.)
+- PR review input: the PR branch's diff against its merge base with
+  `main`; no focus text.
+- The report states what was EXECUTED, not only what was read: did the
+  test suite actually run, and with what exit status. A verdict whose
+  tests did not run is a reading, and must say so. (Measured
+  2026-08-11: two PR-gate runs exited 1 on an unwritable TMPDIR; both
+  verdicts were readings and neither disclosed it.)
+- Review is read-only, checked mechanically: `git status --porcelain`
+  in the reviewed checkout is byte-identical before and after the run,
+  or the run is invalid.
+- Output is relayed verbatim (see Rules).
+
+### Backend selection
+
+If the `gptsol` agent is available in the current session, use it;
+otherwise use the Codex plugin. A backend counts as validated only
+after its own both-directions run (green on a compliant diff, red on
+a deliberately broken one) — one backend's green never validates the
+other.
+
+### Backend: gptsol agent (preferred where available)
+
+- One agent per gate run. Dispatch = the gate's vendored prompt
+  (placeholders filled where the prompt has them), the contract inputs
+  above, and the instruction to report what it executed and return the
+  findings verbatim as its final message.
+
+### Backend: Codex plugin (works anywhere)
+
+- Design review: `/codex:adversarial-review` with the focus text.
+- PR review: `/codex:review` (native, no focus text) against the PR
+  branch.
 - Prefer `--background`; results via `/codex:status`.
+- This backend injects its own prompt copies (the plugin's adversarial
+  prompt; the Codex CLI's built-in rubric). The vendored files pin the
+  exact versions this pipeline validated; if upstream moves, re-vendor
+  and re-validate rather than letting the gate's semantics drift
+  silently.
 
 ## Rules
 
@@ -189,6 +381,22 @@ instead of a blocked session.
   stronger day-to-day mechanism (it keeps mirrors in lockstep up front); this
   breaker is the backstop for when scattered contract prose slipped through
   unregistered.
+- **Capture an exit code as its own statement, immediately.** `rc=$?` on the
+  line after the command — never after an intervening command substitution or
+  echo, which overwrite `$?` with their own status. The failure shape is a
+  gate measured as exit 0 that actually exited 1, pasted as green evidence;
+  it appeared twice in one day on the same check (PR #22's boundary run)
+  before the pattern was named. The general form: read the VALUE the tool
+  produced, not the value the pipeline last touched.
+- **A zero-hit sweep is evidence only if the sweep demonstrably read its
+  targets.** A grep that failed to open a file also reports zero matches —
+  an unquoted variable holding several paths, a shim that does not
+  word-split, a binary-skip default — and the output is indistinguishable
+  from a clean sweep. For an absence claim ("this phrase appears nowhere"),
+  pass every path literally, use the system grep with `-a`, and treat any
+  `No such file` on stderr as the sweep not having run. Measured on PR #22:
+  a full round of "ZERO HITS — clean" verdicts were false for exactly this
+  reason.
 
 ## Requirements
 
