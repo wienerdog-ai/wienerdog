@@ -228,6 +228,7 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 | create | tests/unit/dream-pipeline.test.js | Table G, and pipeline-level CLAIM 1 and CLAIM 2b |
 | modify | tests/unit/dream-validate.test.js | the gates' new inputs and the removed enforcement half |
 | modify | tests/integration/dream.test.js | pipeline wiring and abort behaviour |
+| modify | tests/unit/frontmatter-digest-differential.test.js | **AMENDED IN, owner ruling of 2026-08-30 (see the amendment note below).** Row G7 retires `validateAndCommit`, and this file is the ONE surface outside this table that still calls it (`:72`) — for the validator half of a two-sided parity assertion. It is re-pointed at the extracted `tier3` gate, which IS that decision after the extraction. Nothing else about the file changes |
 | modify | docs/adr/0012-dream-run-lifecycle.md | the lifecycle this package changes |
 
 **Not in this package, and the exclusions are load-bearing.**
@@ -240,6 +241,31 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 
 If a further file appears necessary, that is a finding, not a fix: record it
 under "Discovered issues" in the PR body.
+
+**AMENDMENT NOTE — 2026-08-30, owner ruling, one row added.** The implementer
+stopped on the boundary rather than working around it, which is what this
+paragraph asks for. **The rule the ruling states: when a contract RETIRES a
+surface, the Deliverables table must list that surface's consumers too — a
+table that lists only the surface leaves its callers red with no in-boundary
+fix.** Row G7 requires the EP2 revert core to be UNREACHABLE, and its three
+named spans (`validate.js:1325-1333`, `:1334-1338`, `:1362-1364`, re-verified
+on `152ae3a`) all sit inside `validateAndCommit`'s Step 3; removing them leaves
+a validator that preserves a secret and then commits it, so the function is
+retired rather than reduced — which is also what Table V's six inheritances
+already say. **The grant is ONE EXACT FILE ROW, never a directory prefix**
+(`WP-dream-workspace-retarget`'s amendment of 2026-08-27 is the precedent, and
+its reason holds here: a trailing-slash row under `tests/unit/` would open the
+integrity guards this family's designs exist to satisfy).
+
+**The row is scoped by MEASUREMENT, not by estimate.** Every consumer of
+`validateAndCommit` outside `src/` was swept:
+`tests/unit/dream-validate.test.js` (a Deliverables row already),
+`tests/unit/frontmatter-digest-differential.test.js:72` (granted here) and
+**two hits in `tests/fixtures/dream/fake-brain.js` that are COMMENTS**
+(`:187`, `:195`) — prose describing the old pipeline, not a call. The fixture
+is not granted and the comments are not a contract; their staleness is recorded
+under "Discovered issues" instead, exactly as the excluded-file discipline
+requires.
 
 ### Exact contracts
 
