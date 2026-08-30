@@ -797,7 +797,7 @@ test('doctor: every Table A reason class renders its exact message, in row order
   // A hostile key: newline, a callout, an ANSI escape, `..`, a path separator.
   // quarantineReport never reads ledger KEYS at all (only outcome/reason), so
   // this must not surface in any form.
-  const hostileKey = 'evil\n> [!warning] pwn[31m/../traversal' + path.sep + 'x';
+  const hostileKey = 'evil\n> [!warning] pwn\x1b[31m/../traversal' + path.sep + 'x';
   seedLedger(core, {
     '/a/oc1.jsonl': quarantinedRecord('over-ceiling'),
     '/a/oc2.jsonl': quarantinedRecord('over-ceiling'),
@@ -851,7 +851,7 @@ test('doctor: counts come from the ledger, never from a stale/hand-edited/empty 
   assert.match(r.stdout, /^\[warn\] 2 session transcript\(s\) are being skipped: the session file is bigger than Wienerdog will read$/m);
 });
 
-test('doctor: the pointer takes the info branch when reports/warnings.md is a readable non-symlink regular file', () => {
+test('doctor: the pointer takes the info branch when reports/warnings.md is a readable non-symlink regular file, and renders exactly once', () => {
   const { root, core, env } = tempEnv();
   run(['init', '--fresh-vault', '--yes'], env);
   seedLedger(core, { '/a/oc1.jsonl': quarantinedRecord('over-ceiling') });
@@ -860,6 +860,11 @@ test('doctor: the pointer takes the info branch when reports/warnings.md is a re
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /^\[info\] which sessions, and why: reports\/warnings\.md in your vault$/m);
+  assert.equal(
+    r.stdout.split('\n').filter((l) => l.includes('which sessions, and why')).length,
+    1,
+    'the pointer line must render exactly once'
+  );
 });
 
 test('doctor: the pointer warns when reports/warnings.md is absent (vault configured)', () => {
@@ -1023,25 +1028,31 @@ test('doctor: every quarantine-report line matches the doctor grammar — no hea
     '/a/sre1.jsonl': quarantinedRecord('secret-revert-exhausted'),
   });
   const r = run(['doctor'], env);
-  const lines = r.stdout.split('\n').filter((l) => l.length > 0);
+  const lines = r.stdout.replace(/\n$/, '').split('\n');
   assert.ok(lines.length > 0);
   for (const line of lines) {
     assert.match(line, /^\[(ok|warn|info)\] /, `line violates the doctor grammar: ${JSON.stringify(line)}`);
   }
+  // The unrecognized-reason class has zero members here: it must not print a
+  // zero-count line, and exactly the four seeded classes render.
+  assert.doesNotMatch(r.stdout, /does not recognize/);
+  assert.equal(lines.filter((l) => l.includes('are being skipped')).length, 4);
 });
 
-test('doctor: the quarantine group sits after Google readiness and before the update notice, and pre-existing lines are unchanged with no quarantines', () => {
+test('doctor: the quarantine group sits immediately after Google readiness and immediately before the update notice', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
+  plantDamagedToken(core, 'not json');
   seedNewerVersion(core);
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
   const lines = r.stdout.split('\n').filter(Boolean);
-  const idxHarness = lines.findIndex((l) => l.includes('AI tools —'));
+  const idxGoogle = lines.findIndex((l) => l.includes('Google sign-in file looks damaged'));
   const idxOk = lines.findIndex((l) => l === '[ok] no session transcripts are being skipped');
   const idxUpdate = lines.findIndex((l) => l.includes('a newer Wienerdog is available'));
-  assert.ok(idxHarness >= 0 && idxOk >= 0 && idxUpdate >= 0, r.stdout);
-  assert.ok(idxHarness < idxOk && idxOk < idxUpdate, `expected ordering: harness < quarantine-ok < update, got:\n${r.stdout}`);
+  assert.ok(idxGoogle >= 0 && idxOk >= 0 && idxUpdate >= 0, r.stdout);
+  assert.equal(idxOk, idxGoogle + 1, `quarantine group must sit immediately after Google readiness, got:\n${r.stdout}`);
+  assert.equal(idxUpdate, idxOk + 1, `update notice must sit immediately after the quarantine group, got:\n${r.stdout}`);
   // Pre-existing lines are still present and unchanged shape (byte-identical
   // messages) when there are no quarantines: the vault-deferred warn, the
   // manifest/config/core [ok] lines, and the harness summary.
