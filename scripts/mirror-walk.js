@@ -12,11 +12,22 @@
  * mirror lists the checklists already contain. This walks them.
  *
  * WHAT IT CHECKS (exit 1 on any failure, every offender named):
- *   1. Every TABLE ROW ID named inside a Mirrored Surface Checklist entry
- *      resolves to a real table row, IN THAT ENTRY'S RESOLUTION SCOPE.
- *   2. Every TABLE LETTER named there resolves to a real "Table X" heading in
- *      the same scope, at any heading level (specs use both ### and ####).
- *   3. Every docs/specs/*.md PATH named there exists on disk.
+ *   1. Every TABLE LETTER named inside a Mirrored Surface Checklist entry
+ *      resolves to a real "Table X" heading in that entry's resolution scope,
+ *      at any heading level (specs use both ### and ####).
+ *   2. Every docs/specs/*.md PATH named there exists on disk.
+ *   3. That it walked something at all — a run that reaches ZERO entries EXITS
+ *      1. An empty scan and a clean scan are otherwise indistinguishable, and
+ *      this house already treats the absence case that way everywhere else: the
+ *      specs guard every `--test-name-pattern` run with `test -f` because a
+ *      pattern matching nothing exits 0 with a pass count. Measured here: run
+ *      from outside the repo root, or with a misspelled `--scope`, this printed
+ *      a clean verdict over zero specs.
+ *
+ * AND THE REVERSE INDEX, which is the half that earned the tool: `--surface G8`
+ * answers "which checklist entries name this surface" — the query whose absence
+ * produced three of round 6's nine findings, each a sweep that stopped one
+ * surface short of a mirror its own checklist had already named.
  *
  * RESOLUTION SCOPE, because table letters are PER-SPEC and a tree-wide index
  * makes every letter ambiguous: an entry's references resolve against its OWN
@@ -31,6 +42,23 @@
  *   - mirrors named in prose ("the decided-bytes acceptance criterion",
  *     "Current state's validate.js bullet"). --list prints the entry so a
  *     sweeper reads them; they are not mechanically resolvable.
+ *   - THAT A NAMED ROW ID RESOLVES, WHENEVER ITS LETTER IS AMBIGUOUS IN SCOPE.
+ *     Row ids ARE resolved and DO fail — but only where the letter names
+ *     exactly one table in scope. Where two specs in scope both define that
+ *     letter, the reference is reported as AMBIGUOUS and never failed, and a
+ *     row that exists in NEITHER owner passes with it. **Measured on
+ *     2026-08-30, which is why this text was rewritten twice:** breaking
+ *     `Q8` -> `Q88` inside a promote-family checklist entry left the run at
+ *     exit 0, because Table Q is defined both here and in
+ *     `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. The ambiguity branch
+ *     short-circuits the existence check.
+ *     THE CONSEQUENCE IS WORST EXACTLY WHERE THIS TOOL WAS BUILT: the promote
+ *     family shares B, H, N, Q and R with that shipped package, so its own row
+ *     references get no row-level protection at all. A green run over this
+ *     family asserts table existence, path existence and non-vacuity — not
+ *     rows. An earlier header claimed row resolution outright; a review gate
+ *     proved that false, and a first correction claimed rows are never resolved,
+ *     which the tree-wide output falsified in the other direction.
  *   - `<letter><n>` ids whose letter names no table in the scope. Other specs
  *     in this repo address Deliverables rows, verification commands and
  *     test-index rows with that same shape; those are SKIPPED and counted.
@@ -242,6 +270,20 @@ function main() {
   }
 
   const specsWithChecklists = new Set(all.map((a) => a.file)).size;
+  // VACUITY GUARD. Zero walked entries EXITS 1. A run that reached nothing and a
+  // run that found nothing wrong print the same verdict otherwise, and this
+  // house already treats the absence case that way everywhere else — the specs
+  // guard every `--test-name-pattern` run with `test -f` because a pattern
+  // matching nothing exits 0 with a pass count. Measured: run from outside the
+  // repo root, or with a misspelled `--scope`, this printed a clean verdict over
+  // zero specs.
+  if (all.length === 0) {
+    console.error(
+      `mirror-walk: walked ZERO checklist entries${scope ? ` for scope "${scope}"` : ''} — ` +
+        'nothing was checked. Run it from the repository root, and check the --scope spelling.'
+    );
+    process.exit(1);
+  }
   console.log(`mirror-walk${scope ? ` (scope: ${scope})` : ''}: ${all.length} checklist entries across ${specsWithChecklists} specs (${files.length} scanned)`);
   console.log(`  row references: ${all.reduce((n, a) => n + a.refs.rows.length, 0)}   table references: ${all.reduce((n, a) => n + a.refs.letters.length, 0)}   spec-path references: ${all.reduce((n, a) => n + a.refs.paths.length, 0)}`);
   if (skipped.length) {
@@ -264,7 +306,11 @@ function main() {
     for (const f of failures) console.log(`  ${f}`);
     process.exit(1);
   }
-  console.log('\nEvery mechanically-addressable mirror resolves. THIS DOES NOT MEAN ANY SURFACE WAS SWEPT.');
+  console.log(
+    '\nEvery TABLE and SPEC PATH named in these checklists resolves, and the walk was not vacuous.\n' +
+      'NOT CLAIMED: that any surface was SWEPT, that a mirror list is COMPLETE, or that row ids\n' +
+      'resolve where their letter is ambiguous in scope (see the header).'
+  );
   process.exit(0);
 }
 
