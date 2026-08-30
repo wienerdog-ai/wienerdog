@@ -68,11 +68,16 @@ characters, and the owner ruled it lettered (round 6 of the design loop;
 `grep -rhoE '^### Table [A-Z]' docs/specs/` **at `98f0cef` — the tip BEFORE this
 amendment created Table Y** — the letters live anywhere under
 `docs/specs/` were A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
-and W, and I, X, Y and Z occurred nowhere. **Measured again at `5bacae5`, the tip of the amendment that created it, the
-list was that same set plus Y, with I, X and Z still free.** Both readings name
+and W, and I, X, Y and Z occurred nowhere. **Re-measured at `5bacae5`, the parent of the commit that recorded this
+sentence, the list was that same set plus Y, with I, X and Z still free.**
+(Table Y itself was created earlier, at `e23a5bb` — verified: absent at
+`98f0cef`, present at `e23a5bb`. An earlier form of this sentence called
+`5bacae5` "the tip of the amendment that created it", which named the wrong
+commit AND used a pointer that stopped being the tip the moment the next
+commit landed.) Both readings name
 the revision they were taken at and neither is present tense, because a
-present-tense measurement is falsified by the very change it justifies — which is what the round-2 PR gate found here, in
-a sentence that carried both tenses at once and contradicted itself three
+present-tense measurement is falsified by the very change it justifies — which
+is what the round-2 PR gate found here, in a sentence that carried both tenses at once and contradicted itself three
 clauses apart.
 
 `Y` therefore collides with nothing in

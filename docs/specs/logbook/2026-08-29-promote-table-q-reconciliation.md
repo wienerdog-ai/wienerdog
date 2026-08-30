@@ -1874,19 +1874,20 @@ rebase of that branch. This record states only why it exists and where it went,
 and the remedy was DELETION, not a fourth re-wording: a second description is
 exactly what produced the finding.**
 
-**HISTORICAL, and qualified — read the canonical header before trusting it.**
-The run this section reported was taken at `c96c7e3`, before the tool left this
-branch; its verbatim output is NOT reproduced here — a paste nobody can refresh
-is a citation that goes stale silently — so no reader can re-run it on this
-branch; and its `row references: 68` assert NOTHING, because
-the canonical header records that a green run says nothing about row ids until
-`stripFindingIds` is fixed. What it does establish is TABLE and SPEC-PATH
-resolution. With that stated:
-**the family is GREEN on what the tool actually checks, and
-   the two skipped ids are correct skips** (`M2`, `M3` in the module spec: rows
-   of an unlettered table, so their letter names no `Table M`. Observed, not
-   filed — an unlettered table with three rows is nowhere near this pass's
-   threshold, and noting it is not the same as extracting it).
+**WHAT THE FIRST RUN FOUND — HISTORICAL, and qualified.** Read the canonical
+header before trusting any of it. The run was taken at `c96c7e3`, before the tool
+left this branch, and its verbatim output is NOT reproduced here: a paste nobody
+can refresh is a citation that goes stale silently, and no reader can re-run it
+on this branch. Its reported row-reference count asserts nothing, because the
+canonical header records that a green run says nothing about row ids until
+`stripFindingIds` is fixed. What it does establish is what the header's table
+and spec-path checks cover.
+
+1. **The family was GREEN on what the tool actually checks, and the two skipped
+   ids are correct skips** (`M2`, `M3` in the module spec: rows of an unlettered
+   table, so their letter names no `Table M`. Observed, not filed — an
+   unlettered table with three rows is nowhere near this pass's threshold, and
+   noting it is not the same as extracting it).
 2. **The AMBIGUITY report is a measurement nobody had taken:** the family's
    letters collide not only with the shipped EP2 package the map lists, but also
    with **`WP-dream-gate-inputs-baseline-delta`'s Tables C, D and E** and with
@@ -2228,11 +2229,11 @@ and a divergence list that included them would bury the four items that matter.
   owner meant a different precedent, the script's shape is the thing to re-examine
   first.
 
-## QUEUED, owner-ratified — three items this arc produced and did not do
+## QUEUED, owner-ratified — FIVE items: three this arc produced, two standing
 
 1. **A structural parser check in the lint pipeline.** An unclosed code fence
    swallowed 764 lines of `WP-dream-promote-report.md` — every heading from
-   `## Contract reference` down, all four contract tables, both prose sections
+   `## Contract reference` down, all three named contract tables (N, R and Y), both prose sections
    and every acceptance criterion rendered as JavaScript — and survived FOUR
    gate passes with `npm run lint` green. It survived because every check this
    arc ran greps raw text, and a lexical check cannot see a structural break.
