@@ -61,7 +61,7 @@ against itself; this is that lesson applied.
 |---|---|---|---|---|---|
 | 1 | Codex rubric (gptsol) | `aea77ef` | patch is incorrect | 2 (both P2, both PRODUCT) | `2026-08-30-promote-report-pr-gate-round-1-gptsol-raw.txt` @ `80e0f84` |
 | 1 | spec fidelity (wd-reviewer) | `aea77ef` | REQUEST-CHANGES | 9 | `2026-08-30-promote-report-pr-gate-round-1-wd-reviewer-raw.txt` @ `410b67c` |
-| 2 | spec fidelity (wd-reviewer) | `795f904` | _running_ | _running_ | _pending_ |
+| 2 | spec fidelity (wd-reviewer) | `795f904` | REQUEST-CHANGES | 4 (1 BLOCKER, 1 product, 2 residual) | `2026-08-30-promote-report-pr-gate-round-2-wd-reviewer-raw.txt` @ `c43d63c` |
 | 2 | Codex rubric (gptsol) | `795f904` | _running_ | _running_ | _pending_ |
 
 Raw output is committed BEFORE it is read or judged, and each row cites the raw
@@ -141,3 +141,112 @@ the trailing-slash test, literal equality reddens the canonical-identity test,
 and the un-normalised separator reddens R3. The round-1 RED probes were re-run
 on the changed surface and still discriminate — an unwired interpolation still
 makes composition refuse, and sanitise-first still leaks.
+
+---
+
+# ROUND 2 — ESCALATION TRIGGER (i) HAS FIRED. THE LOOP STOPS HERE.
+
+**The pinned criterion is met, and it was pinned before either gate's output was
+readable precisely so this could not be rationalised past.** Trigger (i): *two
+consecutive rounds land findings of the same KIND.*
+
+| | Round 1 | Round 2 |
+|---|---|---|
+| Gate | Codex rubric | spec fidelity |
+| Findings on **report-path derivation and identity** | 2 of 2 | 3 of 4 |
+
+- **Round 1**: `reportRel` built by a naive join (empty segment → the primitive
+  throws); the body matched by literal `===` (NFC/NFD → the report written twice).
+- **Round 2**: the derivation is STILL not H1-valid (a `.` segment throws, from
+  three `reports_dir` values `readVaultLayout` really returns); the matching
+  predicate OVER-matches (two spellings in one run → both delta records lose
+  their carrier entirely); and the derived path and the matched path DISAGREE at
+  the record on the fallback arm.
+
+**Round 2's first two findings are defects in round 1's own fixes.** That is the
+treadmill this repo has twice been through, and the runbook names the exit:
+*"When two consecutive rounds land findings of the same kind, the next step is a
+design question, never another textual patch."*
+
+## Both round-2 product findings independently reproduced
+
+Neither was taken on the gate's word.
+
+```
+readVaultLayout(".")             -> "."                 << PRESERVED
+readVaultLayout("reports/./dreams") -> "reports/./dreams"  << PRESERVED
+readVaultLayout("./reports")     -> "./reports"          << PRESERVED
+
+promote(reports_dir="reports/dreams/")  -> outcome = fallback          (round 1's fix holds)
+promote(reports_dir="reports//dreams")  -> outcome = fallback          (round 1's fix holds)
+promote(reports_dir=".")                -> THREW: `rel` has a "." path segment
+promote(reports_dir="reports/./dreams") -> THREW: `rel` has a "." path segment
+promote(reports_dir="./reports")        -> THREW: `rel` has a "." path segment
+```
+
+`splitRel` (`src/core/dream/vault-write.js`) rejects **three** segment shapes —
+empty, `.`, `..` — and `isSafeRelativePath` (`src/core/layout.js:65-71`) filters
+only **two** of them — absolute and `..`. The caller must close the other two,
+and round 1's fix closed one.
+
+The identity over-match, reproduced with a cloned delta record (this Mac's
+tmpdir is case-insensitive and cannot hold both spellings):
+
+```
+delta rels                = [ 'reports/dreams/2026-08-29.md', 'reports/Dreams/2026-08-29.md' ]
+promoted/redacted/refused = 0 0 0
+records with NO carrier   = [ 'reports/dreams/2026-08-29.md', 'reports/Dreams/2026-08-29.md' ]
+```
+
+Both records match `isReport`, `reportBody` is assigned twice and the second
+assignment silently discards the first. **That is the exact state the module
+throws for one branch earlier** — `promote: no outcome was decided for …` —
+reached without the throw.
+
+## WHY A THIRD PATCH IS THE WRONG MOVE, stated as a measurement rather than a preference
+
+The gate grepped all four family specs — `WP-dream-promote-report`,
+`WP-dream-promote-module`, `WP-dream-promote-in-workspace`,
+`WP-dream-vault-write-primitive` — for the derivation and the identity rule.
+**No row anywhere pins either one.** The family pins the primitive's
+OBLIGATION (Table H, row H1) and leaves the caller-side half of that contract to
+be invented by an implementer — which has now happened twice, both times under
+gate pressure, and both inventions were defective.
+
+**The mirror is the evidence.** `promote.js`'s own comment states the rule as
+"empty segments are dropped, exactly as `isUnder` reads a layout directory". That
+is a true statement of the code and a PARTIAL statement of H1's rule: the surface
+it mirrors rejects three segment shapes and this one handles one. The test
+repeats the same partial rule — and spends its one case on `'/reports/dreams'`,
+an input `readVaultLayout` **cannot return**, while missing all three reachable
+broken ones. A mirror that has fallen out of agreement with its canonical table,
+and it is the same mirror both product defects came through.
+
+A third invention has the same expected defect rate as the first two. The fix
+must land against a CONTRACT, not against the last gate's example.
+
+## THE OWNER QUESTION
+
+**Pin the caller-side path contract before `promote.js` is touched again.** Three
+facts, and they are wd-architect's to write, not the implementer's:
+
+1. **DERIVATION** — how `reportRel` is built from `layout.reports_dir` and
+   `<date>.md`, and its standing obligation to satisfy row H1. Name which shapes
+   `readVaultLayout` already guarantees (absolute, `..`) and which the CALLER must
+   drop (`.`, empty), so the next implementer is not re-deriving the split.
+2. **IDENTITY** — the predicate matching a delta record to the report body, its
+   folding rule, and **what happens when MORE THAN ONE record matches**. Today
+   that case silently drops both.
+3. **AUTHORITY** — which path the record NAMES and which the fallback TARGETS on
+   the `published:false` arm. After round 1's fix these are two different values
+   and no surface says which is authoritative.
+
+**The mechanical fix for finding 1 is one expression and is known** — adding
+`s !== '.'` to the filter — and it is deliberately NOT applied here. Applying it
+would be the third textual patch on the contract the loop keeps hitting, which is
+what the trigger exists to prevent.
+
+**Nobody is exposed while this sits.** The module ships consumed by nothing (the
+consumed-by-nothing grep exits 0 in both rounds), the PR is unmergeable with both
+gates requesting changes, and `reports_dir` is a hand-edited config key whose
+default (`reports/dreams`) is unaffected by either defect.
