@@ -1083,6 +1083,7 @@ test('doctor: no digest (plain init --yes) → no block line at all, even with a
   assert.equal(fs.existsSync(path.join(core, 'state', 'digest.md')), false);
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] AI tools — Claude Code: found/m); // non-vacuity: D1, not D2
   assert.doesNotMatch(r.stdout, /Wienerdog block in/);
 });
 
@@ -1191,7 +1192,7 @@ test('doctor: the block group sits after the skill-link lines and before the qua
   assert.equal(r.status, 0);
   const lines = r.stdout.split('\n').filter(Boolean);
   const idxSkills = lines.findIndex((l) => l.includes('Claude Code skills registered'));
-  const idxBlock = lines.findIndex((l) => l.includes('Wienerdog block in'));
+  const idxBlock = lines.findIndex((l) => l.startsWith('[warn] the Wienerdog block in '));
   const idxQuarantine = lines.findIndex((l) => l === '[ok] no session transcripts are being skipped');
   assert.ok(idxSkills >= 0 && idxBlock >= 0 && idxQuarantine >= 0, r.stdout);
   assert.ok(idxSkills < idxBlock, `block line must follow the skill-link lines:\n${r.stdout}`);
