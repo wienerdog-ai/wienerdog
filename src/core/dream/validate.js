@@ -678,6 +678,45 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
 
 
 /**
+ * RETAINED DELIBERATELY, WITH NO PRODUCTION CALLER, AND THE REASON IS A
+ * DIFFERENTIAL GUARANTEE.
+ *
+ * Under promotion the run's added-line numbers come from the git-free delta
+ * primitive, so no gate parses a diff any more and this parser has no caller in
+ * `src/`. What it still has is a JOB: `tests/unit/dream-delta.test.js` uses it
+ * as the REFERENCE against which `computeDelta`'s `addedLineNumbers` are proved
+ * equivalent to git's own answer, loading it out of this file precisely so the
+ * comparison is against the real thing rather than a copy that can drift.
+ * Deleting it would not remove a git dependency from any gate — the gates
+ * consult none — it would only delete the cross-check that the replacement
+ * agrees with what it replaced.
+ *
+ * The 1-based line numbers THIS run added, read out of a `git diff -U0` hunk
+ * header. The header shape is not the obvious one: git omits `,<count>` on
+ * either side whenever that side's count is 1, and it omits them
+ * independently, so a pattern requiring `,b` never matches a single-line
+ * replacement (`@@ -2 +2 @@`) at all and one that reads a missing `,d` as 0
+ * never matches a single-line insertion (`@@ -2,0 +3 @@`). Both omissions fail
+ * closed — the scrub becomes a no-op and the note is withheld — which is why
+ * both are parsed here rather than discovered later.
+ * @param {string} diff  the raw `git diff --cached -U0 -- <rel>` output
+ * @returns {number[]} 1-based line numbers in the NEW file
+ */
+function addedLineNumbersFromDiff(diff) {
+  /** @type {number[]} */
+  const out = [];
+  for (const line of String(diff).split('\n')) {
+    // Anchored at ^ and indifferent to the trailing function-context string.
+    const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!m) continue;
+    const start = Number(m[3]);
+    const count = m[4] === undefined ? 1 : Number(m[4]); // absent → 1; 0 → pure deletion
+    for (let i = 0; i < count; i += 1) out.push(start + i);
+  }
+  return out;
+}
+
+/**
  * Can these bytes be decoded as UTF-8 and re-encoded to exactly themselves?
  *
  * THE PER-LINE SCRUB HAS TO DECODE THE WHOLE NOTE, AND A DECODE IS ONLY SAFE IF
