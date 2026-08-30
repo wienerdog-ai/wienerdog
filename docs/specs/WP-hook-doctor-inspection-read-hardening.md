@@ -14,6 +14,19 @@ epic: digest-delivery
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template
   gives the skeleton, the runbook the rules. Read both.
 
+> **Revision 4, 2026-08-30 — design round 3 returned 6 findings, and every
+> mechanism passed.** Round 3 confirmed the E6 gates go RED on the `emit = false`
+> mutation, the `-f` matrix matches the tables, and all six round-2 fixes are
+> substantively present. **All six new findings were restatement surfaces
+> contradicting ratified canon** — no design decision was left in any of them.
+> Fixed in the style ADR-0031 prefers: **deletion over patching**, so a fact lives
+> once and the copies point at it. Two restatements survive because they ship in
+> code (the script's comments and `digestBlockChecks`' JSDoc); both are now
+> registered on the Mirrored Surface Checklist and both were rewritten to point
+> rather than claim. The script changed, so it was re-embedded and everything
+> re-run: **26/26 sweep, 22/22 hooks-fail-open, all Table E gates green,
+> 21.4 ms**.
+>
 > **Revision 3, 2026-08-30 — design round 2 returned 6 findings; the owner
 > dispositioned all six FIX.** Round 2 verified the nine round-1 fixes except one
 > narrowly (its finding 1 here). The two that changed the design again: **opening
@@ -194,7 +207,7 @@ machine:
 - every FIFO row **returns promptly** under a `spawnSync` timeout, where the
   shipped script times out;
 - `tests/integration/hooks-fail-open.test.js` passes **22/22, byte-unchanged**;
-- elapsed time **22.8 ms** average over five runs on a 32 KB digest with a
+- elapsed time **21.4 ms** average over five runs on a 32 KB digest with a
   matching block — against 22.4 ms for the shipped script, i.e. the descriptor
   mechanism plus `O_NOCTTY` plus the read-to-EOF loop cost nothing measurable,
   and the ADR-0004 `<200ms` budget is intact;
@@ -285,14 +298,15 @@ contains **no `'` character anywhere** — verified, 128 payload lines, zero hit
 ```bash
 #!/usr/bin/env bash
 # Wienerdog SessionStart hook (enrichment, not capture): injects the
-# pre-rendered digest into a new session — but ONLY when the managed block in
-# some present harness CLAUDE.md / AGENTS.md is NOT already carrying exactly
-# these bytes. When every present harness already carries them, it emits
-# nothing (ADR-0039). Fast: a few small descriptor reads and one string compare.
-# GENUINELY fail-open — always exit 0 (audit A6/F4): no `set -e`, every fallible
-# step is best-effort, and ANY doubt injects. The fail-open structural contract
-# is Table E of docs/specs/WP-hook-doctor-inspection-read-hardening.md; this
-# comment cites it and does not restate it.
+# pre-rendered digest into a new session. It emits NOTHING in exactly one case:
+# at least one harness is present AND every present harness CLAUDE.md /
+# AGENTS.md already carries exactly these bytes. Every other state injects —
+# including no harness present at all (ADR-0039). Fast: a few small descriptor
+# reads and one string compare. GENUINELY fail-open — always exit 0 (audit
+# A6/F4): no `set -e`, every fallible step is best-effort, and ANY doubt
+# injects. The fail-open structural contract is Table E of
+# docs/specs/WP-hook-doctor-inspection-read-hardening.md; this comment cites it
+# and does not restate it.
 
 # Skip during Wienerdog own scheduled jobs (dream/digest) so unattended runs
 # start context-free and never re-read state mid-job.
@@ -320,13 +334,13 @@ DIGEST="$CORE/state/digest.md"
 # no jq dependency. Every path is opened O_RDONLY|O_NONBLOCK, type-checked by
 # fstat on that same descriptor, and read only when it is a regular file within
 # the ceiling, so a FIFO, socket, device or directory is refused unread. Neither
-# claim is absolute and the spec says so: O_NONBLOCK is not a blocking guarantee
-# for every device class, and the -f pre-filter above leaves a swap window the
-# descriptor pair cannot close. Both are named residuals. The envelope is built
-# first and written in ONE call; on any read failure it emits NOTHING — empty
-# stdout means "no additional context", never a partial envelope. The dedup
-# decision sits in its own try/catch whose catch sets emit=true: any error, any
-# ambiguity, any doubt injects.
+# guard is absolute; the bounds are residuals R-A and R-B in the spec, which this
+# comment points at rather than restating. The envelope is built first and
+# written in ONE call. Read failures are NOT uniform and must not be described as
+# if they were: a failure of the DIGEST read emits nothing (there is no content
+# to inject), while a failure of a HARNESS-TARGET read is doubt, and doubt
+# injects. The dedup decision sits in its own try/catch whose catch sets
+# emit=true.
 node -e '
 var fs = require("fs");
 var path = require("path");
@@ -473,8 +487,11 @@ exit 0
 **2. `src/cli/doctor.js` — `digestBlockChecks`, unchanged signature.**
 
 ```js
-/** Read-only. Never throws, never mutates, never blocks on a non-regular path,
- *  and never resident-loads more than the Table C ceiling per target.
+/** Read-only: never throws, never mutates. Its read discipline, memory bound and
+ *  the residuals that bound them are decided in
+ *  docs/specs/done/WP-hook-doctor-inspection-read-hardening.md — Table C
+ *  (mechanism), Table B row B7 (memory), R-A/R-B (residuals). This comment
+ *  points there and states no guarantee of its own.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @param {{claude:{present:boolean}, codex:{present:boolean}}} harnesses
  *  @returns {{status:'ok'|'warn', msg:string}[]} */
@@ -578,8 +595,8 @@ factor" and could not have passed its own AC8, because no number existed to test
 |----|------|-------|-----|
 | C1 | inspection ceiling for any path either surface reads | **4 MiB** (`4194304` bytes) | already the hook's `MAX_TARGET_BYTES`; doctor adopts the same number so the two cannot disagree about which files they will inspect |
 | C2 | how a path is read | `open(path, O_RDONLY \| O_NONBLOCK \| O_NOCTTY)` → `fstat` **that descriptor** → refuse unless `isFile()` → bounded `read` from **the same descriptor**, **to EOF**, stopping at `ceiling + 1` → `close`. Getting more than `ceiling` bytes is over-ceiling, discovered by reading | one descriptor for check and read closes the swap window between them; `O_NONBLOCK` makes `open` return immediately on a FIFO read-end; `O_NOCTTY` keeps a terminal device from becoming the process's controlling terminal |
-| C2a | **`st_size` has exactly two roles, and neither is "length"** | **Role 1, both surfaces:** a cheap **over-cap check** before any content read, so an over-ceiling file is refused having read zero content bytes. **Role 2: none.** `st_size` is **never** used as the number of bytes to read or as the content length | a readable regular file may report `st_size` 0 and still yield bytes (the procfs class), so a reader that trusts it sees an empty file. Round 2 finding 3. The two roles are listed separately here precisely because revision 2 conflated them |
-| C2b | the hook does **not** perform the `ceiling + 1` probe as an over-cap *decision* | it takes `fstat.size` from the descriptor it already holds and injects immediately when that exceeds the ceiling (Table A row A-H7), reading zero content bytes. Its read loop is still capped at `ceiling + 1` so an `st_size`-0 file cannot exceed the bound | preserves the shipped A10 contract and the `<200ms` measurement. **Owner- and Codex-confirmed** (round 2): open-without-content-read is within A10's intent and better than a separate `stat` |
+| C2a | **`st_size` has exactly two roles — this row enumerates both, and neither is "length"** | **Role 1 — doctor: a cheap over-cap check.** An over-ceiling file is refused having read zero content bytes. **Role 2 — the hook: the over-cap decision itself** (row C2b). **NEVER a length:** `st_size` is never the number of bytes to read, and never the content length, on either surface | a readable regular file may report `st_size` 0 and still yield bytes (the procfs class), so a reader that trusts it as a length sees an empty file. Round 2 finding 3. Round 3 found revision 3 saying "exactly two roles" and then listing "Role 2: none" while C2b defined a second role — one formulation now, here |
+| C2b | **Role 2 in full:** the hook does not probe for over-cap, it decides | it takes `fstat.size` from the descriptor it already holds and injects immediately when that exceeds the ceiling (Table A row A-H7), reading zero content bytes. Its read loop is still capped at `ceiling + 1` so an `st_size`-0 file cannot exceed the bound | preserves the shipped A10 contract and the `<200ms` measurement. **Owner- and Codex-confirmed** (round 2): open-without-content-read is within A10's intent and better than a separate `stat` |
 | C2c | **layered defense against special-file open side effects** | **(a)** the bash scaffold keeps a **`-f` pre-filter** on the digest path — **defense in depth, NOT the authority**: the descriptor `fstat` decides, and `-f` may never be the reason a decision is correct. It rejects a non-regular path **at rest without opening it**, which is protection the shipped script had and which open-then-`fstat` cannot give back. **(b)** `O_NOCTTY` in the flags of both readers. **(c)** the remaining window is a **named residual** — see Residuals below | round 2 finding 2: opening a special file has effects **before** `fstat` can reject it. Demonstrated on this machine: `digest.md` symlinked to a pseudoterminal, opened without `O_NOCTTY`, **acquired a controlling terminal**. The Linux auto-rewind tape class acts even on `close()`, which would collide with doctor's never-mutates claim |
 | C3 | symlink policy | **targets and the digest are judged on the RESOLVED type** — a symlink to a regular file is acceptable and must keep working. **Only `AGENTS.override.md` is judged on the link itself** (`lstat`), because a shadow file's mere presence is the signal and a link we cannot resolve is not certainty | round 1 finding 4: revision 1's prose said "type probes are `lstat`", which contradicted both tables |
 | C4 | the constants' homes | the hook's inline `MAX_TARGET_BYTES`, and a named constant in `src/cli/doctor.js` | the hook cannot `require` (Implementation notes), so the value is stated twice by necessity. **Both are mirrors of C1** and move in one pass |
@@ -642,10 +659,27 @@ restating it, and moves with it:
 - [ ] Acceptance criteria — one per row of Tables A, B and D, plus C1 parity and Table E
 - [ ] Verification commands / greps
 - [ ] Current-state descriptions D1–D5 and the two probe tables
-- [ ] The shipped hook's header comment — cites Table E
-- [ ] `digestBlockChecks`' JSDoc — Tables B and C
 - [ ] The two ceiling constants named in Table C row C4
 - [ ] Table E's own registered-mirror list (above)
+
+**The two restatements that SHIP IN CODE and therefore cannot be deleted** —
+registered here explicitly, because rounds 1–3 each found a defect in this class
+and an unregistered in-code comment is how every one of them survived:
+
+- [ ] **The shipped hook's header and inline comments.** They must **point**, not
+      restate: Table E for the fail-open structure, R-A/R-B for the residual
+      bounds. Round 3 found two that still carried their own claim — a header
+      whose "ONLY when" was false for the zero-harness case, and an "on any read
+      failure it emits NOTHING" that is true of the digest read only. Both now
+      state the digest/target asymmetry or defer.
+- [ ] **`digestBlockChecks`' JSDoc.** Same rule: it cites Table C, Table B row B7
+      and R-A/R-B and states **no guarantee of its own**. Round 3 found it
+      claiming "at most the ceiling resident per target" (contradicting B7's
+      measured `N`) and "never blocks on a non-regular path" (contradicting R-B).
+
+**Everywhere else, the fix for a drifted mirror is DELETION, not repair**
+(ADR-0031). A restatement that exists only to be kept in sync is a liability;
+four consecutive review rounds on this spec found nothing but this class.
 
 ## Residuals — named, owner-accepted
 
@@ -693,24 +727,28 @@ universal the mechanism does not earn.
   read is to *not block*: `O_NONBLOCK` plus a type check. A timeout would still
   have opened the FIFO, and it would be a process outliving its decision.
 - **`doctor` never mutates (WP-070)** and never sets `fail` from this check.
-- **The `<200ms` hook budget (ADR-0004) still binds** — measured **22.8 ms** for
-  the revision-3 script. Re-measure and state the number.
+- **The `<200ms` hook budget (ADR-0004) still binds.** The measured figure lives
+  in Current state; re-measure and state your own rather than copying it.
 - Plain Node ≥ 18, zero new dependencies, JSDoc types, no build step.
 - Ambiguity → choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
 
 ## Security checklist
 
-- [ ] Every path either surface reads is **opened once and type-checked on that
-      descriptor**, so a FIFO, socket or device cannot block, and **no swap
-      between check and read is possible** — the window round 1 found is closed
-      by construction, not narrowed.
+- [ ] Every path either surface reads goes through the Table C row C2 mechanism
+      and the row C2c layering, **with the limits those rows carry**: the
+      check-to-read window is closed *between the `fstat` and the read on one
+      descriptor*, and the guards are bounded by residuals **R-A** and **R-B**.
+      This item asserts conformance to those rows; it deliberately states no
+      universal of its own, because the two it used to state ("cannot block", "no
+      swap is possible") were both wider than the mechanism earns.
 - [ ] Symlink policy is per Table C row C3 and is **deliberately asymmetric**:
       targets and the digest are judged on the **resolved** type (a symlink to a
       regular file keeps working — AC4 pins it); `AGENTS.override.md` is judged
       on the **link** (`lstat`), because presence is the signal.
-- [ ] Every read is **bounded** by the Table C ceiling, so no inspected path can
-      drive Wienerdog's memory by growing.
+- [ ] Every read is **bounded** per Table C row C1 and Table B row B7, so no
+      inspected path can drive Wienerdog's memory by growing. The bound is
+      `N x ceiling`, not the ceiling — B7 owns the number.
 - [ ] No untrusted identifier flows into a filesystem path or a shell command;
       the new warns interpolate only Wienerdog-composed paths and code-owned
       numbers. Nothing read is executed.
@@ -752,8 +790,9 @@ instead of failing it (round 1 finding 8).
       **never** suggesting `wienerdog sync`. A grep proves `sync` is absent from
       that message.
 - [ ] **AC8 (B7), with an objective threshold.** On a target of at least 64 MiB,
-      `doctor`'s peak RSS must not exceed **baseline + 68 MiB** (`N x ceiling`,
-      `N = 17`, ceiling 4 MiB — the table under Table B row B7). **Baseline on
+      `doctor`'s peak RSS must not exceed **baseline + the Table B row B7 bound**
+      (B7 owns `N`, the ceiling and the product; this criterion asserts against
+      it and does not restate the number). **Baseline on
       `152ae3a`: 418 MB peak against a 61 MB normal-file baseline**, i.e. today's
       code fails this by a wide margin and grows without limit above 64 MiB.
       **Run it at two sizes — 64 MiB and 256 MiB — and show the peak barely
@@ -796,7 +835,7 @@ instead of failing it (round 1 finding 8).
       Linux with plain `mkfifo` / `fs.symlinkSync`.
 - [ ] **AC15 (budget):** the hook's measured time on a normal digest with a
       matching block stays well under 200 ms; the PR states the number
-      (22.8 ms measured for the revision-3 script).
+      (Current state records the figure measured for the specified script).
 - [ ] **AC16 (C2a, `st_size` is not a length):** a readable regular file that
       reports `st_size` 0 and still yields bytes is read correctly, not as empty,
       by **both** surfaces. On Linux a procfs path serves; where the platform
@@ -885,11 +924,17 @@ grep -n "writeFileSync\|mkdirSync\|chmodSync\|rmSync\|unlinkSync" src/cli/doctor
 # docs/specs/done/WP-doctor-quarantine-counts.md, must still print OK.
 ```
 
-Three measurements are taken by hand and pasted, because no unit test asserts
+Two measurements are taken by hand and pasted, because no unit test asserts
 them: **doctor's peak RSS** on a ≥64 MiB target (`/usr/bin/time -l` on macOS,
-`-v` on Linux) against its normal-file baseline; **the hook's elapsed time** on a
-normal digest with a matching block; and **AC14's Linux run** of the two hook
-suites. State every number and the baseline compared against.
+`-v` on Linux) against its normal-file baseline, per **AC8**; and **the hook's
+elapsed time** on a normal digest with a matching block, per **AC15**. State
+every number and the baseline compared against.
+
+**The Linux evidence is a third obligation and is NOT summarised here.** It is
+enumerated in **AC14** — suites, fixture rows, actor, timing, and what counts as
+a recorded observation — and this paragraph deliberately does not repeat the
+list, because the previous revision's summary re-narrowed it to "the two hook
+suites", which is the exact drift AC14 was widened to prevent.
 
 ## Out of scope (do NOT do these)
 
