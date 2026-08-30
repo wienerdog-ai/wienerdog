@@ -42,23 +42,24 @@
  *   - mirrors named in prose ("the decided-bytes acceptance criterion",
  *     "Current state's validate.js bullet"). --list prints the entry so a
  *     sweeper reads them; they are not mechanically resolvable.
- *   - THAT A NAMED ROW ID RESOLVES, WHENEVER ITS LETTER IS AMBIGUOUS IN SCOPE.
- *     Row ids ARE resolved and DO fail — but only where the letter names
- *     exactly one table in scope. Where two specs in scope both define that
- *     letter, the reference is reported as AMBIGUOUS and never failed, and a
- *     row that exists in NEITHER owner passes with it. **Measured on
- *     2026-08-30, which is why this text was rewritten twice:** breaking
- *     `Q8` -> `Q88` inside a promote-family checklist entry left the run at
- *     exit 0, because Table Q is defined both here and in
- *     `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. The ambiguity branch
- *     short-circuits the existence check.
- *     THE CONSEQUENCE IS WORST EXACTLY WHERE THIS TOOL WAS BUILT: the promote
- *     family shares B, H, N, Q and R with that shipped package, so its own row
- *     references get no row-level protection at all. A green run over this
- *     family asserts table existence, path existence and non-vacuity — not
- *     rows. An earlier header claimed row resolution outright; a review gate
- *     proved that false, and a first correction claimed rows are never resolved,
- *     which the tree-wide output falsified in the other direction.
+ *   - ROW IDS, RELIABLY. Row resolution is PARTIAL, and after three attempts to
+ *     describe the rule — one by this file's author, one by a review gate, one
+ *     more here — NOBODY HAS PINNED IT DOWN, so this header stops asserting a
+ *     mechanism and states only what is demonstrable. Measured 2026-08-30 with
+ *     one-token edits in a full working copy, `--scope promote`:
+ *         `row S6`  -> `row S66`           exit 1   caught
+ *         `row Q9`  -> `row Q99`           exit 0   NOT caught
+ *         `**Q9**`  -> `**Q99**`           exit 0   NOT caught
+ *         `rows Q8 and ...` -> `Q88`       exit 0   NOT caught
+ *         `rows G8 and G10` -> `G100`      exit 0   NOT caught
+ *     Both syntactic position and letter ambiguity look involved — `S` names one
+ *     table in this family's scope, `Q` names two (here and in the shipped
+ *     `WP-secret-fence-ep2-redact-arm`) — but a review gate reports the opposite
+ *     result for a `Q8` edit, and that disagreement is unresolved. **So: a green
+ *     run asserts NOTHING about row ids.** Some breaks are caught; do not rely
+ *     on it, and do not let a green run stop you reading. If you need this
+ *     guarantee, the honest fix is to characterise the resolver first — not to
+ *     write a fourth description of it.
  *   - `<letter><n>` ids whose letter names no table in the scope. Other specs
  *     in this repo address Deliverables rows, verification commands and
  *     test-index rows with that same shape; those are SKIPPED and counted.
@@ -208,6 +209,22 @@ function main() {
     }
   }
 
+  // VACUITY GUARD, applied to EVERY mode before any of them can report success.
+  // A run that reached nothing and a run that found nothing wrong are otherwise
+  // indistinguishable, and this house already treats the absence case that way:
+  // the specs guard every `--test-name-pattern` run with `test -f` because a
+  // pattern matching nothing exits 0 with a pass count. Measured — outside the
+  // repo root, a misspelled `--scope`, and (found by the second gate round)
+  // `--surface X --scope <typo>` and `--list <missing spec>` — each printed a
+  // success and exited 0 over zero entries.
+  if (all.length === 0) {
+    console.error(
+      `mirror-walk: walked ZERO checklist entries${scope ? ` for scope "${scope}"` : ''} — ` +
+        'nothing was checked. Run it from the repository root, and check the --scope spelling.'
+    );
+    process.exit(1);
+  }
+
   // ---- --surface <id>: the reverse index, the query no human step ran ----
   const want0 = argOf('--surface');
   if (want0 !== null) {
@@ -231,7 +248,12 @@ function main() {
   // ---- --list <spec> ----
   const listSpec = argOf('--list');
   if (listSpec) {
-    for (const a of all.filter((x) => x.file === listSpec)) {
+    const rows = all.filter((x) => x.file === listSpec);
+    if (rows.length === 0) {
+      console.error(`mirror-walk --list: no Mirrored Surface Checklist entries found in ${listSpec}`);
+      process.exit(1);
+    }
+    for (const a of rows) {
       console.log(`${a.file}:${a.entry.line}  ${a.entry.title.replace(/\s+/g, ' ').slice(0, 110)}`);
       console.log(`    rows:   ${a.refs.rows.join(', ') || '(none)'}`);
       console.log(`    tables: ${a.refs.letters.join(', ') || '(none)'}`);
@@ -270,20 +292,6 @@ function main() {
   }
 
   const specsWithChecklists = new Set(all.map((a) => a.file)).size;
-  // VACUITY GUARD. Zero walked entries EXITS 1. A run that reached nothing and a
-  // run that found nothing wrong print the same verdict otherwise, and this
-  // house already treats the absence case that way everywhere else — the specs
-  // guard every `--test-name-pattern` run with `test -f` because a pattern
-  // matching nothing exits 0 with a pass count. Measured: run from outside the
-  // repo root, or with a misspelled `--scope`, this printed a clean verdict over
-  // zero specs.
-  if (all.length === 0) {
-    console.error(
-      `mirror-walk: walked ZERO checklist entries${scope ? ` for scope "${scope}"` : ''} — ` +
-        'nothing was checked. Run it from the repository root, and check the --scope spelling.'
-    );
-    process.exit(1);
-  }
   console.log(`mirror-walk${scope ? ` (scope: ${scope})` : ''}: ${all.length} checklist entries across ${specsWithChecklists} specs (${files.length} scanned)`);
   console.log(`  row references: ${all.reduce((n, a) => n + a.refs.rows.length, 0)}   table references: ${all.reduce((n, a) => n + a.refs.letters.length, 0)}   spec-path references: ${all.reduce((n, a) => n + a.refs.paths.length, 0)}`);
   if (skipped.length) {

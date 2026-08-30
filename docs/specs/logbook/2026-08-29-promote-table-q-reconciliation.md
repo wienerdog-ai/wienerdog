@@ -2151,7 +2151,7 @@ named row G8), and **the union of the two is what was swept.**
 
 ### CITATIONS — ENUMERATED BEFORE THE SWEEP, COUNTED AFTER IT
 
-**Endpoints have been clean for four rounds and this pass does not break them.**
+**Endpoints have been clean for three rounds — 4, 5 and 6 — and this pass does not break them.** (Corrected 2026-08-30: an earlier form said four. Round 3 still carried F6, a range one line short of its construct, so round 4 is the first clean round. The first correction fixed two sites in this file and missed this one; a PR gate found it. Sweep for the CLAIM, in every file.)
 No existing citation's ENDPOINTS were changed. Two citation classes moved.
 
 | Citation | Sites before | Sites after | Note |
