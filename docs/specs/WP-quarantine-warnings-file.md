@@ -151,6 +151,12 @@ function writeIntoVault(o)
   fully idle run reaches: **Table B's refresh point 3 goes immediately before its
   `return`.** Note the ordering — this return comes BEFORE step 8's dry-run return
   at `:474-477`, so that call site needs its own `!dryRun` guard.
+- `:507` **step 10** `precommitSessionEdits(vaultDir)`, then `assertCleanTree(vaultDir)`
+  at `:508`. `precommitSessionEdits` (`src/core/dream/validate.js:113-137`) stages
+  **every** dirty working-tree path with `git add -A` (`:125`) and commits it as
+  `vault: session edits before dream`. It runs BEFORE the brain, and therefore
+  before step 13's commit. **What that ordering implies for this package is decided
+  in exactly one place — Table B's precommit-ordering row — and is restated nowhere.**
 - `:572-580` **step 13** `validateAndCommit({…})` — the run's single git commit
   (ADR-0012: one dream run = one commit).
 - `:597-611` **step 14**: `recordProcessed` / `recordSecretDeferred` /
@@ -306,13 +312,14 @@ never retyped (Table A's path row).
 |---|---|
 | Vault-relative path | the fixed literal `reports/warnings.md`, **exported from this module as a named constant** — it is the one place the path is decided, and `WP-doctor-quarantine-counts` imports it. Retyping it in a second module is drift waiting to happen; the only other occurrences in the codebase are inside fixed English sentences (the digest banner, the dream report), each pinned by its own package's byte-exact gate. **Layout-independent on purpose:** it is not a dream report, so it does not live under `layout.reports_dir` (`reports/dreams` by default), and `src/core/vault-snapshot.js` scopes routine snapshots by `'reports/dreams'` newest-N — a warnings file inside that dir would displace a dream report from a routine's window |
 | Document shape | the two literal worked examples under "Exact contracts" ARE the shape: `# Wienerdog warnings`, the fixed two-sentence header paragraph byte-for-byte as shown, `## Current conditions`, the block below. **That is the whole document — there is no second section** (owner-ruled 2026-08-30; the earlier `## Run log` is dropped, and its dated history now comes from the vault's git log). Exactly one blank line between every block; the file ends with exactly one `\n` |
+| **The header paragraph's trigger sentence stands as written — RULED 2026-08-30 (PR-review errata)** | the shipped bytes end `Do not edit it — it is rewritten whenever the list below changes.` The Mirrored Surface Checklist's rewrite-trigger item was read as forbidding them; it does not, and this row is where that is decided. What the item forbids is a MEMBERSHIP formulation — the file rewritten when the SET changes, i.e. when a transcript enters or leaves quarantine — which is false, because a same-key reason or size change rewrites the file with the set unmoved. **"The list below" denotes the rendered block, not the key set**, and the rendered block IS the trigger's operand (Table C). The sentence is therefore true in both directions: every rewrite changes what is printed below, and every change to what is printed below causes a rewrite. It is a registered, examined mirror of Table C, not a violation. **If the paragraph is ever reopened for an independent reason, the successor wording is `it is rewritten whenever what it shows changes`** — nearer the mechanism, no less plain for a non-technical reader. **It is not worth reopening on its own:** these bytes are part of the render, so under Table C row 1 every install that already holds the file rewrites it on its next dream run, producing a vault commit whose entire diff is this sentence — a real cost in the user's own history, bought for a wording that is already true |
 | Current conditions, empty | the single line `No session transcripts are being skipped.` |
 | Current conditions, non-empty | one `### <heading> — <N>` per non-empty reason group, in the row order of the next table, each followed by a blank line and one markdown list entry per member |
 | Which records are members | every entry of `ledger.files` that is a plain object with `outcome === 'quarantined'`. Nothing else |
 | Name shown | `displayName(key)` output and nothing else — never a full path, never content |
 | **No stored `reason` string is ever rendered** | the unrecognized group uses a fixed heading. `readLedger` deliberately does not validate individual records, so rendering a stored string would let stored data choose the document's bytes |
 | Size (`over-ceiling` group only) | the fingerprint's first `:`-separated field as an integer, rendered as the suffix `— <X.X> MB (<bytes> bytes)` after an em-dash-spaced separator, with `X.X` = `bytes / 1048576` to one decimal. Absent, non-numeric, negative or not a safe integer → the entry renders with **no** size suffix |
-| Sort within a group | by `displayName` ascending; equal names render identical text, so the bytes are deterministic either way |
+| Sort within a group | by `displayName` ascending. **The tie-break is deliberately unspecified — but NOT because tied entries render identically. That justification was false and is withdrawn (2026-08-30, PR-review errata):** two distinct ledger keys can sanitize to one `displayName` while carrying different sizes, and in the `over-ceiling` group the size suffix makes their order observable in the bytes. Measured: keys `{p1/huge.jsonl, p2/huge.jsonl}` with sizes 52 428 800 and 51 404 120 render `50.0 MB` then `49.0 MB` in one key order and the reverse in the other. **What makes leaving it unspecified affordable is that the order is not reachable churn**, and that is a property of the callers, not of the render: `composeWarnings` is a pure function of the ledger OBJECT, `writeLedger` (`ledger.js:102-115`) serializes `ledger.files` in key-insertion order, and `withRecord` (`:246-248`) re-spreads an existing key in place, so a tied pair's relative order is fixed at first insertion and never moves within an install. An unchanged ledger therefore still renders byte-equal output, which is all Table C row 2 needs. **A total sort — a secondary tie-break on the ledger KEY, unique by construction — would make that a property of the function instead. It is one line, it is deliberately NOT in this package, and it is recorded here so it is not rediscovered as a bug** |
 | **Nothing time-varying may appear ANYWHERE in the file** | no timestamp, no date, no run count, no "last checked" — and, since 2026-08-30, no run log either. **The rule used to be scoped to "above `## Run log`"; dropping that section makes it total, which is strictly stronger and now trivially true**: the whole document is a pure function of the ledger. This is what makes "an existing file's bytes change exactly when its RENDERED CONTENT changes" true (the one other write is Table C row 3's write-if-absent reconciliation, which by definition has no existing bytes to churn), and Table C's no-op rule depends on it: `composeWarnings` is a pure function of the ledger, so an unchanged ledger yields byte-equal output and no rewrite |
 | **Nothing on disk is carried forward** | a rewrite REPLACES the file with `composeWarnings(ledger)` in full. No section, line or byte of the previous file survives into the new one, and none survives into the bytes the commit-time render composes. **The COMMIT carries only those composed bytes once `WP-dream-promote-in-workspace`'s row G8 is the commit path; in the pre-promotion window the current `git add -A` staging still commits what is on disk** — the named transitional residual under Implementation notes. **This is the property that killed the run log** (round 3, finding 1): a carried section is user-controlled input to a code-owned document, and the only cheap way to be sure a user's bytes never enter Wienerdog's own commit is never to read them |
 
@@ -344,6 +351,7 @@ The withheld copies are in state/quarantine/: restore what you meant to keep and
 | Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 3 already decides what this call does: it writes only when the file is absent and the current set is non-empty |
 | Why point 3 exists at all (owner-ruled 2026-08-29) | `WP-doctor-quarantine-counts` ships a byte-gated message promising *"that file is not there yet; the next dream run writes it"*. Without a write-if-absent trigger that promise is false for an idle run, which is exactly the upgrade shape: 191 historical quarantines already in the ledger, quiet nights, no file. The owner ruled the mechanism in rather than hedging the message |
 | Why these three, and no others | points 1 and 2 are already the two points at which the run refreshes its other ledger-derived durable surface, `state/digest.md` — one rule, two surfaces, nothing that can drift out of step. Point 3 is **not** a set-change point and refreshes nothing else: it is a reconciliation on the one run shape that reaches neither of the others. The capacity-wedge path (`:451-464`) is not a refresh point — it throws |
+| **Where a refresh write lands relative to the run's own git steps — the ONE place this ordering is decided (added 2026-08-30, PR-review errata)** | measured on the tree this spec is written against, and written down because three other surfaces had each asserted it independently and all three were false. Step 10 `precommitSessionEdits(vaultDir)` (`src/cli/dream.js:507`; `src/core/dream/validate.js:113-137`) commits **every** dirty working-tree path with `git add -A` as `vault: session edits before dream`, and it runs BEFORE the brain and therefore before step 13's `validateAndCommit` (`:572-580`). **Refresh point 1 writes before it. Refresh points 2 and 3 write after it, or on a run that never reaches it.** So in the pre-promotion window **no refresh-point write is ever a member of a `validateAndCommit` changed set**: point 1's bytes are already in `HEAD` by the time step 3's EP2 staged-output secret gate scans `git diff --cached`, and points 2 and 3 are swept in by the NEXT run's precommit (the uncommitted-until-next-run residual under Implementation notes). **This row moves no call site** — every refresh point stays exactly where the three rows above put it; the row writes down the consequence those placements already had. Its two consequences are each stated by the surface that owns them and are not restated here: what the EP2 gate does and does not see (the EP2 residual under Implementation notes), and when Table D's exclusion can fire (**Table D**). Post-promotion this ordering is not this package's at all — `WP-dream-promote-in-workspace`'s row G6 removes the precommit and its row G8 makes the dream commit carry this file directly |
 | What a second refresh in one run does | nothing, unless the ledger moved or the first write was refused — and it needs no memory to get that right. The first write leaves the file holding exactly `composeWarnings(ledger)`, so the second call's comparison is byte-equal and it writes nothing (Table C row 2). Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3 |
 | Dry run | writes nothing. Point 1 is already inside a `!dryRun` guard; point 2 is unreachable on a dry run (`:474-477` returns first); **point 3 needs an explicit `!dryRun` guard** — step 7's return at `:467-470` comes BEFORE step 8's dry-run return, so it is reachable on a preview run. That guard is the one new guard this package adds |
 | A refresh failure never fails the dream | `refreshWarnings` never throws, and a `written:false` result prints one `wienerdog: dream — …` console line and is otherwise ignored. The ledger still holds the condition, `doctor` still reports the counts, and the digest banner still raises it — what is lost is the enumeration, until the next refresh |
@@ -402,9 +410,9 @@ change moves nothing rendered and writes nothing.
 
 | Fact / rule | Value |
 |---|---|
-| The problem | `src/core/dream/validate.js:1427-1429` counts a committed path as a `note` unless it is under `layout.skills_dir` or `layout.reports_dir`. `reports/warnings.md` is under neither, so a run that changes it reports one extra note in `dream: <date> — N notes, M skills` |
+| The problem | `src/core/dream/validate.js:1427-1429` counts a committed path as a `note` unless it is under `layout.skills_dir` or `layout.reports_dir`. `reports/warnings.md` is under neither, so **any dream commit that carries it** reports one extra note in `dream: <date> — N notes, M skills`. **WHICH runs those are is Table B's precommit-ordering row's to decide, cited not restated:** no refresh-point write is ever in a `validateAndCommit` changed set, so on the code-owned path the exclusion does not fire. (An earlier form of this row said "a run that changes it", which asserted the opposite and was false — 2026-08-30, PR-review errata.) **It is not dead code and it is not defensive padding.** It is reachable today on the brain-writes-it path — the precommit runs before the brain and `assertCleanTree` leaves the tree clean, so anything appearing at this path during the brain window (a model that can write the vault can write any path in it; so can a user saving mid-run) IS in the changed set and IS counted — and it is required FORWARD, because `WP-dream-promote-in-workspace`'s row G8 makes the dream commit carry this file by design. Landing it here is what lets that spec's row G11 inherit it by citation instead of inventing it |
 | The change | one added condition that excludes exactly the literal `reports/warnings.md` from `notes`, alongside the existing `reports_dir` exclusion. Nothing is reclassified as a skill, no other step is touched |
-| Not changed | the file is still committed, still classified by Step 2's branch (c) at `:1208` ("keep"), and still scanned by the EP2 gate. This is a **counting** fix only |
+| Not changed | **whenever the file IS in a changed set**, it is still committed, still classified by Step 2's branch (c) at `:1208` ("keep"), and still scanned by the EP2 gate — the change removes it from the `notes` tally and from nothing else. **On the code-owned path it is in no changed set at all** (Table B's precommit-ordering row), so on that path Step 2 and Step 3 have nothing to do with it; that is a fact about reachability, not a carve-out, and no path is exempted from any gate anywhere. (The unqualified "still scanned by the EP2 gate" this row used to carry was the same false ordering assumption — 2026-08-30, PR-review errata.) This is a **counting** fix only |
 
 ### Table E — the GLOSSARY sentence
 
@@ -439,9 +447,17 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       bytes on disk — and its mirrors are the `composeWarnings` and
       `refreshWarnings` contracts under "Exact contracts", Table A's
       no-time-varying row, Table B's no-carried-state row, the
-      second-run acceptance criterion, and the wiring gate's render assertions.
-      **No surface may say the file is rewritten "when the SET changes"** — that is
-      the round-1 wording a same-key reason change falsifies. **Nor may any
+      second-run acceptance criterion, the wiring gate's render assertions, **and —
+      registered 2026-08-30, because it was an UNREGISTERED mirror and that is
+      exactly why it collided — the rendered document's own trigger sentence, whose
+      ruling is Table A's header-sentence row.**
+      **No surface may say the file is rewritten when the SET of quarantined
+      transcripts changes** — when one enters or leaves quarantine — that is the
+      round-1 wording a same-key reason change falsifies. **The prohibition is on
+      the MEMBERSHIP formulation, not on the word "list":** a surface that names
+      what is RENDERED — the list as printed, the document, what the file shows —
+      is naming Table C's actual operand and is compliant. The rendered header
+      sentence is precisely that case, and Table A rules it. **Nor may any
       surface say "when the FINGERPRINT changes"** — that is the round-2 wording an
       `mtimeMs`-only change falsifies in the other direction, and it would demand a
       rewrite the no-churn property forbids. **And no surface may reintroduce a
@@ -477,9 +493,17 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       exclusion by citing this table rather than restating it — so a change to
       Table D moves that row and its counts acceptance criterion too. **No surface
       may state the exclusion's shape anywhere but here.**
+- [ ] **Where a refresh write lands relative to the run's own git steps.** Table
+      B's precommit-ordering row decides it — added 2026-08-30 because three prose
+      surfaces had each asserted it independently and all three were false — and its
+      registered mirrors are the Current-state `:507` bullet, Table D's "The problem"
+      and "Not changed" rows, the EP2 residual under Implementation notes, and the
+      Security checklist's residual list. **No surface may state that ordering, or
+      what the EP2 gate does and does not see, anywhere but by citing that row.**
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
-      `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
-      validator's counting loop)
+      `dream.js` line ranges — including `:467-470`, where point 3 goes, and `:507`,
+      the precommit whose ordering Table B's row decides — and the validator's
+      counting loop)
 - [ ] The two literal worked files under "Exact contracts" (they ARE Table A rendered)
 - [ ] Implementation notes (the render-is-the-trigger decision, the EP2
       residual, the uncommitted-until-next-run residual **and its pre-/post-promote
@@ -595,15 +619,32 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   provides for free. **Dropping the section makes both round-3 findings dissolve
   at the root rather than be answered** — there is no carry to authenticate and no
   date to pin — and it removes surface rather than adding it.
-- **Named residual — refresh point 1 is inside the EP2 window.** A file written at
-  point 1 on a run that goes on to commit is staged before Step 3's secret gate and
-  is scanned like any other change. Its content is code-owned labels, integers
-  and `displayName` output; only the last is attacker-influenceable, and a
-  basename that tripped an entropy rule would cost a redaction or a withhold **of
-  Wienerdog's own warnings file** — non-destructive (the ledger is untouched,
-  `doctor` still reports the counts) and self-healing at the next set change. Do NOT
-  carve this path out of the gate; a gate exemption is a much worse trade than a
-  named residual.
+- **Named residual — in the pre-promotion window this file's bytes reach the
+  vault's git history WITHOUT passing the EP2 gate (restated 2026-08-30 after PR
+  review; the earlier text claimed the opposite and was false).** The mechanism is
+  Table B's precommit-ordering row's and is cited, not restated: a refresh point's
+  write is committed by `precommitSessionEdits`, so it is never a member of a
+  `validateAndCommit` changed set, and Step 3's staged-output secret gate — which
+  scans exactly that set — never sees it. **The harm runs the OPPOSITE way from
+  what this residual used to reason about.** It used to worry that the gate might
+  redact or withhold Wienerdog's own file, a bounded and self-healing cost; the
+  real exposure is unscanned bytes entering the user's own vault history.
+  **It is bounded, and the bound is structural rather than a judgement call.** The
+  document is code-owned labels, integers and `displayName` output; only the last
+  is attacker-influenceable, and `displayName` whitelists `[A-Za-z0-9._-]` and
+  rewrites every other byte to `_`, so no `:`, `=`, `/` or whitespace can appear in
+  it and no assignment-shaped, URL-shaped or header-shaped token can be forged into
+  the file by a filename. The same sanitized basename already reaches the injected
+  digest and the dream console lines, so this file adds no new CLASS of byte to any
+  surface — only one more place the same bytes land. **It sits in the same window
+  as the pre-promotion-window residual above and has the same discharge event,
+  `WP-dream-promote-in-workspace`'s row G8**, after which the commit path is that
+  spec's and what gates it is that spec's to state, not this one's. **Do NOT answer
+  it here.** A carve-out or suppression in the gate is forbidden outright (Out of
+  scope), and a special-case re-scan or re-stage of this one path before the
+  current validator commits is the transitional canonical re-stage guard the owner
+  already rejected as throwaway machinery (the pre-promotion-window residual
+  above).
 - **Named residual — the fixed path in an adopted vault.** A user who set
   `vault_layout.reports_dir` to somewhere outside `reports/` gets a top-level
   `reports/` directory holding just this file. Accepted for now: the alternative
@@ -638,8 +679,11 @@ Three writers use it and no others: each promoted note; the dream report (whose 
 - [ ] Four residuals, all named under Implementation notes: the commit may be one
       run late; **in the pre-promotion window the file's integrity level is any
       vault note's, discharged when `WP-dream-promote-in-workspace`'s row G8
-      lands**; refresh point 1 is inside the EP2 window; the fixed path in an
-      adopted vault with a relocated `reports_dir`.
+      lands**; **in that same window the file's bytes reach the vault's git history
+      without passing the EP2 gate** — no refresh-point write is ever in a
+      `validateAndCommit` changed set (Table B's precommit-ordering row), bounded by
+      `displayName`'s whitelist and discharged by the same row G8; the fixed path in
+      an adopted vault with a relocated `reports_dir`.
 
 ## Acceptance criteria
 
