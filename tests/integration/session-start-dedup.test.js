@@ -232,4 +232,328 @@ if (process.platform === 'win32') {
     assert.deepEqual(out.changed, [mdPath], 'applyManagedBlock must report the write');
     assertSilence(runHook(world));
   });
+
+  // ===========================================================================
+  // WP-hook-doctor-inspection-read-hardening — the hook rows of Tables A and D.
+  // Presence taxonomy: present | cleanly absent | doubt, where ONLY a clean
+  // ENOENT is absence and every doubt injects. Reads are descriptor-based
+  // (open O_RDONLY|O_NONBLOCK|O_NOCTTY → fstat the SAME fd → refuse
+  // non-regular → EOF-bounded read). Every potentially-blocking fixture runs
+  // the hook as a timeout-bounded child and asserts it did NOT time out.
+  // ===========================================================================
+
+  const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+  const SKIP_EACCES = IS_ROOT ? 'EACCES fixtures cannot be produced as root' : false;
+
+  /** The explicit did-not-time-out assertion for blockable paths. */
+  function assertNoTimeout(r) {
+    assert.equal(r.error, undefined, `hook child errored: ${r.error}`);
+    assert.equal(r.signal, null, 'hook child must not be killed by the timeout');
+  }
+
+  /** mkfifo(1) — portable on macOS and Linux (Codex-confirmed in the spec). */
+  function makeFifo(p) {
+    const r = spawnSync('mkfifo', [p], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `mkfifo failed: ${r.stderr}`);
+  }
+
+  /** Codex harness carrying the fresh block — makes doubt-fixtures non-vacuous:
+   *  if the doubted harness were wrongly read as "absent", this fresh harness
+   *  alone would silence the hook (the shipped D4 wrong-silence shape). */
+  function freshCodex(world) {
+    fs.writeFileSync(codexDir(world), `${shared.buildBlock(world.digest)}\n`);
+  }
+
+  /** Write the fstat-underreport shim (--require) into the world and return the
+   *  env additions that arm it for `target`. Lets any platform exercise the
+   *  A-H7 slow tier and the C2a st_size-is-not-a-length contract; on Linux the
+   *  procfs rows below exercise the same contract with no shim at all. */
+  function underreportEnv(world, target, fakeSize = 0) {
+    const shim = path.join(world.home, 'underreport-shim.js');
+    fs.writeFileSync(shim, [
+      "'use strict';",
+      'const fs = require("fs");',
+      'const target = process.env.WD_UNDERREPORT_PATH;',
+      'if (target) {',
+      '  const fakeSize = Number(process.env.WD_UNDERREPORT_SIZE || "0");',
+      '  const realOpen = fs.openSync;',
+      '  const tracked = new Set();',
+      '  fs.openSync = function (p, ...rest) {',
+      '    const fd = realOpen.call(fs, p, ...rest);',
+      '    try { if (String(p) === target) tracked.add(fd); } catch (e) { /* ignore */ }',
+      '    return fd;',
+      '  };',
+      '  const realFstat = fs.fstatSync;',
+      '  fs.fstatSync = function (fd, ...rest) {',
+      '    const st = realFstat.call(fs, fd, ...rest);',
+      '    if (tracked.has(fd)) Object.defineProperty(st, "size", { value: fakeSize });',
+      '    return st;',
+      '  };',
+      '  const realClose = fs.closeSync;',
+      '  fs.closeSync = function (fd) { tracked.delete(fd); return realClose.call(fs, fd); };',
+      '}',
+      '',
+    ].join('\n'));
+    return {
+      NODE_OPTIONS: `--require ${shim}`,
+      WD_UNDERREPORT_PATH: target,
+      WD_UNDERREPORT_SIZE: String(fakeSize),
+    };
+  }
+
+  // ---- AC2 (A-H5, A-H6): non-regular targets inject, promptly ---------------
+
+  test('H-AC2: CLAUDE.md is a FIFO with no writer → envelope, no timeout', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    makeFifo(md);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC2: CLAUDE.md is a symlink to a FIFO → envelope, no timeout', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    const fifo = path.join(world.home, 'somewhere.fifo');
+    makeFifo(fifo);
+    fs.symlinkSync(fifo, md);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC2: CLAUDE.md is a directory → envelope', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.mkdirSync(md);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  // ---- AC1 (A-H2/A-H3/A-H4; Table D): only a clean ENOENT is absence --------
+  // Every fixture pairs the doubted Claude dir with a FRESH Codex harness: on
+  // 152ae3a the doubt read as "absent" and the fresh harness silenced the hook
+  // (the D4 wrong silence). Injection here is the fix, not the default.
+
+  test('H-AC1 (D-E3): Claude dir stat EACCES + Codex fresh → envelope (the D4 dual-harness wrong silence)', { skip: SKIP_EACCES }, () => {
+    const world = tempWorld();
+    freshCodex(world);
+    const locked = path.join(world.home, 'locked');
+    const dir = path.join(locked, 'claude');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.chmodSync(locked, 0o000);
+    try {
+      const r = runHook(world, { CLAUDE_CONFIG_DIR: dir });
+      assertNoTimeout(r);
+      assertEnvelope(r, world.digest);
+    } finally {
+      fs.chmodSync(locked, 0o700);
+    }
+  });
+
+  test('H-AC1 (D-E4): Claude dir is a symlink loop (ELOOP) + Codex fresh → envelope', () => {
+    const world = tempWorld();
+    freshCodex(world);
+    const a = path.join(world.home, 'loop-a');
+    const b = path.join(world.home, 'loop-b');
+    fs.symlinkSync(a, b);
+    fs.symlinkSync(b, a);
+    const r = runHook(world, { CLAUDE_CONFIG_DIR: a });
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC1 (D-E5): Claude dir path under a regular file (ENOTDIR) + Codex fresh → envelope', () => {
+    const world = tempWorld();
+    freshCodex(world);
+    const file = path.join(world.home, 'plain-file');
+    fs.writeFileSync(file, 'not a directory\n');
+    const r = runHook(world, { CLAUDE_CONFIG_DIR: path.join(file, 'claude') });
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC1 (D-E6): Claude dir with a 500-char component (ENAMETOOLONG) + Codex fresh → envelope', () => {
+    const world = tempWorld();
+    freshCodex(world);
+    const long = path.join(world.home, 'x'.repeat(500));
+    const r = runHook(world, { CLAUDE_CONFIG_DIR: long });
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC1 (A-H4): Claude config path exists but is a regular file + Codex fresh → envelope', () => {
+    const world = tempWorld();
+    freshCodex(world);
+    const file = path.join(world.home, 'claude-config-as-a-file');
+    fs.writeFileSync(file, 'exists, but not a directory\n');
+    const r = runHook(world, { CLAUDE_CONFIG_DIR: file });
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  // ---- AC1 structural (D-E8): the errno taxonomy is the code's, not a list --
+  // EMFILE/EIO have no portable deterministic fixture (the spec allows a
+  // structural-branch check): assert the shipped payload maps ONLY a clean
+  // ENOENT to absence, in BOTH probes, so every unlisted errno falls to doubt.
+
+  test('H-AC1 structural: only a clean ENOENT is absence, in dirState and entryState', () => {
+    const src = fs.readFileSync(HOOK, 'utf8');
+    const absences = src.match(/e && e\.code === "ENOENT" \? "absent" : "doubt"/g) || [];
+    assert.equal(absences.length, 2, 'both probes must map only ENOENT to absence');
+    assert.match(src, /O_RDONLY \| fs\.constants\.O_NONBLOCK \| fs\.constants\.O_NOCTTY/);
+  });
+
+  // ---- AC3 (A-H8): a dangling override symlink still shadows ----------------
+
+  test('H-AC3: AGENTS.override.md is a DANGLING symlink over fresh blocks → envelope', () => {
+    const world = tempWorld();
+    fs.writeFileSync(claudeDir(world), `${shared.buildBlock(world.digest)}\n`);
+    freshCodex(world);
+    fs.symlinkSync(
+      path.join(world.home, 'no-such-target'),
+      path.join(world.home, '.codex', 'AGENTS.override.md')
+    );
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  // ---- AC4 (C3): a symlink to a regular file must keep working --------------
+
+  test('H-AC4: CLAUDE.md is a symlink to a regular file with the fresh block → silence', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    const real = path.join(world.home, 'real-claude.md');
+    fs.writeFileSync(real, `${shared.buildBlock(world.digest)}\n`);
+    fs.symlinkSync(real, md);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertSilence(r);
+  });
+
+  test('H-AC4 (C3, digest side): digest.md is a symlink to a regular file → envelope with its content', () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    const real = path.join(world.home, 'real-digest.md');
+    fs.renameSync(digestPath, real);
+    fs.symlinkSync(real, digestPath);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  // ---- AC5 (A-H10): a digest with no readable content stays silent ----------
+
+  test('H-AC5: digest.md is a FIFO → exit 0, silence, no timeout (A-H10/A-H11)', () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    fs.rmSync(digestPath);
+    makeFifo(digestPath);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertSilence(r);
+  });
+
+  test('H-AC5: digest.md over the ceiling → exit 0, silence', () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    fs.writeFileSync(digestPath, 'x'.repeat(4 * 1024 * 1024 + 2));
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertSilence(r);
+  });
+
+  // ---- AC5 (A-H7 slow tier) + AC16 (C2a): st_size is never a length ---------
+  // The pair pins the EOF-bounded read: with fstat forced to report size 0,
+  // an under-ceiling fresh block still SILENCES (the loop read the real bytes;
+  // an st_size-as-length reader would see an empty file and inject), and an
+  // actually-over-ceiling file still INJECTS (over-cap emerged from the read,
+  // not from st_size — the fast tier cannot have fired at size 0).
+
+  test('H-AC16: fstat underreports CLAUDE.md size as 0, fresh block within ceiling → still silence', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.writeFileSync(md, `${shared.buildBlock(world.digest)}\n`);
+    const r = runHook(world, underreportEnv(world, md, 0));
+    assertNoTimeout(r);
+    assertSilence(r);
+  });
+
+  test('H-AC5 slow tier: fstat underreports an over-ceiling CLAUDE.md as 0 → envelope (over-cap found by the read)', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.writeFileSync(md, `${shared.buildBlock(world.digest)}\n${'x'.repeat(4 * 1024 * 1024 + 2)}`);
+    const r = runHook(world, underreportEnv(world, md, 0));
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  test('H-AC16 (digest side): fstat underreports digest.md size as 0 → envelope still carries the FULL digest', () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    const r = runHook(world, underreportEnv(world, digestPath, 0));
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest); // byte-for-byte, so a truncated read fails
+  });
+
+  // ---- AC14/AC16 (Linux): the virtual-regular st_size=0 procfs class --------
+
+  test('H-AC16 procfs (Linux): digest.md → /proc/version (virtual regular, st_size 0) is read to EOF', { skip: process.platform !== 'linux' ? 'procfs is Linux-only' : false }, () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    fs.rmSync(digestPath);
+    fs.symlinkSync('/proc/version', digestPath);
+    assert.equal(fs.statSync(digestPath).size, 0, 'fixture: procfs must report st_size 0');
+    const content = fs.readFileSync('/proc/version', 'utf8');
+    assert.ok(content.length > 0, 'fixture: /proc/version must yield bytes');
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, content);
+  });
+
+  test('H-AC14 procfs (Linux): CLAUDE.md → /proc/self/status (virtual regular, st_size 0) as target → envelope', { skip: process.platform !== 'linux' ? 'procfs is Linux-only' : false }, () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.symlinkSync('/proc/self/status', md);
+    const r = runHook(world);
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+  });
+
+  // ---- AC17 (C2c/R-A): the descriptor check is the authority ----------------
+  // Deterministic R-A window: a `node` wrapper first in PATH swaps the digest
+  // for a FIFO AFTER bash's `-f` passed and BEFORE node opens it. The
+  // descriptor mechanism must refuse it promptly — exit 0, silence, no hang.
+
+  test('H-AC17: digest passes -f, is swapped for a FIFO before the open → refused by fstat, silence, no timeout', () => {
+    const world = tempWorld();
+    const digestPath = path.join(world.core, 'state', 'digest.md');
+    const bindir = path.join(world.home, 'swapbin');
+    fs.mkdirSync(bindir);
+    const wrapper = path.join(bindir, 'node');
+    fs.writeFileSync(wrapper, [
+      '#!/bin/sh',
+      '# R-A window, made deterministic: runs between bash -f and the real open.',
+      'rm -f "$WD_SWAP_PATH"',
+      'mkfifo "$WD_SWAP_PATH"',
+      `exec "${process.execPath}" "$@"`,
+      '',
+    ].join('\n'), { mode: 0o755 });
+    const r = runHook(world, {
+      PATH: `${bindir}${path.delimiter}${process.env.PATH || ''}`,
+      WD_SWAP_PATH: digestPath,
+    });
+    assertNoTimeout(r);
+    assertSilence(r);
+    assert.ok(fs.lstatSync(digestPath).isFIFO(), 'fixture: the swap must have happened');
+  });
+
+  test('H-AC17 structural: the -f pre-filter is present and the flags carry O_NOCTTY', () => {
+    const src = fs.readFileSync(HOOK, 'utf8');
+    assert.match(src, /^\[ -f "\$DIGEST" \] \|\| exit 0$/m, 'the -f pre-filter (defense in depth) must be present');
+    assert.match(src, /O_NOCTTY/, 'O_NOCTTY must be in the reader flags');
+  });
 }
