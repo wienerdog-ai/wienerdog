@@ -1,7 +1,7 @@
 ---
 id: WP-digest-line-cap-raise
 title: Raise the digest line cap so a real identity set is no longer truncated
-status: Ready
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,28 @@ epic: digest-delivery
 ---
 
 # WP-digest-line-cap-raise: Raise the digest line cap so a real identity set is no longer truncated
+
+> **Archived 2026-08-30, post-merge.** Shipped in PR #45 (`efca39c`; implementation
+> `ad2a050`, review findings 1+2 in `f3dbf6f`), after wd-reviewer APPROVE. The
+> spec text below carries **four dated errata**, folded in during this archive
+> pass so the record matches what shipped. In document order:
+>
+> 1. **Contract 1** (line ~154) — the mandated `DigestCaps` comment said
+>    "re-approved at its current value", false next to a 120 → 400 change.
+>    Corrected here; **the shipped source still carries the original phrasing**,
+>    left open deliberately as product code.
+> 2. **Contract 4** (line ~264) — the measured byte figure was `25,055`,
+>    measured without the malformed daily note the test is named for. It is
+>    `25,159`.
+> 3. **Contract 4** (line ~307) — the exact-edit list named one byte-figure
+>    comment; the rescale falsifies **two**. Both are named now.
+> 4. **Contract 5** (line ~342) — the fixture used 160 items against a `> 200`
+>    line assertion, and 160 items renders 199 lines. The shipped test uses 170.
+>
+> Errata 2–4 are all one root cause: **a number was derived by arithmetic and
+> never rendered once.** The acceptance criteria caught all three at
+> implementation time, which is the loop working — but each cost a review round
+> that a single `node -e` render while drafting would have saved.
 
 ## Context (read this, nothing else)
 
@@ -146,10 +168,22 @@ comment, the `const DigestCaps = {` line, and the `MAX_LINES` line) with exactly
 
 ```js
 /** Digest size caps (audit A6, F3/F5). Values OWNER-APPROVED 2026-07-17; MAX_LINES
- *  re-approved at its current value OWNER-APPROVED 2026-08-30 — see the spec. */
+ *  raised to 400 OWNER-APPROVED 2026-08-30 — see the spec. */
 const DigestCaps = {
   MAX_LINES: 400, // secondary guard only; MAX_BYTES is the primary cap (WP-digest-line-cap-raise)
 ```
+
+> **Errata, 2026-08-30 (post-merge) — and a divergence from the shipped source,
+> deliberately left open.** This block mandated `re-approved at its current
+> value OWNER-APPROVED 2026-08-30`, which is false on its face next to a
+> 120 → 400 change: 400 was not the value being re-approved, it is the new one.
+> The wording is corrected above so the archived spec does not instruct a future
+> reader into the false reading. **`src/core/digest.js` still carries the
+> original phrasing** — that is product code, out of scope for this docs-only
+> archive pass, and it is recorded here rather than silently fixed. Whoever next
+> touches `DigestCaps` should bring the source comment to the wording above; it
+> needs no owner decision, only a one-line edit in a PR that already has a
+> reason to be in that file.
 
 Leave `MAX_BYTES`, `MAX_NOTE_BYTES`, `MAX_PROJECTS`, `MAX_DAILY_READ_BYTES` and
 `TRUNCATION_MARKER` byte-identical. Change no logic in `capDigest`.
@@ -243,14 +277,42 @@ with:
     const bulk = Array.from({ length: 110 }, (_, i) => `- ${f}-${i} ${'x'.repeat(50)}`).join('\n');
 ```
 
-**Measured with that fixture at `MAX_LINES: 400`** (2026-08-30, re-run on
-`main` = `0410e3a`, identical to the earlier measurement):
-`401` lines against the 400 cap — i.e. cap + marker — and `25,055` bytes against
-`MAX_BYTES` 32,768, with the truncation marker present. The test passes and keeps
-its tight half tight.
+**Measured with that fixture at `MAX_LINES: 400`**, running the test's own
+setup — which includes `writeDailyRaw(tmp, MALFORMED_DAILY)`, the daily entry the
+test is named for: `401` lines against the 400 cap — i.e. cap + marker — and
+**`25,159` bytes** against `MAX_BYTES` 32,768, with the truncation marker
+present. The test passes and keeps its tight half tight.
 
-Its comment carries a measured byte figure that this rescale falsifies. In the
-same block, replace the sentence
+> **Errata, 2026-08-30 (post-merge).** This figure read `25,055` until the
+> archive pass. That number came from a measurement harness that omitted the
+> malformed daily note, so it measured a digest with no prefix banner — not the
+> fixture this contract describes. Both round to the `~24.5 KiB` the shipped
+> comments carry, so nothing downstream moved; the exact byte count is corrected
+> here because the acceptance criterion below asserts that a comment's figure
+> matches what the fixture actually produces, and a spec that states the wrong
+> input to that comparison cannot support it. Re-measured on `efca39c`.
+
+**This rescale falsifies TWO byte-figure comments in that test, not one, and
+both must be updated.** The acceptance criterion below is satisfied only when
+neither still states a figure the rescaled fixture does not produce.
+
+*Comment A — the setup block, above the `for (const f of [...])` loop.* Replace
+
+```text
+  // never approach the 32 KiB whole-digest ceiling. Long lines rather than
+  // many short ones, so the bytes that survive the line cap are near the byte
+  // ceiling too — measured 31.7 KiB of 32 KiB here. See the note below on
+```
+
+with
+
+```text
+  // never approach the 32 KiB whole-digest ceiling. Enough short lines per
+  // note that the LINE cap is what trims — measured ~24.5 KiB of 32 KiB here.
+  // See the note below on
+```
+
+*Comment B — the explanatory note below the line-cap assertion.* Replace
 
 ```text
   // notes filled to their per-note ceiling AND 60 projects, renderDigest tops
@@ -263,6 +325,14 @@ with
   // notes filled with shorter lines AND 60 projects, renderDigest tops out at
   // ~24.5 KiB against MAX_BYTES = 32 KiB, because MAX_NOTE_BYTES (8 KiB)
 ```
+
+> **Errata, 2026-08-30 (post-merge).** Comment A was **not named here** when this
+> spec was dispatched; only Comment B was. The implementer had to find it
+> anyway — the acceptance criterion's "comment matches measurement" rule reaches
+> every comment in the test, not only the ones this list happens to enumerate,
+> and the review caught the omission. Both are named now so the archived text
+> matches what shipped. Rewrapping is expected: reflowing Comment A leaves an
+> orphaned short line, which `f3dbf6f` tidied.
 
 Leave the rest of that comment — including its honest statement that dropping
 `prefixBytes` from `bodyByteBudget` leaves the suite green — exactly as it is.
@@ -277,7 +347,7 @@ test('a real-vault-sized identity body (205+ lines) is NOT truncated (WP-digest-
   // (2026-08-30) — the size that the old 120-line cap cut mid-Preferences,
   // dropping ## Goals and ## Standing instructions entirely.
   const items = [];
-  for (let i = 0; i < 160; i++) items.push(`- i ${i}`);
+  for (let i = 0; i < 170; i++) items.push(`- i ${i}`);
   const note =
     '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
     `# Standing instructions\n\n${items.join('\n')}\n`;
@@ -287,9 +357,18 @@ test('a real-vault-sized identity body (205+ lines) is NOT truncated (WP-digest-
   assert.ok(digest.split('\n').length > 200, 'fixture renders past the old 120-line cap');
   assert.ok(!digest.includes(DigestCaps.TRUNCATION_MARKER), 'no truncation at real-vault size');
   assert.ok(digest.includes('## Standing instructions'), 'the last identity section survives');
-  assert.ok(digest.includes('- i 159'), 'the last line of the last identity note survives');
+  assert.ok(digest.includes('- i 169'), 'the last line of the last identity note survives');
 });
 ```
+
+> **Errata, 2026-08-30 (post-merge).** As dispatched this snippet used **160**
+> items and probed for `- i 159`, while asserting `> 200` lines — and **160 items
+> renders 199 lines**, so the snippet failed its own second assertion. The implementer raised it to `170` (209 lines) and moved the
+> last-line probe with it; the shipped test is the truth and this block is now
+> byte-identical to it. Re-measured on `efca39c`: 160 → 199 lines (assert FAILS),
+> 170 → 209 lines (assert passes, `- i 169` present). **The `> 200` assertion was
+> right and the fixture was wrong** — the spec picked the item count by
+> subtracting from the 205-line real-vault figure without rendering it once.
 
 `tmpVault()` (line 228) and `approvals()` (line 34) already exist in that file;
 `fs`, `path`, `renderDigest`, `DigestCaps` and `assert` are already imported.
@@ -351,8 +430,11 @@ arguable, and ADR-0031's discipline needs two of the seven.
         `400` — its assertion (line 1326) is not deleted, and not loosened into a
         self-comparison;
       - the test at line 1329 still emits the truncation marker with a daily
-        entry in the prefix, and its comment's byte figure matches what its
-        rescaled fixture actually produces.
+        entry in the prefix, and **every** byte figure stated in **any** of its
+        comments matches what its rescaled fixture actually produces — the
+        criterion quantifies over the whole test, not over the comments Contract
+        4 happens to enumerate. (Two comments carry one: the setup block's and
+        the note below the line-cap assertion.)
 - [ ] No literal `120` line-cap assertion survives anywhere in
       `tests/unit/digest.test.js`.
 - [ ] A digest body of more than 200 lines renders with **no** truncation marker

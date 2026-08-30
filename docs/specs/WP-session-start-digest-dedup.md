@@ -161,6 +161,10 @@ fail 0`).
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+<!-- Always allowed without listing, per scripts/boundary-check.js: this spec file
+     itself (you flip its `status:` — Definition of done item 4), package-lock.json,
+     memory/lessons/inbox.md, and docs/specs/logbook/. Everything else must be listed. -->
+
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | templates/hooks/session-start.sh | replace wholesale with the script in "Exact contracts"; implements Table A + Table B |
@@ -579,4 +583,8 @@ npm run lint
 2. Conventional commits; PR titled
    `feat(hooks): inject the digest only when the block lacks it (WP-session-start-digest-dedup)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
-4. This spec's `status:` flipped to `In-Review` in the same PR.
+4. This spec's `status:` flipped to `In-Review` in the same PR. **This is not a
+   Deliverables-boundary violation and needs no table row** — `scripts/boundary-check.js`
+   allows the spec file by path, with or without one (proven: it exits 0 on a diff
+   containing only the spec plus a listed file). If a boundary rule anywhere seems to
+   forbid it, that rule is the stale one.
