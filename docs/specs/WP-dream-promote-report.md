@@ -846,7 +846,7 @@ left for a gate to refuse.
       prefix-shaped secret survives the sanitiser intact and is caught in either
       order, so a test built only from one goes green on the leaking
       implementation.
-- [ ] **Every report refusal delivers the record, and the TWO refusal shapes (Table Y, rows Y4 and Y5)
+- [ ] **Every report refusal delivers the record, and the TWO refusal shapes (Table Y, row Y6)
       are asserted apart.** **(a) THE ONE-WRITE PATH's WRITE IS REFUSED — Table R's
       row R4, where nothing of this run's report reached the vault, and the
       return is `report.outcome === 'refused'`.** **The title was singular in a
@@ -858,7 +858,7 @@ left for a gate to refuse.
       record is returned in `report.record`, and the refusal names its reason.
       Proven RED against an implementation that refuses the write and drops the
       record — which is the failure that survives if only the `expect` path is
-      handled. **(b) THE FIRST PUBLISH SUCCEEDS AND THE SECOND PRIMITIVE WRITE
+      handled. **(b) (Table Y, rows Y4 and Y5) THE FIRST PUBLISH SUCCEEDS AND THE SECOND PRIMITIVE WRITE
       IS REFUSED (round 4's A1).** The body publishes, then the enforcement
       section's write is refused — asserted on an `expect` conflict AND on a
       symlinked target. The return is `report.outcome === 'promoted'` with

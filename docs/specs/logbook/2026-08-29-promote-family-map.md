@@ -65,9 +65,17 @@ this is the surface where a new letter has to be justified.** The report
 package's report row had become an unlettered contract table of 8,082
 characters, and the owner ruled it lettered (round 6 of the design loop;
 `2026-08-29-promote-table-q-reconciliation.md`). Measured with
-`grep -rhoE '^### Table [A-Z]' docs/specs/`, the letters live ANYWHERE under
-`docs/specs/` are A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
-and W; **I, X, Y and Z occurred nowhere — measured at `98f0cef`, the tip BEFORE Table Y was created by this very amendment.** Stated in the past tense against a named revision because a present-tense measurement is falsified by the change it justifies: at HEAD the list is A–H, J–W and **Y**, and `I`, `X` and `Z` remain free.** `Y` therefore collides with nothing in
+`grep -rhoE '^### Table [A-Z]' docs/specs/` **at `98f0cef` — the tip BEFORE this
+amendment created Table Y** — the letters live anywhere under
+`docs/specs/` were A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
+and W, and I, X, Y and Z occurred nowhere. **At HEAD the list is that same set
+plus Y; I, X and Z remain free.** Both readings are stated in the past tense
+against a named revision, because a present-tense measurement is falsified by
+the very change it justifies — which is what the round-2 PR gate found here, in
+a sentence that carried both tenses at once and contradicted itself three
+clauses apart.
+
+`Y` therefore collides with nothing in
 this family, nothing in the shipped package below, and nothing in any other
 spec in the tree — **the collision table below stays at five rows and gains
 none.** `I` was rejected because its row ids (`I1`) are misread as `11` or `Il`

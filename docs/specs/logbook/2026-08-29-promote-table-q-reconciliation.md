@@ -1857,13 +1857,19 @@ is where to correct the naming.**
 **WHAT WAS BUILT: `scripts/mirror-walk.js`.** Plain Node, zero dependencies,
 JSDoc types, no build step — the repo's conventions.
 
-**WHAT IT CHECKS** (exit 1, every offender named):
+**WHAT IT CHECKS — NOT DESCRIBED HERE ANY MORE, and that is the point.** This
+section once carried its own copy of the tool's contract, and when the round-2 PR
+gate forced the contract to narrow, the header was swept and this copy was not —
+so the tool's contract stood in two surfaces that disagreed. Two descriptions of
+one contract is the exact defect this whole amendment exists to remove.
 
-1. Every **table row id** named inside a Mirrored Surface Checklist entry
-   resolves to a real table row **in that entry's resolution scope**.
-2. Every **table letter** named there resolves to a real `Table X` heading in the
-   same scope, at any heading level (specs in this repo use both `###` and `####`).
-3. Every **`docs/specs/*.md` path** named there exists on disk.
+**The tool was routed OUT of this PR by owner ruling (2026-08-30)** and lives on
+`tools/mirror-walk` with its own gate, because a review round found the root
+cause of its unreliable row resolution: `stripFindingIds`' first regex is
+case-insensitive and permits zero digits, so it deletes real row citations along
+with runs of short words before extraction — `(round 6's CD-1, see row Y4)`
+becomes `( )`. **Its header is the single canonical statement of what it checks;
+this record states only why it exists and where it went.**
 
 **RESOLUTION SCOPE, because table letters are per-spec and a tree-wide index makes
 every letter ambiguous:** an entry's references resolve against its OWN spec plus
@@ -1924,6 +1930,11 @@ AMBIGUOUS — 66 references. Reported, NEVER failed: the canonical table-letter 
   (--ambiguous lists every site)
 
 Every mechanically-addressable mirror resolves. THIS DOES NOT MEAN ANY SURFACE WAS SWEPT.
+(Verbatim as printed AT `36cfc23`. Both this verdict text and the line numbers
+below have since moved — the verdict was rewritten when the tool's claim narrowed,
+and the report spec gained a line at :257. Pinned rather than re-pasted: a paste
+re-taken at each tip is a citation that goes stale silently, which is the defect
+the map's own measurement was corrected for two sections up.)
 $ echo $?
 0
 ```
@@ -2288,3 +2299,31 @@ and a divergence list that included them would bury the four items that matter.
   one.** `boundary-check.js` was used as the model on structural grounds. If the
   owner meant a different precedent, the script's shape is the thing to re-examine
   first.
+
+## QUEUED, owner-ratified — three items this arc produced and did not do
+
+1. **A structural parser check in the lint pipeline.** An unclosed code fence
+   swallowed 764 lines of `WP-dream-promote-report.md` — every heading from
+   `## Contract reference` down, all four contract tables, both prose sections
+   and every acceptance criterion rendered as JavaScript — and survived FOUR
+   gate passes with `npm run lint` green. It survived because every check this
+   arc ran greps raw text, and a lexical check cannot see a structural break.
+   That includes the relay's own: acceptance criteria were counted with `awk`
+   over raw lines through all seven rounds, and would have counted the same had
+   the file been one code block. `markdownlint` does not flag the shape.
+
+2. **A branch under gate review is FROZEN until the verdict** (owner rule,
+   2026-08-30, for the runbook). Produced by an incident in this very PR: the
+   spec-fidelity gate was assigned tip `9aee7f5` at 09:46 and a commit landed on
+   the same branch at 10:02 while it was reading. Its verdict is therefore
+   sound only for the tip it names, and the commit that overtook it was never
+   gated — so the same diff needs a closing same-tip pass. In a shared checkout
+   this is not a courtesy; a verdict against a moving tip is not a verdict.
+
+3. **The `mirror-walk` resolver defect**, routed to `tools/mirror-walk` with its
+   root cause characterised (`stripFindingIds`' first regex is case-insensitive
+   and permits zero digits, so it deletes real row citations along with runs of
+   short words before extraction). It gets its own PR and its own gate. The
+   earlier two queue items stand: the family map's four further colliding
+   packages at its next touch, and the tool's CI wiring after the twelve stale
+   `Done`-spec references are cleaned.
