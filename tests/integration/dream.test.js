@@ -776,6 +776,12 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   // The vault's durable record of what could not be read.
   const warned = fs.readFileSync(path.join(ctx.vault, WARNINGS_REL), 'utf8');
   assert.ok(warned.includes('- huge.jsonl —'), warned);
+  // This is the one run where BOTH refresh points fire: point 1 wrote the file
+  // before the sweep, and point 2 ran after the commit over an unchanged
+  // quarantine set. Point 2 must therefore have taken Table C row 2 and written
+  // nothing — if it rewrote the file, the run would end with a dirty vault and
+  // every following night would grow another `vault: session edits` commit.
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'point 2 took row 2 — no second write');
   // The quarantine was surfaced plainly — basename + reason only.
   assert.match(output, /quarantined claude\/huge\.jsonl \(over-ceiling\); it will not be retried until it changes\./);
   assert.ok(!output.includes(path.join(ctx.claude, 'projects')), 'console line carries no full path');
@@ -852,7 +858,12 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   // Two commits again, for the same reason as above: the warnings file runs 1
   // and 2 left uncommitted in the working tree is swept in by this run's
   // `precommitSessionEdits` — the named residual, discharged one run later.
+  // The messages are what tell the pre-existing sweep apart from a second dream
+  // commit; a bare count cannot, and ADR-0012 is about the dream's own commit.
   assert.equal(commitCount(ctx.vault), before + 2);
+  const msgs3 = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
+  assert.match(msgs3[0], /^dream: /, 'the dream commit is last');
+  assert.equal(msgs3[1], 'vault: session edits before dream');
   const ledger3 = readLedgerFile(ctx.core);
   assert.equal(ledgerRecord(ledger3, 'huge.jsonl').outcome, 'processed');
   // The banner self-clears once the file leaves quarantine.
@@ -865,6 +876,44 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   const warnBytes3 = fs.readFileSync(warnings, 'utf8');
   assert.ok(warnBytes3.includes('No session transcripts are being skipped.'), warnBytes3);
   assert.ok(!warnBytes3.includes('huge.jsonl'), 'the cleared quarantine is gone from the list');
+});
+
+test('dream-integration: a refresh FAILURE is reported and never fails the dream', async () => {
+  // The six lines in dream.js that turn a `reason` into a console line and
+  // otherwise swallow it are what keep a broken warnings file from taking the
+  // night's consolidation down with it. If that path ever threw instead, a user
+  // whose reports/warnings.md is a directory would get a hard-failing nightly
+  // dream with no consolidation at all — precisely the fail-safe-skip class
+  // ADR-0023 exists to prevent.
+  //
+  // A DIRECTORY at the path is the cheapest real failure: the leaf check refuses
+  // it by return, and an EMPTY untracked directory is invisible to git, so the
+  // tree stays clean and the run proceeds all the way to its commit.
+  const ctx = setup({ overCeiling: 'huge' });
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  fs.mkdirSync(path.join(ctx.vault, WARNINGS_REL), { recursive: true });
+  assert.equal(git(ctx.vault, ['status', '--porcelain', '-uall']).trim(), '', 'an empty dir is invisible to git');
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+
+  // The dream still consolidated and still committed.
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /dream committed/);
+  // And it said so, in plain language, ONCE PER REFRESH POINT THAT FAILED.
+  // This run shape fires point 1 (a new quarantine) and point 2 (after the
+  // commit), and both hit the same directory, so the line appears twice. That
+  // is the honest number and not a defect to dedupe: suppressing the second
+  // would mean remembering the first, and Table B's no-carried-state rule is
+  // that nothing crosses refresh points — each one re-reads and re-decides.
+  assert.match(output, /could not update reports\/warnings\.md in your vault/);
+  assert.equal(output.split('could not update reports/warnings.md').length - 1, 2, 'one line per failed refresh point');
+  // Everything the other surfaces promise is still true: the ledger holds the
+  // condition and the digest banner still raises it. Only the enumeration is
+  // lost, and only until the next refresh.
+  assert.equal(ledgerRecord(readLedgerFile(ctx.core), 'huge.jsonl').outcome, 'quarantined');
+  assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
+  // The thing in the way is left exactly as found — never cleared, never written through.
+  assert.ok(fs.statSync(path.join(ctx.vault, WARNINGS_REL)).isDirectory());
 });
 
 test('dream-integration: an idle run writes the vault warnings file when it is absent, then leaves it alone', async () => {
