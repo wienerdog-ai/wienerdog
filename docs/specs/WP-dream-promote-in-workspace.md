@@ -403,9 +403,10 @@ revisited.
       from HEAD, guarded on the absent-HEAD arm by the ledger holding at least one
       active quarantine), and its mirrors are the dispatch-precondition dependency
       sentence, the consumed-not-modified exclusion naming
-      `src/core/dream/warnings.js`, the dream-commit
-      acceptance criterion, `WP-dream-promote-module`'s Table E staged-bytes row,
-      and `WP-quarantine-warnings-file`'s named residual and Table C rows, which
+      `src/core/dream/warnings.js`, the Security checklist's vault-writer
+      clause, the dream-commit acceptance criterion,
+      `WP-dream-promote-module`'s Table E staged-bytes row, and
+      `WP-quarantine-warnings-file`'s named residual and Table C rows, which
       cite this row by name. **No surface may state the commit as "only
       promoted paths and the report"** — with `precommitSessionEdits` gone (row
       G6) that omission strands the code-owned warnings file uncommitted forever —
@@ -418,8 +419,8 @@ revisited.
       `No session transcripts are being skipped.` bytes, which differ from an
       absent HEAD file, so any restatement that drops the guard orders the very
       churn commit the guard forbids (PR gate, 2026-08-30). **And the file this
-      row puts INTO the commit is excluded from the note COUNT** — row G11's
-      counts clause and its acceptance criterion are that fact's two mirrors, both
+      row puts INTO the commit is excluded from the note COUNT** — that fact's
+      mirrors are row G11's counts clause and its acceptance criterion, both
       deferring to `WP-quarantine-warnings-file`'s Table D
 - [ ] **The two consumers of the decided bytes** — rows G8 and G10, and row S6
       in `WP-dream-promote-module`, which lists them (row S5 is that table's
@@ -577,9 +578,16 @@ revisited.
       human-readable refusal reason to decide a transcript's fate would be an
       undocumented security interface.
 - [ ] Containment and vault-write discipline are the primitive's (Table H),
-      applied by it and cited here. **This package writes no vault content
-      byte** — `promote()` is the only writer — and it implements no path
-      containment of its own.
+      applied by it and cited here. **This package writes no PROMOTION content
+      byte of its own** — `promote()` is the only writer of promoted content —
+      and it implements no path containment of its own. **The one other
+      vault-content write a run governed by this package performs is the
+      code-owned warnings refresh:** `refreshWarnings`
+      (`src/core/dream/warnings.js`, imported at `src/cli/dream.js:13`), whose
+      content, timing and composition are `WP-quarantine-warnings-file`'s and
+      are cited here, never restated. **An earlier form said this package
+      writes no vault content byte at all and named `promote()` the only
+      writer outright, which that file's refresh points falsify.**
 
 ## Acceptance criteria
 
