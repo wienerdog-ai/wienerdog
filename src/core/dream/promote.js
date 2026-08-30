@@ -666,9 +666,14 @@ function preservedLine(rel, entry) {
  * non-null `redaction`, ride the redaction line; every other copy rides its
  * own preserved-copy line.
  *
+ * The two arrays are typed BY REFERENCE to `promote()`'s own return rather than
+ * by writing their fields out again: the Mirrored Surface Checklist forbids any
+ * surface here restating the fields of the module half's returned shapes, and a
+ * second structural statement of them in this same file is how they went stale
+ * twice (round-1 PR gate, finding 7).
  * @param {{records:Array<{path:string, reason:string}>,
- *          refused:Array<{rel:string, reason:string, preserved:PreservedCopy[]}>,
- *          redacted:Array<{rel:string, redaction:RedactionAccounting, preserved:PreservedCopy[]}>,
+ *          refused:ReturnType<typeof promote>['refused'],
+ *          redacted:ReturnType<typeof promote>['redacted'],
  *          reportRel:string, reportRefusal:string|null,
  *          reportRedaction:RedactionAccounting|null,
  *          reportPreserved:PreservedCopy[]}} o
@@ -1307,16 +1312,41 @@ function promote(o) {
   // The report body's path. Code-derived from the layout and the run date, so
   // the brain cannot choose it: `date`'s shape is validated above precisely
   // because it is an unsanitized component of this name (Table D's `date` row).
-  const reportRel = siblingRel(layout.reports_dir, `${date}.md`);
+  //
+  // EMPTY SEGMENTS ARE DROPPED, exactly as `isUnder` reads a layout directory,
+  // because `reports_dir` is a USER CONFIG value: `readVaultLayout` accepts and
+  // PRESERVES a trailing slash (`isSafeRelativePath` does not reject one), so a
+  // plain join yields `reports/dreams//<date>.md`, which the primitive's segment
+  // validation throws on — failing EVERY run, including one where the brain
+  // wrote nothing. Measured, and found by the round-1 rubric gate.
+  const reportRel = [...String(layout.reports_dir).split('/').filter((s) => s !== ''), `${date}.md`].join('/');
+  /**
+   * IDENTITY, CANONICALISED THEN CASE-FOLDED — the same predicate row C9 already
+   * matches with (`fold`), and for the same measured reasons: the primary
+   * filesystem is case-insensitive, and macOS enumerates DECOMPOSED names while
+   * accepting composed ones, so the delta can hand back an NFD spelling of the
+   * NFC path the layout holds. A literal `===` treats those as different files,
+   * which silently folds the body into `promoted[]` as an ordinary note while
+   * the fallback fires as though no body existed — the report then written
+   * twice. Found by the round-1 rubric gate; not a containment rule, which
+   * stays the primitive's (Table H).
+   * @param {string} rel @returns {boolean}
+   */
+  const reportKey = foldedSegments(reportRel).join('/');
+  const isReport = (rel) => foldedSegments(rel).join('/') === reportKey;
   /**
    * The report body's own outcome, kept OUT of the three arrays above: the body
    * is not a member of `refused[]`, and its whole disposition travels on
    * `report`. `null` until the write phase reaches it — and still `null`
    * afterwards when the brain wrote no report at all, which is one member of
    * Table R's trigger class.
-   * @type {{published:true, bytes:Buffer, redaction:RedactionAccounting|null,
-   *         preserved:PreservedCopy[]}
-   *       |{published:false, reason:string, preserved:PreservedCopy[]}|null}
+   * Carries the DECIDED path as well as the outcome: the second write must
+   * target the object the FIRST write published, which on a normalisation- or
+   * case-insensitive filesystem can be a different spelling of `reportRel`.
+   * @type {{rel:string, published:true, bytes:Buffer,
+   *         redaction:RedactionAccounting|null, preserved:PreservedCopy[]}
+   *       |{rel:string, published:false, reason:string,
+   *         preserved:PreservedCopy[]}|null}
    */
   let reportBody = null;
 
@@ -1331,8 +1361,8 @@ function promote(o) {
       // Nothing was promoted for this path, so any copy the gate preserved is a
       // delete. The value is filled HERE because only here is the outcome known.
       const outcome = { rel: d.rel, reason: d.refuse, preserved: withRemediation(d.preserved, 'delete') };
-      if (d.rel === reportRel) {
-        reportBody = { published: false, reason: d.refuse, preserved: outcome.preserved };
+      if (isReport(d.rel)) {
+        reportBody = { rel: d.rel, published: false, reason: d.refuse, preserved: outcome.preserved };
       } else {
         refused.push(outcome);
       }
@@ -1360,16 +1390,17 @@ function promote(o) {
       // A PRIMITIVE refusal of the body — its H5 `expect` guard, a symlinked
       // target under H3, any H-rule — is one member of Table R's trigger class,
       // and the class is what this branch routes on rather than a list.
-      if (d.rel === reportRel) reportBody = { published: false, reason, preserved };
+      if (isReport(d.rel)) reportBody = { rel: d.rel, published: false, reason, preserved };
       else refused.push({ rel: d.rel, reason, preserved });
       continue;
     }
 
     // Table S — the DECIDED bytes are the ones the primitive returned.
-    if (d.rel === reportRel) {
+    if (isReport(d.rel)) {
       // The body published. Its copy is restorable for the same reason an
       // ordinary redacted note's is: this run promoted its sanitized content.
       reportBody = {
+        rel: d.rel,
         published: true,
         bytes: res.bytes,
         redaction: d.redaction || null,
@@ -1400,18 +1431,33 @@ function promote(o) {
   const bodyPublished = reportBody !== null && reportBody.published === true;
   const reportRedaction = bodyPublished ? reportBody.redaction : null;
   const reportPreserved = reportBody === null ? [] : reportBody.preserved;
+  // The path the record NAMES, and the path the second write TARGETS, is the one
+  // the body was actually decided and published at — `reportRel` only when there
+  // is no body to have a path of its own.
+  const effectiveRel = reportBody === null ? reportRel : reportBody.rel;
   const record = composeRecord({
     records: callerRecords,
     refused,
     redacted,
-    reportRel,
+    reportRel: effectiveRel,
     reportRefusal: bodyPublished || reportBody === null ? null : reportBody.reason,
     reportRedaction,
     reportPreserved,
   });
   const section = Buffer.from(`${record.join('\n')}\n`, 'utf8');
-  /** Appended form: a blank line, then the section — the shipped separator. */
-  const appendedTo = (base) => Buffer.concat([base, Buffer.from('\n', 'utf8'), section]);
+  /**
+   * Appended form: a blank line, then the section — the shipped separator.
+   * The base is normalised to end in a newline first, because on Table R's R3
+   * the base is whatever the USER's file holds and a file with no trailing
+   * newline would put the heading directly under a paragraph line. The shipped
+   * append guaranteed a `\n`-terminated base; this keeps that guarantee.
+   */
+  const appendedTo = (base) =>
+    Buffer.concat([
+      base,
+      Buffer.from(base.length > 0 && base[base.length - 1] === 0x0a ? '\n' : '\n\n', 'utf8'),
+      section,
+    ]);
 
   /** @type {ReturnType<typeof promote>['report']} */
   let report;
@@ -1422,7 +1468,7 @@ function promote(o) {
     // publishes body-plus-section, and the two can disagree.
     const second = writeFile({
       vaultDir,
-      rel: reportRel,
+      rel: reportBody.rel,
       bytes: appendedTo(reportBody.bytes),
       admit,
       expect: reportBody.bytes,
