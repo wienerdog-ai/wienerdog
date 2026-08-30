@@ -673,7 +673,10 @@ test('ledger: opts.now is the ONLY clock, a non-numeric now falls back to the li
     ledgerLib.quarantineBannerLine(l, { now: Date.parse('2000-01-02T00:00:00.000Z') }).includes(INFORMATIONAL_SENTENCE_OPENER),
     'opts.now decides'
   );
-  for (const bad of [undefined, null, NaN, Infinity, -Infinity, '1600000000000', {}, [], true]) {
+  // '946771200000' and the Date are the discriminating ones: each would make
+  // the ANCIENT record look FRESH if `now` were used without the finite-number
+  // guard, so a fallback that merely checks `!== undefined` fails here.
+  for (const bad of [undefined, null, NaN, Infinity, -Infinity, '946771200000', new Date(946771200000), {}, [], true]) {
     assert.equal(ledgerLib.quarantineBannerLine(l, { now: bad }), '', `now=${String(bad)} falls back to the live clock`);
   }
   // The repeatable property this package ships: a function of the ledger and
