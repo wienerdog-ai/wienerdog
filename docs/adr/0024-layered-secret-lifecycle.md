@@ -209,3 +209,38 @@ those are A9. This keeps A5 landable now without waiting on A9.
 - **Treat high-entropy hits as `redact` (inline) rather than `quarantine`.**
   Rejected: an unstructured high-entropy blob has no safe partial form — redacting
   "the secret part" is undefined, so the whole artifact must be withheld/reverted.
+
+## Amendments
+
+### Amendment 1 (2026-08-30) — the managed block leaves the sink list (ADR-0039)
+
+§Context above lists four persistence boundaries a missed secret can reach: "a
+committed note, a durable log line, a digest banner, **a managed block**, or an
+email." ADR-0039 (Proposed) removes the fourth by construction rather than by adding
+a gate to it.
+
+**What changes.** `wienerdog sync` stops copying the rendered digest's bytes into the
+`CLAUDE.md`/`AGENTS.md` **managed block**. For Claude Code the block carries a memory
+import of the absolute path to `<core>/state/digest.md`; for Codex — which has no
+include syntax — it carries only the **stable** half of the digest, the identity
+notes that already passed ADR-0021's exact-byte human-ratification gate, plus a
+constant pointer line.
+
+**Why this is a genuine reduction and not a relocation.** The EP4 per-section secret
+gate in `renderDigest` is unchanged and still omits any section with a finding, so
+the detector coverage is identical. What disappears is the *durability* of a miss.
+A secret that evades the detector and lands in `state/digest.md` is 0600
+(`A5_PRIVATE_FILE_BASENAMES`), in-core, overwritten by the next render, and disposed
+by `wienerdog uninstall`. The same secret copied into `~/.claude/CLAUDE.md` was
+0644, outside `scanPrivateModes`' in-core scope — so outside the A5 repair this ADR
+established — and durable in a file the user owns and may commit to their own git.
+The copy step was therefore *downgrading* the confidentiality of exactly the
+artifacts §Decision hardened, and removing it restores the intended posture.
+
+**What is left of the boundary.** The Codex block still carries identity-note bodies,
+so it remains a persistence surface for a secret that evades the detector in a
+**human-ratified** note. That is a strictly smaller surface than the previous one
+(no daily summary, no banners, no project enumeration) and it is the surface a human
+approved byte-for-byte under ADR-0021. The four-boundary framing in §Decision is
+otherwise unchanged: notes, logs, alerts/email and the digest render all keep their
+gates.
