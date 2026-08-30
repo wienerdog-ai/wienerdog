@@ -1,0 +1,30 @@
+Gate: PR review, Codex rubric (backend: gptsol agent, model codex/gpt-5.6-sol via llmp)
+PR: #42 (WP-dream-promote-report) — ROUND 3
+Tip reviewed: 3ac951b
+Merge base: 14e2a70
+Date: 2026-08-30
+Reviewer instructions: docs/runbooks/review-prompts/pr-rubric.md (vendored, frozen)
+
+Returned VERBATIM below. Committed before it was adjudicated.
+
+=== overall_correctness ===
+patch is correct
+
+=== findings ===
+[] — NONE
+
+=== overall_confidence_score ===
+0.99
+
+=== overall_explanation ===
+Reviewed `git diff 14e2a70...3ac951b` and `git diff --check 14e2a70...3ac951b`
+(both exit 0). Independent `node <<'NODE'` probes confirmed the dot-segment
+derivation fix and duplicate folded-identity collision handling, including
+preserved copies, skill/ledger pair refusal, and `secretDisposition` interaction
+(all final probes exit 0); `node --test tests/unit/dream-promote.test.js`, both
+specified `npm test -- --test-name-pattern` runs, the consumed-by-nothing grep,
+and `npm run lint` exited 0. `npm test` exited 1 solely on the known `adopt-e2e`
+pinned-`claude` mismatch; the focused test exited 1 with that mismatch on BOTH
+`3ac951b` and merge base `14e2a70`. Initial `git status --porcelain` (exit 0)
+stdout was exactly ""; final `git status --porcelain` (exit 0) stdout was exactly
+""; they are byte-identical.

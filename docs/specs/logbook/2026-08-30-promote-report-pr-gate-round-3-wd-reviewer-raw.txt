@@ -1,0 +1,143 @@
+Gate: PR review, spec fidelity (wd-reviewer) — ROUND 3
+PR: #42 (WP-dream-promote-report)
+Tip reviewed: 3ac951b (tip had not moved during the run)
+Merge base: 14e2a70
+Date: 2026-08-30
+
+Returned VERBATIM below. Committed before it was adjudicated.
+
+=== VERDICT ===
+REQUEST-CHANGES — two LIGHT (test-only) findings, one SPEC route.
+ZERO PRODUCT DEFECTS: every Table Z row verified correct by execution.
+
+=== READ-ONLY COMPLIANCE ===
+git status --porcelain BYTE-IDENTICAL before and after — both 0 bytes, empty.
+HEAD still 3ac951b. All mutation work on `git archive` exports in /tmp/wd-r3/.
+Every command under WIENERDOG_LOADER_NOOP=1.
+
+=== WHAT WAS EXECUTED ===
+V1  npm test -- --test-name-pattern "dream-promote"    exit 0
+V2  npm test -- --test-name-pattern "report-fallback"  exit 0
+V3  npm test                                           exit 1 — adopt-e2e ONLY;
+      identical failure reproduced on a merge-base 14e2a70 export. Pre-existing,
+      disclosed. Not this diff's.
+V4  npm run lint                                       exit 0 (576 md files, 236 specs, 0 issues)
+V5  consumed-by-nothing grep                           exit 0
+B   scripts/boundary-check.js on all 9 changed files   exit 0
+      2 deliverables + spec file + 5 under docs/specs/logbook/
+MUT 26 mutations vs baseline 58 pass / 0 fail          24 killed, 2 survived
+P1-P6 six executed probes
+
+PRIOR BATTERY RE-RUN AGAINST 3ac951b — ZERO REGRESSIONS, FOUR STRENGTHENED:
+  A 2 · C 6 (was 5) · D 14 (was 2) · E 2 · F 2 · G 0 — GREEN CONTROL STILL GREEN
+  · H 5 (was 4) · I 1 · I2 1 · J 1 · K 6 (was 2) · L 1 · M 1 · N 2
+
+NEW TABLE Z MUTATIONS — ALL KILLED:
+  revert the `.` filter (1) · first-match-wins (1) · collision refused BEFORE the
+  gates, dropping EP2's copies (1) · derived path to the composer (1) ·
+  fallback R1 shape (1) · fallback R2/R3 shape (1) · second write targets the
+  derived path (1).
+  The two fallback shapes are INDEPENDENTLY guarded — mutating either alone is
+  caught.
+
+=== JOB 2 — TABLE Z AS A CONTRACT ===
+- PROHIBITION (iv) HOLDS. Drove readVaultLayout over 13 values: Z2's five
+  (reports/dreams/, reports//dreams, ., ./reports, reports/./dreams) all return
+  UNCHANGED; /reports/dreams, .., a\b, "", reports/../dreams all DEFAULT. The
+  case list contains no unreachable value. The derivation is total over what the
+  layout can return.
+- ROW Z3's NAMED RESIDUAL — VERIFIED BY RUNNING IT. reports_dir:
+  reports/./dreams -> derived reports/dreams/2026-08-29.md, isUnder admits
+  nothing, report.outcome='refused', reason 'not admitted: not under a writable
+  vault tier directory', RECORD REACHES THE CALLER (H_ENFORCE present), vault
+  reports/ tree ABSENT. Fail-closed exactly as claimed.
+- ROW Z4 — COLLISION MEASURED. Two fold-equal spellings: outcome 'fallback',
+  both records in refused[] with the collision reason, EXACTLY ONE CARRIER EACH
+  ({note:1, dreams:1, Dreams:1, REPORTARM=fallback:1}), and BOTH EP2 preserved
+  copies announced exactly once — refusing after the gates is the correct point.
+- `rel` PER-ARM HOLDS ON EVERY PHASE-3 PATH, including the readVaultNow error
+  branch (EISDIR probe -> 'refused' carrying the DERIVED path, per Z5(e)).
+  Correct in code; see finding 2.
+- Y4 PROHIBITION: /usr/bin/grep -a sweep of every claim-shaped variant across
+  both changed files — one hit, promote.js:1575, which is the NEGATION. The two
+  'untouched' clauses (:1600, :1620) sit only where the body did not publish.
+  Y6 holds.
+- PINNED REDACTION LINE: byte-identical to WP-secret-fence-ep2-redact-arm.md's
+  literal outside the placeholders; redactionLine/copyClause byte-unchanged since
+  795f904.
+- CLOSED-CONTRACT DRIFT CHECK: Table Z reinterprets nothing settled — Z3 NAMES
+  C9's residual rather than widening a Done spec, Z2 states the H1 split without
+  duplicating containment. The Mirrored Surface Checklist registers Table Z with
+  14 mirrors and 6 prohibitions. One registered mirror is unwalked (finding 3).
+
+=== FINDINGS ===
+
+FINDING 1 [criteria] src/core/dream/promote.js:1577 (row Z5(e))
+`rel` is unasserted on the `promoted` arm's `published:false` form. Deleting
+`rel: reportBody.rel` from that arm survives 58 pass / 0 fail. This is the one
+arm-form of the owner's explicit interface ruling ("rel on all three arms") that
+nothing measures, and per Table Y row Y12 it is precisely the form
+WP-dream-promote-in-workspace's G8 commits from. The sibling assertions exist for
+promoted/published:true (tests:1820), fallback (:1783, :1843) and refused/R4
+(:1742).
+Disposition: FIX, LIGHT, test-only — add
+  assert.equal(res.report.rel, <the body's own rel>, "row Z5(e): the BODY's own rel on the published:false form")
+to the existing test at tests/unit/dream-promote.test.js:1587. NO FRESH ROUND
+(weighted-closure rule).
+
+FINDING 2 [criteria] src/core/dream/promote.js:1601
+The readVaultNow error branch is ENTIRELY UNEXERCISED. Deleting its
+`rel: reportRel` survives 58 pass / 0 fail, and grep finds zero tests touching
+this branch. Proved reachable: making the report path a DIRECTORY yields
+outcome='refused', rel='reports/dreams/2026-08-29.md', reason='vault path could
+not be read (EISDIR)' — THE CODE IS CORRECT per Z5(e). Round 2's finding 9
+accepted this branch as a residual BEFORE Table Z existed; Z5(e) now makes a
+positive claim over it ("the DERIVED path on fallback and on refused") and
+nothing checks it.
+Disposition: FIX, LIGHT, test-only — one case asserting outcome, rel and that the
+record reaches the caller. NO FRESH ROUND.
+
+FINDING 3 [contract] docs/specs/WP-dream-promote-in-workspace.md:316 (row G8)
+A REGISTERED TABLE Z MIRROR HAS NOT BEEN WALKED. This spec's checklist
+(WP-dream-promote-report.md:650-653) registers G8 as a Table Z mirror, "which
+commits the path report.rel now supplies". That spec contains ZERO occurrences of
+`report.rel`; G8 still commits "the report path" with no named source. Not a
+falsehood yet (that spec is Ready), but it is mirror drift created by this round's
+owner-ruled interface change, and it is BLOCKING for
+WP-dream-promote-in-workspace — same shape as round 2's finding 4.
+THE IMPLEMENTER CANNOT FIX THIS: the file is outside the Deliverables table.
+Disposition: ROUTE to wd-architect. Not a blocker for this PR.
+
+FINDING 4 [quality] src/core/dream/promote.js:1099
+The new collision reason renders with its punctuation destroyed. `neutralise`
+maps ( -> _, ) -> _, ; -> _, so the user reads:
+  ...for this date _2 paths differ only by case or Unicode normalisation__ none is promoted as the report
+CONFIRMED the mangling class is PRE-EXISTING AND ACCEPTED (EP2: -> EP2_,
+not admitted: -> not admitted_), so this is a NEW INSTANCE OF A SHIPPED CLASS,
+NOT A NEW KIND, and it does NOT re-open the loop.
+Disposition: RESIDUAL, or a free LIGHT fix: reword the string without ( ) ;
+  e.g. "...for this date — 2 paths differ only by case or Unicode normalisation — none is promoted as the report"
+
+FINDING 5 [quality] src/core/dream/promote.js:1540
+ROUND 2's FINDING 4, JUDGED: NOT TAKING IT WAS RIGHT. Measured, not argued: a
+zero-byte existing report as the fallback base publishes "\n\n## Refused" — two
+leading blank lines. Reachable only when the user truncates run 1's report, no
+spec row governs the separator on an empty base, R2/R3's byte-preservation holds
+trivially over zero bytes, and every markdown renderer ignores leading blanks.
+Disposition: DROP. (If touched anyway, base.length === 0 ? section : ... is the
+one-expression form.)
+
+=== CONVENTIONS ===
+Clean. Zero runtime deps (package.json untouched), JSDoc only — no .ts in src/,
+all 14 commits conventional with the (WP-dream-promote-report) suffix, glossary
+terms intact. Idempotent/reversible does not apply — this ships consumed by
+nothing.
+
+=== ON THE LOOP ===
+THE PINNED STOP CRITERION IS MET. This round found NOTHING ABOUT THE PRODUCT —
+every Table Z row is correct under execution, and the two mutation survivors are
+ASSERTION GAPS, NOT BEHAVIOUR. Under the criterion's own disposition rule,
+findings 1 and 2 are LIGHT machinery: they land inside the existing deliverable,
+are verified mechanically, and DO NOT EXTEND THE LOOP. Finding 3 routes out to
+wd-architect rather than being folded. A ROUND 4 IS NOT WARRANTED — escalation
+trigger (iii) does not need to fire.
