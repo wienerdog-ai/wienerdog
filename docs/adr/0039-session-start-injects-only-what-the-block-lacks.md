@@ -1,12 +1,13 @@
 # ADR-0039: The SessionStart hook injects the digest only when the managed block does not already carry it
 
-Status: Proposed
+Status: Accepted — OWNER-SIGNED 2026-08-30
 Date: 2026-08-30
 
-> **Proposed, not ratified.** Nothing here binds anyone until the owner accepts
-> it in the review round that moves `WP-session-start-digest-dedup` to `Ready`.
-> Until then this file records a proposal, and the WP that cites it cites it as
-> a proposal.
+> **Ratified by the owner on 2026-08-30.** The owner ratified this ADR in the
+> working session of 2026-08-30 and explicitly instructed the agent, in that
+> session, to write the signature line above on his behalf — recorded here so
+> the provenance of the line is exact, per the ADR-0035 discipline that an
+> agent never writes one silently.
 
 ## Context
 
