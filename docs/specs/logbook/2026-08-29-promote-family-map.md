@@ -74,7 +74,25 @@ sentence, the list was that same set plus Y, with I, X and Z still free.**
 `98f0cef`, present at `e23a5bb`. An earlier form of this sentence called
 `5bacae5` "the tip of the amendment that created it", which named the wrong
 commit AND used a pointer that stopped being the tip the moment the next
-commit landed.) Both readings name
+commit landed.)
+
+> **ERRATA, appended 2026-08-30 — the sentence above is left standing on
+> purpose.** Its relational clause is WRONG for the third time in this file:
+> `5bacae5` is not "the parent of the commit that recorded this sentence". The
+> sentence was recorded by `f32d8da`, whose parent is `a2f86fd`; `5bacae5` is
+> the grandparent. **What is true, and all that was ever needed:** the
+> re-measurement was RUN at `5bacae5`, and its result — the letter set plus `Y`,
+> with `I`, `X` and `Z` free — was re-derived unchanged at `a2f86fd` and at
+> `f32d8da`.
+>
+> **Why this is appended rather than corrected in place, per the owner's ruling
+> of 2026-08-30:** every in-place rewrite of this one clause has introduced a new
+> false claim — first the wrong tense, then the wrong creating commit, now the
+> wrong ancestry — six fix windows, six injections. The claim itself is the
+> lesson: **a revision needs no relational description. Name the revision the
+> measurement was run at, and stop.**
+
+Both readings name
 the revision they were taken at and neither is present tense, because a
 present-tense measurement is falsified by the very change it justifies — which
 is what the round-2 PR gate found here, in a sentence that carried both tenses at once and contradicted itself three
