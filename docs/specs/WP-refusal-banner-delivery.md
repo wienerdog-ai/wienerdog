@@ -148,7 +148,7 @@ input is empty the digest output must be unchanged.
 |--------|------|-------|
 | modify | templates/hooks/session-start.sh | read the banner; prepend to the digest; emit when either exists |
 | modify | src/core/digest.js | accept `opts.refusalBanner`; place it FIRST in the prefix |
-| modify | src/cli/sync.js | pass `refusalBanner: readRefusalBannerFromDir(paths)`; self-heal the concatenated file under the lock on drift (B18a) |
+| modify | src/cli/sync.js | pass `refusalBanner: reconciliationClean ? '' : readRefusalBannerFromDir(paths)` (B17/B17a sequence above); self-heal the concatenated file under the lock on drift (B18a) |
 | modify | src/cli/dream.js | same, in `regenerateDigest` (B18a) |
 | modify | tests/unit/digest.test.js | prefix order + empty-input byte stability |
 | create | tests/unit/session-start-hook.test.js | hook emits banner+digest, banner-only, digest-only, neither |
@@ -230,10 +230,28 @@ local fact stated once, in Exact contracts.
 - **The same script serves Codex.** Both `src/adapters/claude.js` and
   `src/adapters/codex.js` copy this one file. Do not add anything Claude-specific to
   it; the `hookSpecificOutput` envelope is already shared and stays as it is.
-- **Read the banner AFTER clearing it in `sync`.** The predecessor's Table B row B10
-  makes a successful `sync` clear the banner. `sync` must clear first, then
-  `readRefusalBanner`, so a successful sync's digest carries no banner. Getting this
-  backwards produces a digest that permanently shows a refusal the sync just resolved.
+- **`sync`'s sequence is decided by Table B B17/B17a — do not reorder it.** Round 1 of
+  this spec said "clear first, then read"; that is **⚠ superseded**. Clearing now happens
+  **after** `manifestMod.save` (Codex P1) and **only on a fully clean reconciliation**
+  (B17), so "read after clear" is neither possible nor correct. The sequence:
+
+  ```js
+  // 1. In the scheduler block, BEFORE the digest render — one hoisted flag:
+  let reconciliationClean = true;
+  if (r.descriptorFailures > 0) reconciliationClean = false;
+  if (heal.failed.length > 0) reconciliationClean = false;
+  if (!r.catchup.ok) reconciliationClean = false;            // B17a
+
+  // 2. Render: banner-free on a clean run, banner-carrying on an unclean one.
+  refusalBanner: reconciliationClean ? '' : readRefusalBannerFromDir(paths)
+
+  // 3. AFTER manifestMod.save(paths, manifest):
+  if (!dryRun && reconciliationClean) clearRefusalBanner(paths);
+  ```
+
+  A clean run therefore renders no banner because it passes `''`, not because it cleared
+  first. An unclean run renders the banner **and keeps the entries** — a sync that just
+  warned it could not write a descriptor must not silence the warning that says so.
 - `capDigest` already reserves prefix lines and bytes, so a long banner correctly
   shrinks the body rather than being dropped. Do not touch `DigestCaps`.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
@@ -270,10 +288,10 @@ local fact stated once, in Exact contracts.
       byte-identical output to before the change; `tests/golden/digest-default.md`
       still matches with no golden update.
 - [ ] AC-9 — A **fully clean** `wienerdog sync` (no descriptor-write failures, no
-      scheduler reload failures) clears the banner and its rendered digest contains no
-      banner line. A sync that reported either failure clears nothing and renders the
-      digest **with** the banner — `WP-launcher-refusal-banner` Table B row B17 owns
-      that rule; this WP only has to pass whatever `readRefusalBanner` returns.
+      scheduler reload failures, `catchup.ok`) renders a digest containing **no** banner
+      line, because it passes `''` — **not** because it cleared the banner first. The
+      clear itself happens after `manifestMod.save` and is asserted by
+      `WP-launcher-refusal-banner` AC-27 (B17/B17a).
 - [ ] AC-10 — `shellcheck --severity=warning templates/hooks/session-start.sh` passes
       and `shfmt -i 2 -d templates/hooks/session-start.sh` reports no diff.
 - [ ] AC-11 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
@@ -375,3 +393,11 @@ grep -n "readdir\|refusal-banner/" templates/hooks/session-start.sh
   renders a digest that **carries** the refusal banner. That assertion moved here from
   `WP-launcher-refusal-banner`, which owns `sync.js` (and therefore the entries-survive
   half) but not the `renderDigest` wiring that decides what the digest contains.
+- **2026-08-30 — Codex round-6 finding V3 (owner: ACCEPTED).** An implementation note
+  still carried round 1's "clear first, then read" sequence, which B17/B17a superseded:
+  clearing now happens **after** `manifestMod.save` and **only on a fully clean
+  reconciliation**, so reading after clearing is neither possible nor correct. Replaced
+  with the actual three-step sequence (hoist `reconciliationClean` before the render; pass
+  `''` when clean and `readRefusalBannerFromDir` when not; clear after the manifest save),
+  and AC-9 restated: a clean run's digest is banner-free **because it passes `''`**, not
+  because it cleared first. The Deliverables note was aligned in the same pass.

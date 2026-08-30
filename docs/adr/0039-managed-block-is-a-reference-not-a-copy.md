@@ -355,10 +355,10 @@ ADR-0021, ADR-0028 and ADR-0035 need no amendment. ADR-0035 is cited for why an
 unchanged: the decision of 2026-08-30 stands as signed. This amendment records the
 round-2 **and round-3** corrections to it and is not itself in force until signed.)
 
-Five adversarial Codex design reviews of this ADR and its spec chain found thirty-eight
+Six adversarial Codex design reviews of this ADR and its spec chain found forty-three
 issues in total — seven in round 1 (**F1–F7**, below), nine in round 2 (**R1–R9**),
-seven in round 3 (**S1–S7**), seven in round 4 (**T1–T7**), and eight in round 5
-(**U1–U8**, at the end of this amendment). The owner accepted all thirty-eight, and
+seven in round 3 (**S1–S7**), seven in round 4 (**T1–T7**), eight in round 5
+(**U1–U8**), and five in round 6 (**V1–V5**, at the end of this amendment). The owner accepted all thirty-eight, and
 **reversed two** of his own earlier rulings — compare-and-retry in round 2, and the
 versioned lock directory in round 5. The dispositions follow. Four are corrections
 to this ADR — two of them to claims that were simply **wrong** — and they are marked in
@@ -818,3 +818,47 @@ Claude imports, what Codex copies, when a banner entry clears, when the canary i
 what the lock protects — must either **point at a canonical row** or carry a **⚠
 superseded** marker. Narrative prose is where superseded designs survive longest, because
 it reads as explanation rather than as specification.
+
+#### Round 6 of review — findings V1–V5 (2026-08-30)
+
+Five findings, **all mirror or contract drift — no new protocol defect**, and U1, U2, U4,
+U6 and U7 confirmed fixed. A pure reconciliation round, and the first in which the
+mechanism itself was not implicated.
+
+**V1 — a spec forbade a change it simultaneously demanded.** `WP-launcher-alert-bound`
+authorized exactly three `clearAlerts` changes while C8h1/AC-13c5 already required a
+fourth: fencing the `rmSync` that removes the whole file when no records remain. This is
+**U5 recurring one round later in the same section** — the round-5 fix enumerated the
+authorized changes as a closed list, and the very next round's U3 added one without
+reopening it. A closed enumeration is a mirror like any other. Now four changes,
+each citing its row; the prohibition narrowed to **semantic** change only.
+
+**V2 — a table row overclaimed against its own sibling.** B1a called the concatenated
+banner file "the single path every reader points at", which B18a contradicts by having
+`renderDigest`'s app-side callers read the directory and self-heal. B1a now names only
+the two readers that cannot enumerate a directory.
+
+**V3 — an implementation note carried a superseded sequence.** The delivery spec still
+said "clear first, then read", from before B17 moved clearing after the manifest save and
+gated it on a clean reconciliation. Replaced with the real sequence.
+
+**V4 — the amended topology was still imprecise in this ADR.** Amendment 1's consumer
+list blurred three genuinely different cases. Restated per harness: **Claude Code** copies
+no daily-summary bytes but *references* `digest-volatile.md`, which contains the summary;
+**hook-less Codex** copies the stable identity plus last-sync code-owned banners;
+**Cowork** skips *both* user-scope imports and therefore receives **only the inline stable
+identity — no summary and no banners**, which is named for the first time as an
+**accepted fail-loud degradation** rather than left implicit.
+
+**V5 — a Deliverables cell three rounds stale.** The Codex golden was still described as
+"stable-only content", predating F7's banner carve-out. Restated to the E7 composition.
+
+**The check this round adds.** Every finding here is a **mirror that no existing gate
+reads**: the constant sweep reads identifiers, the sentence sweep reads topology and
+lifecycle claims, the AC map reads criteria against Deliverables — and none of them reads
+an **Out-of-scope section against its own tables and criteria**. V1 is exactly that pair.
+So the ritual gains one more pass: for every spec, read Out-of-scope against every table
+row and every acceptance criterion, and list any pair that conflict. Run on this round it
+found two further conflicts beyond V1 — a Deliverables cell promising a `renderDigest`
+change the spec cannot make, and an acceptance criterion asserting content its own
+Out-of-scope assigns to a successor WP.

@@ -395,11 +395,15 @@ git diff --stat -- tests/golden/digest-default.md
   Acknowledgement keys on `(job, reason)`, which collapsing preserves exactly — no ack
   change is needed or permitted here.
 - **`clearAlerts` is NOT out of scope** — round 5 both mandated and forbade changing it
-  (finding U5). Exactly **three** changes to it are authorized, and nothing else: (1) it
+  (finding U5). Exactly **four** changes to it are authorized, and nothing else: (1) it
   takes the shared lock (C8f); (2) it degrades to the C8g fallback when the lock cannot
-  be acquired; (3) it calls `handle.stillHeld()` before its rewrite rename (C8h1). Its
-  filtering semantics, its `pruneAcksForJob` call, and its remove-when-empty behaviour
-  are unchanged.
+  be acquired; (3) it calls `handle.stillHeld()` before its rewrite rename (C8h1); and
+  (4) it calls `handle.stillHeld()` before the **`rmSync` that removes the whole file
+  when no records remain** (C8h1, asserted by **AC-13c5**). Round 6 authorized only the
+  first three while C8h1/AC-13c5 already required the fourth, so the spec forbade a change
+  it also demanded (finding V1). What remains prohibited is any **semantic** change: its
+  filtering logic, its `pruneAcksForJob` call, and *whether* it removes the file when
+  empty are all unchanged — only the fence in front of that removal is added.
 - Adding a bound or a collapse to the app-side `appendAlert` beyond the ones it
   already has.
 - Any change to the managed block, the adapters, or the digest's body sections.
@@ -491,3 +495,11 @@ git diff --stat -- tests/golden/digest-default.md
     module boundary. New AC-13c6.
   - **U3.** C8h1 extended: `clearAlerts`' `rmSync` of the whole file when no records
     remain is a destructive operation and is fenced identically. New AC-13c5.
+- **2026-08-30 — Codex round-6 finding V1 (owner: ACCEPTED).** Out-of-scope authorized
+  exactly **three** `clearAlerts` changes while C8h1 and AC-13c5 already required a
+  **fourth** — fencing the `rmSync` that removes the whole file when no records remain.
+  The spec forbade a change it simultaneously demanded, which is the U5 defect recurring
+  one round later in the same section. Now four changes are authorized explicitly, each
+  citing its row, and the prohibition is narrowed to what it was always meant to cover:
+  **semantic** change (filtering logic, the `pruneAcksForJob` call, and *whether* the file
+  is removed when empty), none of which moves.

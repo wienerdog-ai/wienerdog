@@ -162,7 +162,7 @@ import of `state/digest.md`. `src/adapters/codex.js` still copies the whole dige
 | modify | tests/unit/claude-adapter.test.js | block shape |
 | modify | tests/unit/codex-adapter.test.js | `buildCodexBlock` order, the E7b adaptive budget, the maximum-size and large-user-content fixtures |
 | modify | tests/golden/claude-adapter/CLAUDE.md | new block shape |
-| modify | tests/golden/codex-adapter/AGENTS.md | stable-only content |
+| modify | tests/golden/codex-adapter/AGENTS.md | the E7 composition: preamble + banners + stable identity, with **no** projects list and **no** daily log. The pointer paragraph slot is populated by `WP-codex-block-pointer-line`, not here |
 
 **Golden files:** you **DO** have permission to update
 `tests/golden/claude-adapter/CLAUDE.md` and `tests/golden/codex-adapter/AGENTS.md`.
@@ -348,9 +348,14 @@ discipline is on, and Table E above is the canonical table.
       order: `digest-volatile.md` then `refusal-banner.md`; the updated golden matches
       (E6, and Table D rows D2/D2a in `WP-managed-block-by-reference`).
 - [ ] AC-9 — The Codex block is produced by `buildCodexBlock({prefix, stable,
-      pointerLine})` reading `digest-prefix.md` and `digest-stable.md`, in the E7a order
-      — preamble, banners, pointer line, stable identity — with **no** import line and
-      **no** projects list or daily log; the updated golden matches (E7, E7a).
+      pointerLine})` reading `digest-prefix.md` and `digest-stable.md`, and places its
+      arguments in the E7a order — preamble, banners, **pointerLine slot**, stable
+      identity — with **no** import line and **no** projects list or daily log; the
+      updated golden matches (E7, E7a). **This WP supplies an empty `pointerLine`**: the
+      paragraph's content is `WP-codex-block-pointer-line`'s deliverable, so assert the
+      *positioning* here (an empty slot collapses to nothing, leaving banners directly
+      above the identity) and the *content* there. Asserting the paragraph's text here
+      would require work this spec puts out of scope.
 - [ ] AC-9a — A fixture with an active alert renders that alert's banner **into** the
       Codex golden (F7: Codex keeps proactive warnings), while the same fixture's daily
       log token appears in neither user-owned file (AC-4).
@@ -505,3 +510,12 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
   `digest-volatile.md` (which is `prefix` + `volatile` body, E4), and never in
   `digest-stable.md`. An acceptance criterion contradicting its own canonical table is the
   same failure class as T3 and U5, in a third location.
+- **2026-08-30 — Codex round-6 finding V5, plus the new Out-of-scope/table conflict
+  check (owner: ACCEPTED).** **V5:** the Codex golden's Deliverables cell still said
+  "stable-only content", three rounds after F7 added the code-owned banners to that block.
+  Restated to the E7 composition — preamble + banners + stable identity, no projects list,
+  no daily log — with the pointer paragraph named as `WP-codex-block-pointer-line`'s slot
+  to fill. **Conflict check:** AC-9 then asserted the pointer line's presence in the E7a
+  order while Out-of-scope assigns that line to the successor WP. AC-9 now asserts the
+  *positioning* with an empty `pointerLine` and leaves the *content* to the successor —
+  the same "mandated and forbidden" class as V1.

@@ -125,14 +125,27 @@ above stand on their own and are what justify the change.
 
 **The amended consumer list.** Under ADR-0039 the digest renders in **three** components
 — `prefix` (banners), `stable` (the ADR-0021 hash-gated identity notes), and `volatile`
-(`## Active projects` + this daily summary). The **stable** part is the only part ever
-copied into a Claude Code user-owned file. The daily summary is **volatile**, so it
-reaches a session only **by reference** — Claude Code's managed block imports
-`<core>/state/digest-volatile.md`, **not** `digest.md` — or not at all: a hook-less Codex
-session and a Cowork session that skips user-scope imports both receive the stable
-identity plus the code-owned banners, and **never** this summary. (Canonical rows:
-`WP-digest-stable-volatile-split` Table E E4/E6/E7; `WP-managed-block-by-reference`
-Table D D2/D2a.) The managed block no longer carries the daily summary
+(`## Active projects` + this daily summary). Stated per harness, precisely, because
+earlier drafts of this amendment blurred the three cases (finding V4):
+
+- **Claude Code.** The managed block **copies no daily-summary bytes** — its inline half
+  is the stable identity only. It **references** `<core>/state/digest-volatile.md`, which
+  *does* contain the fenced summary, via an `@import`. So the summary reaches the session,
+  but it is never a durable copy in the user-owned file; it lives at 0600 in the core and
+  the block holds a path. (Canonical rows: `WP-managed-block-by-reference` Table D
+  D1/D2/D2a; `WP-digest-stable-volatile-split` Table E E4/E6.)
+- **Codex, hooks untrusted.** The block copies the **stable identity plus the code-owned
+  state-derived banners as of the last sync** (Table E E7). It has no import mechanism, so
+  the daily summary and the projects list are **absent** — which for untrusted-derived
+  content is the fail-safe direction.
+- **Cowork.** A Cowork session skips **both** user-scope imports — it ignores user-scope
+  imports resolving outside the session `cwd`, and skips a symlinked `~/.claude/CLAUDE.md`
+  entirely — so it receives **only the inline stable identity**: no daily summary, and
+  **no banners either**. That second part is an **accepted fail-loud degradation**, named
+  as such here rather than left implicit: a Cowork user gets no proactive Wienerdog
+  warnings through this channel at all.
+
+The managed block no longer carries the daily summary
 in any form, on any harness.
 
 **What is unchanged.** The fence itself, `DAILY_FENCE_OPEN`/`DAILY_FENCE_CLOSE`, the

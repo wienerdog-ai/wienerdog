@@ -44,10 +44,11 @@ of fail-loud was dead too — it spawns the CLI shim, which is unusable when
 **refusal banner**: code-owned, fixed text under `<core>/state/`, using the same
 self-contained, no-app-tree-require discipline `appendRefuseAlert` already uses.
 Per-job entries live in `<core>/state/refusal-banner/`, and the launcher rebuilds a
-single concatenated `<core>/state/refusal-banner.md` from them — that concatenated file
-is what every reader points at, because an `@import` cannot glob a directory. Later WPs
-(`WP-refusal-banner-delivery`, `WP-managed-block-by-reference`) make the SessionStart
-hook, `renderDigest` and the Claude Code managed block read it. **This WP writes,
+single concatenated `<core>/state/refusal-banner.md` from them — the path for the two
+readers that **cannot enumerate a directory**: the SessionStart hook and the Claude Code
+managed-block import (an `@import` cannot glob). `renderDigest`'s app-side callers read
+the **directory** instead and self-heal the concatenated file (**B18a**). Later WPs
+(`WP-refusal-banner-delivery`, `WP-managed-block-by-reference`) wire all three readers. **This WP writes,
 clears and rebuilds; it does not yet display.** That is deliberate: the file format and
 its lifecycle are one contract, and the readers are another.
 
@@ -82,9 +83,10 @@ whole chain exists to fix, reintroduced by the fix.
 **The corrected design (owner-accepted, F5).** Banner state is **per job**:
 
 - One entry per job under a launcher-owned directory, plus a single **concatenated
-  file rebuilt from those entries** — so the readers, including the Claude Code
-  managed-block import, have exactly **one** path to point at (an `@import` cannot
-  glob a directory).
+  file rebuilt from those entries** — so the two readers that cannot enumerate a
+  directory (the hook, and the Claude Code managed-block import, since an `@import`
+  cannot glob) have exactly **one** path to point at. App-side `renderDigest` callers
+  read the directory directly (**B18a**).
 - The **launcher** clears a job's **own** entry **only after that job's `spawnSync`
   returns a numeric status** (Table B, **B15**); if the spawn throws or returns a null
   status it *writes* a spawn-failure entry instead (**B16**). This is launcher-owned
@@ -242,7 +244,7 @@ the structured `catchup: {ok, reason?}`.
 | create | src/core/refusal-banner.js | app-side read + whole-directory clear. The launcher NEVER requires this |
 | modify | src/core/private-fs.js | `'refusal-banner.md'` in `A5_PRIVATE_FILE_BASENAMES`; `refusal-banner/` **and** `launcher.lock/` in the A5 dirs set (B13) |
 | modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it |
-| modify | src/cli/sync.js | clear the whole directory **after** `manifestMod.save`, **only on a clean reconciliation** (B17, incl. catch-up); render the digest banner-free only in that same case |
+| modify | src/cli/sync.js | compute the `reconciliationClean` flag (B17/B17a) and clear the whole directory **after** `manifestMod.save`, only when it is true. **Passing the flag into `renderDigest` is NOT this WP's change** — the `refusalBanner` option does not exist until `WP-refusal-banner-delivery`, which owns that wiring and asserts it in its AC-9/AC-15 |
 | modify | src/cli/schedule.js | `repairCatchup` returns `{ok, reason?}`; `repointSchedules` propagates it as `catchup` (B17a) |
 | modify | tests/unit/catchup-authorization.test.js | the new structured `catchup` result, including the caught-throw shape |
 | create | tests/unit/refusal-banner.test.js | app-side reader/clearer |
@@ -431,7 +433,7 @@ name *what* each one requires first, and B11 states the scope rule they both obe
 | Row | Fact | Value |
 |-----|------|-------|
 | B1 | Per-job entry | `<core>/state/refusal-banner/<entry-name>.md` — one file per job, the source of truth |
-| B1a | Concatenated file | `<core>/state/refusal-banner.md` — a **derived** artifact: every entry, joined by a blank line, in **sorted filename order**. Rebuilt from the directory after every mutation. This is the single path every reader and the Claude Code import point at, because an `@import` cannot glob a directory |
+| B1a | Concatenated file | `<core>/state/refusal-banner.md` — a **derived** artifact: every entry, joined by a blank line, in **sorted filename order**. Rebuilt from the directory after every mutation. It exists for the **two readers that cannot enumerate a directory**: the SessionStart hook (which must stay a single-file read with no computation) and the Claude Code managed-block import (an `@import` cannot glob). It is **not** the path every reader uses — `renderDigest`'s app-side callers read the **directory** and self-heal this file; see **B18a** |
 | B1b | Empty directory | No entries → the concatenated file is **removed**, not written empty. A missing import target is skipped silently, which is the healthy state |
 | B1c | Mutation lock | Every banner-directory mutation **and** its rebuild happen while holding the launcher lock (Table L). A writer that cannot acquire still writes its own entry **and still rebuilds, unlocked** (Table L, L6) — the rebuild is idempotent and lands by atomic rename, so an unlocked one can lose a race but never corrupt |
 | B2 | Sole writer | `writeRefusalBanner` in `src/scheduler/launcher.js`, called from `refuse()` and from the spawn-failure path (B16) |
@@ -1069,3 +1071,16 @@ grep -n "catchup" src/cli/schedule.js src/cli/sync.js
     ago; the corrected-design bullet list had never been updated, and neither had the
     GLOSSARY entry or ADR-0039 §5. All three now state B15/B16: clear only after a
     numeric `spawnSync` status; on throw or null status, write a spawn-failure entry.
+- **2026-08-30 — Codex round-6 finding V2, plus the new Out-of-scope/table conflict
+  check (owner: ACCEPTED).**
+  - **V2 — B1a overclaimed.** It said the concatenated file "is the single path every
+    reader points at", which B18a had already contradicted by having `renderDigest`'s
+    app-side callers read the **directory** and self-heal. B1a now names only the two
+    readers that *cannot* enumerate a directory — the SessionStart hook and the Claude
+    Code import — and points everything else at B18a. The two Context sentences making
+    the same claim were fixed in the same pass.
+  - **Out-of-scope conflict found by the new check.** The `src/cli/sync.js` Deliverables
+    cell said this WP would "render the digest banner-free", but the `refusalBanner`
+    option does not exist until `WP-refusal-banner-delivery`. Split: this WP computes the
+    `reconciliationClean` flag and clears; the delivery WP passes the flag into
+    `renderDigest`. Same class as V1 — a spec asking for work it cannot legally do.
