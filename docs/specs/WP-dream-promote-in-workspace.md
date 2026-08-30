@@ -789,7 +789,28 @@ revisited.
       redact arm's copy survives the withhold — the run's result carries that
       copy as an entry on the EP2 gate's preservation record, with its own
       `location`, and the refusal reason names no copy at all
-      (`WP-dream-promote-module`, Table Q rows Q1, Q8 and Q9). **Proven RED
+      (`WP-dream-promote-module`, Table Q rows Q1, Q8 and Q9).
+      **AND ONE TRIGGER NARROWED, WITH ITS CAUSE, AND THE NARROWING IS NAMED
+      RATHER THAN LEFT TO BE DISCOVERED (owner ruling, 2026-08-30).** The
+      preservation-failure abort's identity check used to RE-READ THE VAULT and
+      compare that read against the preserved copy; the extracted gate is HANDED
+      the bytes it preserves, so the copy holds them by construction. **A whole
+      TOCTOU class therefore retired together with its CAUSE — the vault
+      re-read — and the two arms only that class could reach ("a copy exists but
+      is of the WRONG bytes", "the identity read cannot be performed") are
+      unreachable by construction, not by weakening.** What remains is asserted
+      in BOTH directions: both preserves failed → fail-loud refuse; a durable
+      copy exists → recoverable, no abort. **THE PROTECTION DID NOT VANISH, IT
+      MOVED, and this is where a future reader is told so:** a user save landing
+      between the judgment and the publish is the vault-write primitive's
+      `expect` guard — Table H row **H5**
+      (`docs/specs/done/WP-dream-vault-write-primitive.md`), which states the
+      conditional publish and names its own residual — and it is ASSERTED THERE,
+      in `tests/unit/dream-vault-write.test.js`. This package CITES it and does
+      not re-assert it; a second copy here would be a drifting duplicate of a
+      contract this package does not own. The move is recorded in
+      `docs/specs/logbook/2026-08-30-toctou-class-retired-with-its-cause.md`.
+      **Proven RED
       against an extraction that preserves `:1338-1360` byte-for-byte**, which
       keeps the append at `:1358` to a `reason` whose only consumer this package
       deletes — the copy is then kept and announced to nobody — **and separately
