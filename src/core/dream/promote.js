@@ -6,9 +6,12 @@
  * WHAT THIS IS. The decision layer between the workspace and the vault. Given
  * the run's constructed baseline, the delta of what the brain wrote into the
  * workspace, and the live vault, it decides per path what happens — promote,
- * promote a merged version, or refuse-and-report — runs the four policy gates
- * on the bytes that would actually be published, publishes what survives
- * through the vault-write primitive, and returns the decided bytes.
+ * promote a merged version, promote a scrubbed version, or refuse-and-report —
+ * runs four policy gates, publishes what survives through the vault-write
+ * primitive, and returns the decided bytes. **The gates do NOT share one
+ * input:** the secret scan judges what the BRAIN wrote, before the merge; the
+ * other three judge the MERGED bytes that would actually be published. Table D
+ * owns that split and this header states none of its rule.
  *
  * FILTERING OUT BECOMES PROMOTING IN. Today's validator lets the brain write
  * the vault and then reverts what fails policy. Here the brain never touches

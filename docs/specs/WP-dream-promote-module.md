@@ -126,10 +126,13 @@ the caller's premise still holds, and returns the bytes it published.
 
 **This package builds the decision layer between them.** Given the run's
 constructed baseline, the delta of what the brain wrote, and the live vault, it
-decides per path what happens — promote, promote a merged version, or
-refuse-and-report — runs the four policy gates on the bytes that would actually
-be published, publishes what survives through the primitive, and composes the
-dream report's enforcement record. **Filtering out becomes promoting in.** It
+decides per path what happens — promote, promote a merged version, promote a
+scrubbed version, or refuse-and-report — runs four policy gates, publishes what
+survives through the primitive, and composes the dream report's enforcement
+record. **The gates do NOT share one input:** the secret scan judges what the
+BRAIN wrote, before the merge; the other three judge the MERGED bytes that would
+actually be published. **Table D owns that split and this summary states none of
+its rule.** **Filtering out becomes promoting in.** It
 ships with no caller: `WP-dream-promote-in-workspace` is the package that makes
 it true of the running product.
 

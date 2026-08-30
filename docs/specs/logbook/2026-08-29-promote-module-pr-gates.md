@@ -341,8 +341,12 @@ editable.
 ### Finding 5 — `date` now has a shape, in ONE place
 
 **The row: Table D, `The `date` INPUT'S SHAPE`.** Table D owns what the gates
-are HANDED, and `date` is handed to two of them (`promote.js:812` to the EP2
-gate, `:954` to the skill-body guard), so the shape belongs there rather than in
+are HANDED, and `date` is handed to two of them (`promote.js:819` to the EP2
+gate, `:961` to the skill-body guard — corrected 2026-08-30 from `:812`/`:954`,
+which landed on the call expressions' other arguments; the gate reported
+`:816`/`:958`, true of the tree it read and moved by three lines when the same
+commit rewrote this module's header), so the shape belongs
+there rather than in
 Table E, which owns the write, or in Table Q, which owns the gate's OUTPUT.
 
 **The shape is `/^\d{4}-\d{2}-\d{2}$/`, not the weaker "no path separators".**
@@ -401,3 +405,81 @@ would make the list twenty-two entries and falsify the six-of-twenty-one count
 the owner fixed for this pass, so it is named in the section's own gap paragraph
 and routed to the owner instead of taken quietly. This is the second such gap
 recorded there; the first is `docs/GLOSSARY.md`.
+
+## Round 5 — the code cleared, the registry escalated
+
+**Note on the rounds-1-and-2 SHAs above.** The rebase onto `68ac5e9` rewrote
+this branch, so the commits those earlier rows cite — `b4a9e24`, `2f3d506`,
+`d79b125`, `16c98e9`, `cbff493`, `db86d3e`, `9d8daf3` — are **no longer
+ancestors of this branch**. They still resolve in this clone's object store and
+they were true when written, so the rows stay as the record they are. Checked
+mechanically with `git merge-base --is-ancestor`, not assumed. **The rule the
+raw-SHA convention protects still holds** — a SHA cannot be cited before its
+commit exists, so a skipped raw-commit is still visible at adjudication time —
+but a reader on a fresh clone will not be able to follow those seven. The
+round-3 through round-5 SHAs (`07947f0`, `f60f1f1`, `e4c3a29`) are post-rebase
+and are ancestors.
+
+| Gate | Raw output | Introduced by | Verdict on `d548f5a` |
+|---|---|---|---|
+| PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-5-gptsol-raw.txt` | `e4c3a29` | patch is incorrect — 1 × P2 |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-5-wd-reviewer-raw.txt` | `e4c3a29` | REQUEST-CHANGES — 2 contract, 2 quality |
+
+**All seven round-4 findings verified genuinely fixed**, and the spec gate said
+of the deliverables: *"The shipped code is clean and I would approve it as it
+stands."* It judged the new `date` contract correct in owner, citation,
+uniqueness and strength, and probed the trailing-newline case **against its own
+stated hypothesis** — expecting JS `$` to leak a newline the way Perl's does,
+and reporting that it does not. A check that disproves the checker is the kind
+this record should name.
+
+### Dispositions
+
+| # | Gate | Finding | Disposition |
+|---|---|---|---|
+| P2 | rubric | `promote.js:9` and spec `:130` still said the four gates judge the bytes that would actually land | **fix** |
+| — | (sweep) | the SAME sentence enumerated three outcomes, omitting `redacted` | **fix** — found by sweeping the claim, not named by either gate |
+| 4 | spec | two `promote.js` citations in the architect section resolved to the wrong lines | **fix** |
+| 1 | spec | item *Table Q*'s mirror list says "Q3, Q8 and Q10" where the mirror asserts Q1–Q3, Q8, Q9, Q10 | **ESCALATED** — inside the checklist |
+| 2 | spec | the `date` registry-gap paragraph says "one mirror"; measured, three cite the row | **ESCALATED** — inside the checklist |
+| 3 | spec | `### Exact contracts` still narrates Q9 where `promote.js` was fixed to cite it | **ESCALATED** — the gate itself called it the architect's call |
+
+### The eighth injection, and it was mine
+
+The rubric gate named ONE false claim in that sentence. Sweeping the claim
+found **two**, and the second is the one already fixed once this session:
+`GLOSSARY.md`'s "only three" outcomes, omitting `redacted`, living on in the
+module header and the spec summary in different words.
+
+**The rule was written down, saved, and then not applied.** Round 4 recorded
+"grep the claim's distinguishing word across every surface FIRST" and round 5's
+sweep ran it for four claims — `uniform`, `otherwise consistent`,
+`non-empty string`, `YYYY-MM-DD` — and not for the four-gates claim, because the
+glossary fix was treated as finished at the instance that was named. **A named
+instance is one example of the rule, never the whole of it.** The correction
+that follows is not a new rule but the same one, applied to itself: after
+fixing any claim, sweep for THAT claim, not only for the ones already on the
+list.
+
+Then the correction re-injected once more, in miniature: the logbook citations
+were fixed to `:816`/`:958` — true of the tree the gate read — in the same
+commit that added three lines to the module header and moved them to
+`:819`/`:961`. Caught by measuring instead of trusting the arithmetic, and
+recorded rather than smoothed over.
+
+### The escalation the gate raised — ADR-0031 on the checklist
+
+Two of this round's three substantive findings landed inside the **Mirrored
+Surface Checklist**, and round 4's did too: three rounds deep on one section.
+The gate's reading is that neither finding is a thinking error — both are what a
+~250-line hand-maintained prose registry does — and that **the section is itself
+the contract-dense prose ADR-0031 says to extract into a canonical table**: one
+row per item, one column for the mirror set, one for the prohibitions, one for
+walk state. The spec already names the consumer that will need it tabular
+(`scripts/mirror-walk.js`).
+
+Findings 1, 2 and 3 have their correct values already derived — in the walk
+paragraph, in the gate's report, and in this record — so they can land inside
+that pass without re-deriving anything. **Routing it is the owner's call; a
+seventh consecutive prose patch to the same section is what the repeat-kind rule
+exists to prevent.**
