@@ -321,12 +321,21 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   }
   assert.equal(matches.trim(), '');
 
-  // The report's enforcement section lists every intervention.
+  // The report's enforcement section lists every intervention. The HEADING is
+  // `WP-dream-promote-report`'s — "refused by policy", not "reverted by
+  // orchestrator", because under promotion nothing was ever written to the vault
+  // to revert.
   const report = fs.readFileSync(path.join(ctx.vault, 'reports/dreams', `${DATE}.md`), 'utf8');
-  assert.ok(report.includes('## Reverted by orchestrator (policy enforcement)'));
-  assert.ok(report.includes('06-Identity/injected.md'));
-  assert.ok(report.includes('05-Skills/weak-skill/SKILL.md'));
-  assert.ok(report.includes('EVIL.json'));
+  assert.ok(report.includes('## Refused by policy (promotion enforcement)'), report);
+  // The paths are NEUTRALISED where the report renders them
+  // (`WP-dream-promote-report`'s Table N): a brain-chosen path is attacker text,
+  // and `sanitizeProjectName` replaces every character outside
+  // `[\p{L}\p{N}\p{M} ._-]` — the separator included. So the report names
+  // `06-Identity_injected.md`, and asserting the raw spelling would be asserting
+  // that the neutralisation did NOT happen.
+  assert.ok(report.includes('06-Identity_injected.md'), report);
+  assert.ok(report.includes('05-Skills_weak-skill_SKILL.md'), report);
+  assert.ok(report.includes('EVIL.json'), report);
 
   // Per-file ledger advanced (the transcript recorded processed at its
   // fingerprint); no scalar watermark is written any more.
@@ -400,7 +409,7 @@ test('dream-integration: --dry-run prints the plan and resolved argv, runs no br
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
 });
 
-test('dream-integration: a dirty vault is pre-committed, then the dream proceeds (starvation fix)', async () => {
+test('dream-integration: a dirty vault is NOT pre-committed, and the dream proceeds anyway (row G6)', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   // An ordinary interactive session left the vault dirty (uncommitted edits).
@@ -409,17 +418,27 @@ test('dream-integration: a dirty vault is pre-committed, then the dream proceeds
   const { thrown } = await runDream(ctx, ['--yes']);
   assert.equal(thrown, null, thrown && thrown.message);
 
-  // Two new commits: the pre-commit of the user's edits, then the dream commit.
-  assert.equal(commitCount(ctx.vault), before + 2);
+  // ONE new commit — the dream's own. The pre-commit is RETIRED (row G6,
+  // ADR-0012's 2026-08-30 amendment): there is no dream diff in the vault to
+  // keep clean, and what remained was only its cost — committing the user's
+  // in-flight edits under the `wienerdog` identity without asking.
+  //
+  // The STARVATION this test's original name refers to is closed a different
+  // way now, and closed harder: a dirty tree is no longer a precondition of the
+  // run at all, so it cannot starve it. That is what this test asserts.
+  assert.equal(commitCount(ctx.vault), before + 1);
   const subjects = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
   assert.match(subjects[0], /^dream: \d{4}-\d{2}-\d{2} — \d+ notes, \d+ skills$/);
-  assert.equal(subjects[1], 'vault: session edits before dream');
+  assert.notEqual(subjects[1], 'vault: session edits before dream', 'the retired pre-commit is not there');
 
-  // The previously-uncommitted file is now tracked.
-  assert.ok(git(ctx.vault, ['ls-files']).includes('uncommitted.md'));
-  // The dream's own writes still landed and the tree is clean.
+  // The user's file is neither committed nor lost.
+  assert.ok(!git(ctx.vault, ['ls-files']).includes('uncommitted.md'), 'not swept into the commit');
+  assert.equal(fs.readFileSync(path.join(ctx.vault, 'uncommitted.md'), 'utf8'), 'session edit\n', 'and not discarded');
+  // The dream's own writes still landed.
   assert.ok(git(ctx.vault, ['ls-files']).includes('06-Identity/valid-identity.md'));
-  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  // The tree is NOT clean any more, and that is correct: the user's own edit is
+  // still theirs to commit.
+  assert.match(git(ctx.vault, ['status', '--porcelain']), /uncommitted\.md/);
 });
 
 test('dream-integration: a crashed brain restores the vault, releases the lock, records no ledger outcome', async () => {
@@ -697,61 +716,24 @@ test('dream-integration: a stderr-channel rejection with whitespace-only stdout 
   assert.ok(!/dream committed/.test(output));
 });
 
-test('dream-integration: a probe git EXECUTION failure after a bare-marker brain fails loud — never certifies a no-op (WP-dream-plaintext-trigger)', { skip: process.platform === 'win32' }, async () => {
-  // Codex round 3: the brain writes nothing + emits the bare diagnostic, and
-  // the post-brain clean-tree probe fails TRANSIENTLY on git execution (not
-  // because the tree is dirty). Treating that throw as "dirty" would suppress
-  // the abort; git recovers; validateAndCommit certifies the vacuous run and
-  // advances the ledger — the original incident class. The probe must instead
-  // RETHROW: no evidence either way → fail closed, one loud failed run, no
-  // commit, no ledger advance; the sessions are retried next night.
-  const ctx = setup();
-  const before = commitCount(ctx.vault);
+// RETIRED with the vault-cleanliness probe (WP-dream-promote-in-workspace, row
+// G3). This test asserted that a TRANSIENT git-execution failure inside the
+// unknown-command guard's `assertCleanTree` probe must RETHROW rather than read
+// as "dirty" — because swallowing it would let a vacuous run be certified once
+// git recovered, which was the original incident class.
+//
+// The guard no longer runs git at all. Its evidence moved to the workspace: the
+// abort keys off the marker AND an empty `computeDelta` result, and that walk is
+// git-free by construction. So the failure mode this test drove does not exist
+// to be driven — it is closed structurally rather than by a correct catch, and a
+// test that plants a breaking `git` wrapper would now be asserting nothing about
+// the guard.
+//
+// What replaced its DECISION is asserted in tests/unit/dream-pipeline.test.js:
+// "the marker with a DIRTY VAULT still aborts — the decision keys off the delta,
+// not the vault (row G3)", which is the same discrimination proven on the
+// evidence the guard now uses.
 
-  // Pre-plant a stateful git wrapper in the bin dir pinFakeBrain pins from
-  // (WP-155 pinned-fakes idiom): it delegates to the real git until the fake
-  // brain plants the break flag, then fails EXACTLY ONE `status` call (the
-  // probe) — the flag is cleared before failing, so git "recovers"
-  // immediately. The transience is load-bearing for mutation strength: under
-  // a mutant catch that swallows the probe error and proceeds, git has
-  // already recovered, so validateAndCommit SUCCEEDS and silently certifies
-  // the vacuous run (thrown null, commit made, ledger advanced) — only the
-  // correct rethrow can fail this run. A persistent failure would let
-  // validateAndCommit's own identical "git status failed" mask the mutant.
-  const realGit = resolveOnPath('git', process.env.PATH).commandPath;
-  const flag = path.join(ctx.core, 'git-break.flag');
-  const binDir = path.join(fs.realpathSync(ctx.root), 'bin');
-  fs.mkdirSync(binDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(binDir, 'git'),
-    [
-      '#!/bin/sh',
-      `if [ -f "${flag}" ]; then`,
-      '  for a in "$@"; do',
-      '    if [ "$a" = "status" ]; then',
-      `      rm -f "${flag}"`,
-      '      echo "fatal: transient git failure (test)" 1>&2',
-      '      exit 128',
-      '    fi',
-      '  done',
-      'fi',
-      `exec "${realGit}" "$@"`,
-      '',
-    ].join('\n')
-  );
-  fs.chmodSync(path.join(binDir, 'git'), 0o755);
-
-  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'bare-marker-break-git' });
-
-  // Loud failure carrying the PROBE's error, not a silent certification.
-  assert.ok(thrown, 'expected a loud failure');
-  assert.match(thrown.message, /git status failed/);
-  // No commit, no ledger record; vault restored clean by the outer catch.
-  assert.equal(commitCount(ctx.vault), before);
-  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
-  assert.equal(readLedgerFile(ctx.core), null);
-  assert.ok(!/dream committed/.test(output));
-});
 
 // ── WP-119: per-file quarantine ledger (audit A6, ADR-0023) ─────────────────
 
@@ -764,23 +746,29 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   assert.equal(thrown, null, thrown && thrown.message);
 
   // The valid neighbour was consolidated and committed; the run exited 0.
-  // TWO commits, and the first one is the pre-existing session-edits sweep, not
-  // a second dream commit: refresh point 1 writes the vault warnings file before
-  // the run's `precommitSessionEdits`, which commits every dirty working-tree
-  // change ahead of the brain. The dream's own commit is still exactly one.
-  assert.equal(commitCount(ctx.vault), before + 2);
+  // ONE commit — and that is row G8's third clause discharging the residual this
+  // assertion used to record. Refresh point 1 writes the vault warnings file
+  // BEFORE the brain, and it used to sit dirty in the working tree until the
+  // next run's `precommitSessionEdits` swept it into a second commit. That call
+  // is gone (row G6), so the file rides THIS run's own commit instead, carried
+  // by the render-versus-HEAD comparison rather than by any authorship test.
+  assert.equal(commitCount(ctx.vault), before + 1);
   const messages = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
   assert.match(messages[0], /^dream: /, 'the dream commit is last');
-  assert.equal(messages[1], 'vault: session edits before dream');
+  assert.notEqual(messages[1], 'vault: session edits before dream', 'no sweep commit beside it');
+  assert.ok(
+    git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).includes(WARNINGS_REL),
+    'and the warnings file is IN that one commit'
+  );
   assert.match(output, /dream committed/);
   // The vault's durable record of what could not be read.
   const warned = fs.readFileSync(path.join(ctx.vault, WARNINGS_REL), 'utf8');
   assert.ok(warned.includes('- huge.jsonl —'), warned);
   // This is the one run where BOTH refresh points fire: point 1 wrote the file
-  // before the sweep, and point 2 ran after the commit over an unchanged
+  // before the brain, and point 2 ran after the commit over an unchanged
   // quarantine set. Point 2 must therefore have taken Table C row 2 and written
-  // nothing — if it rewrote the file, the run would end with a dirty vault and
-  // every following night would grow another `vault: session edits` commit.
+  // nothing — and because row G8 already carried the file into the commit, the
+  // run ends with a CLEAN tree rather than a file waiting for a next-run sweep.
   assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'point 2 took row 2 — no second write');
   // The quarantine was surfaced plainly — basename + reason only.
   assert.match(output, /quarantined claude\/huge\.jsonl \(over-ceiling\); it will not be retried until it changes\./);
@@ -861,15 +849,15 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   const r3 = await runDream(ctx, ['--yes']);
   assert.equal(r3.thrown, null, r3.thrown && r3.thrown.message);
   assert.match(r3.output, /dream committed/);
-  // Two commits again, for the same reason as above: the warnings file runs 1
-  // and 2 left uncommitted in the working tree is swept in by this run's
-  // `precommitSessionEdits` — the named residual, discharged one run later.
-  // The messages are what tell the pre-existing sweep apart from a second dream
-  // commit; a bare count cannot, and ADR-0012 is about the dream's own commit.
-  assert.equal(commitCount(ctx.vault), before + 2);
+  // ONE commit again, for the same reason as above: the residual this assertion
+  // used to record — the warnings file left uncommitted for the NEXT run's
+  // pre-commit to sweep — is discharged by row G8's third clause. ADR-0012's
+  // "one dream run = one git commit in the vault" now holds with nothing beside
+  // it.
+  assert.equal(commitCount(ctx.vault), before + 1);
   const msgs3 = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
   assert.match(msgs3[0], /^dream: /, 'the dream commit is last');
-  assert.equal(msgs3[1], 'vault: session edits before dream');
+  assert.notEqual(msgs3[1], 'vault: session edits before dream', 'no sweep commit beside it');
   const ledger3 = readLedgerFile(ctx.core);
   assert.equal(ledgerRecord(ledger3, 'huge.jsonl').outcome, 'processed');
   // The banner self-clears once the file leaves quarantine.
@@ -1487,7 +1475,14 @@ test('dream-integration: a standalone run (no run token) writes no hand-up pidfi
   const state = path.join(ctx.core, 'state');
   const pidfiles = fs.readdirSync(state).filter((f) => f.startsWith('dream-brain.'));
   assert.deepEqual(pidfiles, [], 'no per-token pidfile on the standalone path');
-  assert.equal(reapCalls.length, 0, 'no token → no hand-up, no finally group reap (the inner watchdog covers the brain)');
+  // ROW G2 CHANGED THIS, and the change is the point: the group reap used to be
+  // computed INSIDE `if (pidfile)`, so on a tokenless manual run the verdict was
+  // not merely discarded, it was ABSENT — and the workspace walk that follows
+  // must not run while a member of the brain's group can still mutate it. The
+  // verdict is now computed on EVERY run and surfaced to the caller, which
+  // refuses fail-closed on anything but a verified reap.
+  assert.equal(reapCalls.length > 0, true, 'the verdict IS computed on the tokenless path (row G2)');
+  // The hand-up pidfile is still the token path's alone — that half is unchanged.
 });
 
 // ── WP-secret-revert-defers-ledger: a secret-reverted run defers its inputs ──
