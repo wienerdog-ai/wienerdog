@@ -1,7 +1,7 @@
 ---
 id: WP-hook-doctor-inspection-read-hardening
 title: Type-guard and bound every inspection read, and make presence-doubt inject
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-session-start-digest-dedup]

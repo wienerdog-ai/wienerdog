@@ -228,42 +228,112 @@ function staleHookChecks(paths, harnesses) {
   return findings;
 }
 
-/** Report whether each present harness's managed block still carries the CURRENT
- *  digest. The digest file is rewritten by every dream run; the block is written
- *  only by an attended `wienerdog sync`, so the two drift apart between syncs and
- *  nothing else surfaces it. Read-only — doctor never mutates (WP-070); the
- *  remediation is always `wienerdog sync`. Emits NOTHING when there is no digest
- *  to compare against (a no-vault install: normal, and the vault check above
- *  already covers it) — same convention as googleReadinessChecks, which is silent
- *  when Google is not connected. The freshness predicate is exact: applyManagedBlock
- *  writes buildBlock(digest) between the sentinels on every branch, so the block
- *  text sliced at locateManagedBlock's offsets must equal buildBlock(digest).
- *  Never throws.
+// Inspection ceiling for any path digestBlockChecks reads. Table C rows C1/C4
+// of docs/specs/WP-hook-doctor-inspection-read-hardening.md: the hook's inline
+// MAX_TARGET_BYTES is the other home of this number, both are mirrors of C1,
+// and the two move in one pass.
+const MAX_INSPECT_BYTES = 4194304;
+
+/** Descriptor-based bounded read for digestBlockChecks, its only consumer —
+ *  the Table C row C2 mechanism of
+ *  docs/specs/WP-hook-doctor-inspection-read-hardening.md: open
+ *  O_RDONLY|O_NONBLOCK|O_NOCTTY → fstat the SAME descriptor → refuse
+ *  non-regular → read to EOF from the same descriptor, stopping at
+ *  ceiling + 1 → close. st_size is a cheap over-cap check, never a length
+ *  (Table C row C2a); only a clean OPEN-time ENOENT is absence (Table D) —
+ *  an ENOENT thrown after the open succeeded is a descriptor-lifetime
+ *  anomaly (FUSE/network fs), not path absence, and stays doubt.
+ *  @param {string} p
+ *  @returns {{kind:'ok', content:string} | {kind:'absent'} | {kind:'nonregular'}
+ *    | {kind:'overcap', size:number|null} | {kind:'unreadable', code:string}} */
+function inspectRegular(p) {
+  let fd = null;
+  try {
+    fd = fs.openSync(p, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOCTTY);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { kind: 'absent' };
+    return { kind: 'unreadable', code: (err && err.code) || 'unknown error' };
+  }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return { kind: 'nonregular' };
+    if (st.size > MAX_INSPECT_BYTES) return { kind: 'overcap', size: st.size };
+    const buf = Buffer.alloc(MAX_INSPECT_BYTES + 1);
+    let off = 0;
+    while (off < MAX_INSPECT_BYTES + 1) {
+      const n = fs.readSync(fd, buf, off, MAX_INSPECT_BYTES + 1 - off, null);
+      if (n <= 0) break;
+      off += n;
+    }
+    // More than the ceiling actually arrived (an st_size-underreporting file):
+    // over-cap discovered by reading, so the true size is unknowable here.
+    if (off > MAX_INSPECT_BYTES) return { kind: 'overcap', size: null };
+    return { kind: 'ok', content: buf.subarray(0, off).toString('utf8') };
+  } catch (err) {
+    // Post-open failures are doubt regardless of code: the path resolved, so
+    // even an ENOENT here is not the clean absence Table D row D-E1 means.
+    return { kind: 'unreadable', code: (err && err.code) || 'unknown error' };
+  } finally {
+    try { fs.closeSync(fd); } catch { /* ignore */ }
+  }
+}
+
+/** One wording for the doubt states of Table B rows B2, B3 and B9.
+ *  @param {{kind:string, code?:string}} r @returns {string} */
+function inspectionDoubt(r) {
+  if (r.kind === 'nonregular') return 'it is not a regular file';
+  if (r.kind === 'overcap') return `it is larger than the ${MAX_INSPECT_BYTES}-byte inspection ceiling`;
+  return `reading it failed (${r.code})`;
+}
+
+/** Read-only: never throws, never mutates. Its read discipline, memory bound and
+ *  the residuals that bound them are decided in
+ *  docs/specs/done/WP-hook-doctor-inspection-read-hardening.md — Table C
+ *  (mechanism), Table B row B7 (memory), R-A/R-B (residuals). This comment
+ *  points there and states no guarantee of its own.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @param {{claude:{present:boolean}, codex:{present:boolean}}} harnesses
  *  @returns {{status:'ok'|'warn', msg:string}[]} */
 function digestBlockChecks(paths, harnesses) {
-  let digest;
-  try {
-    digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
-  } catch {
-    return []; // no digest → nothing to compare (no-vault install, or an
-              // unreadable file the private-modes check above already owns)
+  const digestPath = path.join(paths.state, 'digest.md');
+  const dig = inspectRegular(digestPath);
+  if (dig.kind === 'absent') {
+    return []; // no digest → nothing to compare (a no-vault install: normal)
   }
-  const want = buildBlock(digest);
+  if (dig.kind !== 'ok') {
+    // Table B row B9: without a trustworthy digest there is nothing to compare
+    // against — one warn, and no target is inspected.
+    return [{ status: 'warn', msg: `cannot inspect ${digestPath} — ${inspectionDoubt(dig)}` }];
+  }
+  const want = buildBlock(dig.content);
   const targets = [];
   if (harnesses.claude.present) targets.push(path.join(paths.claudeDir, 'CLAUDE.md'));
   if (harnesses.codex.present) targets.push(path.join(paths.codexDir, 'AGENTS.md'));
 
   const out = [];
   for (const file of targets) {
-    let content;
-    try {
-      content = fs.readFileSync(file, 'utf8');
-    } catch {
+    const r = inspectRegular(file);
+    if (r.kind === 'absent') {
+      // Table B row B4 — clean ENOENT keeps its pre-hardening message.
       out.push({ status: 'warn', msg: `no Wienerdog block in ${file} — run 'wienerdog sync'` });
       continue;
     }
+    if (r.kind === 'overcap') {
+      // Table B row B5. The file may be fine — it is too large to inspect.
+      const observed = r.size === null ? `larger than ${MAX_INSPECT_BYTES} bytes` : `${r.size} bytes`;
+      out.push({
+        status: 'warn',
+        msg: `${file} is too large to inspect — ${observed} against the ${MAX_INSPECT_BYTES}-byte ceiling; trim it below the ceiling and re-run doctor`,
+      });
+      continue;
+    }
+    if (r.kind !== 'ok') {
+      // Table B rows B2 (non-regular) and B3 (any non-ENOENT failure): doubt is
+      // said out loud, never resolved into a confident answer.
+      out.push({ status: 'warn', msg: `cannot inspect ${file} — ${inspectionDoubt(r)}` });
+      continue;
+    }
+    const content = r.content;
     let span;
     try {
       span = locateManagedBlock(content, file);
