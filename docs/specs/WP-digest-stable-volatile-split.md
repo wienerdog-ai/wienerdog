@@ -330,7 +330,12 @@ discipline is on, and Table E above is the canonical table.
       fenced daily log). `renderDigest` composes them as prefix + stable + volatile
       (E1, E2, E11).
 - [ ] AC-3 — An identity note failing the ADR-0021 hash gate is absent from `stable`,
-      and its exclusion banner appears in `volatile` (E1, E2).
+      and its identity-exclusion banner appears in the **`prefix`** component — banners
+      live in `prefix`, never in the `volatile` body (E2, E11). After composition it is
+      therefore present in **`digest-volatile.md`** (which is `prefix` + `volatile`, E4)
+      and in `digest-prefix.md`, and absent from `digest-stable.md`. *Round 5 stated this
+      as "appears in `volatile`", which contradicted E2/E11's placement of banners in the
+      prefix (finding U7).*
 - [ ] AC-4 — A distinctive token in the fixture's daily note appears in
       `digest-volatile.md` and in **neither** `CLAUDE.md` nor `AGENTS.md`.
 - [ ] AC-5 — All **three** new files are written on every `sync` and every `dream`
@@ -493,3 +498,10 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
   **E7c**: when even that floor does not fit, write the critical block anyway — never drop
   the banners — and push a `sync` NOTICE naming the three byte counts, because a user can
   act on numbers and cannot act on a silent overflow. New AC-15a and AC-15b.
+- **2026-08-30 — Codex round-5 finding U7 (owner: ACCEPTED).** AC-3 asserted that a
+  failed identity note's exclusion banner "appears in `volatile`", contradicting E2/E11,
+  which place **every** banner in the `prefix` component. Restated: the banner appears in
+  `prefix`, and therefore in `digest-prefix.md` and — after composition — in
+  `digest-volatile.md` (which is `prefix` + `volatile` body, E4), and never in
+  `digest-stable.md`. An acceptance criterion contradicting its own canonical table is the
+  same failure class as T3 and U5, in a third location.

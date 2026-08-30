@@ -175,12 +175,12 @@ copies are updated together.
 | C7 | Collapse effect | Increment that last record's `count` by 1 and rewrite it. `at` keeps the **original first** occurrence's timestamp, so the banner's "since \<first\>" stays truthful |
 | C8 | Write order | Append the new record atomically FIRST, then collapse-and-bound in a temp+rename rewrite — mirroring `appendAlert`, so the writer never loses its own record to a concurrent compaction |
 | C8c | Temp cleanup | The compaction's temp-plus-rename `rmSync`s the temp on a rename failure, so a failed atomic write never leaves an orphan beside `alerts.jsonl` (Codex P2). Retained unchanged from round 2 |
-| C8d | Lock | **Pointer row — no algorithm here.** The lock's full contract is `WP-launcher-refusal-banner` **Table L**, which is its single canonical source (ADR-0031). This WP **consumes** it through the exported `acquireLauncherLock` / `releaseLauncherLock` primitives and their exported constants; it must not restate the directory name, the staleness threshold, the wait budget, the release mechanism, or the stale-break algorithm, and must not define a second lock. Round 4 left a copy of the *superseded* algorithm in this cell (bare `rmdirSync`, 10 s, 5 × 200 ms) that survived two protocol rewrites — exactly the drift a pointer row prevents (finding T3). The append **and** its compaction run while holding the lock |
+| C8d | Lock | **Pointer row — no algorithm here.** The lock's full contract is `WP-launcher-refusal-banner` **Table L**, which is its single canonical source (ADR-0031). This WP **consumes** it through the exported `acquireLauncherLock` and the opaque handle it returns (`release()`, `stillHeld()`), plus the exported constants; it must not restate the directory name, the staleness threshold, the wait budget, the release mechanism, or the stale-break algorithm, and must not define a second lock. Round 4 left a copy of the *superseded* algorithm in this cell (bare `rmdirSync`, 10 s, 5 × 200 ms) that survived two protocol rewrites — exactly the drift a pointer row prevents (finding T3). The append **and** its compaction run while holding the lock |
 | C8e | Fallback | If the lock cannot be acquired, **still append the record atomically** and skip **only** the compaction. Fail-loud is never sacrificed to the lock (Table L, L6) |
-| C8f | **Every** writer takes the lock | Round 3 scoped the lock to the launcher, leaving the app side racing it on the **same file** (finding S3). Corrected: `src/core/alerts.js` **requires** `acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js` and takes the same lock around **`appendAlert`**'s append+compaction and **`clearAlerts`**'s filter+rewrite. The direction is app → launcher, which is safe: `launcher.js` is require-safe (its `module.exports` precedes the `if (require.main === module)` guard) and the launcher still requires nothing from `src/`. One implementation, no twin literals (ADR-0031, Table L L11) |
+| C8f | **Every** writer takes the lock | Round 3 scoped the lock to the launcher, leaving the app side racing it on the **same file** (finding S3). Corrected: `src/core/alerts.js` **requires** `acquireLauncherLock` from `src/scheduler/launcher.js` and takes the same lock around **`appendAlert`**'s append+compaction and **`clearAlerts`**'s filter+rewrite. The direction is app → launcher, which is safe: `launcher.js` is require-safe (its `module.exports` precedes the `if (require.main === module)` guard) and the launcher still requires nothing from `src/`. One implementation, no twin literals (ADR-0031, Table L L11) |
 | C8g | App-side fallback | On a failure to acquire, the app side degrades **exactly like the launcher** (C8e): `appendAlert` appends its record atomically and skips compaction; `clearAlerts` skips the rewrite and leaves the file unchanged, so a cleared job's records are removed on the next lock-holding call rather than lost the other way round. Never drop a record to win a race |
 | C8h | Not in scope | `alert-ack.js`'s `pruneAcksForJob` writes **`alerts-ack.json`**, a different file, and never rewrites `alerts.jsonl` — so it needs no lock. It is called *from* `clearAlerts`, which already holds the lock for its own rewrite; taking the lock again there would self-deadlock. Stated so the boundary is deliberate rather than an omission |
-| C8h1 | **Commit-time fence** | Both destructive rewrites here — `appendAlert`'s compaction and `clearAlerts`'s filter-and-rewrite — call the fence (`WP-launcher-refusal-banner` Table L, **L7a**) immediately before `renameSync`: re-read `<lock>/owner`, compare the token, and on mismatch or `ENOENT` `rmSync` the temp and **abort the rewrite**. An evicted holder that renames anyway replaces `alerts.jsonl` with a **pre-successor snapshot**, destroying every record its successor appended — a fail-loud record lost by the very machinery meant to protect it (finding T1). Aborting is free: the append already landed |
+| C8h1 | **Commit-time fence** | Both destructive rewrites here — `appendAlert`'s compaction and `clearAlerts`'s filter-and-rewrite — call `handle.stillHeld()` (`WP-launcher-refusal-banner` Table L, **L7a**) immediately before `renameSync`, and on false `rmSync` the temp and **abort the rewrite**. `clearAlerts`'s `rmSync` of the whole file when no records remain is a destructive operation too and is fenced identically (U3). An evicted holder that renames anyway replaces `alerts.jsonl` with a **pre-successor snapshot**, destroying every record its successor appended — a fail-loud record lost by the very machinery meant to protect it (finding T1). Aborting is free: the append already landed |
 | C8i | Accepted residual | After a C8e/C8g fallback, `alerts.jsonl` may exceed its bound, or retain a cleared job's records, until the next lock-holding call. Both are self-correcting and neither loses a record. The `src/core/alerts.js` lines 87–88 comment describing the old unlocked residual must be **updated**, not left contradicting the new behaviour |
 | C9 | Empty-read guard | If the read-back yields zero records, skip the rewrite entirely and leave the atomically-appended file intact |
 | C10 | Bound order | Count budget first (keep newest `MAX_ALERTS`), then drop oldest until the serialized bytes fit `MAX_FILE_BYTES`; always keep at least the newest record |
@@ -320,7 +320,7 @@ and Table C above is the canonical table.
 - [ ] AC-13a — **Serialised under the lock (round-3 R2/R5).** Two `appendRefuseAlert`
       calls that would interleave are serialised by the launcher lock, and **both**
       records survive (C8d).
-- [ ] AC-13b — **Contended fallback.** With `<core>/state/launcher.lock.v1/` pre-created and
+- [ ] AC-13b — **Contended fallback.** With `<core>/state/launcher.lock/` pre-created and
       fresh, `appendRefuseAlert` still appends its record atomically, skips compaction,
       throws nothing, and leaves no `*.tmp` behind (C8e, C8f, C8c).
 - [ ] AC-13c — The lock is released after a successful append+compact, and also when the
@@ -339,9 +339,16 @@ and Table C above is the canonical table.
 - [ ] AC-13c4 — **Evicted-holder `clearAlerts` (round-5 T1).** Same for the
       filter-and-rewrite path: an evicted `clearAlerts` does not overwrite the file, and
       a record the successor appended after the eviction is still present (C8h1).
+- [ ] AC-13c5 — **Evicted-holder `clearAlerts` remove-when-empty (round-6 U3).** When
+      `clearAlerts` would `rmSync` the whole file because no records remain, an evicted
+      holder aborts that too — a successor's freshly appended record is not deleted
+      (C8h1).
+- [ ] AC-13c6 — **The lock API is the opaque handle (round-6 U2).** `alerts.js` obtains
+      `{release, stillHeld}` from `acquireLauncherLock` and never handles a token; assert
+      no token parameter crosses the module boundary (Table L, L2b/L11).
 - [ ] AC-13d — **App-side writers take the same lock (round-4 S3).** `appendAlert` and
       `clearAlerts` each acquire the launcher lock; assert by observing
-      `<core>/state/launcher.lock.v1/` during the call, and that the release leaves it gone
+      `<core>/state/launcher.lock/` during the call, and that the release leaves it gone
       (C8f).
 - [ ] AC-13e — **Cross-writer interleaving.** A launcher `appendRefuseAlert` and an
       app-side `appendAlert` that would interleave are serialised, and **both** records
@@ -368,7 +375,7 @@ npm run lint
 # C11 — the launcher still requires no app-tree code (expect NO output):
 grep -n "require(['\"]\.\./src\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
 # C8d/C8f — the lock is defined once in launcher.js and REQUIRED by alerts.js:
-grep -n "acquireLauncherLock\|releaseLauncherLock" src/scheduler/launcher.js src/core/alerts.js
+grep -n "acquireLauncherLock\|stillHeld" src/scheduler/launcher.js src/core/alerts.js
 # L11/B9 — the dependency runs app -> launcher only (expect NO output):
 grep -n "require(['\"]\.\./core\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
 # C3/C4/C5 — the duplicated bounds are present in both places:
@@ -384,9 +391,15 @@ git diff --stat -- tests/golden/digest-default.md
   logic in the launcher.
 - Writing, clearing or displaying the refusal banner — `WP-launcher-refusal-banner`
   and `WP-refusal-banner-delivery`.
-- Changing `clearAlerts`, the acknowledgement store (`alerts-ack.json`), or
-  `unacknowledgedAlerts`. Acknowledgement keys on `(job, reason)`, which collapsing
-  preserves exactly — no ack change is needed or permitted here.
+- Changing the acknowledgement store (`alerts-ack.json`) or `unacknowledgedAlerts`.
+  Acknowledgement keys on `(job, reason)`, which collapsing preserves exactly — no ack
+  change is needed or permitted here.
+- **`clearAlerts` is NOT out of scope** — round 5 both mandated and forbade changing it
+  (finding U5). Exactly **three** changes to it are authorized, and nothing else: (1) it
+  takes the shared lock (C8f); (2) it degrades to the C8g fallback when the lock cannot
+  be acquired; (3) it calls `handle.stillHeld()` before its rewrite rename (C8h1). Its
+  filtering semantics, its `pruneAcksForJob` call, and its remove-when-empty behaviour
+  are unchanged.
 - Adding a bound or a collapse to the app-side `appendAlert` beyond the ones it
   already has.
 - Any change to the managed block, the adapters, or the digest's body sections.
@@ -438,7 +451,8 @@ git diff --stat -- tests/golden/digest-default.md
   closed the launcher-vs-launcher race and left the launcher-vs-app race wide open, which
   is the more likely one (a nightly fire during an attended `sync`). Corrected: **every**
   writer of `alerts.jsonl` takes the same lock. `src/core/alerts.js` **requires**
-  `acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js` — safe
+  `acquireLauncherLock` from `src/scheduler/launcher.js` (release and the fence are methods
+  on the handle it returns) — safe
   because `launcher.js` is require-safe (`module.exports` precedes its
   `if (require.main === module)` guard) and the direction is app → launcher only. The
   vendored `<core>/launcher/launch.js` is a byte copy of that same file, so the protocol
@@ -464,3 +478,16 @@ git diff --stat -- tests/golden/digest-default.md
     pre-successor snapshot — a fail-loud record destroyed by the machinery meant to
     protect it. New AC-13c3 and AC-13c4 cover the evicted-holder compaction and
     `clearAlerts` paths.
+- **2026-08-30 — Codex round-5 findings U2, U3, U5 (owner: ACCEPTED).**
+  - **U5 — this spec both mandated and forbade the same change.** S3 required
+    `clearAlerts` to take the shared lock while Out-of-scope still said "Changing
+    `clearAlerts` … is not needed or permitted here" — an implementer following the spec
+    literally could not satisfy it. The prohibition is replaced with an **exact
+    authorization**: the shared lock, the C8g fallback, and the commit-time fence, and
+    nothing else; filtering semantics, the `pruneAcksForJob` call and remove-when-empty
+    are explicitly unchanged.
+  - **U2.** C8d/C8f and the notes now describe the **opaque handle** (`{release,
+    stillHeld}`) rather than a `releaseLauncherLock` free function; no token crosses the
+    module boundary. New AC-13c6.
+  - **U3.** C8h1 extended: `clearAlerts`' `rmSync` of the whole file when no records
+    remain is a destructive operation and is fenced identically. New AC-13c5.

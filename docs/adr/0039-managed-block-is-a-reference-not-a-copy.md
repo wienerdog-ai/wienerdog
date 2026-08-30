@@ -143,7 +143,7 @@ the semantics wanted: no refusal, no banner, no noise. So the block carries **tw
 import lines — the digest and the refusal banner — and the hook is still de-registered
 for Claude Code.
 
-### 3. Codex keeps a copy of the stable half only, and the asymmetry is documented
+### 3. Codex keeps a copy — of what, settled by Amendment 1 — and the asymmetry is documented
 
 Codex has **no** include or import syntax in `AGENTS.md` (official docs checked
 2026-08-30; `openai/codex#17401` is an open feature request), its
@@ -210,9 +210,15 @@ still-broken job's warning. The corrected design:
 
 - Banner state is **per job**: one entry per job under a launcher-owned directory,
   with a single concatenated file rebuilt from it as the import/read target.
-- The **launcher** clears a job's own entry when **that job's** verification passes,
-  before spawn. This is launcher-owned state needing no app-tree code, and it makes
-  `--catch-up` **self-clearing** — dissolving the 2026-08-01 arithmetic trap
+- The **launcher** clears a job's own entry **only after `spawnSync` returns a numeric
+  status** — any number, since a non-zero child exit is `run-job`'s fail-loud to report.
+  If the spawn **throws** or returns `status === null` (signal-killed, or never started),
+  the launcher instead **writes a spawn-failure entry** with a code-owned reason and
+  exits 1 (B15/B16). *An earlier draft of this section said "after verification and
+  before spawn"; that is ⚠ superseded — clearing before the spawn deleted the banner in
+  exactly the cases worth banner-ing (S/R3).* This is launcher-owned state needing no
+  app-tree code, and it makes `--catch-up` **self-clearing** — dissolving the 2026-08-01
+  arithmetic trap
   (`clearAlerts` fires only for real job names and `--catch-up` never reports success)
   at its source rather than working around it.
 - An attended `sync` clears the whole directory, **after** the manifest save, so an
@@ -349,11 +355,12 @@ ADR-0021, ADR-0028 and ADR-0035 need no amendment. ADR-0035 is cited for why an
 unchanged: the decision of 2026-08-30 stands as signed. This amendment records the
 round-2 **and round-3** corrections to it and is not itself in force until signed.)
 
-Four adversarial Codex design reviews of this ADR and its spec chain found thirty
+Five adversarial Codex design reviews of this ADR and its spec chain found thirty-eight
 issues in total — seven in round 1 (**F1–F7**, below), nine in round 2 (**R1–R9**),
-seven in round 3 (**S1–S7**), and seven in round 4 (**T1–T7**, at the end of this
-amendment). The owner accepted all thirty, and in round 2 **reversed** one of his own
-round-1 rulings. The dispositions follow. Four are corrections
+seven in round 3 (**S1–S7**), seven in round 4 (**T1–T7**), and eight in round 5
+(**U1–U8**, at the end of this amendment). The owner accepted all thirty-eight, and
+**reversed two** of his own earlier rulings — compare-and-retry in round 2, and the
+versioned lock directory in round 5. The dispositions follow. Four are corrections
 to this ADR — two of them to claims that were simply **wrong** — and they are marked in
 place in the sections they affect, so no reader of §2–§5 can act on a superseded
 statement without seeing the correction beside it.
@@ -390,10 +397,15 @@ byte-identical to today; `digest-volatile.md` = prefix + volatile body;
 **F4 — the hermetic canary was non-blocking.** A canary whose adverse verdict has no
 consequence is a measurement, not a gate. **Resolution:** "user `CLAUDE.md` **is**
 loaded under the production hermetic argv" is now a **blocking** verdict. It spawns
-`WP-hermetic-user-memory-suppression`, and the canary's own Done criteria are
-disjunctive: either *not loaded, recorded*, or *loaded, and the suppression WP is
-merged*. `WP-managed-block-by-reference` depends on the canary, so the block shape
-cannot ship over an unresolved adverse finding.
+`WP-hermetic-user-memory-suppression`. *⚠ The Done rule stated here — "the canary's own
+Done criteria are disjunctive: either not loaded, recorded, or loaded and the suppression
+WP merged" — is **superseded by R6**, which found it created a dependency cycle (the
+canary would have waited on its own descendant).* **The rule in force:** the canary is
+Done once the measurement is recorded, under either verdict; the conditional lives on the
+**consumer**, so `WP-managed-block-by-reference` proceeds when the canary is Done **and**
+(the verdict is *not loaded* **or** `WP-hermetic-user-memory-suppression` is Done). Same
+gate strength, no cycle — the block shape still cannot ship over an unresolved adverse
+finding.
 
 **F5 — the banner's clearing rule let one job erase another's warning.** §5's
 unconditional clear rested on the premise that nothing can succeed while a banner
@@ -401,7 +413,7 @@ stands, because the banner only exists when the app tree is broken. `launcher.js
 refuses on **per-job** verdicts (`verifyAndResolve(p, name, …)`), so the premise is
 false and a healthy job could silently erase a broken job's warning. **Resolution:**
 per-job banner entries; the launcher clears a job's **own** entry when that job
-verifies, before spawn; `sync` clears the whole directory after the manifest save;
+verifies **and its spawn returns a numeric status**; `sync` clears the whole directory after the manifest save, and only on a fully clean reconciliation;
 `run-job` clears nothing. See §5's superseding note. This also makes `--catch-up`
 self-clearing, which dissolves the 2026-08-01 logbook's arithmetic trap at its source.
 
@@ -464,8 +476,8 @@ append-plus-compaction, and every banner-directory mutation plus its rebuild.
 
 *⚠ The round-2 algorithm — `launcher.lock/`, `rmdirSync` release, 10 s staleness,
 5 × 200 ms wait — is **superseded**, twice: by S1/S2 below (token ownership,
-rename-based stale break, 30 s staleness, 35 s wait) and by T1/T5 (commit-time fence,
-`launcher.lock.v1/`). The canonical algorithm lives in exactly one place,
+rename-based stale break, 30 s staleness, 35 s wait) and by T1/U1/U2 (commit-time fence,
+an unversioned directory with a FROZEN core protocol, an opaque lock handle). The canonical algorithm lives in exactly one place,
 `WP-launcher-refusal-banner` Table L; this paragraph records the decision, not the
 mechanism.*
 
@@ -598,7 +610,7 @@ to the launcher and *explicitly recorded* the app-side `appendAlert` as out of s
 sides write the same `alerts.jsonl`, so that closed the launcher-vs-launcher race and left
 the launcher-vs-app race — the more likely one, a nightly fire during an attended `sync` —
 wide open. **Resolution:** every writer takes the same lock. `src/core/alerts.js` requires
-`acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js`, which is safe
+`acquireLauncherLock` from `src/scheduler/launcher.js`, which is safe
 because `launcher.js` is require-safe (its `module.exports` precedes the
 `if (require.main === module)` guard) and the dependency runs **app → launcher** only,
 never the reverse. The vendored `<core>/launcher/launch.js` is a byte copy of that same
@@ -691,12 +703,13 @@ clause granularity.
 
 **T5 — an interrupted update can put two protocol versions on one lock.** The vendored
 `<core>/launcher/launch.js` is a byte copy of `src/scheduler/launcher.js`, but during an
-interrupted update the two sides can differ. **Accepted as a residual, with a cheap
-guard:** the lock directory name carries the protocol version (`launcher.lock.v1/`), and
-any protocol change bumps it. Mismatched sides therefore use different directories — they
-cannot corrupt each other's lock state, they simply do not exclude each other for the
-duration of the interrupted update, both still **append atomically** so no record is
-lost, and the next clean run self-heals the derived files. The rejected alternative is
+interrupted update the two sides can differ. The round-4 resolution was to put the protocol version in the
+directory name (`launcher.lock.v1/`) so mismatched sides use different directories.
+*⚠ **Superseded by U1.** That is exactly backwards: two versions holding two different
+directories do not exclude each other at all, so both can compact `alerts.jsonl` over the
+other's appended record — **irreversible record loss**, categorically worse than the
+derived-file drift it was avoiding. The lock directory is unversioned and permanent; the
+core protocol is FROZEN (see U1 below).* The rejected alternative is
 worth recording: making the app side **load the out-of-tree launcher** would guarantee
 one protocol, and would invert the trust direction — the app tree would execute the very
 file whose purpose is to be verified *before* the app tree runs, outside the app release
@@ -726,3 +739,82 @@ grepped across every file in the chain and listed against its canonical row befo
 hand-off. It found six live sites still naming the unversioned lock directory minutes
 after T5 was applied — drift introduced *by the fix for the drift finding*, which is
 exactly the point.
+
+#### Round 5 of review — findings U1–U8 (2026-08-30)
+
+Eight findings, all accepted. Three are lock-protocol defects — including one where
+round 4's *fix* was strictly worse than the problem it addressed — and five are
+superseded prose that survived in the ADR and the GLOSSARY after the specs had moved on.
+
+**HARD CONSTRAINT introduced by this round — the frozen lock core.** The launcher
+lock's core protocol is **FROZEN**: `mkdirSync` acquire, an `owner` file, token-checked
+release, mtime-based staleness, a rename-based stale break, and a commit-time fence. Any
+future change to the lock **must remain compatible with this core**, so that two builds
+of Wienerdog running side by side — the ordinary state during an interrupted update —
+**always mutually exclude**. The `owner` file carries `"protocol": 1` for diagnostics and
+forward reading only; a reader that finds an unfamiliar value treats the lock as **live**
+and waits. Exclusion and staleness are never derived from it. This constraint binds
+future ADRs and specs, not just this chain.
+
+**U1 — round 4's version-skew guard was worse than the problem.** T5 put the protocol
+version in the lock *directory name* so that mismatched builds could not corrupt each
+other's lock state. That reasoning inverted the actual risk: two builds holding **two
+different directories** do not exclude each other at all, so both can compact
+`alerts.jsonl` — and each can land a snapshot over the other's appended record.
+**Irreversible loss of a fail-loud record**, traded for avoidance of *recoverable*
+derived-file drift. Withdrawn. One unversioned directory, the frozen core above, and
+`protocol` as a non-exclusionary field. **This also removes the owner-acceptance question
+round 4 raised:** with one directory and a frozen core, an interrupted update costs
+nothing beyond the pre-existing >30 s-stall residual. There is no version-skew residual
+left to accept.
+
+**U2 — the commit-time fence was not implementable as specified.** T1 required every
+destructive rename to re-compare the lock token, while `acquireLauncherLock` returned
+only a release closure — so no caller could obtain the token the fence needs. Resolved
+by returning an **opaque handle** `{ release(), stillHeld() }` with the token captured in
+the closure and never exposed: the fence becomes `handle.stillHeld()`, and no exported
+function takes a token parameter that could be passed, logged, or forged.
+
+**U3 — the fence covered renames only, and destruction is not only renaming.** An
+evicted *clearer* could still `unlink` a per-job entry that its successor had freshly
+written for the same job, and an evicted `sync` could still wipe the whole banner
+directory under a successor that had repopulated it. Both destroy state without renaming
+anything. The fence now guards **every** destructive operation — rename, unlink,
+directory clear, and `clearAlerts`' remove-when-empty — each calling `stillHeld()`
+immediately before acting and aborting on false.
+
+**U4 — the GLOSSARY and §5 still described the superseded clear timing.** Both said a
+job's entry clears "after verification and before spawn", which R3 replaced three rounds
+earlier: clearing before the spawn deletes the banner in precisely the cases worth
+banner-ing. Restated in both places — clear **only after `spawnSync` returns a numeric
+status**; on a throw or a null status, **write** a spawn-failure entry instead.
+
+**U5 — one spec both mandated and forbade the same change.** `WP-launcher-alert-bound`
+required `clearAlerts` to take the shared lock (S3) while its Out-of-scope section still
+forbade changing `clearAlerts` at all. The prohibition is removed and replaced with an
+exact authorization: the shared lock, the fallback, and the commit-time fence — and
+nothing else. Its filtering semantics, its `pruneAcksForJob` call, and its
+remove-when-empty behaviour are unchanged.
+
+**U6 — the F4 disposition still stated the pre-R6 canary Done rule.** R6 broke that
+dependency cycle by moving the conditional onto the consumer; the F4 paragraph above was
+never updated. Marked superseded in place, with the rule in force restated beside it.
+
+**U7 — an acceptance criterion contradicted its own contract table.** The split spec's
+AC-3 placed an identity-exclusion banner in the `volatile` body, while E2/E11 place every
+banner in the `prefix`. Restated: the banner appears in `prefix`, and therefore in
+`digest-prefix.md` and in `digest-volatile.md` after composition.
+
+**U8 — the GLOSSARY and ADR-0032 still described the pre-split topology.** Both said
+Claude Code imports `digest.md` and Codex receives the stable half only — two topologies
+superseded by the split (E4/E6/E7) and by F7's banner carve-out. Restated to the final
+topology in both places, with pointers to the canonical rows rather than fresh prose.
+
+**What round 6 changes about the sweep.** Rounds 4 and 5 both leaked through **GLOSSARY
+and ADR prose**, which the constant-level reconciliation introduced in round 5 does not
+read — it greps numbers and identifiers, and these were sentences. The sweep is therefore
+extended: **every sentence in the chain that states a topology or lifecycle fact** — what
+Claude imports, what Codex copies, when a banner entry clears, when the canary is Done,
+what the lock protects — must either **point at a canonical row** or carry a **⚠
+superseded** marker. Narrative prose is where superseded designs survive longest, because
+it reads as explanation rather than as specification.

@@ -123,12 +123,16 @@ itself. So the instruction-versus-context improvement is claimed **only** where 
 moves to the **hook** channel, and nowhere else. The durable-copy and 0644 results
 above stand on their own and are what justify the change.
 
-**The amended consumer list.** Under ADR-0039 the digest renders in two parts. The
-**stable** part (the ADR-0021 hash-gated identity notes) is the only part ever copied
-into a user-owned file. The daily summary is **volatile**, so it reaches a session
-only by reference (Claude Code's memory import of `<core>/state/digest.md`) or not at
-all (a hook-less Codex session, or a Cowork session that skips user-scope imports —
-both get the stable half only). The managed block no longer carries the daily summary
+**The amended consumer list.** Under ADR-0039 the digest renders in **three** components
+— `prefix` (banners), `stable` (the ADR-0021 hash-gated identity notes), and `volatile`
+(`## Active projects` + this daily summary). The **stable** part is the only part ever
+copied into a Claude Code user-owned file. The daily summary is **volatile**, so it
+reaches a session only **by reference** — Claude Code's managed block imports
+`<core>/state/digest-volatile.md`, **not** `digest.md` — or not at all: a hook-less Codex
+session and a Cowork session that skips user-scope imports both receive the stable
+identity plus the code-owned banners, and **never** this summary. (Canonical rows:
+`WP-digest-stable-volatile-split` Table E E4/E6/E7; `WP-managed-block-by-reference`
+Table D D2/D2a.) The managed block no longer carries the daily summary
 in any form, on any harness.
 
 **What is unchanged.** The fence itself, `DAILY_FENCE_OPEN`/`DAILY_FENCE_CLOSE`, the
