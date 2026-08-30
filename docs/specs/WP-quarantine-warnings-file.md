@@ -151,6 +151,12 @@ function writeIntoVault(o)
   fully idle run reaches: **Table B's refresh point 3 goes immediately before its
   `return`.** Note the ordering — this return comes BEFORE step 8's dry-run return
   at `:474-477`, so that call site needs its own `!dryRun` guard.
+- `:507` **step 10** `precommitSessionEdits(vaultDir)`, then `assertCleanTree(vaultDir)`
+  at `:508`. `precommitSessionEdits` (`src/core/dream/validate.js:113-137`) stages
+  **every** dirty working-tree path with `git add -A` (`:125`) and commits it as
+  `vault: session edits before dream`. It runs BEFORE the brain, and therefore
+  before step 13's commit. **What that ordering implies for this package is decided
+  in exactly one place — Table B's precommit-ordering row — and is restated nowhere.**
 - `:572-580` **step 13** `validateAndCommit({…})` — the run's single git commit
   (ADR-0012: one dream run = one commit).
 - `:597-611` **step 14**: `recordProcessed` / `recordSecretDeferred` /
@@ -344,6 +350,7 @@ The withheld copies are in state/quarantine/: restore what you meant to keep and
 | Refresh point 3 — **write-if-absent** | immediately before the `return` inside step 7's `sel.entries.length === 0` block (`:467-470`), guarded by `!dryRun`. A **fully idle** run — nothing fresh to consume, no new quarantine, no commit — reaches neither point 1 (guarded by `sel.newlyQuarantined.length > 0`) nor point 2 (past this return), so without this call site an install whose quarantines are all **pre-existing** never gets the file at all until the set happens to change. Table C row 3 already decides what this call does: it writes only when the file is absent and the current set is non-empty |
 | Why point 3 exists at all (owner-ruled 2026-08-29) | `WP-doctor-quarantine-counts` ships a byte-gated message promising *"that file is not there yet; the next dream run writes it"*. Without a write-if-absent trigger that promise is false for an idle run, which is exactly the upgrade shape: 191 historical quarantines already in the ledger, quiet nights, no file. The owner ruled the mechanism in rather than hedging the message |
 | Why these three, and no others | points 1 and 2 are already the two points at which the run refreshes its other ledger-derived durable surface, `state/digest.md` — one rule, two surfaces, nothing that can drift out of step. Point 3 is **not** a set-change point and refreshes nothing else: it is a reconciliation on the one run shape that reaches neither of the others. The capacity-wedge path (`:451-464`) is not a refresh point — it throws |
+| **Where a refresh write lands relative to the run's own git steps — the ONE place this ordering is decided (added 2026-08-30, PR-review errata)** | measured on the tree this spec is written against, and written down because three other surfaces had each asserted it independently and all three were false. Step 10 `precommitSessionEdits(vaultDir)` (`src/cli/dream.js:507`; `src/core/dream/validate.js:113-137`) commits **every** dirty working-tree path with `git add -A` as `vault: session edits before dream`, and it runs BEFORE the brain and therefore before step 13's `validateAndCommit` (`:572-580`). **Refresh point 1 writes before it. Refresh points 2 and 3 write after it, or on a run that never reaches it.** So in the pre-promotion window **no refresh-point write is ever a member of a `validateAndCommit` changed set**: point 1's bytes are already in `HEAD` by the time step 3's EP2 staged-output secret gate scans `git diff --cached`, and points 2 and 3 are swept in by the NEXT run's precommit (the uncommitted-until-next-run residual under Implementation notes). **This row moves no call site** — every refresh point stays exactly where the three rows above put it; the row writes down the consequence those placements already had. Its two consequences are each stated by the surface that owns them and are not restated here: what the EP2 gate does and does not see (the EP2 residual under Implementation notes), and when Table D's exclusion can fire (**Table D**). Post-promotion this ordering is not this package's at all — `WP-dream-promote-in-workspace`'s row G6 removes the precommit and its row G8 makes the dream commit carry this file directly |
 | What a second refresh in one run does | nothing, unless the ledger moved or the first write was refused — and it needs no memory to get that right. The first write leaves the file holding exactly `composeWarnings(ledger)`, so the second call's comparison is byte-equal and it writes nothing (Table C row 2). Points 2 and 3 are mutually exclusive (point 3 returns from the run); the reachable pairing is point 1 then point 2, or point 1 then point 3 |
 | Dry run | writes nothing. Point 1 is already inside a `!dryRun` guard; point 2 is unreachable on a dry run (`:474-477` returns first); **point 3 needs an explicit `!dryRun` guard** — step 7's return at `:467-470` comes BEFORE step 8's dry-run return, so it is reachable on a preview run. That guard is the one new guard this package adds |
 | A refresh failure never fails the dream | `refreshWarnings` never throws, and a `written:false` result prints one `wienerdog: dream — …` console line and is otherwise ignored. The ledger still holds the condition, `doctor` still reports the counts, and the digest banner still raises it — what is lost is the enumeration, until the next refresh |
@@ -477,9 +484,17 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       exclusion by citing this table rather than restating it — so a change to
       Table D moves that row and its counts acceptance criterion too. **No surface
       may state the exclusion's shape anywhere but here.**
+- [ ] **Where a refresh write lands relative to the run's own git steps.** Table
+      B's precommit-ordering row decides it — added 2026-08-30 because three prose
+      surfaces had each asserted it independently and all three were false — and its
+      registered mirrors are the Current-state `:507` bullet, Table D's "The problem"
+      and "Not changed" rows, the EP2 residual under Implementation notes, and the
+      Security checklist's residual list. **No surface may state that ordering, or
+      what the EP2 gate does and does not see, anywhere but by citing that row.**
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
-      `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
-      validator's counting loop)
+      `dream.js` line ranges — including `:467-470`, where point 3 goes, and `:507`,
+      the precommit whose ordering Table B's row decides — and the validator's
+      counting loop)
 - [ ] The two literal worked files under "Exact contracts" (they ARE Table A rendered)
 - [ ] Implementation notes (the render-is-the-trigger decision, the EP2
       residual, the uncommitted-until-next-run residual **and its pre-/post-promote
