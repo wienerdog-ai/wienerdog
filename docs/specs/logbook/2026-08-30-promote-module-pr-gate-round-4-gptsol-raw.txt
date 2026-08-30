@@ -1,0 +1,13 @@
+Gate: PR rubric (gptsol, codex/gpt-5.6-sol), PR #31 round 4
+Tip reviewed: 81c00a1 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Form: this backend returns structured JSON rather than prose. Reproduced verbatim.
+
+---
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No findings. Executed `WIENERDOG_LOADER_NOOP=1 node --test tests/unit/dream-promote.test.js` (exit 0, 39/39 passed), `WIENERDOG_LOADER_NOOP=1 npm run lint` (exit 0), and the required boundary check (exit 0); full `npm test` exited 1 with only the documented adopt E2E failure (2219 passed, 1 failed, 9 skipped), and the same pinned-path failure reproduced on `68ac5e9`. The four fixes and mirror claim were independently verified: the public return contract matches both the spec and phase-2 construction, removing the date guard makes its test fail (exit 1), the validate shift map is exactly old 1–15 → +0, 16–1428 → +1, 1429–1469 → +2, and the consumed-by-nothing assertion exits 0 while a planted import makes it exit 1; final HEAD remained `81c00a1` and `git status --porcelain` remained empty.",
+  "overall_confidence_score": 0.99
+}

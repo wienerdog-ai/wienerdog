@@ -1,0 +1,123 @@
+Gate: spec-fidelity (wd-reviewer), PR #31 round 4
+Tip reviewed: 81c00a1 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Provenance note: the harness neutralised instruction-shaped control characters,
+rewriting "<" as "&lt;" and "&" as "&amp;" inside quoted code and paths. The text
+below is otherwise verbatim as received; no character has been restored, because
+restoring it would make this file a reconstruction rather than a record.
+
+---
+
+## What I ran (all with `WIENERDOG_LOADER_NOOP=1`, all from `/Users/felho/dev/repos-to-learn-from/wienerdog`)
+
+| Command | Result |
+|---|---|
+| `git status --porcelain` before and after | empty, byte-identical. HEAD unmoved at `81c00a1`. No writes outside `/tmp/wd-rev4` |
+| `node --test tests/unit/dream-promote.test.js` | **39 pass, 0 fail** |
+| `npm run lint` | **passed** (markdownlint 0 errors / 573 files, shellcheck clean, frontmatter 236 specs) |
+| `npm test` | **2219 pass, 1 fail, 9 skipped.** The single failure is `tests/integration/adopt-e2e.test.js:72` — `refusing to run claude: ... pinned command path is /Users/felho/.local/share/fnm/.../claude`. **Reproduced, and it is the described environmental one** (a real `claude` on this machine defeats the fixture's pinned path). Not a finding |
+| Consumed-by-nothing assertion **as the spec now writes it** | exit 0 (green). Non-vacuity control: `grep -rn "require(.*delta" src/ --include='*.js'` returns `src/core/dream/workspace.js:63`, so the pattern matches real requires |
+| **Mutation A** (`/tmp/wd-rev4`, `git archive 81c00a1`): deleted the `date` entry check | test suite goes **38 pass / 1 fail** — `AssertionError: Missing expected exception: a date of undefined must fail loud`. The new test is non-vacuous |
+| **Mutation B** (`/tmp/wd-rev4`): appended `const x = require('./promote');` to `src/core/dream/promote.js` | new form (no `--exclude`) exits **1 = correctly red**; old form (with `--exclude='promote.js'`) exits **0 = falsely green**. The dropped flag is proven to have been the false-green hole the round-3 finding described |
+
+Boundary: `git diff --name-only 68ac5e9..81c00a1` = `docs/GLOSSARY.md`, `docs/specs/WP-dream-promote-module.md`, five `docs/specs/logbook/*`, `src/core/dream/promote.js`, `tests/unit/dream-promote.test.js`. All listed or always-allowed. **Boundary clean.**
+
+---
+
+# REQUEST-CHANGES
+
+## Status of my three round-3 findings
+
+**1 — [contract] the public `@returns` at `promote.js`: GENUINELY FIXED.** `src/core/dream/promote.js:619-625` now reads byte-for-byte the spec's `### Exact contracts` block at `docs/specs/WP-dream-promote-module.md:292-298`, modulo one column of leading indentation. I checked it against what phase 2 actually constructs, not just against the spec: `promote.js:1037` and `:1057-1061` push `{rel, reason, preserved}`; `:1067-1073` pushes `{rel, bytes, redaction, preserved}`; `:1076` pushes `{rel, bytes}`; `:1080` returns `secretDisposition`. The internal `@type` annotations at `:1022` and `:1024` agree. Prose citations check out: `redaction` → Q10 (`:651`), `preserved` → Q8/Q9 (`:647`), the no-bytes/record split → Table S row S3 (`:639`). Field sweep re-run independently with `/usr/bin/grep -a` (the ugrep shim skips binaries): every surviving `artifact:` / `lines:` / `labels:` in `promote.js` and its test is the settled shape. `{rel, reason}` without `preserved` appears nowhere in `promote.js`, its test, or the three family specs. The sweep's stated result is true as far as it was run — see finding 2 for how far that was.
+
+**2 — [criteria] the uniform-shift claim: HALF-FIXED, and the un-fixed half is now a self-contradiction.** I re-derived the map from `git show 2ac8dcb -- src/core/dream/validate.js` rather than from the text. Hunk headers `@@ -13,6 +13,7 @@` and `@@ -1426,6 +1427,7 @@` with three leading context lines each put the insertions at **new `:16`** and **new `:1430`**, so: old 1–15 → +0; old 16 → new 17 and old 1428 → new 1429 (the last line before the second insertion), giving old 16–1428 → +1; old 1429 → new 1431, giving old 1429–1469 → +2. **The three-zone map is correct.** The sibling claim checks out too: `WP-dream-promote-in-workspace.md` is pinned to `36c2ce5` with no re-verification note, so its `validate.js:1427-1429` is old numbering, mapping to new 1428, 1429, **1431** — genuinely astride and genuinely non-contiguous. "Highest endpoint is old 1409" is right: the maximum carried endpoint in this spec is new `1410` (from `:1375-1410`, `:1393-1410`, `:1399-1410`), and the only `1427-1429` token in this spec is the quoted example at `:73`. Spot-checked citations all resolve on this tree: `validate.js:1157/1188/1195/1204/1212/1268/1277/1287/1288/1298/1375/1402`, `:1399-1410`, `:839-841`, `:16`, `:1430`.
+
+**The deletion form was honoured in the logbook and NOT in the spec.** `docs/specs/logbook/2026-08-29-promote-module-pr-gates.md` at `6ec1ab5` read "...a counting condition at `validate.js:1430`, moving every line below the first by one." That clause is **gone** at `81c00a1` and replaced by the measured map at `:172-179`. Correct. The spec did not get the same treatment — see finding 1 below.
+
+**3 — [quality] the `--exclude='promote.js'` flag: GENUINELY FIXED, and I proved the rationale rather than reading it.** The replacement rationale at `docs/specs/WP-dream-promote-module.md:1149-1154` is measured-true: `promote.js` contains no `require(.*promote` line, so the grep is empty with or without the flag. Mutation B above proves the removal bought exactly the case the new text claims.
+
+**Round-3 rubric's `date` finding: FIXED, non-vacuously — but see finding 5 for the contract underneath it.** `promote.js:675-677` is placed with the other six checks and uses the same message shape; `tests/unit/dream-promote.test.js:1101-1107` covers `[undefined, '', 0, null, {}]`.
+
+---
+
+## Findings
+
+**1. [contract] `docs/specs/WP-dream-promote-module.md:80` — the false generalisation the round-3 fix was supposed to delete is still there, and the fix added its own contradiction eight lines above it. Band: contract.**
+
+The dispatch note now says, at `:67`, "**TWO insertions means the shift is NOT uniform over the file, and an earlier form of this note said it was.**" It then says, at `:80`, "...both ends of every range included, **so the shift is uniform** and no citation was bumped on a coincidence." Both sentences are in the same paragraph, about the same measurement. The second is verbatim what stood at `6ec1ab5`; nothing was deleted from the spec. The logbook disposition table at `docs/specs/logbook/2026-08-29-promote-module-pr-gates.md:226` records this as "**fix by DELETION**, per the owner's append-only rule" — that disposition is true of the logbook and false of the spec.
+
+This is the third statement of this one measurement and the second false one, which is the exact recurrence the round was trying to break. It is contract-band by the obligation test: the shift map is what any future citation in this spec, and the sibling's astride citation, must be bumped against, and a reader who reaches `:80` first applies `+1` to a line in the `+2` zone.
+
+**Fix:** delete the clause "so the shift is uniform and" at `:80`, leaving "...both ends of every range included, and no citation was bumped on a coincidence." That is the form the logbook's own table row already uses ("Endpoints that ALSO matched in place | 0 — so no token was bumped on a coincidence"). Do not re-word `:67`; it is correct.
+
+**2. [criteria] `docs/specs/WP-dream-promote-module.md:691-712` — the Mirrored Surface Checklist is ticked 4 of 21, and the paragraph claiming the walk asserts consistency over the whole. The two items that register the repaired surface's own mirror family are among the 17 unticked. Band: contract.**
+
+Counted mechanically over the section (lines 689–876): **4 `- [x]`, 17 `- [ ]`**. The two prose paragraphs at `:696-712` sit *between* item 4 and item 5, splitting one 21-item list into 4 + prose + 17, and they close with "**One stale surface, now fixed; the mirror is otherwise consistent.**" That sentence's scope is the whole registry; the evidence behind it covers four items.
+
+Concretely, the surface that was found stale — `promote.js`'s `@returns` — is a registered mirror of two *unticked* items:
+- `:742` "**Table Q** — ... Its mirrors are the `gates` paragraph, the `GateReportedCopy` and `PreservedCopy` typedefs ..., the `RedactionAccounting` typedef ... **and the `@returns` block in `### Exact contracts`**, Table D's EP2 row, ..., `WP-dream-promote-report`'s Table R redaction-lines row, its preserved-copy row, its Table N channel rows ..., and `WP-dream-promote-in-workspace`'s rows G5, G7 and V3 ..."
+- `:835` "**Table S — the decided bytes.** Its mirrors are the `@returns` shape (**including the refused arm's `preserved`**, whose presence row S3 permits and row Q8 requires), Table E's staged-bytes handoff row, and `WP-dream-promote-in-workspace`'s rows G8 and G10."
+
+Those two items name the cross-package surfaces (`WP-dream-promote-report`'s Table N/Table R rows, `WP-dream-promote-in-workspace`'s G5/G7/G8/G10/V3) that would have to agree with the repaired `@returns`. None of them was walked. A ticked box that certifies four items while the registry's own entry for the repaired surface stays empty is exactly the state the brief describes as worse than an empty checklist: a later reader will read "the mirror is otherwise consistent" and skip the 17.
+
+I found no *further* stale statement of the retired return shape in `promote.js`, its test, or the three family specs — the sweep, within its stated scope, is honest. The defect is the tick and the scope of the claim, not a second stale surface I can name.
+
+**Fix, three parts:** (i) move both prose paragraphs to *after* item 21 (`:876`) so the list is one list; (ii) narrow the closing sentence to what was measured — e.g. "One stale surface, now fixed. **This walk covered items 1–4 only**; items 5–21 are not yet walked, and items *Table Q* and *Table S* register this same `@returns` as a mirror across `WP-dream-promote-report` and `WP-dream-promote-in-workspace`."; (iii) either walk items 5–21 and tick honestly, or leave them unticked with that sentence standing. Do not tick a box you did not walk.
+
+**3. [contract] `docs/GLOSSARY.md:91-93` — the canonical `promotion` entry says there are "only three" outcomes and enumerates three that exclude `redacted`. Band: contract.**
+
+The entry reads: "One outcome per changed path, and **only three**: the note is promoted as the dream wrote it, a merged version of it is promoted ..., or it is refused and the reason is reported." `promote()` returns four arms, and a redacted note fits none of the three: it is not "promoted as the dream wrote it" and not "a merged version". The spec's own Mirrored Surface Checklist item at `:734` states the prohibition in as many words: "**No surface may reduce EP2 to `reason|null` or drop the `redacted` outcome or `secretDisposition`.**" This surface drops it.
+
+Note also that "three-way" in this spec means the three-way *state* triple (`:369`) and the three-way *merge* (`:457`), never three outcomes — so the count is invented here rather than mirrored from anything. That makes it the same "a number beside a list inside a cell" failure the sibling spec has already recorded three times (round 4's F-3, round 5's N2, round 6's COH-2).
+
+This was not introduced in the fix window; it has been on the branch since the glossary entry was written and three rounds including mine missed it. Raising it now rather than after merge.
+
+**Fix:** drop the count and add the fourth outcome, in the entry's plain-language register — e.g. "One outcome per changed path: the note is promoted as the dream wrote it; a merged version is promoted ...; **a scrubbed version is promoted, with the unredacted original kept aside for you** ; or it is refused and the reason is reported."
+
+**4. [contract] `docs/GLOSSARY.md:101-102` — "the four quality gates judge the bytes that would actually land" is false for one of the four, and it is false in precisely the case the spec names as a residual. Band: contract.**
+
+Measured in the code, not inferred: `promote.js:805-812` calls `gates.secret` with `afterBytes` (the brain's bytes) and `record.addedLineNumbers` — **before** the merge; `promote.js:942-975` calls `gates.skillBody`, `gates.tier3` and `gates.ledger` with `d.candidate`, the merged bytes. The spec states the same split at `:268-271`: "the EP2 secret gate judges the delta's added lines against the baseline BEFORE the merge; the other three judge the MERGED candidate bytes."
+
+So on a C6 merge path the bytes that land were never secret-scanned as such. That is the spec's design and the gap is already a named residual on the checklist ("a secret the USER writes into their own note during the run"), which is what makes the glossary sentence worse than merely loose: the user-facing canonical text asserts the opposite of the residual the spec deliberately named.
+
+**Fix:** scope the sentence to the three — e.g. "Every promoted byte goes through a *vault write*. The skill-body, Tier-3 and ledger gates judge the bytes that would actually land, not an earlier draft of them; the secret scan judges what the dream itself wrote."
+
+**5. [contract] SPEC FAULT — `date` is declared `date:string` with no shape, while two consumers use it as a path component. Route to wd-architect. Band: contract.**
+
+The implementer's fix is the right call under `CLAUDE.md`'s ambiguity rule (choose the simpler option) and I am not asking for it to change. But the brief asked whether non-empty-string is the right strength, and the honest answer is that the spec does not say and cannot be read to say.
+
+What is measured: the spec's `### Exact contracts` declares `date:string` (`:254`) and its prose says only "the run's date, which names the report `&lt;reports_dir&gt;/&lt;date&gt;.md` (Tables D and R)" (`:268-270`). The shipped gate that consumes it declares a shape — `src/core/dream/validate.js:693`: `@param {string} date  the dream run date (YYYY-MM-DD)` — and composes the artifact name `&lt;date&gt;-&lt;sanitized-basename&gt;` (`:683`), where only the *basename* half is sanitized. So `date` is an unsanitized path component in the quarantine artifact name and in the report path, and neither this spec nor Table Q constrains it.
+
+`typeof date === 'string' &amp;&amp; date !== ''` catches the caller bug the finding was about (`undefined` → `undefined-note.md`) and is consistent with the six siblings, which is the whole of what round 3 asked for. What it does not catch is a `date` carrying `/` or `..`, which reaches a filename the module does not build and cannot see. That is a contract gap, not an implementer's oversight — and it is not the implementer's to close by guessing a regex, because the shape has to agree with `WP-dream-promote-report`'s `&lt;reports_dir&gt;/&lt;date&gt;.md` and with the shipped gate's `YYYY-MM-DD`.
+
+**Recommend:** route to wd-architect to decide whether `### Exact contracts` declares a shape for `date` (and, if so, whether the check is `/^\d{4}-\d{2}-\d{2}$/` or merely "no path separators"), and to say which table owns it. Until that lands, `81c00a1`'s check is the correct build and should stay.
+
+**6. [quality] `src/core/dream/promote.js:642-648` — the fix window added a second prose narration of row Q9's per-field provenance, in a block that declares it restates none of it. Band: C.**
+
+The new `@returns` prose says: "It is `Array&lt;PreservedCopy&gt;` — **the gate's `artifact` and `location` plus the `remediation` THIS module assigns at outcome time.** Table Q rows Q8 and Q9 own why it travels and which party fills each field; **this block restates neither**." The sentence before the disclaimer is Q9's per-field split, stated in prose. The same file already carries that split in its sanctioned location — the `GateReportedCopy` / `PreservedCopy` typedefs at `:539-553` — whose own comment justifies why the TYPE is allowed to carry it ("the split is the TYPE carrying PROVENANCE"). `promote.js` now states the split twice, and the second statement's disclaimer is falsified by its own preceding clause.
+
+**Fix:** at `:643-645`, cite instead of narrate — "It is `Array&lt;PreservedCopy&gt;`, whose two-typedef split above carries the per-field provenance. Table Q rows Q8 and Q9 own why it travels and which party fills each field; this block restates neither."
+
+**7. [quality] `src/core/dream/promote.js:642` — the mirror states a rule where the canonical states an enumeration. Band: C.**
+
+Code: "`preserved` is on **EVERY arm that could have a copy**, `refused[]` included". Canonical (`docs/specs/WP-dream-promote-module.md:314`, and Table S row S3): "**`preserved` ... is REQUIRED on BOTH of these arms**". The two agree today — `promoted[]` cannot carry a copy, since a redaction lands in `redacted[]` — but the code's form is a universal the type does not enforce and cannot: `promoted[]` has no `preserved` field. Turning an enumeration into a rule in the mirror is the same widening shape as finding 1, one contract over.
+
+**Fix:** at `:642`, match the canonical — "`preserved` is on BOTH of these arms, `refused[]` included, and is REQUIRED AND POSSIBLY EMPTY".
+
+---
+
+## Closed-Contract Drift Check (one paragraph, per ADR-0031)
+
+No settled canonical contract was silently reinterpreted by `81c00a1`, and no mirror was promoted to primary: Table Q (Q1/Q8/Q9/Q10), Table S (S1–S6) and the `### Exact contracts` typedefs are byte-unchanged in the fix window, and the `@returns` repair moved a *mirror* into agreement with them rather than the reverse. Two drifts are live, both mirror-side: the spec's `:80` against the logbook's corrected map (finding 1), and `docs/GLOSSARY.md`'s `promotion` entry against the EP2 taxonomy and Table D's gate-input split (findings 3 and 4). **One registry gap is worth wd-architect's attention rather than the implementer's:** `docs/GLOSSARY.md` is a Deliverable of this package that mirrors the EP2 outcome taxonomy and the gates' inputs, and it appears on **no** item of the Mirrored Surface Checklist — which is why two false canonical-text claims survived three rounds under a checklist that would have caught them had it named the file. Recommend registering `docs/GLOSSARY.md`'s `promotion` entry as a mirror on the item at `:734` ("The EP2 disposition taxonomy") when that item is next edited.
+
+## Escalation
+
+This is round 4 with contract-band findings in each of rounds 1–4, and findings 1 and 2 are both *the fix window reproducing the defect class it was closing* — an over-general sentence left standing beside its own correction, and a process gate ticked wider than the work behind it. Per the two-failed-rounds rule the spec is now implicated, not just the implementer. **Recommend routing findings 1, 2 and 5 to wd-architect** (findings 1 and 2 are spec-text edits inside a document only the architect should be restructuring at this point; finding 5 is a missing contract). Findings 3, 4, 6 and 7 are implementer-owned and land on this branch.
+
+## Same-tip verdict
+
+**REQUEST-CHANGES on `81c00a1`.** The three round-3 findings and the rubric's `date` finding are all genuinely fixed and I proved two of them by mutation rather than by reading. What blocks the tip is that the round-3 fix for the shift claim was applied to one of its two surfaces and left the spec self-contradicting (finding 1), that the process gate certifying mirror consistency was ticked over 4 of 21 items with the repaired surface's own registry entries left unwalked (finding 2), and that the canonical glossary entry states a false outcome count and a false claim about what the gates judge (findings 3 and 4).
+
+## Discovered issues (not re-filed, status only)
+
+The four `main`-side issues I filed last round are out of this PR's boundary and none got worse on this tip. The `adopt-e2e` environmental failure is unchanged and reproduces as described.
