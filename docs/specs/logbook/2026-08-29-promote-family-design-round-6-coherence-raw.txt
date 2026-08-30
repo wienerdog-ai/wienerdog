@@ -1,0 +1,234 @@
+Gate: INTERNAL COHERENCE pass (peer of the adversarial round 6)
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at 3e0b930
+Round: 6
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only: git status empty before and after. HEAD moved mid-pass 3e0b930 ->
+d7587f2 (this session's round-6 adversarial raw output); all four analysed files
+verified byte-identical across 3e0b930, d7587f2 and the worktree by shasum -a 256.
+
+=========================================================================
+THE REPORT-ROW MEASUREMENT (the maintainer's specific request)
+=========================================================================
+
+LENGTH — every table cell in the three specs, ranked:
+   1  report.md:295        THE REPORT ROW          8,082 chars
+   2  in-workspace.md:307  row G7                  6,523
+   3  module.md:634        row Q10                 6,475
+   4  report.md:387        Table R preserved-copy   5,270
+   5  module.md:633        row Q9                   5,235
+   6  in-workspace.md:347  Table V row V3           3,985
+  Longest cell in the family: 1.24x the next, and 1.53x the longest OTHER cell
+  in its own spec.
+
+CONTRACTS DECIDED — the discriminating measurement. Ranks 2-5 each decide ONE
+contract with sub-parts (G7 = the gate-extraction handoff; Q10 = the redaction
+accounting; Q9 = the preservation record; the preserved-copy row = one line's
+sourcing and partition).
+The report row decides, in one cell, at least FIFTEEN separable rules across
+FIVE unrelated subjects:
+   1 the body is brain-authored and gated like any file; reports_dir copied in
+   2 code does not own the body (the withdrawal, with its SKILL.md:409-425 ground)
+   3 the second write's mechanism: through the primitive, expect = the first
+     publish's bytes, never in-place append
+   4 the classification rule — outcome:'promoted' with accounting:{published:false,
+     reason}, and why it is neither fallback nor refused
+   5 which buffer travels in bytes on each form of accounting
+   6 the prohibition on asserting byte-equality with the live vault, with the
+     S1-qualifier argument
+   7 what the arm states positively
+   8 R4's rule applied deliberately-not-verbatim, and R4's outcome clause scoped away
+   9 preserved / record / redaction unchanged on this arm; Q10's carriers not widened
+  10 the two-writes measurement that scopes accounting to promoted
+  11 per-field provenance for published and for reason (filler + moment, each)
+  12 why the type carries provenance by discrimination rather than base/extension
+  13 the ownership assignment against ### Exact contracts (round 5's C1)
+  14 downstream: G8 commits on both forms, G11 delivers on the published:false form
+  15 the fallback trigger stated as a complete class
+  plus two more in the Refusal remedy column.
+
+ADDRESSABILITY — 37 references to "the report row" across the four files; ZERO
+of them sub-address a rule inside it. The finest address the family has is "the
+report row's rule cell" — the whole 8,082 characters. Every peer contract of
+comparable density is citable by row id (R4, N3, Q9, Q10, S1, G7, V3). The
+`accounting` contract ALONE is cited from ELEVEN surfaces, and each of those
+eleven readers must scan the full cell to find the sentence it points at.
+
+*** FINDING — THE REPORT ROW HAS REACHED THE THRESHOLD. ***
+  A reader can no longer locate a specific rule in it: longest cell in the
+  family, ~15 separable rules across five subjects, and the only dense contract
+  in the family with no addressable sub-unit despite being cited 37 times. The
+  spec's own ### Contract table(s) already concedes the category — it calls the
+  report row "an UNLETTERED contract table" (report.md:271-272).
+
+  THE FAMILY'S OWN PRECEDENT NOW APPLIES. Every circuit-breaker threshold this
+  family has used is met or exceeded: Table N was extracted after "two
+  consecutive rounds landed an A-band finding on one rule"; Table S after "two
+  consecutive rounds landed a finding on this one contract"; Table V after "four
+  findings in two rounds". The report row has taken round 4's A1 (owner ruling),
+  round 5's C1, round 5's C5, and a pre-window "the table above" correction —
+  THREE ROUNDS, FOUR FINDINGS, ON ONE CELL. And this window it absorbed a scope
+  measurement, per-field provenance and a type-discrimination argument, GROWING
+  RATHER THAN SPLITTING. The architect's self-flag is correct: "the owner surface
+  absorbs everything" is a failure mode of the contract-density pattern, not a
+  success of it.
+
+  THIS GOES BACK TO THE MAINTAINER AS A DECISION. The remedy — a lettered table
+  for the report row, plus a change to the family map's "Tables N, R and the
+  report row" (map:32) and to report.md:270-278's "deliberately outside that
+  scheme" — is NOT proposed here, and its contents are NOT proposed here.
+
+=========================================================================
+FINDINGS — 3 contract, 3 coherence, 3 nits
+=========================================================================
+
+CD-1 [contract] A killed claim survives, ON THE EXACT SURFACE ITS OWN CHECKLIST
+  NAMES AS A MIRROR.  in-workspace.md:308 (row G8):
+    "This row commits the report path on BOTH forms of `accounting`, and what it
+    commits is that arm's `bytes` — THE BYTES THE VAULT HOLDS — never
+    report.record and never a fresh read"
+  Three surfaces forbid exactly this: report.md:295 ("NO SURFACE MAY SAY THIS
+  ARM's bytes IS BYTE-EQUAL TO WHAT THE VAULT THEN HOLDS"), report.md:483-486
+  (prohibition #6, citing round 5's C5), in-workspace.md:457-460.
+  And in-workspace.md:450 — THE SAME CHECKLIST ENTRY, FOUR LINES ABOVE ITS OWN
+  PROHIBITION — REGISTERS "row G8's report-path clause" AS A MIRROR OF IT.
+  The sentence quantifies over "BOTH forms", so it makes the claim precisely on
+  the published:false form where the expect conflict IS the vault no longer
+  holding those bytes.
+  Evidence: grep "the bytes the vault holds" over the four files -> one hit,
+  in-workspace:308. git diff 4f1f050..HEAD shows ROW G8 WAS NOT TOUCHED THIS
+  WINDOW (only G7, G11, V3 changed in that file). The round-5 C5 sweep reached
+  five surfaces and STOPPED ONE ROW SHORT OF THE MIRROR ITS OWN ENTRY NAMES.
+  This is a twin-sweep failure, and it falsifies the window's own claim that the
+  phrase is gone.
+
+CD-2 [contract] The pin quotation is NOT VERBATIM, in the one place the ruling
+  required a quotation.  in-workspace.md:307.
+    fragment 1  source `The line format is pinned here, not illustrated.`
+                quoted `PINNED HERE`                      -> NO, 10 chars re-cased
+    fragment 2  source `Every byte outside the angle-bracket placeholders is literal`
+                quoted all caps                            -> NO, 51 of 59 alpha re-cased
+    fragment 3  ``where `<n>` is `addedLineNumbers.length` ``  -> YES
+  The line-range :1373-1387 is correct at both ends. THE IRONY IS LOAD-BEARING:
+  the sentence being mis-quoted is "every byte outside the placeholders is
+  literal." Fix: lower-case to the source, or drop the quote marks and mark the
+  emphasis as added.
+
+CD-3 [contract] Table N's new channel row has NO ENFORCEMENT HALF.
+  report.md:348 added (round 5's N1) the accounting.reason channel row,
+  classified "YES, by derivation". The code-authored-section criterion
+  (:698-723) — which Table N's OWN CHECKLIST ENTRY (:502-503) registers as a
+  mirror — WAS NOT SWEPT. Its GREEN quantifies over "on the normal second write
+  AND on the fallback"; accounting.reason exists on exactly one form (promoted +
+  published:false), which is NEITHER. THE UNIVERSAL HAS A MEMBER IT CANNOT
+  EXERCISE. Row N2 states enforcement is "the fail-closed default PLUS the
+  acceptance criterion"; for this channel the criterion half is absent — the
+  channel now has a row and still no assertion, ONE STEP SHORT OF THE STATE N1
+  WAS FILED TO CLOSE.
+
+COH-1 The module half has no checklist registration for the PENDING counting
+  input; the pipeline's entry names no module surface. The module carries the
+  pending state on Q10 (:634) and Out-of-scope (ii) (:1131-1136); its MSC
+  (:656-794) registers neither (measured: zero occurrences of PENDING in the
+  checklist). The pipeline's entry (:433-437) enumerates five pipeline surfaces
+  plus itself and names NO module surface. THIS IS ROUND 5's H4 EXACTLY, one
+  spec over, IN THE SAME WINDOW THAT FIXED H4.
+
+COH-2 A new count claim that does not match its list, INSIDE THE SENTENCE THAT
+  WARNS ABOUT EXACTLY THAT.  in-workspace.md:311 (row G11), added this window:
+    "'two' stood against five items, it had already been wrong before this window
+    and a later pass added a SIXTH without touching it"
+  Measured history: the count stood against FOUR items for most of its wrong
+  life, and the pass that added (i-b) took the list from four to FIVE, not from
+  five to six. NO SIXTH ITEM HAS EVER EXISTED — HEAD has exactly five. The
+  replacement sentence introduced two fresh numbers beside the same list and
+  BOTH ARE FALSE.
+
+COH-3 ### Exact contracts still states one of the things it declares it does not.
+  report.md:237-251 glosses the two writes two lines before claiming "What THIS
+  block declares is the TYPE and its two-arm shape, AND NOTHING ELSE." Round 5's
+  C1 closed the full-restatement form; the reduced form survived in the same
+  block. Contrast its own treatment of `redaction`, named without gloss and
+  explicitly offered as the model.
+
+NIT-1 An over-broad prohibition its own registered mirror falsifies.
+  report.md:486-490 prohibition #7 ("a surface enumerating where the record
+  TRAVELS on a refusal states BOTH refusal states or it is wrong"); the
+  redaction-lines row (:386) enumerates one state and is CORRECT to, because its
+  report source exists only on the promoted arm. Only the mirror list four lines
+  above scopes it; the flat prohibition is where an implementer looks.
+NIT-2 Prohibition #5 vs Table N's new row. report.md:480-483 says "no surface
+  but the rule cell may state this field's PER-FIELD PROVENANCE"; Table N's
+  accounting.reason row (:348), added the same window and registered as a mirror
+  in the same entry, states it. The owner row's verb is DECIDED; the checklist
+  rendered it as STATE — the weaker verb is what makes the prohibition false.
+NIT-3 A number in a pointer row, and two twin entries counting by different
+  rules. in-workspace.md:347 (V3) carries "the carrier change reached six
+  surfaces" — correct today, stale the moment a seventh is added; precisely the
+  pattern G11 warns about at :311 in the same window, one row over. Separately,
+  the carrier-change entry EXCLUDES itself from its own count while the
+  structurally-twin pending-input entry INCLUDES itself to reach six.
+
+PRE-EXISTING, flagged not filed: report.md:42-43 "seven acceptance criteria"
+  (measured 8 substantive, 10 total; drift predates the window);
+  module.md:687 same drift but scoped historically; in-workspace.md:311 cites
+  cli/dream.js:628-631 where the statement terminates at :632;
+  in-workspace.md:186 cites validate.js:113-115, cosmetic; report.md:295's
+  "(its rows S1 and S4 still govern...)" slightly over-reaches into the zone S5
+  excludes.
+
+CATEGORIES WITH NOTHING FOUND
+ * Killed claims: three of four genuinely gone (only the PROHIBITION form of
+   "byte-equal to what the vault" survives, correctly; "every write was refused"
+   only in historical narration; "two obligations" ABSENT). The fourth is CD-1.
+ * Pin quotation single-quoter rule: exactly ONE surface quotes; six cite by
+   path — seven sites, matching the stated count. Nothing else in the family
+   restates the pinned package's format, rules or numbers.
+ * PENDING operative completeness: all seven instruction-bearing surfaces
+   converge on "build the shipped count". NO surface describes `lines` as a count
+   of CHANGED lines.
+ * CITATION ENDPOINTS: ZERO BROKEN. Every citation introduced or changed since
+   4f1f050 resolves and every range starts on a statement/branch opening and ends
+   on its matching close. The four flagged sites resolve with the counts stated
+   (:1286 -> 4, :838-840 -> 3, :1401 -> 3, pin -> 7). THE ENDPOINT STREAK NOW
+   STANDS AT FOUR ROUNDS.
+ * Acceptance-criteria counts: 23 / 10 / 24, exact.
+ * Fold honesty: both folds honest; H4's stretches slightly but both REDs are
+   stated explicitly.
+ * R4's untouched-vault clause: no surface copies it onto the partial-publish arm.
+ * Family map: unchanged this window; its own counts verified (9 tables, 5
+   collisions).
+
+RUNNABLE CRITERIA
+  promote.js and dream-promote.test.js are NOT in this tree. All 21 substantive
+  module criteria, all 8 report criteria and 21 of 22 pipeline criteria are NOT
+  EVALUABLE here; not guessed at. Only the shell-form verification steps run.
+  CONTROL zzz-no-such-test-zzz -> 0 (pass 108, fail 0) — confirms the hazard.
+  All six guarded pattern runs -> 1, correct RED (guard fires).
+  unguarded "dream-validate" -> 0 (pass 190); correctly NOT claimed as an
+    assertion by the spec — smoke run only.
+  consumed-by-nothing grep -> 0, YES. glossary grep -> 1, correct RED.
+  precommitSessionEdits -> 1, correct RED. assertCleanTree -> 0, presence check
+    only and the spec says so. adr/0012 promot -> 1, correct RED.
+  npm test -> 1 (2143 / 2133 pass / 1 fail: the pre-existing adopt-e2e).
+  npm run lint -> 0 (markdownlint 0 errors over 556 files; 232 specs).
+
+=========================================================================
+VERDICT ON THE TWIN-SWEEP DISCIPLINE
+=========================================================================
+"IT DID NOT CLOSE THE GAP IT WAS INTRODUCED TO CLOSE." Two of three contract
+defects are twin-sweep misses of exactly the shape round 5 named:
+  CD-1: round 5's C5 swept five surfaces but not row G8, WHICH THAT SAME
+        CHECKLIST ENTRY NAMES AS ITS OWN MIRROR. The "sweep the paired row" step
+        was not run in the direction the entry itself points.
+  CD-3: round 5's N1 added a Table N row and did not sweep the criterion that
+        Table N's checklist entry registers as its mirror. The "sweep that row's
+        acceptance criterion" step was not run.
+  COH-1: the ruling swept the pipeline's registration and both Out-of-scope
+        bullets, but not the module's checklist — the "sweep the authorization
+        surface" step run on one spec and not the other.
+"IN EACH CASE THE REGISTRATION WAS ALREADY CORRECT AND THE SWEEP SIMPLY DID NOT
+FOLLOW IT. The discipline's weakness is not its rule set; it is that NOTHING
+MECHANICALLY WALKS THE MIRROR LISTS THE CHECKLISTS ALREADY CONTAIN."
+Findings this round: 3 contract, 3 coherence, 3 nits — against 13 last round on
+a broken trend and 8 the round before.

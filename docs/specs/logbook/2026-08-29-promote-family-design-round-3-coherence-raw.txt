@@ -1,0 +1,209 @@
+Gate: INTERNAL COHERENCE pass (peer of the adversarial round 3)
+Backend: fresh general-purpose executor, no part in drafting/relaying/reviewing
+Branch: docs/promote-table-q-reconciliation, analysed at 1757e8e
+Round: 3
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only: git status --porcelain empty before and after; git stash list empty;
+nothing modified, staged, committed or stashed. Scratch /tmp/wd-coh.
+NOTE: HEAD moved mid-pass 1757e8e -> 474110a (this session committing the round-3
+adversarial raw output). Verified `git diff --quiet 1757e8e..HEAD` over all five
+analysed files -> exit 0; every finding holds at both tips.
+
+F1 [CONTRACT DEFECT] A preserving arm that carries no record: the report union's
+   PUBLISHED arms.  WP-dream-promote-report.md:161-165
+     report:{outcome:'promoted'|'fallback', bytes, record:string[]}
+           |{outcome:'refused', reason, preserved:Array<PreservedCopy>, record}
+   The published arms carry no `preserved` — and no lines/labels either. But the
+   report body IS a promotion candidate EP2 judges (report:224: "EP2 is the one
+   gate that judges a path there"), so EP2 can REDACT the body, preserve an
+   unredacted copy, and PUBLISH the sanitized body. That is a preserving arm.
+   Nothing else catches it: module:465 "The report has no outcome in this
+   package's accounting"; report:313 composes redaction lines "one line per entry
+   of redacted[]" (excludes the body); report:314 names exactly two sources; and
+   report:270 — NEW IN THIS WINDOW — makes a fresh completeness enumeration ("on
+   redacted[], on refused[], and on the refused report arm") that omits the route.
+   Consequence is Q3's data-loss shape (module:540: a redacted-shelf copy "is
+   announced by nothing else"), one surface over from where Q8 closed it, against
+   a ruling whose words are "carried on EVERY preserving arm".
+   CLASSIFIED BY THE REVIEWER: under the re-stated stop criterion this is
+   ORDINARY WORK — the fact has somewhere to go ON the record — not an
+   escalation. Add `preserved` to the published arms; sweep Table N row 270,
+   Table R's redaction-lines row and the criterion.
+
+F2 [CONTRACT DEFECT] The two-entry keep case is attributed to an arm that can
+   never produce it.  module:856-861 and report:469-472
+   Both say the two-entry case arises where the gate refuses FOR A HARD SECRET.
+   Measured against the shipped gate:
+     validate.js:1269  if (!hasHardFinding(findings)) {   <- gates the ENTIRE redact arm
+     validate.js:1276    redactCopy = quarantinePreserve(..., 'redacted');
+     secret-scan.js:321-323  hasHardFinding -> severity === SEVERITY.QUARANTINE
+   A hard finding SKIPS the arm, so redactCopy stays null, so :1338
+   `if (redactCopy)` never fires and :1357-1359 never keeps anything.
+   HARD SECRET => EXACTLY ONE ENTRY, ALWAYS. The two-entry keep case is the
+   redact-arm FALL-THROUGH route (:1293 redactFellThrough = true -> :1297
+   withheld preserve -> :1338-1360).
+   The sweep got this right twice and wrong twice:
+     correct — in-workspace:558-561 "the redact arm's copy survives the withhold"
+     correct — Q9, module:546 "including whether the redact arm's copy survives A WITHHOLD"
+     wrong   — the two criteria above.
+   As written both criteria mandate a fixture combination THE REAL GATE CANNOT
+   PRODUCE — constructible only with a fake gate, which is exactly what hides it
+   in the module's tests.
+
+F3 [COHERENCE] Entry order in that same case contradicts its owner row.
+   Q9 (module:546) decides entries are "in the order the gate wrote them".
+   Measured write order: redact-shelf copy :1276, withheld copy :1297 — the
+   REDACT copy is FIRST. module:860-861 calls the redact-arm kept copy "a SECOND
+   entry"; report:470-471 enumerates "the withheld copy and the redact arm's kept
+   copy". Both invert the order their owner row fixes.
+
+F4 [COHERENCE + MSC GAP] The pipeline's Out-of-scope bullet contradicts the
+   ruling it just landed, and is an unregistered mirror.
+   in-workspace:723-724: "row G7's criterion asserts they SURVIVE the extraction;
+   IT MAY NOT CHANGE WHAT THEY DO, and it may not restate the rules."
+   Contradicted by four surfaces in the same file, all rewritten in this window:
+   G7 (:302 "the CARRIER ... an owner-authorized change"), V3 (:342 "PRESERVING
+   IT IS NOT THE SAME AS LEAVING IT BYTE-IDENTICAL"), the new MSC entry
+   (:405-416) and the G7 criterion (:558-568). The new MSC entry lists exactly
+   five mirrors (:412-414) — THIS BULLET IS A SIXTH CARRYING SURFACE AND IS NOT
+   AMONG THEM. Changed-surface-with-no-entry, in the spec that authored the rule.
+
+F5 [COHERENCE] Module Out-of-scope carries the pre-ruling premise.
+   module:957-960: "...so it can neither implement nor assert any of them; THAT
+   THE GATE EXTRACTION PRESERVES THEM is asserted by ... row G7." "Them" includes
+   the identity-gated deletion (:951). The pipeline NARROWED exactly this in the
+   same sweep — :403 "preserves their DECISIONS, nothing more"; :553 "did not
+   remove or alter their DECISIONS". Verified unchanged since 60539fe
+   (git log -L959,959 -> 0 commits in range). A pointer carrying a premise its
+   target no longer states.
+
+F6 [CONTRACT DEFECT] A range one line short of its construct, live in two
+   contract surfaces, while two siblings carry the corrected value.
+   module:447 and report:224 both cite validate.js:1374-1408.
+   Measured at both ends: :1398 is `if (secretRedacted.length > 0) {` (indent 2),
+   :1409 is its closing `}` (indent 2). :1408 is the `);` closing the inner
+   fs.appendFileSync(. Step 4 runs :1374-1409; :1410 blank, :1411 is Step 5.
+   report:99 and in-workspace:343 WERE swept to :1374-1409 in this window.
+   report:224 was ITSELF REWRITTEN in this window (the P-1 "the table above" fix
+   — an added line in the diff) and KEPT THE STALE RANGE.
+   *** The reconciliation record's P-4 disposition claims "FIXED at all three
+   sites ... :1374-1409 cited as :1374-1408 in two specs" — THAT HALF OF THE
+   CLAIM IS FALSE AGAINST THE TREE. ***
+
+F7 [COHERENCE] Remediation guidance restated in the surface that says it does not
+   decide it.  report:314: "The guidance is NOT decided here — it is READ from
+   the entry's remediation, WHICH IS A `delete` ON EVERY REFUSING ARM because the
+   note was never promoted, and the difference from a redaction's
+   restore-or-delete is the content's provenance..."
+   Q9 (module:546) states verbatim why that is forbidden: "a surface that
+   re-derived it would be writing A SECOND, INDEPENDENT STATEMENT OF THE SAME
+   GUIDANCE — which is exactly how a design round came to read two correct
+   surfaces as a contradiction." The sentence re-creates the condition the field
+   exists to remove. Same class at module:563 (S3) and module:546 (Q9 itself).
+
+F8 [COHERENCE/MSC] The report's Table N mirror list names one surface twice.
+   report:358-366 lists "...the redaction-lines row, Table R's preserved-copy row
+   (...), Table R's redaction-lines row (which cites N3 for the same scope), the
+   records input..." — two list members for one surface.
+
+F9  [NIT] Record vs entry. report:313 "that entry's preservation RECORD read
+    field by field — the artifact, the location and the remediation". `preserved`
+    is Array<PreservedCopy>; the record has no such fields, its ENTRIES do.
+    Correct form used at module:540 and report:379-380.
+
+F10 [NIT] The Deliverables cell reintroduces containment phrasing the same commit
+    removed elsewhere. in-workspace:216 (added line): the identity-gated deletion
+    "sits INSIDE THAT SPAN'S MIDDLE". The three sibling surfaces were swept to
+    measured geometry (:173, :302, :342). The one surface left with the
+    containment framing round-zero C1 was raised against.
+
+F11 [COHERENCE, pre-existing shape hardened this window] A criterion assigned to
+    a package that composes no report asserts a report line.
+    module:820-829 asserts "A redacted note's REPORT LINE carries ...", with new
+    text "so a line built from a directory the module composed for itself is red
+    too". But module:259 "This module publishes ordinary notes and COMPOSES NO
+    REPORT"; Deliverables :170 "NOT the report". The framing is pre-existing
+    (verified against 60539fe), but this window HARDENED the delegation to it:
+    report:375-377 now says "the redaction-lines row's own assertion is the module
+    half's".
+
+CATEGORIES WITH NO FINDINGS — stated explicitly
+
+ 1. A surface still carrying the OLD shape — NOTHING. /usr/bin/grep over all three
+    specs for refused[].artifact, redacted[].artifact, {rel, reason},
+    {refuse, reason}, "reason, artifact", "artifact, record", artifact:string
+    returns only: the deliberate history sentence module:521, the deliberate
+    history clause module:538, the PreservedCopy typedef :187, and Q9 :546. No arm
+    is described as carrying an artifact directly anywhere.
+ 2. A consumer hardcoding the quarantine directory or deciding restore-vs-delete
+    itself — NOTHING. `state/quarantine` appears only at module:540,543,951 and
+    report:570, all pointer prose, never composition. Every composing surface
+    reads location and remediation off the entry. (F7 is a RESTATEMENT of the
+    value, not a re-derivation at composition.)
+ 3. Count mismatches — NOTHING. Acceptance criteria re-counted -> 23 / 10 / 24,
+    unchanged as pinned. V3's "all five are inside the per-path loop": the list
+    has exactly five members (:1298-1323, :1324-1332, :1333-1337, :1338-1360,
+    :1361-1363), all inside :1233-1364. The map's "NINE tables ... FIVE collide":
+    /usr/bin/grep -cE '^### Table [A-Z]' over the EP2 spec -> 9, letters match the
+    map exactly; the collision table has 5 rows, each correct.
+ 4. Assertions citing a table/row/file that does not contain the rule — NOTHING
+    BEYOND F6. Verified present and matching: B3b (EP2 :1565), Q18 (:1647, and it
+    does say "EACH OF THE FOUR FIELDS"), Table N rows N1-N7 (:1759-1765), "Every
+    retention fact is decided here" (:1755 header), "None may restate a number
+    from this table" (:1813, after the rows — Q6 correctly claims no location for
+    either), Table R "consequence 2" (:1216), the EP2 H7/H9 meanings (:3408-3430,
+    matching the map verbatim), the glossary's secret quarantine ("in two
+    places", GLOSSARY.md:122-128 — so Q9's and Table N's "two places" is a count
+    read off its cited owner, not a drifted one).
+ 5. All other range endpoints — CLEAN, checked at both ends by indentation:
+    :669-738, :906-946, :1083-1086, :1107-1142, :1211, :1233-1364, :1298-1323,
+    :1324-1332, :1333-1337, :1338-1360, :1357-1359, :1358, :1361, :1361-1363,
+    :1365-1366, :1385-1386, :1392-1409, :1398-1409, :1450-1458,
+    digest.js:817-822/:847-849/:853-863, layout.js:21-29, cli/dream.js:57-78,
+    SKILL.md:409-425, secret-scan.js:314/:325, validate.js line count 1469.
+    The reason-consumer claim independently confirmed: writes at
+    1247/1255/1268/1333/1335/1358 and EXACTLY ONE READ, :1361.
+ 6. MSC entries naming a mirror that no longer exists — NOTHING. Every mirror
+    named in the module's Table Q entry (:603-626), Table C ordering entry
+    (:627-635), Table S entry (:636-646), the report's four entries and the
+    pipeline's new entry was located in the tree. The MSC gap runs the other way
+    only (F4).
+ 7. Ownership collisions beyond F7 — NOTHING. Q9 is the single decider of the
+    record's fields; S3 defers; Table R's two rows read; G7/V3 defer with G7
+    owning the instruction and V3 explicitly saying it records "not why".
+
+RUNNABLE CRITERIA
+  promote.js and dream-promote.test.js DO NOT EXIST in this tree (ls -> exit 1
+  for both). 21 of the module's 23, 8 of the report's 10, and all of the
+  pipeline's behavioural criteria are UNEVALUABLE here; not guessed at.
+  control zzz-no-such-test-zzz -> exit 0, "tests 108 / pass 108" (confirms the
+    test -f guards are load-bearing)
+  guarded dream-promote / claim-2b-merge-cwd / report-fallback / dream-pipeline /
+    claim-1-pipeline / claim-2b-pipeline -> 1, YES (guard fires on absent)
+  consumed-by-nothing grep -> 0, NO on this tree (vacuously green: promote.js
+    does not exist here, so nothing can require it; discriminates only after the
+    module lands)
+  glossary grep -> 1, YES (correctly red here)
+  unguarded "dream-validate" -> 0, PARTLY (190 tests ran and passed, not vacuous,
+    but proves only that today's suite is green)
+  ! grep precommitSessionEdits -> 1, YES (correctly red pre-landing)
+  grep assertCleanTree -> 0, presence check only, the spec says so at :576-578
+  grep -i promot docs/adr/0012 -> 1, YES (correctly red)
+  npm test -> 1: 2133 pass / 1 fail, the known machine-local adopt-e2e
+    executable-pin mismatch. Unrelated to this docs-only branch.
+  npm run lint -> 0, PARTLY: markdownlint 556 files 0 errors, frontmatter 232
+    specs passed; shellcheck and PSScriptAnalyzer SKIPPED locally.
+
+BOTTOM LINE (reviewer's own)
+  "The redesign's CORE held under audit: the old standalone artifact fields are
+  gone from every contract surface, no consumer re-derives location or
+  remediation, the arm coverage in Q1 is complete for the module's own return,
+  the counts are stable at 23/10/24, and every range endpoint except one class
+  checks out at both ends.
+  The chronic disease still bit, four times. Two of them matter for what an
+  implementer builds: F1, a preserving arm the new enumeration at report:270
+  walks straight past; and F2, a two-entry fixture that two specs pin to an arm
+  the shipped gate provably cannot reach while a third spec describes it
+  correctly. F4 and F5 are stale mirrors of the ruling inside the two specs that
+  landed it, and F6 is a stale range in a cell that was rewritten in this very
+  window while its siblings were corrected."

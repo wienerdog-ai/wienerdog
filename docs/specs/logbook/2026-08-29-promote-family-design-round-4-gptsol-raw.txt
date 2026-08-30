@@ -1,0 +1,83 @@
+Gate: adversarial DESIGN review (docs/runbooks/review-prompts/adversarial.md)
+Backend: gptsol (codex/gpt-5.6-sol via llmp)
+Branch: docs/promote-table-q-reconciliation, tip 36cfc23
+Round: 4
+Committed BEFORE adjudication, per docs/runbooks/codex-review.md.
+Read-only confirmed: git status --porcelain empty before and after, byte-identical;
+nothing created, edited, deleted, staged, committed or stashed. Every introduced
+or changed source citation checked at BOTH endpoints against the cited construct
+and its indentation (40 commands, all exit 0).
+
+ROUND-3 FINDING: CONFIRMED FIXED.
+  "GateReportedCopy owns the gate-time artifact/location fields, PreservedCopy
+  adds remediation, and Q9 explicitly makes the module the place where
+  remediation FIRST EXISTS at outcome time, with downstream surfaces restricted
+  to reading it."
+
+MECHANICAL: acceptance-criteria counts confirmed 23 / 10 / 24 (command 21);
+whole-file checkbox counts 47/26/48 both at 1757e8e and at HEAD (commands 19-20),
+so nothing moved anywhere in the files. 11 unique explicit citations and 38
+colon-style occurrences enumerated and checked (commands 25, 28).
+
+VERDICT: needs-attention
+SUMMARY: "NO-SHIP: the new report union still has no truthful representation for
+a successful body publish followed by refusal of the accounting write. This is an
+ESCALATION under the stated test: a real outcome fact has nowhere to go on the
+shape, so the owner must rule on the shape rather than treating it as another
+missing-field repair. Q10 also defines its disclosure count as lines actually
+scrubbed while sourcing the total number of added lines. Round 3's
+remediation-provenance finding is CONFIRMED FIXED."
+
+*** A1 [contract-defect / OWNER ESCALATION] confidence 0.98 ***
+  The report union cannot represent refusal of the second write after the body
+  was published.  docs/specs/WP-dream-promote-report.md:163-221
+
+  The normal report path performs TWO primitive writes: first it publishes the
+  gated body, then it publishes body plus enforcement accounting. The union
+  offers only `promoted`, `fallback`, and `refused`. The new prose defines
+  `promoted` as the arm where the candidate's sanitized bytes published,
+  `fallback` as the arm where the body did NOT publish, and `refused` as meaning
+  NOTHING published. If the first write succeeds and the second write is refused
+  by an `expect` conflict, symlink replacement, or another primitive rule, THE
+  BODY HAS ALREADY PUBLISHED BUT ITS ACCOUNTING HAS NOT. That state is neither
+  `fallback` nor the specified `refused` state; `promoted` also has no refusal
+  reason or fact saying the required accounting write failed. Consequently the
+  caller cannot distinguish a complete report from a published body whose
+  enforcement record exists only in the return. This is exactly the escalation
+  condition: the second-write refusal fact has nowhere to go on the report shape.
+
+  IMPACT: The pipeline can misclassify or commit a report lacking its required
+  enforcement record, while user output cannot truthfully explain the partial
+  publication. Tests built from the current three arms cannot assert the real
+  state without violating one arm's contract.
+
+  RECOMMENDATION: Escalate to the owner and add an explicit representation for
+  body-published/accounting-refused, either as a dedicated union arm or an
+  owner-ratified field on a precisely defined arm. It must carry the published
+  body bytes, the complete enforcement record, the primitive refusal reason,
+  preservation metadata, and any applicable redaction accounting. Then define
+  G8's commit behaviour and G11's delivery behaviour for that state, and add an
+  acceptance case where the first publish succeeds but the second primitive
+  write refuses.
+
+B1 [contract-defect] confidence 0.99
+  Q10 calls the total added-line count a scrubbed-line count.
+  docs/specs/WP-dream-promote-module.md:618
+
+  Q10 defines `redaction.lines` as how many added lines the scrub REPLACED, but
+  fixes its source as `addedLineNumbers.length` at `validate.js:1286`. The cited
+  scrub helper iterates EVERY added line and replaces each with
+  `scanAndRedact(line).text`; clean added lines remain byte-identical. Therefore
+  a candidate with ten added lines and one secret reports TEN lines scrubbed even
+  though only one line changed. The new report-body parity propagates the same
+  inaccurate disclosure to both ordinary notes and promoted report bodies.
+
+  IMPACT: The enforcement report materially OVERSTATES how much user content was
+  altered, weakening the audit and recovery information this field was
+  introduced to provide.
+
+  RECOMMENDATION: Have the gate calculate and return the number of added lines
+  whose post-redaction bytes DIFFER from their captured bytes, and use that value
+  for `redaction.lines`. Add a mixed fixture containing secret-bearing and clean
+  added lines and assert the actual changed-line count on both the `redacted[]`
+  carrier and the promoted report carrier.
