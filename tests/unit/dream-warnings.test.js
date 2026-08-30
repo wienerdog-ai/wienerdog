@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync, spawnSync } = require('node:child_process');
 
 const { WARNINGS_REL, composeWarnings, refreshWarnings } = require('../../src/core/dream/warnings');
 
@@ -351,6 +352,40 @@ test('dream-warnings: a symlinked warnings FILE is refused rather than written t
   assert.equal(res.written, false);
   assert.ok(res.reason);
   assert.equal(fs.readFileSync(victim, 'utf8'), 'user content\n', 'the link target is untouched');
+});
+
+test('dream-warnings: a symlink to a FIFO is refused by return — the read must never block', { skip: !POSIX }, () => {
+  // THE DEFECT THIS PINS. A plain readFileSync on the leaf follows the link and
+  // opens the FIFO, which blocks forever waiting for a writer: the dream never
+  // returns, the process never exits, and that night's consolidation is lost
+  // silently — the fail-loud-instead-of-fail-safe outcome ADR-0023 exists to
+  // prevent. The earlier symlink tests cannot catch it, because they point the
+  // link at a REGULAR file, where the read returns and the primitive refuses.
+  //
+  // The call runs in a CHILD process with a hard kill, because what is being
+  // guarded is a HANG. An in-process assertion could not fail cleanly here: a
+  // blocked synchronous read starves the event loop, so no test timeout could
+  // ever fire, and the whole suite would wedge instead of reporting.
+  const vault = makeVault();
+  fs.mkdirSync(path.join(vault, 'reports'));
+  const fifo = path.join(vault, 'blocking-fifo');
+  execFileSync('mkfifo', [fifo]);
+  fs.symlinkSync(fifo, warningsPath(vault));
+
+  const child = `
+    const { refreshWarnings } = require(${JSON.stringify(MODULE_PATH)});
+    const ledger = ${JSON.stringify(ONE_QUARANTINE)};
+    process.stdout.write(JSON.stringify(refreshWarnings({ vaultDir: ${JSON.stringify(vault)}, ledger })));
+  `;
+  const res = spawnSync(process.execPath, ['-e', child], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+
+  assert.equal(res.signal, null, 'refreshWarnings BLOCKED on the FIFO and had to be killed');
+  assert.equal(res.status, 0, res.stderr);
+  const out = JSON.parse(res.stdout);
+  assert.equal(out.written, false);
+  assert.match(out.reason, /could not be read/);
+  // The link is untouched and nothing was published through it.
+  assert.ok(fs.lstatSync(warningsPath(vault)).isSymbolicLink(), 'the leaf is left exactly as found');
 });
 
 test('dream-warnings: a broken vault root is reported by return, never by exception', () => {

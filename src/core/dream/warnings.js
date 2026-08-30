@@ -229,12 +229,44 @@ function refreshWarnings(o) {
 
     /** @type {Buffer|null} the bytes on disk, or null when the file is absent */
     let current = null;
+    // Judge the LEAF before opening it. `lstat` does not follow a symlink, so a
+    // link, a directory or a special file is refused here without the linked
+    // object ever being opened.
+    //
+    // This is not tidiness: a plain `readFileSync` on a symlink pointing at a
+    // FIFO BLOCKS FOREVER waiting for a writer. The dream would never return,
+    // the process would never exit, and that night's consolidation would be
+    // silently lost — the exact fail-loud-instead-of-fail-safe outcome ADR-0023
+    // exists to prevent. A refusal by return costs the enumeration for one run
+    // and nothing else.
+    //
+    // NARROWING, not prevention, and the limit is stated rather than implied: a
+    // leaf swapped between this check and the read below is still followed.
+    // That is the same component-swap class portable Node cannot close, already
+    // carried as residual A by this family's write primitive.
+    let leaf = null;
     try {
-      current = fs.readFileSync(abs);
+      leaf = fs.lstatSync(abs);
     } catch (e) {
-      // ENOENT is the absent case. Any other read failure is NOT: never guess
+      // ENOENT is the absent case. Any other stat failure is NOT: never guess
       // at the file's content, and never overwrite a file we could not read.
       if (!e || e.code !== 'ENOENT') {
+        return {
+          written: false,
+          reason: `${WARNINGS_REL} could not be read (${(e && e.code) || (e && e.message)})`,
+        };
+      }
+    }
+    if (leaf !== null) {
+      if (!leaf.isFile()) {
+        return {
+          written: false,
+          reason: `${WARNINGS_REL} could not be read (something other than a regular file is at that path)`,
+        };
+      }
+      try {
+        current = fs.readFileSync(abs);
+      } catch (e) {
         return {
           written: false,
           reason: `${WARNINGS_REL} could not be read (${(e && e.code) || (e && e.message)})`,
