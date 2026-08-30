@@ -1,7 +1,7 @@
 ---
 id: WP-session-start-digest-dedup
 title: Make the SessionStart hook inject the digest only when the managed block lacks it
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-doctor-digest-block-drift]
@@ -10,6 +10,37 @@ epic: digest-delivery
 ---
 
 # WP-session-start-digest-dedup: Make the SessionStart hook inject the digest only when the managed block lacks it
+
+> **Archived 2026-08-30, post-merge.** Shipped in PR #50 (`152ae3a`), after
+> **both** gates: wd-reviewer **APPROVE** (its finding 1 applied in `d10fe7c`
+> before merge) and the Codex design gate **FINDINGS (4), all dispositioned by
+> the owner** — record in the PR #50 closing comment. The text below carries
+> **three dated errata** folded in during this archive pass, plus the two
+> accepted residuals, now recorded in a "Residuals" section of their own.
+>
+> 1. **Verification step 3** — `grep -n "set -e"` can never be silent: the
+>    script's own header comment contains the phrase (`session-start.sh:7`,
+>    "no `set -e`"), and that comment predates this WP. The step asserted
+>    "expect: no output" against a grep that always matches, so it proved
+>    nothing and could never go red. Replaced with an anchored form,
+>    `grep -nE '^[[:space:]]*set -e'`, verified silent on the shipped script and
+>    still matching a real `set -e`/`set -euo pipefail` line.
+> 2. **Mirrored Surface Checklist** — the acceptance-criteria bullet said
+>    AC1–AC13 while the spec defines **AC14**, and Table A row **A12** had no
+>    criterion and no explanation. Both corrected in place; A12 is now marked
+>    explicitly *unreachable from outside the process*, with the reason.
+> 3. **`docs/adr/0004-no-daemon-invariant.md`** — its Decision line still says
+>    hook scripts do "no computation at SessionStart", which this WP made
+>    literally false. **Amendment 1 is written in that ADR and marked pending the
+>    owner's signature**; ADR-0004's Decision line is registered on the checklist
+>    below so the two move together. Until it is signed, the ADR's ratified text
+>    stands as written and this note is the only thing marking it stale.
+>
+> A fourth reviewer recommendation — extract the scattered fail-open structural
+> contract to one canonical owner — is **recorded as a named trigger** on the
+> checklist rather than done here, because four of its five surfaces are product
+> code or another document's ratified text. It is routed to
+> `WP-hook-doctor-inspection-read-hardening`.
 
 ## Context (read this, nothing else)
 
@@ -380,8 +411,16 @@ review is added here on the spot.
       `AGENTS.override.md` comment) — Table A rows A5, A10, A11, A12.
 - [ ] **The `docs/ARCHITECTURE.md` cell** ("only when the managed block is not
       already carrying the same bytes") — Table A row A5.
-- [ ] **Acceptance criteria** AC1–AC13 — one per Table A row plus the parity
-      criterion.
+- [ ] **Acceptance criteria** AC1–**AC14** — one per Table A row plus the two
+      parity criteria (AC13 `buildBlock`, AC14 `applyManagedBlock`). **Table A row
+      A12 has no acceptance criterion and is not supposed to have one:** it is the
+      inner `catch`, and it is *unreachable from outside the process*. Every
+      filesystem state a test can construct lands on A6–A11 first, so a test that
+      claimed to exercise A12 would in fact be exercising one of those. A12 is a
+      structural guarantee, pinned by the script's shape — the inner `try/catch`
+      whose `catch` sets `emit = true` — and read by review, not by a case.
+      *Registered 2026-08-30, post-Done: this line said AC1–AC13 while the spec
+      defined AC14, and left A12's absence unexplained; both are corrected here.*
 - [ ] **Verification commands / greps** in "Verification steps" — Table A rows A5
       and A6, Table B row B10.
 - [ ] **Current-state description** (the `buildBlock` excerpt, the
@@ -391,6 +430,36 @@ review is added here on the spot.
       row A4–A12 and Table B rows B4, B6, B8, B9, B10.
 - [ ] **ADR-0039's Consequences bullets** (harness-blindness, the duplicated
       `buildBlock` transformation) — Table A's conjunction rule and Table B row B10.
+- [ ] **`docs/adr/0004-no-daemon-invariant.md`, the Decision line's hook clause**
+      — Table A's whole premise that the hook now computes. *Registered
+      2026-08-30, post-Done: see Amendment 1 in that ADR, written and **pending
+      the owner's signature**. Until it is signed the ADR's Decision line still
+      reads "no computation at SessionStart", which this WP made literally false;
+      the pair moves together the moment the signature lands.*
+
+> **Canonical-extraction trigger, named and dated 2026-08-30 (post-Done) — the
+> record ADR-0031 asks for when a contract is scattered rather than owned.** The
+> **fail-open structural contract** — no `set -e`; always `exit 0`; the
+> `WIENERDOG_JOB` guard first; a single `process.stdout.write` or none; the outer
+> `try/catch` around the digest read; the inner `try/catch` whose `catch` sets
+> `emit = true`; and the tie-break rule that ANY doubt injects — is currently
+> stated on **five** surfaces with no canonical owner among them:
+>
+> 1. the shipped `templates/hooks/session-start.sh` header comment;
+> 2. this spec's "Implementation notes" fail-open bullet;
+> 3. this spec's Verification step 3 (the greps that assert the structure);
+> 4. `tests/integration/hooks-fail-open.test.js`'s file header;
+> 5. `docs/adr/0004-no-daemon-invariant.md`'s Decision line (the `<200ms` /
+>    computation clause), plus ADR-0039's fail-open Consequence.
+>
+> **Not extracted in this round, deliberately.** Four of the five are product
+> code or another document's ratified text; a docs-only archival pass can edit
+> neither, and a canonical table added to a `Done` spec would be a sixth
+> statement rather than an owner. **The extraction is routed to
+> `WP-hook-doctor-inspection-read-hardening`**, which re-issues the hook script
+> and touches `hooks-fail-open.test.js` anyway — it is the first change with
+> legitimate write access to surfaces 1, 3 and 4 at once, which is what makes the
+> extraction cheap there and impossible here.
 
 ## Implementation notes & constraints
 
@@ -518,7 +587,7 @@ console.log("payload lines:",payload.length,"| lines with a single quote:",bad.l
 if(bad.length){console.error(bad.join("\n"));process.exit(1);}'
 
 # 3. The fail-open structure is intact.
-grep -n "set -e" templates/hooks/session-start.sh          # expect: no output
+grep -nE '^[[:space:]]*set -e' templates/hooks/session-start.sh   # expect: no output
 grep -n "WIENERDOG_JOB" templates/hooks/session-start.sh
 grep -c "exit 0" templates/hooks/session-start.sh          # expect >= 4
 grep -n "|| true" templates/hooks/session-start.sh
@@ -551,6 +620,46 @@ console.log("avg ms per run:",avg); if(avg>=200) process.exit(1);'
 npm test
 npm run lint
 ```
+
+## Residuals — owner-dispositioned, 2026-08-30
+
+Two Codex design-gate findings against this package were dispositioned by the
+owner as **accepted residuals** rather than fixes (full record: the PR #50
+closing comment). They are recorded here because a residual that lives only in a
+PR comment is a residual nobody can find later.
+
+**R1 — TOCTOU: the digest is rewritten while the hook is mid-flight. PARKED; no
+freshness claim is made or implied.** The hook reads `digest.md`, then reads the
+harness block, then compares. A dream run that rewrites `digest.md` between those
+reads makes the comparison one against bytes that are already superseded, and the
+hook can go silent on a digest that is no longer current.
+
+This is parked under the runbook's explicit **park sub-case**
+(`docs/runbooks/codex-review.md`, "Diff size does not measure contract impact"):
+*a finding whose only honest fix re-imports a property the package was
+deliberately re-cut to exclude is a contract change, and a contract change is the
+owner's act.* Every honest fix here — a two-pass stability check, a lock, a
+re-read-and-compare — is a **freshness mechanism**, and this package makes no
+freshness claim: the hook decides only whether the block already carries *some*
+version of the digest. The bound on the damage is what makes the park defensible:
+digest writes are atomic (`writeFilePrivate`), so no torn read is possible, and
+the worst case is that one session carries the block's bytes instead of bytes
+written seconds earlier — **exactly the one-session staleness window that existed
+before this WP and that `wienerdog sync` closes**. Nothing new is introduced.
+
+**R2 — invalid UTF-8 folds to the same replacement character, so two
+byte-different files can compare equal. RESIDUAL; no information is lost.** Both
+sides of the comparison are read with `readFileSync(…, "utf8")`, which maps every
+invalid byte sequence to U+FFFD. Two files that differ only in invalid bytes
+therefore decode identically and the hook goes silent.
+
+Accepted because **the counterfactual delivers nothing**: had the hook injected,
+it would have injected `additionalContext: text` — the same `readFileSync(…,
+"utf8")` string, with the same U+FFFD folding. The session would receive a
+byte-for-byte identical decoded payload to the one the block already carries. The
+silence loses no information the injection would have supplied. (A digest
+containing invalid UTF-8 is itself an anomaly — `renderDigest` emits none — and
+would be a defect in the writer, not in this comparison.)
 
 ## Out of scope (do NOT do these)
 
