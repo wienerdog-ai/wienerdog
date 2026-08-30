@@ -1,6 +1,6 @@
 # ADR-0039: The managed block is a reference, not a copy
 
-Status: Proposed
+Status: Accepted — OWNER-SIGNED 2026-08-30
 Date: 2026-08-30
 
 ## Context
