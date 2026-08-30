@@ -1,0 +1,102 @@
+GATE: PR review, spec-fidelity merge gate (wd-reviewer)
+ROUND: 2 — the UNIFIED tip of PR #55 + PR #57
+TIP: 910e4ed20ac4e37d6ae01c78bdf69557acaa9010
+READ-ONLY CHECK: repo byte-identical before and after; scratch work in throwaway exports outside the repo.
+RAW OUTPUT, RELAYED VERBATIM:
+
+---
+
+## REQUEST-CHANGES
+
+### What I EXECUTED (exit statuses)
+
+| Command | Result |
+|---|---|
+| `git status --porcelain` before / after | empty / empty, **byte-identical** — run valid |
+| `npm test` | **exit 1** — 2309 tests, 2308 pass, 1 fail (`adopt-e2e` only) |
+| `npm run lint` | **exit 0** — markdownlint 587 files 0 errors, shellcheck clean, frontmatter 240 specs |
+| `node --test tests/integration/adopt-e2e.test.js` on a clean `git archive origin/main` export | **same single failure, same error, same pinned-path cause.** Confirmed environmental, not counted. `which -a claude` → `/Users/felho/.local/state/fnm_multishells/…/bin/claude`; neither `adopt-e2e.test.js`, `exec-identity.js` nor `brain.js` is in either diff |
+| PR55: `npm test -- --test-name-pattern "dream-pipeline"` | 150/150 pass |
+| PR55: `claim-1-pipeline` / `claim-2b-pipeline` patterns | 2 and 1 matching tests, non-vacuity confirmed by direct file run |
+| PR55 greps: `!precommitSessionEdits`, `!assertCleanTree`, `!"Reverted by orchestrator"`, ADR `promot` | 0, 0, 0, 0 |
+| PR57 V1: `node --test dream-validate.test.js dream-promote.test.js` | 160/160 pass |
+| PR57 V2 `grep -nE 'isLosslessUtf8\|record\.binary === true' promote.js` | no output (exit 1) OK |
+| PR57 V3 `git diff --name-only 7d30fa9..HEAD -- docs/THREAT-MODEL.md` | empty; also empty vs `origin/main` OK |
+
+**Boundary — clean, both PRs.** PR55 alone (`origin/main...e8e65b5`) = 7 deliverable paths + spec file + 6 logbook entries (always-allowed). PR57 alone (`7d30fa9..origin/wp/ep2-unscannable-preserve`) = exactly its 6 Deliverables rows, no more. No stray file.
+
+**Merge integrity.** `diff(e8e65b5 -> 910e4ed)` over `src/`+`tests/` is byte-for-byte PR57's own delta (220+/130-, same 4 files); `diff(PR57tip -> 910e4ed)` is byte-for-byte PR55's post-`7d30fa9` delta (286+/5-, same 2 files). **No evil-merge content.**
+
+### Per round-1 finding
+
+I mutation-tested every claimed fix in a throwaway `git archive` export. Each mutation was verified applied (grep count) before the run — an unapplied mutation is a false green, and one of mine silently didn't apply on the first attempt.
+
+| # | Finding | Verdict | Evidence |
+|---|---|---|---|
+| **B1** | G11 refused arm — record returned, not delivered | **FIXED** | Deleting the delivery loop at `src/cli/dream.js:1182` -> `dream-pipeline.test.js:966` RED |
+| **B2** | G11 partially-published arm | **FIXED** | Same mutation -> `:1081` RED |
+| **B3** | G10 skill registry | **FIXED** | `if (false) recordSkills` at `src/cli/dream.js:1092` -> `:885` RED |
+| **B4** | G8 partial-publish commit clause | **FIXED** | Gating the member push on `published !== false` (`src/cli/dream.js:1004`) -> `:1081` RED |
+| **B5** | G5 only-copy teardown | **FIXED** | Removing `retainWorkspace = true` from the promote catch (`src/cli/dream.js:983`) -> `:1042` RED. The *other* `retainWorkspace` (G2 reap) correctly survived |
+| **B6** | Counts discriminating input | **FIXED** | Narrowing the skills test to `endsWith('/SKILL.md')` (`src/cli/dream.js:1052`) -> `:916` RED |
+| **B7** | G4 REDACTED case | **FIXED** | Making `redactions > 0` defer (`src/cli/dream.js:1109`) -> `:942` RED |
+| **9** | `neutralise()` duplicated | **FIXED as ruled** | `src/cli/dream.js:325-336` now cites Table N row N1 and names the routed consolidation instead of restating the rationale; the measured rationale lives once, in `promote.js:579-592`. Checklist registration present at spec `:616` |
+| **10** | `hash-object --path` mutates decided bytes | **FIXED, and byte-equality independently proven** | Restoring `'--path', m.rel` at `src/cli/dream.js:255` -> `:720` RED. That test pipes through a real `filter.mangle.clean` and asserts every committed blob is `Buffer.equals` to the piped buffer, with a non-vacuity guard on `piped.length > 0` |
+| **14** | Table V row V1 vs G12 | **FIXED** | V1's inheritance cell now splits the two halves and closes with *"No surface here may say a changed expected extract is deleted-and-recorded under the pipeline"* |
+| **7, 8, 11, 12, 13** | — | **CANNOT VERIFY** | Their text is not in the record at `docs/specs/logbook/2026-08-31-pr55-gate-round1-verification.md`, which names only the six-blocker family and 9/10/14. No wd-reviewer raw for PR #55 was committed to the logbook (contrast the `promote-module`/`promote-report` gates, which have `*-wd-reviewer-raw.txt`). **I will not certify findings I cannot read.** Process gap worth closing: the other gate's raw output is archived, this gate's is not |
+
+**Nothing is RE-WORDED-ONLY.** Every claimed assertion goes red without its fix.
+
+### PR57 on its own terms — clean
+
+Its three both-directions mutations all reproduce:
+
+- **A** (restore the Phase-1 pre-refusal above `promote.js:1174`) -> both `dream-promote D:` tests RED. *First attempt did not apply; re-verified with the real call site.*
+- **B** (classify then `return {preserved: []}` instead of falling through) -> all three unscannable fixtures RED.
+- **C** (`if (false && deltaRecord.binary === true)` at `validate.js:989`) -> both binary fixtures RED.
+
+Table U row U5 holds in code: the unscannable branch leaves `redactCopy = null` and `redactFellThrough = false`, so the redact arm, the preservation-failure abort and the identity-gated deletion are all genuinely out of play. The Done-spec amendment landed on exactly the three named surfaces (the REFUSAL paragraph, Table D's EP2 row, Table Q row Q1), each citing Table U rather than restating it.
+
+### The interaction — what only this tip can show
+
+I drove the **real pipeline** with the spec's own worked example (`23 20 00 ff fe 0a`, `01-Projects/alpha/note.md`):
+
+```
+QUARANTINE: 2026-07-02-note.md  mode=600  dir mode=700
+bytes=232000fffe0a  byteEqual=true          <- NUL and all, never decoded
+BANNER: "1 dream note(s) were withheld … Review the copies in state/quarantine/"
+LEDGER: {"outcome":"deferred","reason":"secret-revert","deferrals":1}
+VAULT HAS NOTE: false
+```
+
+**The REORDER does what the owner ruled it should**, observable only here: AC2, AC6 and Table U row U3's (a), (b) and (c) all hold end to end through PR55's pipeline. `docs/THREAT-MODEL.md:124` is true again with the file untouched. The two PRs compose correctly on the shared arm.
+
+### NEW findings on this tip
+
+1. **[quality] The only-copy invariant has a hole that PR55's teardown now reaches, and PR57 enrolls a second class into it.** `src/core/dream/validate.js:1014` guards the fail-loud abort on `redactFellThrough && !preserved`. A withhold that never entered the redact arm — a **hard secret**, and now **unscannable content** — leaves `redactFellThrough` false, so a failed `quarantinePreserve` at `:1012` refuses with an empty record and **no abort**. `src/cli/dream.js:1206` then tears the workspace down. Measured, both classes:
+
+   ```
+   HARD SECRET  : THROWN null | WORKSPACE SURVIVES false | BYTES SURVIVE false
+   UNSCANNABLE  : THROWN null | WORKSPACE SURVIVES false | BYTES SURVIVE false
+   ```
+
+   The bytes exist nowhere afterwards. **Worse, the run tells the user the opposite:** `src/core/dream/ledger.js:472` prints *"The withheld notes are in state/quarantine/"* — measured `CLAIMS A COPY EXISTS: true` with the quarantine path not even a directory. **Not a PR57 regression** (the pre-refusal lost the bytes too) and **not in either boundary** (`ledger.js` is in neither), but PR55's teardown is what turns "no copy" into "no bytes anywhere", and Table Q row Q4 says the invariant "binds every party that could destroy a working copy". G5 scopes it to the redaction-AND-preservation cross-product, which is narrower than Q4. **Route to wd-architect** — the fix is a decision about G5's scope, not an implementer edit.
+
+2. **[criteria] Four criterion clauses remain unasserted, and they are the SAME FAMILY as round 1's six.**
+   - `tests/unit/dream-pipeline.test.js:885` (G10) omits two clauses its criterion names: *"Asserted for a REDACTED acceptance as well as an ordinary one"* and the *"modification of an existing tracked skill"* negative. Grep for both: no hits anywhere in the file.
+   - `:916` (counts) omits *"`reports/warnings.md` … counts it as neither a note nor a skill"* — no `WARNINGS_REL` reference in that test. Its deletion clause is **vacuous**: promotion never deletes, so `README.md` never reaches the counting loop at `src/cli/dream.js:1050-1055` and could not discriminate any rule.
+   - `:966` (G11 case a) asserts only the symlinked target; the criterion names *"an `expect` conflict AND … a symlinked report target"*. No `expect`-conflict case exists in the file.
+   - `:1081` (G11 case b) reaches the arm through a stubbed `writeFile` returning a synthetic `{written:false}` — neither of the two causes the criterion names.
+   - The `fallback` report arm is a live branch at `src/cli/dream.js:1004` with **no test anywhere** in the file.
+
+### The disposition — the pinned stop criterion fires
+
+Round 1 pinned this, and it is now due:
+
+> Patch the criteria family ONCE. If a second round lands on it again, extract the criterion→test-name mapping instead of patching a third time.
+
+Finding 2 **is** that family landing a second time. **Do not add four more tests.** Per ADR-0031 and the `contract-extraction-beats-a-third-patch` measurement (PR #42: two rounds of patching = 4 product defects; one round of contract = 0), the fix is the machine-checkable **criterion → test-name mapping**, the way the mirror lists got `scripts/mirror-walk.js`. Route to **wd-architect** with finding 1.
+
+**Contract-density / closed-contract drift check.** No drift found. PR55's only surviving `unscannable` mention (`WP-dream-promote-in-workspace.md:174`) describes the *pre-extraction* tree under `## Current state` — historically accurate, not a stale mirror. PR57's Table U is a properly constituted canonical table with a registered Mirrored Surface Checklist, and its amendment of the settled Table D/Table Q contracts edits the tables themselves with dated amendment notes rather than promoting a mirror to primary. Table U does not silently reinterpret Table Q row Q4 — but finding 1 is precisely where Q4 and G5 disagree on scope, and that gap predates both PRs.
+
+**Conventions.** `package.json` untouched (zero runtime deps hold), no `.ts` under `src/`, all commit subjects conventional with the WP suffix, glossary terms used canonically.

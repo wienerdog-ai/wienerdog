@@ -1,0 +1,20 @@
+GATE: PR review, independent second opinion (gptsol / pr-rubric.md)
+ROUND: 2 — the UNIFIED tip of PR #55 + PR #57
+TIP: 910e4ed20ac4e37d6ae01c78bdf69557acaa9010
+READ-ONLY CHECK: git status --porcelain empty before and after, byte-identical.
+RAW OUTPUT, RELAYED VERBATIM:
+
+{
+  "findings": [
+    {
+      "title": "[P1] Preserve every staged index state during refresh",
+      "body": "When the user has staged a deletion, `ls-files --stage` produces no entry, so `stagedSha` becomes `null` and this guard overwrites the deletion; when the user has staged only a mode change, the blob SHA still equals `oldSha`, so the guard overwrites the staged mode as well. A concurrent `git add` between this check and `update-index` is also overwritten because the comparison and update are not atomic. Direct probes reproduced all three losses: a staged deletion became a `100644` entry, a staged `100755` mode became `100644`, and concurrently staged content was replaced by the dream blob. Compare the complete index entry and perform a conditional/atomic refresh so any staged user state survives.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": { "absolute_file_path": "src/cli/dream.js", "line_range": { "start": 289, "end": 296 } }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "Executed `npm test`: exit 1 with 2299 passing, 1 failing and 9 skipped; the sole `adopt-e2e` failure was reproduced at the base commit with the same real-`claude` pin mismatch, so it is discounted. Also executed the focused promote/validate suites (160/160 passed, exit 0), `npm run lint` (exit 0), raw-hash and special-entry probes, plus staged deletion/mode/race probes; `git status --porcelain` was empty before and after, byte-identically. Round-1 results: (1) FIXED - `hash-object -w --stdin` stored bytes exactly under a clean filter and `core.autocrlf`; (2) NOT FIXED - ordinary staged content survives, but staged deletion, mode-only work and a concurrent stage are overwritten; (3) FIXED - refresh failure is surfaced with the Git error and recovery instruction; (4) FIXED - the enumerator returned both a symlink and FIFO. The unified unscannable reorder is correct: binary and non-lossless-UTF-8 bytes reach EP2 undecoded, are byte-preserved in quarantine, refused with unchanged reasons, and retain their preservation records through later refusal paths. NEW findings: none beyond unresolved round-1 finding 2.",
+  "overall_confidence_score": 0.98
+}
