@@ -1,7 +1,7 @@
 ---
 id: WP-hook-doctor-inspection-read-hardening
 title: Type-guard and bound every inspection read, and make presence-doubt inject
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-session-start-digest-dedup]
@@ -746,9 +746,10 @@ universal the mechanism does not earn.
   call sites are the whole guarantee — `carries()` returns `false` on `null`, and
   a `false` clears `allCarry`, so no refusal the reader *reports* can be
   swallowed downstream. *NOT guaranteed:* that the reader reports one. **A reader
-  bug that FABRICATES content instead of returning `null` produces silence, and
-  round 5 proved it by mutation** — the non-regular refusal branch changed to
-  return the expected block turned a 120-byte injection into 0 bytes on a FIFO
+  bug that FABRICATES content instead of returning `null` CAN produce silence —
+  when the fabricated bytes happen to look like a fresh block — and round 5
+  proved the reachable case by mutation:** the non-regular refusal branch changed
+  to return the expected block turned a 92-byte injection into 0 bytes on a FIFO
   target. That class is covered by the Table E gates and the AC2/AC5 fixtures,
   **by testing, not by structure**, and saying otherwise was the defect in
   revision 4's wording. *Convention, not structure:* the two readers agreeing
