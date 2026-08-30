@@ -14,6 +14,20 @@ epic: digest-delivery
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template
   gives the skeleton, the runbook the rules. Read both.
 
+> **Revision 3, 2026-08-30 — design round 2 returned 6 findings; the owner
+> dispositioned all six FIX.** Round 2 verified the nine round-1 fixes except one
+> narrowly (its finding 1 here). The two that changed the design again: **opening
+> a special file has side effects before `fstat` can reject it** — so the `-f`
+> pre-filter is restored as defense in depth, `O_NOCTTY` is added, and the
+> remaining swap window is a named owner-accepted residual — and **`st_size` is no
+> longer trusted as a content length**. Every gate and number below was re-derived
+> against the revision-3 script.
+>
+> **The owner and Codex both confirmed the revision-2 refinement** flagged under
+> "Pushback and refinements": taking the over-cap size from the `fstat` on the
+> already-open descriptor is within row A-H7's intent and better than a separate
+> `stat`. It stands, and the confirmation is recorded there.
+>
 > **Revision 2, 2026-08-30 — design-review round 1 (Codex) returned 9 findings;
 > the owner dispositioned all nine FIX.** Every one is applied. The two that
 > changed the design rather than the prose: the type check moved from
@@ -142,10 +156,14 @@ a regular file:
 | path under a regular file | 0 ms | throws `ENOTDIR` |
 | 500-char basename | 0 ms | throws `ENAMETOOLONG` |
 
-Two further probes: a `ceiling + 1` bounded read returns exactly `ceiling + 1`
+Three further probes. A `ceiling + 1` bounded read returns exactly `ceiling + 1`
 bytes on an over-ceiling file and the true length on a small one, so **one read
-answers both questions**; and `fstat.size` **on the already-open descriptor**
-decides over-ceiling with **zero content bytes read**.
+answers both questions**. `fstat.size` **on the already-open descriptor** decides
+over-ceiling with **zero content bytes read**. And a read loop that **ignores
+`st_size` entirely** and stops on EOF returns the correct bytes for an honest
+file — which is what makes it safe to stop trusting `st_size` as a length
+(round 2 finding 3); the memory factor that loop feeds is measured under Table B
+row B7.
 
 **The evidence boundary, stated rather than glossed.** All of the above is
 measured on **macOS only** — this machine is darwin and CI is down (billing). The
@@ -159,8 +177,10 @@ platform-specific errno is handled without being enumerated.
 
 ### The replacement script, measured
 
-The script in Exact contracts was written and run before being specified.
-Against it, on this machine:
+The script in Exact contracts was written and run before being specified, and
+**re-run after every revision-3 change** (the `-f` pre-filter, `O_NOCTTY`, the
+read-to-EOF loop, the comment fixes). Against the revision-3 script, on this
+machine:
 
 - **the full behavioural sweep passes 26/26** — all **17** scenarios the shipped
   dedup contract already required (six `buildBlock`-parity digests, stale,
@@ -174,9 +194,21 @@ Against it, on this machine:
 - every FIFO row **returns promptly** under a `spawnSync` timeout, where the
   shipped script times out;
 - `tests/integration/hooks-fail-open.test.js` passes **22/22, byte-unchanged**;
-- elapsed time **21.8 ms** average over five runs on a 32 KB digest with a
+- elapsed time **22.8 ms** average over five runs on a 32 KB digest with a
   matching block — against 22.4 ms for the shipped script, i.e. the descriptor
-  mechanism costs nothing measurable, and the ADR-0004 `<200ms` budget is intact.
+  mechanism plus `O_NOCTTY` plus the read-to-EOF loop cost nothing measurable,
+  and the ADR-0004 `<200ms` budget is intact;
+- `O_NOCTTY` is defined on this platform (`131072`) and changes nothing for the
+  cases that must keep working: a regular file still `fstat`s as regular and
+  reads, and a FIFO with no writer still opens in **0 ms**;
+- the restored `-f` pre-filter accepts exactly what it must and rejects the rest,
+  measured: regular **true**, **symlink → regular true** (the AC4 acceptance case
+  survives the restoration), FIFO false, symlink → FIFO false, symlink →
+  `/dev/zero` false, `/dev/tty` false, directory false;
+- the replacement **E6a/E6b/E6c** gates were observed on the mutation that
+  defeated the old E6 — inner catch flipped to `emit = false`: **E6a RED, E6c
+  RED**, while the old `grep -c 'catch (e)'` gate printed **ok** on that same
+  file.
 
 **What is deliberately NOT in this WP's problem statement.** The two residuals the
 owner accepted on PR #50 — TOCTOU on a mid-hook *digest rewrite* (parked; every
@@ -192,6 +224,11 @@ Nothing in the batch is rejected. **One disposition is implemented in a way that
 exceeds its letter, and the owner should see the difference stated rather than
 buried.**
 
+> **CONFIRMED, round 2 (2026-08-30).** The owner ratified this refinement and
+> Codex independently endorsed it: open-without-content-read is within row
+> A-H7's intent and better than a separate `stat`. It stands as written; Table C
+> row C2b now carries the same confirmation.
+
 **Finding 5 — "the hook's over-cap path stays stat-based immediate injection with
 NO content read".** The intent is clear: preserve the shipped A10 contract and the
 `<200ms` measurement, and keep the `ceiling + 1` probe out of the hook. Both are
@@ -205,12 +242,15 @@ so the contradiction round 1 found cannot re-form.
 
 **Two smaller judgement calls, flagged because they are mine and not the batch's.**
 
-1. The bash scaffold keeps a cheap existence pre-filter, but it is now `-e` (any
-   entry), not `-f` (regular file). Without any pre-filter, a no-vault install
-   would spawn `node` on every session for nothing; with `-f`, the bash layer
-   would be re-asserting the very type assumption this WP removes, and a FIFO
-   `digest.md` would be filtered by an untyped shell test rather than by the
-   authoritative `fstat`. `-e` gets the fast path without an assumption.
+1. ~~The bash scaffold keeps a cheap existence pre-filter, but it is now `-e`
+   (any entry), not `-f`.~~ **Withdrawn in revision 3 — round 2 was right and I
+   was wrong.** My reasoning was that `-f` re-asserts the type assumption this WP
+   removes. What I missed is that `-f` is not competing with the descriptor
+   check, it *precedes* it: it rejects a non-regular path **without opening it**,
+   and round 2 demonstrated that the open itself has side effects `fstat` cannot
+   undo. The shipped script had that protection and my change removed it. `-f` is
+   restored as **defense in depth** (Table C row C2c), explicitly not the
+   authority, and the window it cannot close is named residual **R-A**.
 2. A FIFO `digest.md` yields **silence**, not injection. This looks like a
    fail-open violation and is not: there is no content to inject. It is rows
    A2/A3 of the shipped contract, unchanged — but it is called out in Context
@@ -246,8 +286,9 @@ contains **no `'` character anywhere** — verified, 128 payload lines, zero hit
 #!/usr/bin/env bash
 # Wienerdog SessionStart hook (enrichment, not capture): injects the
 # pre-rendered digest into a new session — but ONLY when the managed block in
-# every present harness CLAUDE.md / AGENTS.md is already carrying exactly these
-# bytes (ADR-0039). Fast: a few small descriptor reads and one string compare.
+# some present harness CLAUDE.md / AGENTS.md is NOT already carrying exactly
+# these bytes. When every present harness already carries them, it emits
+# nothing (ADR-0039). Fast: a few small descriptor reads and one string compare.
 # GENUINELY fail-open — always exit 0 (audit A6/F4): no `set -e`, every fallible
 # step is best-effort, and ANY doubt injects. The fail-open structural contract
 # is Table E of docs/specs/WP-hook-doctor-inspection-read-hardening.md; this
@@ -263,19 +304,25 @@ command -v node >/dev/null 2>&1 || exit 0
 
 CORE="${WIENERDOG_HOME:-$HOME/.wienerdog}"
 DIGEST="$CORE/state/digest.md"
-# Cheap existence pre-filter so a no-vault install does not spawn node every
-# session. Deliberately `-e` (any entry), not `-f`: the authoritative type check
-# is the fstat below, and a pre-filter that assumed a regular file here would be
-# the very assumption this hook stopped making.
-[ -e "$DIGEST" ] || exit 0
+# Regular-file pre-filter. DEFENSE IN DEPTH, NOT THE AUTHORITY: the fstat on the
+# descriptor below is what decides, and this line is not allowed to be the reason
+# any decision is correct. It earns its place twice anyway — a no-vault install
+# does not spawn node at all, and a non-regular path at rest (FIFO, device,
+# symlink to either) is rejected WITHOUT EVER BEING OPENED, which is the
+# protection the shipped script had and which open-then-fstat cannot give back.
+# The residual it does not close — a regular file swapped for a device between
+# this test and the open — is named and owner-accepted in the spec.
+[ -f "$DIGEST" ] || exit 0
 
 # Emit the Claude Code SessionStart envelope UNLESS every present harness
 # managed block already carries these exact bytes. node (>=18, always present
 # since Wienerdog is a Node CLI) does the inspection and the JSON-safe encoding —
 # no jq dependency. Every path is opened O_RDONLY|O_NONBLOCK, type-checked by
 # fstat on that same descriptor, and read only when it is a regular file within
-# the ceiling: a FIFO, socket, device or directory can never block this hook, and
-# nothing can be swapped between the check and the read. The envelope is built
+# the ceiling, so a FIFO, socket, device or directory is refused unread. Neither
+# claim is absolute and the spec says so: O_NONBLOCK is not a blocking guarantee
+# for every device class, and the -f pre-filter above leaves a swap window the
+# descriptor pair cannot close. Both are named residuals. The envelope is built
 # first and written in ONE call; on any read failure it emits NOTHING — empty
 # stdout means "no additional context", never a partial envelope. The dedup
 # decision sits in its own try/catch whose catch sets emit=true: any error, any
@@ -289,27 +336,37 @@ var END = "<!-- wienerdog:end -->";
 // Ceiling on any path this hook will read. Table C row C1 of
 // WP-hook-doctor-inspection-read-hardening; doctor carries the same number.
 var MAX_TARGET_BYTES = 4194304;
-var FLAGS = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK;
+var FLAGS = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOCTTY;
+// O_NOCTTY: opening a terminal device must never make it this process controlling
+// terminal. O_NONBLOCK alone does not prevent that, and a digest path pointed at a
+// pseudoterminal is exactly the accident this hook must survive.
 
-// Read a path as a regular file, bounded, without ever blocking. O_NONBLOCK
-// makes open return immediately on a FIFO with no writer instead of waiting for
-// one; fstat on the SAME descriptor decides the type, so nothing can be swapped
-// between the check and the read. Returns null for every refusal — not regular,
-// over the ceiling, or any error at all.
+// Read a path as a regular file, bounded. O_NONBLOCK makes open return
+// immediately on a FIFO with no writer instead of waiting for one, and fstat on
+// the SAME descriptor decides the type, so nothing can be swapped between THIS
+// check and THIS read. Returns null for every refusal — not regular, over the
+// ceiling, or any error at all.
 function readRegular(p) {
   var fd = null;
   try {
     fd = fs.openSync(p, FLAGS);
     var st = fs.fstatSync(fd);
     if (!st.isFile()) return null;
+    // st.size has ONE role here: the cheap over-cap check, which lets an
+    // over-ceiling file be refused with zero content bytes read.
     if (st.size > MAX_TARGET_BYTES) return null;
-    var buf = Buffer.alloc(st.size);
+    // st.size has NO role as a length. A readable regular file may report
+    // st_size 0 and still yield bytes (the procfs class), so the loop reads to
+    // EOF and stops at the ceiling, whatever st.size claimed.
+    var buf = Buffer.alloc(MAX_TARGET_BYTES + 1);
     var off = 0;
-    while (off < st.size) {
-      var n = fs.readSync(fd, buf, off, st.size - off, off);
+    while (off < MAX_TARGET_BYTES + 1) {
+      var n = fs.readSync(fd, buf, off, MAX_TARGET_BYTES + 1 - off, null);
       if (n <= 0) break;
       off += n;
     }
+    // More than the ceiling actually arrived: over-cap, discovered by reading.
+    if (off > MAX_TARGET_BYTES) return null;
     return buf.subarray(0, off).toString("utf8");
   } catch (e) {
     return null;
@@ -458,7 +515,8 @@ every row of that table not named here is unchanged and still governs.
 | A-H7 | a target is a regular file whose **`fstat.size` on the already-open descriptor** exceeds the Table C ceiling | **inject**, with **zero content bytes read**. **The hook performs no `ceiling + 1` probe** — that is doctor-only (Table C row C2); this row preserves the shipped A10 contract and the `<200ms` measurement |
 | A-H8 | `$CODEX_HOME/AGENTS.override.md` exists as a **path entry** judged by `lstat` — regular file, directory, or symlink of any kind **including a dangling one** | treat Codex's block as **not delivered** → **inject** |
 | A-H9 | zero harnesses are present after A-H1…A-H4 | **inject** |
-| A-H10 | `digest.md` is absent, non-regular, over-ceiling, or unreadable | **emit nothing** — there is no content to inject. Unchanged from the shipped A2/A3; see the Context clarification |
+| A-H10 | `digest.md` is absent, non-regular, over-ceiling, or unreadable | **emit nothing** — there is no content to inject. Unchanged from the shipped A2/A3; see the Context clarification. **Verified against the shipped script in round 2: `[ -f ]` was already false for a FIFO, so the old behaviour was silent too — this is preserved behaviour, not a new silence** |
+| A-H11 | `digest.md` is non-regular **at rest** | rejected by the `-f` pre-filter **without being opened** (Table C row C2c layer (a)). The descriptor check still runs for everything that passes `-f` and remains the authority |
 
 **The rule the rows share, stated once:** the hook distinguishes three answers —
 *present*, *cleanly absent*, *cannot tell* — where it had two, and **only a clean
@@ -483,20 +541,46 @@ the guard, which round 1 found and the owner dispositioned FIX.
 | B10 | `<core>/state/digest.md` is cleanly absent (`ENOENT`) | **emit nothing at all** — the existing no-vault silence, unchanged |
 | B11 | the digest read | uses the same Table C mechanism as the targets. **`DigestCaps.MAX_BYTES` (32 KiB) is a product invariant about what `renderDigest` emits — it is not a filesystem-integrity guarantee.** Nothing stops a user, a bad merge, or a broken tool from putting something else at that path, so the reader must not assume the file it finds is the file Wienerdog wrote |
 
-**The memory contract (row B7), stated so it cannot self-contradict.**
-`digestBlockChecks` reads **at most `ceiling + 1` input bytes per target**; its
-peak resident memory attributable to a target is **O(ceiling) with a documented
-constant factor** — the decoded string and the line index `locateManagedBlock`
-builds are each derived from at most that many bytes — and **an over-ceiling file
-is never fully loaded**. The claim is bounded-by-the-ceiling, *not*
-constant-bytes: revision 1 said both and was incoherent.
+**The memory contract (row B7), quantified so AC8 has an objective threshold.**
+`digestBlockChecks` reads **at most `ceiling + 1` input bytes per target**, and
+**an over-ceiling file is never fully loaded**. Peak resident memory attributable
+to one target is **at most `N x ceiling`, with `N = 17`** — i.e. **≤ 68 MiB** at
+the 4 MiB ceiling.
+
+**`N` is measured, not asserted, and it is not small — that matters and revision 2
+was wrong to imply otherwise.** Measured on this machine (`darwin`, node v24.18.0,
+`--expose-gc`, RSS delta across the full pipeline: bounded buffer → UTF-8 string →
+`locateManagedBlock`'s `split('\n')` line array → its per-line offset array), over
+four line profiles of a ceiling-sized file:
+
+| content profile | RSS delta | N |
+|---|---|---|
+| 4096-column ASCII | 2.1 MiB | 0.53x |
+| 2-byte UTF-8, 40-col | 2.8 MiB | 0.70x |
+| 80-column ASCII | 5.7 MiB | 1.43x |
+| **3-column ASCII (worst case)** | **67.5 MiB** | **16.88x** |
+
+**The dominant term is not the read — it is the per-line decomposition.** A 4 MiB
+file of 3-byte lines becomes ~1.4M `String` objects plus a ~1.4M-element offset
+array, and object overhead dwarfs the content. `locateManagedBlock` lives in
+`src/adapters/shared.js`, which this WP explicitly does not touch, so the factor
+is a property of the existing block parser, not of the new reader — **the reader
+bounds it, it cannot remove it.**
+
+`N = 17` is the measured worst case rounded up. The contract is
+bounded-by-the-ceiling, *not* constant-bytes, and *not* small: revision 1 claimed
+both bounded and constant and was incoherent; revision 2 said "small constant
+factor" and could not have passed its own AC8, because no number existed to test.
 
 ### Table C — canonical: the inspection mechanism and its constants
 
 | id | fact | value | why |
 |----|------|-------|-----|
 | C1 | inspection ceiling for any path either surface reads | **4 MiB** (`4194304` bytes) | already the hook's `MAX_TARGET_BYTES`; doctor adopts the same number so the two cannot disagree about which files they will inspect |
-| C2 | how a path is read | `open(path, O_RDONLY \| O_NONBLOCK)` → `fstat` **that descriptor** → refuse unless `isFile()` → bounded `read` from **the same descriptor** → `close`. **Doctor** reads at most `ceiling + 1` bytes and treats getting `ceiling + 1` as over-ceiling. **The hook** does not probe: it takes `fstat.size` from the same descriptor and injects immediately when it exceeds the ceiling (Table A row A-H7) | one descriptor for check and read closes the swap window; `O_NONBLOCK` makes `open` return immediately on a FIFO read-end instead of waiting for a writer, and is a no-op for regular-file reads |
+| C2 | how a path is read | `open(path, O_RDONLY \| O_NONBLOCK \| O_NOCTTY)` → `fstat` **that descriptor** → refuse unless `isFile()` → bounded `read` from **the same descriptor**, **to EOF**, stopping at `ceiling + 1` → `close`. Getting more than `ceiling` bytes is over-ceiling, discovered by reading | one descriptor for check and read closes the swap window between them; `O_NONBLOCK` makes `open` return immediately on a FIFO read-end; `O_NOCTTY` keeps a terminal device from becoming the process's controlling terminal |
+| C2a | **`st_size` has exactly two roles, and neither is "length"** | **Role 1, both surfaces:** a cheap **over-cap check** before any content read, so an over-ceiling file is refused having read zero content bytes. **Role 2: none.** `st_size` is **never** used as the number of bytes to read or as the content length | a readable regular file may report `st_size` 0 and still yield bytes (the procfs class), so a reader that trusts it sees an empty file. Round 2 finding 3. The two roles are listed separately here precisely because revision 2 conflated them |
+| C2b | the hook does **not** perform the `ceiling + 1` probe as an over-cap *decision* | it takes `fstat.size` from the descriptor it already holds and injects immediately when that exceeds the ceiling (Table A row A-H7), reading zero content bytes. Its read loop is still capped at `ceiling + 1` so an `st_size`-0 file cannot exceed the bound | preserves the shipped A10 contract and the `<200ms` measurement. **Owner- and Codex-confirmed** (round 2): open-without-content-read is within A10's intent and better than a separate `stat` |
+| C2c | **layered defense against special-file open side effects** | **(a)** the bash scaffold keeps a **`-f` pre-filter** on the digest path — **defense in depth, NOT the authority**: the descriptor `fstat` decides, and `-f` may never be the reason a decision is correct. It rejects a non-regular path **at rest without opening it**, which is protection the shipped script had and which open-then-`fstat` cannot give back. **(b)** `O_NOCTTY` in the flags of both readers. **(c)** the remaining window is a **named residual** — see Residuals below | round 2 finding 2: opening a special file has effects **before** `fstat` can reject it. Demonstrated on this machine: `digest.md` symlinked to a pseudoterminal, opened without `O_NOCTTY`, **acquired a controlling terminal**. The Linux auto-rewind tape class acts even on `close()`, which would collide with doctor's never-mutates claim |
 | C3 | symlink policy | **targets and the digest are judged on the RESOLVED type** — a symlink to a regular file is acceptable and must keep working. **Only `AGENTS.override.md` is judged on the link itself** (`lstat`), because a shadow file's mere presence is the signal and a link we cannot resolve is not certainty | round 1 finding 4: revision 1's prose said "type probes are `lstat`", which contradicted both tables |
 | C4 | the constants' homes | the hook's inline `MAX_TARGET_BYTES`, and a named constant in `src/cli/doctor.js` | the hook cannot `require` (Implementation notes), so the value is stated twice by necessity. **Both are mirrors of C1** and move in one pass |
 
@@ -534,7 +618,9 @@ this table in AC13 and did not contain it).
 | E3 | the `node -e` invocation is followed by `\|\| true` | grep |
 | E4 | the `WIENERDOG_JOB` guard is the **first** executable statement | grep, asserting it precedes every other command |
 | E5 | **exactly one** `process.stdout.write` in the payload | counted grep — more than one could emit a partial envelope |
-| E6 | an **outer** `try/catch` around the digest read and an **inner** `try/catch` around the dedup decision whose `catch` sets `emit = true` | grep for both `catch` sites |
+| E6a | the **inner** catch sets `emit = true` | grep for the exact text `catch (e) { emit = true; }` |
+| E6b | the **outer** catch is the fail-open no-output one | grep for the exact text `catch (e) { /* fail-open: no output */ }` |
+| E6c | **no** catch anywhere sets `emit = false` | negated grep for `catch…emit = false` |
 | E7 | every doubt injects | Tables A and D; not separately greppable, and this row says so rather than implying a check exists |
 
 **Registered mirrors of Table E** (ADR-0031). Each cites this table instead of
@@ -561,6 +647,31 @@ restating it, and moves with it:
 - [ ] The two ceiling constants named in Table C row C4
 - [ ] Table E's own registered-mirror list (above)
 
+## Residuals — named, owner-accepted
+
+**R-A — the pre-filter/open swap window.** Layer (a) tests the path with `-f`,
+then layer (b) opens it. A **regular file swapped for a device or FIFO between
+the test and the open** is not caught by `-f`, and reaches the `open`. What
+happens then is bounded by layer (b) — `O_NONBLOCK` and `O_NOCTTY` — and by the
+`fstat` refusal that follows, but the `open` itself has occurred.
+
+**Accepted, and the reason is a boundary rather than a probability.** Producing
+this requires adversarial-timed local placement inside the user's own config
+directories, which is **outside the ADR-0035 attended-execution trust boundary**:
+an actor who can write there at will already has the far cheaper option of
+editing the files. The layering is what makes the residual small — `-f` removes
+every *at-rest* special file, so only a live race remains — and the descriptor
+check remains authoritative for everything that gets through.
+
+**R-B — `O_NONBLOCK` is not a universal non-blocking guarantee.** It is specified
+for FIFO read-ends and is a no-op for regular files, and those are the cases this
+WP is about. **It is not a guarantee for every device class**, and the spec no
+longer claims otherwise: the supported-input assumption is that inspected paths
+are regular files or the ordinary special files a user creates by accident, and
+R-A covers the rest. The script's comments were softened in revision 3 to match —
+round 2 asked for exactly this, because "a device can never block this hook" was a
+universal the mechanism does not earn.
+
 ## Implementation notes & constraints
 
 - **One shared helper, or two local guards? Two, and the asymmetry is the
@@ -582,8 +693,8 @@ restating it, and moves with it:
   read is to *not block*: `O_NONBLOCK` plus a type check. A timeout would still
   have opened the FIFO, and it would be a process outliving its decision.
 - **`doctor` never mutates (WP-070)** and never sets `fail` from this check.
-- **The `<200ms` hook budget (ADR-0004) still binds** — measured 21.8 ms for the
-  replacement script. Re-measure and state the number.
+- **The `<200ms` hook budget (ADR-0004) still binds** — measured **22.8 ms** for
+  the revision-3 script. Re-measure and state the number.
 - Plain Node ≥ 18, zero new dependencies, JSDoc types, no build step.
 - Ambiguity → choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
@@ -640,10 +751,15 @@ instead of failing it (round 1 finding 8).
       file, its size and the ceiling, telling the user to trim and re-run, and
       **never** suggesting `wienerdog sync`. A grep proves `sync` is absent from
       that message.
-- [ ] **AC8 (B7):** on a target of at least 64 MiB, `doctor`'s peak RSS stays
-      within a small constant of its normal-file baseline. **Baseline measured on
-      `152ae3a`: 418 MB peak against 61 MB.** The criterion is the *shape* —
-      bounded, not proportional to file size — and the PR states the number.
+- [ ] **AC8 (B7), with an objective threshold.** On a target of at least 64 MiB,
+      `doctor`'s peak RSS must not exceed **baseline + 68 MiB** (`N x ceiling`,
+      `N = 17`, ceiling 4 MiB — the table under Table B row B7). **Baseline on
+      `152ae3a`: 418 MB peak against a 61 MB normal-file baseline**, i.e. today's
+      code fails this by a wide margin and grows without limit above 64 MiB.
+      **Run it at two sizes — 64 MiB and 256 MiB — and show the peak barely
+      moves**; that is what distinguishes bounded from merely-smaller, and a
+      single size cannot. Also run the **3-byte-line** profile at the ceiling,
+      which is the worst case `N` came from. State every number.
 - [ ] **AC9 (B9, B10, B11):** a non-regular / over-ceiling / unreadable
       `digest.md` produces the new `[warn]` and **no target inspection**; a
       cleanly absent one stays fully silent.
@@ -658,14 +774,41 @@ instead of failing it (round 1 finding 8).
       shipped script header **cites it by name**, the verification greps E1–E6 all
       run, and `hooks-fail-open.test.js`'s header is recorded as a known
       uncorrected mirror.
-- [ ] **AC14 (portability, the open evidence gap):** the FIFO and symlink rows are
-      observed on **Linux** as well as macOS — the mechanism is probed on macOS
-      only (Current state). Run the suites on a Linux runner, or on Linux in a
-      container, and paste the output. Codex confirmed the fixtures are
-      constructible on both with plain `mkfifo` / `fs.symlinkSync`.
+- [ ] **AC14 (portability — the open evidence gap, enumerated).** The mechanism is
+      probed on **macOS only** (Current state), so Linux evidence is mandatory.
+      **Actor:** the implementer. **Timing:** before merge, not after.
+      **Where:** a Linux runner, or Linux in a container — CI cannot be relied on
+      while Actions is down. **What must be run, all of it:**
+      1. `node --test tests/integration/hooks-fail-open.test.js`
+      2. `node --test tests/integration/session-start-dedup.test.js`
+      3. `node --test tests/unit/doctor.test.js` — the doctor suite is **not**
+         optional here; the bounded reader is as platform-sensitive as the hook
+      4. the named fixture rows, individually visible in the output: **target
+         FIFO**, **`digest.md` FIFO**, **symlink → FIFO**, **symlink → regular
+         (the acceptance case, must still silence)**, and **the virtual-regular
+         `st_size` 0 case** — on Linux use a procfs path (e.g. `/proc/self/status`)
+         as the target, which macOS cannot provide at all
+      **What counts as the recorded observation:** the pasted stdout of each of
+      the four, showing pass counts and the individual fixture-row names — not a
+      summary sentence, and not "ran green locally". A row that could not be
+      constructed is reported as such with the reason, never silently omitted.
+      Codex confirmed the FIFO and symlink fixtures are constructible on macOS and
+      Linux with plain `mkfifo` / `fs.symlinkSync`.
 - [ ] **AC15 (budget):** the hook's measured time on a normal digest with a
       matching block stays well under 200 ms; the PR states the number
-      (21.8 ms measured for the specified script).
+      (22.8 ms measured for the revision-3 script).
+- [ ] **AC16 (C2a, `st_size` is not a length):** a readable regular file that
+      reports `st_size` 0 and still yields bytes is read correctly, not as empty,
+      by **both** surfaces. On Linux a procfs path serves; where the platform
+      cannot produce one, the criterion is discharged by showing the read loop
+      terminates on EOF rather than on `st_size` and saying which platform could
+      not be exercised.
+- [ ] **AC17 (C2c, layered defense):** the `-f` pre-filter is present in the
+      scaffold **and** is proven non-authoritative — a path that passes `-f` and
+      is then non-regular at `fstat` is still refused. `O_NOCTTY` is present in
+      both readers' flags, and a grep proves it. **AC4's symlink → regular
+      acceptance case must still pass**, since `-f` follows symlinks: restoring
+      the pre-filter must not re-break what round 1 finding 4 fixed.
 - [ ] Every new verification step is observed **on both sides** — green on the
       fixed state, red on a deliberately broken one, and red on the
       deliverable-absent case where a negated grep is used. Paste all outputs.
@@ -690,8 +833,11 @@ npm run lint
 # Exact contracts (2026-08-30, this machine):
 #   compliant           -> E1..E6 all "ok"
 #   deliverable absent  -> E1..E6 all "RED"   (all six, not just the greps)
-#   deliberately broken -> E1, E2, E4, E5 "RED"; E3 and E6 stayed "ok" because
+#   deliberately broken -> E1, E2, E4, E5 "RED"; E3 and E6b stayed "ok" because
 #                          that mutation did not touch what they assert
+# And E6a/E6b/E6c separately, on the mutation that defeated the old E6 (inner
+# catch flipped to `emit = false`): E6a RED, E6c RED, E6b ok — while the OLD
+# gate printed "ok" on that same file, which is the finding.
 # Re-run all three on the finished tree and paste them; the third case must
 # break a DIFFERENT property per gate, not one mutation for all six.
 H=templates/hooks/session-start.sh
@@ -702,8 +848,15 @@ test -f "$H" && [ "$(grep -nvE '^[[:space:]]*(#|$)' "$H" | head -1 | grep -c 'WI
   && echo "E4 ok: WIENERDOG_JOB is the first statement" || echo "E4 RED"
 test -f "$H" && [ "$(grep -c 'process\.stdout\.write' "$H")" = 1 ] \
   && echo "E5 ok: exactly one stdout write" || echo "E5 RED"
-test -f "$H" && [ "$(grep -c 'catch (e)' "$H")" -ge 2 ] \
-  && echo "E6 ok: outer + inner catch present" || echo "E6 RED"
+# E6 was VACUOUS in revision 2: `grep -c 'catch (e)'` counts five in this script
+# and stays green when the inner catch is flipped to `emit = false` — proven on
+# exactly that mutation. Three exact-pattern gates replace it.
+test -f "$H" && grep -qF 'catch (e) { emit = true; }' "$H" \
+  && echo "E6a ok: inner catch sets emit = true" || echo "E6a RED"
+test -f "$H" && grep -qF 'catch (e) { /* fail-open: no output */ }' "$H" \
+  && echo "E6b ok: outer fail-open catch" || echo "E6b RED"
+test -f "$H" && ! grep -qE 'catch[^\n]*emit[[:space:]]*=[[:space:]]*false' "$H" \
+  && echo "E6c ok: no catch sets emit = false" || echo "E6c RED"
 
 # The payload is still one single-quoted bash argument (no `'` inside it).
 node -e 'const fs=require("fs");const Q=String.fromCharCode(39);
