@@ -14,16 +14,22 @@ epic: digest-delivery
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template
   gives the skeleton, the runbook the rules. Read both.
 
-> **Two forward references, stated so a review does not have to discover them.**
-> This spec cites `docs/specs/done/WP-session-start-digest-dedup.md` twice — for
-> the accepted residuals and for the canonical-extraction trigger AC13
-> discharges. On `main` at drafting time (`152ae3a`) that spec is
-> `docs/specs/WP-session-start-digest-dedup.md` with `status: In-Review`; its
-> archival to `done/` is **PR #53**, which also writes the trigger this WP
-> inherits. **PR #53 lands first** — that is what `depends_on` records, and both
-> citations resolve at that moment. Re-run this spec's Current-state claims at
-> dispatch time regardless (`docs/runbooks/codex-review.md`); they were measured
-> on `152ae3a` and the two surfaces they describe are not touched by #53.
+> **Revision 2, 2026-08-30 — design-review round 1 (Codex) returned 9 findings;
+> the owner dispositioned all nine FIX.** Every one is applied. The two that
+> changed the design rather than the prose: the type check moved from
+> `stat`-then-open to a **descriptor-based** mechanism (open `O_NONBLOCK`, `fstat`
+> the fd, read the same fd), which closes the swap window round 1 found *and* the
+> block; and the re-issued hook script is now **included verbatim** in Exact
+> contracts, tested, with its sweep numbers in Current state. One disposition is
+> **refined rather than followed literally** — see "Pushback and refinements"
+> below, which is the only place this revision departs from the batch.
+>
+> **Two forward references.** This spec cites
+> `docs/specs/done/WP-session-start-digest-dedup.md` for the accepted residuals
+> and for the canonical-extraction trigger AC13 discharges. On `main` at drafting
+> (`152ae3a`) that spec is `docs/specs/WP-session-start-digest-dedup.md`,
+> `status: In-Review`; its archival is **PR #53**, which `depends_on` records.
+> Both citations resolve when #53 lands.
 
 ## Context (read this, nothing else)
 
@@ -54,70 +60,161 @@ never hang an attended terminal. In both cases the correct answer to "I cannot
 safely determine this" is to say so — inject, or warn — never to resolve doubt
 into a confident silence or a confident `[ok]`.
 
+**One clarification the fail-open rule needs, because it reads like a
+contradiction otherwise.** "Any doubt injects" governs the **dedup decision** —
+whether the block already carries the digest. It does not govern whether a digest
+*exists*: when `digest.md` is missing or unreadable there is nothing to inject,
+and the hook is silent. That is rows A2/A3 of the shipped dedup contract, it
+predates this WP, and it is unchanged here.
+
 ## Current state
 
-Measured on `main` = `152ae3a` (2026-08-30), by reproducing each defect. The
-findings originate in the PR #50 Codex design gate (F1, F2), wd-reviewer finding
-5 on the same PR, and the retro Codex gate on the merged PR #48 (two findings) —
-all dispositioned **fix** by the owner and routed here; the measurements below
-are this spec's own, not the gates' restated.
+Measured on `main` = `152ae3a` (2026-08-30) by reproducing each defect, and then
+re-measured against the replacement script in Exact contracts. The findings
+originate in the PR #50 Codex design gate (F1, F2), wd-reviewer finding 5 on the
+same PR, and the retro Codex gate on the merged PR #48 — all dispositioned **fix**
+by the owner. The numbers below are this spec's own.
 
-`digestBlockChecks` (`src/cli/doctor.js:371`… — the function added by
-`WP-doctor-digest-block-drift`) reads each target with a bare
-`fs.readFileSync(file, 'utf8')` inside a `try`, and treats any throw as "no
-block". The hook (`templates/hooks/session-start.sh`) resolves harness presence
-with `fs.statSync(dir).isDirectory()` inside a `try` returning `false`, checks
-the Codex shadow file with `fs.existsSync`, and guards size with
-`fs.statSync(file).size > MAX_TARGET_BYTES` (4 MiB, `session-start.sh:38`)
-**before** a `readFileSync` — a size guard, not a type guard.
+`digestBlockChecks` (`src/cli/doctor.js:371`…) reads each target with a bare
+`fs.readFileSync(file, 'utf8')` inside a `try` and treats any throw as "no
+block". The hook resolves harness presence with `fs.statSync(dir).isDirectory()`
+inside a `try` returning `false`, checks the Codex shadow file with
+`fs.existsSync`, and guards size with `fs.statSync(file).size >
+MAX_TARGET_BYTES` (4 MiB, `session-start.sh:38`) **before** a `readFileSync` — a
+size guard, not a type guard, and a `stat`-then-open pair with a window between
+them.
 
-**D1 — doctor hangs forever on a FIFO.** With `CLAUDE.md` replaced by a FIFO
-with no writer, `wienerdog doctor` printed its harness line and then blocked in
+**D1 — doctor hangs forever on a FIFO.** With `CLAUDE.md` replaced by a FIFO with
+no writer, `wienerdog doctor` printed its harness line and then blocked in
 `open(2)`; still alive at 15 s, killed. There is no timeout on this path: it is
 an attended CLI, so the user's terminal is simply gone.
 
-**D2 — the hook blocks on the same FIFO.** Same fixture: the hook produced no
-output and was still alive at 12 s. In production it is bounded only by the
-`timeout: 10` the adapters register with the harness — a 10-second stall on
-every new session, and the injection never happens.
+**D2 — the hook blocks on the same FIFO.** Same fixture: no output, still alive
+at 12 s. In production it is bounded only by the `timeout: 10` the adapters
+register — a 10-second stall on every new session, and no injection.
 
 **D3 — doctor's unbounded read amplifies file size ~6.5× in RSS.** A 64 MiB
-line-rich `CLAUDE.md` (838,861 lines, block intact): `doctor` peaked at
-**418 MB** maximum resident set size versus **61 MB** on the same install with a
-normal-size file — **+357 MB**, and it reported `[ok]` in 0.17 s, so nothing
-warns the user. `readFileSync` materialises the whole file, and
-`locateManagedBlock` then `split('\n')`s it into an array of every line. (The
-retro gate reported 2.1 GB on a 64 MiB file; the amplification factor depends on
-the content's line and codepoint profile — a multi-byte file doubles the string
-representation. Both measurements say the same thing: the read is unbounded and
-the peak is a multiple of the file.)
+line-rich `CLAUDE.md` (838,861 lines, block intact): `doctor` peaked at **418 MB**
+maximum resident set size versus **61 MB** on the same install with a normal-size
+file — **+357 MB** — and reported `[ok]` in 0.17 s, so nothing warns the user.
+`readFileSync` materialises the whole file and `locateManagedBlock` then
+`split('\n')`s it into an array of every line. (The retro gate reported 2.1 GB on
+a 64 MiB file; the factor depends on the content's line and codepoint profile.
+Both measurements say the same thing: the read is unbounded and the peak is a
+multiple of the file. My own first attempt read 57 MB and was **wrong** — the pad
+I generated had no newlines, so `split` never allocated; recorded because the
+mistake is instructive about how this defect hides.)
 
-**D4 — a `statSync` error on a harness directory reads as "harness absent",
-which can turn into a wrong silence.** With Claude's config dir made
-un-`stat`-able (parent `chmod 000`, `statSync` → `EACCES`), the hook's `isDir()`
-returns `false` and that harness drops out of the conjunction. Single-harness,
-this is benign — zero present harnesses means the hook injects. **Dual-harness,
-it is a real wrong silence**, and that is the case that matters: with a *fresh*
-Codex block and a Claude directory that errors, the control run (both readable,
-Claude carrying no block) **injected 92 bytes**, and the identical run with
-Claude's parent locked emitted **nothing**. Codex alone decided; the Claude block
-was never examined. Absence and inability-to-tell were collapsed into one answer,
-and the collapse resolved toward silence — the opposite of the fail-open rule.
+**D4 — a `statSync` error on a harness directory reads as "harness absent", which
+becomes a wrong silence.** With Claude's config dir made un-`stat`-able (parent
+`chmod 000`, `statSync` → `EACCES`), the hook's `isDir()` returns `false` and that
+harness drops out of the conjunction. Single-harness this is benign. **Dual-harness
+it is a real wrong silence:** with a *fresh* Codex block and a Claude directory
+that errors, the control run (both readable, Claude carrying no block) **injected
+92 bytes**, and the identical run with Claude's parent locked emitted **nothing**.
+Codex alone decided; the Claude block was never examined.
 
-**D5 — a dangling `AGENTS.override.md` symlink is not seen as shadowing.** The
-hook checks the Codex shadow file with `fs.existsSync`, which follows symlinks:
-on a symlink pointing at a non-existent target, `existsSync` returns `false`
-while `lstatSync` reports a symlink. Measured: with such a link in place the hook
-emitted **nothing**. Whether Codex itself honours a dangling override is not the
-question the hook is answering — it is answering *"am I certain the block is
-delivered?"*, and a link it cannot resolve is not certainty.
+**D5 — a dangling `AGENTS.override.md` symlink is not seen as shadowing.**
+`fs.existsSync` follows symlinks, so on a link with no target it returns `false`
+while `lstatSync` reports a symlink. Measured: the hook emitted **nothing**.
 
-**What is deliberately NOT in this WP's problem statement.** The two residuals
-the owner accepted on PR #50 — TOCTOU on a mid-hook digest rewrite (parked; every
+### The descriptor mechanism — probed before it was specified
+
+Round 1's finding 1 is that a `stat`-then-open type check has a window: the path
+can be swapped for a FIFO after the check and the open blocks anyway. The owner
+directed a descriptor-based fix. **It was probed first**, on
+`darwin 25.5.0 / node v24.18.0`, opening each fixture with
+`O_RDONLY | O_NONBLOCK`, `fstat`-ing that descriptor and reading only when it is
+a regular file:
+
+| fixture | elapsed | result |
+|---|---|---|
+| regular file | 0 ms | `open` OK, `fstat`=regular, read succeeds |
+| **FIFO, no writer** | **0 ms** | **`open` OK — does not block** — `fstat`=fifo, refused unread |
+| symlink → regular | 0 ms | resolves to regular, read succeeds (**must stay accepted**) |
+| symlink → FIFO | 0 ms | `fstat`=fifo, refused unread |
+| symlink loop | 0 ms | throws `ELOOP` |
+| dangling symlink | 0 ms | throws `ENOENT` |
+| directory | 0 ms | `fstat`=dir, refused unread |
+| char device (`/dev/zero`) | 0 ms | `fstat`=chardev, refused unread |
+| unix socket | 0 ms | throws (macOS `EOPNOTSUPP`/-102; Linux `ENXIO`) |
+| absent | 0 ms | throws `ENOENT` |
+| path under a regular file | 0 ms | throws `ENOTDIR` |
+| 500-char basename | 0 ms | throws `ENAMETOOLONG` |
+
+Two further probes: a `ceiling + 1` bounded read returns exactly `ceiling + 1`
+bytes on an over-ceiling file and the true length on a small one, so **one read
+answers both questions**; and `fstat.size` **on the already-open descriptor**
+decides over-ceiling with **zero content bytes read**.
+
+**The evidence boundary, stated rather than glossed.** All of the above is
+measured on **macOS only** — this machine is darwin and CI is down (billing). The
+FIFO property is POSIX-specified (`O_NONBLOCK` on a read-end returns immediately
+rather than waiting for a writer) and `O_NONBLOCK` is a no-op for regular-file
+reads on both Linux and macOS, so the mechanism is expected to be identical on
+Linux; **it is not measured there, and AC14 exists to force that observation
+before merge.** The socket row shows why the design does not depend on the code
+table being complete: the rule is *"any non-`ENOENT` throw is doubt"*, so a
+platform-specific errno is handled without being enumerated.
+
+### The replacement script, measured
+
+The script in Exact contracts was written and run before being specified.
+Against it, on this machine:
+
+- **the full behavioural sweep passes 26/26** — all **17** scenarios the shipped
+  dedup contract already required (six `buildBlock`-parity digests, stale,
+  no-block, file-absent, ambiguous, no-harness, over-ceiling, dual-fresh,
+  dual-codex-stale, dual-override, real `applyManagedBlock` append path,
+  `CLAUDE_CONFIG_DIR` override), **plus 9 new rows**: FIFO target,
+  symlink→FIFO, **symlink→regular still silences**, directory target, `ELOOP`,
+  config-dir-is-a-file, dangling override link, the D4 dual-harness `EACCES`
+  case (**was silent, now injects**), and a FIFO `digest.md` (silent — no digest
+  to inject, per A2/A3);
+- every FIFO row **returns promptly** under a `spawnSync` timeout, where the
+  shipped script times out;
+- `tests/integration/hooks-fail-open.test.js` passes **22/22, byte-unchanged**;
+- elapsed time **21.8 ms** average over five runs on a 32 KB digest with a
+  matching block — against 22.4 ms for the shipped script, i.e. the descriptor
+  mechanism costs nothing measurable, and the ADR-0004 `<200ms` budget is intact.
+
+**What is deliberately NOT in this WP's problem statement.** The two residuals the
+owner accepted on PR #50 — TOCTOU on a mid-hook *digest rewrite* (parked; every
 honest fix is a freshness mechanism and the package makes no freshness claim) and
-invalid-UTF-8 replacement folding (injection would deliver the identical decoded
-string) — stay accepted. Nothing here reopens them; see
+invalid-UTF-8 replacement folding — stay accepted. Note that round 1's finding 1
+is a **different** TOCTOU: a *type* swap on an inspected path, which the
+descriptor mechanism closes outright. See
 `docs/specs/done/WP-session-start-digest-dedup.md`, "Residuals".
+
+## Pushback and refinements
+
+Nothing in the batch is rejected. **One disposition is implemented in a way that
+exceeds its letter, and the owner should see the difference stated rather than
+buried.**
+
+**Finding 5 — "the hook's over-cap path stays stat-based immediate injection with
+NO content read".** The intent is clear: preserve the shipped A10 contract and the
+`<200ms` measurement, and keep the `ceiling + 1` probe out of the hook. Both are
+honoured. **But the hook no longer uses a separate `statSync`**: it takes the size
+from the `fstat` on the descriptor it has already opened. That is strictly better
+than the literal instruction — same "no content read", same immediate injection,
+and it also closes the swap window on the *size* check that finding 1 closed on
+the *type* check. Reverting to a standalone `stat` would re-open exactly the hole
+finding 1 was about. Table A row A-H7 and Table C row C2 both say this explicitly
+so the contradiction round 1 found cannot re-form.
+
+**Two smaller judgement calls, flagged because they are mine and not the batch's.**
+
+1. The bash scaffold keeps a cheap existence pre-filter, but it is now `-e` (any
+   entry), not `-f` (regular file). Without any pre-filter, a no-vault install
+   would spawn `node` on every session for nothing; with `-f`, the bash layer
+   would be re-asserting the very type assumption this WP removes, and a FIFO
+   `digest.md` would be filtered by an untyped shell test rather than by the
+   authoritative `fstat`. `-e` gets the fast path without an assumption.
+2. A FIFO `digest.md` yields **silence**, not injection. This looks like a
+   fail-open violation and is not: there is no content to inject. It is rows
+   A2/A3 of the shipped contract, unchanged — but it is called out in Context
+   because a reviewer is right to stop on it.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -127,54 +224,223 @@ string) — stay accepted. Nothing here reopens them; see
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | templates/hooks/session-start.sh | re-issue the `node -e` payload per **Table A** and **Table C**; the bash scaffold's fail-open structure is unchanged |
-| modify | src/cli/doctor.js | `digestBlockChecks` only — bounded, type-guarded reader per **Tables B and C**. No other check, no reordering |
-| modify | tests/integration/session-start-dedup.test.js | cover the hook rows of Tables A and C |
-| modify | tests/unit/doctor.test.js | cover the doctor rows of Tables B and C (append; never rewrite an existing case) |
+| modify | templates/hooks/session-start.sh | replace with the verbatim script in **Exact contracts**; implements **Tables A, C, D, E** |
+| modify | src/cli/doctor.js | `digestBlockChecks` only — descriptor-based, bounded reader per **Tables B, C, D**. No other check, no reordering |
+| modify | tests/integration/session-start-dedup.test.js | cover the hook rows of Tables A and D |
+| modify | tests/unit/doctor.test.js | cover the doctor rows of Tables B and D (append; never rewrite an existing case) |
 
 **Not deliverables, and each for a reason.**
 `tests/integration/hooks-fail-open.test.js` must keep passing **byte-unchanged** —
-it is the independent witness that this WP did not weaken fail-open, and a
-witness you may edit is not one. `src/adapters/shared.js` is untouched: this WP
-changes no block semantics. No new `src/` module is created — see the helper
-trade-off in Implementation notes.
+it is the independent witness that this WP did not weaken fail-open, and a witness
+you may edit is not one. `src/adapters/shared.js` is untouched: no block semantics
+change. No new `src/` module — see the helper trade-off in Implementation notes.
 
 ### Exact contracts
 
-Two functions change behaviour. Neither changes signature.
+**1. `templates/hooks/session-start.sh` — the complete replacement file.** Write
+exactly this. It was written, run and swept before being specified (Current
+state); the `node -e` program is a **single-quoted** bash argument and therefore
+contains **no `'` character anywhere** — verified, 128 payload lines, zero hits.
+
+```bash
+#!/usr/bin/env bash
+# Wienerdog SessionStart hook (enrichment, not capture): injects the
+# pre-rendered digest into a new session — but ONLY when the managed block in
+# every present harness CLAUDE.md / AGENTS.md is already carrying exactly these
+# bytes (ADR-0039). Fast: a few small descriptor reads and one string compare.
+# GENUINELY fail-open — always exit 0 (audit A6/F4): no `set -e`, every fallible
+# step is best-effort, and ANY doubt injects. The fail-open structural contract
+# is Table E of docs/specs/WP-hook-doctor-inspection-read-hardening.md; this
+# comment cites it and does not restate it.
+
+# Skip during Wienerdog own scheduled jobs (dream/digest) so unattended runs
+# start context-free and never re-read state mid-job.
+[ -n "${WIENERDOG_JOB:-}" ] && exit 0
+
+# No usable core path or no node → nothing to inject; fail-open.
+[ -n "${WIENERDOG_HOME:-}" ] || [ -n "${HOME:-}" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+CORE="${WIENERDOG_HOME:-$HOME/.wienerdog}"
+DIGEST="$CORE/state/digest.md"
+# Cheap existence pre-filter so a no-vault install does not spawn node every
+# session. Deliberately `-e` (any entry), not `-f`: the authoritative type check
+# is the fstat below, and a pre-filter that assumed a regular file here would be
+# the very assumption this hook stopped making.
+[ -e "$DIGEST" ] || exit 0
+
+# Emit the Claude Code SessionStart envelope UNLESS every present harness
+# managed block already carries these exact bytes. node (>=18, always present
+# since Wienerdog is a Node CLI) does the inspection and the JSON-safe encoding —
+# no jq dependency. Every path is opened O_RDONLY|O_NONBLOCK, type-checked by
+# fstat on that same descriptor, and read only when it is a regular file within
+# the ceiling: a FIFO, socket, device or directory can never block this hook, and
+# nothing can be swapped between the check and the read. The envelope is built
+# first and written in ONE call; on any read failure it emits NOTHING — empty
+# stdout means "no additional context", never a partial envelope. The dedup
+# decision sits in its own try/catch whose catch sets emit=true: any error, any
+# ambiguity, any doubt injects.
+node -e '
+var fs = require("fs");
+var path = require("path");
+var os = require("os");
+var BEGIN = "<!-- wienerdog:begin -->";
+var END = "<!-- wienerdog:end -->";
+// Ceiling on any path this hook will read. Table C row C1 of
+// WP-hook-doctor-inspection-read-hardening; doctor carries the same number.
+var MAX_TARGET_BYTES = 4194304;
+var FLAGS = fs.constants.O_RDONLY | fs.constants.O_NONBLOCK;
+
+// Read a path as a regular file, bounded, without ever blocking. O_NONBLOCK
+// makes open return immediately on a FIFO with no writer instead of waiting for
+// one; fstat on the SAME descriptor decides the type, so nothing can be swapped
+// between the check and the read. Returns null for every refusal — not regular,
+// over the ceiling, or any error at all.
+function readRegular(p) {
+  var fd = null;
+  try {
+    fd = fs.openSync(p, FLAGS);
+    var st = fs.fstatSync(fd);
+    if (!st.isFile()) return null;
+    if (st.size > MAX_TARGET_BYTES) return null;
+    var buf = Buffer.alloc(st.size);
+    var off = 0;
+    while (off < st.size) {
+      var n = fs.readSync(fd, buf, off, st.size - off, off);
+      if (n <= 0) break;
+      off += n;
+    }
+    return buf.subarray(0, off).toString("utf8");
+  } catch (e) {
+    return null;
+  } finally {
+    if (fd !== null) { try { fs.closeSync(fd); } catch (e2) { /* ignore */ } }
+  }
+}
+
+// present | absent | doubt. ONLY a clean ENOENT is absence.
+function dirState(d) {
+  if (!d) return "doubt";
+  try {
+    return fs.statSync(d).isDirectory() ? "present" : "doubt";
+  } catch (e) {
+    return e && e.code === "ENOENT" ? "absent" : "doubt";
+  }
+}
+
+// Does a path entry exist AT ALL, judged on the link itself? A dangling symlink
+// counts as present: a shadow file we cannot resolve is not certainty.
+// present | absent | doubt.
+function entryState(p) {
+  try {
+    fs.lstatSync(p);
+    return "present";
+  } catch (e) {
+    return e && e.code === "ENOENT" ? "absent" : "doubt";
+  }
+}
+
+// Byte-for-byte the block adapters/shared.js buildBlock() would write.
+function expectedBlock(d) {
+  var safe = d.split("\n").map(function (l) {
+    var t = l.trim();
+    if (t === BEGIN) return l.replace(BEGIN, "<!-- wienerdog begin -->");
+    if (t === END) return l.replace(END, "<!-- wienerdog end -->");
+    return l;
+  }).join("\n");
+  return BEGIN + "\n" + safe.trimEnd() + "\n" + END;
+}
+
+// The single managed block in content, by full-line sentinel match, using the
+// same offsets adapters/shared.js locateManagedBlock() uses. null when there is
+// no block or the markers are ambiguous.
+function blockOf(content) {
+  var lines = content.split("\n");
+  var starts = []; var off = 0; var i;
+  for (i = 0; i < lines.length; i++) { starts.push(off); off += lines[i].length + 1; }
+  var begins = []; var ends = [];
+  for (i = 0; i < lines.length; i++) {
+    var t = lines[i].trim();
+    if (t === BEGIN) begins.push(i);
+    else if (t === END) ends.push(i);
+  }
+  if (begins.length !== 1 || ends.length !== 1 || ends[0] < begins[0]) return null;
+  var e = ends[0];
+  return content.slice(starts[begins[0]], starts[e] + lines[e].indexOf(END) + END.length);
+}
+
+function carries(file, want) {
+  var text = readRegular(file);
+  if (text === null) return false;
+  return blockOf(text) === want;
+}
+
+try {
+  var text = readRegular(process.argv[1]);
+  if (text === null) process.exit(0);
+  var emit = true;
+  try {
+    var home = process.env.HOME || os.homedir() || "";
+    var claudeDir = process.env.WIENERDOG_CLAUDE_DIR || process.env.CLAUDE_CONFIG_DIR ||
+      (home ? path.join(home, ".claude") : "");
+    var codexDir = process.env.CODEX_HOME || (home ? path.join(home, ".codex") : "");
+    var want = expectedBlock(text);
+    var present = 0;
+    var allCarry = true;
+    var cs = dirState(claudeDir);
+    if (cs === "doubt") allCarry = false;
+    else if (cs === "present") {
+      present += 1;
+      if (!carries(path.join(claudeDir, "CLAUDE.md"), want)) allCarry = false;
+    }
+    var xs = dirState(codexDir);
+    if (xs === "doubt") allCarry = false;
+    else if (xs === "present") {
+      present += 1;
+      // An AGENTS.override.md shadows our AGENTS.md, so the block is not
+      // delivered no matter what it contains. Judged on the link itself.
+      var ov = entryState(path.join(codexDir, "AGENTS.override.md"));
+      if (ov !== "absent") allCarry = false;
+      else if (!carries(path.join(codexDir, "AGENTS.md"), want)) allCarry = false;
+    }
+    emit = !(present > 0 && allCarry);
+  } catch (e) { emit = true; }
+  if (emit) {
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text } }));
+  }
+} catch (e) { /* fail-open: no output */ }
+' "$DIGEST" || true
+exit 0
+```
+
+**2. `src/cli/doctor.js` — `digestBlockChecks`, unchanged signature.**
 
 ```js
-/** src/cli/doctor.js — unchanged signature, hardened reads (Tables B and C).
+/** Read-only. Never throws, never mutates, never blocks on a non-regular path,
+ *  and never resident-loads more than the Table C ceiling per target.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @param {{claude:{present:boolean}, codex:{present:boolean}}} harnesses
- *  @returns {{status:'ok'|'warn', msg:string}[]}  never throws, never mutates,
- *    never blocks on a non-regular file, never resident-loads more than the
- *    Table C ceiling per target */
+ *  @returns {{status:'ok'|'warn', msg:string}[]} */
 function digestBlockChecks(paths, harnesses)
 ```
 
-The hook's `node -e` payload keeps its single-argument contract (`argv[1]` = the
-digest path), its outer/inner `try/catch` shape, its single
-`process.stdout.write`, and its no-apostrophe constraint (it is one
-single-quoted bash argument). Only the guards change.
-
-**Message strings.** Doctor's four existing strings are unchanged. Exactly one
-new string is introduced, for Table B row B5; its wording is decided in Table B
-and nowhere else.
+Both its **digest read** and its **target reads** go through the Table C
+descriptor mechanism. Doctor's four existing message strings are unchanged;
+**exactly two** new strings are introduced, for Table B rows B5 and B9, and their
+wording is decided in Table B and nowhere else.
 
 ## Contract reference
 
-Activation (ADR-0031, 2-of-7): **(ii)** a doubt/absence taxonomy is introduced
-where one boolean stood; **(iv)** error, fallback and precedence behaviour is the
-entire substance; **(vi)** two independent surfaces inherit one contract;
-**(vii)** the same facts are mirrored across two implementations, two test files
-and their acceptance criteria.
+Activation (ADR-0031, 2-of-7): **(ii)** a doubt/absence taxonomy replaces a
+boolean; **(iv)** error, fallback and precedence behaviour is the entire
+substance; **(vi)** two independent surfaces inherit one contract; **(vii)** the
+same facts are mirrored across two implementations, two test files and their
+acceptance criteria.
 
-Tables A and B are declarative fact tables — observed state → required outcome.
-Table C is a shared-constants table. None carries a `mechanism`, `seam` or
-`how to produce it` column, so ADR-0036's cell schema does not apply; **how**
-each state is produced is the implementer's design, per
-`docs/runbooks/spec-authoring.md`.
+Tables A, B, D and E are declarative fact tables; Table C is the shared mechanism
+and constants. None carries a `mechanism`, `seam` or `how to produce it` column,
+so ADR-0036's cell schema does not apply; **how** each state is produced in a test
+is the implementer's design (`docs/runbooks/spec-authoring.md`).
 
 ### Table A — canonical: the hook's presence and read decisions
 
@@ -183,62 +449,117 @@ every row of that table not named here is unchanged and still governs.
 
 | id | observed state | hook must |
 |----|----------------|-----------|
-| A-H1 | `stat` of a harness config dir succeeds and it is a directory | treat that harness as **present** (unchanged) |
-| A-H2 | `stat` of a harness config dir fails with a **clean `ENOENT`** | treat that harness as **absent** — the only absence that counts |
-| A-H3 | `stat` of a harness config dir fails with **anything else** (`EACCES`, `ELOOP`, `ENOTDIR`, `EIO`, …) | treat as **doubt** → **inject**. Never "absent" |
-| A-H4 | a harness config path exists but is **not** a directory | treat as **doubt** → **inject** |
-| A-H5 | a target file is not a **regular file** — FIFO, socket, device, directory, or a symlink resolving to any of these | **doubt** → **inject**, without opening it for read |
-| A-H6 | a target file cannot be type-checked at all (the type probe itself errors, other than a clean `ENOENT`) | **doubt** → **inject** |
-| A-H7 | a target file is a regular file larger than the Table C ceiling | **inject** (unchanged in outcome; the existing size guard) |
-| A-H8 | `$CODEX_HOME/AGENTS.override.md` is present **as a path entry** — regular file, directory, or symlink of any kind including one whose target does not exist | treat Codex's block as **not delivered** → **inject** |
-| A-H9 | zero harnesses are present after A-H1…A-H4 are applied | **inject** (unchanged) |
+| A-H1 | a harness config dir `stat`s successfully and is a directory | treat that harness as **present** |
+| A-H2 | a harness config dir `stat` fails with a **clean `ENOENT`** | treat as **absent** — the only absence that counts |
+| A-H3 | a harness config dir `stat` fails with **anything else** (`EACCES`, `ELOOP`, `ENOTDIR`, `ENAMETOOLONG`, `EIO`, …) | **doubt** → **inject**. Never "absent" |
+| A-H4 | a harness config path exists but is **not** a directory | **doubt** → **inject** |
+| A-H5 | a target's descriptor `fstat`s as anything other than a **regular file** — FIFO, socket, device, directory, including via a symlink | **doubt** → **inject**, and the descriptor is closed **without a content read** |
+| A-H6 | opening a target's descriptor throws anything other than a clean `ENOENT` | **doubt** → **inject** |
+| A-H7 | a target is a regular file whose **`fstat.size` on the already-open descriptor** exceeds the Table C ceiling | **inject**, with **zero content bytes read**. **The hook performs no `ceiling + 1` probe** — that is doctor-only (Table C row C2); this row preserves the shipped A10 contract and the `<200ms` measurement |
+| A-H8 | `$CODEX_HOME/AGENTS.override.md` exists as a **path entry** judged by `lstat` — regular file, directory, or symlink of any kind **including a dangling one** | treat Codex's block as **not delivered** → **inject** |
+| A-H9 | zero harnesses are present after A-H1…A-H4 | **inject** |
+| A-H10 | `digest.md` is absent, non-regular, over-ceiling, or unreadable | **emit nothing** — there is no content to inject. Unchanged from the shipped A2/A3; see the Context clarification |
 
 **The rule the rows share, stated once:** the hook distinguishes three answers —
-*present*, *cleanly absent*, and *cannot tell* — where it previously had two, and
-**only a clean `ENOENT` is absence**. Every "cannot tell" is a member of the
-conjunction that forces injection, exactly as a stale block is.
+*present*, *cleanly absent*, *cannot tell* — where it had two, and **only a clean
+`ENOENT` is absence**. Every "cannot tell" forces injection.
 
 ### Table B — canonical: doctor's inspection reads
+
+Rows B9–B11 are new in revision 2: doctor's **own `digest.md` read** was outside
+the guard, which round 1 found and the owner dispositioned FIX.
 
 | id | observed state | doctor must emit |
 |----|----------------|------------------|
 | B1 | target is a regular file at or under the ceiling | the existing `[ok]`/`[warn]` comparison lines, unchanged |
-| B2 | target is not a regular file (FIFO, socket, device, directory, symlink to any of these) | one `[warn]`, **without opening it for read** |
-| B3 | the type probe itself fails other than a clean `ENOENT` | one `[warn]` |
+| B2 | target `fstat`s as non-regular (FIFO, socket, device, directory, incl. via symlink) | one `[warn]`, **without a content read** |
+| B3 | opening the target throws anything but a clean `ENOENT` | one `[warn]` |
 | B4 | target is cleanly absent (`ENOENT`) | the existing `no Wienerdog block in <file>` warn, unchanged |
-| B5 | target is a regular file **larger than the ceiling** | one **actionable** `[warn]` naming the file, the ceiling, and what to do — the single new string this WP introduces. It must be distinguishable from B2/B3 and from "out of date": the file is fine, it is *too large to inspect* |
-| B6 | any of B2, B3, B5 | `process.exitCode` is **not** set — no state here is a `fail`, matching every other row this function emits |
-| B7 | every state above | resident memory attributable to this check stays bounded by the Table C ceiling **per target**, and the whole file is never materialised |
+| B5 | target is a regular file **larger than the ceiling** | one **actionable** `[warn]` naming the file, **its actual size**, and **the ceiling**, and telling the user to **trim the file below the ceiling and re-run `doctor`**. It must **NOT** suggest `wienerdog sync` — sync cannot shrink a user-owned `CLAUDE.md`, and an instruction that cannot work is worse than none. It must be distinguishable from B2/B3 and from "out of date": the file is fine, it is *too large to inspect* |
+| B6 | any of B2, B3, B5, B9, B10 | `process.exitCode` is **not** set — no state here is a `fail` |
+| B7 | every state above | see the memory contract below |
 | B8 | every state above | the check returns; it never blocks waiting for a writer, and `doctor` never mutates |
+| B9 | `<core>/state/digest.md` is non-regular, or over the ceiling, or its open throws anything but a clean `ENOENT` | one `[warn]` naming `digest.md` and the condition, and **no target is inspected** — without a trustworthy digest there is nothing to compare against. The second new string |
+| B10 | `<core>/state/digest.md` is cleanly absent (`ENOENT`) | **emit nothing at all** — the existing no-vault silence, unchanged |
+| B11 | the digest read | uses the same Table C mechanism as the targets. **`DigestCaps.MAX_BYTES` (32 KiB) is a product invariant about what `renderDigest` emits — it is not a filesystem-integrity guarantee.** Nothing stops a user, a bad merge, or a broken tool from putting something else at that path, so the reader must not assume the file it finds is the file Wienerdog wrote |
 
-### Table C — canonical: the shared constants and their two homes
+**The memory contract (row B7), stated so it cannot self-contradict.**
+`digestBlockChecks` reads **at most `ceiling + 1` input bytes per target**; its
+peak resident memory attributable to a target is **O(ceiling) with a documented
+constant factor** — the decoded string and the line index `locateManagedBlock`
+builds are each derived from at most that many bytes — and **an over-ceiling file
+is never fully loaded**. The claim is bounded-by-the-ceiling, *not*
+constant-bytes: revision 1 said both and was incoherent.
 
-| id | fact | value | why it is here |
-|----|------|-------|----------------|
-| C1 | inspection ceiling for a harness markdown target | **4 MiB** (`4194304` bytes) | already the hook's `MAX_TARGET_BYTES`; doctor adopts the same number so the two surfaces cannot disagree about which files they will inspect |
-| C2 | over-ceiling detection | read at most **ceiling + 1** bytes; getting `ceiling + 1` means over-ceiling | one bounded read answers both "does it fit" and "what does it contain"; a `stat`-then-read pair would be a second TOCTOU window for no gain |
-| C3 | the constant's homes | the hook's inline `MAX_TARGET_BYTES`, and a named constant in `src/cli/doctor.js` | the hook cannot `require` (see Implementation notes), so the value is stated twice by necessity. **Both are mirrors of C1**, and a change to C1 changes both in one pass |
+### Table C — canonical: the inspection mechanism and its constants
+
+| id | fact | value | why |
+|----|------|-------|-----|
+| C1 | inspection ceiling for any path either surface reads | **4 MiB** (`4194304` bytes) | already the hook's `MAX_TARGET_BYTES`; doctor adopts the same number so the two cannot disagree about which files they will inspect |
+| C2 | how a path is read | `open(path, O_RDONLY \| O_NONBLOCK)` → `fstat` **that descriptor** → refuse unless `isFile()` → bounded `read` from **the same descriptor** → `close`. **Doctor** reads at most `ceiling + 1` bytes and treats getting `ceiling + 1` as over-ceiling. **The hook** does not probe: it takes `fstat.size` from the same descriptor and injects immediately when it exceeds the ceiling (Table A row A-H7) | one descriptor for check and read closes the swap window; `O_NONBLOCK` makes `open` return immediately on a FIFO read-end instead of waiting for a writer, and is a no-op for regular-file reads |
+| C3 | symlink policy | **targets and the digest are judged on the RESOLVED type** — a symlink to a regular file is acceptable and must keep working. **Only `AGENTS.override.md` is judged on the link itself** (`lstat`), because a shadow file's mere presence is the signal and a link we cannot resolve is not certainty | round 1 finding 4: revision 1's prose said "type probes are `lstat`", which contradicted both tables |
+| C4 | the constants' homes | the hook's inline `MAX_TARGET_BYTES`, and a named constant in `src/cli/doctor.js` | the hook cannot `require` (Implementation notes), so the value is stated twice by necessity. **Both are mirrors of C1** and move in one pass |
+
+### Table D — canonical: error code → answer
+
+The three-answer model, applied uniformly by both surfaces. **The rule is the
+first row; the rest are worked instances, not an allowlist** — an errno not listed
+falls to "any other" and is therefore doubt, which is why a platform-specific code
+needs no spec change.
+
+| id | condition | answer |
+|----|-----------|--------|
+| D-E1 | **clean `ENOENT`** | **absent** — the only absence |
+| D-E2 | **any other throw** | **doubt** |
+| D-E3 | `EACCES` (unsearchable parent, unreadable entry) | doubt |
+| D-E4 | `ELOOP` (symlink loop) | doubt |
+| D-E5 | `ENOTDIR` (a path component is not a directory) | doubt. **Technically provable-unresolvable is still not clean absence** — consistent with A-H4, and the ruling round 1 asked for explicitly |
+| D-E6 | `ENAMETOOLONG` | doubt |
+| D-E7 | `ENXIO` / `EOPNOTSUPP` (unix socket; the code differs by platform) | doubt |
+| D-E8 | `EMFILE`, `ENFILE`, `EIO`, and anything else | doubt |
+
+### Table E — canonical: the fail-open structural contract
+
+**This table is the single owner of these facts.** It exists because
+`docs/specs/done/WP-session-start-digest-dedup.md` registered a dated
+canonical-extraction trigger: the contract was stated on five surfaces with no
+owner among them, and the extraction was routed here as the first change with
+write access to three of them at once (round 1 finding 6 — revision 1 promised
+this table in AC13 and did not contain it).
+
+| id | required property of `templates/hooks/session-start.sh` | how it is checked |
+|----|--------------------------------------------------------|-------------------|
+| E1 | no `set -e` anywhere in the script body | anchored grep (an unanchored one matches the header comment and can never go red — the PR #50 erratum) |
+| E2 | the script's last statement is `exit 0` | grep for a trailing `exit 0` |
+| E3 | the `node -e` invocation is followed by `\|\| true` | grep |
+| E4 | the `WIENERDOG_JOB` guard is the **first** executable statement | grep, asserting it precedes every other command |
+| E5 | **exactly one** `process.stdout.write` in the payload | counted grep — more than one could emit a partial envelope |
+| E6 | an **outer** `try/catch` around the digest read and an **inner** `try/catch` around the dedup decision whose `catch` sets `emit = true` | grep for both `catch` sites |
+| E7 | every doubt injects | Tables A and D; not separately greppable, and this row says so rather than implying a check exists |
+
+**Registered mirrors of Table E** (ADR-0031). Each cites this table instead of
+restating it, and moves with it:
+
+- the shipped script's header comment — **cites Table E by name** (in the Exact
+  contracts text above);
+- this spec's Verification steps E1–E6 greps;
+- ADR-0004's Decision line, whose hook clause is under a **pending owner
+  signature** (Amendment 1, written in PR #53) — not editable here;
+- `tests/integration/hooks-fail-open.test.js`'s file header. **This one is a
+  known, deliberately uncorrected mirror**: that file is not a deliverable
+  because it is this WP's independent witness. Recorded rather than quietly
+  omitted.
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (each names the tables it implements)
-- [ ] Acceptance criteria — one per row of Tables A and B, plus C1's parity
+- [ ] Acceptance criteria — one per row of Tables A, B and D, plus C1 parity and Table E
 - [ ] Verification commands / greps
-- [ ] Current-state descriptions D1–D5 (each states the behaviour a row changes)
-- [ ] The shipped hook's comment header, where it describes what counts as doubt — Table A's shared rule
+- [ ] Current-state descriptions D1–D5 and the two probe tables
+- [ ] The shipped hook's header comment — cites Table E
 - [ ] `digestBlockChecks`' JSDoc — Tables B and C
-- [ ] The two constants named in Table C row C3
-- [ ] **The fail-open structural contract**, inherited as this WP's job:
-      `docs/specs/done/WP-session-start-digest-dedup.md` registered a dated
-      canonical-extraction trigger naming five surfaces (the script header, that
-      spec's notes, its verification greps, `hooks-fail-open.test.js`'s header,
-      ADR-0004's Decision line) with no owner among them, and routed the
-      extraction here because this is the first change with write access to
-      three of them at once. **Land it: give the fail-open contract one canonical
-      table in this spec, and make the script header and the re-issued
-      verification greps cite it.** `hooks-fail-open.test.js` is not a
-      deliverable, so its header stays a registered, uncorrected mirror — record
-      that explicitly rather than quietly leaving it off the list.
+- [ ] The two ceiling constants named in Table C row C4
+- [ ] Table E's own registered-mirror list (above)
 
 ## Implementation notes & constraints
 
@@ -247,100 +568,107 @@ conjunction that forces injection, exactly as a stale block is.
   design** — it runs from `<core>/bin` and cannot rely on resolving the Wienerdog
   package across the npm, vendored and tarball install shapes; that
   self-containment is what makes "any throw ⇒ inject" true by construction. A
-  shared `src/` helper could therefore serve **only** doctor, which means the
-  choice is not "one helper vs two" but "one helper plus one inline guard, vs two
-  inline guards". A single-consumer module in `src/` buys nothing here and adds a
-  file, so: **doctor keeps its guard local to `digestBlockChecks`, the hook keeps
-  its guard inline, and Table C is the single place their shared numbers are
-  decided.** If a third consumer appears, extract then — the extraction is
-  mechanical once two callers exist, and speculative now.
-- **The duplication is bounded in the safe direction, and that is why it is
-  tolerable.** Any divergence between the hook's guard and doctor's yields a
-  *mismatch* in the hook, and a mismatch injects. The dangerous direction — the
-  hook becoming more permissive than doctor — cannot arise from drift alone,
-  only from editing the hook.
-- **Do not weaken the hook's structure.** No `set -e`, `exit 0` at the end,
-  `|| true` after the `node -e`, the single `process.stdout.write`, the outer and
-  inner `try/catch`, and the `WIENERDOG_JOB` guard first. The payload stays free
-  of `'` characters.
+  shared `src/` helper could therefore serve **only** doctor, so the real choice
+  is "one helper plus one inline guard vs two inline guards". A single-consumer
+  module buys nothing and adds a file: **doctor keeps its reader local to
+  `digestBlockChecks`, the hook keeps its inline, and Tables C and D are the
+  single place their shared facts are decided.** Extract when a third consumer
+  appears — mechanical then, speculative now.
+- **The duplication is bounded in the safe direction.** Any divergence between
+  the two readers makes the hook *inject*; the dangerous direction — the hook
+  becoming more permissive than doctor — cannot arise from drift, only from
+  editing the hook.
 - **Do not add a timeout, a retry, or a signal handler.** The fix for a blocking
-  read is to *not open* the thing — type-check first. A timeout would be a
-  process that outlives its decision, and it would still have opened the FIFO.
+  read is to *not block*: `O_NONBLOCK` plus a type check. A timeout would still
+  have opened the FIFO, and it would be a process outliving its decision.
 - **`doctor` never mutates (WP-070)** and never sets `fail` from this check.
-- **The `<200ms` hook budget (ADR-0004) still binds.** Type probes are `lstat`
-  calls; they cost nothing measurable. Measure and report anyway.
+- **The `<200ms` hook budget (ADR-0004) still binds** — measured 21.8 ms for the
+  replacement script. Re-measure and state the number.
 - Plain Node ≥ 18, zero new dependencies, JSDoc types, no build step.
 - Ambiguity → choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
 
 ## Security checklist
 
-- [ ] Every path this WP opens is **type-checked before it is opened for read**,
-      so a FIFO, socket or device on a Wienerdog-inspected path cannot block, and
-      a symlink cannot redirect an inspection read to a target of a different
-      type. Symlink resolution is deliberate per row: **A-H5/B2 judge the
-      resolved type** (a symlink to a regular file is fine), while **A-H8 judges
-      the link itself** (`lstat`), because a shadow file's mere presence is the
-      signal.
+- [ ] Every path either surface reads is **opened once and type-checked on that
+      descriptor**, so a FIFO, socket or device cannot block, and **no swap
+      between check and read is possible** — the window round 1 found is closed
+      by construction, not narrowed.
+- [ ] Symlink policy is per Table C row C3 and is **deliberately asymmetric**:
+      targets and the digest are judged on the **resolved** type (a symlink to a
+      regular file keeps working — AC4 pins it); `AGENTS.override.md` is judged
+      on the **link** (`lstat`), because presence is the signal.
 - [ ] Every read is **bounded** by the Table C ceiling, so no inspected path can
       drive Wienerdog's memory by growing.
-- [ ] No untrusted identifier flows into a filesystem path or a shell command:
-      paths come from `paths.js`/env install configuration, and the new `[warn]`
-      interpolates only a path Wienerdog itself composed plus a code-owned
-      numeric ceiling. Nothing read is executed.
+- [ ] No untrusted identifier flows into a filesystem path or a shell command;
+      the new warns interpolate only Wienerdog-composed paths and code-owned
+      numbers. Nothing read is executed.
 - [ ] Failure direction is stated per row and is never "assume fine": the hook
       injects, doctor warns.
 
 ## Acceptance criteria
 
-Every criterion names the Table row it discharges. Cases, fixtures and test
-structure are the implementer's design (`docs/runbooks/spec-authoring.md`);
-these say what must be true.
+Each names the row it discharges. Cases and fixtures are the implementer's design
+(`docs/runbooks/spec-authoring.md`); these say what must be true. **Every test
+that touches a potentially-blocking path must run its subject as a
+timeout-bounded child** — `spawnSync`/`execFileSync` with an explicit `timeout`,
+plus an assertion that it **did not** time out. A bare call would hang the suite
+instead of failing it (round 1 finding 8).
 
-- [ ] **AC1 (A-H2, A-H3, A-H4):** the hook injects whenever a harness directory's
-      `stat` fails with anything other than a clean `ENOENT`, and treats only
-      `ENOENT` as absence. **Including the dual-harness case that is a real wrong
-      silence today** — one harness fresh, the other's directory erroring must
-      inject, where `152ae3a` is silent.
-- [ ] **AC2 (A-H5, A-H6):** the hook injects for a non-regular target — at
-      minimum a FIFO with no writer — **and returns promptly**, proving it never
-      opened it. Today's behaviour on that fixture is a block of at least 12 s.
-- [ ] **AC3 (A-H8):** the hook injects when `AGENTS.override.md` is present as a
-      **dangling symlink**, where `152ae3a` is silent.
-- [ ] **AC4 (A-H1, A-H7, A-H9):** the unchanged rows stay unchanged — a fresh
-      block still silences, an over-ceiling target still injects, zero harnesses
-      still inject.
-- [ ] **AC5 (B2, B8):** `doctor` emits a `[warn]` and **exits** on a non-regular
-      target, at minimum a FIFO with no writer. Today it hangs indefinitely
-      (measured: alive at 15 s, killed).
-- [ ] **AC6 (B5):** `doctor` emits its new actionable `[warn]` on an
-      over-ceiling regular file, naming the file and the ceiling, and does not
-      claim the block is `[ok]` or out of date.
-- [ ] **AC7 (B7):** on a target at least 64 MiB, `doctor`'s peak RSS stays within
-      a small constant of its normal-file baseline. **Baseline to beat, measured
-      on `152ae3a`: 418 MB peak against a 61 MB baseline on a 64 MiB file.** The
-      criterion is the *shape* — bounded, not proportional to file size — and the
-      PR states the number it achieved.
-- [ ] **AC8 (B3, B4, B6):** a probe failure warns, a clean `ENOENT` keeps its
-      existing wording, and none of the new states sets a non-zero exit code.
-- [ ] **AC9 (B1):** every pre-existing `digestBlockChecks` behaviour and message
-      string is unchanged, and `tests/unit/doctor.test.js`'s existing cases pass
-      untouched.
-- [ ] **AC10 (regression witness):** `tests/integration/hooks-fail-open.test.js`
+- [ ] **AC1 (A-H2, A-H3, A-H4, D-E1…D-E8):** the hook injects whenever a harness
+      directory's `stat` fails with anything but a clean `ENOENT`, and treats only
+      `ENOENT` as absence — **including the dual-harness case that is a real wrong
+      silence today** (one harness fresh, the other's dir erroring). Deterministic
+      minimum: `EACCES`, `ELOOP`, `ENOTDIR`, `ENAMETOOLONG`. `EMFILE`/`EIO` may be
+      covered as structural-branch checks rather than fixtures — portable
+      fixtures for them are unreliable.
+- [ ] **AC2 (A-H5, A-H6):** the hook injects for a non-regular target — at minimum
+      a FIFO with no writer, a symlink→FIFO, and a directory — **and the child
+      does not time out**.
+- [ ] **AC3 (A-H8):** the hook injects when `AGENTS.override.md` is a **dangling
+      symlink**, where `152ae3a` is silent.
+- [ ] **AC4 (C3, acceptance regression):** a target that is a **symlink to a
+      regular file** carrying a fresh block still **silences** the hook, and is
+      still inspected by doctor. The guard must not over-refuse.
+- [ ] **AC5 (A-H1, A-H7, A-H9, A-H10):** unchanged rows stay unchanged — fresh
+      block silences, over-ceiling injects with no content read, zero harnesses
+      inject, and an absent/non-regular `digest.md` stays silent.
+- [ ] **AC6 (B2, B3, B8):** `doctor` warns and **exits** on a non-regular target
+      and on a non-`ENOENT` open failure; the child does not time out. Today it
+      hangs indefinitely (alive at 15 s, killed).
+- [ ] **AC7 (B5):** `doctor` emits its actionable over-ceiling `[warn]` naming the
+      file, its size and the ceiling, telling the user to trim and re-run, and
+      **never** suggesting `wienerdog sync`. A grep proves `sync` is absent from
+      that message.
+- [ ] **AC8 (B7):** on a target of at least 64 MiB, `doctor`'s peak RSS stays
+      within a small constant of its normal-file baseline. **Baseline measured on
+      `152ae3a`: 418 MB peak against 61 MB.** The criterion is the *shape* —
+      bounded, not proportional to file size — and the PR states the number.
+- [ ] **AC9 (B9, B10, B11):** a non-regular / over-ceiling / unreadable
+      `digest.md` produces the new `[warn]` and **no target inspection**; a
+      cleanly absent one stays fully silent.
+- [ ] **AC10 (B1, B4, B6):** every pre-existing `digestBlockChecks` behaviour,
+      message string and exit code is unchanged, and the existing
+      `tests/unit/doctor.test.js` cases pass untouched.
+- [ ] **AC11 (regression witness):** `tests/integration/hooks-fail-open.test.js`
       passes **byte-unchanged**.
-- [ ] **AC11 (C1):** both homes of the ceiling carry the same number, and a grep
+- [ ] **AC12 (C1, C4):** both homes of the ceiling carry the same number; a grep
       proves it.
-- [ ] **AC12 (ADR-0004 budget):** the hook's measured time on a normal digest and
-      a matching block stays well under 200 ms; the PR states the number.
-- [ ] **AC13 (canonical extraction):** the fail-open structural contract has one
-      canonical table in this spec, the shipped script header and the
-      verification greps cite it instead of restating it, and
-      `hooks-fail-open.test.js`'s header is recorded as a known uncorrected
-      mirror (it is not a deliverable).
+- [ ] **AC13 (Table E):** the fail-open contract has its canonical table here, the
+      shipped script header **cites it by name**, the verification greps E1–E6 all
+      run, and `hooks-fail-open.test.js`'s header is recorded as a known
+      uncorrected mirror.
+- [ ] **AC14 (portability, the open evidence gap):** the FIFO and symlink rows are
+      observed on **Linux** as well as macOS — the mechanism is probed on macOS
+      only (Current state). Run the suites on a Linux runner, or on Linux in a
+      container, and paste the output. Codex confirmed the fixtures are
+      constructible on both with plain `mkfifo` / `fs.symlinkSync`.
+- [ ] **AC15 (budget):** the hook's measured time on a normal digest with a
+      matching block stays well under 200 ms; the PR states the number
+      (21.8 ms measured for the specified script).
 - [ ] Every new verification step is observed **on both sides** — green on the
       fixed state, red on a deliberately broken one, and red on the
-      deliverable-absent case where a negated grep is used
-      (`docs/runbooks/spec-authoring.md`). Paste all outputs.
+      deliverable-absent case where a negated grep is used. Paste all outputs.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -353,24 +681,49 @@ node --test tests/unit/doctor.test.js
 npm test
 npm run lint
 
-# The hook payload is still one single-quoted bash argument (no `'` inside it).
+# Table E, E1-E6. Every one is guarded by `test -f` so the DELIVERABLE-ABSENT
+# case is RED (a bare negated grep exits 0 when the file is missing — the
+# runbook's rule), and each prints its own verdict rather than relying on exit
+# status alone.
+#
+# ALREADY OBSERVED ON ALL THREE SIDES while drafting, against the script in
+# Exact contracts (2026-08-30, this machine):
+#   compliant           -> E1..E6 all "ok"
+#   deliverable absent  -> E1..E6 all "RED"   (all six, not just the greps)
+#   deliberately broken -> E1, E2, E4, E5 "RED"; E3 and E6 stayed "ok" because
+#                          that mutation did not touch what they assert
+# Re-run all three on the finished tree and paste them; the third case must
+# break a DIFFERENT property per gate, not one mutation for all six.
+H=templates/hooks/session-start.sh
+test -f "$H" && ! grep -qE '^[[:space:]]*set -e' "$H" && echo "E1 ok: no set -e" || echo "E1 RED"
+test -f "$H" && tail -n1 "$H" | grep -qE '^exit 0$' && echo "E2 ok: trailing exit 0" || echo "E2 RED"
+test -f "$H" && grep -qE "^' \"\\\$DIGEST\" \|\| true$" "$H" && echo "E3 ok: || true" || echo "E3 RED"
+test -f "$H" && [ "$(grep -nvE '^[[:space:]]*(#|$)' "$H" | head -1 | grep -c 'WIENERDOG_JOB')" = 1 ] \
+  && echo "E4 ok: WIENERDOG_JOB is the first statement" || echo "E4 RED"
+test -f "$H" && [ "$(grep -c 'process\.stdout\.write' "$H")" = 1 ] \
+  && echo "E5 ok: exactly one stdout write" || echo "E5 RED"
+test -f "$H" && [ "$(grep -c 'catch (e)' "$H")" -ge 2 ] \
+  && echo "E6 ok: outer + inner catch present" || echo "E6 RED"
+
+# The payload is still one single-quoted bash argument (no `'` inside it).
 node -e 'const fs=require("fs");const Q=String.fromCharCode(39);
 const lines=fs.readFileSync("templates/hooks/session-start.sh","utf8").split("\n");
 const a=lines.findIndex((l)=>l==="node -e "+Q);
 const b=lines.findIndex((l,i)=>i>a && l.startsWith(Q+" \"$DIGEST\""));
 if(a<0||b<0){console.error("payload delimiters not found");process.exit(1);}
 const bad=lines.slice(a+1,b).filter((l)=>l.includes(Q));
-console.log("payload lines with a single quote:",bad.length);
+console.log("payload lines:",b-a-1,"| with a single quote:",bad.length);
 if(bad.length){console.error(bad.join("\n"));process.exit(1);}'
-
-# Fail-open structure intact (anchored — the unanchored form matches the header
-# comment and can never go red; that was this family's erratum on PR #50).
-grep -nE '^[[:space:]]*set -e' templates/hooks/session-start.sh   # expect: no output
-grep -n "WIENERDOG_JOB" templates/hooks/session-start.sh
-grep -n "|| true" templates/hooks/session-start.sh
 
 # Table C row C1 — one number, both homes.
 grep -n "4194304" templates/hooks/session-start.sh src/cli/doctor.js
+
+# AC7 — the over-ceiling message must not send the user to `sync`.
+node -e 'const t=require("fs").readFileSync("src/cli/doctor.js","utf8");
+const m=t.split("\n").filter((l)=>l.includes("too large")||l.includes("ceiling"));
+console.log(m.join("\n"));
+if(m.some((l)=>l.includes("wienerdog sync"))){console.error("over-ceiling message must not suggest sync");process.exit(1);}
+console.log("ok: no sync suggestion in the over-ceiling message");'
 
 # doctor still never mutates.
 grep -n "writeFileSync\|mkdirSync\|chmodSync\|rmSync\|unlinkSync" src/cli/doctor.js   # expect: no output
@@ -379,31 +732,33 @@ grep -n "writeFileSync\|mkdirSync\|chmodSync\|rmSync\|unlinkSync" src/cli/doctor
 # docs/specs/done/WP-doctor-quarantine-counts.md, must still print OK.
 ```
 
-Two measurements must be taken by hand and pasted, because no unit test asserts
+Three measurements are taken by hand and pasted, because no unit test asserts
 them: **doctor's peak RSS** on a ≥64 MiB target (`/usr/bin/time -l` on macOS,
-`/usr/bin/time -v` on Linux) against its normal-file baseline, and **the hook's
-elapsed time** on a normal digest with a matching block. State both numbers and
-the baseline you compared against.
+`-v` on Linux) against its normal-file baseline; **the hook's elapsed time** on a
+normal digest with a matching block; and **AC14's Linux run** of the two hook
+suites. State every number and the baseline compared against.
 
 ## Out of scope (do NOT do these)
 
-- The two accepted residuals: TOCTOU on a mid-hook digest rewrite, and
-  invalid-UTF-8 replacement folding. Both are owner-dispositioned; reopening
-  either is a contract change and the owner's act.
+- The two accepted residuals: TOCTOU on a mid-hook **digest rewrite**, and
+  invalid-UTF-8 replacement folding. Owner-dispositioned; reopening either is a
+  contract change and the owner's act. (The *type*-swap TOCTOU is in scope and is
+  closed — different finding.)
 - Any change to block semantics, `buildBlock`, `locateManagedBlock`,
   `applyManagedBlock`, or `src/adapters/shared.js`.
 - Any other `doctor` check, and any reordering of `doctor`'s output groups.
 - Timeouts, retries, signal handlers, or async rewrites of either surface.
-- Editing `tests/integration/hooks-fail-open.test.js` — it is this WP's
-  independent witness.
-- Amending ADR-0004. Its Amendment 1 is written and awaits the owner's
-  signature; that is not an implementer's act.
+- Editing `tests/integration/hooks-fail-open.test.js`.
+- Amending ADR-0004. Its Amendment 1 is written and awaits the owner's signature;
+  that is not an implementer's act.
+- Changing `DigestCaps`, or treating its 32 KiB as a filesystem guarantee
+  (Table B row B11).
 
 ## Definition of done
 
-1. All verification steps pass locally; output pasted into the PR body,
-   including both hand-taken measurements and the both-sides observation of
-   every new check.
+1. All verification steps pass locally; output pasted into the PR body, including
+   the three hand-taken measurements and the both-sides observation of every new
+   check.
 2. Conventional commits; PR titled
    `fix(hooks,doctor): type-guard and bound inspection reads (WP-hook-doctor-inspection-read-hardening)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
