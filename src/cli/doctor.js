@@ -307,13 +307,14 @@ function googleReadinessChecks(paths) {
  *  readable, non-symlink regular file reached through a parent chain that
  *  resolves inside the vault — deliberately NOT a bare existence check (see
  *  Current state on why `fileExists` (`:20`) is the wrong helper here): (1)
- *  `vaultPath` must be a string; (2) `lstat` the exact leaf — a throw (absent
- *  leaf or parent) takes the `warn` branch; (3) that stat's `isFile()` must be
+ *  `vaultPath` must be a string; (2) build `p = path.join(vaultPath,
+ *  warningsRel)`; (3) `lstat` the exact leaf — a throw (absent leaf or
+ *  parent) takes the `warn` branch; (4) that stat's `isFile()` must be
  *  true — `lstat` does not follow a symlink, so a symlink fails here whatever
- *  it points at, and a dangling symlink fails here too; (4) the PARENT CHAIN
+ *  it points at, and a dangling symlink fails here too; (5) the PARENT CHAIN
  *  must resolve inside the vault — a `<vault>/reports` that is itself a
  *  symlink out of the vault would otherwise pass a leaf-only probe while
- *  `writeIntoVault` refuses that same destination; (5) the file must open for
+ *  `writeIntoVault` refuses that same destination; (6) the file must open for
  *  reading — proving the open is the point, the bytes are not, so the
  *  descriptor is closed immediately without reading anything. Only all steps
  *  passing gives `info`; every other case, including `vaultPath === null`,
