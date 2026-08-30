@@ -284,3 +284,78 @@ contract the owner question asks to have pinned.
 Both gates also independently confirmed that **round 1's two fixes are genuinely
 gone**, so the escalation is about the REMAINDER of the contract, not about a
 regression.
+
+---
+
+# OWNER RULING, 2026-08-30 — THE CONTRACT, NOT THE PATCH
+
+**The trigger stands; the owner declined to override it.** Ruled:
+
+> The contract, not the patch — the trigger stands, I am not overriding it.
+> A wd-architect round: the caller-side path contract (`reportRel` derivation
+> with a SINGLE OWNER, the delta-record identity definition, collision
+> authority) in canonical form, with the two gates' SHARED findings as input.
+> Then the fix against the contract, and round 3 measures the settled form.
+> Let the record preserve the "two rounds, two fixes, two new defects" curve —
+> this is Table S's prehistory one level over, and the patch would only have
+> looked cheaper.
+
+## The sequence this pins
+
+1. **wd-architect** writes the canonical contract. Not the implementer, and not
+   inline in the fix.
+2. **The fix lands against the CONTRACT**, not against the last gate's example.
+3. **Round 3 measures the SETTLED form** — both gates, on one tip.
+
+## THE CURVE, preserved by ruling
+
+| Round | What was fixed | What the fix produced |
+|---|---|---|
+| 1 | `reportRel` built by a naive join — an empty segment throws in the primitive | A fix that closed ONE of `splitRel`'s three rejected segment shapes |
+| 1 | The body matched by literal `===` — NFC/NFD writes the report twice | A folded predicate that **OVER**-matches, so two spellings in one run leave BOTH delta records with no carrier |
+| 2 | — | Both gates, independently, on the same two lines |
+
+**Two rounds, two fixes, two new defects, one contract family.** Every
+individual fix was correct about the case in front of it and wrong about the
+contract behind it, because there is no contract behind it — the caller-side half
+of Table H row H1 exists in no spec, so each fix could only be measured against
+the last example rather than against a rule.
+
+**This is Table S's prehistory one level over, and naming that is the point of
+recording it.** Table S was extracted by the ADR-0031 circuit-breaker after two
+consecutive external rounds landed a finding on ONE contract — round 1's R1-1
+(the interface typed paths where the prose promised bytes) and round 2's F2 (the
+same defect surviving on the report's arm of the same interface). The breaker's
+rule was to stop patching finding-by-finding and pull the contract into one
+canonical table with registered mirrors. **The shape here is identical, one level
+down the same call:** there the contract was WHICH BYTES cross `promote()`'s
+return; here it is WHICH PATH `promote()` derives and matches. Same family, same
+two-round signature, same remedy.
+
+**And the patch only looked cheaper.** Measured: round 1's fix was two
+expressions and produced two defects that cost a full round on both gates. The
+third expression would have been cheaper still to write and had no better prior.
+
+## Table-letter space, measured for the architect
+
+`grep -rhoE '^### Table [A-Z]' docs/specs/` over the whole tree:
+
+```
+used : A B C D E F G H J K L M N O P Q R S T U V W Y
+free : I X Z
+```
+
+The constraints Table Y's own preamble already recorded still bind: **`I` is
+rejected** because its row ids (`I1`) are misread as `11` or `Il` in prose, and
+**`X` is rejected** because this family uses `### Table X` as its metasyntactic
+placeholder for "some table"
+(`2026-08-29-promote-family-design-round-zero-raw.txt:164`). That leaves **`Z`**,
+which Y's preamble deliberately preserved so it would not be "spent on a table
+that is not last" — a consideration the architect now has to weigh against
+having no alternative. Rows in Table R or Table Y remain the other option and
+cost no letter at all.
+
+**Whatever is chosen, the canonical map
+(`docs/specs/logbook/2026-08-29-promote-family-map.md`) is a LIVING surface and a
+new letter is a change to it** — plus a sweep of each spec's Out-of-scope
+ownership prose, which stays hand-maintained.
