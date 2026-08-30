@@ -409,9 +409,9 @@ change moves nothing rendered and writes nothing.
 
 | Fact / rule | Value |
 |---|---|
-| The problem | `src/core/dream/validate.js:1427-1429` counts a committed path as a `note` unless it is under `layout.skills_dir` or `layout.reports_dir`. `reports/warnings.md` is under neither, so a run that changes it reports one extra note in `dream: <date> — N notes, M skills` |
+| The problem | `src/core/dream/validate.js:1427-1429` counts a committed path as a `note` unless it is under `layout.skills_dir` or `layout.reports_dir`. `reports/warnings.md` is under neither, so **any dream commit that carries it** reports one extra note in `dream: <date> — N notes, M skills`. **WHICH runs those are is Table B's precommit-ordering row's to decide, cited not restated:** no refresh-point write is ever in a `validateAndCommit` changed set, so on the code-owned path the exclusion does not fire. (An earlier form of this row said "a run that changes it", which asserted the opposite and was false — 2026-08-30, PR-review errata.) **It is not dead code and it is not defensive padding.** It is reachable today on the brain-writes-it path — the precommit runs before the brain and `assertCleanTree` leaves the tree clean, so anything appearing at this path during the brain window (a model that can write the vault can write any path in it; so can a user saving mid-run) IS in the changed set and IS counted — and it is required FORWARD, because `WP-dream-promote-in-workspace`'s row G8 makes the dream commit carry this file by design. Landing it here is what lets that spec's row G11 inherit it by citation instead of inventing it |
 | The change | one added condition that excludes exactly the literal `reports/warnings.md` from `notes`, alongside the existing `reports_dir` exclusion. Nothing is reclassified as a skill, no other step is touched |
-| Not changed | the file is still committed, still classified by Step 2's branch (c) at `:1208` ("keep"), and still scanned by the EP2 gate. This is a **counting** fix only |
+| Not changed | **whenever the file IS in a changed set**, it is still committed, still classified by Step 2's branch (c) at `:1208` ("keep"), and still scanned by the EP2 gate — the change removes it from the `notes` tally and from nothing else. **On the code-owned path it is in no changed set at all** (Table B's precommit-ordering row), so on that path Step 2 and Step 3 have nothing to do with it; that is a fact about reachability, not a carve-out, and no path is exempted from any gate anywhere. (The unqualified "still scanned by the EP2 gate" this row used to carry was the same false ordering assumption — 2026-08-30, PR-review errata.) This is a **counting** fix only |
 
 ### Table E — the GLOSSARY sentence
 
@@ -610,15 +610,32 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   provides for free. **Dropping the section makes both round-3 findings dissolve
   at the root rather than be answered** — there is no carry to authenticate and no
   date to pin — and it removes surface rather than adding it.
-- **Named residual — refresh point 1 is inside the EP2 window.** A file written at
-  point 1 on a run that goes on to commit is staged before Step 3's secret gate and
-  is scanned like any other change. Its content is code-owned labels, integers
-  and `displayName` output; only the last is attacker-influenceable, and a
-  basename that tripped an entropy rule would cost a redaction or a withhold **of
-  Wienerdog's own warnings file** — non-destructive (the ledger is untouched,
-  `doctor` still reports the counts) and self-healing at the next set change. Do NOT
-  carve this path out of the gate; a gate exemption is a much worse trade than a
-  named residual.
+- **Named residual — in the pre-promotion window this file's bytes reach the
+  vault's git history WITHOUT passing the EP2 gate (restated 2026-08-30 after PR
+  review; the earlier text claimed the opposite and was false).** The mechanism is
+  Table B's precommit-ordering row's and is cited, not restated: a refresh point's
+  write is committed by `precommitSessionEdits`, so it is never a member of a
+  `validateAndCommit` changed set, and Step 3's staged-output secret gate — which
+  scans exactly that set — never sees it. **The harm runs the OPPOSITE way from
+  what this residual used to reason about.** It used to worry that the gate might
+  redact or withhold Wienerdog's own file, a bounded and self-healing cost; the
+  real exposure is unscanned bytes entering the user's own vault history.
+  **It is bounded, and the bound is structural rather than a judgement call.** The
+  document is code-owned labels, integers and `displayName` output; only the last
+  is attacker-influenceable, and `displayName` whitelists `[A-Za-z0-9._-]` and
+  rewrites every other byte to `_`, so no `:`, `=`, `/` or whitespace can appear in
+  it and no assignment-shaped, URL-shaped or header-shaped token can be forged into
+  the file by a filename. The same sanitized basename already reaches the injected
+  digest and the dream console lines, so this file adds no new CLASS of byte to any
+  surface — only one more place the same bytes land. **It sits in the same window
+  as the pre-promotion-window residual above and has the same discharge event,
+  `WP-dream-promote-in-workspace`'s row G8**, after which the commit path is that
+  spec's and what gates it is that spec's to state, not this one's. **Do NOT answer
+  it here.** A carve-out or suppression in the gate is forbidden outright (Out of
+  scope), and a special-case re-scan or re-stage of this one path before the
+  current validator commits is the transitional canonical re-stage guard the owner
+  already rejected as throwaway machinery (the pre-promotion-window residual
+  above).
 - **Named residual — the fixed path in an adopted vault.** A user who set
   `vault_layout.reports_dir` to somewhere outside `reports/` gets a top-level
   `reports/` directory holding just this file. Accepted for now: the alternative
@@ -653,8 +670,11 @@ Three writers use it and no others: each promoted note; the dream report (whose 
 - [ ] Four residuals, all named under Implementation notes: the commit may be one
       run late; **in the pre-promotion window the file's integrity level is any
       vault note's, discharged when `WP-dream-promote-in-workspace`'s row G8
-      lands**; refresh point 1 is inside the EP2 window; the fixed path in an
-      adopted vault with a relocated `reports_dir`.
+      lands**; **in that same window the file's bytes reach the vault's git history
+      without passing the EP2 gate** — no refresh-point write is ever in a
+      `validateAndCommit` changed set (Table B's precommit-ordering row), bounded by
+      `displayName`'s whitelist and discharged by the same row G8; the fixed path in
+      an adopted vault with a relocated `reports_dir`.
 
 ## Acceptance criteria
 
