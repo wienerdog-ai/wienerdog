@@ -77,8 +77,8 @@ line's bytes were read from the authoring tree's `validate.js` and compared
 against BOTH the same line and the next line of this tree's `validate.js`. **50
 citation tokens carry over from the authoring tree — 47 in this spec and 3 in
 `promote.js` — naming 73 line endpoints; all 73 matched one line down and NONE
-matched in place**, both ends of every range included, so the shift is uniform
-and no citation was bumped on a coincidence. **No other cited file changed** —
+matched in place**, both ends of every range included, and no citation was
+bumped on a coincidence. **No other cited file changed** —
 `delta.js`, `workspace.js`,
 `brain.js`, `layout.js`, `digest.js`, `vault-write.js`, the dream `SKILL.md`,
 `CURRENT-IMPLEMENTATION-REVIEW.md` and `WP-secret-fence-ep2-redact-arm.md` are
@@ -692,24 +692,6 @@ is decided;** `### Exact contracts`, Table E's staged-bytes row, and
 - [x] `### Exact contracts`' signature and its return shape
 - [x] Acceptance criteria that assert Tables C, D, E, Q and S
 - [x] Verification steps (the assertions mirror Tables C, D, E, Q and S)
-
-**Walked 2026-08-30, after the PR-review gate found that it had NOT been —
-every box was still empty, and the one surface the walk would have caught was
-stale.** `promote.js`'s public `@returns` still declared the pre-reconciliation
-shape (loose `lines`/`labels`/`artifact` on `redacted[]`, no `preserved` on
-`refused[]`) three commits after the typed record landed. In a repo that forbids
-TypeScript in `src/`, that JSDoc IS the module's type contract, so a consumer
-coding against it would look for fields that no longer exist and would not know
-`refused[]` carries the only route back to a quarantined original.
-
-**The sweep behind the fix, because fixing the named instance is the failure
-mode this repo keeps paying for:** the retired shape was grepped for by FIELD,
-not by sentence — `artifact:`, `lines:` and `labels:` across `promote.js` and
-its test. Every surviving occurrence is the CORRECT shape (`artifact`/`location`
-inside a `GateReportedCopy`, `lines`/`labels` inside a `RedactionAccounting`);
-the spec's `### Exact contracts`, its acceptance criteria and the Deliverables
-notes were each re-read and already state the settled shape. **One stale
-surface, now fixed; the mirror is otherwise consistent.**
 - [ ] Current-state description (the validator's four gates, the delta
       primitive's binary record, the shipped sanitizer, the skill's report
       requirement)
@@ -873,6 +855,43 @@ surface, now fixed; the mirror is otherwise consistent.**
       criteria. **No surface may call the window "closed" or claim cross-path
       write-atomicity, and none may re-assert the withdrawn "scanning merged
       forces discarding the user edit" rationale.**
+
+**WALK OF 2026-08-30 — ITEMS 1–4 ONLY, and the tick marks say so.** The
+PR-review gate found this registry had never been walked at all: every one of
+its 21 boxes was empty, and the surface item 2 names was stale. `promote.js`'s
+public `@returns` still declared the pre-reconciliation shape (loose
+`lines`/`labels`/`artifact` on `redacted[]`, no `preserved` on `refused[]`)
+three commits after the typed record landed. In a repo that forbids TypeScript
+in `src/`, that JSDoc IS the module's type contract, so a consumer coding
+against it would look for fields that no longer exist and would not know
+`refused[]` carries the only route back to a quarantined original.
+
+**The sweep behind that fix went by FIELD, not by sentence** — `artifact:`,
+`lines:` and `labels:` across `promote.js` and its test. Every surviving
+occurrence is the CORRECT shape (`artifact`/`location` inside a
+`GateReportedCopy`, `lines`/`labels` inside a `RedactionAccounting`), and the
+gate re-ran that sweep independently and agreed. **One stale surface, and no
+second one inside items 1–4.**
+
+**ITEMS 5–21 ARE NOT WALKED, and the claim is scoped to say it.** An earlier
+form of this paragraph said "the mirror is otherwise consistent" — a claim over
+21 items backed by evidence from four, which is the same widening this package
+has now produced four times. **It matters here specifically:** items *Table Q*
+and *Table S* both register this same `@returns` as a mirror, and their entries
+reach `WP-dream-promote-report`'s Table N and Table R rows and
+`WP-dream-promote-in-workspace`'s rows G5, G7, G8, G10 and V3. Those
+cross-package surfaces are the ones that would have to agree with the repaired
+annotation, and none of them was checked here. **Whether they are walked before
+this package merges is the owner's call, not a box to tick quietly.**
+
+**One registry GAP, recorded because the checklist cannot catch what it does not
+name:** `docs/GLOSSARY.md` is a Deliverable of this package and mirrors both the
+EP2 outcome taxonomy and the gates' input split, and it appears on NO item of
+this list. That is why two false canonical claims in it — an outcome count that
+omitted `redacted`, and "the four quality gates judge the bytes that would
+actually land", which is false of the pre-merge secret scan — survived three
+review rounds. Registering it belongs to the next architect touch of item
+"The EP2 disposition taxonomy".
 
 ## Implementation notes & constraints
 

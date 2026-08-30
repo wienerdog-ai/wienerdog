@@ -255,3 +255,77 @@ preserve, so it was deleted and the measured three-zone map put in its place.
   claimed to prevent a redness that the delivered file cannot produce. One
   ten-second grep would have shown it; the flag rode along because it was
   already written.
+
+## Round 4 — the rubric gate clean, the spec gate escalating
+
+**Stop criterion, pinned before adjudication:** clean or all-C on the same tip
+closes the round. A contract-band finding of a kind already seen in a previous
+round does NOT get another textual patch — it goes to the owner as a design
+question, per the runbook's repeat-kind rule.
+
+| Gate | Raw output | Introduced by | Verdict on `81c00a1` |
+|---|---|---|---|
+| PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-4-gptsol-raw.txt` | `f60f1f1` | **patch is correct — zero findings** |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-4-wd-reviewer-raw.txt` | `f60f1f1` | REQUEST-CHANGES — 5 contract-band, 2 C-band |
+
+The rubric gate proved two round-3 fixes by MUTATION rather than by reading:
+deleting the `date` guard reddens its test, and a planted `require('./promote')`
+reddens the consumed-by-nothing assertion in its new form while the old
+`--exclude` form stayed falsely green. The spec gate independently re-derived
+the three-zone shift map from the hunk headers and confirmed it.
+
+### Dispositions
+
+| # | Finding | Band | Disposition |
+|---|---|---|---|
+| 1 | `:80` still said "the shift is uniform", contradicting `:67` eight lines above | contract | **fix by deletion** — the gate named the exact clause; no design judgment in it |
+| 2 | The checklist was ticked 4 of 21 while claiming consistency over the whole | contract | **fix by narrowing** — the gate's own option (iii). Whether items 5–21 are walked before merge is ESCALATED |
+| 3 | `GLOSSARY.md` said "only three" outcomes, omitting `redacted` | contract | **fix** |
+| 4 | `GLOSSARY.md` said all four gates judge the landing bytes — false of EP2 | contract | **fix** |
+| 5 | `date` is declared `date:string` with no shape, but is used as a path component | contract | **ESCALATED to the owner → wd-architect.** Not the implementer's to close by guessing a regex |
+| 6 | The new `@returns` prose narrated Q9's split under a disclaimer saying it did not | C | **fix** — cite, don't narrate |
+| 7 | The mirror said "EVERY arm" where the canonical enumerates "BOTH of these arms" | C | **fix** — match the canonical |
+
+### The repeat-kind rule fired, and here is the kind
+
+Findings 1, 2 and 7 are ONE defect wearing three costumes: **a correction placed
+BESIDE a false claim instead of replacing it, and a certification whose scope is
+wider than the evidence behind it.** Round 3 produced two of them while fixing
+two of them. Counting the family's earlier rounds, this is the sixth window in
+which a fix introduced a defect of the class it was closing.
+
+**What was missing was not care — it was a mechanical step**, and the one that
+works has already been proven twice in this package: *grep for the CLAIM, not
+for the sentence.* Round 3's citation sweep succeeded because it grepped the
+NUMBER being changed. Round 4's correction failed because it re-read the
+paragraph it was editing instead of grepping the claim's distinguishing word.
+Measured after the fact: `grep -n "uniform"` returns both sites — the correction
+at `:67` and the survivor at `:80` — in one command. **The rule that follows:
+when correcting a claim, grep the claim's distinguishing word across every
+surface FIRST, delete every occurrence, and only then write the correction.**
+Proposed as a runbook line, not adopted here — that is the owner's call.
+
+### What is NOT decided here
+
+- **Finding 5** is a genuine spec gap: `### Exact contracts` declares `date` a
+  string and says nothing about its shape, while the shipped gate composes
+  `<date>-<sanitized-basename>` — only the basename half is sanitized. A `date`
+  carrying a path separator reaches a filename this module never builds and
+  cannot see. The non-empty-string check is the right BUILD against the spec as
+  written and stays; the contract needs an architect.
+- **Items 5–21 of the checklist.** Narrowing the claim made it true. Walking
+  them is a different question, and items *Table Q* and *Table S* reach five
+  rows in two sibling packages.
+
+### What I got wrong this round
+
+- **I called it a deletion and deleted one of two copies.** The logbook got the
+  treatment; the spec did not, and the surviving clause sat eight lines below
+  its own correction, in the same paragraph.
+- **I ticked four boxes and certified twenty-one.** I read the checklist through
+  a grep window that showed four items, never saw the other seventeen, and wrote
+  "the mirror is otherwise consistent" over all of them.
+- **Two false claims in `GLOSSARY.md` survived three rounds** because the file is
+  a Deliverable that no checklist item names. The gate found them by reading the
+  canonical text against the code, which is what I should have done when I wrote
+  the entry.

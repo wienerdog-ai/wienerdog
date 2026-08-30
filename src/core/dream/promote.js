@@ -639,12 +639,12 @@ function withRemediation(record, remediation) {
  *   the GATE already wrote outside the vault, so it is not content and cannot
  *   be staged, committed or mistaken for a candidate (Table S, row S3).
  *
- *   `preserved` is on EVERY arm that could have a copy, `refused[]` included,
- *   and is REQUIRED AND POSSIBLY EMPTY: "no copy exists for this path" is
- *   stated rather than left to a missing field. It is `Array<PreservedCopy>` —
- *   the gate's `artifact` and `location` plus the `remediation` THIS module
- *   assigns at outcome time. Table Q rows Q8 and Q9 own why it travels and
- *   which party fills each field; this block restates neither.
+ *   `preserved` is on BOTH of these arms, `refused[]` included, and is REQUIRED
+ *   AND POSSIBLY EMPTY: "no copy exists for this path" is stated rather than
+ *   left to a missing field. It is `Array<PreservedCopy>`, whose two-typedef
+ *   split above carries the per-field provenance. Table Q rows Q8 and Q9 own
+ *   why it travels and which party fills each field; this block restates
+ *   neither.
  *
  *   `redacted[]` additionally carries `redaction`, ONE `RedactionAccounting`
  *   holding the scrubbed-line count and the detector labels — both filled by
