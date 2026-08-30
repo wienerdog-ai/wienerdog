@@ -22,25 +22,38 @@ of `~/.claude/CLAUDE.md` by `wienerdog sync`, and injected by the SessionStart h
 one. It adds no process.
 
 **What the predecessor built.** `WP-launcher-refusal-banner` made the **independent
-launcher** (`<core>/launcher/launch.js`) write a **refusal banner** —
-`<core>/state/refusal-banner.md`, exactly one line, `> [!warning]` plus one space, followed by the
-folded refusal sentence, `0600`, atomically replaced — whenever it refuses to run a
-scheduled job. It exists because a launcher-stage refusal has **no other delivery
+launcher** (`<core>/launcher/launch.js`) write a **refusal banner** whenever it refuses
+to run a scheduled job. Banner state is **per job** — one entry per job under
+`<core>/state/refusal-banner/`, each exactly one line, `> [!warning]` plus one space,
+followed by the folded refusal sentence, `0600`, atomically replaced — and the launcher
+rebuilds a single concatenated `<core>/state/refusal-banner.md` from those entries, in
+sorted filename order, after every write and every clear. **The readers in this WP use
+the concatenated file only** (`Table B`, B1a/B15); they never enumerate the directory.
+With no entries the concatenated file is **removed**, so "absent" is the healthy
+state. It exists because a launcher-stage refusal has **no other delivery
 channel**: the launcher must not require code from the app tree it is verifying, so it
 cannot call `renderDigest`; and the fail-loud email leg spawns the CLI shim, which is
 unusable when `app/current` is precisely what failed. On the maintainer's machine that
 gap hid an hourly refusal for four weeks (see
 `docs/specs/logbook/2026-08-30-the-banner-channel-inverted-and-nobody-noticed.md`).
 
-**Nothing reads that file yet. This WP adds the two readers.**
+**Nothing reads that file yet. This WP adds two of its three readers** — the third,
+the Claude Code managed-block import line, belongs to
+`WP-managed-block-by-reference`.
 
-The two readers are deliberately different in kind:
+The two readers here are deliberately different in kind:
 
 - The **SessionStart hook** is the channel that works when the app tree is broken —
   the case the banner exists for. It must therefore stay exactly what its header
   comment says it is: *"Fast, no computation — just read one file and JSON-encode it.
   GENUINELY fail-open — always exit 0 (audit A6/F4)."* It gains **one more file read**
   and a string concatenation. Nothing else.
+
+  **The hook prepend is permanent, not transitional (round-2 finding F1).**
+  `WP-managed-block-by-reference` de-registers this hook for **Claude Code** only. It
+  stays registered for **Codex**, which has no import mechanism at all, and it is the
+  only banner channel for every Claude Code install during the interval between this WP
+  landing and the block-as-reference work landing. Do not treat it as scaffolding.
 - `renderDigest` folds the banner into its existing banner **prefix**, so the banner
   also appears in a normally-rendered digest and in the managed block. This path only
   ever runs when the app tree is healthy, so it is the redundant one — but it costs
@@ -130,6 +143,7 @@ input is empty the digest output must be unchanged.
 | modify | src/cli/dream.js | pass `refusalBanner: readRefusalBanner(paths)` in `regenerateDigest` |
 | modify | tests/unit/digest.test.js | prefix order + empty-input byte stability |
 | create | tests/unit/session-start-hook.test.js | hook emits banner+digest, banner-only, digest-only, neither |
+| create | tests/unit/refusal-banner-delivery.test.js | the end-state chain assertion (AC-12) |
 
 **Golden files:** `tests/golden/digest-default.md` must NOT change — the frozen
 default has no refusal banner, so its bytes are unchanged. If your run reports a diff
@@ -251,6 +265,16 @@ local fact stated once, in Exact contracts.
 - [ ] AC-10 — `shellcheck --severity=warning templates/hooks/session-start.sh` passes
       and `shfmt -i 2 -d templates/hooks/session-start.sh` reports no diff.
 - [ ] AC-11 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
+- [ ] AC-12 — **End-state chain assertion (round-2 finding F1).** With `app/current`
+      unresolvable, the launcher refusing, and the **full** chain applied — that is,
+      with the Claude Code SessionStart hook **de-registered** as
+      `WP-managed-block-by-reference` leaves it — the banner still reaches a Claude Code
+      session, via the managed block's refusal-banner import line. Assert on the
+      artifacts the harness would read (the block's import line resolves to a
+      concatenated banner file whose content is the refusal), not on a live session.
+      **If `WP-managed-block-by-reference` has not landed when you implement this WP,
+      write the test `skip`ped with a comment naming that WP**, so the gap is recorded
+      rather than forgotten — it is the exact contradiction F1 caught.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -265,6 +289,8 @@ shfmt -i 2 -d templates/hooks/session-start.sh
 git diff --stat -- tests/golden/digest-default.md
 # both renderDigest callers pass the new option:
 grep -n "refusalBanner" src/core/digest.js src/cli/sync.js src/cli/dream.js
+# F5 — the readers use the CONCATENATED file, never the directory (expect NO output):
+grep -n "readdir\|refusal-banner/" templates/hooks/session-start.sh
 ```
 
 ## Out of scope (do NOT do these)
@@ -284,3 +310,23 @@ grep -n "refusalBanner" src/core/digest.js src/cli/sync.js src/cli/dream.js
    `feat(digest): display the refusal banner (WP-refusal-banner-delivery)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1).
+- **2026-08-30 — Codex round-2 findings F1 and F5 (owner: ACCEPTED).**
+  - **F1.** ADR-0039 §2 de-registered the Claude Code SessionStart hook while §5
+    delivered the refusal banner *through that hook* — so the finished chain would have
+    left a Claude Code user with no banner channel, reintroducing the four-week silent
+    failure in a new form. Resolved at the ADR level by giving the Claude block a
+    **second import line** for the banner. In this spec: the hook prepend is now stated
+    as **permanent** (Codex has no imports, and Claude Code needs it until the block
+    work lands), and a new **AC-12** asserts the end state — unresolvable
+    `app/current`, hook de-registered, banner still delivered — with an explicit
+    instruction to land it `skip`ped if `WP-managed-block-by-reference` has not merged
+    yet, so the contradiction cannot silently reappear.
+  - **F5.** The predecessor's banner became per-job entries plus a rebuilt concatenated
+    file. The readers here bind to the **concatenated file only** and never enumerate
+    the directory — which keeps the hook's "read one file, no computation" property
+    intact and gives the Claude import a single path to point at. Current state updated;
+    a verification grep now asserts the hook does no directory reads.

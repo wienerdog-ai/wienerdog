@@ -174,6 +174,9 @@ copies are updated together.
 | C6 | Collapse key | The **exact** pair `(job, reason)` of the **last** record in the file. Not a prefix, not a fuzzy match, and never a non-adjacent record |
 | C7 | Collapse effect | Increment that last record's `count` by 1 and rewrite it. `at` keeps the **original first** occurrence's timestamp, so the banner's "since \<first\>" stays truthful |
 | C8 | Write order | Append the new record atomically FIRST, then collapse-and-bound in a temp+rename rewrite — mirroring `appendAlert`, so the writer never loses its own record to a concurrent compaction |
+| C8a | Lost-update guard | **Compare-and-retry.** Capture the live file's `size` and `mtimeMs` at read time. Immediately before the rename, re-`stat` and compare both. If either differs, another writer appended in the window: discard the temp (`fs.rmSync(tmp,{force:true})`) and retry the read-compact **once**. If it differs again, leave the appended file **uncompacted** and return — the bound applies on the next append |
+| C8b | Accepted residual | Two launchers appending within the same filesystem timestamp granularity, with no net size change, can still interleave undetected. This is the same class of residual `src/core/alerts.js` already accepts and documents at lines 87–88; it is accepted here for the same reason (full cross-process locking is out of scope per ADR-0004) |
+| C8c | Temp cleanup | Every temp-plus-rename in this file `rmSync`s the temp on a rename failure, so a failed atomic write never leaves an orphan beside the artifact (Codex P2) |
 | C9 | Empty-read guard | If the read-back yields zero records, skip the rewrite entirely and leave the atomically-appended file intact |
 | C10 | Bound order | Count budget first (keep newest `MAX_ALERTS`), then drop oldest until the serialized bytes fit `MAX_FILE_BYTES`; always keep at least the newest record |
 | C11 | Launcher dependencies | Node built-ins only. `appendRefuseAlert` must NOT require `src/core/alerts.js` or any other `src/` module |
@@ -227,6 +230,18 @@ and Table C above is the canonical table.
   C10): append-first durability, the empty-read guard, and count-then-bytes budgeting
   keeping at least one record. They are quoted in Current state with the reasoning;
   each exists because of a real prior bug.
+- **C8a is a round-2 correction, and the reasoning is worth carrying.** Append-first
+  durability protects *this* writer's record. It does **not** protect a record another
+  launcher appended between our read and our rename — that one is silently discarded by
+  the rewrite. `appendAlert` tolerates this because its writers are `run-job` processes
+  that rarely overlap; the launcher's writers are **scheduled**, so a catch-up and a
+  nightly firing at the same minute is an ordinary Tuesday, not an edge case.
+  Compare-and-retry closes the detectable window: `size` catches an append that changed
+  the length, `mtimeMs` catches one that did not. Retry **once** and then give up
+  compacting — never spin, and never drop the append to win the race. An uncompacted
+  file is a bounded, self-correcting cost; a lost fail-loud record is not.
+- **Compare against values captured at read time, not at function entry**, or the guard
+  has a hole exactly the size of the read itself.
 - **`redactOnly` is app-side only.** `sanitizeAlert` scrubs; the launcher's writer
   deliberately does not, because its reasons are code-owned (its header comment says
   so). Keep it that way — do not add a second scrubber to the launcher, and do not
@@ -288,6 +303,13 @@ and Table C above is the canonical table.
       renders as before (C13) — no migration step anywhere.
 - [ ] AC-13 — With `state/` unwritable, `appendRefuseAlert` throws nothing and the
       refusal still exits non-zero with zero spawn.
+- [ ] AC-13a — **Lost-update guard (round-2 finding F6).** Simulate the interleaving by
+      mutating `alerts.jsonl` between the read and the rename — append a foreign
+      record via a test seam or a stubbed `statSync`/`renameSync` — and assert the
+      foreign record **survives**: the compaction is discarded and retried (C8a).
+- [ ] AC-13b — When the file changes again during the retry, the function leaves the
+      appended file uncompacted, throws nothing, and leaves no `*.tmp` behind
+      (C8a, C8c).
 - [ ] AC-14 — `grep -n "require(.*src" src/scheduler/launcher.js` shows no app-tree
       require (C11).
 
@@ -328,3 +350,20 @@ git diff --stat -- tests/golden/digest-default.md
    `fix(launcher): bound the refusal alert log (WP-launcher-alert-bound)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1), implementing the repair
+  the 2026-08-01 logbook drafted and withdrew.
+- **2026-08-30 — Codex round-2 finding F6 (owner: ACCEPTED — compare-and-retry).**
+  Round 1's C8 mirrored `appendAlert`: append atomically, then read-compact-rename. That
+  protects the appending writer's **own** record but silently discards any record a
+  *concurrent* launcher appended between the read and the rename. `appendAlert` tolerates
+  that residual because its writers are `run-job` processes that rarely overlap; the
+  launcher's writers are **scheduled**, so simultaneous fires are routine rather than
+  exceptional — the same residual carries a materially higher probability here. New rows
+  **C8a** (capture `size` + `mtimeMs` at read time, re-`stat` before rename, discard and
+  retry once, then leave uncompacted), **C8b** (the accepted same-timestamp residual,
+  cited to `src/core/alerts.js` lines 87–88), and **C8c** (`rmSync` the temp on rename
+  failure — Codex P2). New AC-13a and AC-13b assert the interleaving by mutating the
+  file between read and rename.

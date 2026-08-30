@@ -43,14 +43,21 @@ The digest mixes content from two genuinely different trust classes:
   **soft** boundary."* `## Active projects` is derived from directory names, and the
   banners are state-derived control-plane text.
 
-**The gap ADR-0032 did not consider.** A fence's strength depends on the **channel**
-the fenced text arrives in. A harness presents `CLAUDE.md` / `AGENTS.md` to the model
-as *instructions* — Claude Code's own preamble says those instructions **override**
-default behavior — while a SessionStart hook's `additionalContext` is presented as
-*context*. Copying the whole digest into the managed block therefore placed
-untrusted-derived, softly-fenced content into the **instruction** channel, and into a
-durable 0644 file the user owns and may commit to their own git. ADR-0024 separately
-names the managed block as one of four durable **secret sinks**.
+**The gap ADR-0032 did not consider — stated in its corrected, narrower form.**
+Copying the whole digest into the managed block made untrusted-derived, softly-fenced
+content a **durable copied artifact** inside a file the user owns, at 0644, outside
+`scanPrivateModes`' in-core scope — while the same bytes sat at 0600 in
+`state/digest.md`. ADR-0024 separately names the managed block as one of four durable
+**secret sinks**. Removing the copy removes that sink and that 0644 exposure.
+
+*Round-2 correction (Codex finding F2, owner: narrow the claim).* An earlier draft
+argued the split also moves this content out of the harness's **instruction** channel
+into a *data* channel. **It does not.** An `@import` is inlined into Claude Code **user
+memory** — the same channel `CLAUDE.md` occupies. The instruction-versus-context
+distinction is real (a hook's `additionalContext` genuinely is presented as context)
+but it applies **only** to the hook channel, and this WP does not move anything there.
+Do not restate the stronger claim anywhere in the implementation, the tests, or the PR
+body. The durable-copy and 0644 results are sufficient justification on their own.
 
 **The decision (ADR-0039 §4).** Only content that has passed ADR-0021's
 human-ratification gate is ever **copied** into a file the user owns. Everything else
@@ -61,18 +68,39 @@ is delivered by reference, or not at all. Concretely:
   banners: refusal, identity-exclusion, alerts, transcript quarantine, secret
   quarantine, insecure modes, scheduler, update. Never copied.
 
-**The accepted cost (owner rulings D2, D3).** A Codex session without trusted hooks —
-and a Cowork session, which skips user-scope imports resolving outside the session
-`cwd` — sees the stable half and **no volatile content at all**. Not stale content:
-**absent** content. That is the fail-safe direction and it is documented rather than
-engineered around.
+**The accepted cost (owner rulings D2 and D3, D3 amended 2026-08-30 by finding F7).**
+A Codex session without trusted hooks — and a Cowork session, which skips user-scope
+imports resolving outside the session `cwd` — sees the stable half and no *fresh*
+volatile content.
+
+Round 1 made **all** volatile content absent there, reasoning that absent is fail-safe
+where stale is not. **That reasoning holds for the untrusted-derived daily log and
+fails for the banners.** An absent alert or refusal banner is not fail-safe — it is a
+fail-loud *regression*, and this entire chain exists because a warning went undelivered
+for four weeks. The amended split for the **copied** (Codex) block is therefore:
+
+| Content | Copied into the Codex block? |
+|---------|------------------------------|
+| stable identity (ADR-0021 hash-gated) | yes |
+| code-owned state-derived banners (alerts, refusal, quarantines, scheduler, update, insecure modes) | **yes** — as of the last sync |
+| `## Active projects` (enumerated) | no |
+| `## Latest daily log` (ADR-0032, untrusted-derived) | **no** |
+
+This keeps Codex's fail-loud at **exactly today's level** — last-sync banners, no
+better and no worse — while still keeping every untrusted-derived byte out of a durable
+user-owned file. The banners are code-owned, fixed-template control-plane text with no
+untrusted bytes (the same rule `formatAlerts` and the quarantine banner already
+follow), which is precisely why they are safe to copy when the daily log is not.
 
 ## Current state
 
 `renderDigest(vaultDir, layout, opts)` builds `parts[]` in this order — identity
 sections (each gated by the ADR-0021 hash check, then the provenance gate, then the
 EP4 secret scan), then `## Active projects`, then the fenced `## Latest daily log` —
-and assembles:
+and assembles. **Read the order carefully: it is `prefix` → identity → projects →
+daily.** Round 1 of this spec specified a volatile-then-stable composition, which
+contradicts this and would have broken its own E3 byte-identity guarantee; finding F3
+corrected it to the three-component form in E11.
 
 ```js
 const body = `${parts.join('\n\n')}\n`;
@@ -126,7 +154,8 @@ import of `state/digest.md`. `src/adapters/codex.js` still copies the whole dige
 | modify | src/core/digest.js | `renderDigestParts`; `renderDigest` keeps its signature and composes from it |
 | modify | src/cli/sync.js | write both files; pass the stable text to the adapters |
 | modify | src/cli/dream.js | `regenerateDigest` writes both files |
-| modify | src/core/private-fs.js | add `'digest-stable.md'` to `A5_PRIVATE_FILE_BASENAMES` |
+| modify | src/core/private-fs.js | add **both** `'digest-stable.md'` and `'digest-volatile.md'` to `A5_PRIVATE_FILE_BASENAMES` (E5) |
+| modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it (precedent: `docs/specs/done/WP-attended-alert-acknowledgement.md`) |
 | modify | src/adapters/claude.js | import the **volatile** file; inline the stable text (Table E) |
 | modify | src/adapters/codex.js | copy the **stable** text only |
 | modify | tests/unit/digest.test.js | apportionment, caps, part membership |
@@ -143,18 +172,20 @@ current content (Table E, E3). If it changes, you have a bug.
 ### Exact contracts
 
 ```js
-/** Render the digest's two halves in one pass. Same inputs as renderDigest, same
- *  gates, same order — it is refactored out of it, not reimplemented.
- *  @returns {{stable: string, volatile: string}}
- *  stable   — the ADR-0021 hash-gated identity sections only, capped per Table E.
- *  volatile — the banner prefix, `## Active projects`, and the fenced
- *             `## Latest daily log`, capped per Table E.
- *  Either may be ''. */
+/** Render the digest's THREE components in one pass. Same inputs as renderDigest,
+ *  same gates, same order — refactored out of it, not reimplemented (Table E, E11).
+ *  @returns {{prefix: string, stable: string, volatile: string}}
+ *  prefix   — the banner block, in its existing urgency order. UNCAPPED here; the
+ *             cap is applied by the composing render, which passes it as capDigest's
+ *             reserved `prefix` argument.
+ *  stable   — the ADR-0021 hash-gated identity sections only.
+ *  volatile — `## Active projects` + the fenced `## Latest daily log`.
+ *  Any of the three may be ''. */
 function renderDigestParts(vaultDir, layout, opts)
 
-/** UNCHANGED SIGNATURE AND UNCHANGED OUTPUT. Now composed from renderDigestParts:
- *  prefix-and-volatile first, then the stable sections — preserving today's exact
- *  byte order and the frozen golden. */
+/** UNCHANGED SIGNATURE AND UNCHANGED OUTPUT. Composed from renderDigestParts as
+ *  prefix + stable + volatile (E11) — today's exact byte order (prefix, identity,
+ *  projects, daily), so the frozen golden still matches byte-for-byte. */
 function renderDigest(vaultDir, layout, opts)
 ```
 
@@ -166,15 +197,15 @@ The single place these facts are decided.
 |-----|------|-------|
 | E1 | Stable membership | The four injected identity sections (`profile.md`, `preferences.md`, `goals.md`, `instructions.md`) that pass the ADR-0021 hash gate, the provenance gate and the EP4 secret scan. Nothing else, ever |
 | E2 | Volatile membership | Every banner in the prefix (refusal, identity-exclusion, alerts, transcript quarantine, secret quarantine, insecure modes, scheduler, update), `## Active projects`, and the fenced `## Latest daily log` |
-| E3 | `digest.md` | **Unchanged** — still the full render, still `writeFilePrivate` 0600, still byte-identical to today for a given input. `tests/golden/digest-default.md` is frozen |
-| E4 | New files | `<core>/state/digest-stable.md` and `<core>/state/digest-volatile.md`, both `writeFilePrivate` 0600, both written by the same two callers that write `digest.md` |
-| E5 | Privacy | `'digest-stable.md'` and `'digest-volatile.md'` both join `A5_PRIVATE_FILE_BASENAMES` |
-| E6 | Claude block | Preamble + the **stable** text inline + one blank line + `@<abs path to digest-volatile.md>` |
-| E7 | Codex block | Preamble + the **stable** text inline. No import line (Codex has none). The pointer line is added by `WP-codex-block-pointer-line` |
+| E3 | `digest.md` | **Unchanged** — still the full render (`prefix` + `stable` + `volatile`, E11), still `writeFilePrivate` 0600, still byte-identical to today for a given input. `tests/golden/digest-default.md` is frozen |
+| E4 | New files | `<core>/state/digest-stable.md` = the `stable` body alone (no prefix). `<core>/state/digest-volatile.md` = `prefix` + `volatile` body — the banners ride with the volatile half, because they are the part that must stay fresh. Both `writeFilePrivate` 0600, both written by the same two callers that write `digest.md` |
+| E5 | Privacy | `'digest-stable.md'` **and** `'digest-volatile.md'` both join `A5_PRIVATE_FILE_BASENAMES`. Adding either **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
+| E6 | Claude block | Preamble + the **stable** text inline + one blank line + **two** import lines: `@<abs path to digest-volatile.md>` then `@<abs path to refusal-banner.md>`. The banner keeps its own import (Table D, D2a) because it must stay fresh precisely when nothing is re-rendering the digest |
+| E7 | Codex block | Preamble + the **stable** text + the **code-owned state-derived banners** (the `prefix`: refusal, identity-exclusion, alerts, transcript quarantine, secret quarantine, insecure modes, scheduler, update) as of the last sync. **Not** the projects list and **not** the daily log. No import line (Codex has none). The pointer line is added by `WP-codex-block-pointer-line`. Amended in round 2 by finding F7 (D3 amended 2026-08-30): making *all* volatile content absent removed Codex's proactive warnings, which is a fail-loud regression, not a fail-safe one |
 | E8 | Line cap | `MAX_LINES` 120 applies to **each** rendered file independently. The volatile render reserves its prefix lines exactly as `capDigest` does today; the stable render has no prefix, so its whole budget is body |
 | E9 | Byte cap | `MAX_BYTES` 32 KiB applies to **each** rendered file independently, with the same prefix reservation rule as E8 |
 | E10 | Truncation marker | Unchanged text, appended independently to whichever half truncates |
-| E11 | Composition order | `renderDigest` = volatile (prefix + its body) then stable body — matching today's byte order exactly, so E3 holds |
+| E11 | Composition order | **Three components**: `prefix`, `stable` body (identity), `volatile` body (projects + daily). `renderDigest` = `prefix` + `stable` + `volatile`, which is today's exact byte order (prefix → identity → projects → daily), so E3 holds |
 | E12 | Empty halves | Either half may render as `''`. An empty stable half means no identity note passed its gate; an empty volatile half means no banners and no vault activity. Neither is an error, and an empty file is still written (so a stale previous file is never left behind) |
 
 ### Mirrored Surface Checklist
@@ -207,12 +238,19 @@ discipline is on, and Table E above is the canonical table.
   `prefix`, then return them apportioned *and* joined. If
   `tests/golden/digest-default.md` moves by one byte, the refactor is wrong —
   do not update that golden to make it pass.
-- **Caps are the subtle part (E8, E9).** `capDigest` today reserves the prefix's lines
-  and bytes so the banner prefix can never be squeezed out by the body. Applying it
-  twice, once per half, is correct but must not be done by calling `capDigest` on the
-  concatenation and then splitting — that would apportion the budget by accident.
-  Give each half its own `capDigest(assembled, prefix)` call, with the stable half
-  passing `prefix = ''`.
+- **Caps are the subtle part (E8, E9), and there are THREE capped renders, not two.**
+  `capDigest(assembled, prefix)` reserves the prefix's lines and bytes so the banner
+  prefix can never be squeezed out by the body. With the three-component split (E11)
+  the calls are:
+
+  | Output | `assembled` | `prefix` argument |
+  |--------|-------------|-------------------|
+  | `digest.md` (E3, frozen) | `prefix` + `stable` + `volatile` | `prefix` |
+  | `digest-volatile.md` (E4) | `prefix` + `volatile` | `prefix` |
+  | `digest-stable.md` (E4) | `stable` | `''` |
+
+  Never call `capDigest` on a concatenation and then split the result — that apportions
+  the budget by accident and silently changes `digest.md`'s bytes, breaking E3.
 - **A consequence worth stating: each half gets the full 120-line / 32 KiB budget**, so
   the two files together may exceed what `digest.md` alone would have carried. That is
   intended — they are delivered through different channels and are never concatenated
@@ -265,21 +303,27 @@ discipline is on, and Table E above is the canonical table.
 - [ ] AC-1 — `renderDigest`'s output is byte-identical to before this WP for the default
       fixture; `tests/golden/digest-default.md` is unchanged with no golden update (E3,
       E11).
-- [ ] AC-2 — `renderDigestParts` returns a `stable` containing only identity sections
-      and a `volatile` containing the prefix banners, `## Active projects` and the
-      fenced daily log (E1, E2).
+- [ ] AC-2 — `renderDigestParts` returns three components: `prefix` (banners only),
+      `stable` (identity sections only), and `volatile` (`## Active projects` + the
+      fenced daily log). `renderDigest` composes them as prefix + stable + volatile
+      (E1, E2, E11).
 - [ ] AC-3 — An identity note failing the ADR-0021 hash gate is absent from `stable`,
       and its exclusion banner appears in `volatile` (E1, E2).
 - [ ] AC-4 — A distinctive token in the fixture's daily note appears in
       `digest-volatile.md` and in **neither** `CLAUDE.md` nor `AGENTS.md`.
 - [ ] AC-5 — Both new files are written on every `sync` and every `dream`
       `regenerateDigest`, with mode 0600 on POSIX (E4).
-- [ ] AC-6 — Both basenames are members of `A5_PRIVATE_FILE_BASENAMES` (E5).
+- [ ] AC-6 — **Both** `'digest-stable.md'` and `'digest-volatile.md'` are members of
+      `A5_PRIVATE_FILE_BASENAMES`, pinned by `tests/unit/private-fs.test.js` (E5).
 - [ ] AC-7 — An empty half still produces a written, empty file (E12).
 - [ ] AC-8 — The Claude block is preamble + stable text + one import line pointing at
       `digest-volatile.md`; the updated golden matches (E6).
-- [ ] AC-9 — The Codex block is preamble + stable text with **no** import line; the
+- [ ] AC-9 — The Codex block is preamble + stable text + the **prefix banners** as of
+      the last sync, with **no** import line and **no** projects list or daily log; the
       updated golden matches (E7).
+- [ ] AC-9a — A fixture with an active alert renders that alert's banner **into** the
+      Codex golden (F7: Codex keeps proactive warnings), while the same fixture's daily
+      log token appears in neither user-owned file (AC-4).
 - [ ] AC-10 — Each half is independently capped at 120 lines and 32 KiB, with the
       volatile half's prefix protected exactly as today (E8, E9).
 - [ ] AC-11 — A half that truncates carries the unchanged truncation marker; the other
@@ -299,13 +343,15 @@ npm test
 npm run lint
 # AC-1/E3 — the digest golden is frozen (expect NO output):
 git diff --stat -- tests/golden/digest-default.md
-# AC-4 — no daily-log content in either user-owned file:
+# AC-4 — no daily-log content in either user-owned file (expect NO output):
 grep -rn "Latest daily log" tests/golden/claude-adapter tests/golden/codex-adapter
 # E5 — both basenames registered:
 grep -n "digest-stable.md\|digest-volatile.md" src/core/private-fs.js
-# E6/E7 — exactly one import line for Claude, none for Codex:
-grep -c "^@" tests/golden/claude-adapter/CLAUDE.md   # expect 1
+# E6/E7 — two import lines for Claude, none for Codex:
+grep -c "^@" tests/golden/claude-adapter/CLAUDE.md   # expect 2
 grep -c "^@" tests/golden/codex-adapter/AGENTS.md    # expect 0
+# F7 — Codex keeps the state-derived banners but not the daily log:
+grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
 ```
 
 ## Out of scope (do NOT do these)
@@ -328,3 +374,42 @@ grep -c "^@" tests/golden/codex-adapter/AGENTS.md    # expect 0
    `feat(digest): stable/volatile split (WP-digest-stable-volatile-split)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1).
+- **2026-08-30 — Codex round-2 findings F2, F3 and F7, plus the wd-reviewer pass on
+  PR #174 (owner: ACCEPTED).**
+  - **F3 (the one that broke the spec's own guarantee).** Round 1's Table E11 specified
+    a **volatile-then-stable** composition. Today's actual render order is
+    `prefix` → identity → projects → daily, so E11 contradicted **E3/AC-1** — the
+    byte-identity safety rail this WP leans on — inside the same table. An implementer
+    following E11 would have produced a `digest.md` that failed its own frozen golden,
+    with no way to satisfy both rows. Corrected to a **three-component** render:
+    `prefix`, `stable` (identity), `volatile` (projects + daily); `digest.md` =
+    prefix + stable + volatile; `digest-volatile.md` = prefix + volatile;
+    `digest-stable.md` = stable alone. E3, E4, E11, `renderDigestParts`' return shape,
+    AC-2, and the capDigest apportionment note (now an explicit three-row table) all
+    updated, and the Current-state excerpt now calls the real order out in words so the
+    contradiction cannot recur silently.
+  - **F7 (D3 amended 2026-08-30).** Round 1 made *all* volatile content absent on a
+    hook-less Codex install, reasoning that absent beats stale. That holds for the
+    untrusted-derived daily log and **fails for the banners**: an absent alert is a
+    fail-loud regression, which is the exact failure mode this chain exists to fix.
+    E7 now copies the stable identity **plus the code-owned state-derived banners** into
+    the Codex block; only the daily log and the enumerated projects list are absent.
+    Codex keeps fail-loud at today's level — last-sync banners, no better. New AC-9a
+    asserts an alert reaches the Codex golden while the daily-log token reaches neither
+    user-owned file.
+  - **F2.** The motivation section's claim that the split moves content out of the
+    harness's *instruction* channel was **false** — an `@import` is inlined into user
+    memory, the same channel. Narrowed to what is actually true and sufficient: no
+    durable copied bytes, no 0644 exposure, ADR-0024 sink removed. The instruction-vs-
+    context distinction is now claimed only for the hook channel.
+  - **E5 mirror drift + required test (wd-reviewer note 10).** Table E5 named two new
+    A5 basenames while the Deliverables row named only one — a mirror that had already
+    drifted from its own canonical table. Both now name both, and
+    `tests/unit/private-fs.test.js` is a **required** Deliverable because it pins A5
+    membership by value and the boundary check rejects the PR without it.
+  - **E6.** The Claude block now carries **two** import lines (volatile digest, refusal
+    banner) per the F1 resolution in `WP-managed-block-by-reference`.

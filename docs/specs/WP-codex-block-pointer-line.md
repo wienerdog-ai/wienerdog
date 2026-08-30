@@ -35,16 +35,28 @@ untrusted-fenced latest daily log) — and established that only the stable half
 feature request. Its hooks engine is merged in `codex-rs` (TOML config, per-hook
 `trusted_hash`, a `SessionStart` event exists) but has **no documentation page** and is
 not a stable surface, and Codex requires the user to trust new hooks interactively via
-`/hooks` before they run at all. So on Codex:
+`/hooks` before they run at all.
 
-- the **stable** half is copied into the block, exactly as `AGENTS.md` can carry it;
-- the **volatile** half arrives only if the user has trusted the hook, and otherwise is
-  **absent** — not stale, absent.
+**Round-2 finding F7 amended ruling D3 on 2026-08-30, and it changes this WP's
+premise.** Round 1 made *all* volatile content absent on a hook-less Codex install,
+reasoning that absent is fail-safe where stale is not. That reasoning holds for the
+untrusted-derived daily log and **fails for the banners**: an absent alert or refusal
+banner is not fail-safe, it is a fail-loud *regression* — and this whole chain exists
+because a warning went undelivered for four weeks. So on Codex:
 
-That asymmetry is an owner ruling (D2, D3), recorded in ADR-0039 §3, and this WP does
-**not** try to close it. What it does is stop the absence from being *silent*: the
-block gains a constant line naming the live digest path, so a Codex session can be
-told where the current context is and can read it if the user asks.
+- the **stable** identity is copied into the block;
+- the **code-owned state-derived banners** (alerts, refusal, quarantines, scheduler,
+  update, insecure modes) are **also** copied, as of the last sync;
+- the **enumerated projects list** and the **untrusted-derived daily log** are absent —
+  not stale, absent;
+- anything fresher than the last sync arrives only if the user has trusted the hook.
+
+Codex therefore keeps fail-loud at **exactly today's level** — last-sync banners, no
+better and no worse — while receiving no untrusted-derived bytes. That residual
+asymmetry against Claude Code is an owner ruling (D2, D3-as-amended) recorded in
+ADR-0039 §3 and its Amendment 1, and this WP does **not** try to close it. What this WP
+adds is a constant line naming the live digest path, so the gap between the last sync
+and now is *named* rather than silent.
 
 **Why a constant line and not a timestamp.** ADR-0039's Alternatives rejects a
 `rendered: <ISO>` stamp explicitly: it would make every `sync` produce different block
@@ -99,8 +111,8 @@ out.notices.push(
 ```
 
 **That notice is now false in its second clause** and is a deliverable of this WP: the
-block carries the *stable* half, so context does **not** "work regardless" — the
-volatile half genuinely requires the hook.
+block carries the stable identity plus the last-sync banners, so context does **not**
+"work regardless" — anything fresher than the last sync genuinely requires the hook.
 
 `AGENTS.override.md` **replaces** `AGENTS.md` rather than merging (researcher fact,
 2026-08-30), which is why the existing override notice tells the user to merge by hand.
@@ -140,9 +152,9 @@ function buildPointerLines(digestAbsPath)
 **The literal appended paragraph** (with `<DIGEST_ABS_PATH>` substituted):
 
 ```markdown
-Your live working memory — today's activity, active projects, and any Wienerdog
-warnings — is kept current at `<DIGEST_ABS_PATH>`. Read that file when you need it;
-the text above this line is only the part that changes rarely.
+Your live working memory — today's activity, active projects, and the current state of
+any Wienerdog warnings — is kept current at `<DIGEST_ABS_PATH>`. Read that file when you
+need it; the text above this line is only as fresh as the last `wienerdog sync`.
 ```
 
 The block body becomes: the stable digest text, one blank line, then this paragraph.
@@ -151,9 +163,8 @@ The block body becomes: the stable digest text, one blank line, then this paragr
 
 ```text
 Codex requires trusting new hooks via `/hooks` before they run. Until you do, your
-AGENTS.md carries only the stable part of your memory (who you are); today's activity
-and any Wienerdog warnings are not injected automatically — the block names the file
-to read instead.
+AGENTS.md carries who you are plus any Wienerdog warnings as of your last sync; today's
+activity is not injected automatically — the block names the file to read instead.
 ```
 
 ### Table F — the pointer-line contract
@@ -161,7 +172,7 @@ to read instead.
 | Row | Fact | Value |
 |-----|------|-------|
 | F1 | Applies to | Harnesses with **no** import mechanism. Today: Codex only. Never emitted into the Claude Code block, which imports instead |
-| F2 | Position | Last element of the block body: stable text, one blank line, then the pointer paragraph |
+| F2 | Position | Last element of the block body: stable text, the state-derived banners (Table E, E7), one blank line, then the pointer paragraph |
 | F3 | Path | The **absolute** path to `<core>/state/digest.md` — the full render, not `digest-volatile.md`, because a human or model reading one file should get the whole picture |
 | F4 | Path separators | Forward slashes on every platform, via `toPosixCommand` |
 | F5 | Path rendering | Inside backticks, so a path with spaces reads correctly and markdown does not mangle it |
@@ -209,8 +220,11 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
       than emit one whose resolution depends on the harness's cwd (F3).
 - [ ] The paragraph is fixed, code-owned text with exactly one interpolation — the path.
       No digest content, no vault content, no user string enters it.
-- [ ] This WP must not reintroduce volatile content into `AGENTS.md`. It names a file;
-      it does not inline it. Verify by grepping the golden for daily-log content.
+- [ ] This WP must not reintroduce **untrusted-derived** content into `AGENTS.md`. The
+      state-derived banners are code-owned fixed-template text with no untrusted bytes
+      (the rule `formatAlerts` and the quarantine banner already follow), which is
+      exactly why they are safe to copy where the daily log is not. Verify by grepping
+      the golden for daily-log and projects content.
 - [ ] The pointer text must not instruct the model to *act* on the file's contents —
       it says the file is memory to read, which keeps ADR-0032's untrusted-fenced daily
       log inside the fence when it is eventually read, rather than pre-authorizing it.
@@ -232,7 +246,9 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
       no longer contains "context works regardless" (F9).
 - [ ] AC-7 — The `AGENTS.override.md` notice is unchanged and still fires only on a
       successful block write (F10).
-- [ ] AC-8 — The golden `AGENTS.md` contains no daily-log content and no banner text.
+- [ ] AC-8 — The golden `AGENTS.md` contains **no** daily-log content and **no**
+      projects list, but **does** carry the state-derived banners when the fixture has
+      any (F7, Table E E7).
 - [ ] AC-9 — `buildPointerLines` throws on a relative path.
 - [ ] AC-10 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
 
@@ -249,8 +265,10 @@ git diff --stat -- tests/golden/claude-adapter/CLAUDE.md tests/golden/digest-def
 grep -nE "20[0-9]{2}-[0-9]{2}-[0-9]{2}|as of" tests/golden/codex-adapter/AGENTS.md
 # AC-6 — the false clause is gone (expect NO output):
 grep -n "context works regardless" src/adapters/codex.js
-# AC-8 — no volatile content copied into AGENTS.md (expect NO output):
-grep -n "Latest daily log\|\[!warning\]" tests/golden/codex-adapter/AGENTS.md
+# AC-8 — no untrusted-derived content copied into AGENTS.md (expect NO output):
+grep -n "Latest daily log\|Active projects" tests/golden/codex-adapter/AGENTS.md
+# F7 — but the state-derived banners ARE carried when the fixture has any:
+grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
 ```
 
 ## Out of scope (do NOT do these)
@@ -273,3 +291,20 @@ grep -n "Latest daily log\|\[!warning\]" tests/golden/codex-adapter/AGENTS.md
    `feat(adapters): Codex pointer line (WP-codex-block-pointer-line)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1).
+- **2026-08-30 — Codex round-2 finding F7 (owner: ACCEPTED — ruling D3 amended
+  2026-08-30).** Round 1 built this WP on the premise that a hook-less Codex install
+  receives **no** volatile content, with the pointer line as the consolation. The owner
+  amended D3 because that premise silently removed Codex's proactive warnings: an absent
+  alert or refusal banner is a **fail-loud regression**, not the fail-safe outcome round
+  1 claimed, and the four-week silent failure behind this whole chain is exactly what an
+  undelivered warning costs. The Codex block now copies the stable identity **plus the
+  code-owned state-derived banners** as of the last sync; only the untrusted-derived
+  daily log and the enumerated projects list stay absent. Codex keeps fail-loud at
+  today's level — last-sync banners, no better. Context, Table F row F2, the pointer
+  paragraph's wording ("only as fresh as the last `wienerdog sync`"), the corrected
+  hook-trust notice, AC-8, the security checklist and the verification greps all follow.
+  The constant pointer line and the no-timestamp rule (F6) are unchanged.

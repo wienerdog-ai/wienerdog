@@ -34,6 +34,20 @@ dream's brain reads the user's own transcripts, which include external `tool_res
 content — so what else is in that brain's context is a security question, not a
 cosmetic one.
 
+**The verdict is BLOCKING (round-2 finding F4).** Round 1 made this WP a measurement
+whose adverse outcome had no consequence — "report, do not decide" — which is not a
+gate at all. It now is one. `WP-managed-block-by-reference` depends on this WP, and
+this WP's Done criteria are **disjunctive**:
+
+| Verdict | This WP is Done when |
+|---------|----------------------|
+| **not loaded** | the finding is recorded in the logbook entry (below) |
+| **loaded** | the finding is recorded **and** `WP-hermetic-user-memory-suppression` is merged |
+
+So an adverse measurement stops the block-shape work until it is resolved, rather than
+being noted and stepped over. "Report, do not decide" still governs *this* WP's code —
+you do not change `composeClaudeArgs` here — but the reporting now has teeth.
+
 Two outcomes, and both are actionable:
 
 - **If user-level `CLAUDE.md` is NOT loaded** in a hermetic run, ADR-0025's "no
@@ -179,10 +193,14 @@ as an amendment candidate for ADR-0025.
   `claude --version` measured against, the date, the exact argv, and the raw
   per-case verdicts. A version-less finding is worthless three releases later — that is
   why Amendment 2 rejected pinning in the first place.
-- **Report, do not decide.** If the answer is "loaded", do not change
-  `composeClaudeArgs`, do not add `--bare`, and do not alter the profile. Write the
-  finding and stop; the owner rules on the response, and any product change is a
-  separate WP.
+- **Report, do not decide — but the report now gates.** If the answer is "loaded", do
+  not change `composeClaudeArgs`, do not add `--bare`, and do not alter the profile in
+  **this** WP. Write the finding, then fill in `WP-hermetic-user-memory-suppression`'s
+  Current-state placeholder with the measured fact and flip that spec to the owner for
+  scheduling. This WP is not Done until that successor is merged (the disjunctive Done
+  criteria in Context). The separation still holds — the measurement and the response
+  are different WPs — but the chain no longer proceeds over an unresolved adverse
+  finding.
 - Skip cleanly with a clear message (exit 0, "skipped: no `claude` on PATH") when the
   binary or credentials are absent, so a contributor without them is not blocked.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
@@ -221,6 +239,12 @@ as an amendment candidate for ADR-0025.
 - [ ] AC-8 — `docs/specs/logbook/2026-08-30-hermetic-user-memory-canary.md` exists and
       states: the `claude --version`, the date, the argv, the five verdicts, and one
       sentence on what it means for ADR-0025 and ADR-0039 §2.
+- [ ] AC-9 — **The gate is honoured (round-2 finding F4).** If case A reports
+      **loaded**, `WP-hermetic-user-memory-suppression`'s Current-state placeholder is
+      filled in with the measured fact in this same PR, and this WP's `status:` is
+      **not** advanced past `In-Review` until that WP is merged. If case A reports **not
+      loaded**, say so explicitly in the PR body and in the logbook entry, and note that
+      the suppression WP is not needed.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -237,7 +261,8 @@ grep -n "composeClaudeArgs\|getProfile" tests/scenarios/memory-canary/run-memory
 ## Out of scope (do NOT do these)
 
 - Changing `composeClaudeArgs`, any runtime profile, or the hermetic argv — even if
-  the finding is "loaded". Report; the owner decides.
+  the finding is "loaded". That is `WP-hermetic-user-memory-suppression`'s job. Report,
+  fill in its Current-state placeholder, and let the owner schedule it.
 - Changing the managed block or the adapters — that is
   `WP-managed-block-by-reference`, which this WP gates.
 - Amending ADR-0025 — propose it in the PR body; the amendment is the owner's call
@@ -251,3 +276,17 @@ grep -n "composeClaudeArgs\|getProfile" tests/scenarios/memory-canary/run-memory
    `test(scenarios): hermetic user-memory canary (WP-memory-import-hermetic-canary)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1).
+- **2026-08-30 — Codex round-2 finding F4 (owner: ACCEPTED).** Round 1 wrote this as a
+  pure measurement — "report, do not decide" — with no consequence attached to an
+  adverse verdict. A canary whose bad outcome changes nothing is not a gate, and
+  `WP-managed-block-by-reference` would have shipped over an unresolved finding while
+  formally "depending on" this WP. Changes: the **loaded** verdict is now blocking; Done
+  criteria became **disjunctive** (*not loaded, recorded* / *loaded, and the suppression
+  WP merged*); the adverse branch spawns `WP-hermetic-user-memory-suppression`, whose
+  Current-state placeholder this WP fills in with the measured fact; new **AC-9** pins
+  the gate. The "report, do not decide" discipline still governs this WP's own code —
+  what changed is that the report now stops the chain instead of annotating it.

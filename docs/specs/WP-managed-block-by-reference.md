@@ -190,7 +190,7 @@ status. It already has `staleHookChecks(paths, harnesses)` and `skillLinkChecks(
 |--------|------|-------|
 | modify | src/adapters/claude.js | reference block (Table D); explicit SessionStart de-registration; rewrite the stale header comment |
 | modify | src/adapters/shared.js | `buildReferenceBody`; `applySettings` gains a `removeEvents` parameter |
-| modify | src/cli/doctor.js | check the managed block's import target resolves |
+| modify | src/cli/doctor.js | check the **digest** import target resolves (D12); never fault a missing **banner** target (D12a) |
 | modify | tests/golden/claude-adapter/CLAUDE.md | the new reference block |
 | modify | tests/unit/claude-adapter.test.js | block shape, de-registration, manifest `commands` |
 | modify | tests/unit/doctor.test.js | the import-target check, all three verdicts |
@@ -208,8 +208,11 @@ change — Codex is untouched here and `renderDigest` is not modified.
  *  (Table D). Pure — no fs. The returned string is passed to applyManagedBlock in
  *  place of the digest bytes.
  *  @param {string} digestAbsPath absolute path to <core>/state/digest.md
+ *  @param {string} bannerAbsPath absolute path to <core>/state/refusal-banner.md.
+ *    This target is normally ABSENT and that is the healthy state (D2b) — the
+ *    function does NOT check for it, and sync does NOT gate on it.
  *  @returns {string} */
-function buildReferenceBody(digestAbsPath)
+function buildReferenceBody(digestAbsPath, bannerAbsPath)
 ```
 
 ```js
@@ -238,11 +241,20 @@ Wienerdog keeps that file current; this block does not change between runs of
 `wienerdog sync`.
 
 @<DIGEST_ABS_PATH>
+@<REFUSAL_BANNER_ABS_PATH>
 <!-- wienerdog:end -->
 ```
 
-That is `BEGIN`, the four-line preamble, a blank line, the import line, `END` — exactly
-what `buildBlock(buildReferenceBody(digestAbsPath))` produces.
+That is `BEGIN`, the four-line preamble, a blank line, the **two** import lines, `END` —
+exactly what `buildBlock(buildReferenceBody(digestAbsPath, bannerAbsPath))` produces.
+The second target is normally **absent** on disk, and is skipped silently when it is
+(Table D, D2a/D2b).
+
+### Blocked-by (research gates)
+
+| Gate | Blocked until | Why |
+|------|---------------|-----|
+| R2 — does a hermetic run load user-level `CLAUDE.md`? | `WP-memory-import-hermetic-canary` reaches **Done**, whose criteria are disjunctive: either *"not loaded — recorded"*, **or** *"loaded — and `WP-hermetic-user-memory-suppression` is merged"* | Round 2 finding F4: a canary whose adverse verdict has no consequence is a measurement, not a gate. If user memory **is** loaded hermetically, the managed block already carries the digest into the dream's own brain, and this WP would change *which* digest reaches it. That must be resolved, not noted, before the block shape changes |
 
 ### Table D — the Claude Code managed-block delivery contract
 
@@ -251,8 +263,10 @@ specs cite this table rather than restating it.
 
 | Row | Fact | Value | Revised by |
 |-----|------|-------|-----------|
-| D1 | Block body | Fixed code-owned preamble + one blank line + one import line. No digest bytes | `WP-digest-stable-volatile-split` adds the stable half above the import |
-| D2 | Import line | `@` immediately followed by the **absolute** path to `<core>/state/digest.md`, alone on its line, never inside a code span or fence | — |
+| D1 | Block body | Fixed code-owned preamble + one blank line + **two** import lines: the digest, then the refusal banner. No digest bytes, no banner bytes | `WP-digest-stable-volatile-split` adds the stable half above the imports |
+| D2 | Digest import | `@` immediately followed by the **absolute** path to `<core>/state/digest.md`, alone on its line, never inside a code span or fence | — |
+| D2a | Banner import | A second import line, `@` + the **absolute** path to `<core>/state/refusal-banner.md`, on its own line directly after D2. Added in round 2 (finding F1): §2 de-registers the SessionStart hook, which was §5's only banner channel for Claude Code, so the block must carry the banner itself | — |
+| D2b | Banner absence | The refusal-banner file is **absent** whenever no job has refused — that is the healthy state. A missing import target is skipped **silently**, which is exactly the wanted semantics: no refusal, no banner, no noise. D5's existence precondition applies to the **digest** import only, never to this one | — |
 | D3 | Path form | Absolute, from `path.join(paths.state, 'digest.md')`. **Not** `~`-prefixed and not relative, so it is independent of how the harness resolves `~` | — |
 | D4 | Path separators | Forward slashes on every platform, via the existing `toPosixCommand` normalizer in `shared.js` | — |
 | D5 | Precondition | The block is written **only** when `digest.md` exists. Absent → skip the block with the existing notice (a missing import target is skipped **silently** by the harness) | — |
@@ -262,7 +276,8 @@ specs cite this table rather than restating it.
 | D9 | SessionEnd registration | Unchanged — still registered | — |
 | D10 | Hook script copy | `session-start.sh` is still copied to `<core>/bin/` and still manifest-recorded: it is shared with the Codex adapter and must stay present and reversible | — |
 | D11 | Manifest `commands` | After the removal pass, `recordSettingsEntry` records only the commands still registered. The orphan hazard is closed by removing at sync time, not by widening the record | — |
-| D12 | Doctor | Reads the block, extracts the import target, and reports `ok` when it resolves to an existing file, `fail` when it does not, and nothing when there is no block or no import line | — |
+| D12 | Doctor — digest import | Reads the block, extracts the **digest** import target, and reports `ok` when it resolves to an existing file, `fail` when it does not, and nothing when there is no block or no import line | — |
+| D12a | Doctor — banner import | **Never reports a fault for a missing refusal-banner target.** Absence is healthy (D2b). Doctor may report `ok` when the banner exists, or stay silent; it must not emit `warn` or `fail` for absence. Getting this wrong turns a clean install into a permanent `doctor` failure | — |
 | D13 | Codex | Untouched by this WP — `AGENTS.md` keeps the full copy | `WP-digest-stable-volatile-split`, `WP-codex-block-pointer-line` |
 | D14 | Cowork limitation | Cowork sessions skip user-scope imports resolving outside the session `cwd` and skip a symlinked `~/.claude/CLAUDE.md`. Such a user gets the preamble only. Documented, not worked around | — |
 
@@ -352,8 +367,9 @@ the spot:
 - [ ] AC-1 — With a digest present, the block equals
       `buildBlock(buildReferenceBody(digestAbsPath))` byte-for-byte, and the updated
       golden matches (D1).
-- [ ] AC-2 — The block contains exactly one line beginning with `@`, that line is the
-      absolute digest path, and it is not indented and not fenced (D2, D3).
+- [ ] AC-2 — The block contains exactly **two** lines beginning with `@`: the absolute
+      digest path, then the absolute refusal-banner path, in that order, neither
+      indented nor fenced (D2, D2a, D3).
 - [ ] AC-3 — The block contains **no** digest content: grep the produced `CLAUDE.md`
       for a string present in the fixture digest body and find nothing (D1).
 - [ ] AC-4 — On Windows-style paths the import line uses forward slashes (D4).
@@ -375,9 +391,13 @@ the spot:
       SessionEnd command and not the SessionStart one (D11).
 - [ ] AC-13 — `<core>/bin/session-start.sh` is still copied and still has its `file`
       manifest entry (D10).
-- [ ] AC-14 — `doctor` reports `ok` when the import target exists, `fail` when the
-      block has an import line whose target is missing, and emits no such line when
-      `CLAUDE.md` has no managed block (D12).
+- [ ] AC-14 — `doctor` reports `ok` when the **digest** import target exists, `fail`
+      when the block has a digest import line whose target is missing, and emits no such
+      line when `CLAUDE.md` has no managed block (D12).
+- [ ] AC-14a — `doctor` emits **no `warn` and no `fail`** when the **refusal-banner**
+      import target is missing, on an otherwise-healthy install. Assert the whole
+      `doctor` run is clean with the banner absent (D12a) — this is the normal state of
+      every working machine, so a fault here would make `doctor` permanently red.
 - [ ] AC-15 — `tests/golden/codex-adapter/**` and `tests/golden/digest-default.md` are
       unchanged (D13).
 - [ ] AC-16 — Running the full `wienerdog sync` twice is idempotent: the second run
@@ -392,8 +412,9 @@ npm test
 npm run lint
 # D13/AC-15 — Codex and the digest golden are untouched (expect NO output):
 git diff --stat -- tests/golden/codex-adapter tests/golden/digest-default.md
-# D1/D2 — the golden is a reference block, not a copy:
-grep -c "^@" tests/golden/claude-adapter/CLAUDE.md   # expect 1
+# D1/D2/D2a — the golden is a reference block, not a copy, with BOTH imports:
+grep -c "^@" tests/golden/claude-adapter/CLAUDE.md   # expect 2
+grep -n "refusal-banner.md" tests/golden/claude-adapter/CLAUDE.md
 grep -n "Ada Kovács" tests/golden/claude-adapter/CLAUDE.md  # expect NO output
 # D8 — the Claude adapter no longer ENSURES SessionStart, and explicitly removes it:
 grep -n "SessionStart" src/adapters/claude.js
@@ -423,3 +444,26 @@ grep -n "copyHookScript(startSrc" src/adapters/claude.js
    `feat(adapters): managed block by reference (WP-managed-block-by-reference)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-08-30 — created** from the ADR-0039 chain (round 1).
+- **2026-08-30 — Codex round-2 findings F1, F2 and F4 (owner: ACCEPTED).**
+  - **F1 (the blocking one).** ADR-0039 §2 de-registers the Claude Code SessionStart
+    hook, and §5 delivered the refusal banner *through that hook*. Applied together, the
+    round-1 chain would have left a Claude Code user with **no** refusal-banner channel
+    — reintroducing the four-week silent failure this chain exists to fix. Resolution:
+    the block carries a **second import line** for `state/refusal-banner.md`. New Table D
+    rows **D2a** (the line) and **D2b** (absence is healthy, and D5's existence
+    precondition applies to the digest import only), plus **D12a**: `doctor` must never
+    fault a missing banner target. That last one matters more than it looks — the banner
+    is absent on every healthy machine, so a naive "import target must resolve" check
+    would make `doctor` permanently red for everyone. New AC-14a asserts it.
+  - **F2.** The instruction-channel claim was narrowed at the ADR level; this spec never
+    asserted it, so nothing here changed beyond inheriting the corrected motivation.
+  - **F4.** The canary gate became **blocking**. Added an explicit **Blocked-by** table
+    rather than leaving the gate as prose: this WP proceeds only once
+    `WP-memory-import-hermetic-canary` is Done under its disjunctive criteria — *not
+    loaded, recorded*, or *loaded, and `WP-hermetic-user-memory-suppression` merged*.
+  - Golden, `buildReferenceBody`'s signature, AC-2 and the verification greps updated
+    for the two-import block shape.

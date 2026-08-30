@@ -107,15 +107,21 @@ managed-block compile) inherits the fence — the fix is made once, at the sourc
 That remains true of the chokepoint. ADR-0039 (Proposed) changes the consumer list,
 and in a direction stronger than inheriting the fence.
 
-**The gap this closes.** The fence is a **soft** boundary — §Why the fence closes the
-vector states that residual plainly. Its strength therefore depends on the *channel*
-the fenced text arrives in, which this ADR did not consider. A harness presents
-`CLAUDE.md`/`AGENTS.md` as instructions (Claude Code's own preamble tells the model
-those instructions **override** default behavior); a SessionStart hook's
-`additionalContext` is presented as context. Copying the whole digest into the
-managed block therefore placed the fenced, mixed-provenance daily summary into the
-*instruction* channel — the worst available home for it — while the identical bytes
-also arrived through the data channel via the hook.
+**The gap this closes.** Copying the whole digest into the managed block made the
+fenced, mixed-provenance daily summary a **durable, copied artifact** inside a file the
+user owns, at 0644, outside `scanPrivateModes`' in-core scope — where the same bytes
+also sat in `state/digest.md` at 0600. That is what the amended consumer list removes.
+
+**Correction, and the narrower claim (ADR-0039 Amendment 1, round-2 finding F2).** An
+earlier draft of this amendment argued the change also moved the summary out of the
+harness's *instruction* channel and into a *data* channel. **That is not true of an
+import.** A harness does present `CLAUDE.md`/`AGENTS.md` as instructions (Claude Code's
+preamble tells the model those instructions **override** default behavior) while a
+SessionStart hook's `additionalContext` is presented as context — but an `@import` is
+**inlined into user memory**, which is the *same* instruction channel as `CLAUDE.md`
+itself. So the instruction-versus-context improvement is claimed **only** where content
+moves to the **hook** channel, and nowhere else. The durable-copy and 0644 results
+above stand on their own and are what justify the change.
 
 **The amended consumer list.** Under ADR-0039 the digest renders in two parts. The
 **stable** part (the ADR-0021 hash-gated identity notes) is the only part ever copied
