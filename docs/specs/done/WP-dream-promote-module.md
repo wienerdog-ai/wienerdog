@@ -843,11 +843,19 @@ through MS-21 — and nothing above reaches them.** They are the machine walker'
 (`scripts/mirror-walk.js`, which `WP-dream-promote-in-workspace` names as the
 surface built because a registered mirror went unwalked). No sentence in this
 section certifies them, and none may be added that does without the walk behind
-it. **That walker cannot yet read this registry: it recognises a checklist entry
-only by a leading `- [ ]` / `- [x]` bullet, so the table above parses as zero
-entries. Teaching it to accept a row whose Walk-state cell holds the state is a
-change to that script, tracked on branch `tools/mirror-walk` and outside this
-package's Deliverables.**
+it. **That walker NOW READS this registry, and its part in these fifteen rows is
+narrower than "walking" them.** `scripts/mirror-walk.js` reads BOTH checklist
+forms — in the table form its delimiter row opens the registry, every following
+pipe row is one entry and the first non-pipe line closes it, so all 21 rows
+above parse (measured: 21 entries, zero unresolved references). **What it does for a row is EXISTENCE and the REVERSE INDEX, and
+nothing beyond them:** it resolves the table letters, table-row ids and
+`docs/specs` paths a row names, and it answers which rows register a given
+surface. **It cannot read a sweep, it resolves nothing at LINE level — no
+`file.js:120-130` citation in any row is read — and an unregistered mirror is
+invisible to it.** So it never moves a row's Walk state, and the fifteen still
+need the human walk this paragraph withholds. (Owner ruling of 2026-08-30
+narrowing the tool's claim; this sentence is aligned to it, replacing the
+"cannot yet read this registry" statement the landing falsified.)
 
 **One registry GAP, recorded because the registry cannot catch what it does not
 name:** `docs/GLOSSARY.md` is a Deliverable of this package and mirrors both the
