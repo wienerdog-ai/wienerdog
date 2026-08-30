@@ -68,16 +68,16 @@ characters, and the owner ruled it lettered (round 6 of the design loop;
 `grep -rhoE '^### Table [A-Z]' docs/specs/` **at `98f0cef` — the tip BEFORE this
 amendment created Table Y** — the letters live anywhere under
 `docs/specs/` were A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
-and W, and I, X, Y and Z occurred nowhere. **At HEAD the list is that same set
-plus Y; I, X and Z remain free.** Both readings are stated in the past tense
-against a named revision, because a present-tense measurement is falsified by
-the very change it justifies — which is what the round-2 PR gate found here, in
+and W, and I, X, Y and Z occurred nowhere. **Measured again at `5bacae5`, the tip of the amendment that created it, the
+list was that same set plus Y, with I, X and Z still free.** Both readings name
+the revision they were taken at and neither is present tense, because a
+present-tense measurement is falsified by the very change it justifies — which is what the round-2 PR gate found here, in
 a sentence that carried both tenses at once and contradicted itself three
 clauses apart.
 
 `Y` therefore collides with nothing in
-this family, nothing in the shipped package below, and nothing in any other
-spec in the tree — **the collision table below stays at five rows and gains
+this family, nothing in the shipped package named above, and nothing in any other
+spec in the tree — **the collision table above stays at five rows and gains
 none.** `I` was rejected because its row ids (`I1`) are misread as `11` or `Il`
 in running prose; `X` because this family already uses `### Table X` as its
 METASYNTACTIC placeholder for "some table", so a real one would collide with the

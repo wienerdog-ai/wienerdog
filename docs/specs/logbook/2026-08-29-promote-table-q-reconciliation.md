@@ -1868,95 +1868,21 @@ one contract is the exact defect this whole amendment exists to remove.
 cause of its unreliable row resolution: `stripFindingIds`' first regex is
 case-insensitive and permits zero digits, so it deletes real row citations along
 with runs of short words before extraction — `(round 6's CD-1, see row Y4)`
-becomes `( )`. **Its header is the single canonical statement of what it checks;
-this record states only why it exists and where it went.**
+becomes `( )`. **Its header is the single canonical statement of what it checks — on
+`tools/mirror-walk`, commit `240881c`, cited by SHA so the pointer survives a
+rebase of that branch. This record states only why it exists and where it went,
+and the remedy was DELETION, not a fourth re-wording: a second description is
+exactly what produced the finding.**
 
-**RESOLUTION SCOPE, because table letters are per-spec and a tree-wide index makes
-every letter ambiguous:** an entry's references resolve against its OWN spec plus
-every spec that spec reaches — by full path, by bare WP id, or via `depends_on`.
-All three citation forms are in live use here, and a scope that missed any of them
-would report a correct sibling citation as a defect.
-
-**AND THE QUERY THAT IS THE POINT:** `--surface G8` is the **reverse index** —
-every checklist entry, across every spec, that names a given surface. **That is
-the query no human step ran, and running it on `G8` returns five entries across
-three specs.** CD-1 is exactly the defect of not having run it.
-
-**WHAT IT DOES NOT CHECK, stated in the script's own header so a green run is
-never over-read:**
-
-- **whether a surface was CORRECTLY SWEPT.** It cannot read a sweep. A green run
-  says the mirrors point at something real, and nothing more. The script's last
-  line of output says so in capitals.
-- **whether a mirror list is COMPLETE.** An UNREGISTERED mirror is invisible to
-  it; only a human or a review gate finds those.
-- **prose-named mirrors** — "the decided-bytes acceptance criterion", "Current
-  state's validate.js bullet". `--list` prints the entry so a sweeper reads them.
-- **which of two colliding owners a row id means.** Ambiguity inside a scope is
-  REPORTED, never failed: the canonical map records those collisions as resolved
-  by prose qualification, which no parser can check.
-- **ids whose letter names no table in scope.** Other specs in this repo address
-  Deliverables rows (`D1`), verification commands (`V5`) and test-index rows
-  (`T6`) with the same lexical shape. Those are SKIPPED and counted — failing
-  them would report another family's addressing scheme as this family's defect.
-
-**FIRST RUN, against the finished tree, pasted rather than described.**
-
-```
-$ node scripts/mirror-walk.js --scope dream-promote
-mirror-walk (scope: dream-promote): 53 checklist entries across 3 specs (3 scanned)
-  row references: 68   table references: 54   spec-path references: 7
-  skipped: 2 ids whose letter names no table in scope (another addressing scheme, not a mirror) — --skipped lists them
-
-AMBIGUOUS — 66 references. Reported, NEVER failed: the canonical table-letter map records these collisions as resolved by prose qualification, which no parser can check. Distinct colliding surfaces:
-  Table C → WP-dream-promote-module.md | WP-dream-baseline-delta-primitive.md | WP-dream-denied-object-disposal.md | WP-dream-fence-candidate-set.md | WP-dream-gate-inputs-baseline-delta.md   (4 entries)
-  Table D → WP-dream-promote-module.md | WP-dream-gate-inputs-baseline-delta.md   (6 entries)
-  Table E → WP-dream-promote-module.md | WP-dream-gate-inputs-baseline-delta.md   (5 entries)
-  Table H → WP-dream-vault-write-primitive.md | WP-secret-fence-ep2-redact-arm.md   (3 entries)
-  Table N → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (5 entries)
-  Table Q → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (8 entries)
-  Table R → WP-dream-promote-module.md | WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (8 entries)
-  row N3 → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
-  row Q1 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
-  row Q10 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (6 entries)
-  row Q2 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
-  row Q4 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
-  row Q8 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (6 entries)
-  row Q9 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (4 entries)
-  row R4 → WP-dream-promote-report.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
-  row S3 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
-  row S5 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (1 entry)
-  row S6 → WP-dream-promote-module.md | WP-secret-fence-ep2-redact-arm.md   (2 entries)
-  (--ambiguous lists every site)
-
-Every mechanically-addressable mirror resolves. THIS DOES NOT MEAN ANY SURFACE WAS SWEPT.
-(Verbatim as printed AT `36cfc23`. Both this verdict text and the line numbers
-below have since moved — the verdict was rewritten when the tool's claim narrowed,
-and the report spec gained a line at :257. Pinned rather than re-pasted: a paste
-re-taken at each tip is a citation that goes stale silently, which is the defect
-the map's own measurement was corrected for two sections up.)
-$ echo $?
-0
-```
-
-```
-$ node scripts/mirror-walk.js --surface G8 --scope dream-promote
-row G8 is named by 5 Mirrored Surface Checklist entries (scope: dream-promote):
-  docs/specs/WP-dream-promote-in-workspace.md:393
-      **The two consumers of the decided bytes** — rows G8 and G10, and row S6
-  docs/specs/WP-dream-promote-in-workspace.md:460
-      **THE PARTIALLY PUBLISHED REPORT — this side of a TWO-SIDED contract,
-  docs/specs/WP-dream-promote-module.md:784
-      **Table S — the decided bytes.** Its mirrors are the `@returns` shape
-  docs/specs/WP-dream-promote-report.md:493
-      **The `report` union's arms** — `### Exact contracts`, Table R's four
-  docs/specs/WP-dream-promote-report.md:523
-      **Table Y — the report's SECOND write and its `accounting`** (owner
-```
-
-**WHAT THE FIRST RUN FOUND, and it earned its keep on both counts.**
-
-1. **The family is GREEN — every mechanically-addressable mirror resolves, and
+**HISTORICAL, and qualified — read the canonical header before trusting it.**
+The run this section reported was taken at `c96c7e3`, before the tool left this
+branch; its verbatim output is NOT reproduced here — a paste nobody can refresh
+is a citation that goes stale silently — so no reader can re-run it on this
+branch; and its `row references: 68` assert NOTHING, because
+the canonical header records that a green run says nothing about row ids until
+`stripFindingIds` is fixed. What it does establish is TABLE and SPEC-PATH
+resolution. With that stated:
+**the family is GREEN on what the tool actually checks, and
    the two skipped ids are correct skips** (`M2`, `M3` in the module spec: rows
    of an unlettered table, so their letter names no `Table M`. Observed, not
    filed — an unlettered table with three rows is nowhere near this pass's
@@ -2245,11 +2171,13 @@ whoever folds PR #31 back has nothing to reconcile on this field.** If it is eve
 authorized, the settlement arrives as an AMENDMENT to that `Done` spec rather
 than as a spec sentence somebody has to notice.
 
-**G. ONE NEW REPO FILE, outside PR #31's subject entirely.**
-`scripts/mirror-walk.js`. It is not in any Deliverables table, it is not wired
-into CI, and it touches no product surface — **so it neither conflicts with PR
-#31 nor needs folding into it.** Noted here only so its arrival is not
-discovered.
+**G. NO NEW REPO FILE — corrected 2026-08-30.**  `scripts/mirror-walk.js` was
+routed OUT of PR #32 by owner ruling and lives on `tools/mirror-walk` (commit
+`240881c`) with its own gate. It is in no Deliverables table, no CI step and no
+`package.json` script, and it is absent from both PRs' diffs. This item said the
+opposite until a closing gate caught it — the divergence list was not swept when
+the tool was routed out, which is the same one-surface-short miss this record
+documents four times.
 
 **NOT ON THIS LIST, and deliberately:** every change of round 6 that is a
 citation re-point, a prohibition re-cut, a count removed or a false sentence
