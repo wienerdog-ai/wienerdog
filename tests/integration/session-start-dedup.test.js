@@ -2,8 +2,8 @@
 // WP-session-start-digest-dedup: the SessionStart hook injects the digest only
 // when the managed block of every present harness is not already carrying the
 // same bytes (ADR-0039). Drives templates/hooks/session-start.sh as a bash
-// subprocess through every Table A row A4-A12 and the Table B path resolutions
-// (B4, B6, B8, B9, B10), asserting exit 0 on every case: silence exactly when
+// subprocess through Table A rows A4-A11 and the Table B path resolutions
+// (B4, B6, B8, B10), asserting exit 0 on every case: silence exactly when
 // every present harness carries buildBlock(digest), the full envelope on any
 // mismatch, absence, ambiguity, oversize, override shadow, or zero harnesses.
 
