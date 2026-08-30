@@ -1,7 +1,7 @@
 ---
 id: WP-shim-recovery-message
 title: Make the CLI shim fail with a human recovery message when app/current is unresolvable, not a raw MODULE_NOT_FOUND
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

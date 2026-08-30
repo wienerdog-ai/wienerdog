@@ -435,7 +435,14 @@ function writeShim(paths, opts = {}) {
   const content =
     '#!/usr/bin/env bash\n' +
     '# Wienerdog CLI shim (managed) — points at the vendored app entry (ADR-0013).\n' +
-    `exec node "${currentBin(paths)}" "$@"\n`;
+    `WIENERDOG_ENTRY="${currentBin(paths)}"\n` +
+    'if [ ! -f "$WIENERDOG_ENTRY" ]; then\n' +
+    '  echo "wienerdog: the installed app files are missing or unreadable ($WIENERDOG_ENTRY)." >&2\n' +
+    '  echo "wienerdog: no command can run until they are restored. Reinstall Wienerdog from a trusted source." >&2\n' +
+    '  echo "wienerdog: if you have a checkout, \'npx wienerdog@latest sync\' reinstalls the vendored app." >&2\n' +
+    '  exit 127\n' +
+    'fi\n' +
+    'exec node "$WIENERDOG_ENTRY" "$@"\n';
   let same = false;
   try { same = fs.readFileSync(shimPath, 'utf8') === content; } catch { same = false; }
   let changed = false;

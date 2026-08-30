@@ -329,8 +329,9 @@ test('vendor: writeShim writes an executable launcher, records it, and is byte-i
   assert.equal(r.changed, true);
   const content = fs.readFileSync(r.path, 'utf8');
   assert.match(content, /^#!\/usr\/bin\/env bash$/m);
-  assert.ok(content.includes(`exec node "${vendor.currentBin(paths)}"`), 'execs the vendored current bin');
-  assert.equal(content.endsWith(' "$@"\n'), true);
+  assert.ok(content.includes(`WIENERDOG_ENTRY="${vendor.currentBin(paths)}"`), 'binds the vendored current bin');
+  assert.ok(content.includes('exec node "$WIENERDOG_ENTRY" "$@"'), 'execs via the guarded variable');
+  assert.equal(content.endsWith('exec node "$WIENERDOG_ENTRY" "$@"\n'), true);
   if (process.platform !== 'win32') {
     assert.equal(fs.statSync(r.path).mode & 0o111, 0o111, 'shim is executable');
   }
@@ -343,6 +344,127 @@ test('vendor: writeShim writes an executable launcher, records it, and is byte-i
   assert.equal(r2.changed, false, 'a re-run makes zero content changes');
   assert.equal(manifest.entries.filter((e) => e.kind === 'file' && e.path === r.path).length, 1);
 });
+
+test('vendor: writeShim generates exactly the guarded shim body (WP-shim-recovery-message AC-1)', () => {
+  const paths = tempPaths();
+  const r = vendor.writeShim(paths, {});
+  const content = fs.readFileSync(r.path, 'utf8');
+  const expected =
+    '#!/usr/bin/env bash\n' +
+    '# Wienerdog CLI shim (managed) — points at the vendored app entry (ADR-0013).\n' +
+    `WIENERDOG_ENTRY="${vendor.currentBin(paths)}"\n` +
+    'if [ ! -f "$WIENERDOG_ENTRY" ]; then\n' +
+    '  echo "wienerdog: the installed app files are missing or unreadable ($WIENERDOG_ENTRY)." >&2\n' +
+    '  echo "wienerdog: no command can run until they are restored. Reinstall Wienerdog from a trusted source." >&2\n' +
+    '  echo "wienerdog: if you have a checkout, \'npx wienerdog@latest sync\' reinstalls the vendored app." >&2\n' +
+    '  exit 127\n' +
+    'fi\n' +
+    'exec node "$WIENERDOG_ENTRY" "$@"\n';
+  assert.equal(content, expected);
+});
+
+test('vendor: writeShim remedy never instructs bare `wienerdog sync` (AC-5)', () => {
+  const paths = tempPaths();
+  const r = vendor.writeShim(paths, {});
+  const content = fs.readFileSync(r.path, 'utf8');
+  // The only occurrence of "sync" must be inside the npx reinstall line — never a
+  // bare "run wienerdog sync" recovery instruction, which the launcher's own
+  // reinstall remedy class deliberately withholds (REMEDY_TAIL.reinstall).
+  const syncLines = content.split('\n').filter((l) => l.includes('sync'));
+  assert.equal(syncLines.length, 1, 'exactly one line mentions sync');
+  assert.equal(
+    syncLines[0].trim(),
+    "echo \"wienerdog: if you have a checkout, 'npx wienerdog@latest sync' reinstalls the vendored app.\" >&2"
+  );
+  assert.equal(content.match(/wienerdog sync\b/g), null, 'no bare "wienerdog sync" instruction');
+});
+
+if (process.platform !== 'win32') {
+  const { execFileSync } = require('node:child_process');
+
+  test('vendor: writeShim runtime — missing entry writes 3 lines to stderr, nothing to stdout, exits 127 (AC-2)', () => {
+    const paths = tempPaths();
+    // Never point WIENERDOG_ENTRY at app/current itself: leave it unresolved.
+    const r = vendor.writeShim(paths, {});
+    let stdout = '';
+    let error;
+    try {
+      stdout = execFileSync(r.path, [], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      error = err;
+    }
+    assert.ok(error, 'exits non-zero');
+    assert.equal(error.status, 127, 'exit code 127');
+    assert.equal(stdout, '', 'nothing written to stdout on the caught path either');
+    assert.equal(error.stdout.toString('utf8'), '', 'stdout is empty');
+    const stderrLines = error.stderr.toString('utf8').split('\n').filter(Boolean);
+    assert.equal(stderrLines.length, 3, 'exactly three message lines');
+    for (const line of stderrLines) assert.ok(line.startsWith('wienerdog: '), 'each line is prefixed');
+  });
+
+  test('vendor: writeShim runtime — dangling symlink at app/current triggers the guard (AC-4)', () => {
+    const paths = tempPaths();
+    fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+    fs.symlinkSync(path.join(paths.core, 'app', 'nonexistent-version'), vendor.currentLink(paths));
+    const r = vendor.writeShim(paths, {});
+    let error;
+    try {
+      execFileSync(r.path, [], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      error = err;
+    }
+    assert.ok(error, 'exits non-zero on a dangling symlink target');
+    assert.equal(error.status, 127);
+  });
+
+  test('vendor: writeShim runtime — entry present execs node and forwards args and exit code (AC-3)', () => {
+    const paths = tempPaths();
+    fs.mkdirSync(path.dirname(vendor.currentBin(paths)), { recursive: true });
+    fs.writeFileSync(
+      vendor.currentBin(paths),
+      'console.log(process.argv.slice(2).join(","));\nprocess.exit(42);\n'
+    );
+    const r = vendor.writeShim(paths, {});
+    let stdout = '';
+    let error;
+    try {
+      stdout = execFileSync(r.path, ['foo', 'bar'], { encoding: 'utf8' });
+    } catch (err) {
+      error = err;
+      stdout = err.stdout ? err.stdout.toString('utf8') : '';
+    }
+    assert.equal(stdout.trim(), 'foo,bar', 'forwards all arguments unchanged');
+    assert.equal(error && error.status, 42, "exit code is node's");
+  });
+
+  test('vendor: writeShim runtime — correct for a HOME containing a space (AC-9)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-vendor-space-'));
+    const home = path.join(root, 'home with space');
+    const core = path.join(home, '.wienerdog');
+    fs.mkdirSync(core, { recursive: true });
+    const paths = getPaths({ HOME: home, WIENERDOG_HOME: core });
+
+    fs.mkdirSync(path.dirname(vendor.currentBin(paths)), { recursive: true });
+    fs.writeFileSync(
+      vendor.currentBin(paths),
+      'console.log("ran ok:", process.argv.slice(2).join(","));\n'
+    );
+    const r = vendor.writeShim(paths, {});
+    const stdout = execFileSync(r.path, ['x', 'y'], { encoding: 'utf8' });
+    assert.equal(stdout.trim(), 'ran ok: x,y');
+
+    // And the guard still fires correctly when that space-containing entry is missing.
+    fs.rmSync(vendor.currentBin(paths));
+    let error;
+    try {
+      execFileSync(r.path, [], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      error = err;
+    }
+    assert.equal(error && error.status, 127);
+    assert.ok(error.stderr.toString('utf8').includes(home), 'the space-containing path is quoted correctly');
+  });
+}
 
 test('vendor: writeShim on win32 also writes a .cmd launcher, byte-idempotent', () => {
   const paths = tempPaths();
