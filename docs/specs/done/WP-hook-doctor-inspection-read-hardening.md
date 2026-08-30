@@ -1,7 +1,7 @@
 ---
 id: WP-hook-doctor-inspection-read-hardening
 title: Type-guard and bound every inspection read, and make presence-doubt inject
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-session-start-digest-dedup]
@@ -10,6 +10,50 @@ epic: digest-delivery
 ---
 
 # WP-hook-doctor-inspection-read-hardening: type-guarded, bounded inspection reads, and presence-doubt injects
+
+> **Archived 2026-08-31, post-merge.** Shipped in PR #58 (`072093a`), after both
+> gates — wd-reviewer **APPROVE**, Codex **F1/F3 fixed** in `63abcf0` / `754b677`
+> before merge. This closes the `digest-delivery` epic. The text below carries
+> **five dated errata** folded in during this archive pass, plus two cosmetic
+> residuals and one optimiser warning, all recorded so a later pass does not
+> re-open them as defects.
+>
+> 1. **AC8 measured the wrong quantity** (Acceptance criteria). It asserted a
+>    threshold on `/usr/bin/time -l` **whole-process peak RSS**, while Table B row
+>    B7's `N = 17` was measured as a **forced-GC retained-set delta**. Those are
+>    different quantities, and the mismatch made the criterion
+>    **non-discriminating**: the pre-PR base code already exceeded AC8-as-worded
+>    by ~85 MiB on the same fixture, so it could not tell the change from its
+>    absence. **Resolved by moving AC8 onto B7's instrument**, with a separate
+>    threshold-free observation for whole-process peak — see the note below.
+>    Measured on the worst-case fixture: **retained set 49.9 MiB → N = 12.46**,
+>    inside the bound.
+> 2. **Exact contracts over-claimed where the two new doctor strings were
+>    decided.** It said their wording was "decided in Table B and nowhere else",
+>    which was never achievable — a condition clause has to be written where the
+>    condition is known. The **shipped shared template**
+>    `cannot inspect <path> — <condition>` is **ratified into rows B2/B3**.
+> 3. **Table E's mirror list still called ADR-0004 Amendment 1 pending.** It was
+>    **`OWNER-SIGNED 2026-08-31`** (PR #56). The entry now says so.
+> 4. **CR-1** — this spec is cited from shipped code at two different paths, and
+>    one form dangles after this archival. Recorded, not fixed: the hook comment
+>    is byte-locked canon. See "Cosmetic residuals".
+> 5. **CR-2** — B5's slow-tier message renders the ceiling number twice, forced by
+>    B5 requiring both the observed size and the ceiling. Awkward, not wrong; the
+>    obvious fix would violate B5. See "Cosmetic residuals".
+>
+> **One optimiser warning**, filed next to Table B row B7: `Buffer.alloc(MAX + 1)`
+> zero-fills 4 MiB even for a tiny file, and that is **correct** under Table C row
+> C2a — sizing from `st_size` is the length-trust C2a forbids.
+>
+> **A correction to one shipped lesson.** PR #58's second lesson bullet presents
+> `--max-old-space-size` as "the cheap corroboration" that the peak-vs-delta gap
+> is slack. wd-reviewer's adjudication narrowed that: the flag caps **V8 old
+> space, not RSS** — RSS stayed **~157 MB** under `--max-old-space-size=96` — so
+> it corroborates far less than it appears to. **The load-bearing evidence is the
+> retained-set figure**, which is why erratum 1 moves AC8 onto that instrument.
+> The bullet is appended to `memory/lessons/inbox.md` verbatim, per the dogfooding
+> rule, with a dated correction bullet beside it.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template
   gives the skeleton, the runbook the rules. Read both.
@@ -566,8 +610,8 @@ the guard, which round 1 found and the owner dispositioned FIX.
 | id | observed state | doctor must emit |
 |----|----------------|------------------|
 | B1 | target is a regular file at or under the ceiling | the existing `[ok]`/`[warn]` comparison lines, unchanged |
-| B2 | target `fstat`s as non-regular (FIFO, socket, device, directory, incl. via symlink) | one `[warn]`, **without a content read** |
-| B3 | opening the target throws anything but a clean `ENOENT` | one `[warn]` |
+| B2 | target `fstat`s as non-regular (FIFO, socket, device, directory, incl. via symlink) | one `[warn]`, **without a content read**, in the **shipped shared template** `cannot inspect <path> — <condition>` (`src/cli/doctor.js`, via `inspectionDoubt()`). **Ratified post-Done:** Exact contracts claimed both new strings' wording was "decided in Table B and nowhere else", which was never achievable — a condition clause has to be written where the condition is known. The template is canon from here; B2 and B3 share it and differ only in the clause |
+| B3 | opening the target throws anything but a clean `ENOENT` | one `[warn]`, in the same `cannot inspect <path> — <condition>` template as B2 (row B2 owns the template; this row owns only its condition clause) |
 | B4 | target is cleanly absent (`ENOENT`) | the existing `no Wienerdog block in <file>` warn, unchanged |
 | B5 | target is a regular file **larger than the ceiling** | one **actionable** `[warn]` naming the file, **its observed size**, and **the ceiling**, and telling the user to **trim the file below the ceiling and re-run `doctor`**. It must **NOT** suggest `wienerdog sync` — sync cannot shrink a user-owned `CLAUDE.md`, and an instruction that cannot work is worse than none. It must be distinguishable from B2/B3 and from "out of date": the file is fine, it is *too large to inspect*. **"Observed size", not actual size, and the difference is forced by row B7:** on the credible fast path (`st_size > ceiling`) print `st_size`; when over-cap was instead discovered by the `ceiling + 1` read on an **underreporting** file, the true size is unknowable without reading past the ceiling, which B7 forbids — print `larger than <ceiling>` and say no more. Round 4 found the earlier "actual size" wording demanding what B7 makes unobtainable |
 | B6 | any of B2, B3, B5, B9, B10 | `process.exitCode` is **not** set — no state here is a `fail` |
@@ -576,6 +620,15 @@ the guard, which round 1 found and the owner dispositioned FIX.
 | B9 | `<core>/state/digest.md` is non-regular, or over the ceiling, or its open throws anything but a clean `ENOENT` | one `[warn]` naming `digest.md` and the condition, and **no target is inspected** — without a trustworthy digest there is nothing to compare against. The second new string |
 | B10 | `<core>/state/digest.md` is cleanly absent (`ENOENT`) | **emit nothing at all** — the existing no-vault silence, unchanged |
 | B11 | the digest read | uses the same Table C mechanism as the targets. **`DigestCaps.MAX_BYTES` (32 KiB) is a product invariant about what `renderDigest` emits — it is not a filesystem-integrity guarantee.** Nothing stops a user, a bad merge, or a broken tool from putting something else at that path, so the reader must not assume the file it finds is the file Wienerdog wrote |
+
+> **Warning to a future optimiser (wd-reviewer finding 5, PR #58).**
+> `Buffer.alloc(MAX_TARGET_BYTES + 1)` zero-fills 4 MiB **even for a 12-byte
+> file**, which looks like obvious waste and is **correct under Table C row
+> C2a**. Sizing the buffer from `st_size` is exactly the length-trust C2a
+> forbids: an `st_size`-underreporting file would then get a short buffer and be
+> read as truncated. **Do not "optimise" this into a C2a violation.** If the
+> allocation ever needs to shrink, the only safe shape is a growable read that
+> still never consults `st_size` as a length.
 
 **The memory contract (row B7), quantified so AC8 has an objective threshold.**
 `digestBlockChecks` reads **at most `ceiling + 1` input bytes per target**, and
@@ -665,8 +718,10 @@ restating it, and moves with it:
 - the shipped script's header comment — **cites Table E by name** (in the Exact
   contracts text above);
 - this spec's Verification steps gates — **E1–E5 and E6a–E6c, eight in total**;
-- ADR-0004's Decision line, whose hook clause is under a **pending owner
-  signature** (Amendment 1, written in PR #53) — not editable here;
+- ADR-0004's Decision line, whose hook clause is governed by **Amendment 1 —
+  `OWNER-SIGNED 2026-08-31`** (written in PR #53, signed in PR #56). No longer
+  pending: the amendment is in force, so this mirror and ADR-0004 now agree and
+  move together;
 - `tests/integration/hooks-fail-open.test.js`'s file header. **This one is a
   known, deliberately uncorrected mirror**: that file is not a deliverable
   because it is this WP's independent witness. Recorded rather than quietly
@@ -727,6 +782,38 @@ are regular files or the ordinary special files a user creates by accident, and
 R-A covers the rest. The script's comments were softened in revision 3 to match —
 round 2 asked for exactly this, because "a device can never block this hook" was a
 universal the mechanism does not earn.
+
+## Cosmetic residuals — recorded so nobody "fixes" them into defects
+
+Neither is a defect. Both are recorded because the obvious tidy-up makes each
+one worse, and a later pass without this note would make it.
+
+**CR-1 — this spec is cited from shipped code at two different paths, and after
+this archival one form dangles.** Measured on `072093a`:
+
+| surface | line | cited path | after archival |
+|---|---|---|---|
+| `src/cli/doctor.js` (byte-mandated JSDoc) | 291 | `docs/specs/done/…` | **correct** |
+| `src/cli/doctor.js` | 232, 239 | `docs/specs/…` (non-`done/`) | dangling |
+| `templates/hooks/session-start.sh` | 15 | `docs/specs/…` (non-`done/`) | dangling |
+| `templates/hooks/session-start.sh` | 58 | bare WP id, no path | unaffected |
+
+**Note the spread is wider than the review summary had it:** `doctor.js` carries
+**both** forms, so this is a within-file inconsistency as well as a cross-file
+one. **Not fixed here, deliberately.** The hook comment is **byte-locked canon** —
+changing it is a script re-issue, which means a full sweep, `hooks-fail-open`,
+dedup, gate and timing re-run for a comment typo. **The surface a future pass
+should align is the hook comment and `doctor.js:232/239`, onto the `done/` form
+that `doctor.js:291` already uses**, and the cheapest moment is the next change
+that re-issues the script for a real reason.
+
+**CR-2 — B5's slow-tier message renders the same number twice.** It reads
+`larger than 4194304 bytes against the 4194304-byte ceiling`, because on the slow
+tier the observed size *is* "larger than the ceiling" and **row B5 requires both
+the observed size and the ceiling**. wd-reviewer's finding 4 on PR #58 classed it
+as awkward, not wrong. **Do not fix it by dropping one of the two facts** — that
+would violate B5. If it is ever reworded, both facts stay and only the phrasing
+changes (e.g. naming the ceiling once and the observation as "at or above it").
 
 ## Implementation notes & constraints
 
@@ -837,16 +924,23 @@ instead of failing it (round 1 finding 8).
       where the message says `larger than <ceiling>` and states no number it
       cannot know. A test that only covers the honest case leaves the branch B7
       forced into existence untested.
-- [ ] **AC8 (B7), with an objective threshold.** On a target of at least 64 MiB,
-      `doctor`'s peak RSS must not exceed **baseline + the Table B row B7 bound**
-      (B7 owns `N`, the ceiling and the product; this criterion asserts against
-      it and does not restate the number). **Baseline on
-      `152ae3a`: 418 MB peak against a 61 MB normal-file baseline**, i.e. today's
-      code fails this by a wide margin and grows without limit above 64 MiB.
-      **Run it at two sizes — 64 MiB and 256 MiB — and show the peak barely
+- [ ] **AC8 (B7) — measured with B7's own instrument.** On a target of at least
+      64 MiB, the **forced-GC retained-set delta** attributable to one target must
+      not exceed the Table B row B7 bound (B7 owns `N`, the ceiling and the
+      product; this criterion asserts against it and does not restate the
+      number). Measure it the way B7's own figure was measured: `--expose-gc`,
+      `gc()`, RSS before, run the reader pipeline, `gc()`, RSS after. **Run it at
+      two sizes — 64 MiB and 256 MiB — and show the retained delta barely
       moves**; that is what distinguishes bounded from merely-smaller, and a
       single size cannot. Also run the **3-byte-line** profile at the ceiling,
       which is the worst case `N` came from. State every number.
+- [ ] **AC8b (B7, non-contractual observation — no threshold).** Also record
+      whole-process peak RSS (`/usr/bin/time -l` on macOS, `-v` on Linux) at the
+      same sizes, **as an observation with no pass/fail line**. It is the quantity
+      a user feels, so it is worth seeing; it is **not** a contract, because it
+      measures V8's allocator and GC timing as much as this code, and pinning a
+      threshold to it is what made the original AC8 non-discriminating. Report it
+      and move on unless it is grossly disproportionate to the retained delta.
 - [ ] **AC9 (B9, B10, B11):** a non-regular / over-ceiling / unreadable
       `digest.md` produces the new `[warn]` and **no target inspection**; a
       cleanly absent one stays fully silent.
