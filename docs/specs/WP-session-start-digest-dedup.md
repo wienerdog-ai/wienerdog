@@ -1,7 +1,7 @@
 ---
 id: WP-session-start-digest-dedup
 title: Make the SessionStart hook inject the digest only when the managed block lacks it
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-doctor-digest-block-drift]
