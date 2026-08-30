@@ -119,6 +119,10 @@ const A5_PRIVATE_FILE_BASENAMES = [
   'alerts-ack.json',
   'transcript-ledger.json',
   'identity-approvals.json',
+  // The launcher's refusal banner (WP-launcher-refusal-banner, Table B row B13).
+  // The launcher chmods it 0600 itself, but it is written by a process that must
+  // swallow every error, so the A5 set is what guarantees it self-heals.
+  'refusal-banner.md',
 ];
 
 /** A9-scoped private DIRECTORIES (0700): the credential store. `secrets/` is

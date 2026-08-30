@@ -641,6 +641,10 @@ test('private-fs: the A5-scoped set matches the OWNER-APPROVED membership', () =
     'alerts-ack.json',
     'transcript-ledger.json',
     'identity-approvals.json',
+    // WP-launcher-refusal-banner, Table B row B13: the launcher's refusal banner.
+    // Written by a process that must swallow every error (its chmod is
+    // best-effort), so the A5 set is what guarantees the mode self-heals.
+    'refusal-banner.md',
   ]);
 });
 

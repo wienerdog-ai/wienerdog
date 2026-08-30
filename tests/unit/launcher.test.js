@@ -821,3 +821,122 @@ test('remedy: an INHERITED remedy does not select the sync tail (ownership)', ()
     delete Object.prototype.remedy;
   }
 });
+
+// -------------------------------------------------------------------------
+// WP-launcher-refusal-banner: a refusing launcher never reaches renderDigest,
+// so the refusal's promise of "your next digest" needs a channel the launcher
+// itself owns. Table B decides the banner's path, content, folding, write mode,
+// permissions, multiplicity and failure policy; these tests pin every row this
+// WP implements (the two readers land in WP-refusal-banner-delivery).
+// -------------------------------------------------------------------------
+
+/** The banner file for a temp install. @param {{state:string}} paths */
+function bannerOf(paths) {
+  return path.join(paths.state, 'refusal-banner.md');
+}
+
+/** Drive main() through a drift refusal, capturing stderr (which carries the
+ *  exact refusalText output) and whether anything was spawned. */
+function refuseOnDrift(fixture) {
+  const { env, descriptorPath, digest, paths } = fixture;
+  let spawned = false;
+  let stderr = '';
+  const origErr = process.stderr.write;
+  process.stderr.write = (s) => {
+    stderr += s;
+    return true;
+  };
+  let code;
+  try {
+    code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: () => {
+        spawned = true;
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  return { code, spawned, stderr };
+}
+
+test('banner: a refusal writes exactly one blockquote line to state/refusal-banner.md (B1/B3, AC-1/AC-2)', () => {
+  const fixture = setupProd();
+  jobsLib.saveJob(fixture.paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift
+  const { stderr } = refuseOnDrift(fixture);
+  const content = fs.readFileSync(bannerOf(fixture.paths), 'utf8');
+  assert.match(content, /^> \[!warning\] wienerdog: refusing to run/, 'AC-1: the banner line shape');
+  assert.equal(content.split('\n').length, 2, 'AC-1: exactly one line plus a trailing newline');
+  // AC-2: byte-for-byte the folded refusalText output for THIS refusal — stderr
+  // carries that same text, so the expectation is not hardcoded a second time.
+  assert.equal(content, `> [!warning] ${stderr.trim()}\n`);
+});
+
+test('banner: whitespace runs and newlines in the reason fold to single spaces (B4, AC-3)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-banner-fold-'));
+  launcher.writeRefusalBanner({ state: dir }, '  a\nb\t\tc \n\n d  ');
+  assert.equal(fs.readFileSync(path.join(dir, 'refusal-banner.md'), 'utf8'), '> [!warning] a b c d\n');
+});
+
+test('banner: a reason longer than 2000 characters is cut before prefixing (B4, AC-4)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-banner-cut-'));
+  launcher.writeRefusalBanner({ state: dir }, 'x'.repeat(2500));
+  const content = fs.readFileSync(path.join(dir, 'refusal-banner.md'), 'utf8');
+  assert.equal(content, `> [!warning] ${'x'.repeat(2000)}\n`);
+  assert.equal(content.length, '> [!warning] '.length + 2000 + 1, 'the cut lands on the text, not the prefix');
+});
+
+test('banner: a second refusal OVERWRITES — banners never accumulate (B7, AC-5)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-banner-over-'));
+  launcher.writeRefusalBanner({ state: dir }, 'first');
+  launcher.writeRefusalBanner({ state: dir }, 'second');
+  assert.equal(fs.readFileSync(path.join(dir, 'refusal-banner.md'), 'utf8'), '> [!warning] second\n');
+  assert.equal(
+    fs.readdirSync(dir).filter((n) => n.startsWith('refusal-banner')).length,
+    1,
+    'the temp+rename leaves nothing behind'
+  );
+});
+
+test('banner: the file is 0600 after a refusal (B6, AC-6)', { skip: process.platform === 'win32' }, () => {
+  const fixture = setupProd();
+  jobsLib.saveJob(fixture.paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift
+  refuseOnDrift(fixture);
+  assert.equal(fs.statSync(bannerOf(fixture.paths)).mode & 0o777, 0o600);
+});
+
+test(
+  'banner: a failed banner write changes NOTHING about the refusal (B8, AC-7)',
+  { skip: process.platform === 'win32' || (process.getuid && process.getuid() === 0) },
+  () => {
+    const fixture = setupProd();
+    jobsLib.saveJob(fixture.paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift
+    // alerts.jsonl already exists, so appending to it needs no write permission on
+    // the DIRECTORY — but creating the banner's temp file does. That asymmetry is
+    // what makes the banner alone fail: the durable alert must survive it.
+    const alertsFile = path.join(fixture.paths.state, 'alerts.jsonl');
+    fs.writeFileSync(alertsFile, '', { mode: 0o600 });
+    fs.chmodSync(fixture.paths.state, 0o500);
+    let out;
+    try {
+      out = refuseOnDrift(fixture);
+    } finally {
+      fs.chmodSync(fixture.paths.state, 0o700);
+    }
+    assert.equal(out.spawned, false, 'still zero spawn');
+    assert.equal(out.code, 1, 'still a non-zero exit');
+    assert.match(out.stderr, /refusing to run/, 'still the stderr line');
+    assert.match(fs.readFileSync(alertsFile, 'utf8'), /refusing to run/, 'still the durable alert');
+    assert.equal(fs.existsSync(bannerOf(fixture.paths)), false, 'the banner write failed, silently');
+  }
+);
+
+test('banner: the launcher requires NO app-tree code to write it (B9, AC-10)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'scheduler', 'launcher.js'), 'utf8');
+  assert.doesNotMatch(src, /require\((['"])\.\.?\/(\.\.\/)?src/, 'no relative require into the app tree');
+  assert.doesNotMatch(src, /refusal-banner['"]\)/, 'in particular, never src/core/refusal-banner.js');
+});

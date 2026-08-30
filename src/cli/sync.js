@@ -9,6 +9,7 @@ const { writeFilePrivate, repairPrivateModes, scanPrivateModes } = require('../c
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
+const { clearRefusalBanner } = require('../core/refusal-banner');
 const { unacknowledgedAlerts } = require('../core/alert-ack');
 const ledgerLib = require('../core/dream/ledger');
 const { readVaultLayout } = require('../core/layout');
@@ -263,6 +264,16 @@ async function run(argv, opts = {}) {
     const { changed } = repairPrivateModes(paths);
     if (changed > 0) console.log(`wienerdog: hardened ${changed} artifact permission(s).`);
   }
+
+  // 0b. The launcher's refusal banner clears on an attended sync (owner ruling D4,
+  //     ADR-0039, WP-launcher-refusal-banner Table B rows B10/B11/B12). Reaching
+  //     here means the app tree runs, so the richer alerts.jsonl channel — which
+  //     counts occurrences and honours `wienerdog alerts ack` — is back and
+  //     supersedes the banner; the refusal's own alert record is untouched.
+  //     UNCONDITIONAL: never keyed to the job that wrote it. Placed BEFORE the
+  //     renderDigest call below so this sync's own digest does not carry a banner
+  //     it just invalidated. Dry-run never clears (B12).
+  if (!dryRun) clearRefusalBanner(paths);
 
   // 1. Digest + managed block need a vault. Skip both when unset (exit 0).
   const skipManagedBlock = !vaultPath;

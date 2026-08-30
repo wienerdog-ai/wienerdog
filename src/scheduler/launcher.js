@@ -203,6 +203,47 @@ function appendRefuseAlert(p, job, reason) {
   }
 }
 
+/** Hard cap on the folded banner text. A DELIBERATE duplicate of MAX_FIELD_CHARS
+ *  in src/core/alerts.js (its twin — the two move together): this file cannot
+ *  require the app tree it is verifying (Table B row B9/B4). */
+const BANNER_MAX_CHARS = 2000;
+
+/** Write the single-line refusal banner (Table B). Overwrites any previous banner:
+ *  the newest refusal is the one worth showing. Atomic (temp + rename) so a hook
+ *  reading concurrently never sees a partial line. Best-effort in EVERY step —
+ *  a failure here must never affect the refusal, which stands on its non-zero exit
+ *  and zero spawn.
+ *
+ *  The launcher writes this because a refusing launcher never reaches renderDigest,
+ *  so the refusal's own promise ("your next digest") has no other channel. Same
+ *  self-contained discipline as appendRefuseAlert: Node builtins only, never a
+ *  require from `src/` — NOT src/core/refusal-banner.js, which is the app-side
+ *  reader/clearer half of the same contract.
+ *  @param {{state:string}} p @param {string} text the refusalText() output */
+function writeRefusalBanner(p, text) {
+  try {
+    // Fold BEFORE prefixing (B4): a newline inside the reason would end the
+    // markdown blockquote and let the tail render as ordinary prose. Folding is
+    // the whole defence, and it is the ONLY transformation — the text is
+    // code-owned control-plane text, so no second sanitizer belongs here.
+    const folded = String(text).replace(/\s+/g, ' ').trim().slice(0, BANNER_MAX_CHARS);
+    fs.mkdirSync(p.state, { recursive: true, mode: 0o700 });
+    const file = path.join(p.state, 'refusal-banner.md');
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `> [!warning] ${folded}\n`);
+    fs.renameSync(tmp, file);
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(file, 0o600);
+      } catch {
+        /* best-effort */
+      }
+    }
+  } catch {
+    /* the banner is best-effort — the refusal (non-zero exit, zero spawn) stands regardless */
+  }
+}
+
 /** Read + JSON-parse the descriptor file. @param {string} descriptorPath
  *  @returns {object|null} null on missing/corrupt */
 function readDescriptorFile(descriptorPath) {
@@ -503,9 +544,13 @@ function main(argv, opts = {}) {
    *  (the next digest banner) plus the remedy for THIS refusal's class, chosen from
    *  the verdict's structured `remedy` field, never from the reason text
    *  (WP-refusal-remedy-discriminator, Table R). `wienerdog doctor` is still never
-   *  named — it reads no A7 state (F27). Zero spawn, non-zero exit. */
+   *  named — it reads no A7 state (F27). Zero spawn, non-zero exit.
+   *  The banner (WP-launcher-refusal-banner) is the channel that survives a broken
+   *  app tree, where the promised "next digest" is never rendered at all; both it
+   *  and the durable alert are best-effort and neither can hold up the exit. */
   const refuse = (jobName, why, remedy) => {
     const reason = refusalText(jobName, why, remedy);
+    writeRefusalBanner(p, reason);
     appendRefuseAlert(p, jobName, reason);
     process.stderr.write(`${reason}\n`);
     exit(1);
@@ -552,7 +597,7 @@ function main(argv, opts = {}) {
   return code;
 }
 
-module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, main };
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, writeRefusalBanner, main };
 
 // When the vendored copy at <core>/launcher/launch.js is executed by the OS
 // scheduler, run main with the real argv.

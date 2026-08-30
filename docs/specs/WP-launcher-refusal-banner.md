@@ -1,7 +1,7 @@
 ---
 id: WP-launcher-refusal-banner
 title: Give a launcher-stage refusal its own delivery channel — a code-owned banner file the launcher writes without app-tree code
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []

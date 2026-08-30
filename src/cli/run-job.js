@@ -10,6 +10,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { maybeRefresh } = require('../core/update-check');
 const { appendAlert, clearAlerts } = require('../core/alerts');
+const { clearRefusalBanner } = require('../core/refusal-banner');
 const { redactOnly } = require('../core/secret-scan');
 const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
@@ -1059,6 +1060,12 @@ async function runJob(paths, job, opts = {}) {
   if (!failure && code === 0 && !reapFailure && !logStreamFailed) {
     jobsLib.writeScheduleState(paths, name, { last_success: nowIso(), last_status: 'ok' });
     clearAlerts(paths, name);
+    // UNCONDITIONAL (WP-launcher-refusal-banner, Table B row B11): the banner is
+    // not keyed to the job that wrote it. A `--catch-up` refusal is a pseudo-job
+    // that never reports success, so a per-job clear would never fire for it. Any
+    // job succeeding means the app tree works, which means the richer alerts.jsonl
+    // channel is back — the banner exists only to cover the case where it is not.
+    clearRefusalBanner(paths);
     if (platform === 'darwin' || platform === 'win32') {
       try {
         noticeIfCatchupMissing(paths, platform);
