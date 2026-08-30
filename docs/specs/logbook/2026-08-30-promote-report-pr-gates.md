@@ -64,6 +64,9 @@ against itself; this is that lesson applied.
 | 2 | spec fidelity (wd-reviewer) | `795f904` | REQUEST-CHANGES | 4 (1 BLOCKER, 1 product, 2 residual) | `2026-08-30-promote-report-pr-gate-round-2-wd-reviewer-raw.txt` @ `c43d63c` |
 | 2 | Codex rubric (gptsol) | `795f904` | patch is incorrect | 2 (both P2, both PRODUCT) | `2026-08-30-promote-report-pr-gate-round-2-gptsol-raw.txt` @ `1952499` |
 
+| 3 | Codex rubric (gptsol) | `3ac951b` | **patch is CORRECT — clean** | **0** | `2026-08-30-promote-report-pr-gate-round-3-gptsol-raw.txt` @ `941d490` |
+| 3 | spec fidelity (wd-reviewer) | `3ac951b` | REQUEST-CHANGES | 5 — **0 about the PRODUCT** | `2026-08-30-promote-report-pr-gate-round-3-wd-reviewer-raw.txt` @ `941d490` |
+
 Raw output is committed BEFORE it is read or judged, and each row cites the raw
 file's path AND the SHA of the commit that introduced it. A row without that SHA
 is a round where that rule did not run.
@@ -359,3 +362,71 @@ cost no letter at all.
 (`docs/specs/logbook/2026-08-29-promote-family-map.md`) is a LIVING surface and a
 new letter is a change to it** — plus a sweep of each spec's Out-of-scope
 ownership prose, which stays hand-maintained.
+
+---
+
+# ROUND 3 — THE LOOP CLOSES. The contract worked.
+
+**The pinned criterion's closing condition is met: this round found NOTHING
+ABOUT THE PRODUCT.** The rubric gate returned `patch is correct` with zero
+findings. The spec-fidelity gate returned REQUEST-CHANGES on five items, of which
+**zero are behaviour** — every Table Z row was verified CORRECT BY EXECUTION, and
+its two mutation survivors were assertion gaps.
+
+## What the contract bought, measured
+
+| | Round 1 | Round 2 | **Round 3** |
+|---|---|---|---|
+| Product defects | 2 | 2 | **0** |
+| Filed by both gates | 0 | 2 | — |
+| Rubric verdict | incorrect | incorrect | **CORRECT** |
+| Mutations killed | — | — | **24 of 26** |
+
+**Rounds 1 and 2 each fixed a defect and produced a new one in the same family.
+Round 3, the first round in which the fix landed against a CONTRACT rather than
+against the previous round's example, produced none.** The two rounds of patching
+cost four product defects; the one round of contract cost zero. That is the whole
+argument for the escalation, and it is now a measurement rather than a
+prediction.
+
+Round 3 also re-ran the full prior mutation battery: **zero regressions, four
+mutations strengthened**, and the wired-channel green control (`G`) still
+measures 0 fail — the fail-closed guard has never once false-fired on a correctly
+wired channel across three rounds.
+
+## Round 3 dispositions
+
+| # | Finding | Weight | Disposition |
+|---|---|---|---|
+| 1 | `rel` unasserted on the `promoted` arm's `published:false` form | LIGHT | **FIX, test-only.** The one arm-form of the owner-ruled interface nothing measured — and per Table Y row **Y12**, precisely the form the pipeline's G8 commits from. Verified alive, then killed |
+| 2 | The `readVaultNow` error branch entirely unexercised | LIGHT | **FIX, test-only.** Round 2 accepted this branch as a residual BEFORE Table Z existed; row **Z5(e)** then made a positive claim over it, so it needed a case. Proved reachable with a directory where the report belongs — `refused`, the derived path, EISDIR named, record delivered, vault object untouched |
+| 3 | `WP-dream-promote-in-workspace` row **G8** is a registered Table Z mirror that has not been walked — that spec has zero occurrences of `report.rel` | — | **ROUTE to wd-architect.** Mirror drift created by this round's owner-ruled interface change, and **blocking for the pipeline package**. The implementer cannot fix it: the file is outside this package's Deliverables |
+| 4 | The collision reason's punctuation is destroyed by `neutralise` — `(`, `)` and `;` all become `_` | — | **NAMED RESIDUAL.** The gate confirmed the mangling class is PRE-EXISTING AND ACCEPTED (`EP2:` → `EP2_`, `not admitted:` → `not admitted_`), so this is a new INSTANCE of a shipped class rather than a new KIND, and it does not re-open the loop. **The reword was deliberately NOT taken**: the string is user-observable, so changing it is HEAVY under this record's own weighted-closure rule and would cost a full fresh round on both gates — for a message on a path reachable only when the brain writes two case-variants of the report in one run. The one-expression form is recorded for whoever next opens the file: drop `(`, `)` and `;` in favour of em-dashes |
+| 5 | Round 2's finding 4 (empty base → two leading blank lines) | — | **DROP, and the gate judged NOT taking it in round 2 was RIGHT** — measured, not argued: reachable only when the user truncates run 1's report, no spec row governs the separator on an empty base, byte-preservation holds trivially over zero bytes, and every markdown renderer ignores leading blanks |
+
+## The closing tip, stated rather than glossed
+
+**The rubric gate cleared `3ac951b`. The two LIGHT fixes landed on top of it as
+`d7603d8`, and `src/` is BYTE-IDENTICAL between the two** —
+`git diff 3ac951b -- src/` is empty, verified. Under the runbook's weighted
+closure a LIGHT finding's fix "lands and is verified mechanically; the loop closes
+without another external round", and mechanical verification is what was done:
+each survivor was confirmed alive on the cleared tip, then confirmed killed.
+
+**This is stated rather than left implicit because this record's own criterion
+says both gates must be clean on the SAME tip.** The honest position is that the
+final tip carries test-only changes neither gate saw, with the code they reviewed
+provably unchanged. Whether that satisfies the same-tip rule is the maintainer's
+call at merge, and the evidence for it is one command.
+
+## What is NOT closed, carried forward
+
+- **Finding 3 above** — G8's Table Z mirror, blocking for `WP-dream-promote-in-workspace`.
+- **Round 1's findings 4, 5 and 6** — the two unpinned section headings (blocking
+  for the pipeline package, which makes one of them live), Table N's two missing
+  channel rows, and `scripts/mirror-walk.js` not existing.
+- **Row Z3's named residual** — `isUnder` does not drop `.`, so
+  `reports_dir: reports/./dreams` admits nothing. Verified fail-closed by the
+  round-3 gate: the record still reaches the caller. Widening row C9 is a change
+  to a `Done` spec and needs its own work package.
+- **Finding 4's reword**, above.
