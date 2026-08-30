@@ -963,6 +963,14 @@ async function run(argv, opts = {}) {
         res = promote({
           vaultDir, workspaceDir, date, baseline, delta, layout,
           gates, registry, extractsBySession, records,
+          // JS-only test seam, forwarded rather than invented: `promote()` already
+          // documents `writeFile` as the vault-write primitive's injection point.
+          // The pipeline needs it because the report's SECOND write — the one whose
+          // refusal produces the `promoted`-with-`published:false` arm — cannot be
+          // made to fail from outside `promote()`: it targets a path the first
+          // write just published, inside the same synchronous call. Production
+          // passes no opts, so the real primitive always runs.
+          ...(opts.writeFile ? { writeFile: opts.writeFile } : {}),
         });
       } catch (err) {
         // ROW G5's SECOND teardown exception, and it is the only-copy invariant

@@ -1000,35 +1000,43 @@ test('dream-pipeline: a REFUSED report reaches the user with its COMPLETE record
 
 test('dream-pipeline: the report refusal REASON is neutralised where this package renders it (row G11)', async () => {
   const ctx = setup();
-  // `report.accounting.reason` / `report.reason` ORIGINATE WITH THE VAULT-WRITE
-  // PRIMITIVE, whose surviving staging object derives its name from the
-  // BRAIN-CHOSEN PATH — so Table N classifies them attacker-influenceable BY
-  // DERIVATION. The write that would have composed them is the one that was
-  // refused, so the report package's code-authored-section criterion does not
-  // reach them: THIS package renders them, so this is where it is enforced.
+  // `report.reason` / `report.accounting.reason` ORIGINATE WITH THE VAULT-WRITE
+  // PRIMITIVE and quote the target they could not write, so Table N classifies
+  // them attacker-influenceable BY DERIVATION. The write that would have
+  // composed them is the one that was refused, so the report package's
+  // code-authored-section criterion does not reach them: THIS package renders
+  // them, so this is where the classification is enforced.
   //
-  // BOTH secret shapes, because a prefix-shaped secret survives the sanitiser
-  // intact and is caught in either order.
+  // THE HOSTILE BYTES MUST BE IN THE PATH THE REASON QUOTES. An earlier form of
+  // this test put them in a symlink's TARGET, which the reason never carries —
+  // it was VACUOUS and stayed green with the reason rendered raw. The layout's
+  // `reports_dir` is a real, user-supplied route into that path.
   const HOSTILE = 'token=abcdefghijkl client_secret: abcdefghijkl';
-  const reportRel = `reports/dreams/${DATE}.md`;
+  writeFile(ctx.core, 'config.yaml',
+    `vault: ${ctx.vault}\ndream_timeout_minutes: 5\nvault_layout:\n  reports_dir: ${HOSTILE}\n`);
+  const reportRel = `${HOSTILE}/${DATE}.md`;
+
   const r = await runDream(ctx, ['--yes'], {
     opts: {
       platform: 'linux',
       reapGroup: async () => {
         const abs = path.join(ctx.vault, reportRel);
         fs.mkdirSync(path.dirname(abs), { recursive: true });
-        // The refusal reason will quote the target it could not write.
-        try { fs.symlinkSync(`/tmp/${HOSTILE}`, abs); } catch { /* already planted */ }
+        try { fs.symlinkSync('/tmp/elsewhere.md', abs); } catch { /* already planted */ }
         return { reaped: true };
       },
     },
   });
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  assert.match(r.output, /the report could not be written to your vault/, 'the arm was reached');
+  assert.match(r.output, /the report could not be written to your vault/, `the arm was reached: ${r.output}`);
 
-  // GREEN: the raw secret bytes appear NOWHERE in the run's log or output.
+  // GREEN, and BOTH shapes, because a prefix-shaped secret survives the
+  // sanitiser intact and is caught in either order.
   assert.ok(!r.output.includes('token=abcdefghijkl'), `raw assignment-shaped secret leaked: ${r.output}`);
   assert.ok(!r.output.includes('client_secret: abcdefghijkl'), `raw prefix-shaped secret leaked: ${r.output}`);
+  // NON-VACUITY: the channel really did carry the hostile path, so the two
+  // assertions above are not green on an output that never contained it.
+  assert.match(r.output, /token_abcdefghijkl|REDACTED/, `the neutralised form is present: ${r.output}`);
 });
 
 test('dream-pipeline: teardown never destroys the last copy — the only-copy refusal RETAINS the workspace (row G5)', async () => {
@@ -1068,4 +1076,44 @@ test('dream-pipeline: teardown never destroys the last copy — the only-copy re
     "the note's bytes are still there afterwards"
   );
   assert.equal(commitCount(ctx.vault), 1, 'and nothing was committed');
+});
+
+test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed from that arm\'s bytes, and the record is delivered (rows G8, G11)', async () => {
+  const ctx = setup();
+  const reportRel = `reports/dreams/${DATE}.md`;
+  const { writeIntoVault } = require('../../src/core/dream/vault-write');
+  const HOSTILE_REASON = 'staging object token=abcdefghijkl client_secret: abcdefghijkl could not be replaced';
+  let reportWrites = 0;
+  // THE BODY PUBLISHES, THE SECOND WRITE IS REFUSED. That is the only way to
+  // reach `report.outcome === 'promoted'` with `accounting.published === false`:
+  // the two writes target the same path inside one synchronous call.
+  const writeFile = (o) => {
+    if (o.rel === reportRel) {
+      reportWrites += 1;
+      if (reportWrites === 2) return { written: false, reason: HOSTILE_REASON };
+    }
+    return writeIntoVault(o);
+  };
+  const r = await runDream(ctx, ['--yes'], { opts: { writeFile } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.equal(reportWrites, 2, 'both report writes were attempted — a vacuous pass would prove nothing');
+
+  // ROW G8: the report path IS in the run's one commit, from that arm's `bytes`
+  // — the body THIS RUN PUBLISHED. Skipping it would drop a published, gated
+  // file out of the commit; manufacturing the missing section would commit bytes
+  // no gate judged and no primitive published.
+  const named = git(ctx.vault, ['show', '--name-only', '--pretty=', 'HEAD']).trim().split('\n').filter(Boolean);
+  assert.ok(named.includes(reportRel), `the report path is committed on this arm: ${named.join(', ')}`);
+  const committed = headBytes(ctx.vault, reportRel).toString('utf8');
+  assert.ok(committed.includes('Consolidated recent sessions.'), 'the committed bytes are the body the first write published');
+  assert.ok(!committed.includes('Refused by policy'), 'and NOT a manufactured enforcement section');
+
+  // ROW G11 (i-b): the COMPLETE record is delivered, and the accounting names
+  // the reason — NEUTRALISED, because this package renders it and the primitive
+  // derives it from a brain-chosen path.
+  assert.match(r.output, /the report body was published, but its enforcement section was NOT/);
+  assert.match(r.output, /Refused by policy/, 'the complete record follows');
+  assert.ok(!r.output.includes('token=abcdefghijkl'), `raw assignment-shaped secret leaked: ${r.output}`);
+  assert.ok(!r.output.includes('client_secret: abcdefghijkl'), 'raw prefix-shaped secret leaked');
+  assert.match(r.output, /token_abcdefghijkl|REDACTED/, 'and the neutralised form is present — non-vacuity');
 });
