@@ -1,0 +1,8 @@
+Gate: PR rubric (gptsol, codex/gpt-5.6-sol), PR #31 round 6
+Tip reviewed: 1ea9d37 (wp/dream-promote-module), merge base origin/main = 68ac5e9
+Run: 2026-08-30
+Form: this backend returns structured JSON rather than prose. Reproduced verbatim.
+
+---
+
+{"findings":[],"overall_correctness":"patch is correct","overall_explanation":"No actionable findings. The prior P2 is fixed on both `/Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js:6-14` and `/Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/WP-dream-promote-module.md:128-136`; the four prose outcomes correctly map to `promoted` (plain or merged), `redacted`, and `refused`, while the gate-input split agrees with Table D. Verification: unit tests exited 0 (39/39), lint exited 0, boundary check exited 0, the three registry greps each exited 0 and returned 21/6/15, the extraction-commit `src`/`tests` path check exited 0 with zero paths, and the final status comparison exited 0 with both status snapshots empty and byte-identical; a preliminary attempt to execute the non-executable boundary script directly exited 126 before the required Node invocation passed. Full `npm test` exited 1 only for `tests/integration/adopt-e2e.test.js`; the same pinned-command environmental failure reproduced on a `/tmp` export of `68ac5e9` with exit 1, and the date contract, `@returns` shape, and glossary entry remain consistent.","overall_confidence_score":0.99}
