@@ -137,6 +137,7 @@ with the manifest save and the `changed/unchanged` summary console lines.
 | modify | src/cli/sync.js | clear the banner at the end of a successful non-dry-run sync |
 | create | tests/unit/refusal-banner.test.js | app-side helpers + the A5 membership |
 | modify | tests/unit/launcher.test.js | banner written on refuse; content shape; failure is swallowed |
+| modify | tests/unit/private-fs.test.js | IMPLEMENTER AMENDMENT (see PR "Decisions made"): this file pins `A5_PRIVATE_FILE_BASENAMES` by value under the comment *"it must not be able to grow without someone noticing"*. B13 mandates growing it, so the one-line membership update is a **required** consequence of a Deliverable, not an extra. Add the entry and nothing else — never weaken the assertion |
 
 ### Exact contracts
 
