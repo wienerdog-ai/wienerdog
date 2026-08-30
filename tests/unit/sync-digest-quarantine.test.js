@@ -87,7 +87,9 @@ test('sync-digest-quarantine: sync re-renders BOTH transcript-quarantine banners
   const { env, paths } = setup();
 
   // One intake quarantine and one secret-revert exhaustion, as a machine that
-  // hit the 2026-07-24/25 bug would carry.
+  // hit the 2026-07-24/25 bug would carry. `recordQuarantined` stamps
+  // `updated_at` with the current time, which is what puts the informational
+  // record INSIDE the 7-day freshness window (WP-quarantine-banner-decay).
   let ledger = ledgerLib.recordQuarantined(ledgerLib.readLedger(paths.state), disc('/tmp/proj/huge.jsonl'), 'over-ceiling');
   ledger = ledgerLib.recordSecretExhausted(ledger, disc('/tmp/proj/spent.jsonl'));
   ledgerLib.writeLedger(paths.state, ledger);
@@ -102,8 +104,12 @@ test('sync-digest-quarantine: sync re-renders BOTH transcript-quarantine banners
 
   const digest = fs.readFileSync(digestPath, 'utf8');
   assert.ok(!digest.includes('stale digest'), 'sync regenerated the digest');
-  assert.ok(digest.includes('could not be read and were skipped'), 'the intake banner survives a sync');
-  assert.ok(digest.includes('huge.jsonl (over-ceiling)'), 'it names the sanitized basename + reason');
+  assert.ok(
+    digest.includes('1 session transcript(s) are being skipped and will not be dreamed over'),
+    'the informational banner survives a sync, as an exact count'
+  );
+  assert.ok(digest.includes('reports/warnings.md in your vault'), 'and points at the one home of the enumeration');
+  assert.ok(!digest.includes('huge.jsonl'), 'the informational sentence names no transcript (WP-quarantine-banner-decay)');
   assert.ok(digest.includes('are no longer being dreamed over'), 'the exhausted banner survives a sync');
   assert.ok(digest.includes('spent.jsonl'), 'it names the sanitized basename');
   // Ledger-derived only: no full path, no content, no matched value.
@@ -145,7 +151,33 @@ test('sync-digest-quarantine: a missing or corrupt ledger renders no banner and 
   const corrupt = fs.readFileSync(path.join(b.paths.state, 'digest.md'), 'utf8');
 
   for (const digest of [missing, corrupt]) {
-    assert.ok(!digest.includes('could not be read and were skipped'));
+    assert.ok(!digest.includes('are being skipped and will not be dreamed over'));
     assert.ok(!digest.includes('are no longer being dreamed over'));
   }
+});
+
+test('sync-digest-quarantine: a stale-only quarantine renders NO informational banner, but is still on the ledger', async () => {
+  // WP-quarantine-banner-decay: the end-to-end half of the 7-day window. The
+  // unit tests drive `opts.now`; `sync` passes no clock at all, so the only way
+  // to prove the decay reaches the real digest is a record whose `updated_at`
+  // is genuinely older than the window. A hand-written year-2000 timestamp is
+  // stale under any live clock, which keeps this deterministic.
+  const { env, paths } = setup();
+  const ledger = ledgerLib.recordQuarantined(ledgerLib.readLedger(paths.state), disc('/tmp/proj/huge.jsonl'), 'over-ceiling');
+  const key = ledgerLib.foldKey('/tmp/proj/huge.jsonl');
+  ledger.files[key].updated_at = '2000-01-01T00:00:00.000Z';
+  ledgerLib.writeLedger(paths.state, ledger);
+
+  await runSync(env);
+
+  const digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
+  assert.ok(digest.length > 0, 'the digest was still rendered');
+  assert.ok(!digest.includes('are being skipped and will not be dreamed over'), 'the informational banner has retired');
+  assert.ok(!digest.includes('huge.jsonl'), 'and nothing else leaked the name into it');
+  // Only the BANNER retired. The record is untouched and every durable surface
+  // still sees it — that is what makes the decay safe.
+  const back = ledgerLib.readLedger(paths.state);
+  assert.equal(back.files[key].outcome, 'quarantined');
+  assert.equal(back.files[key].reason, 'over-ceiling');
+  assert.equal(ledgerLib.activeQuarantines(back).length, 1, 'still an active quarantine');
 });
