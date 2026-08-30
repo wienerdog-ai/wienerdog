@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-banner-decay
 title: Collapse the quarantine banner to an exact count and a pointer, on a 7-day window
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file]

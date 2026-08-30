@@ -450,20 +450,146 @@ test('ledger: both secret writers key at foldKey(path) and touch no other record
   assert.equal('deferrals' in healed.files[key], false);
   assert.equal(ledgerLib.secretDeferralCount(healed, d), 0);
 });
+// ── WP-quarantine-banner-decay (ADR-0023 Amendment 2) ───────────────────────
 
-test('ledger: quarantineBannerLine reproduces the intake banner byte for byte', () => {
+/** A raw ledger of QUARANTINE records with hand-set `updated_at`s — the seam
+ *  the recording functions cannot give us, because they always stamp `now`.
+ *  Each entry is `[basename, reason, updated_at]`; an `undefined` reason or
+ *  `updated_at` is written as an ABSENT key, not a present-but-undefined one.
+ *  @param {...Array} entries @returns {object} */
+function quarantined(...entries) {
+  /** @type {Record<string, object>} */
+  const files = {};
+  for (const [name, reason, updatedAt] of entries) {
+    /** @type {Record<string, unknown>} */
+    const rec = { fingerprint: '64:1000:7:42', outcome: 'quarantined', harness: 'claude' };
+    if (reason !== undefined) rec.reason = reason;
+    if (updatedAt !== undefined) rec.updated_at = updatedAt;
+    files[`/tmp/proj/${name}`] = rec;
+  }
+  return { ...EMPTY, files };
+}
+
+const NOW = Date.parse('2026-08-29T00:00:00.000Z');
+const WINDOW = 7 * 24 * 60 * 60 * 1000;
+/** @param {number} ms @returns {string} */
+const iso = (ms) => new Date(ms).toISOString();
+const FRESH = iso(NOW - 1000);
+const ANCIENT = '2000-01-01T00:00:00.000Z';
+const INFORMATIONAL_SENTENCE_OPENER = 'session transcript(s) are being skipped and will not be dreamed over';
+
+test('ledger: the decay constants are exported — a 7-day window and the informational reason set', () => {
+  assert.equal(ledgerLib.QUARANTINE_BANNER_WINDOW_MS, WINDOW);
+  assert.equal(ledgerLib.QUARANTINE_BANNER_WINDOW_MS, 604800000);
+  assert.deepEqual([...ledgerLib.INFORMATIONAL_QUARANTINE_REASONS].sort(), ['over-ceiling', 'read-error', 'too-many-lines']);
+  // The exhausted reason is ACTIONABLE and must never be classified as one that
+  // may decay — the whole partition rests on this.
+  assert.ok(!ledgerLib.INFORMATIONAL_QUARANTINE_REASONS.includes(ledgerLib.SECRET_REVERT_EXHAUSTED_REASON));
+});
+
+test('ledger: quarantineBannerLine renders the informational sentence byte for byte — a count and ONE pointer', () => {
   assert.equal(ledgerLib.quarantineBannerLine(EMPTY), '', 'no quarantine → empty, so renderDigest drops it');
 
   let l = ledgerLib.recordQuarantined(EMPTY, disc({ path: '/tmp/proj/huge.jsonl' }), 'over-ceiling');
   l = ledgerLib.recordQuarantined(l, disc({ path: '/tmp/proj/broken.jsonl' }), 'read-error');
-  // The exact bytes of the template dream.js used to build inline (WP-119).
-  const q = ledgerLib.activeQuarantines(l);
-  const expected =
-    `> [!warning] Wienerdog: ${q.length} session transcript(s) could not be read and were skipped — ` +
-    `${q.map((e) => `${e.file} (${e.reason})`).join(', ')}. Dreaming continues over your other sessions; ` +
-    'a skipped file is retried automatically if it changes.';
-  assert.equal(ledgerLib.quarantineBannerLine(l), expected);
-  assert.ok(expected.includes('broken.jsonl (read-error), huge.jsonl (over-ceiling)'), 'sorted by basename');
+  const line = ledgerLib.quarantineBannerLine(l);
+  assert.equal(
+    line,
+    '> [!warning] Wienerdog: 2 session transcript(s) are being skipped and will not be dreamed over. ' +
+      'Which ones, and why: reports/warnings.md in your vault. Dreaming continues over your other sessions; ' +
+      'a skipped file is retried automatically if it changes.'
+  );
+  // Built from ONE INTEGER and fixed code-owned text: the moment a name or a
+  // stored string enters it, the defect class this package closes is reopened.
+  for (const leaked of ['huge.jsonl', 'broken.jsonl', 'over-ceiling', 'read-error', ' — ', 'unreadable']) {
+    assert.ok(!line.includes(leaked), `${leaked} must not reach the informational sentence`);
+  }
+  assert.ok(line.length < 400, `the sentence is bounded, got ${line.length}`);
+  // The enumeration has ONE home. `Wienerdog:` is brand + colon; any
+  // "wienerdog <subcommand>" would be a second destination.
+  assert.ok(!/wienerdog\s+[a-z]/i.test(line), 'the banner names no second surface');
+});
+
+test('ledger: the informational sentence does not grow with the number of quarantines', () => {
+  /** @param {number} n @returns {string} */
+  const banner = (n) =>
+    ledgerLib.quarantineBannerLine(quarantined(...Array.from({ length: n }, (_, i) => [`s${i}.jsonl`, 'over-ceiling', FRESH])), {
+      now: NOW,
+    });
+  const one = banner(1);
+  const many = banner(191); // the maintainer's measured 0.13.0 install
+  assert.ok(one.includes('1 session transcript(s) are being skipped'));
+  assert.ok(many.includes('191 session transcript(s) are being skipped'));
+  // The 16,805-byte line is gone: only the DIGITS differ between 1 and 191.
+  assert.equal(many.length - one.length, 2);
+  assert.equal(one.replace('1 session', '<N> session'), many.replace('191 session', '<N> session'));
+  assert.ok(many.length < 400, `still bounded at 191 records, got ${many.length}`);
+});
+
+test('ledger: every informational record older than the window → the sentence retires and nothing else does', () => {
+  const l = quarantined(['a.jsonl', 'over-ceiling', ANCIENT], ['b.jsonl', 'read-error', ANCIENT], ['c.jsonl', 'too-many-lines', ANCIENT]);
+  assert.equal(ledgerLib.quarantineBannerLine(l, { now: NOW }), '');
+  // Only the BANNER retires: the records are still active quarantines, so every
+  // durable surface still sees all three.
+  assert.equal(ledgerLib.activeQuarantines(l).length, 3, 'the decay expires no record');
+  assert.deepEqual(Object.keys(l.files).length, 3, 'the ledger is not pruned');
+});
+
+test('ledger: while ONE record is fresh the sentence renders, and <N> counts the stale ones too', () => {
+  const straddling = quarantined(
+    ['old-a.jsonl', 'over-ceiling', ANCIENT],
+    ['old-b.jsonl', 'over-ceiling', ANCIENT],
+    ['new.jsonl', 'over-ceiling', FRESH]
+  );
+  const line = ledgerLib.quarantineBannerLine(straddling, { now: NOW });
+  // The EXACT total — this is what carries the anti-silent-drop invariant.
+  assert.ok(line.includes('3 session transcript(s) are being skipped'), line);
+  // When the last fresh one goes stale the sentence stops, with no partial count.
+  const allStale = quarantined(
+    ['old-a.jsonl', 'over-ceiling', ANCIENT],
+    ['old-b.jsonl', 'over-ceiling', ANCIENT],
+    ['new.jsonl', 'over-ceiling', ANCIENT]
+  );
+  assert.equal(ledgerLib.quarantineBannerLine(allStale, { now: NOW }), '');
+});
+
+test('ledger: the freshness boundary is exact on BOTH sides of 7 days', () => {
+  /** @param {number} ms @returns {string} */
+  const at = (ms) => ledgerLib.quarantineBannerLine(quarantined(['a.jsonl', 'over-ceiling', iso(ms)]), { now: NOW });
+  assert.ok(at(NOW - WINDOW).includes(INFORMATIONAL_SENTENCE_OPENER), 'exactly at the window is FRESH');
+  assert.equal(at(NOW - WINDOW - 1), '', 'one millisecond past the window is STALE');
+});
+
+test('ledger: an unreadable or future updated_at keeps the sentence up — fail loud, never silently retired', () => {
+  // Date.parse(1000) is a FINITE, year-1000 timestamp, so a non-string that is
+  // merely handed to Date.parse would decay. The type guard is what stops it.
+  const unreadable = [undefined, 1000, null, {}, [], true, '', 'not-a-date', '2026-13-45T99:99:99Z'];
+  for (const updatedAt of unreadable) {
+    const l = quarantined(['a.jsonl', 'over-ceiling', updatedAt]);
+    let line = '';
+    assert.doesNotThrow(() => {
+      line = ledgerLib.quarantineBannerLine(l, { now: NOW });
+    }, `updated_at=${JSON.stringify(updatedAt)} must not throw`);
+    assert.ok(line.includes(INFORMATIONAL_SENTENCE_OPENER), `updated_at=${JSON.stringify(updatedAt)} → fresh`);
+  }
+  // A clock that jumped backwards makes records look future-dated: still fresh.
+  const future = ledgerLib.quarantineBannerLine(quarantined(['a.jsonl', 'over-ceiling', iso(NOW + 30 * WINDOW)]), { now: NOW });
+  assert.ok(future.includes(INFORMATIONAL_SENTENCE_OPENER), 'a future timestamp is fresh');
+});
+
+test('ledger: an UNRECOGNIZED reason is counted, rendered, and NEVER decays — however old it is', () => {
+  // Fail loud: a future reason class must not be retired by old code that
+  // assumed it was informational.
+  for (const reason of ['from-the-future', undefined, 42, null, '']) {
+    const l = quarantined(['odd.jsonl', reason, ANCIENT]);
+    const line = ledgerLib.quarantineBannerLine(l, { now: NOW });
+    assert.ok(line.includes('1 session transcript(s) are being skipped'), `reason=${JSON.stringify(reason)} still renders`);
+    assert.ok(!line.includes('odd.jsonl'), 'and still carries no name');
+  }
+  // One unrecognized record alone keeps the sentence up for a stale majority,
+  // and <N> counts every one of them.
+  const mixed = quarantined(['a.jsonl', 'over-ceiling', ANCIENT], ['b.jsonl', 'over-ceiling', ANCIENT], ['odd.jsonl', 'from-the-future', ANCIENT]);
+  assert.ok(ledgerLib.quarantineBannerLine(mixed, { now: NOW }).includes('3 session transcript(s) are being skipped'));
 });
 
 test('ledger: quarantineBannerLine renders the exhausted sentence, names no command, and states no count', () => {
@@ -478,7 +604,7 @@ test('ledger: quarantineBannerLine renders the exhausted sentence, names no comm
       'of the files there (not the redacted/ folder inside it). ' +
       'The session files themselves are untouched.'
   );
-  assert.ok(!line.includes('could not be read'), 'the intake sentence is not emitted for this reason');
+  assert.ok(!line.includes(INFORMATIONAL_SENTENCE_OPENER), 'the informational sentence is not emitted for this reason');
   // The banner's own occurrence is `Wienerdog:` — brand, colon, no command. Any
   // "wienerdog <subcommand>" in EITHER casing would be telling the user to run
   // something this package does not ship.
@@ -486,23 +612,78 @@ test('ledger: quarantineBannerLine renders the exhausted sentence, names no comm
   assert.ok(!line.includes('secret-revert-exhausted'), 'the raw reason enum is not shown to the user');
 });
 
-test('ledger: quarantineBannerLine emits BOTH sentences, intake first, separated by a blank line', () => {
-  let l = ledgerLib.recordQuarantined(EMPTY, disc({ path: '/tmp/proj/huge.jsonl' }), 'over-ceiling');
-  l = ledgerLib.recordSecretExhausted(l, disc({ path: '/tmp/proj/spent.jsonl' }));
-  const parts = ledgerLib.quarantineBannerLine(l).split('\n\n');
-  assert.equal(parts.length, 2);
-  assert.ok(parts[0].includes('could not be read and were skipped'));
-  assert.ok(parts[0].includes('huge.jsonl (over-ceiling)'));
-  assert.ok(!parts[0].includes('spent.jsonl'), 'the exhausted file is not double-counted in the intake sentence');
-  assert.ok(parts[1].includes('are no longer being dreamed over'));
-  assert.ok(parts[1].includes('spent.jsonl'));
+test('ledger: the ACTIONABLE sentence never decays and renders ALONE once the informational ones are stale', () => {
+  const exhausted = ledgerLib.SECRET_REVERT_EXHAUSTED_REASON;
+  // Byte-identical to the live-clock rendering of the same set — a decaying
+  // banner is only ever correct for a condition the user cannot act on.
+  const ancientSpent = quarantined(['sess-a.jsonl', exhausted, ANCIENT], ['sess-b.jsonl', exhausted, ANCIENT]);
+  let live = ledgerLib.recordSecretExhausted(EMPTY, disc({ path: '/tmp/proj/sess-a.jsonl' }));
+  live = ledgerLib.recordSecretExhausted(live, disc({ path: '/tmp/proj/sess-b.jsonl' }));
+  assert.equal(ledgerLib.quarantineBannerLine(ancientSpent, { now: NOW }), ledgerLib.quarantineBannerLine(live));
+  // An unreadable updated_at cannot decay it either — it is never consulted.
+  assert.equal(
+    ledgerLib.quarantineBannerLine(quarantined(['sess-a.jsonl', exhausted, undefined], ['sess-b.jsonl', exhausted, 1000]), { now: NOW }),
+    ledgerLib.quarantineBannerLine(live)
+  );
+  // Alone: no leading blank line, no empty first sentence.
+  const withStale = quarantined(['huge.jsonl', 'over-ceiling', ANCIENT], ['spent.jsonl', exhausted, ANCIENT]);
+  const line = ledgerLib.quarantineBannerLine(withStale, { now: NOW });
+  assert.ok(!line.startsWith('\n'), 'no leading blank line where the retired sentence was');
+  assert.ok(!line.includes('\n\n'), 'exactly one sentence renders');
+  assert.ok(line.startsWith('> [!warning] Wienerdog: 1 session transcript(s) are no longer being dreamed over'), line);
 });
 
-test('ledger: an UNRECOGNIZED quarantine reason lands in the intake sentence — never silently dropped', () => {
-  const l = { ...EMPTY, files: { '/tmp/proj/odd.jsonl': { fingerprint: 'x', outcome: 'quarantined', reason: 'from-the-future', harness: 'claude' } } };
-  const line = ledgerLib.quarantineBannerLine(l);
-  assert.ok(line.includes('could not be read and were skipped'));
-  assert.ok(line.includes('odd.jsonl (from-the-future)'));
+test('ledger: quarantineBannerLine emits BOTH sentences, informational first, separated by a blank line', () => {
+  const l = quarantined(['huge.jsonl', 'over-ceiling', FRESH], ['spent.jsonl', ledgerLib.SECRET_REVERT_EXHAUSTED_REASON, ANCIENT]);
+  const parts = ledgerLib.quarantineBannerLine(l, { now: NOW }).split('\n\n');
+  assert.equal(parts.length, 2);
+  assert.ok(parts[0].includes('1 session transcript(s) are being skipped'));
+  assert.ok(!parts[0].includes('huge.jsonl'), 'the informational sentence names nothing');
+  assert.ok(!parts[0].includes('spent.jsonl'), 'the exhausted file is not double-counted in the informational sentence');
+  assert.ok(parts[1].includes('are no longer being dreamed over'));
+  assert.ok(parts[1].includes('spent.jsonl'), 'the actionable sentence keeps its enumeration');
+});
+
+test('ledger: nothing to report → the empty string, and no record shape throws', () => {
+  assert.equal(ledgerLib.quarantineBannerLine(EMPTY), '');
+  assert.equal(ledgerLib.quarantineBannerLine(ledgerLib.readLedger(tempState())), '', 'a missing ledger reads empty');
+  const notQuarantines = {
+    ...EMPTY,
+    files: {
+      '/tmp/proj/done.jsonl': { fingerprint: '1:2:3:4', outcome: 'processed', updated_at: FRESH, harness: 'claude' },
+      '/tmp/proj/later.jsonl': { fingerprint: '1:2:3:4', outcome: 'deferred', reason: 'secret-revert', deferrals: 1, updated_at: FRESH, harness: 'claude' },
+    },
+  };
+  assert.equal(ledgerLib.quarantineBannerLine(notQuarantines, { now: NOW }), '', 'processed and deferred records are not quarantines');
+  // A hand-edited or forward-schema ledger must not throw.
+  const junk = { ...EMPTY, files: { '/a': null, '/b': 'a string', '/c': 42, '/d': [], '/e': undefined } };
+  let line = 'unset';
+  assert.doesNotThrow(() => {
+    line = ledgerLib.quarantineBannerLine(junk, { now: NOW });
+  });
+  assert.equal(line, '');
+});
+
+test('ledger: opts.now is the ONLY clock, a non-numeric now falls back to the live one, and the render is pure', () => {
+  const l = quarantined(['a.jsonl', 'over-ceiling', ANCIENT]);
+  // Omitted → the live clock → a year-2000 record is long stale.
+  assert.equal(ledgerLib.quarantineBannerLine(l), '', 'the live clock retires it');
+  // An explicit now beside the record makes the very same ledger render.
+  assert.ok(
+    ledgerLib.quarantineBannerLine(l, { now: Date.parse('2000-01-02T00:00:00.000Z') }).includes(INFORMATIONAL_SENTENCE_OPENER),
+    'opts.now decides'
+  );
+  // '946771200000' and the Date are the discriminating ones: each would make
+  // the ANCIENT record look FRESH if `now` were used without the finite-number
+  // guard, so a fallback that merely checks `!== undefined` fails here.
+  for (const bad of [undefined, null, NaN, Infinity, -Infinity, '946771200000', new Date(946771200000), {}, [], true]) {
+    assert.equal(ledgerLib.quarantineBannerLine(l, { now: bad }), '', `now=${String(bad)} falls back to the live clock`);
+  }
+  // The repeatable property this package ships: a function of the ledger and
+  // opts.now alone, and no call writes, mutates or expires a record.
+  const before = JSON.stringify(l);
+  assert.equal(ledgerLib.quarantineBannerLine(l, { now: NOW }), ledgerLib.quarantineBannerLine(l, { now: NOW }));
+  assert.equal(JSON.stringify(l), before, 'the ledger is untouched');
 });
 
 test('ledger: secretRevertSummaryLine is built from integers alone', () => {

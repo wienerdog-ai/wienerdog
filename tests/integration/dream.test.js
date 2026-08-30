@@ -798,8 +798,10 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
 
   // The digest shows the durable, secret-free quarantine banner.
   const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
-  assert.ok(digest.includes('could not be read and were skipped'), 'banner present');
-  assert.ok(digest.includes('huge.jsonl (over-ceiling)'), 'banner names basename + reason');
+  assert.ok(digest.includes('1 session transcript(s) are being skipped and will not be dreamed over'), 'banner present, as a count');
+  assert.ok(digest.includes('reports/warnings.md in your vault'), 'and points at the one home of the enumeration');
+  assert.ok(!digest.includes('huge.jsonl'), 'the banner names no transcript (WP-quarantine-banner-decay)');
+  assert.ok(!digest.includes('over-ceiling'), 'and carries no stored reason string');
   assert.ok(!digest.includes(ctx.claude), 'banner carries no full path');
 });
 
@@ -817,7 +819,11 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   const ledger1 = readLedgerFile(ctx.core);
   assert.equal(ledgerRecord(ledger1, 'huge.jsonl').outcome, 'quarantined');
   const digest1 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
-  assert.ok(digest1.includes('huge.jsonl (over-ceiling)'), 'banner written on the quarantine-only run');
+  assert.ok(
+    digest1.includes('1 session transcript(s) are being skipped and will not be dreamed over'),
+    'banner written on the quarantine-only run'
+  );
+  assert.ok(!digest1.includes('huge.jsonl'), 'the banner names no transcript');
   const bytes1 = fs.readFileSync(ledgerPath, 'utf8');
   // The vault gets its own durable record (WP-quarantine-warnings-file). This
   // run makes NO commit, so refresh point 1 is what produced the file, and the
@@ -868,7 +874,7 @@ test('dream-integration: a quarantine-only run records + banners + exits 0; unch
   assert.equal(ledgerRecord(ledger3, 'huge.jsonl').outcome, 'processed');
   // The banner self-clears once the file leaves quarantine.
   const digest3 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
-  assert.ok(!digest3.includes('huge.jsonl (over-ceiling)'), 'banner cleared after the retry succeeded');
+  assert.ok(!digest3.includes('are being skipped and will not be dreamed over'), 'banner cleared after the retry succeeded');
   // The vault file does NOT self-clear by vanishing: the quarantine leaving the
   // set is knowable only after the commit (refresh point 2), and what that point
   // writes is the explicit empty form. The file is never unlinked.
@@ -911,7 +917,9 @@ test('dream-integration: a refresh FAILURE is reported and never fails the dream
   // condition and the digest banner still raises it. Only the enumeration is
   // lost, and only until the next refresh.
   assert.equal(ledgerRecord(readLedgerFile(ctx.core), 'huge.jsonl').outcome, 'quarantined');
-  assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
+  assert.ok(
+    fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('1 session transcript(s) are being skipped')
+  );
   // The thing in the way is left exactly as found — never cleared, never written through.
   assert.ok(fs.statSync(path.join(ctx.vault, WARNINGS_REL)).isDirectory());
 });
@@ -997,7 +1005,15 @@ test('dream-integration: the one-time migration seeds the ledger baseline from w
 test('dream-integration: a hostile quarantined filename reaches the banner and console only in sanitized form', async () => {
   // Review finding: a newline + markdown callout in the FILENAME would render
   // its own line inside the injected digest. The whitelist sanitizer
-  // ([A-Za-z0-9._-]) is what enforces the no-untrusted-bytes invariant.
+  // ([A-Za-z0-9._-]) is what enforces the no-untrusted-bytes invariant on the
+  // CONSOLE line, which still names the file.
+  //
+  // WP-quarantine-banner-decay changes this test's PREMISE on the digest side:
+  // the informational sentence is now built from one integer and fixed
+  // code-owned text, so no filename — hostile, sanitized or otherwise — reaches
+  // the banner at all. That is a strict improvement over sanitizing it, and the
+  // assertions below pin the stronger property: the sanitized form must be
+  // absent too, or a name has crept back into the sentence.
   const ctx = setup({ withTranscript: false });
   plantOverCeiling(ctx.claude, 'evil]\n> [!danger] INJECTED');
 
@@ -1010,9 +1026,11 @@ test('dream-integration: a hostile quarantined filename reaches the banner and c
   assert.ok(!output.includes('[!danger]'), 'no raw markdown in console output');
   assert.ok(!output.includes('INJECTED'), 'no raw (unfolded) filename bytes in console output');
 
-  // Digest banner: sanitized, no attacker-controlled line break or callout.
+  // Digest banner: a count and a pointer, carrying NO name at all.
   const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
-  assert.ok(digest.includes(`${sanitized} (over-ceiling)`), 'banner names the sanitized basename');
+  assert.ok(digest.includes('1 session transcript(s) are being skipped and will not be dreamed over'), 'the banner renders as a count');
+  assert.ok(!digest.includes(sanitized), 'not even the SANITIZED basename reaches the banner');
+  assert.ok(!digest.includes('evil'), 'no fragment of the hostile filename reaches the digest');
   assert.ok(!digest.includes('[!danger]'), 'no raw markdown from the filename in the digest');
   assert.ok(!digest.includes('INJECTED'), 'no raw filename bytes in the digest');
   assert.ok(!/\n> \[!danger\]/.test(digest), 'the hostile name cannot start its own digest line');
@@ -1038,7 +1056,9 @@ test('dream-integration: --dry-run reports a would-be quarantine but persists ne
   assert.match(real.output, /quarantined claude\/huge\.jsonl \(over-ceiling\)/);
   const ledger = readLedgerFile(ctx.core);
   assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
-  assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
+  assert.ok(
+    fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('1 session transcript(s) are being skipped')
+  );
 });
 
 test('dream-integration: --dry-run on the upgrade path (watermarks.json present, no ledger) persists nothing', async () => {
@@ -1068,7 +1088,10 @@ test('dream-integration: --dry-run on the upgrade path (watermarks.json present,
   assert.ok(ledger, 'real run persists the migrated ledger');
   assert.equal(ledger.baseline_mtime.claude, 1, 'baseline seeded from watermarks.json');
   assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
-  assert.ok(fs.readFileSync(path.join(state, 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'), 'banner written by the real run');
+  assert.ok(
+    fs.readFileSync(path.join(state, 'digest.md'), 'utf8').includes('1 session transcript(s) are being skipped'),
+    'banner written by the real run'
+  );
 });
 
 test('dream-integration: A5 private modes — digest.md 0600 after a dream; scratch dir 0700 with 0600 extracts (WP-126)', { skip: process.platform === 'win32' }, async () => {

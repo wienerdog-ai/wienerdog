@@ -181,15 +181,18 @@ test('renderDigest prepends opts.quarantineLine; empty/absent leaves the golden 
   );
   // A non-empty quarantine line is prepended, then a blank line, then the body.
   const line =
-    '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling). ' +
-    'Dreaming continues over your other sessions; a skipped file is retried automatically if it changes.';
+    '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over. ' +
+    'Which ones, and why: reports/warnings.md in your vault. Dreaming continues over your other sessions; ' +
+    'a skipped file is retried automatically if it changes.';
   const withLine = renderDigest(FIXTURE, undefined, { quarantineLine: line, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
 test('renderDigest places quarantineLine after alerts and before schedulerLine/updateLine', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
-  const quarantineLine = '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling).';
+  const quarantineLine =
+    '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over. ' +
+    'Which ones, and why: reports/warnings.md in your vault.';
   const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
   const updateLine = '> [!note] update available';
   const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
@@ -1098,7 +1101,7 @@ test('framing: no other emitter opens a line with the marker, and the block is c
     identityApprovals: approvals(tmp),
     profile: allowAll(),
     alerts: [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }],
-    quarantineLine: '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped.',
+    quarantineLine: '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over.',
     schedulerLine: '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active.',
     updateLine: '> [!note] A newer Wienerdog is available.',
     secretQuarantine: ['2026-07-17-leak.md'],
