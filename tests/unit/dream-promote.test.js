@@ -1094,16 +1094,19 @@ test('dream-promote: a missing gate or malformed input throws rather than promot
       `a layout of ${JSON.stringify(bad)} must fail loud`
     );
   }
-  // `date` is validated like the other six inputs. Unvalidated, `undefined`
-  // reaches the EP2 gate, which names the preserved copy `<date>-<basename>` —
-  // so a caller bug becomes a quarantine artifact called `undefined-note.md`,
-  // and that artifact is the user's ONLY route back to the unredacted original
-  // (PR-review gate, round 3). Every other required input fails loud; this one
-  // has to as well, or the inconsistency is itself the trap.
-  for (const bad of [undefined, '', 0, null, {}]) {
+  // `date` is validated like the other six inputs, and against a SHAPE rather
+  // than mere non-emptiness (Table D's `date` row). It reaches the EP2 gate,
+  // which names the preserved copy `<date>-<sanitized-basename>` — only the
+  // basename half is sanitized, so `date` is an unsanitized path component.
+  // A caller bug therefore becomes a quarantine artifact called
+  // `undefined-note.md`, or one written somewhere else entirely, and that
+  // artifact is the user's ONLY route back to the unredacted original.
+  // The separator cases are the reason the row chose a positive allowlist over
+  // "no path separators": nobody has to enumerate what a separator is.
+  for (const bad of [undefined, '', 0, null, {}, '2026-8-3', '2026/08/30', '../etc', '2026-08-29 ']) {
     assert.throws(
       () => run(sc, { date: bad }),
-      (err) => err instanceof WienerdogError && /`date` must be a non-empty string/.test(err.message),
+      (err) => err instanceof WienerdogError && /`date` must be a run date of the form YYYY-MM-DD/.test(err.message),
       `a date of ${JSON.stringify(bad)} must fail loud`
     );
   }

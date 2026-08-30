@@ -669,11 +669,15 @@ function promote(o) {
   }
   // FAIL LOUD LIKE THE OTHERS, and this one guards a RECOVERY ROUTE. `date`
   // reaches the EP2 gate, which names the preserved unredacted copy
-  // `<date>-<basename>`; an `undefined` here shelves the user's only way back
-  // to their original bytes under `undefined-note.md` and reports that name to
-  // them. Nothing downstream would notice — the run promotes normally.
-  if (typeof date !== 'string' || date === '') {
-    throw new WienerdogError('promote: `date` must be a non-empty string');
+  // `<date>-<sanitized-basename>` — only the basename half is sanitized, so
+  // this value is an UNSANITIZED path component. An `undefined` shelves the
+  // user's only way back to their original bytes under `undefined-note.md`; a
+  // separator shelves it somewhere else entirely. Nothing downstream would
+  // notice: the run promotes normally either way. The SHAPE, and why it is a
+  // positive allowlist rather than a separator deny-list, are Table D's `date`
+  // row's; this check states none of that rule.
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new WienerdogError('promote: `date` must be a run date of the form YYYY-MM-DD');
   }
   if (!baseline || !(baseline.files instanceof Map)) {
     throw new WienerdogError('promote: `baseline` must be a value returned by captureBaseline()');

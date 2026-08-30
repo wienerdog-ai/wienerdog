@@ -329,3 +329,75 @@ Proposed as a runbook line, not adopted here — that is the owner's call.
   a Deliverable that no checklist item names. The gate found them by reading the
   canonical text against the code, which is what I should have done when I wrote
   the entry.
+
+## The architect run of 2026-08-30 — findings 2 and 5, and nothing else
+
+The owner scoped this run to two tasks against `2c264a5`: give `date` a shape
+(round 4's finding 5) and walk exactly two of the seventeen unwalked checklist
+items (round 4's finding 2, escalated half). No other spec text was touched, and
+nothing outside `docs/specs/WP-dream-promote-module.md` and this directory was
+editable.
+
+### Finding 5 — `date` now has a shape, in ONE place
+
+**The row: Table D, `The `date` INPUT'S SHAPE`.** Table D owns what the gates
+are HANDED, and `date` is handed to two of them (`promote.js:812` to the EP2
+gate, `:954` to the skill-body guard), so the shape belongs there rather than in
+Table E, which owns the write, or in Table Q, which owns the gate's OUTPUT.
+
+**The shape is `/^\d{4}-\d{2}-\d{2}$/`, not the weaker "no path separators".**
+The pattern is a positive allowlist, so nobody has to enumerate what a path
+separator is on which platform — the same argument row C9 already makes about
+its own allowlist, and the same argument the containment lesson makes about
+string answers to path questions. It also matches, rather than merely permits,
+what the two owning surfaces already spell: the shipped preserving call's own
+`@param` says `YYYY-MM-DD` (`validate.js:693`) while composing
+`<date>-<sanitized-basename>` with only the basename sanitized (`:683`), and
+`WP-dream-promote-report`'s report row names `<reports_dir>/<date>.md`.
+
+**A third consumer was measured during the pass and is corroboration, not a
+second owner:** the skill-body guard compares `cur.updated === date`
+(`validate.js:282`) against a note's `updated` frontmatter, which the vault
+writes in the same spelling — so the pattern is what keeps that comparison
+meaningful too. Table D's skill-body row already named the run date among its
+inputs, which is why the new row does NOT claim that no gate row names `date`.
+
+**What the module must add:** the existing non-empty check becomes the pattern
+test, same throw, same place. Nothing else moves.
+
+**What was deliberately NOT added: an acceptance criterion.** No criterion in
+this spec covers ANY of `promote()`'s seven argument checks — the `date` guard
+that round 3 asked for landed with none either. Adding one only for `date` would
+put a second statement of the pattern on a second surface, which is the exact
+defect this package has produced six times. Whether the argument checks as a
+CLASS get a criterion is an owner's call, recorded here rather than taken.
+
+### Finding 2 — two items walked, and the arithmetic says two
+
+Items *Table Q* and *Table S* were resolved mirror by mirror against the
+repaired `@returns` and **both cleared**. The cross-package half was read on
+`main` and reported, never edited: `WP-dream-promote-report`'s five Table N rows,
+its two Table R rows, its Q1–Q3/Q8/Q9/Q10 criterion, its `report` union and its
+Current-state paragraph; `WP-dream-promote-in-workspace`'s rows G5, G7, G8, G10
+and V3 and row G7's acceptance criterion.
+
+**The one thing the walk found, filed not fixed:** the report package's
+Current-state paragraph attributes "the arms that carry the preservation record"
+to row **Q1**. Q1 decides that for the GATE's three arms (`{ok}` / `{refuse}` /
+`{redact}`); the rule for `promote()`'s RETURN arms is row **Q8**'s, with Table S
+row S3 for `refused[]`. The shape it describes is correct, so this is a
+citation-owner slip and not a drift — and it is one surface away from the
+"corrected 2026-08-29, round 4's F-8" note in the same sentence, which fixed a
+different mis-citation in the same clause.
+
+**Fifteen items remain unwalked and the spec says fifteen.** The scope sentence
+was rewritten to name them individually (5–12, 14, 15, 17–21) rather than by a
+range that would drift if an item were ever inserted.
+
+### One gap opened on purpose
+
+The new `date` row and its one mirror are on NO checklist item. Registering it
+would make the list twenty-two entries and falsify the six-of-twenty-one count
+the owner fixed for this pass, so it is named in the section's own gap paragraph
+and routed to the owner instead of taken quietly. This is the second such gap
+recorded there; the first is `docs/GLOSSARY.md`.
