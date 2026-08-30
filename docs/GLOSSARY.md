@@ -70,9 +70,11 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   "staging directory" — that is the empty working directory a job RUNS from; not
   "scratch", "shadow vault", "mirror".)
 - **vault write** — the one call this family's code goes through to put a
-  content file into the vault. Two writers use it and no others: each promoted
-  note, and the dream report (whose body the brain authors and to which code
-  appends its accounting section, so that one is two calls). Git's writes to the
+  content file into the vault. Three writers use it and no others: each promoted
+  note; the dream report (whose body the brain authors and to which code appends
+  its accounting section, so that one is two calls); and the vault warnings file
+  (`reports/warnings.md`), which code writes whole from the transcript
+  quarantine ledger. Git's writes to the
   vault's own `.git` directory are not content files and are not vault writes.
   It decides on the object the write would actually LAND on rather than on the
   path it was handed: the destination is resolved first — a directory that is
