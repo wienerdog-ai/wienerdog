@@ -499,6 +499,67 @@ if (process.platform === 'win32') {
     assertEnvelope(r, world.digest); // byte-for-byte, so a truncated read fails
   });
 
+  // ---- FIX 2 (A-H7 fast tier): over-cap injection reads ZERO content bytes --
+  // A --require shim drops a marker line whenever readSync touches a
+  // descriptor opened on the watched path. The control run proves the shim
+  // observes ordinary reads; the over-cap run then proves the fast path
+  // performs none (st_size alone decided).
+
+  /** Env additions arming the read-marker shim for `target`. */
+  function readMarkEnv(world, target, markOut) {
+    const shim = path.join(world.home, 'readmark-shim.js');
+    fs.writeFileSync(shim, [
+      "'use strict';",
+      'const fs = require("fs");',
+      'const markPath = process.env.WD_READMARK_PATH;',
+      'const markOut = process.env.WD_READMARK_OUT;',
+      'if (markPath && markOut) {',
+      '  const realOpen = fs.openSync;',
+      '  const tracked = new Set();',
+      '  fs.openSync = function (p, ...rest) {',
+      '    const fd = realOpen.call(fs, p, ...rest);',
+      '    try { if (String(p) === markPath) tracked.add(fd); } catch (e) { /* ignore */ }',
+      '    return fd;',
+      '  };',
+      '  const realRead = fs.readSync;',
+      '  fs.readSync = function (fd, ...rest) {',
+      '    if (tracked.has(fd)) fs.appendFileSync(markOut, "content-read\\n");',
+      '    return realRead.call(fs, fd, ...rest);',
+      '  };',
+      '  const realClose = fs.closeSync;',
+      '  fs.closeSync = function (fd) { tracked.delete(fd); return realClose.call(fs, fd); };',
+      '}',
+      '',
+    ].join('\n'));
+    return {
+      NODE_OPTIONS: `--require ${shim}`,
+      WD_READMARK_PATH: target,
+      WD_READMARK_OUT: markOut,
+    };
+  }
+
+  test('H-FIX2 control: a fresh under-ceiling CLAUDE.md read IS observed by the shim → silence, marker present', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.writeFileSync(md, `${shared.buildBlock(world.digest)}\n`);
+    const mark = path.join(world.home, 'read-marker.log');
+    const r = runHook(world, readMarkEnv(world, md, mark));
+    assertNoTimeout(r);
+    assertSilence(r);
+    assert.ok(fs.existsSync(mark), 'the shim must record content reads on an inspected target');
+  });
+
+  test('H-FIX2 (A-H7 fast tier): over-ceiling CLAUDE.md → envelope with ZERO content bytes read', () => {
+    const world = tempWorld();
+    const md = claudeDir(world);
+    fs.writeFileSync(md, `${shared.buildBlock(world.digest)}\n${'x'.repeat(4 * 1024 * 1024)}\n`);
+    const mark = path.join(world.home, 'read-marker.log');
+    const r = runHook(world, readMarkEnv(world, md, mark));
+    assertNoTimeout(r);
+    assertEnvelope(r, world.digest);
+    assert.ok(!fs.existsSync(mark), 'the fast path must inject with zero content bytes read from the target');
+  });
+
   // ---- AC14/AC16 (Linux): the virtual-regular st_size=0 procfs class --------
 
   test('H-AC16 procfs (Linux): digest.md → /proc/version (virtual regular, st_size 0) is read to EOF', { skip: process.platform !== 'linux' ? 'procfs is Linux-only' : false }, () => {
@@ -534,21 +595,30 @@ if (process.platform === 'win32') {
     const bindir = path.join(world.home, 'swapbin');
     fs.mkdirSync(bindir);
     const wrapper = path.join(bindir, 'node');
+    const ranMarker = path.join(world.home, 'node-ran.marker');
     fs.writeFileSync(wrapper, [
       '#!/bin/sh',
       '# R-A window, made deterministic: runs between bash -f and the real open.',
       'rm -f "$WD_SWAP_PATH"',
       'mkfifo "$WD_SWAP_PATH"',
-      `exec "${process.execPath}" "$@"`,
+      `"${process.execPath}" "$@"`,
+      'ec=$?',
+      '# Written only AFTER the real node returned — a wrapper that skipped node',
+      '# (e.g. a bare `exit 0`) leaves no marker and fails the assertion below.',
+      'echo "$ec" > "$WD_NODE_RAN_MARKER"',
+      'exit $ec',
       '',
     ].join('\n'), { mode: 0o755 });
     const r = runHook(world, {
       PATH: `${bindir}${path.delimiter}${process.env.PATH || ''}`,
       WD_SWAP_PATH: digestPath,
+      WD_NODE_RAN_MARKER: ranMarker,
     });
     assertNoTimeout(r);
     assertSilence(r);
     assert.ok(fs.lstatSync(digestPath).isFIFO(), 'fixture: the swap must have happened');
+    assert.ok(fs.existsSync(ranMarker), 'the real node must actually have run inside the window');
+    assert.equal(fs.readFileSync(ranMarker, 'utf8').trim(), '0', 'the wrapped node invocation must have exited 0');
   });
 
   test('H-AC17 structural: the -f pre-filter is present and the flags carry O_NOCTTY', () => {
