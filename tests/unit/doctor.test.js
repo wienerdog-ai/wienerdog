@@ -1198,3 +1198,266 @@ test('doctor: the block group sits after the skill-link lines and before the qua
   assert.ok(idxSkills < idxBlock, `block line must follow the skill-link lines:\n${r.stdout}`);
   assert.ok(idxBlock < idxQuarantine, `block line must precede the quarantine line:\n${r.stdout}`);
 });
+
+// ---------------------------------------------------------------------------
+// WP-hook-doctor-inspection-read-hardening — the doctor rows of Tables B and D.
+// digestBlockChecks reads every path (targets AND its own digest.md) through a
+// descriptor-based bounded reader: open O_RDONLY|O_NONBLOCK|O_NOCTTY → fstat
+// the SAME fd → refuse non-regular → EOF-bounded read stopping at ceiling+1.
+// Only a clean ENOENT is absence; every other failure is doubt, said out loud.
+// Every potentially-blocking fixture runs doctor as a timeout-bounded child
+// with an explicit did-not-time-out assertion. POSIX-only fixtures skip win32.
+
+const { spawnSync } = require('node:child_process');
+
+const POSIX_SKIP = process.platform === 'win32' ? 'POSIX fixtures (mkfifo/symlink/chmod)' : false;
+const ROOT_SKIP =
+  process.platform === 'win32' ? 'POSIX fixtures (chmod)'
+  : (typeof process.getuid === 'function' && process.getuid() === 0)
+    ? 'EACCES fixtures cannot be produced as root' : false;
+const CEILING = 4194304; // Table C row C1; AC12 asserts parity with both homes
+
+/** Like run(), but the child is timeout-bounded and the result says whether it
+ *  timed out — a blockable path must FAIL, not hang the suite. */
+function runBounded(args, env) {
+  const r = spawnSync(process.execPath, [bin, ...args], { env, encoding: 'utf8', timeout: 15000 });
+  return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '', signal: r.signal, error: r.error };
+}
+
+/** The explicit did-not-time-out assertion plus the B6 exit-code contract. */
+function assertPromptOk(r) {
+  assert.equal(r.error, undefined, `doctor child errored: ${r.error}`);
+  assert.equal(r.signal, null, 'doctor child must not be killed by the timeout');
+  assert.equal(r.status, 0, `doctor must exit 0 (B6), stderr: ${r.stderr}`);
+}
+
+function makeFifo(p) {
+  const r = spawnSync('mkfifo', [p], { encoding: 'utf8' });
+  assert.equal(r.status, 0, `mkfifo failed: ${r.stderr}`);
+}
+
+/** Fresh-vault world with a present Claude harness; returns its key paths. */
+function hardenedWorld() {
+  const t = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], t.env);
+  return {
+    ...t,
+    claudeMd: path.join(t.env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'),
+    digestPath: path.join(t.core, 'state', 'digest.md'),
+  };
+}
+
+/** Write the fstat-underreport shim (--require) and return env additions that
+ *  make fstat report `fakeSize` for descriptors opened on `target` — the
+ *  deterministic stand-in for the procfs virtual-regular class (Table C row
+ *  C2a) on platforms without procfs. */
+function underreportEnv(w, target, fakeSize = 0) {
+  const shim = path.join(w.root, 'underreport-shim.js');
+  fs.writeFileSync(shim, [
+    "'use strict';",
+    'const fs = require("fs");',
+    'const target = process.env.WD_UNDERREPORT_PATH;',
+    'if (target) {',
+    '  const fakeSize = Number(process.env.WD_UNDERREPORT_SIZE || "0");',
+    '  const realOpen = fs.openSync;',
+    '  const tracked = new Set();',
+    '  fs.openSync = function (p, ...rest) {',
+    '    const fd = realOpen.call(fs, p, ...rest);',
+    '    try { if (String(p) === target) tracked.add(fd); } catch (e) { /* ignore */ }',
+    '    return fd;',
+    '  };',
+    '  const realFstat = fs.fstatSync;',
+    '  fs.fstatSync = function (fd, ...rest) {',
+    '    const st = realFstat.call(fs, fd, ...rest);',
+    '    if (tracked.has(fd)) Object.defineProperty(st, "size", { value: fakeSize });',
+    '    return st;',
+    '  };',
+    '  const realClose = fs.closeSync;',
+    '  fs.closeSync = function (fd) { tracked.delete(fd); return realClose.call(fs, fd); };',
+    '}',
+    '',
+  ].join('\n'));
+  return {
+    ...w.env,
+    NODE_OPTIONS: `--require ${shim}`,
+    WD_UNDERREPORT_PATH: target,
+    WD_UNDERREPORT_SIZE: String(fakeSize),
+  };
+}
+
+// ---- B2: non-regular targets warn without a content read, promptly ---------
+
+test('doctor: CLAUDE.md is a FIFO with no writer → cannot-inspect warn, exit 0, no timeout (B2, B6, B8)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.claudeMd);
+  makeFifo(w.claudeMd);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — it is not a regular file`), r.stdout);
+  assert.doesNotMatch(r.stdout, /\[fail\]/);
+});
+
+test('doctor: CLAUDE.md is a symlink to a FIFO → cannot-inspect warn, no timeout (B2)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.claudeMd);
+  const fifo = path.join(w.root, 'somewhere.fifo');
+  makeFifo(fifo);
+  fs.symlinkSync(fifo, w.claudeMd);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — it is not a regular file`), r.stdout);
+});
+
+test('doctor: CLAUDE.md is a directory → cannot-inspect warn (B2)', () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.claudeMd);
+  fs.mkdirSync(w.claudeMd);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — it is not a regular file`), r.stdout);
+});
+
+// ---- B3: any non-ENOENT open failure is doubt, named ------------------------
+
+test('doctor: CLAUDE.md unreadable (EACCES) → cannot-inspect warn naming the code (B3, D-E3)', { skip: ROOT_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.chmodSync(w.claudeMd, 0o000);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — reading it failed (EACCES)`), r.stdout);
+});
+
+test('doctor: CLAUDE.md is a symlink loop (ELOOP) → cannot-inspect warn naming the code (B3, D-E4)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.claudeMd);
+  fs.symlinkSync(w.claudeMd, w.claudeMd); // self-loop
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.claudeMd} — reading it failed (ELOOP)`), r.stdout);
+});
+
+// ---- B5: over-ceiling is actionable, sized, and never sends the user to sync
+
+test('doctor: CLAUDE.md larger than the ceiling → warn with the observed st_size and the ceiling, no sync suggestion (B5)', () => {
+  const w = hardenedWorld();
+  const size = CEILING + 7;
+  fs.writeFileSync(w.claudeMd, 'x'.repeat(size));
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  const line = r.stdout.split('\n').find((l) => l.includes('too large to inspect'));
+  assert.ok(line, r.stdout);
+  assert.ok(line.includes(w.claudeMd), line);
+  assert.ok(line.includes(`${size} bytes`), `must carry the observed st_size: ${line}`);
+  assert.ok(line.includes(`${CEILING}-byte ceiling`), `must carry the ceiling: ${line}`);
+  assert.ok(line.includes('re-run doctor'), `must tell the user to trim and re-run: ${line}`);
+  assert.ok(!line.includes('wienerdog sync'), `must NOT suggest sync (it cannot shrink the file): ${line}`);
+});
+
+test('doctor: st_size-underreporting over-ceiling CLAUDE.md → warn says "larger than", no number it cannot know (B5 slow tier, B7)', () => {
+  const w = hardenedWorld();
+  fs.writeFileSync(w.claudeMd, 'x'.repeat(CEILING + 7));
+  const r = runBounded(['doctor'], underreportEnv(w, w.claudeMd, 0));
+  assertPromptOk(r);
+  const line = r.stdout.split('\n').find((l) => l.includes('too large to inspect'));
+  assert.ok(line, r.stdout);
+  assert.ok(line.includes(`larger than ${CEILING} bytes`), `slow tier must not claim an exact size: ${line}`);
+  assert.ok(!line.includes('wienerdog sync'), line);
+});
+
+// ---- B9/B10/B11: doctor's own digest read is inside the same guard ----------
+
+test('doctor: digest.md is a FIFO → one digest warn, NO target inspected, exit 0, no timeout (B9)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.digestPath);
+  makeFifo(w.digestPath);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.digestPath} — it is not a regular file`), r.stdout);
+  assert.doesNotMatch(r.stdout, /Wienerdog block in/);
+});
+
+test('doctor: digest.md over the ceiling → digest warn, NO target inspected (B9)', () => {
+  const w = hardenedWorld();
+  fs.writeFileSync(w.digestPath, 'x'.repeat(CEILING + 1));
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(
+    r.stdout.includes(`[warn] cannot inspect ${w.digestPath} — it is larger than the ${CEILING}-byte inspection ceiling`),
+    r.stdout
+  );
+  assert.doesNotMatch(r.stdout, /Wienerdog block in/);
+});
+
+test('doctor: digest.md unreadable (EACCES) → digest warn naming the code, NO target inspected (B9)', { skip: ROOT_SKIP }, () => {
+  const w = hardenedWorld();
+  fs.chmodSync(w.digestPath, 0o000);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[warn] cannot inspect ${w.digestPath} — reading it failed (EACCES)`), r.stdout);
+  assert.doesNotMatch(r.stdout, /Wienerdog block in/);
+});
+
+test('doctor: digest.md cleanly absent after a vault existed → no block line at all (B10)', () => {
+  const w = hardenedWorld();
+  fs.rmSync(w.digestPath);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.doesNotMatch(r.stdout, /Wienerdog block in/);
+  assert.doesNotMatch(r.stdout, /cannot inspect/);
+});
+
+// ---- C3: symlinks to regular files keep working on both reads (AC4) --------
+
+test('doctor: CLAUDE.md is a symlink to a regular file with the fresh block → still [ok] (C3)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  const real = path.join(w.root, 'real-claude.md');
+  fs.renameSync(w.claudeMd, real);
+  fs.symlinkSync(real, w.claudeMd);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[ok] the Wienerdog block in ${w.claudeMd} matches the current digest`), r.stdout);
+});
+
+test('doctor: digest.md is a symlink to a regular file → comparison still runs, [ok] (C3, B11)', { skip: POSIX_SKIP }, () => {
+  const w = hardenedWorld();
+  const real = path.join(w.root, 'real-digest.md');
+  fs.renameSync(w.digestPath, real);
+  fs.symlinkSync(real, w.digestPath);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[ok] the Wienerdog block in ${w.claudeMd} matches the current digest`), r.stdout);
+});
+
+// ---- AC16 (C2a): st_size is never a length ----------------------------------
+
+test('doctor: fstat underreports digest.md as size 0 → the block still reads as matching, not empty (AC16, C2a)', () => {
+  const w = hardenedWorld();
+  const r = runBounded(['doctor'], underreportEnv(w, w.digestPath, 0));
+  assertPromptOk(r);
+  // An st_size-as-length reader would build want = buildBlock("") and report
+  // the block out of date; the EOF-bounded loop reads the real bytes.
+  assert.ok(r.stdout.includes(`[ok] the Wienerdog block in ${w.claudeMd} matches the current digest`), r.stdout);
+});
+
+test('doctor procfs (Linux): digest.md → /proc/version (virtual regular, st_size 0) read to EOF, block matches (AC16, AC14)', { skip: process.platform !== 'linux' ? 'procfs is Linux-only' : false }, () => {
+  const w = hardenedWorld();
+  const content = fs.readFileSync('/proc/version', 'utf8');
+  assert.ok(content.length > 0, 'fixture: /proc/version must yield bytes');
+  fs.rmSync(w.digestPath);
+  fs.symlinkSync('/proc/version', w.digestPath);
+  assert.equal(fs.statSync(w.digestPath).size, 0, 'fixture: procfs must report st_size 0');
+  fs.writeFileSync(w.claudeMd, `${buildBlock(content)}\n`);
+  const r = runBounded(['doctor'], w.env);
+  assertPromptOk(r);
+  assert.ok(r.stdout.includes(`[ok] the Wienerdog block in ${w.claudeMd} matches the current digest`), r.stdout);
+});
+
+// ---- D-E8 structural: EMFILE/EIO and every unlisted errno fall to doubt -----
+
+test('doctor structural: only a clean ENOENT is absence; the reader is descriptor-based with O_NONBLOCK|O_NOCTTY (D-E8, C2)', () => {
+  const src = fs.readFileSync(path.join(repoRoot, 'src', 'cli', 'doctor.js'), 'utf8');
+  assert.match(src, /err\.code === 'ENOENT'\) return \{ kind: 'absent' \}/, 'only ENOENT maps to absence');
+  assert.match(src, /O_RDONLY \| fs\.constants\.O_NONBLOCK \| fs\.constants\.O_NOCTTY/, 'descriptor flags');
+  assert.match(src, /fstatSync\(fd\)/, 'fstat on the SAME descriptor');
+  assert.match(src, /isFile\(\)/, 'non-regular refusal');
+});
