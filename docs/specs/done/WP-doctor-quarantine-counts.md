@@ -317,8 +317,15 @@ line was emitted**.
       on why `fileExists` (`doctor.js:20`) is the wrong helper, Table A's mutation
       row, the first worked example's caption, the pointer acceptance criterion
       **and its four hostile cases**, the discipline gate's probe assertions, the
-      Implementation-notes probe bullet, and the security checklist's
-      symlink-refusal item. **No surface may call it an existence
+      Implementation-notes probe bullet, the security checklist's
+      symlink-refusal item, and — **registered 2026-08-30, post-Done errata from
+      PR #37's review gate** — **the shipped `warningsPointerStatus` JSDoc**
+      (`src/cli/doctor.js:306-321`), which enumerates the same six steps in prose.
+      It is a ninth mirror, it was the only one this list never named, and it had
+      already drifted once (it numbered the probe FIVE steps against this table's
+      six) before PR #37's second round repaired it. A change to Table B's step
+      list — a seventh step, a reworded fifth — is not finished until that JSDoc
+      carries the same count and the same steps. **No surface may call it an existence
       check, none may pin it to the LEAF alone** — a redirected parent passes a
       leaf-only probe and `writeIntoVault` refuses the same destination —
       **and none may describe the `warn` branch as "the file is absent"** —
