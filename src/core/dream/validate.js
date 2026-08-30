@@ -1135,8 +1135,13 @@ module.exports = {
   makeGates,
   parseFrontmatter,
   assertGitRepo,
-  // ONE consumer, and it is not the retired precommit's: the unknown-command
-  // non-vacuity guard (row G6). Deleting both uses makes that guard vacuous.
+  // NO consumer in `src/` any more, and that is the contract rather than an
+  // oversight (rows G3 and G6, owner ruling of 2026-08-30). The unknown-command
+  // non-vacuity guard was its last caller; re-basing that guard onto the
+  // workspace delta IS the replacement of this call, because the premise it
+  // rested on — a tree asserted clean immediately before the spawn — is what
+  // removing the pre-commit destroys. Exported still: it is a sound, general
+  // clean-tree assertion and the tests use it to build fixtures.
   assertCleanTree,
   // Left in place and exported (row G9): this package changes only which
   // function the two abort sites call, not the crash-replay / journal /
