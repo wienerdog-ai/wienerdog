@@ -312,6 +312,7 @@ never retyped (Table A's path row).
 |---|---|
 | Vault-relative path | the fixed literal `reports/warnings.md`, **exported from this module as a named constant** — it is the one place the path is decided, and `WP-doctor-quarantine-counts` imports it. Retyping it in a second module is drift waiting to happen; the only other occurrences in the codebase are inside fixed English sentences (the digest banner, the dream report), each pinned by its own package's byte-exact gate. **Layout-independent on purpose:** it is not a dream report, so it does not live under `layout.reports_dir` (`reports/dreams` by default), and `src/core/vault-snapshot.js` scopes routine snapshots by `'reports/dreams'` newest-N — a warnings file inside that dir would displace a dream report from a routine's window |
 | Document shape | the two literal worked examples under "Exact contracts" ARE the shape: `# Wienerdog warnings`, the fixed two-sentence header paragraph byte-for-byte as shown, `## Current conditions`, the block below. **That is the whole document — there is no second section** (owner-ruled 2026-08-30; the earlier `## Run log` is dropped, and its dated history now comes from the vault's git log). Exactly one blank line between every block; the file ends with exactly one `\n` |
+| **The header paragraph's trigger sentence stands as written — RULED 2026-08-30 (PR-review errata)** | the shipped bytes end `Do not edit it — it is rewritten whenever the list below changes.` The Mirrored Surface Checklist's rewrite-trigger item was read as forbidding them; it does not, and this row is where that is decided. What the item forbids is a MEMBERSHIP formulation — the file rewritten when the SET changes, i.e. when a transcript enters or leaves quarantine — which is false, because a same-key reason or size change rewrites the file with the set unmoved. **"The list below" denotes the rendered block, not the key set**, and the rendered block IS the trigger's operand (Table C). The sentence is therefore true in both directions: every rewrite changes what is printed below, and every change to what is printed below causes a rewrite. It is a registered, examined mirror of Table C, not a violation. **If the paragraph is ever reopened for an independent reason, the successor wording is `it is rewritten whenever what it shows changes`** — nearer the mechanism, no less plain for a non-technical reader. **It is not worth reopening on its own:** these bytes are part of the render, so under Table C row 1 every install that already holds the file rewrites it on its next dream run, producing a vault commit whose entire diff is this sentence — a real cost in the user's own history, bought for a wording that is already true |
 | Current conditions, empty | the single line `No session transcripts are being skipped.` |
 | Current conditions, non-empty | one `### <heading> — <N>` per non-empty reason group, in the row order of the next table, each followed by a blank line and one markdown list entry per member |
 | Which records are members | every entry of `ledger.files` that is a plain object with `outcome === 'quarantined'`. Nothing else |
@@ -446,9 +447,17 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       bytes on disk — and its mirrors are the `composeWarnings` and
       `refreshWarnings` contracts under "Exact contracts", Table A's
       no-time-varying row, Table B's no-carried-state row, the
-      second-run acceptance criterion, and the wiring gate's render assertions.
-      **No surface may say the file is rewritten "when the SET changes"** — that is
-      the round-1 wording a same-key reason change falsifies. **Nor may any
+      second-run acceptance criterion, the wiring gate's render assertions, **and —
+      registered 2026-08-30, because it was an UNREGISTERED mirror and that is
+      exactly why it collided — the rendered document's own trigger sentence, whose
+      ruling is Table A's header-sentence row.**
+      **No surface may say the file is rewritten when the SET of quarantined
+      transcripts changes** — when one enters or leaves quarantine — that is the
+      round-1 wording a same-key reason change falsifies. **The prohibition is on
+      the MEMBERSHIP formulation, not on the word "list":** a surface that names
+      what is RENDERED — the list as printed, the document, what the file shows —
+      is naming Table C's actual operand and is compliant. The rendered header
+      sentence is precisely that case, and Table A rules it. **Nor may any
       surface say "when the FINGERPRINT changes"** — that is the round-2 wording an
       `mtimeMs`-only change falsifies in the other direction, and it would demand a
       rewrite the no-churn property forbids. **And no surface may reintroduce a
