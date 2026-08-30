@@ -31,7 +31,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { promote, makeAdmit, spawnGitForMerge, isLosslessUtf8 } = require('../../src/core/dream/promote');
+const { promote, makeAdmit, spawnGitForMerge } = require('../../src/core/dream/promote');
 const { isAtOrBeneath } = require('../../src/core/dream/workspace');
 const { captureBaseline, computeDelta } = require('../../src/core/dream/delta');
 const { defaultLayout } = require('../../src/core/layout');
@@ -532,34 +532,71 @@ test('dream-promote D: the gates receive the evidence Table D enumerates, not by
   assert.deepEqual(pairedSeen[0], B('BRAIN\nb\nc\nd\nLIVE\n'), "the pair's MERGED candidate, never the live vault");
 });
 
-test('dream-promote D: unscannable content is refused, even by a gate that passes the empty scan', () => {
+test('dream-promote D: unscannable content reaches the EP2 gate WITH the binary flag, and its refusal carries the preservation record', () => {
   // A `.md` whose delta record is BINARY. The delta primitive returns no line
-  // numbers for it, so a gate defined only over added lines sees an empty scan.
+  // numbers for it, so a gate defined only over added lines sees an empty scan
+  // — which is why the gate must ask "can this be scanned?" before it scans.
   const binary = Buffer.from([0x23, 0x20, 0x00, 0xff, 0xfe, 0x0a]);
   const sc = scenario({ brain: { [NOTE]: binary } });
   const record = sc.delta.records.find((r) => r.rel === NOTE);
   assert.equal(record.binary, true, 'the fixture must really produce a binary record');
   assert.deepEqual(record.addedLineNumbers, [], 'and therefore an empty scan');
 
-  // The injected gate treats the empty scan as a pass — the module must refuse
-  // anyway. This is the RED side: an implementation that delegated the decision
-  // to the gate would promote it raw.
-  const res = run(sc, { gates: gates({ secret: () => ({ ok: true }) }) });
-  assert.match(refusalFor(res, NOTE), /EP2: content is binary/);
+  // WHAT THIS MODULE OWES THE GATE (`WP-ep2-unscannable-preserve`, Table U row
+  // U2): the delta `record` — only this module holds the primitive's `binary`
+  // answer — and the UNDECODED after-bytes. Without both, the gate cannot make
+  // the classification that is now its own.
+  /** @type {object[]} */
+  const seen = [];
+  const res = run(sc, {
+    gates: gates({
+      secret: (g) => {
+        seen.push(g);
+        return {
+          refuse: true,
+          reason: 'content is binary and cannot be secret-scanned; not promoted',
+          preserved: [{ artifact: '2026-08-29-note.md', location: 'quarantine' }],
+        };
+      },
+    }),
+  });
+  assert.equal(seen.length, 1, 'the gate is CALLED on unscannable content — it is not pre-refused');
+  assert.equal(seen[0].record.binary, true, 'and it is handed the primitive’s binary flag');
+  assert.deepEqual(seen[0].afterBytes, binary, 'and the raw bytes, undecoded');
+
+  assert.equal(refusalFor(res, NOTE), 'EP2: content is binary and cannot be secret-scanned; not promoted');
   assert.equal(get(sc.vaultDir, NOTE), null, 'it does not reach the vault');
   assert.equal(res.secretDisposition.withheld, 1);
+  // SIBLING PARITY, at this module's boundary: the withhold path reports the
+  // gate's preservation record for unscannable content exactly as it does for a
+  // hard-secret finding (Table Q rows Q8/Q9). An empty record here is the shape
+  // the regression had.
+  assert.deepEqual(
+    res.refused.find((r) => r.rel === NOTE).preserved,
+    [{ artifact: '2026-08-29-note.md', location: 'quarantine', remediation: 'delete' }]
+  );
 });
 
-test('dream-promote D: content that is not lossless UTF-8 is refused for the same reason', () => {
-  assert.equal(isLosslessUtf8(B('ok\n')), true);
-  assert.equal(isLosslessUtf8(Buffer.from([0xc3, 0x28])), false, 'an invalid sequence does not round-trip');
+test('dream-promote D: this module runs NO unscannable check of its own — the classification is the gate’s', () => {
+  // THE CONTRACT MOVE, asserted as the absence it is. An injected gate that
+  // passes binary content gets it promoted, because there is no second copy of
+  // the predicate here to catch it. With the REAL gate this cannot happen —
+  // tests/unit/dream-validate.test.js pins that refusal AND its quarantine copy
+  // — and that split is the point: one owner, one place the decision is made.
+  const binary = Buffer.from([0x23, 0x20, 0x00, 0xff, 0xfe, 0x0a]);
+  const sc = scenario({ brain: { [NOTE]: binary } });
+  assert.equal(sc.delta.records.find((r) => r.rel === NOTE).binary, true);
+  const res = run(sc, { gates: gates({ secret: () => ({ ok: true }) }) });
+  assert.deepEqual(get(sc.vaultDir, NOTE), binary, 'a passing gate is obeyed; nothing here second-guesses it');
+  assert.equal(res.secretDisposition.withheld, 0);
 
-  // No NUL, so the delta calls it text; the bytes are still unscannable.
-  const sc = scenario({ brain: { [NOTE]: Buffer.from([0x61, 0xc3, 0x28, 0x0a]) } });
-  assert.equal(sc.delta.records.find((r) => r.rel === NOTE).binary, false);
-  const res = run(sc);
-  assert.match(refusalFor(res, NOTE), /not lossless UTF-8/);
-  assert.equal(get(sc.vaultDir, NOTE), null);
+  // Same for the round-trip half: no NUL, so the delta calls it text, and the
+  // module has no opinion about whether the bytes decode.
+  const sc2 = scenario({ brain: { [NOTE]: Buffer.from([0x61, 0xc3, 0x28, 0x0a]) } });
+  assert.equal(sc2.delta.records.find((r) => r.rel === NOTE).binary, false);
+  const res2 = run(sc2, { gates: gates({ secret: () => ({ ok: true }) }) });
+  assert.equal(res2.secretDisposition.withheld, 0);
+  assert.deepEqual(get(sc2.vaultDir, NOTE), Buffer.from([0x61, 0xc3, 0x28, 0x0a]));
 });
 
 test('dream-promote D: the skill ↔ ledger pair promotes atomically AT THE DECISION', () => {
