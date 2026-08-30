@@ -311,6 +311,41 @@ test('dream-validate: Tier-3 gate + report follow a non-default layout, not the 
   assert.equal(res.counts.skills, 0); // both skills writes reverted
 });
 
+test('dream-validate: the vault warnings file is committed but never counted as a note', () => {
+  // WP-quarantine-warnings-file, Table D. `reports/warnings.md` is under neither
+  // skills_dir nor reports_dir, so without the exclusion a run that changes it
+  // would report one note it did not consolidate. This is a COUNTING fix only:
+  // the file is still classified "keep", still scanned, and still committed.
+  const { vault, scratch } = tempVault();
+
+  writeVault(vault, '03-Resources/valid-note.md', FM({ type: 'note', derived_from_untrusted: 'false' }));
+  writeVault(vault, 'reports/dreams/2026-07-05.md', '# report\n');
+  writeVault(vault, 'reports/warnings.md', '# Wienerdog warnings\n\n## Current conditions\n\nNo session transcripts are being skipped.\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-05', expectedScratch: [] });
+
+  assert.equal(res.counts.notes, 1, 'the warnings file and the dream report are both excluded');
+  assert.equal(res.counts.skills, 0);
+  assert.equal(git(vault, ['log', '-1', '--pretty=%s']).trim(), 'dream: 2026-07-05 — 1 notes, 0 skills');
+  // Still kept on disk and still IN the commit — only the count changed.
+  assert.ok(fs.existsSync(path.join(vault, 'reports/warnings.md')));
+  assert.equal(res.reverted.length, 0);
+  const tracked = git(vault, ['ls-tree', '-r', '--name-only', 'HEAD']);
+  assert.ok(tracked.split('\n').includes('reports/warnings.md'), 'committed, not skipped');
+});
+
+test('dream-validate: the warnings exclusion is the literal path, not a prefix or a sibling', () => {
+  // A neighbouring file under the same top-level directory is still a note: the
+  // exclusion names exactly one path.
+  const { vault, scratch } = tempVault();
+  writeVault(vault, 'reports/warnings.md', '# Wienerdog warnings\n');
+  writeVault(vault, 'reports/warnings.md.bak', 'not the warnings file\n');
+  writeVault(vault, 'reports/notes-about-warnings.md', 'also not it\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-06', expectedScratch: [] });
+  assert.equal(res.counts.notes, 2, 'only the exact path is excluded');
+});
+
 // ── precommitSessionEdits ──────────────────────────────────────────────────
 
 test('dream-validate: precommitSessionEdits is a no-op on a clean tree (no commit)', () => {
