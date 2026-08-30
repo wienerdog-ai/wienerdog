@@ -58,18 +58,22 @@ test('a no-separator-space line agrees on both sides', () => {
 // classified the same way on both sides — went unexercised.
 //
 // The digest side is the exported classifier `parseNoteResult`. The validator
-// side has no exported per-file decision, so its Tier-3 decision is RUN, end to
-// end through `validateAndCommit` on a real vault: an accept is a file that
-// survives into the commit, a refusal is a revert. Asserting a property of the
-// parser instead would not be the decision.
-
-const fs = require('node:fs');
-const os = require('node:os');
-const nodePath = require('node:path');
-const { execFileSync } = require('node:child_process');
+// side is its Tier-3 DECISION, run — asserting a property of the parser instead
+// would not be the decision.
+//
+// RE-POINTED at the extracted Tier-3 gate (WP-dream-promote-in-workspace, row
+// G7). It used to run end to end through `validateAndCommit` on a real vault,
+// because the validator exported no per-file decision: an accept was a file that
+// survived into the commit, a refusal was a revert. That function is retired —
+// under promotion nothing is written to the vault, so there is nothing to revert
+// — and the Tier-3 decision it ran inline is now `makeGates().tier3`, an
+// exported per-file decision taking the candidate bytes. So this side asserts
+// the SAME decision, one indirection closer, with no temp repo in between: a
+// refusal is a reason string, an accept is `null`.
 
 const { parseNoteResult } = require('../../src/core/digest');
-const { validateAndCommit } = require('../../src/core/dream/validate');
+const { makeGates } = require('../../src/core/dream/validate');
+const { defaultLayout } = require('../../src/core/layout');
 
 // One floor-passing, trusted block per rule that sets `malformed` — so the only
 // ground on which either side may refuse is the malformed-ness itself.
@@ -86,22 +90,18 @@ const WELL_FORMED = { control: `---\n${FLOOR}---\nb\n` };
  *  @param {Record<string,string>} notes  vault-relative path → bytes
  *  @returns {{reverted:{path:string,reason:string}[], tracked:(rel:string)=>boolean}} */
 function validatorVerdict(notes) {
-  const root = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'wd-parity-'));
-  const vault = nodePath.join(root, 'vault');
-  const scratch = nodePath.join(root, 'scratch');
-  fs.mkdirSync(vault, { recursive: true });
-  fs.mkdirSync(scratch, { recursive: true });
-  const git = (...args) => execFileSync('git', ['-C', vault, ...args], { encoding: 'utf8' });
-  git('init', '-q');
-  git('config', 'user.name', 'test');
-  git('config', 'user.email', 'test@test');
-  git('commit', '-q', '--allow-empty', '-m', 'init');
+  const layout = defaultLayout();
+  const { tier3 } = makeGates({});
+  /** @type {{path:string, reason:string}[]} */
+  const reverted = [];
+  /** @type {Set<string>} the paths the gate ADMITS — what "reaches the commit" means now */
+  const admitted = new Set();
   for (const [rel, text] of Object.entries(notes)) {
-    fs.mkdirSync(nodePath.dirname(nodePath.join(vault, rel)), { recursive: true });
-    fs.writeFileSync(nodePath.join(vault, rel), text);
+    const reason = tier3({ rel, candidateBytes: Buffer.from(text, 'utf8'), layout });
+    if (reason) reverted.push({ path: rel, reason });
+    else admitted.add(rel);
   }
-  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
-  return { reverted: res.reverted, tracked: (rel) => git('ls-files', rel).trim() !== '' };
+  return { reverted, tracked: (rel) => admitted.has(rel) };
 }
 
 test('a malformed block is refused by the digest classifier AND by the validator Tier-3 decision', () => {
