@@ -27,10 +27,19 @@ to run a scheduled job. Banner state is **per job** — one entry per job under
 `<core>/state/refusal-banner/`, each exactly one line, `> [!warning]` plus one space,
 followed by the folded refusal sentence, `0600`, atomically replaced — and the launcher
 rebuilds a single concatenated `<core>/state/refusal-banner.md` from those entries, in
-sorted filename order, after every write and every clear. **The readers in this WP use
-the concatenated file only** (`Table B`, B1a/B15); they never enumerate the directory.
-With no entries the concatenated file is **removed**, so "absent" is the healthy
-state. It exists because a launcher-stage refusal has **no other delivery
+sorted filename order, after every write and every clear. With no entries the
+concatenated file is **removed**, so "absent" is the healthy state.
+
+**The two readers in this WP read different things, deliberately** (Table B, B18/B18a,
+revised in round 4 by finding S2c):
+
+- the **hook** reads the **concatenated file** — it must stay a single-file read with no
+  computation, and it runs when the app tree may be broken;
+- **`renderDigest`'s callers** (`sync`, `dream`) read the **directory**, compose the
+  banner from its entries in sorted filename order, and **rebuild the concatenated file
+  under the launcher lock whenever it disagrees** with what they just read. They are
+  app-side, already doing real work, and can hold the lock — so every render self-heals
+  the derived artifact instead of letting it drift until the next launcher mutation. It exists because a launcher-stage refusal has **no other delivery
 channel**: the launcher must not require code from the app tree it is verifying, so it
 cannot call `renderDigest`; and the fail-loud email leg spawns the CLI shim, which is
 unusable when `app/current` is precisely what failed. On the maintainer's machine that
@@ -139,8 +148,8 @@ input is empty the digest output must be unchanged.
 |--------|------|-------|
 | modify | templates/hooks/session-start.sh | read the banner; prepend to the digest; emit when either exists |
 | modify | src/core/digest.js | accept `opts.refusalBanner`; place it FIRST in the prefix |
-| modify | src/cli/sync.js | pass `refusalBanner: readRefusalBanner(paths)` — read AFTER the clear |
-| modify | src/cli/dream.js | pass `refusalBanner: readRefusalBanner(paths)` in `regenerateDigest` |
+| modify | src/cli/sync.js | pass `refusalBanner: readRefusalBannerFromDir(paths)`; self-heal the concatenated file under the lock on drift (B18a) |
+| modify | src/cli/dream.js | same, in `regenerateDigest` (B18a) |
 | modify | tests/unit/digest.test.js | prefix order + empty-input byte stability |
 | create | tests/unit/session-start-hook.test.js | hook emits banner+digest, banner-only, digest-only, neither |
 | create | tests/unit/refusal-banner-delivery.test.js | the end-state chain assertion (AC-12) |
@@ -268,6 +277,15 @@ local fact stated once, in Exact contracts.
 - [ ] AC-10 — `shellcheck --severity=warning templates/hooks/session-start.sh` passes
       and `shfmt -i 2 -d templates/hooks/session-start.sh` reports no diff.
 - [ ] AC-11 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
+- [ ] AC-13 — **Reader self-heal (round-4 S2c).** With the directory holding an entry the
+      concatenated file lacks — the state an L6 fallback can leave — a `renderDigest` call
+      site composes the banner **from the directory** (so the entry appears in the digest)
+      and rewrites the concatenated file to match, under the launcher lock. Uses
+      `readRefusalBannerFromDir` and `rebuildConcatenatedIfDrifted`, both shipped by
+      `WP-launcher-refusal-banner` in `src/core/refusal-banner.js` — this WP wires them
+      into `sync.js` and `dream.js` and does not reimplement them (B18a, Table L L8a).
+- [ ] AC-14 — The hook still reads the **concatenated file only** and performs no
+      `readdir` — the "read one file, no computation" property is unchanged (B18).
 - [ ] AC-12 — **End-state chain assertion (round-2 finding F1).** With `app/current`
       unresolvable, the launcher refusing, and the **full** chain applied — that is,
       with the Claude Code SessionStart hook **de-registered** as
@@ -337,3 +355,12 @@ grep -n "readdir\|refusal-banner/" templates/hooks/session-start.sh
   `sync` clears the banner, which round-3 finding R4 had just narrowed to a **fully
   clean** reconciliation. Reworded, with the rule itself left where it belongs — Table B
   row B17 in `WP-launcher-refusal-banner` — so this spec mirrors rather than restates it.
+- **2026-08-30 — Codex round-3 finding S2c (owner: ACCEPTED).** Round 3 had every reader
+  bound to the concatenated file, so a contended-fallback write (Table L, L6) left the
+  derived artifact stale until the *next launcher mutation* — which, for an hourly job,
+  could be an hour, and for a job whose next fire also contends, longer. The two readers
+  now differ by capability: the hook stays a single-file, no-computation read because it
+  must work when the app tree does not, while `renderDigest`'s app-side callers read the
+  **directory** and rebuild the concatenated file under the lock on drift. Every `sync`
+  and every `dream` therefore repairs it. New B18a/L8a; new AC-13 and AC-14; `sync.js`
+  and `dream.js` Deliverables notes updated.

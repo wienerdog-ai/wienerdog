@@ -349,10 +349,11 @@ ADR-0021, ADR-0028 and ADR-0035 need no amendment. ADR-0035 is cited for why an
 unchanged: the decision of 2026-08-30 stands as signed. This amendment records the
 round-2 **and round-3** corrections to it and is not itself in force until signed.)
 
-Two adversarial Codex design reviews of this ADR and its spec chain found sixteen
-issues in total — seven in round 1 of review (**F1–F7**, below) and nine in round 2
-(**R1–R9**, at the end of this amendment). The owner accepted all sixteen, and in
-round 2 **reversed** one of his own round-1 rulings. The dispositions follow. Four are corrections
+Three adversarial Codex design reviews of this ADR and its spec chain found
+twenty-three issues in total — seven in round 1 (**F1–F7**, below), nine in round 2
+(**R1–R9**), and seven in round 3 (**S1–S7**, at the end of this amendment). The owner
+accepted all twenty-three, and in round 2 **reversed** one of his own round-1 rulings.
+The dispositions follow. Four are corrections
 to this ADR — two of them to claims that were simply **wrong** — and they are marked in
 place in the sections they affect, so no reader of §2–§5 can act on a superseded
 statement without seeing the correction beside it.
@@ -526,7 +527,9 @@ GLOSSARY and in §3 / Consequences above was purged in the same pass.
 its own 32 KiB budget, so concatenating three of them can pass Codex's 32 KiB *combined*
 `project_doc_max_bytes` before the user's own `AGENTS.md` content is counted at all.
 **Resolution:** cap the **composed** block at **24 KiB**, leaving roughly 8 KiB for the
-user, in an explicit priority order — preamble, banners, pointer line, then the stable
+user — *⚠ superseded in round 3 of review by S5, which makes the budget adaptive to the
+user's measured `AGENTS.md` bytes rather than assuming they fit in 8 KiB* — in an
+explicit priority order — preamble, banners, pointer line, then the stable
 identity truncated into the remainder with the standard truncation marker. Only identity
 truncates; a warning the user must see outranks identity they mostly already know, and a
 pointer line that truncates away is worse than no pointer at all.
@@ -540,3 +543,99 @@ table's rows against **each other** or against the Deliverables that must satisf
 The remedy adopted for round 3 is procedural rather than structural: every canonical
 table is re-read row-against-row after any edit, and every acceptance criterion is
 matched to the Deliverables row that satisfies it before the spec is handed on.
+
+#### Round 3 of review — findings S1–S7 (2026-08-30)
+
+Round 2's corrections were themselves reviewed. Seven further issues, all accepted, no
+ruling changes — **the lock stays**. Two of the seven (S1, S2) are defects in the lock
+that round 2 introduced, which is the third consecutive round in which a fix shipped its
+own bug. That pattern, not any individual finding, is the reason this round added a
+written **state-machine argument** to the lock's spec and an **AC-to-Deliverables
+satisfiability map** to the review ritual.
+
+**S1 — the lock could admit two owners, and could free a lock it did not hold.** Round
+2's stale takeover was `rmdirSync` followed by `mkdirSync`, which has no funnel: two
+contenders observing the same stale lock could both remove it (the second failing
+harmlessly) and both then create it in an interleaving where each believed it had won.
+Separately, release was a bare `rmdirSync` with **no ownership check**, so a holder that
+had been broken mid-work would delete its *successor's* lock and admit a third owner.
+**Resolution:** the acquirer stamps `<lock>/owner` with a 16-hex **token** immediately
+after `mkdirSync`; release reads that file and acts **only on a token match**, no-oping on
+mismatch, unreadable, or absent. The stale break becomes an atomic
+`renameSync(lock, lock.stale-<pid>-<rand>)` — one source directory, so exactly one
+contender wins and every loser gets `ENOENT` and simply retries `mkdirSync`. Staleness is
+judged by the **lock directory's mtime**, never the owner file, because a lock is
+legitimately owner-less for the microseconds between the `mkdir` and the stamp; a protocol
+reading "no owner file" as "stale" would break infant locks and produce the very condition
+it was meant to prevent. The threshold rises from 10 s to **30 s** against a stated
+**millisecond** expected hold — four orders of magnitude of headroom, so a break implies a
+genuinely dead or pathologically stalled holder. **Accepted residual:** a legitimately slow
+holder that gets broken loses only its *derived* rebuild; its banner entry and alert record
+are durable before the rebuild begins.
+
+**S2 — the contended fallback could hide a banner indefinitely.** Three sub-problems.
+(a) The bounded wait (10 s) was **shorter** than the staleness threshold, so a crashed
+holder could push a writer onto the fallback path before anyone broke the lock — the
+fallback was reachable in exactly the case the staleness rule existed to handle. The wait
+becomes **35 s (140 × 250 ms)**, deliberately **exceeding** the 30 s threshold, so a dead
+holder is always broken first, with margin. The launcher is synchronous and fires hourly,
+so a 35 s worst case is acceptable. (b) The fallback skipped the rebuild, leaving the
+derived file **guaranteed** stale; it now rebuilds **without** the lock, because the
+rebuild is idempotent and lands by atomic rename — unlocked it can lose a race but never
+corrupt, and a possibly-stale file is strictly better than a guaranteed-stale one. (c)
+Readers now **self-heal**: `renderDigest`'s app-side callers read the banner **directory**
+and rebuild the concatenated file under the lock whenever it disagrees, so every `dream`
+and every `sync` repairs the artifact. Only the SessionStart hook and the Claude Code
+import stay bound to the concatenated file — the hook because it must remain a single-file
+read with no computation, the import because `@import` cannot glob a directory.
+
+**S3 — the lock covered only half the writers of the file it guarded.** Round 2 scoped it
+to the launcher and *explicitly recorded* the app-side `appendAlert` as out of scope. Both
+sides write the same `alerts.jsonl`, so that closed the launcher-vs-launcher race and left
+the launcher-vs-app race — the more likely one, a nightly fire during an attended `sync` —
+wide open. **Resolution:** every writer takes the same lock. `src/core/alerts.js` requires
+`acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js`, which is safe
+because `launcher.js` is require-safe (its `module.exports` precedes the
+`if (require.main === module)` guard) and the dependency runs **app → launcher** only,
+never the reverse. The vendored `<core>/launcher/launch.js` is a byte copy of that same
+file, so the two processes cannot run different protocols: **one implementation, no twin
+literals** (ADR-0031). `alert-ack.js` is deliberately excluded — it writes a different
+file and is called from inside `clearAlerts`, which already holds the lock, so locking
+there would self-deadlock.
+
+**S4 — `sync` still cleared after a catch-up reconciliation failure.** R4 gated clearing on
+`descriptorFailures` and `heal.failed`, but `repairCatchup` reports every failure as
+`{notice?: string}` and `repointSchedules` folds it into `notices` — a console line no code
+tests — so a failed catch-up repair never reached the gate. The catch-up entry is the only
+mechanism that delivers a missed nightly dream, so this was precisely the failure that must
+not silence the banner. **Resolution:** `repairCatchup` returns a structured
+`{ok, reason?}`, including a caught throw as `{ok:false, reason:'threw: …'}`;
+`repointSchedules` propagates it as `catchup`; `sync` folds it into `reconciliationClean`.
+
+**S5 — the Codex block's fixed cap ignored the user's own bytes.** R9's flat 24 KiB
+silently assumed the user's own `AGENTS.md` content fits in the remaining 8 KiB. A user
+with 20 KiB of their own instructions would have been pushed past Codex's 32 KiB combined
+`project_doc_max_bytes` and had content dropped **by Codex, without warning** — the same
+class of silent undelivered failure this ADR exists to fix, one layer down.
+**Resolution:** the allowance becomes adaptive — `32 KiB − the user's own AGENTS.md bytes
+− 2 KiB reserve`, measured on every compose, floored at a minimal critical block
+(preamble + banners + pointer). When even that floor does not fit, write the critical block
+anyway — never drop the banners — and push a `sync` notice naming the three byte counts,
+because a user can act on numbers and cannot act on a silent overflow.
+
+**S6 — a missing dependency.** `WP-codex-block-pointer-line` un-skips the end-to-end test
+that `WP-refusal-banner-delivery` creates, without declaring a dependency on it. Added.
+
+**S7 — a pre-R6 sentence survived the R6 fix.** The canary's implementation notes still
+said "This WP is not Done until that successor is merged", contradicting the Context table
+R6 had already corrected to break the dependency cycle. Purged; a repo-wide grep found no
+other occurrences.
+
+**What round 3 changed about the process, not the design.** Three consecutive rounds
+shipped fix-induced defects, and rounds 2 and 3 concentrated them in whichever mechanism
+had just been introduced. Two habits are now required of this chain and are worth carrying
+beyond it: a **written state-machine argument** for any concurrency primitive, walking the
+contended, crashed-holder, slow-holder and exhausted-wait cases explicitly (it is in
+`WP-launcher-refusal-banner` under Table L); and an **AC-to-Deliverables satisfiability
+map** produced before hand-off, which in round 3 caught three unsatisfiable criteria that
+no reviewer had flagged.

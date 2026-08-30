@@ -126,10 +126,10 @@ one job's records and atomically replaces the file.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/alerts.js | `sanitizeAlert` preserves a fail-closed `count`; JSDoc record shape |
+| modify | src/core/alerts.js | `sanitizeAlert` preserves a fail-closed `count`; JSDoc record shape; `appendAlert` + `clearAlerts` take the launcher lock (C8f–C8i); update the stale lines 87–88 residual comment |
 | modify | src/core/digest.js | `formatAlerts` sums `count` instead of counting rows |
 | modify | src/scheduler/launcher.js | `appendRefuseAlert`: consecutive collapse + the Table C bound |
-| modify | tests/unit/alerts.test.js | `count` coercion, bound behaviour, round-trip |
+| modify | tests/unit/alerts.test.js | `count` coercion, bound behaviour, round-trip, lock acquisition + fallback, cross-writer interleaving |
 | modify | tests/unit/digest.test.js | `formatAlerts` summing; single-record wording unchanged |
 | modify | tests/unit/launcher.test.js | collapse, bound, durability, failure swallowing |
 
@@ -175,9 +175,12 @@ copies are updated together.
 | C7 | Collapse effect | Increment that last record's `count` by 1 and rewrite it. `at` keeps the **original first** occurrence's timestamp, so the banner's "since \<first\>" stays truthful |
 | C8 | Write order | Append the new record atomically FIRST, then collapse-and-bound in a temp+rename rewrite — mirroring `appendAlert`, so the writer never loses its own record to a concurrent compaction |
 | C8c | Temp cleanup | The compaction's temp-plus-rename `rmSync`s the temp on a rename failure, so a failed atomic write never leaves an orphan beside `alerts.jsonl` (Codex P2). Retained unchanged from round 2 |
-| C8d | Lock | **Introduced by `WP-launcher-refusal-banner` (Table L); consumed here.** This WP must not define a second lock — if that WP has not landed, this one is blocked. The append **and** its compaction run while holding the launcher lock — `<core>/state/launcher.lock/`, `fs.mkdirSync` to acquire (`EEXIST` = held), `rmdirSync` in a `finally` to release, a 10 s mtime staleness takeover retried once, and a bounded wait of 5 × 200 ms slept with `Atomics.wait` on a `SharedArrayBuffer`. The full contract is `WP-launcher-refusal-banner` **Table L**, which this row mirrors; the lock is implemented once, in `launcher.js`, and serialises both launcher-owned state files |
+| C8d | Lock | **Introduced by `WP-launcher-refusal-banner` (Table L); consumed here.** This WP must not define a second lock — if that WP has not landed, this one is blocked. The launcher's append **and** its compaction run while holding the launcher lock — `<core>/state/launcher.lock/`, `fs.mkdirSync` to acquire (`EEXIST` = held), `rmdirSync` in a `finally` to release, a 10 s mtime staleness takeover retried once, and a bounded wait of 5 × 200 ms slept with `Atomics.wait` on a `SharedArrayBuffer`. The full contract is `WP-launcher-refusal-banner` **Table L**, which this row mirrors; the lock is implemented once, in `launcher.js`, and serialises both launcher-owned state files |
 | C8e | Fallback | If the lock cannot be acquired, **still append the record atomically** and skip **only** the compaction. Fail-loud is never sacrificed to the lock (Table L, L6) |
-| C8f | Accepted residual | After an C8e fallback `alerts.jsonl` may exceed its bound until the next lock-holding append — self-correcting, and no record is lost. The app-side `appendAlert` in `src/core/alerts.js` does **not** take this lock; its own documented residual at lines 87–88 is unchanged and out of scope here (Table L, L9) |
+| C8f | **Every** writer takes the lock | Round 3 scoped the lock to the launcher, leaving the app side racing it on the **same file** (finding S3). Corrected: `src/core/alerts.js` **requires** `acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js` and takes the same lock around **`appendAlert`**'s append+compaction and **`clearAlerts`**'s filter+rewrite. The direction is app → launcher, which is safe: `launcher.js` is require-safe (its `module.exports` precedes the `if (require.main === module)` guard) and the launcher still requires nothing from `src/`. One implementation, no twin literals (ADR-0031, Table L L11) |
+| C8g | App-side fallback | On a failure to acquire, the app side degrades **exactly like the launcher** (C8e): `appendAlert` appends its record atomically and skips compaction; `clearAlerts` skips the rewrite and leaves the file unchanged, so a cleared job's records are removed on the next lock-holding call rather than lost the other way round. Never drop a record to win a race |
+| C8h | Not in scope | `alert-ack.js`'s `pruneAcksForJob` writes **`alerts-ack.json`**, a different file, and never rewrites `alerts.jsonl` — so it needs no lock. It is called *from* `clearAlerts`, which already holds the lock for its own rewrite; taking the lock again there would self-deadlock. Stated so the boundary is deliberate rather than an omission |
+| C8i | Accepted residual | After a C8e/C8g fallback, `alerts.jsonl` may exceed its bound, or retain a cleared job's records, until the next lock-holding call. Both are self-correcting and neither loses a record. The `src/core/alerts.js` lines 87–88 comment describing the old unlocked residual must be **updated**, not left contradicting the new behaviour |
 | C9 | Empty-read guard | If the read-back yields zero records, skip the rewrite entirely and leave the atomically-appended file intact |
 | C10 | Bound order | Count budget first (keep newest `MAX_ALERTS`), then drop oldest until the serialized bytes fit `MAX_FILE_BYTES`; always keep at least the newest record |
 | C11 | Launcher dependencies | Node built-ins only. `appendRefuseAlert` must NOT require `src/core/alerts.js` or any other `src/` module |
@@ -321,6 +324,21 @@ and Table C above is the canonical table.
       throws nothing, and leaves no `*.tmp` behind (C8e, C8f, C8c).
 - [ ] AC-13c — The lock is released after a successful append+compact, and also when the
       compaction throws (Table L, L3).
+- [ ] AC-13d — **App-side writers take the same lock (round-4 S3).** `appendAlert` and
+      `clearAlerts` each acquire the launcher lock; assert by observing
+      `<core>/state/launcher.lock/` during the call, and that the release leaves it gone
+      (C8f).
+- [ ] AC-13e — **Cross-writer interleaving.** A launcher `appendRefuseAlert` and an
+      app-side `appendAlert` that would interleave are serialised, and **both** records
+      survive with correct `count` values (C8f).
+- [ ] AC-13f — **App-side fallback.** With the lock held by someone else for the whole
+      bounded wait, `appendAlert` still appends its record and skips compaction, and
+      `clearAlerts` leaves the file unchanged rather than rewriting it unlocked. Neither
+      throws; no record is lost (C8g).
+- [ ] AC-13g — `alert-ack.js` is unchanged and takes no lock; `clearAlerts` calling
+      `pruneAcksForJob` while holding the lock does **not** deadlock (C8h).
+- [ ] AC-13h — The `src/core/alerts.js` lines 87–88 residual comment no longer describes
+      unlocked compaction (C8i).
 - [ ] AC-14 — `grep -n "require(.*src" src/scheduler/launcher.js` shows no app-tree
       require (C11).
 
@@ -334,8 +352,10 @@ npm test
 npm run lint
 # C11 — the launcher still requires no app-tree code (expect NO output):
 grep -n "require(['\"]\.\./src\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
-# C8d — the lock is used here and defined once, in launcher.js:
-grep -n "launcher.lock\|acquireLauncherLock" src/scheduler/launcher.js
+# C8d/C8f — the lock is defined once in launcher.js and REQUIRED by alerts.js:
+grep -n "acquireLauncherLock\|releaseLauncherLock" src/scheduler/launcher.js src/core/alerts.js
+# L11/B9 — the dependency runs app -> launcher only (expect NO output):
+grep -n "require(['\"]\.\./core\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
 # C3/C4/C5 — the duplicated bounds are present in both places:
 grep -n "MAX_ALERTS\|MAX_FILE_BYTES\|MAX_COUNT" src/core/alerts.js
 grep -n "200\|512 \* 1024\|1000000\|1_000_000" src/scheduler/launcher.js
@@ -397,3 +417,19 @@ git diff --stat -- tests/golden/digest-default.md
   shipping it first would have meant either a second lock implementation or a broken
   build. `depends_on` now names that WP, and C8d says explicitly that the lock is
   introduced there and only consumed here.
+- **2026-08-30 — Codex round-3 finding S3 (owner: ACCEPTED).** Round 3 scoped the lock to
+  the launcher and explicitly recorded the app-side `appendAlert` as out of scope — a
+  boundary I stated clearly and got wrong. Both sides write **the same file**, so the lock
+  closed the launcher-vs-launcher race and left the launcher-vs-app race wide open, which
+  is the more likely one (a nightly fire during an attended `sync`). Corrected: **every**
+  writer of `alerts.jsonl` takes the same lock. `src/core/alerts.js` **requires**
+  `acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js` — safe
+  because `launcher.js` is require-safe (`module.exports` precedes its
+  `if (require.main === module)` guard) and the direction is app → launcher only. The
+  vendored `<core>/launcher/launch.js` is a byte copy of that same file, so the protocol
+  cannot drift: **one implementation, no twin literals** (ADR-0031). C8f replaced;
+  new **C8g** (app-side fallback degrades exactly like the launcher's), **C8h**
+  (`alert-ack.js` writes a *different* file and must **not** take the lock — it is called
+  from inside `clearAlerts`, which already holds it, so locking there would self-deadlock),
+  **C8i** (residual, plus the requirement to update the now-false `alerts.js` lines 87–88
+  comment). New AC-13d … AC-13h.

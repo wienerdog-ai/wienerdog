@@ -157,10 +157,10 @@ import of `state/digest.md`. `src/adapters/codex.js` still copies the whole dige
 | modify | src/core/private-fs.js | add **all three** of `'digest-stable.md'`, `'digest-volatile.md'`, `'digest-prefix.md'` to `A5_PRIVATE_FILE_BASENAMES` (E5) |
 | modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it (precedent: `docs/specs/done/WP-attended-alert-acknowledgement.md`) |
 | modify | src/adapters/claude.js | import the **volatile** file; inline the stable text (Table E) |
-| modify | src/adapters/codex.js | `buildCodexBlock({prefix, stable, pointerLine})` reading `digest-prefix.md` + `digest-stable.md`; E7a order and 24 KiB cap |
+| modify | src/adapters/codex.js | `buildCodexBlock({prefix, stable, pointerLine})` reading `digest-prefix.md` + `digest-stable.md`; E7a order and the E7b adaptive budget |
 | modify | tests/unit/digest.test.js | apportionment, caps, part membership |
 | modify | tests/unit/claude-adapter.test.js | block shape |
-| modify | tests/unit/codex-adapter.test.js | `buildCodexBlock` order, the 24 KiB cap, the maximum-size fixture |
+| modify | tests/unit/codex-adapter.test.js | `buildCodexBlock` order, the E7b adaptive budget, the maximum-size and large-user-content fixtures |
 | modify | tests/golden/claude-adapter/CLAUDE.md | new block shape |
 | modify | tests/golden/codex-adapter/AGENTS.md | stable-only content |
 
@@ -203,7 +203,9 @@ The single place these facts are decided.
 | E5 | Privacy | `'digest-stable.md'`, `'digest-volatile.md'` **and** `'digest-prefix.md'` all join `A5_PRIVATE_FILE_BASENAMES`. Adding any of them **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
 | E6 | Claude block | Preamble + the **stable** text inline + one blank line + **two** import lines: `@<abs path to digest-volatile.md>` then `@<abs path to refusal-banner.md>`. The banner keeps its own import (Table D, D2a) because it must stay fresh precisely when nothing is re-rendering the digest |
 | E7 | Codex block | Composed by `buildCodexBlock({prefix, stable, pointerLine})` in `src/adapters/codex.js`, which reads **`digest-prefix.md`** and **`digest-stable.md`** (never `digest-volatile.md`, which carries the projects list and daily log). Order and budget are fixed by E7a. No import line — Codex has none. Amended in round 2 by finding F7 (D3 amended 2026-08-30): making *all* volatile content absent removed Codex's proactive warnings, which is a fail-loud regression, not a fail-safe one |
-| E7a | Codex block order and cap | **Order:** preamble, then the banners (`prefix`), then the pointer line, then the **stable** identity truncated into whatever remains, with the standard `DigestCaps.TRUNCATION_MARKER`. **Cap: 24 KiB for the whole composed block.** Codex's `project_doc_max_bytes` default is 32 KiB **combined across documents**, and the user's own `AGENTS.md` content shares that budget — so Wienerdog takes at most three quarters and leaves ~8 KiB for the user. The order is the priority order: a warning the user must see outranks identity they mostly already know, and identity is the only component allowed to truncate |
+| E7a | Codex block order | **Order:** preamble, then the banners (`prefix`), then the pointer line, then the **stable** identity truncated into whatever remains, with the standard `DigestCaps.TRUNCATION_MARKER`. This is the **priority** order: a warning the user must see outranks identity they mostly already know, and identity is the only component allowed to truncate |
+| E7b | Codex block budget — **adaptive** | `allowance = 32 KiB − (bytes of AGENTS.md OUTSIDE our managed block) − 2 KiB reserve`, floored at the **minimal critical block** (preamble + banners + pointer line). Round 3's flat 24 KiB assumed the user's own `AGENTS.md` content was ≤ 8 KiB; a user with 20 KiB of their own instructions would have been pushed past Codex's 32 KiB combined `project_doc_max_bytes` and had content silently dropped by Codex — the failure this whole chain exists to prevent, in a new place (finding S5). Measure the *existing* file, excluding our own block, on every compose |
+| E7c | Budget floor and its notice | When even the minimal critical block does not fit the allowance, write **the minimal critical block anyway** — banners and the pointer are never sacrificed — and push a `sync` NOTICE naming the byte counts: our block's size, the user's own `AGENTS.md` bytes, and Codex's 32 KiB combined limit. The user cannot act on a silent overflow; they can act on three numbers |
 | E8 | Line cap | `MAX_LINES` 120 applies to **each** rendered file independently. The volatile render reserves its prefix lines exactly as `capDigest` does today; the stable render has no prefix, so its whole budget is body |
 | E9 | Byte cap | `MAX_BYTES` 32 KiB applies to **each** rendered file independently, with the same prefix reservation rule as E8 |
 | E10 | Truncation marker | Unchanged text, appended independently to whichever half truncates |
@@ -280,12 +282,17 @@ discipline is on, and Table E above is the canonical table.
   Deliverables and notes still said `codex.js` copies `digest-stable.md` only — the
   table and its own mirrors disagreed. Give it an explicit signature, an explicit pair
   of input files, and the E7a order, so there is one answer.
-- **The 24 KiB cap is on the FINAL block, after composition (round-3 R9, E7a).** Each
-  rendered component already has its own 32 KiB budget (E9), so concatenating three of
-  them can exceed Codex's 32 KiB *combined* `project_doc_max_bytes` on its own — before
-  the user's `AGENTS.md` content is counted at all. Cap the composed block, and truncate
-  **only** the stable identity tail; the banners and the pointer line are never dropped
-  to make room.
+- **The budget is on the FINAL block, after composition, and it is ADAPTIVE (E7b).**
+  Each rendered component already has its own 32 KiB budget (E9), so concatenating three
+  of them can exceed Codex's 32 KiB *combined* `project_doc_max_bytes` on its own. Round
+  3 capped at a flat 24 KiB, which silently assumed the user's own `AGENTS.md` content
+  was ≤ 8 KiB. Measure it instead: read the existing `AGENTS.md`, subtract our own
+  managed block (locate it by the same sentinels `applyManagedBlock` uses — do not
+  re-implement the search), and compute the allowance. Truncate **only** the stable
+  identity tail; the banners and the pointer line are never dropped to make room (E7a).
+- **The floor is not "give up" (E7c).** When the allowance cannot even hold the critical
+  block, write the critical block and warn with numbers. Writing nothing would remove the
+  banners entirely, which is the fail-loud regression finding F7 already corrected once.
 - When uncertain: choose the simpler option and record it under "Decisions made" in the
   PR body. Do NOT expand scope.
 
@@ -352,9 +359,18 @@ discipline is on, and Table E above is the canonical table.
       raises the exclusion banner, exactly as today.
 - [ ] AC-14 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
 - [ ] AC-15 — **Maximum-size fixture (round-3 R9).** With a `prefix` and a `stable` half
-      each near their own 32 KiB budget, the composed Codex block is **≤ 24 KiB**, the
-      banners and the pointer line are **fully present**, and only the stable identity is
-      truncated — carrying `DigestCaps.TRUNCATION_MARKER` (E7a).
+      each near their own 32 KiB budget and an **empty** user `AGENTS.md`, the composed
+      block fits the computed allowance, the banners and the pointer line are **fully
+      present**, and only the stable identity is truncated — carrying
+      `DigestCaps.TRUNCATION_MARKER` (E7a, E7b).
+- [ ] AC-15a — **Adaptive to existing user content (round-4 S5).** With **> 8 KiB** of
+      pre-existing user content in `AGENTS.md` outside our managed block, the composed
+      block shrinks so that `our block + user content + 2 KiB reserve ≤ 32 KiB`, and the
+      banners and pointer line are still fully present (E7b).
+- [ ] AC-15b — **Floor and notice (round-4 S5).** With user content so large that even
+      the minimal critical block exceeds the allowance, the minimal critical block is
+      still written and `sync` pushes a NOTICE naming our block's bytes, the user's bytes,
+      and the 32 KiB limit (E7c).
 - [ ] AC-16 — `digest-prefix.md` contains the banner prefix alone: no `## Active
       projects`, no `## Latest daily log`, no identity sections (E4, E4a).
 
@@ -458,8 +474,22 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
   - **R9 — the Codex block could exceed Codex's own limit.** Each component carries its
     own 32 KiB budget (E9), so concatenating three of them can pass Codex's 32 KiB
     *combined* `project_doc_max_bytes` before the user's own `AGENTS.md` content is
-    counted. New **E7a**: the composed block is capped at **24 KiB** — three quarters of
-    the combined budget, leaving ~8 KiB for the user — in the priority order preamble,
+    counted. New **E7a**: the composed block was capped at **24 KiB** — three quarters of
+    the combined budget, nominally leaving ~8 KiB for the user *(⚠ superseded in round 4
+    by finding S5: the flat cap silently assumed the user's own content fits in 8 KiB;
+    E7b makes the budget adaptive)* — in the priority order preamble,
     banners, pointer line, stable identity, with only the identity tail allowed to
     truncate and the standard truncation marker applied. New AC-15 is a maximum-size
     fixture asserting the banners survive.
+- **2026-08-30 — Codex round-3 finding S5 (owner: ACCEPTED).** Round 3's flat **24 KiB**
+  cap on the composed Codex block silently assumed the user's own `AGENTS.md` content fits
+  in the remaining 8 KiB. A user with 20 KiB of their own instructions would have been
+  pushed past Codex's 32 KiB combined `project_doc_max_bytes` and had content dropped by
+  Codex without warning — the same class of silent, undelivered failure this whole chain
+  exists to fix, reintroduced one layer down. **E7a split into E7a (order) and E7b
+  (budget)**: the allowance is now `32 KiB − the user's own AGENTS.md bytes − 2 KiB
+  reserve`, measured on every compose by excluding our managed block from the existing
+  file, and floored at a **minimal critical block** (preamble + banners + pointer). New
+  **E7c**: when even that floor does not fit, write the critical block anyway — never drop
+  the banners — and push a `sync` NOTICE naming the three byte counts, because a user can
+  act on numbers and cannot act on a silent overflow. New AC-15a and AC-15b.

@@ -204,10 +204,11 @@ as an amendment candidate for ADR-0025.
   not change `composeClaudeArgs`, do not add `--bare`, and do not alter the profile in
   **this** WP. Write the finding, then fill in `WP-hermetic-user-memory-suppression`'s
   Current-state placeholder with the measured fact and flip that spec to the owner for
-  scheduling. This WP is not Done until that successor is merged (the disjunctive Done
-  criteria in Context). The separation still holds — the measurement and the response
-  are different WPs — but the chain no longer proceeds over an unresolved adverse
-  finding.
+  scheduling. **This WP is Done once the measurement is recorded** — under either
+  verdict; it never waits on its own descendant (that was the round-2 cycle finding R6
+  removed). The gate that stops the chain lives on the consumer:
+  `WP-managed-block-by-reference` proceeds only when this WP is Done **and** the verdict
+  is *not loaded* **or** the suppression WP is Done.
 - Skip cleanly with a clear message (exit 0, "skipped: no `claude` on PATH") when the
   binary or credentials are absent, so a contributor without them is not blocked.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
@@ -308,3 +309,9 @@ grep -n "composeClaudeArgs\|getProfile" tests/scenarios/memory-canary/run-memory
   no cycle. AC-9 reworded accordingly. **From the round-3 AC-to-Deliverables consistency
   pass:** AC-9 requires editing `WP-hermetic-user-memory-suppression.md`, which was not
   in the Deliverables — an unsatisfiable criterion under the permission boundary. Added.
+- **2026-08-30 — Codex round-3 finding S7 (owner: ACCEPTED).** A pre-R6 sentence survived
+  in the implementation notes — "This WP is not Done until that successor is merged" —
+  contradicting the Context table R6 had already corrected. Purged; the notes now state
+  the R6 rule (Done on the recorded measurement, either verdict) and point at the consumer
+  that carries the gate. A repo-wide grep for the other pre-R6 phrasings found no further
+  occurrences.

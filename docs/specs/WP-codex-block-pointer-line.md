@@ -4,7 +4,7 @@ title: Give the Codex block a constant pointer line to the live digest, and docu
 status: Draft
 model: sonnet
 size: S
-depends_on: [WP-digest-stable-volatile-split]
+depends_on: [WP-digest-stable-volatile-split, WP-refusal-banner-delivery]
 adrs: [ADR-0004, ADR-0031, ADR-0039]
 epic: digest-delivery
 ---
@@ -131,7 +131,7 @@ normalizer used for Windows-safe paths.
 | modify | src/adapters/codex.js | append the pointer lines to the block body; fix the false hook-trust notice |
 | modify | src/adapters/shared.js | `buildPointerLines(digestAbsPath)` |
 | modify | tests/golden/codex-adapter/AGENTS.md | block with the pointer lines |
-| modify | tests/unit/codex-adapter.test.js | pointer content, E7a order, the 24 KiB cap, idempotence, notice wording |
+| modify | tests/unit/codex-adapter.test.js | pointer content, E7a order, the E7b adaptive budget, idempotence, notice wording |
 | modify | tests/unit/refusal-banner-delivery.test.js | un-skip and complete the chain end-to-end assertion (AC-11) |
 
 **Golden files:** you **DO** have permission to update
@@ -173,8 +173,8 @@ activity is not injected automatically — the block names the file to read inst
 | Row | Fact | Value |
 |-----|------|-------|
 | F1 | Applies to | Harnesses with **no** import mechanism. Today: Codex only. Never emitted into the Claude Code block, which imports instead |
-| F2 | Position | The composed block order is fixed by `WP-digest-stable-volatile-split` **Table E row E7a**: preamble, banners, **pointer paragraph**, then the stable identity. The pointer line sits **before** the identity, not last — round 3 (finding R9) made the order a priority order, because identity is the only component allowed to truncate under the 24 KiB cap and a pointer that truncates away is worse than useless |
-| F2a | Block cap | The whole composed Codex block is capped at **24 KiB** (Table E, E7a), leaving ~8 KiB of Codex's 32 KiB combined `project_doc_max_bytes` for the user's own `AGENTS.md`. The pointer paragraph is **never** the component that truncates |
+| F2 | Position | The composed block order is fixed by `WP-digest-stable-volatile-split` **Table E row E7a**: preamble, banners, **pointer paragraph**, then the stable identity. The pointer line sits **before** the identity, not last — round 3 (finding R9) made the order a priority order, because identity is the only component allowed to truncate under the E7b budget and a pointer that truncates away is worse than useless |
+| F2a | Block budget | The composed Codex block fits an **adaptive** allowance — `32 KiB − the user's own AGENTS.md bytes − 2 KiB reserve`, floored at the minimal critical block (`WP-digest-stable-volatile-split` Table E rows **E7b/E7c**). The pointer paragraph is part of that critical block and is **never** the component that truncates |
 | F3 | Path | The **absolute** path to `<core>/state/digest.md` — the full render, not `digest-volatile.md`, because a human or model reading one file should get the whole picture |
 | F4 | Path separators | Forward slashes on every platform, via `toPosixCommand` |
 | F5 | Path rendering | Inside backticks, so a path with spaces reads correctly and markdown does not mangle it |
@@ -236,9 +236,10 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
 - [ ] AC-1 — The composed Codex block carries the literal paragraph from Exact
       contracts in the E7a order — preamble, banners, **pointer paragraph**, stable
       identity — and the updated golden matches (F2).
-- [ ] AC-1a — **Under the cap (round-3 R9).** With oversized inputs the composed block
-      is ≤ 24 KiB, the pointer paragraph and the banners are fully present, and only the
-      stable identity is truncated (F2a, Table E E7a).
+- [ ] AC-1a — **Within the adaptive allowance (round-3 R9, round-4 S5).** With oversized
+      inputs **and** a non-trivial pre-existing user `AGENTS.md`, the composed block fits
+      `32 KiB − user bytes − 2 KiB`, the pointer paragraph and the banners are fully
+      present, and only the stable identity is truncated (F2a, Table E E7a/E7b).
 - [ ] AC-2 — The path in the paragraph is the absolute path to `state/digest.md`,
       backtick-wrapped, forward-slashed (F3, F4, F5).
 - [ ] AC-3 — The block contains **no** date, time, or "as of" text; two consecutive
@@ -327,7 +328,8 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
     away.** Each rendered component carries its own 32 KiB budget, so the composed block
     could pass Codex's 32 KiB *combined* `project_doc_max_bytes` before the user's own
     `AGENTS.md` content is counted. New **F2a**: a 24 KiB cap on the composed block
-    (~8 KiB left for the user), and **F2 reordered** to the E7a priority order —
+    (~8 KiB left for the user) *(⚠ superseded in round 4 by S5 — the budget is now
+    adaptive to the user's actual `AGENTS.md` bytes)*, and **F2 reordered** to the E7a priority order —
     preamble, banners, **pointer**, identity — because identity is the only component
     allowed to truncate and a pointer line that truncates away is worse than no pointer
     at all. New AC-1a with an oversized fixture.
@@ -341,3 +343,10 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
     the banner reaches the session through the block's second import.
     `WP-refusal-banner-delivery`'s AC-12 remains the earlier, skip-permitted placeholder;
     this one is the real gate, and un-skipping that test is a Deliverable here.
+- **2026-08-30 — Codex round-3 findings S5 and S6 (owner: ACCEPTED).** **S5:** F2a's flat
+  24 KiB cap became the adaptive allowance defined in `WP-digest-stable-volatile-split`
+  Table E rows E7b/E7c; the pointer paragraph is part of the minimal critical block and is
+  never the component that truncates. AC-1a now requires a fixture with non-trivial
+  pre-existing user `AGENTS.md` content. **S6:** `depends_on` gained
+  `WP-refusal-banner-delivery` — this spec's AC-11 un-skips the end-to-end test that spec
+  creates, which is not orderable without the dependency being declared.

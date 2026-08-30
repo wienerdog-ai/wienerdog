@@ -177,7 +177,59 @@ implemented on `origin/wp/launcher-refusal-banner` (PR #174, HEAD `e17d638`), wh
 | `tests/unit/launcher.test.js` and `tests/unit/refusal-banner.test.js` | **Keep and extend.** The per-job cases in the acceptance criteria are new |
 
 `refuse()`'s existing call site is unchanged by this rework; what changes is where
-`writeRefusalBanner` puts its bytes, plus a new clear-on-verify call before spawn.
+`writeRefusalBanner` puts its bytes, plus the post-spawn clear (B15) and the
+spawn-failure write (B16).
+
+**The spawn site (`src/scheduler/launcher.js`), which B15/B16 replace:**
+
+```js
+const r = spawn(verdict.command, verdict.args, { stdio: 'inherit', env: childEnv });
+const code = r && typeof r.status === 'number' ? r.status : 1;
+exit(code);
+```
+
+**`launcher.js` is require-safe** — its exports come first and execution is guarded:
+
+```js
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, main };
+
+// When the vendored copy at <core>/launcher/launch.js is executed by the OS
+// scheduler, run main with the real argv.
+if (require.main === module) {
+  main(process.argv.slice(2));
+}
+```
+
+so the app side may `require` it (Table L, L11). The dependency runs **app → launcher**
+only; the launcher still requires nothing from `src/` (B9).
+
+**The reconciliation signals `sync` already has, and the one it is missing (B17a).**
+`src/cli/sync.js` calls `repointSchedules`, warns, and **continues**:
+
+```js
+const r = repointSchedules(paths, manifest, { loader: opts.loader });
+if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);
+if (r.descriptorFailures > 0) { console.log(`wienerdog: WARNING — ${r.descriptorFailures} job descriptor(s) could not be written; …`); }
+for (const n of r.notices) console.log(`  note: ${n}`);
+…
+const heal = status.reloadMissing(paths, { loader: opts.loader });
+if (heal.failed.length > 0) { console.log(`wienerdog: WARNING — could not reload ${heal.failed.length} scheduled job(s): …`); }
+```
+
+`repointSchedules` returns `{ repointed, changed, descriptorFailures, notices }` — and
+its catch-up repair is folded into `notices` **as a string only**:
+
+```js
+const cu = repairCatchup(paths, manifest, { loader, platform, probe: opts.probe });
+…
+return { repointed, changed, descriptorFailures, notices };
+```
+
+`repairCatchup` itself is `@returns {{notice?:string}}` and reports every failure that
+way, e.g. `{ notice: "catch-up entry rewritten but the OS scheduler did not accept it —
+run 'wienerdog doctor'." }`. It also has early `return {}` paths and can throw. **So a
+failed catch-up repair is a console line no code tests**, which is exactly why B17a adds
+the structured `catchup: {ok, reason?}`.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -187,7 +239,9 @@ implemented on `origin/wp/launcher-refusal-banner` (PR #174, HEAD `e17d638`), wh
 | create | src/core/refusal-banner.js | app-side read + whole-directory clear. The launcher NEVER requires this |
 | modify | src/core/private-fs.js | `'refusal-banner.md'` in `A5_PRIVATE_FILE_BASENAMES`; `refusal-banner/` **and** `launcher.lock/` in the A5 dirs set (B13) |
 | modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it |
-| modify | src/cli/sync.js | clear the whole directory **after** `manifestMod.save`, **only on a clean reconciliation** (B17); render the digest banner-free only in that same case |
+| modify | src/cli/sync.js | clear the whole directory **after** `manifestMod.save`, **only on a clean reconciliation** (B17, incl. catch-up); render the digest banner-free only in that same case |
+| modify | src/cli/schedule.js | `repairCatchup` returns `{ok, reason?}`; `repointSchedules` propagates it as `catchup` (B17a) |
+| modify | tests/unit/catchup-authorization.test.js | the new structured `catchup` result, including the caught-throw shape |
 | create | tests/unit/refusal-banner.test.js | app-side reader/clearer |
 | modify | tests/unit/launcher.test.js | per-job write, clear-after-spawn, rebuild, cross-job isolation, filename collisions, spawn-failure paths, lock contention + stale takeover |
 | modify | tests/unit/sync-repoint.test.js | B17: a failed descriptor write leaves entries in place and the digest carries the banner |
@@ -218,6 +272,20 @@ function readRefusalBanner(paths)
  *  attended `sync`, and only AFTER the manifest save. Idempotent; never throws.
  *  @param {import('./paths').WienerdogPaths} paths @returns {void} */
 function clearRefusalBanner(paths)
+
+/** Compose the banner from the ENTRY DIRECTORY (Table B, B18a) — every entry joined by a
+ *  blank line in sorted filename order — or '' when the directory is absent or empty.
+ *  This is what `renderDigest`'s app-side callers read; the hook and the Claude import
+ *  read the concatenated file instead. Never throws.
+ *  @param {import('./paths').WienerdogPaths} paths @returns {string} */
+function readRefusalBannerFromDir(paths)
+
+/** Self-heal the derived artifact (Table L, L8a): if the concatenated file disagrees with
+ *  the directory, rewrite it to match WHILE HOLDING the launcher lock (required via
+ *  `src/scheduler/launcher.js` — app -> launcher, the safe direction). No drift, or no
+ *  lock available, means no write. Never throws.
+ *  @param {import('./paths').WienerdogPaths} paths @returns {{rewrote: boolean}} */
+function rebuildConcatenatedIfDrifted(paths)
 ```
 
 ```js
@@ -232,11 +300,22 @@ function clearRefusalBanner(paths)
  *  @returns {string} */
 function entryFileName(job)
 
-/** Acquire the launcher lock (Table L). Returns a release function, or null when the
- *  lock could not be taken within the bounded wait — callers MUST handle null by
- *  taking the L6 fallback, never by skipping their write.
+/** Acquire the launcher lock (Table L). On success writes <lock>/owner with a fresh
+ *  16-hex token and returns a release function closed over it; callers never handle
+ *  the token themselves. Returns null when the 35 s bounded wait expired — callers
+ *  MUST then take the L6 fallback, never skip their write.
+ *  EXPORTED: `src/core/alerts.js` requires this (app -> launcher, the safe direction;
+ *  launcher.js is require-safe via its `if (require.main === module)` guard). The
+ *  launcher never requires app code (B9).
  *  @param {{state:string}} p @returns {(() => void)|null} */
 function acquireLauncherLock(p)
+
+/** Release IFF we still own it (Table L, L3): read <lock>/owner, compare `token`, and
+ *  only on a match unlink `owner` then rmdir the directory. A mismatch, an unreadable
+ *  owner, or ENOENT is a NO-OP — a holder broken mid-work must never delete its
+ *  successor's lock. Exported alongside the acquirer for the app side.
+ *  @param {{state:string}} p @param {string} token */
+function releaseLauncherLock(p, token)
 
 /** Write THIS job's banner entry, then rebuild the concatenated file. Overwrites only
  *  this job's entry (B7). Atomic (B5). Takes the lock around the mutation + rebuild
@@ -325,7 +404,7 @@ name *what* each one requires first, and B11 states the scope rule they both obe
 | B1 | Per-job entry | `<core>/state/refusal-banner/<entry-name>.md` — one file per job, the source of truth |
 | B1a | Concatenated file | `<core>/state/refusal-banner.md` — a **derived** artifact: every entry, joined by a blank line, in **sorted filename order**. Rebuilt from the directory after every mutation. This is the single path every reader and the Claude Code import point at, because an `@import` cannot glob a directory |
 | B1b | Empty directory | No entries → the concatenated file is **removed**, not written empty. A missing import target is skipped silently, which is the healthy state |
-| B1c | Mutation lock | Every banner-directory mutation **and** its rebuild happen while holding the launcher lock (Table L). A writer that cannot acquire the lock still writes its own entry and **skips only the rebuild** (Table L, L6) |
+| B1c | Mutation lock | Every banner-directory mutation **and** its rebuild happen while holding the launcher lock (Table L). A writer that cannot acquire still writes its own entry **and still rebuilds, unlocked** (Table L, L6) — the rebuild is idempotent and lands by atomic rename, so an unlocked one can lose a race but never corrupt |
 | B2 | Sole writer | `writeRefusalBanner` in `src/scheduler/launcher.js`, called from `refuse()` and from the spawn-failure path (B16) |
 | B3 | Entry content | Exactly one line: `> [!warning]`, one space, then the folded reason, then one `\n`. Nothing else — no frontmatter, no second line |
 | B4 | Folding | Replace every run of `\s+` with a single space, then trim. Then hard-cut to **2000** characters (matching `MAX_FIELD_CHARS` in `src/core/alerts.js`). Applied before the `> [!warning]` prefix (with its trailing space) is added |
@@ -341,30 +420,93 @@ name *what* each one requires first, and B11 states the scope rule they both obe
 | B14 | Entry filename | `<readable>-<hash>.md`, where `<hash>` is the **first 8 lowercase hex characters of `sha256(raw job name)`** and `<readable>` is the sanitized form cut to **48** characters. Sanitize by replacing every character outside `[A-Za-z0-9._-]` with `_`. A **pseudo-job** — any raw name beginning with `--` — is namespaced with a leading `_` after its dashes are stripped, so `--catch-up` → `_catch-up-<hash>.md` and a real job named `catch-up` → `catch-up-<hash>.md`. An empty `<readable>` becomes `job`. The hash makes the mapping **injective in practice**, which the round-2 sanitizer was not: it collided `--catch-up` with a job named `catch-up`, and collided any two names sharing a 64-character prefix |
 | B15 | Clear timing | The launcher clears a job's entry **only after `spawnSync` returns an object with a numeric `status`** — any number. A non-zero child exit is a job-level failure and is `run-job`'s fail-loud to report, so it still clears the *launcher's* banner. Clearing **before** the spawn (round 2) lost the banner whenever the spawn itself failed |
 | B16 | Spawn-failure banner | If the spawn **throws**, or returns `status === null` (killed by a signal, or never started), the launcher **writes** a banner entry for that job with a code-owned reason — `spawn failed` or `terminated by signal <sig>` — appends a refuse-class alert, writes stderr, and exits 1. It does **not** clear |
-| B17 | Sync's clean-reconciliation precondition | `sync` clears (B10b) **only** when `descriptorFailures === 0` **and** `heal.failed` is empty. Otherwise it clears **nothing** and renders its digest **with** the banner. A sync that just warned "job descriptor(s) could not be written" has not fixed the machine, and must not silence the warning that says so |
-| B18 | Readers | The SessionStart hook, `renderDigest`, and the Claude Code managed-block import — all read the **concatenated** file (B1a), never the directory. Implemented in `WP-refusal-banner-delivery` and `WP-managed-block-by-reference` |
+| B17 | Sync's clean-reconciliation precondition | `sync` clears (B10b) **only** when `descriptorFailures === 0`, `heal.failed` is empty, **and** the catch-up repair reported `ok` (B17a). Otherwise it clears **nothing** and renders its digest **with** the banner. A sync that just warned "job descriptor(s) could not be written" has not fixed the machine, and must not silence the warning that says so |
+| B17a | Catch-up must be in the signal | `repointSchedules` currently returns `{repointed, changed, descriptorFailures, notices}` and folds `repairCatchup`'s result into `notices` only — `repairCatchup` returns `{notice?:string}`, so a failed catch-up repair is a *string* nobody tests. It gains a structured `catchup: {ok: boolean, reason?: string}` (with a caught throw reported as `{ok:false, reason:'threw: …'}`), `repointSchedules` propagates it, and `sync` folds `!r.catchup.ok` into `reconciliationClean`. Round 3's B17 missed this: the catch-up entry is the *only* thing that delivers a missed nightly dream, so a sync that failed to repair it is exactly a sync that must not clear the banner (finding S4) |
+| B18 | Readers — hook and import | The SessionStart hook and the Claude Code managed-block import read the **concatenated** file (B1a). Neither can enumerate a directory: the hook must stay a single-file read with no computation, and an `@import` cannot glob |
+| B18a | Reader — `renderDigest` callers | `sync` and `dream` read the **directory** and compose the banner from its entries in sorted filename order, then **rebuild the concatenated file under the lock whenever it disagrees** with what they just read (Table L, L8a). They are app-side, already doing real work, and already hold a natural place to self-heal — so the derived artifact is repaired on every render rather than drifting until the next launcher mutation. Added in round 4 (finding S2c) |
 
 ### Table L — the launcher lock contract
 
-A single lock serialises **both** mutable launcher-owned state files. Introduced in
-round 3 (Codex R2 + R5) after the owner **reversed** the round-2 compare-and-retry
-ruling: compare-and-retry narrowed the lost-update window on `alerts.jsonl` but left an
-identical, unclosed window on the banner rebuild, and two half-guards are worse than
-one real one.
+A single lock serialises every mutation of the two launcher-owned state files. Round 3
+adopted it after the owner reversed compare-and-retry; **round 4 rewrote the protocol**
+after Codex finding S1 showed the round-3 version could produce **two simultaneous
+owners** (a stale takeover raced with another taker) and could **release a lock it did
+not own** (`rmdirSync` with no ownership check).
 
 | Row | Fact | Value |
 |-----|------|-------|
 | L1 | Path | `<core>/state/launcher.lock/` — a **directory** |
-| L2 | Acquire | `fs.mkdirSync(lockPath)`. Success = acquired; `EEXIST` = held by someone else. Directory creation is atomic on every supported filesystem, which is what makes this a lock at all |
-| L3 | Release | `fs.rmdirSync(lockPath)` in a `finally`, so an exception on the guarded path still releases |
-| L4 | Staleness | A lock whose directory `mtime` is older than **10 000 ms** is stale: `rmdirSync` it and retry `mkdirSync` **once**. Same shape as the dream lock's steal (`src/core/dream/lock.js`, WP-008), which likewise treats an expired holder as dead rather than blocking forever |
-| L5 | Bounded wait | **5 attempts, 200 ms apart** (~1 s worst case). The launcher is synchronous, so sleep with `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)` — a real blocking sleep on Node's main thread, no busy spin, no timer, no async |
-| L6 | Fallback on failure to acquire | **Fail-loud is never sacrificed to the lock.** A writer that cannot acquire still (a) appends its `alerts.jsonl` record atomically, **skipping compaction**, and (b) writes its own banner entry atomically, **skipping the rebuild**. Only the derived/optimising work is skipped |
-| L7 | Accepted residual | After an L6 fallback the concatenated banner file may be **one mutation behind** until the next lock-holding mutation rebuilds it, and `alerts.jsonl` may exceed its bound until the next lock-holding append. Both are self-correcting and neither loses a record |
-| L8 | Guarded regions | (i) `appendRefuseAlert`'s append **plus** compaction; (ii) every banner-directory mutation **plus** its rebuild. Nothing else. Hold the lock for the shortest possible span |
-| L9 | Scope | **Launcher-only.** The app-side `appendAlert` in `src/core/alerts.js` does **not** take this lock; its own documented residual (lines 87–88) is unchanged by this WP. Out of scope here — noted so the boundary is not mistaken for coverage |
-| L10 | Not a daemon | The lock directory is a file, created and removed within one synchronous call. Nothing outlives the process. ADR-0004 is preserved |
-| L11 | Dependencies | Node built-ins only (B9). Implemented inline in `src/scheduler/launcher.js`; **not** a `require` of `src/core/dream/lock.js`, which lives in the app tree the launcher is verifying |
+| L2 | Acquire | `fs.mkdirSync(lockPath)`. Success = acquired; `EEXIST` = held or stale. Directory creation is atomic on every supported filesystem, which is what makes this a lock |
+| L2a | Owner stamp | **Immediately** after a successful `mkdirSync`, write `<lock>/owner` = `{"pid": <pid>, "token": <16 lowercase hex from crypto.randomBytes(8)>, "at": <ISO>}`. The **token**, not the pid, is the identity: a pid can be reused, and after a stale break the same pid may legitimately hold a *different* lock instance |
+| L2b | Return value | `acquireLauncherLock` returns a **release function** closed over the token it wrote, or `null` when the bounded wait expired. Callers never see or pass the token |
+| L3 | Release | Read `<lock>/owner`, parse it, and compare its `token` to ours. **On match only**: unlink `owner`, then `rmdirSync` the directory. On any mismatch, unreadable owner, or `ENOENT` — **no-op**. A holder that was broken while it worked must never delete its successor's lock |
+| L4 | Staleness authority | The **lock directory's own `mtime`**, never the owner file's. A directory whose `mtime` is older than **30 000 ms** is stale. A lock directory with **no readable `owner` file is NOT stale** on that basis alone — it is almost certainly a taker in the microseconds between L2 and L2a. Only the directory mtime decides |
+| L4a | Stale break | `fs.renameSync(lockPath, <core>/state/launcher.lock.stale-<pid>-<8 hex>)`. Rename is atomic on one source: **exactly one** contender wins, and every loser gets `ENOENT` and simply falls back to retrying `mkdirSync`. The winner then `fs.rmSync(renamed, {recursive:true, force:true})` and retries `mkdirSync` once. This replaces round 3's `rmdirSync`-then-`mkdirSync`, which let two stealers both proceed |
+| L4b | Threshold rationale | 30 s, raised from round 3's 10 s. The **maximum expected hold is milliseconds** — a `readdir` of a handful of small files plus one `renameSync`, or one append plus a bounded compaction. 30 s is therefore ~4 orders of magnitude of headroom, so a break implies a genuinely dead or pathologically stalled holder |
+| L5 | Bounded wait | **140 attempts, 250 ms apart — 35 s worst case**, which **exceeds** the 30 s staleness threshold by design (finding S2a): a crashed holder is *always* broken before the wait expires, so the L6 fallback is reachable only against a live holder stalled past 30 s. The launcher is synchronous and fires hourly, so a 35 s worst case is acceptable. Sleep with `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250)` — a real blocking sleep on Node's main thread, no busy spin, no timer, no async |
+| L6 | Fallback when the wait expires | **Fail-loud is never sacrificed to the lock, and neither is the derived artifact.** The caller still (a) appends its `alerts.jsonl` record atomically, skipping **compaction**; and (b) writes its banner entry atomically **and rebuilds the concatenated file without the lock**. Round 3 skipped the rebuild here; finding S2b corrected it — a possibly-stale derived file is strictly better than a guaranteed-stale one, and the rebuild is idempotent and atomic, so an unlocked one can only lose a race, never corrupt |
+| L7 | Accepted residuals | (i) A holder broken under L4a loses only **derived** work — its entry write and its alert append are already durable — so a legitimately slow holder that gets broken costs a rebuild, not a record. (ii) Two concurrent rebuilds each produce a complete valid file and the later `renameSync` wins, so the concatenated file may momentarily lag the directory by one entry; L8a's self-heal repairs it. (iii) After an L6 fallback, `alerts.jsonl` may exceed its bound until the next lock-holding append |
+| L8 | Guarded regions | (i) `appendRefuseAlert`'s append **plus** compaction; (ii) every banner-directory mutation **plus** its rebuild; (iii) the app-side `alerts.jsonl` writers (Table C, C8d). Nothing else. Hold for the shortest possible span |
+| L8a | Reader self-heal | `renderDigest`'s callers read the **directory** and rebuild the concatenated file under the lock whenever it disagrees with the directory (finding S2c). Every `dream` and every `sync` therefore repairs the derived artifact, so an L6-fallback rebuild that lost a race is corrected on the next render rather than persisting |
+| L9 | Scope | **Every writer of the guarded files**, not just the launcher. Round 3 scoped it to the launcher only, which left the app-side `alerts.jsonl` writers racing the launcher (finding S3). See Table C rows C8d–C8g |
+| L10 | Not a daemon | The lock directory is a file, created and removed within one synchronous call. Nothing outlives the process. **ADR-0004 is preserved** |
+| L11 | Single implementation | Implemented **once**, in `src/scheduler/launcher.js`, and exported as `acquireLauncherLock` / `releaseLauncherLock`. The app side **requires** it (`src/core/alerts.js` → `src/scheduler/launcher.js`); the launcher **never** requires app code. That direction is safe because `launcher.js` is require-safe: it guards execution with `if (require.main === module)` after its `module.exports`. The vendored `<core>/launcher/launch.js` is a **byte copy** of this same file (`writeLauncher` in `src/core/vendor.js` copies "the self-contained `src/scheduler/launcher.js` bytes OUT of the app tree"), covered by the app release digest — so the two processes cannot run different protocols. **One implementation, no twin literals** (ADR-0031) |
+
+### The lock state machine — the argument this protocol is correct
+
+Written out because three consecutive rounds shipped fix-induced defects, and the two in
+round 3 (S1) were both in this mechanism. Four scenarios; the invariant to preserve is
+**at most one live owner of `launcher.lock/` at any instant, and no process ever removes
+a lock it does not own.**
+
+**A — two contenders, no holder.** P1 and P2 both call `mkdirSync`. `mkdir` is atomic, so
+exactly one succeeds — say P1. P2 gets `EEXIST`, reads the directory `mtime`, finds it
+fresh, sleeps 250 ms, retries. P1 stamps `owner` with token `T1`, does its
+milliseconds of work, then releases: reads `owner`, sees `T1`, unlinks and `rmdir`s. P2's
+next `mkdirSync` succeeds. **One owner throughout.**
+
+*The window this closes.* Between P1's `mkdirSync` (L2) and its `owner` write (L2a) the
+directory exists with no owner file. A protocol that judged staleness by a missing or
+unreadable owner file would declare that infant lock stale and break it, producing two
+owners. **L4 makes the directory `mtime` the sole staleness authority** and states
+explicitly that a missing `owner` file is not evidence of staleness.
+
+**B — crashed holder, two simultaneous stealers.** The lock directory is 60 s old; P2 and
+P3 both judge it stale. Both attempt L4a's `renameSync(lock, lock.stale-<pid>-<rand>)`.
+Their target names differ, but their **source is the same single directory**: the first
+rename to land moves it, and the second fails `ENOENT`. So exactly one process breaks the
+lock and exactly one is responsible for `rmSync`-ing the renamed corpse — no orphan, no
+double-delete. Both then race `mkdirSync`, which is atomic, so exactly one becomes the new
+owner and the other returns to waiting. **One owner.** Round 3's `rmdirSync`-then-`mkdirSync`
+had no such funnel: both stealers could `rmdirSync` (the second failing harmlessly) and
+both could then `mkdirSync` in an interleaving where each believed it had won.
+
+**C — a live holder that exceeds the threshold.** P1 holds and stalls past 30 s. P2 breaks
+the lock per B and becomes owner with token `T2`. P1 eventually finishes and calls release:
+it reads `owner`, finds `T2` (or `ENOENT`), and **no-ops** — L3's token comparison is
+exactly what prevents P1 from deleting P2's lock and admitting a third owner. Meanwhile P1
+and P2 may both run `rebuildRefusalBanner` concurrently. Each does its own `readdir`,
+builds a complete file, and lands it by atomic `renameSync`; a reader therefore always sees
+one whole valid rebuild, never a torn one, and the later rename wins. If the winner's
+`readdir` snapshot was the older one, the concatenated file lags the directory by one
+entry — repaired at the next render by L8a. **P1 loses only derived work: its banner entry
+and its alert record were durable before the rebuild began.** That is residual L7(i), and
+it is the price of a bounded threshold; the alternative — waiting forever on a possibly
+dead holder — is the failure mode this whole chain exists to prevent.
+
+**D — the bounded wait expires (L6).** Because the wait (35 s) **exceeds** the staleness
+threshold (30 s), a crashed holder is always broken with ~5 s of margin to spare, so this
+path is unreachable for a dead holder. It is reachable only when a *live* holder keeps the
+lock past 30 s — four orders of magnitude beyond the expected hold, i.e. a pathologically
+stalled machine. On that path the caller writes its banner entry, rebuilds unlocked, and
+appends its alert record append-only. **No record is lost in any branch.** The unlocked
+rebuild is safe for the same reason as C: atomic rename, so the worst case is losing a
+race, which L8a then repairs.
+
+**What is deliberately not defended.** Two processes on different hosts sharing
+`<core>` over a network filesystem whose `mkdir` is not atomic. That is outside
+`docs/THREAT-MODEL.md`'s single-machine scope, and `src/core/dream/lock.js` (WP-008) makes
+the same assumption for the dream lock.
 
 ### Mirrored Surface Checklist
 
@@ -443,19 +585,40 @@ in one pass, and any new mirror found in review is added here on the spot:
   `/`, `\` or `..`, and can never be `.` or `..` because it always ends `-<hash>.md`.
   Implement `entryFileName` **once** and call it from the writer and the clearer —
   two implementations that drift is precisely how a clear stops matching its write.
-- **The lock is a real lock, not an advisory comment (Table L).** Round 2 used
-  compare-and-retry on `alerts.jsonl`; the owner reversed that in round 3 because the
-  banner rebuild has the same unclosed window and a second, differently-shaped
-  half-guard is worse than one shared real one. `mkdirSync` is the atomic primitive —
-  `EEXIST` means held. Release in a `finally`. Steal a lock older than 10 s, once, the
-  way `src/core/dream/lock.js` (WP-008) treats an expired holder as dead rather than
-  blocking forever. Sleep synchronously with `Atomics.wait` on a `SharedArrayBuffer`;
-  the launcher has no event loop to yield to and a busy spin would burn a core.
-- **L6 is the rule that keeps the lock from becoming the new failure mode.** If the
-  lock cannot be acquired, the writer still writes — its own alert record, its own
-  banner entry — and skips only the derived work (compaction, rebuild). A lock that can
-  swallow a fail-loud record would be a worse bug than the race it closes. Test the
-  contended path explicitly by pre-creating the lock directory.
+- **Read "The lock state machine" above before writing a line of it.** Round 3's version
+  of this lock had two defects that the four-scenario walkthrough is designed to make
+  impossible to reproduce: a stale takeover that could admit **two owners**, and a
+  release that removed the directory **without checking ownership**. The token in
+  `<lock>/owner` (L2a) is the identity, not the pid — pids are reused, and after a break
+  the same pid may hold a different lock instance.
+- **Staleness is judged by the lock DIRECTORY's mtime, never by the owner file (L4).**
+  There is a real window between `mkdirSync` and the `owner` write in which the directory
+  is empty; a protocol that read "no owner file" as "stale" would break infant locks and
+  produce two owners. Explicitly test that case (AC-20b).
+- **The stale break is a rename, not an unlink (L4a).** `renameSync` on a single source
+  is the funnel that makes exactly one stealer win; every loser gets `ENOENT` and simply
+  retries `mkdirSync`. Round 3's `rmdirSync`-then-`mkdirSync` had no funnel.
+- **The wait budget must exceed the staleness threshold (L5, L4b).** 140 × 250 ms = 35 s
+  against a 30 s threshold. That ordering is what makes the L6 fallback unreachable for a
+  *crashed* holder — it is always broken first, with margin. Assert the constants in a
+  test (AC-22a) rather than trusting a comment, because a later tuning edit that lowers
+  the wait or raises the threshold silently re-opens the gap.
+- **L6 keeps the lock from becoming the new failure mode.** If the lock cannot be
+  acquired, the writer still writes its alert record and its banner entry, **and still
+  rebuilds unlocked** — round 3 skipped that rebuild, which meant a fallback left the
+  derived file guaranteed-stale rather than possibly-stale. The rebuild is idempotent and
+  lands by atomic rename, so unlocked it can lose a race but never corrupt. A lock that
+  can swallow a fail-loud record, or freeze the artifact readers depend on, would be a
+  worse bug than the race it closes.
+- **Hold the lock for milliseconds (L4b).** A `readdir` of a few small files plus one
+  `renameSync`. Do not hold it across the spawn, the console output, or the exit — the
+  30 s threshold is only safe because the real hold is four orders of magnitude below it.
+- **Export the lock; do not re-implement it (L11).** `src/core/alerts.js` requires
+  `acquireLauncherLock`/`releaseLauncherLock` from `src/scheduler/launcher.js`. That is
+  the safe direction — `launcher.js` is require-safe (`module.exports` precedes its
+  `if (require.main === module)` guard) and the launcher still requires nothing from
+  `src/`. The vendored `<core>/launcher/launch.js` is a byte copy of the same file, so
+  the two processes cannot run different protocols.
 - **Fold before prefixing (B4), never after.** `refusalText()` output is a single
   logical sentence today, but `why` comes from a verdict and may grow a newline. An
   unfolded newline would end the markdown blockquote and let the tail of the reason
@@ -554,17 +717,42 @@ by a Deliverables row (see the AC-to-Deliverables map in the PR body).
       refusal: non-zero exit, zero spawn, and the `alerts.jsonl` record is still
       appended (B8).
 - [ ] AC-18 — A `renameSync` failure leaves **no** `*.tmp` file behind (B5).
-- [ ] AC-19 — **Lock contention (round-3 R2/R5).** With `<core>/state/launcher.lock/`
-      pre-created and fresh, a refusal still writes its banner entry and still appends
-      its alert record; only the rebuild is skipped, so the concatenated file is one
-      mutation behind. Nothing throws (L2, L5, L6, L7).
-- [ ] AC-20 — **Stale takeover.** A lock directory whose `mtime` is older than 10 s is
-      removed and re-acquired, once, and the guarded work then runs normally (L4).
+- [ ] AC-19 — **Contended fallback (L6, revised in round 4).** With a **fresh**
+      `<core>/state/launcher.lock/` held for the whole bounded wait, a refusal still
+      writes its banner entry, **still rebuilds the concatenated file unlocked**, and
+      still appends its alert record; only the alerts **compaction** is skipped. Nothing
+      throws (L2, L5, L6, L7).
+- [ ] AC-20 — **Stale takeover.** A lock directory whose `mtime` is older than **30 s**
+      is broken by rename-then-remove and re-acquired once, and the guarded work then
+      runs normally (L4, L4a).
+- [ ] AC-20a — **Two simultaneous stealers, exactly one owner (round-4 S1).** Two
+      acquirers both observing the same stale lock produce **exactly one** successful
+      `renameSync` (the loser sees `ENOENT`), exactly one `launcher.lock.stale-*`
+      directory, which is then removed, and **exactly one** new owner — assert the
+      surviving `owner` file carries a single token (L4a).
+- [ ] AC-20b — **A lock with no `owner` file is not stale.** A freshly `mkdir`ed lock
+      directory containing no `owner` file is **not** broken by a contender; only the
+      directory `mtime` decides staleness (L4).
 - [ ] AC-21 — The lock is released even when the guarded work throws — assert the
       directory is gone after an injected failure (L3).
+- [ ] AC-21a — **Release with a wrong token is a no-op (round-4 S1).** A holder whose
+      lock was broken and re-acquired by another process calls release: the directory
+      and the **successor's** `owner` file both survive untouched (L3).
+- [ ] AC-21b — **Broken slow holder causes no corruption (round-4 S1).** A live holder
+      broken past the threshold, whose rebuild then races the breaker's rebuild, leaves
+      a **valid, completely-formed** concatenated file — never a torn one — and the
+      holder's own banner entry and alert record are both intact (L7 i–ii).
 - [ ] AC-22 — **Write/clear interleaving under the lock.** A write for job A and a clear
       for job B, serialised through the lock, leave exactly A's entry and a concatenated
       file matching it (L8, B11).
+- [ ] AC-22a — **The bounded wait exceeds the staleness threshold (round-4 S2a).** Assert
+      the constants directly: wait budget (140 × 250 ms = 35 000 ms) **>** staleness
+      threshold (30 000 ms). A crashed holder is therefore always broken before the
+      fallback can trigger (L4b, L5).
+- [ ] AC-22b — **Reader self-heal (round-4 S2c).** After an L6 fallback rebuild loses a
+      race — the directory holds an entry the concatenated file lacks, with no further
+      launcher mutation — the **next `renderDigest` call site** (`sync` or `dream`) shows
+      the entry and rewrites the concatenated file to match (B18a, L8a).
 - [ ] AC-23 — `clearRefusalBanner` (app-side) removes every entry and the concatenated
       file, and is a no-op — no throw — when the directory is already absent (B10b).
 - [ ] AC-24 — `'refusal-banner.md'` is in `A5_PRIVATE_FILE_BASENAMES`, and
@@ -577,6 +765,13 @@ by a Deliverables row (see the AC-to-Deliverables map in the PR body).
       one descriptor write fails leaves every banner entry **in place** and renders its
       digest **with** the banner. A run in which `heal.failed` is non-empty behaves the
       same way (B17).
+- [ ] AC-26a — **Catch-up failure counts as unclean (round-4 S4).** `repointSchedules`
+      returns `catchup: {ok:false, reason}` when the catch-up reload is rejected, and
+      when `repairCatchup` **throws** (reported as `{ok:false, reason:'threw: …'}`). In
+      both cases `sync` leaves every banner entry in place and renders the digest **with**
+      the banner (B17, B17a).
+- [ ] AC-26b — A successful catch-up repair returns `catchup: {ok:true}` and does not by
+      itself make the run unclean (B17a).
 - [ ] AC-27 — A fully clean `sync` clears the directory **after** `manifestMod.save`,
       and renders its own digest banner-free (B10b, B12, B17).
 - [ ] AC-28 — `wienerdog sync --dry-run` with entries present leaves them in place and
@@ -603,8 +798,14 @@ grep -n "manifestMod.save\|clearRefusalBanner\|reconciliationClean" src/cli/sync
 grep -n "refusal-banner\|launcher.lock" src/core/private-fs.js tests/unit/private-fs.test.js
 # B14 — one implementation of the filename rule, used by writer and clearer:
 grep -n "entryFileName" src/scheduler/launcher.js
-# L5 — the synchronous sleep is Atomics.wait, not a busy spin:
-grep -n "Atomics.wait\|SharedArrayBuffer" src/scheduler/launcher.js
+# L5/L4b — the wait budget must EXCEED the staleness threshold (35000 > 30000):
+grep -n "30000\|30_000\|250\|140\|Atomics.wait\|SharedArrayBuffer" src/scheduler/launcher.js
+# L2a/L3 — ownership is by token, and release is guarded by it:
+grep -n "token\|owner" src/scheduler/launcher.js | head -20
+# L11 — the lock is exported once and required app -> launcher (never the reverse):
+grep -n "acquireLauncherLock\|releaseLauncherLock" src/scheduler/launcher.js src/core/alerts.js
+# B17a — the catch-up result is structured, not a notice string:
+grep -n "catchup" src/cli/schedule.js src/cli/sync.js
 ```
 
 ## Out of scope (do NOT do these)
@@ -708,3 +909,38 @@ grep -n "Atomics.wait\|SharedArrayBuffer" src/scheduler/launcher.js
     to the Deliverables.
   - Table B rows renumbered and made internally consistent (B10 names *when*, B15/B16/B17
     name *what each clearer requires first*, B11 states the shared scope rule).
+- **2026-08-30 — Codex round-3 findings S1, S2, S4 (owner: ACCEPTED).** Both round-3
+  defects were in the lock this spec introduced, which is why Table L now ships with a
+  written four-scenario state-machine argument.
+  - **S1 — the lock could admit two owners and free a lock it did not hold.** The stale
+    takeover was `rmdirSync`-then-`mkdirSync`, with no funnel: two stealers observing the
+    same stale lock could both proceed. And `release` was a bare `rmdirSync` with **no
+    ownership check**, so a holder broken mid-work would delete its *successor's* lock and
+    admit a third owner. Rewritten: an `owner` file stamped with a 16-hex **token**
+    immediately after `mkdirSync` (L2a); release reads it and acts **only on a token
+    match** (L3); the stale break is an atomic `renameSync` of the single source directory,
+    so exactly one contender wins and every loser gets `ENOENT` (L4a). Staleness is judged
+    by the **directory mtime**, never the owner file, because a lock is legitimately
+    owner-less for the microseconds between L2 and L2a (L4). Threshold raised 10 s → 30 s
+    against a stated **millisecond** expected hold (L4b). New AC-20a, AC-20b, AC-21a,
+    AC-21b.
+  - **S2a/S2b — the contended fallback could hide a banner indefinitely.** The bounded
+    wait (10 s) was *shorter* than the staleness threshold, so a crashed holder could push
+    a writer onto the fallback path before anyone broke the lock; and the fallback skipped
+    the rebuild, leaving the derived file **guaranteed** stale. Now the wait (140 × 250 ms
+    = 35 s) **exceeds** the 30 s threshold by design, so the fallback is unreachable for a
+    dead holder (L5, AC-22a); and the fallback **still rebuilds, unlocked** — idempotent
+    and atomic, so it can lose a race but never corrupt (L6).
+  - **S2c — readers now self-heal.** `renderDigest`'s callers read the **directory** and
+    rebuild the concatenated file under the lock on drift (B18a, L8a); only the hook and
+    the Claude import stay on the concatenated file. New AC-22b.
+  - **S4 — `sync` cleared after a catch-up reconciliation failure.** `repairCatchup`
+    returns `{notice?:string}` and `repointSchedules` folds it into `notices` only, so a
+    failed catch-up repair was a console line no code tested — and B17's gate never saw
+    it. The catch-up entry is the only thing that delivers a missed nightly dream, so this
+    was precisely the case that must not clear. New **B17a**: `repairCatchup` returns
+    `{ok, reason?}` (a caught throw reported as `{ok:false, reason:'threw: …'}`),
+    `repointSchedules` propagates it as `catchup`, and `sync` folds `!r.catchup.ok` into
+    `reconciliationClean`. `src/cli/schedule.js` and `tests/unit/catchup-authorization.test.js`
+    added to the Deliverables; new AC-26a, AC-26b. The real shapes are now quoted in
+    Current state.
