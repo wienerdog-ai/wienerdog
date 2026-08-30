@@ -1,0 +1,57 @@
+Gate: PR review, Codex rubric (backend: gptsol agent, model codex/gpt-5.6-sol via llmp)
+PR: #42 (WP-dream-promote-report)
+Tip reviewed: aea77ef
+Merge base: 14e2a70
+Date: 2026-08-30
+Reviewer instructions: docs/runbooks/review-prompts/pr-rubric.md (vendored, frozen)
+
+Returned VERBATIM below, exactly as the gate filed it. Committed before it was
+read or judged.
+
+=== overall_correctness ===
+patch is incorrect
+
+=== overall_confidence_score ===
+0.99
+
+=== overall_explanation ===
+Reviewed pinned tip `aea77ef` with `git diff 14e2a70...aea77ef` (exit 0); the branch
+later advanced to `fbe2949` only through an allowed gate-log commit, and `git diff
+--exit-code aea77ef fbe2949 -- src/core/dream/promote.js tests/unit/dream-promote.test.js
+docs/specs/WP-dream-promote-report.md` exited 0. Executed `npm test` (exit 1: only
+`adopt-e2e: init → adopt → sync → dream through mapped tiers, one revertable commit`
+failed), independently reproduced that test with its focused pattern (exit 1 due the
+temporary `claude` path differing from the pre-existing pinned path), `npm run lint`
+(exit 0), focused `dream-promote` and `report-fallback` tests (both exit 0), the
+consumed-by-nothing grep and diff checks (exit 0), and targeted Unicode-normalization
+and trailing-separator probes (both exit 0 and reproduced the findings). Initial `git
+status --porcelain` (exit 0) output: ``; final `git status --porcelain` (exit 0)
+output: ``; the outputs are byte-identical.
+
+=== FINDING 1 ===
+title: [P2] Normalize separators before constructing the report path
+priority: 2
+confidence_score: 0.99
+code_location: /Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js line 1310
+
+When `reports_dir` comes from a valid config with a trailing slash, such as
+`reports/dreams/`, `siblingRel` produces `reports/dreams//2026-08-29.md`; phase 3 then
+passes this to `writeIntoVault`, whose segment validation throws instead of returning a
+report. `readVaultLayout` currently accepts and preserves this value, so every promotion
+run using that layout crashes, including a run where the brain writes nothing. Normalize
+the directory or reject empty path segments before constructing `reportRel`.
+
+=== FINDING 2 ===
+title: [P2] Match the report body by canonical path identity
+priority: 2
+confidence_score: 0.99
+code_location: /Users/felho/dev/repos-to-learn-from/wienerdog/src/core/dream/promote.js line 1369
+
+On macOS, filesystem enumeration can return an NFD spelling while `layout.reports_dir`
+retains its NFC spelling; although `makeAdmit` deliberately treats these as the same
+directory, this literal equality does not. A body at the canonically equivalent report
+path is consequently placed in `promoted[]` or `redacted[]` as an ordinary note and
+phase 3 reports `outcome: 'fallback'` instead of the body's disposition; this reproduces
+with `reports/dreáms` versus `reports/dreáms` (NFC vs NFD). Use the same canonical path
+comparison for both report-body branches so the report remains excluded from the three
+ordinary outcome arrays.

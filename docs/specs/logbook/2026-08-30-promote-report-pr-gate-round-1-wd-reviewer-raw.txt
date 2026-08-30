@@ -1,0 +1,314 @@
+Gate: PR review, spec fidelity (wd-reviewer)
+PR: #42 (WP-dream-promote-report)
+Tip reviewed: aea77ef (the briefed tip; the branch advanced to fbe2949 during the
+  run through a logbook-only commit, which the reviewer detected and reported)
+Merge base: 14e2a70
+Date: 2026-08-30
+
+Returned VERBATIM below, exactly as the gate filed it. Committed before it was
+adjudicated.
+
+=== VERDICT ===
+REQUEST-CHANGES
+
+=== READ-ONLY COMPLIANCE ===
+git status --porcelain BEFORE: empty. AFTER: empty. Byte-identical — the run is
+valid. All mutation work was done on `git archive` exports under /tmp, since
+removed.
+WARNING from the reviewer: the branch tip moved during the run, not by the
+reviewer. At start HEAD = aea77ef (the briefed tip). At end HEAD = fbe2949 — a
+third commit, "docs(specs): pin the PR-gate stop criterion before reading either
+gate", adding only docs/specs/logbook/2026-08-30-promote-report-pr-gates.md (an
+always-allowed boundary path). This review is of aea77ef as briefed; the new
+commit does not change the boundary verdict but the maintainer should know the
+diff under gate is no longer the tip.
+
+=== WHAT WAS EXECUTED ===
+B  node scripts/boundary-check.js docs/specs/WP-dream-promote-report.md
+     src/core/dream/promote.js tests/unit/dream-promote.test.js        exit 0
+     clean; git diff --name-status 14e2a70...HEAD = exactly the 3 Deliverables files
+V1 npm test -- --test-name-pattern "dream-promote"                     exit 0
+     163 pass / 0 fail
+V2 npm test -- --test-name-pattern "report-fallback"                   exit 0
+     123 pass / 0 fail; pattern NOT vacuous — matches 14 tests
+V3 npm test                                                            exit 1
+     2244 tests, 1 fail: tests/integration/adopt-e2e.test.js
+V4 npm run lint                                                        exit 0
+     markdownlint 0 errors, shellcheck clean, frontmatter 236 specs OK
+V5 consumed-by-nothing grep                                            exit 0
+     RED direction verified by the reviewer: planted src/core/dream/planted.js
+     containing require('./promote') -> exit 1
+P1 Pinned-line byte comparison against the shipped redactOnly/sanitizeProjectName
+     with the pinned example values: IDENTICAL to
+     WP-secret-fence-ep2-redact-arm.md:1373-1387 outside the <vault-relative path>
+     placeholder; the placeholder is sanitised, which Table R's measured-cost row
+     explicitly accepts. Contract fidelity holds.
+P2 Fixed-point probe of sanitizeProjectName(redactOnly(v)) over 9 values
+     (context-dependent + prefix-shaped secrets, paths, reasons): fixed point of
+     redactOnly in ALL 9 — the composed-text guard cannot false-refuse a
+     correctly wired channel.
+M  14 mutations (A-O) applied to /tmp exports of aea77ef, each run against the
+     full tests/unit/dream-promote.test.js.
+
+npm test exit 1 is NOT this diff's defect. The reviewer exported the merge base
+14e2a70 to /tmp and ran tests/integration/adopt-e2e.test.js there: it fails
+identically ("refusing to run claude: claude now resolves to
+.../home/.local/bin/claude, but the pinned command path is ..."). Environment-
+caused, pre-existing. But the implementer cannot honestly claim Definition-of-done
+#1 ("all verification steps pass locally") on this machine without saying so in
+the PR body.
+
+=== MUTATION RESULTS (whole-file run, baseline 54 pass / 0 fail) ===
+A  unwired, unclassified composer interpolation      2 fail  fail-closed default is REAL
+G  *wired* new channel through neutralise            0 fail  correct discriminator ✓
+C  sanitiser skipped                                 4 fail  criterion RED (i) ✓
+D  redact arm skipped                                2 fail  criterion RED (ii) ✓
+E  sanitise FIRST                                    2 fail  criterion RED (iii) ✓
+F  redacted[].rel unneutralised                      1 fail  criterion RED (iv) ✓
+H  R3 repairs the diverged file                      4 fail  R3 never reconstructs ✓
+I2 gate-refusal routing removed                      1 fail  caught
+N  fallback arm drops preserved                      1 fail  round-3 F1 shape caught
+K  report folded into promoted[]                     1 fail  caught
+J  published:false bytes from a fresh read           1 fail  Y3/Y5 caught
+I  PRIMITIVE-refusal routing removed                 0 fail  GAP - finding 1
+L  published:false record truncated to its heading   0 fail  GAP - finding 2
+M  published:false drops redaction + preserved       0 fail  GAP - finding 3
+
+=== FINDINGS ===
+
+FINDING 1 [criteria] tests/unit/dream-promote.test.js:1242
+The report path's exclusion from refused[] is unasserted on the PRIMITIVE-refusal
+route, and a mutation that violates it passes the entire suite.
+
+Deleting the report routing at src/core/dream/promote.js:1361-1362
+
+    if (d.rel === reportRel) reportBody = { published: false, reason, preserved };
+    else refused.push({ rel: d.rel, reason, preserved });
+
+leaving only `refused.push({ rel: d.rel, reason, preserved });` yields 54 pass /
+0 fail. A probe against the mutant using the test file's own case-(ii) scenario
+printed:
+
+    outcome= fallback | refused rels = ["reports/dreams/2026-08-29.md"]
+
+The suite stays green because the fallback also fires from reportBody === null,
+so report.outcome === 'fallback' and the vault-content assertion at :1271 both
+still hold. What silently breaks are two things the spec states flatly:
+### Exact contracts — "the body is not a member of refused[]" — and the round-3
+F1 rule, since report.preserved empties to [] on the arm the run actually took
+while the body's copies get announced under an ordinary refused-path line. The
+gate-refusal twin (mutation I2) IS caught, so this is a one-sided hole, not a
+design choice.
+
+Disposition: FIX. In case (ii) at :1242, add to the existing assertions:
+    assert.ok(!resH5.refused.some((r) => r.rel === REPORT), 'the body is not a member of refused[]');
+and give that scenario a gate-preserved copy so resH5.report.preserved can be
+asserted non-empty on the primitive-refusal route.
+
+FINDING 2 [criteria] tests/unit/dream-promote.test.js:1558,1601
+Acceptance criterion (b)'s "COMPLETE record" clause is unasserted; truncating
+report.record to its heading passes the suite.
+
+The criterion requires: "report.record holds the COMPLETE record, the redaction
+line and every preserved-copy line the unpublished section would have carried
+included" and "separately RED against one that drops the record on this path."
+The only assertion on that arm is :1601:
+
+    assert.ok(res.report.record.includes(H_ENFORCE), cause);
+
+H_ENFORCE IS the heading, so replacing record with [record[0]] on the
+published:false branch (src/core/dream/promote.js:1440-1452) yields 54 pass / 0
+fail. The scenario at :1558 is scenario({ brain: { [REPORT]: body('one') } })
+with the default gates() (:130-138, secret: () => ({ ok: true })), so it contains
+NO redaction and NO preserved copy — there is nothing for the criterion's clause
+to bite on.
+
+Disposition: FIX. Give the case-(b) scenario at :1558 a secret gate that both
+redacts a sibling note (producing a redacted[] entry with a redaction and a
+preserved copy) and refuses another path with a preserved copy, then assert
+sectionOf(res)/res.report.record contains the redaction line and the
+preserved-copy line — the same literals tests :1418-1436 already assert on the
+published branch.
+
+FINDING 3 [criteria] tests/unit/dream-promote.test.js:1558
+Table Y row Y7 ("preserved, record and redaction are UNCHANGED on this arm") is
+unasserted.
+
+Replacing `redaction: reportRedaction, preserved: reportPreserved` with
+`redaction: null, preserved: []` on the published:false branch
+(src/core/dream/promote.js:1446-1447) yields 54 pass / 0 fail. Same root cause as
+finding 2 — the case-(b) scenario carries neither value — and the same fix closes
+both: once the scenario has a redacted body with a preserved copy, add
+    assert.deepEqual(res.report.redaction, { lines: 1, labels: 'high-entropy' }, cause);
+    assert.equal(res.report.preserved.length, 1, cause);
+
+Disposition: FIX, folded into finding 2's edit.
+
+FINDING 4 [contract] src/core/dream/promote.js:563,569
+Two new user-facing section headings that no spec pins, one of them replacing a
+shipped string. This is a SPEC fault: route to wd-architect.
+
+    const ENFORCEMENT_HEADING = '## Refused by policy (promotion enforcement)';
+    const PRESERVED_HEADING = '## Preserved copies (secret quarantine)';
+
+REDACTION_HEADING at :566 correctly reproduces the shipped
+"## Redacted in place (secret scan)", and the redaction LINE is pinned
+byte-for-byte and matches (probe P1). But the enforcement heading is a rename of
+the shipped "## Reverted by orchestrator (policy enforcement)" — the string
+carried by src/core/dream/validate.js:1391 and asserted or quoted across TWELVE
+other spec surfaces, including docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1406
+("the redaction section is appended after ## Reverted by orchestrator (policy
+enforcement)") and the brain-facing skills/wienerdog-dream/SKILL.md:423.
+"## Preserved copies (secret quarantine)" is wholly new.
+
+The spec pins the redaction line and says nothing about either heading, so the
+implementer had to invent them. The rename is COHERENT with the ADR-0034
+refuse/revert taxonomy the module half adopted, and nothing user-visible changes
+yet (this package ships consumed by nothing; validate.js still writes the old
+heading) — but the pipeline package will make one of these the live string, and
+right now no table decides which.
+
+Disposition: RESIDUAL for this PR, on two conditions — (a) the implementer records
+the heading choice under "Decisions made" in the PR body naming the shipped string
+it replaces, and (b) wd-architect pins both headings, either in the report row or
+as Table Y/R rows, before WP-dream-promote-in-workspace is dispatched. A heading
+that is invented by an implementer and never pinned is exactly the
+contract-density failure mode this family has been closing.
+
+FINDING 5 [contract] docs/specs/WP-dream-promote-report.md:368-427 (Table N)
+Two channels this package's own shapes carry have no classification row. SPEC
+fault: route to wd-architect.
+
+Table N enumerates channels field by field and its own ground for doing so is
+stated twice: "a channel with no row is indistinguishable from a channel nobody
+thought about." Two are missing:
+
+- The report body's own refusal reason. src/core/dream/promote.js:1249-1251
+  interpolates it into the enforcement section as neutralise(o.reportRefusal). It
+  is a composer-interpolated, attacker-influenceable channel (the gate's reason
+  embeds brain-chosen path text, exactly like refused[].reason, which DOES have a
+  row).
+- report.reason on the refused arm (promote.js:1469, :1494). Returned but never
+  composed — structurally the same animal as accounting.reason, which Table N
+  classifies and routes to the pipeline for its assertion.
+
+NO IMPLEMENTATION DEFECT FOLLOWS: the first is neutralised, and the catch-all row
+plus the fail-closed guard (mutation A: 2 fail) cover both. This is purely the
+table being incomplete against the shape this very package ships.
+
+Disposition: RESIDUAL for the implementation, ROUTE TO wd-architect to add two
+Table N rows. Also worth a look: reportRel itself is composer-interpolated
+(promote.js:1249) and unclassified, though code-derived from layout.reports_dir +
+a shape-validated date, so it is not attacker-influenceable — one row stating that
+would close the sweep.
+
+FINDING 6 [contract] docs/specs/WP-dream-promote-report.md:596
+scripts/mirror-walk.js does not exist in the tree, and the checklist drops a
+hand-maintained count on the strength of it.
+
+    `scripts/mirror-walk.js` and are not hand-maintained anywhere.
+
+ls scripts/ yields boundary-check.js, check-frontmatter.js, gen-agents-md.js,
+lint.js, measure-secret-fp.js, smoke-install.sh. The script lives unmerged on
+tools/mirror-walk. Pre-existing and already filed — the module half's round-3 gate
+raised it as its finding 3
+(docs/specs/logbook/2026-08-30-...-round-3-wd-reviewer-raw.txt:103), naming
+report:596 specifically — and it survived the round-6 close. Load-bearing: round
+6's NIT-3 struck the mirror-surface counts BECAUSE a walker would replace them,
+and no walker exists, so those lists are now neither counted nor walked.
+
+Disposition: RESIDUAL, out of this PR's Deliverables blast radius (the spec is
+touched here for the status flip only). ROUTE TO wd-architect: either land
+tools/mirror-walk or restore the counts. This is the mirror-drift class the
+contract-density detector exists to catch, and it has now survived two gates.
+
+FINDING 7 [quality] src/core/dream/promote.js:648-654
+composeRecord's @param writes out the field lists of the module half's refused[]
+and redacted[] entries.
+
+     * @param {{records:Array<{path:string, reason:string}>,
+     *          refused:Array<{rel:string, reason:string, preserved:PreservedCopy[]}>,
+     *          redacted:Array<{rel:string, redaction:RedactionAccounting, preserved:PreservedCopy[]}>,
+
+The Mirrored Surface Checklist's prohibition is "no surface here may write out the
+FIELDS of the module half's returned shapes or of ANY of its THREE typedefs." This
+is a second structural statement of two of those shapes inside the same file that
+decides them at @returns. MITIGATING, and why this is a NIT and not a contract
+finding: it deliberately omits bytes from redacted, so it is a narrower INPUT
+REQUIREMENT rather than a restatement, and it correctly names
+PreservedCopy/RedactionAccounting without expanding either. The rest of the new
+JSDoc is clean against both prohibitions — @returns declares the union's type and
+its two-arm accounting shape and explicitly restates no part of Table Y, and the
+Y4 prohibition is respected everywhere (the reviewer swept every claim-shaped
+variant across both changed files: the only "byte-unchanged"/"untouched"
+statements sit on the R4 fallback arm at promote.js:1470, :1490 and tests:1234,
+:1629, where they are true; tests:1604 says outright "Byte-equality with the live
+vault is asserted NOWHERE on this form").
+
+Disposition: DROP, or narrow to ReturnType<typeof promote>['refused'] if the
+implementer is touching the file anyway.
+
+FINDING 8 [quality] src/core/dream/promote.js:1413
+The appended section can land with no blank line above its heading.
+
+    const appendedTo = (base) => Buffer.concat([base, Buffer.from('\n', 'utf8'), section]);
+
+On R3 the base is whatever the user's file holds. tests:1202's own fixture has no
+trailing newline, so the published result is
+"...wrote this instead.\n## Refused by policy (promotion enforcement)" — heading
+directly under a paragraph line. It renders in CommonMark and the test asserts this
+exact form deliberately, but the shipped validate.js guaranteed a \n-terminated
+file before appending, so this is a small user-facing regression in a vault
+document.
+
+Disposition: RESIDUAL — note it, or normalise with
+base.at(-1) === 0x0a ? '\n' : '\n\n'.
+
+FINDING 9 [quality] src/core/dream/promote.js:1466-1471
+The readVaultNow error branch is a fifth fallback case Table R does not enumerate.
+
+    if ('error' in now) {
+      report = { outcome: 'refused', reason: now.error, preserved: reportPreserved, record };
+    }
+
+Table R has four cases: absent, byte-equal, diverged, mutates-or-refused. An
+unreadable report path (EACCES, and similar) is a READ failure before any write,
+not a primitive refusal, so it is R4-shaped but not R4. The code fails closed to
+refused with the record delivered, which is the right call and the simpler option.
+
+Disposition: RESIDUAL — record under "Decisions made" per CLAUDE.md.
+
+=== CLOSED-CONTRACT DRIFT CHECK ===
+No refinement in this diff reinterprets a settled canonical contract or promotes a
+mirror to primary. Table Y's rows are cited from the code by row id (Y2, Y3, Y5, Y9
+at promote.js:1441-1457) and glossed nowhere; the @returns block declares the
+union's type and hands accounting's rules to Table Y explicitly. Table R's R4
+untouched-vault clause is correctly scoped AWAY from the published:false arm in
+both the code comments and the tests — the Y4 sweep found no surviving instance of
+the killed claim in either changed file. Table Q's typedefs are read, never
+recomputed: redaction.lines/labels and every PreservedCopy field are interpolated
+straight off the record, and mutation F confirms the redaction line's provenance is
+asserted. The partition (redaction accounting present -> redaction line; otherwise
+-> preserved-copy line) is implemented at promote.js:1257-1276 over the
+accounting's presence and never over the arm, matching the re-cut form; the
+"exactly once" assertions at tests:1441-1443 and :1473 hold. Drift is confined to
+the two spec-side items above (findings 5 and 6), and both are Table-N / checklist
+maintenance rather than a contract reinterpretation. No canonical-extraction pass
+is indicated: findings 1-3 are three faces of one under-specified test fixture, not
+one contract family hit round after round.
+
+=== BOTTOM LINE ===
+The IMPLEMENTATION is in good shape: boundary clean, lint clean, the pinned
+redaction line reproduces byte-for-byte, Table R's R1-R4 and the named residual are
+each implemented and each caught by mutation, the trigger genuinely is the complete
+class by construction (bodyPublished is true only on the success branch), Table N's
+fail-closed guard demonstrably fires on an unwired channel and demonstrably does NOT
+fire on a wired one, and the Y4 prohibition is respected across code comments and
+test names alike.
+
+What blocks approval is the TEST HALF of three acceptance criteria: the case-(b)
+scenario at tests/unit/dream-promote.test.js:1558 is too thin to exercise what
+criterion (b) and Table Y row Y7 demand (findings 2 and 3), and the
+primitive-refusal route never asserts the report path stays out of refused[]
+(finding 1). All three are demonstrated by executed mutations that the current suite
+passes 54/54. Findings 4-6 are spec faults for wd-architect, not implementer work.

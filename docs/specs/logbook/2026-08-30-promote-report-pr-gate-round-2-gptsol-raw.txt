@@ -1,0 +1,55 @@
+Gate: PR review, Codex rubric (backend: gptsol agent, model codex/gpt-5.6-sol via llmp)
+PR: #42 (WP-dream-promote-report) — ROUND 2
+Tip reviewed: 795f904
+Merge base: 14e2a70
+Date: 2026-08-30
+Reviewer instructions: docs/runbooks/review-prompts/pr-rubric.md (vendored, frozen)
+
+Returned VERBATIM below. Committed before it was adjudicated.
+
+=== overall_correctness ===
+patch is incorrect
+
+=== overall_confidence_score ===
+0.99
+
+=== overall_explanation ===
+Reviewed `git diff 14e2a70...795f904` (exit 0); independent `node <<'NODE'` probes
+for the trailing separator and NFC/NFD identity fixes both exited 0 and CONFIRMED
+BOTH ROUND-1 DEFECTS ARE GONE, while separate dot-segment and
+duplicate-folded-identity probes exited 0 and reproduced the findings above. With
+WIENERDOG_LOADER_NOOP=1, `npm test` exited 1 solely on `adopt-e2e: init → adopt →
+sync → dream through mapped tiers, one revertable commit`; its focused run exited
+1 with the pinned-`claude` path mismatch, and the same focused test on merge base
+`14e2a70` exited 1 for the same reason, while `npm run lint`, focused
+`dream-promote`, focused `report-fallback`, the consumed-by-nothing grep, and
+`git diff --check` all exited 0. Initial `git status --porcelain` exited 0 with
+stdout ""; final `git status --porcelain` exited 0 with stdout ""; the outputs are
+byte-identical.
+
+=== FINDING 1 ===
+title: [P2] Reject dot segments before deriving the report path
+priority: 2
+confidence_score: 0.99
+code_location: src/core/dream/promote.js line 1322
+
+When the accepted layout contains `reports_dir: reports/./dreams`,
+`readVaultLayout` preserves that value, but this construction preserves the `.`
+segment and passes `reports/./dreams/<date>.md` to `writeIntoVault`; the primitive
+treats `.` as a caller-contract violation and throws, so every promotion run
+fails, including one with no brain-authored files. Normalize or reject dot
+segments before constructing `reportRel`, as is already done for empty segments.
+
+=== FINDING 2 ===
+title: [P2] Reject duplicate folded report identities
+priority: 2
+confidence_score: 0.98
+code_location: src/core/dream/promote.js lines 1335-1336
+
+On a case-sensitive filesystem, the brain can create both
+`reports/dreams/<date>.md` and `REPORTS/DREAMS/<date>.md`; this folded predicate
+classifies both as the one report, phase 2 publishes both, each assignment
+overwrites `reportBody`, and phase 3 appends accounting only to the last spelling.
+The first file remains body-only and disappears from every returned outcome array,
+so detect multiple matching records or limit folding to identities the filesystem
+actually aliases.
