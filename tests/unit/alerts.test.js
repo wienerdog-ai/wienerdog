@@ -15,6 +15,7 @@ const {
   MAX_ALERTS,
   MAX_FIELD_CHARS,
   MAX_FILE_BYTES,
+  MAX_COUNT,
 } = require('../../src/core/alerts');
 const { renderDigest } = require('../../src/core/digest');
 
@@ -133,7 +134,7 @@ test('alerts: unknown keys are dropped and missing fields read back as empty str
   fs.writeFileSync(file, `${JSON.stringify({ job: 'dream', extra: 'nope' })}\n`);
   const got = readAlerts(paths);
   assert.equal(got.length, 1);
-  assert.deepEqual(got[0], { job: 'dream', at: '', reason: '', log_hint: '' });
+  assert.deepEqual(got[0], { job: 'dream', at: '', reason: '', log_hint: '', count: 1 }); // count is always present (C1)
 });
 
 test('alerts: a valid-JSON primitive line does not crash and reads back as an empty-fields record', () => {
@@ -144,7 +145,7 @@ test('alerts: a valid-JSON primitive line does not crash and reads back as an em
   const got = readAlerts(paths);
   assert.equal(got.length, 4, 'all four primitive lines parse without throwing');
   for (const a of got) {
-    assert.deepEqual(a, { job: '', at: '', reason: '', log_hint: '' });
+    assert.deepEqual(a, { job: '', at: '', reason: '', log_hint: '', count: 1 }); // count is always present (C1)
   }
 });
 
@@ -394,4 +395,78 @@ test('alerts: alerts.jsonl ends 0600 after append and after compaction (WP-126)'
   }
   assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'compaction rewrite leaves 0600');
   assert.equal(readAlerts(paths).length, MAX_ALERTS, 'compaction bound unchanged');
+});
+
+// -------------------------------------------------------------------------
+// the `count` field (WP-launcher-alert-bound, Table C1/C2/C3/C13)
+// -------------------------------------------------------------------------
+
+test('alerts: count is coerced fail-closed to 1 for absent/0/-1/1.5/NaN/Infinity/1e309/object; "3" is 3 (AC-1, C2)', () => {
+  /** @type {Array<[string, *, number]>} */
+  const cases = [
+    ['absent', undefined, 1],
+    ['0', 0, 1],
+    ['-1', -1, 1],
+    ['1.5', 1.5, 1],
+    ['NaN', NaN, 1],
+    ['Infinity', Infinity, 1],
+    ['1e309 (overflows to Infinity)', 1e309, 1],
+    ['"9".repeat(400)', '9'.repeat(400), 1],
+    ['an object', {}, 1],
+    ['an array', [], 1],
+    ['null', null, 1],
+    ['the string "3"', '3', 3],
+    ['a plain 5', 5, 5],
+  ];
+  for (const [label, input, want] of cases) {
+    const { paths } = setup();
+    const r = rec('dream', '2026-08-30T03:30:00.000Z', 'exited 1');
+    if (label !== 'absent') r.count = input;
+    appendAlert(paths, r);
+    const got = readAlerts(paths);
+    assert.equal(got.length, 1, `one record for ${label}`);
+    assert.equal(got[0].count, want, `count for ${label}`);
+    assert.equal(typeof got[0].count, 'number', `count stays a number for ${label}`);
+  }
+});
+
+test('alerts: a count above MAX_COUNT is clamped to MAX_COUNT (AC-2, C3)', () => {
+  const { paths } = setup();
+  appendAlert(paths, { ...rec('dream', '2026-08-30T03:30:00.000Z', 'exited 1'), count: MAX_COUNT + 12345 });
+  assert.equal(readAlerts(paths)[0].count, MAX_COUNT, 'clamped, not passed through');
+  assert.equal(MAX_COUNT, 1000000, 'the value the launcher duplicates as a literal (C3)');
+});
+
+test('alerts: every record appendAlert writes carries count 1 — the app-side writer never collapses', () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-08-30T03:30:00.000Z', 'exited 1'));
+  appendAlert(paths, rec('dream', '2026-08-30T04:30:00.000Z', 'exited 1')); // identical (job, reason)
+  const raw = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8').trim().split('\n');
+  assert.equal(raw.length, 2, 'two rows — appendAlert does not collapse');
+  for (const line of raw) assert.equal(JSON.parse(line).count, 1);
+});
+
+test('alerts: a pre-WP alerts.jsonl with no count field reads as count 1 and renders unchanged (AC-12, C13)', () => {
+  const { paths } = setup();
+  fs.mkdirSync(paths.state, { recursive: true });
+  // Hand-written in the OLD four-field shape — no migration step exists or is needed.
+  fs.writeFileSync(
+    path.join(paths.state, ALERTS_FILE),
+    JSON.stringify({ job: 'dream', at: '2026-08-30T03:30:00.000Z', reason: 'exited 1', log_hint: 'logs/dream/' }) + '\n'
+  );
+  const got = readAlerts(paths);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].count, 1, 'absent count reads as 1');
+  const out = renderDigest(FIXTURE, undefined, { alerts: got });
+  assert.ok(out.includes('the "dream" job has failed. Latest error: exited 1.'), out.split('\n')[0]);
+});
+
+test('alerts: count survives a readAlerts → clearAlerts round-trip for the surviving job', () => {
+  const { paths } = setup();
+  appendAlert(paths, { ...rec('dream', '2026-08-30T03:30:00.000Z', 'exited 1'), count: 7 });
+  appendAlert(paths, rec('digest', '2026-08-30T07:00:00.000Z', 'exited 2'));
+  clearAlerts(paths, 'digest');
+  const got = readAlerts(paths);
+  assert.equal(got.length, 1);
+  assert.deepEqual([got[0].job, got[0].count], ['dream', 7], 'the rewrite preserves count');
 });

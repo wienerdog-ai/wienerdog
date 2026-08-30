@@ -14,6 +14,7 @@ const {
   readNoteBounded,
 } = require('../../src/core/digest');
 const { allowAll } = require('../../src/core/safety-profile');
+const { MAX_COUNT } = require('../../src/core/alerts');
 const { approvalsFromVault } = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
 
@@ -813,4 +814,76 @@ test('insecureModes: a positive count renders the fixed banner in the prefix; 0/
   assert.ok(bannerLine && !/[/\\]/.test(bannerLine.replace('`wienerdog sync`', '').replace('`wienerdog doctor`', '')), 'no paths in the banner line');
   assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 0, profile: BLOCKED }), golden);
   assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), profile: BLOCKED }), golden);
+});
+
+// -------------------------------------------------------------------------
+// formatAlerts sums `count` (WP-launcher-alert-bound, Table C12 / AC-3…AC-6)
+// -------------------------------------------------------------------------
+
+/** The alert banner line only (the digest prefix's first block). */
+function alertBanner(alerts) {
+  return renderDigest(FIXTURE, undefined, { alerts, identityApprovals: approvals(FIXTURE), profile: BLOCKED }).split('\n')[0];
+}
+
+test('digest: formatAlerts sums count across rows — 1 + 5 renders "has failed 6 times since" the EARLIEST at (AC-3, C12/C7)', () => {
+  const alerts = [
+    { job: 'dream', at: '2026-08-01T03:30:00.000Z', reason: 'integrity mismatch', log_hint: 'logs/dream/', count: 5 },
+    { job: 'dream', at: '2026-08-30T03:30:00.000Z', reason: 'integrity mismatch', log_hint: 'logs/dream/', count: 1 },
+  ];
+  const line = alertBanner(alerts);
+  assert.ok(
+    line.includes('the "dream" job has failed 6 times since 2026-08-01T03:30:00.000Z.'),
+    `summed count + onset timestamp: ${line}`
+  );
+});
+
+test('digest: a single row with count 1 still renders "has failed" with no number (AC-4, C12)', () => {
+  const line = alertBanner([{ job: 'dream', at: '2026-08-30T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: 1 }]);
+  assert.ok(line.includes('the "dream" job has failed. Latest error: boom.'), line);
+  assert.ok(!line.includes('times since'), 'wording unchanged from before the count field');
+});
+
+test('digest: a single COLLAPSED row with count 4 renders the real streak, not "has failed" (C12)', () => {
+  const line = alertBanner([{ job: 'dream', at: '2026-08-27T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: 4 }]);
+  assert.ok(line.includes('the "dream" job has failed 4 times since 2026-08-27T03:30:00.000Z.'), line);
+});
+
+test('digest: a summed total over MAX_COUNT is clamped, never rendered as an unsafe integer (AC-5)', () => {
+  const alerts = [
+    { job: 'dream', at: '2026-08-01T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: MAX_COUNT },
+    { job: 'dream', at: '2026-08-02T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: MAX_COUNT },
+    { job: 'dream', at: '2026-08-03T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: MAX_COUNT },
+  ];
+  const line = alertBanner(alerts);
+  assert.ok(line.includes(`has failed ${MAX_COUNT} times since`), line);
+  assert.ok(!line.includes('e+'), 'no exponential/unsafe number reaches the banner');
+});
+
+test('digest: a hostile or absent count contributes exactly 1 — the banner never shows NaN/Infinity (C2/C13)', () => {
+  const hostile = [
+    { job: 'dream', at: '2026-08-01T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }, // pre-WP row, no count
+    { job: 'dream', at: '2026-08-02T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: NaN },
+    { job: 'dream', at: '2026-08-03T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: Infinity },
+    { job: 'dream', at: '2026-08-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: -1 },
+    { job: 'dream', at: '2026-08-05T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: '9'.repeat(400) },
+  ];
+  const line = alertBanner(hostile);
+  assert.ok(line.includes('has failed 5 times since 2026-08-01T03:30:00.000Z.'), line);
+  assert.ok(!/NaN|Infinity/.test(line), 'no NaN/Infinity in the banner');
+});
+
+test('digest: counts are summed per job, not across jobs (C12)', () => {
+  const alerts = [
+    { job: 'dream', at: '2026-08-01T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/', count: 3 },
+    { job: 'digest', at: '2026-08-02T07:00:00.000Z', reason: 'bang', log_hint: 'logs/digest/', count: 1 },
+  ];
+  const out = renderDigest(FIXTURE, undefined, { alerts, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
+  assert.ok(out.includes('the "dream" job has failed 3 times since 2026-08-01T03:30:00.000Z.'), out.split('\n')[0]);
+  assert.ok(out.includes('the "digest" job has failed. Latest error: bang.'), out.split('\n')[1]);
+});
+
+test('digest: the golden with no alerts is byte-identical — the count field changes nothing (AC-6)', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  const out = renderDigest(FIXTURE, undefined, { alerts: [], identityApprovals: approvals(FIXTURE), profile: BLOCKED });
+  assert.equal(out, golden, 'no alerts → the frozen golden, unchanged');
 });

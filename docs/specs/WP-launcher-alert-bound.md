@@ -1,7 +1,7 @@
 ---
 id: WP-launcher-alert-bound
 title: Bound the launcher's alert writer without understating a real failure streak — collapse consecutive identical refusals into a count field
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []

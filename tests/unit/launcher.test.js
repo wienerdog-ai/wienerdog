@@ -821,3 +821,213 @@ test('remedy: an INHERITED remedy does not select the sync tail (ownership)', ()
     delete Object.prototype.remedy;
   }
 });
+
+// -------------------------------------------------------------------------
+// appendRefuseAlert: collapse + bound (WP-launcher-alert-bound, Table C)
+// -------------------------------------------------------------------------
+
+const ALERT_MAX_RECORDS = 200; // mirrors the launcher's literal / MAX_ALERTS (C4)
+const ALERT_MAX_FILE_BYTES = 512 * 1024; // mirrors the launcher's literal / MAX_FILE_BYTES (C5)
+
+/** A bare temp state dir — the only thing appendRefuseAlert needs (it writes
+ *  alerts.jsonl there and requires nothing from the app tree, C11). */
+function alertState() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-alert-'));
+  const state = path.join(root, 'state');
+  return { root, p: { state }, file: path.join(state, 'alerts.jsonl') };
+}
+
+/** Parse alerts.jsonl into records, oldest-first. */
+function readRows(file) {
+  return fs
+    .readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => JSON.parse(l));
+}
+
+test('launcher: two identical (job, reason) refusals collapse into ONE record with count 2 (AC-7, C6/C7)', () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  const firstAt = readRows(file)[0].at;
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+
+  const rows = readRows(file);
+  assert.equal(rows.length, 1, 'the repeat collapsed — the file did not grow');
+  assert.equal(rows[0].count, 2, 'the streak length is carried, not discarded');
+  assert.equal(rows[0].at, firstAt, 'at keeps the FIRST occurrence — the banner onset stays truthful');
+  assert.equal(rows[0].job, 'dream');
+  assert.equal(rows[0].log_hint, '');
+});
+
+test('launcher: a repeat collapses into a hand-seeded PRIOR record and keeps its old timestamp (AC-7, C7)', () => {
+  const { p, file } = alertState();
+  fs.mkdirSync(p.state, { recursive: true, mode: 0o700 });
+  const reason = 'refusing to run: integrity mismatch';
+  fs.writeFileSync(file, JSON.stringify({ job: 'dream', at: '2026-08-01T03:30:00.000Z', reason, log_hint: '', count: 118 }) + '\n');
+
+  launcher.appendRefuseAlert(p, 'dream', reason);
+
+  const rows = readRows(file);
+  assert.equal(rows.length, 1, 'still one record');
+  assert.equal(rows[0].count, 119, 'the 2026-08-01 logbook streak advances by exactly one');
+  assert.equal(rows[0].at, '2026-08-01T03:30:00.000Z', 'the onset timestamp is NOT overwritten');
+});
+
+test('launcher: a hundred identical refusals leave one record with count 100 — the growth defect is cured', () => {
+  const { p, file } = alertState();
+  for (let i = 0; i < 100; i += 1) launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  const rows = readRows(file);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].count, 100);
+  assert.ok(fs.statSync(file).size < 500, `the file stays tiny: ${fs.statSync(file).size} bytes`);
+});
+
+test('launcher: two DIFFERENT reasons leave two records, each count 1 (AC-8, C6)', () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: stance mismatch');
+  const rows = readRows(file);
+  assert.equal(rows.length, 2, 'a different reason is a different failure — no collapse');
+  assert.deepEqual(rows.map((r) => r.count), [1, 1]);
+});
+
+test('launcher: the same reason under a DIFFERENT job does not collapse (AC-8, C6)', () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  launcher.appendRefuseAlert(p, 'digest', 'refusing to run: integrity mismatch');
+  const rows = readRows(file);
+  assert.equal(rows.length, 2, 'the collapse key is the PAIR (job, reason)');
+  assert.deepEqual(rows.map((r) => r.job), ['dream', 'digest']);
+});
+
+test('launcher: a match against a NON-LAST record appends instead of collapsing (AC-9, C6)', () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'reason A');
+  launcher.appendRefuseAlert(p, 'dream', 'reason B'); // now the last record
+  launcher.appendRefuseAlert(p, 'dream', 'reason A'); // matches record 1, which is NOT last
+
+  const rows = readRows(file);
+  assert.equal(rows.length, 3, 'no non-adjacent merge — the oldest-first order is preserved');
+  assert.deepEqual(rows.map((r) => r.reason), ['reason A', 'reason B', 'reason A']);
+  assert.deepEqual(rows.map((r) => r.count), [1, 1, 1]);
+});
+
+test('launcher: a prefix of the last reason is not a match — the compare is exact (C6)', () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch (again)');
+  assert.equal(readRows(file).length, 2, 'no prefix/fuzzy matching');
+});
+
+test('launcher: beyond MAX_ALERTS distinct records the log holds exactly MAX_ALERTS, newest kept (AC-10, C4/C10)', () => {
+  const { p, file } = alertState();
+  const total = ALERT_MAX_RECORDS + 25;
+  for (let i = 0; i < total; i += 1) launcher.appendRefuseAlert(p, 'dream', `refusing to run: distinct reason ${i}`);
+
+  const rows = readRows(file);
+  assert.equal(rows.length, ALERT_MAX_RECORDS, 'the launcher now has the bound the app-side writer has');
+  assert.equal(rows[rows.length - 1].reason, `refusing to run: distinct reason ${total - 1}`, 'newest kept');
+  assert.equal(rows[0].reason, `refusing to run: distinct reason ${total - ALERT_MAX_RECORDS}`, 'oldest dropped');
+});
+
+test('launcher: a log already over MAX_FILE_BYTES is reduced below it, keeping the newest record (AC-11, C5/C10)', () => {
+  const { p, file } = alertState();
+  fs.mkdirSync(p.state, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(file, 'x'.repeat(ALERT_MAX_FILE_BYTES + 1000) + '\n'); // one huge malformed line
+  assert.ok(fs.statSync(file).size > ALERT_MAX_FILE_BYTES, 'precondition: already over the byte bound');
+
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: fresh failure');
+
+  assert.ok(fs.statSync(file).size <= ALERT_MAX_FILE_BYTES, 'brought back under the byte bound');
+  const rows = readRows(file);
+  assert.equal(rows.length, 1, 'at least — and here exactly — the newest record survives');
+  assert.equal(rows[0].reason, 'refusing to run: fresh failure');
+});
+
+test('launcher: a pre-WP record with no count collapses correctly — no migration step (C13)', () => {
+  const { p, file } = alertState();
+  fs.mkdirSync(p.state, { recursive: true, mode: 0o700 });
+  const reason = 'refusing to run: integrity mismatch';
+  // The OLD four-field shape, exactly as an installed 0.13.0 log holds it.
+  fs.writeFileSync(file, JSON.stringify({ job: 'dream', at: '2026-08-01T03:30:00.000Z', reason, log_hint: '' }) + '\n');
+
+  launcher.appendRefuseAlert(p, 'dream', reason);
+
+  const rows = readRows(file);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].count, 2, 'the countless record read as 1, then incremented');
+});
+
+test('launcher: an unreadable-but-appendable log keeps the just-appended record (C8/C9 durability)', { skip: process.platform === 'win32' }, () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: first failure');
+  fs.chmodSync(file, 0o200); // write-only: the read-back fails, the append does not
+  try {
+    assert.doesNotThrow(() => launcher.appendRefuseAlert(p, 'dream', 'refusing to run: second failure'));
+  } finally {
+    fs.chmodSync(file, 0o600);
+  }
+  const rows = readRows(file);
+  assert.equal(rows.length, 2, 'the empty read-back skipped the rewrite instead of erasing the log');
+  assert.equal(rows[1].reason, 'refusing to run: second failure', 'the newest fail-loud record is durable');
+});
+
+test('launcher: alerts.jsonl is 0600 after a collapse rewrite as well as after a plain append', { skip: process.platform === 'win32' }, () => {
+  const { p, file } = alertState();
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch');
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'first append leaves 0600');
+  assert.equal(fs.statSync(p.state).mode & 0o777, 0o700, 'state dir is 0700');
+  launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch'); // collapse → rewrite
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'the temp+rename rewrite leaves 0600');
+  assert.equal(readRows(file).length, 1, 'and it did collapse');
+});
+
+test('launcher: appendRefuseAlert swallows an unwritable state dir and leaves no temp file behind (AC-13)', { skip: process.platform === 'win32' }, () => {
+  const { p } = alertState();
+  fs.mkdirSync(p.state, { recursive: true, mode: 0o700 });
+  fs.chmodSync(p.state, 0o500); // readable, not writable
+  try {
+    assert.doesNotThrow(() => launcher.appendRefuseAlert(p, 'dream', 'refusing to run: integrity mismatch'));
+    assert.deepEqual(fs.readdirSync(p.state), [], 'nothing — not even a .tmp — was left behind');
+  } finally {
+    fs.chmodSync(p.state, 0o700);
+  }
+});
+
+test('launcher: with state/ unwritable the refusal STILL exits non-zero and spawns nothing (AC-13)', { skip: process.platform === 'win32' }, () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  jobsLib.saveJob(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift
+  let spawned = false;
+  let code = null;
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  fs.chmodSync(paths.state, 0o500); // the alert cannot land
+  try {
+    code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: () => {
+        spawned = true;
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+    fs.chmodSync(paths.state, 0o700);
+  }
+  assert.equal(code, 1, 'the refusal stands on its exit code, not on the alert landing');
+  assert.equal(spawned, false, 'ZERO spawn');
+});
+
+test('launcher: every literal require in launcher.js is a Node builtin (AC-14, C11)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'scheduler', 'launcher.js'), 'utf8');
+  const literals = [...src.matchAll(/require\((['"])([^'"]+)\1\)/g)].map((m) => m[2]);
+  assert.ok(literals.length >= 4, 'it does require builtins');
+  for (const r of literals) {
+    assert.ok(r.startsWith('node:'), `launcher.js may require builtins only, found: ${r}`);
+  }
+  assert.equal(/require\((['"])\.\.?\/[^'"]*src/.test(src), false, 'no static app-tree require');
+});

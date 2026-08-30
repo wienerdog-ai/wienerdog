@@ -28,32 +28,52 @@ const ALERTS_FILE = 'alerts.jsonl';
 const MAX_ALERTS = 200; // keep only the most-recent N records
 const MAX_FIELD_CHARS = 2000; // cap each string field (control-plane text, not prose)
 const MAX_FILE_BYTES = 512 * 1024; // hard byte bound on the log file / the read
+// Ceiling on a record's `count` — the streak length a collapsed launcher refusal
+// carries (WP-launcher-alert-bound, Table C3). Bounds a parsed-input number before
+// it reaches the digest banner's arithmetic. MAX_ALERTS, MAX_FILE_BYTES and
+// MAX_COUNT are duplicated as literals in src/scheduler/launcher.js, which cannot
+// require this module (Table C11) — update the two copies together.
+const MAX_COUNT = 1000000;
 
 /** @param {import('./paths').WienerdogPaths} paths @returns {string} */
 function alertsPath(paths) {
   return path.join(paths.state, ALERTS_FILE);
 }
 
-/** Coerce a record to the known string fields, each length-capped and then
- *  secret-scrubbed (EP3, audit A5 / ADR-0024 / WP-124): the cap bounds the scan
- *  input, then `redactOnly` guarantees no secret persists to alerts.jsonl or
- *  reaches the digest — `at`/`job`/`log_hint` are code-owned no-ops, but
- *  scanning uniformly is the fail-closed choice. Requires a non-null,
+/** The alert record.
+ *  @typedef {{job:string, at:string, reason:string, log_hint:string, count:number}} Alert
+ *  `count` — how many consecutive identical (job, reason) refusals this row
+ *  represents (Table C1). ALWAYS present after sanitizeAlert; >= 1; an
+ *  absent/invalid input value becomes 1. Only the launcher's writer ever
+ *  collapses, so appendAlert always records 1. */
+
+/** Coerce a record to the known fields: the four string fields, each length-capped
+ *  and then secret-scrubbed (EP3, audit A5 / ADR-0024 / WP-124) — the cap bounds the
+ *  scan input, then `redactOnly` guarantees no secret persists to alerts.jsonl or
+ *  reaches the digest (`at`/`job`/`log_hint` are code-owned no-ops, but scanning
+ *  uniformly is the fail-closed choice) — plus the numeric `count`, coerced FAIL
+ *  CLOSED to 1 (Table C2): anything that is not a safe integer >= 1 (absent, 0, -1,
+ *  1.5, NaN, Infinity, 1e309, an object) becomes 1, and anything larger is clamped to
+ *  MAX_COUNT, so a hand-edited alerts.jsonl cannot push a nonsense or memory-hostile
+ *  number into the digest banner's arithmetic. A pre-WP record with no `count` reads
+ *  as 1, so no migration is needed (Table C13). Requires a non-null,
  *  non-array OBJECT — any other value (null, number, string, array) is
  *  treated as an empty object, so a valid-JSON primitive can't crash the deref.
- *  Drops unknown keys; missing fields become ''.
- *  @param {*} r @returns {{job:string, at:string, reason:string, log_hint:string}} */
+ *  Drops unknown keys; missing string fields become ''.
+ *  @param {*} r @returns {Alert} */
 function sanitizeAlert(r) {
   const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
   const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));
-  return { job: scrub(o.job), at: scrub(o.at), reason: scrub(o.reason), log_hint: scrub(o.log_hint) };
+  const n = Number(o.count);
+  const count = Number.isSafeInteger(n) && n >= 1 ? Math.min(n, MAX_COUNT) : 1;
+  return { job: scrub(o.job), at: scrub(o.at), reason: scrub(o.reason), log_hint: scrub(o.log_hint), count };
 }
 
 /** Append one unresolved failure alert (atomic append; creates state/ if needed).
  *  Compacts to `MAX_ALERTS` records / `MAX_FILE_BYTES` bytes when either bound
  *  is exceeded after the append.
  *  @param {import('./paths').WienerdogPaths} paths
- *  @param {{job:string, at:string, reason:string, log_hint:string}} record */
+ *  @param {{job:string, at:string, reason:string, log_hint:string, count?:number}} record */
 function appendAlert(paths, record) {
   mkdirPrivate(paths.state); // 0700 independent of umask (audit A5, WP-126)
   const file = alertsPath(paths);
@@ -125,7 +145,7 @@ function appendAlert(paths, record) {
  *  Byte-bounds its read (tail window of `MAX_FILE_BYTES` for oversized files) and
  *  sanitizes every parsed line so no unbounded/primitive record reaches callers.
  *  @param {import('./paths').WienerdogPaths} paths
- *  @returns {Array<{job:string, at:string, reason:string, log_hint:string}>} */
+ *  @returns {Alert[]} */
 function readAlerts(paths) {
   const file = alertsPath(paths);
   let fd;
@@ -216,4 +236,5 @@ module.exports = {
   MAX_ALERTS,
   MAX_FIELD_CHARS,
   MAX_FILE_BYTES,
+  MAX_COUNT,
 };

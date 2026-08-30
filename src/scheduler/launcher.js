@@ -165,9 +165,93 @@ function liveStance(p) {
   return containedIn(p.appDir, p.appCurrent) ? 'prod' : 'dev';
 }
 
+// The alert-log bounds, hand-duplicated as LITERALS because this file may require
+// Node builtins ONLY (WP-launcher-alert-bound Table C11): requiring src/core/alerts.js
+// would execute code from the very app tree the launcher exists to verify. Their twins
+// are MAX_ALERTS, MAX_FILE_BYTES and MAX_COUNT in src/core/alerts.js — the duplication
+// is deliberate and registered as Table C3/C4/C5; update the two copies together.
+const ALERT_MAX_RECORDS = 200; // twin: MAX_ALERTS in src/core/alerts.js
+const ALERT_MAX_FILE_BYTES = 512 * 1024; // twin: MAX_FILE_BYTES in src/core/alerts.js
+const ALERT_MAX_COUNT = 1000000; // twin: MAX_COUNT in src/core/alerts.js
+
+/** Read alerts.jsonl back, oldest-first, for the collapse+bound rewrite below.
+ *  A self-contained minimal twin of readAlerts in src/core/alerts.js (Table C11 —
+ *  no app-tree require). Byte-bounds the read to a trailing ALERT_MAX_FILE_BYTES
+ *  window so a pathologically grown log cannot be slurped whole; when the window
+ *  starts mid-file its first line is dropped as a possible partial (the byte bound
+ *  below would drop that oldest record anyway). Malformed lines are skipped, and
+ *  `count` is coerced fail-closed to 1 BEFORE any arithmetic, exactly as
+ *  sanitizeAlert does (Table C2/C13) — a hand-edited NaN/Infinity/-1/1e309 can never
+ *  reach the rewritten file. Any read failure yields [] (the caller then leaves the
+ *  atomically-appended file alone, Table C9).
+ *  @param {string} file
+ *  @returns {Array<{job:string, at:string, reason:string, log_hint:string, count:number}>} */
+function readAlertRecords(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+  } catch {
+    return [];
+  }
+  let text;
+  try {
+    const st = fs.fstatSync(fd); // stat the OPEN fd — no stat→read TOCTOU
+    const start = st.size > ALERT_MAX_FILE_BYTES ? st.size - ALERT_MAX_FILE_BYTES : 0;
+    const len = st.size - start;
+    const buf = Buffer.alloc(len);
+    let off = 0;
+    while (off < len) {
+      const n = fs.readSync(fd, buf, off, len - off, start + off);
+      if (n === 0) break;
+      off += n;
+    }
+    text = buf.subarray(0, off).toString('utf8');
+    if (start > 0) {
+      const nl = text.indexOf('\n'); // the window may have split a record → drop that line
+      text = nl === -1 ? '' : text.slice(nl + 1);
+    }
+  } catch {
+    return [];
+  } finally {
+    fs.closeSync(fd);
+  }
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (line.trim() === '') continue;
+    let r;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue; // skip malformed
+    }
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    const n = Number(r.count);
+    const count = Number.isSafeInteger(n) && n >= 1 ? Math.min(n, ALERT_MAX_COUNT) : 1;
+    const str = (v) => String(v == null ? '' : v);
+    out.push({ job: str(r.job), at: str(r.at), reason: str(r.reason), log_hint: str(r.log_hint), count });
+  }
+  return out;
+}
+
 /** Minimal durable alert append (code-owned reason — no secrets, so no
  *  redaction/compaction machinery from src/core/alerts.js is needed; this must
  *  work even when the app tree is the thing being refused).
+ *
+ *  COLLAPSED + BOUNDED (WP-launcher-alert-bound, Table C). A launcher refusal is
+ *  correct but recurs on the OS schedule, so an unbounded writer grew alerts.jsonl
+ *  forever AND let one repeating refusal crowd every other job out of the app-side
+ *  newest-200 compaction. Two repairs, together because either alone is lossy:
+ *   - a consecutive identical (job, reason) collapses into the previous record's
+ *     `count` (C6/C7) — only the file's LAST record is a candidate, and the
+ *     original `at` is kept so the banner's "since <first>" still names the onset;
+ *     the digest sums `count` (C12), so the honest streak length survives;
+ *   - the same count/byte bounds the app-side writer applies are re-applied here
+ *     (C4/C5/C10).
+ *  Ordering mirrors appendAlert and is load-bearing: append the new record
+ *  ATOMICALLY first so this process never loses its own fail-loud record to a
+ *  concurrent compaction (C8), skip the rewrite entirely on an empty read-back
+ *  because that means the read FAILED rather than the log being empty (C9), then
+ *  budget count-first, bytes-second, always keeping at least the newest record (C10).
  *  @param {{state:string}} p @param {string} job @param {string} reason */
 function appendRefuseAlert(p, job, reason) {
   try {
@@ -189,15 +273,53 @@ function appendRefuseAlert(p, job, reason) {
     } catch {
       /* no existing file */
     }
-    const record = { job, at: new Date().toISOString(), reason, log_hint: '' };
+    const record = { job, at: new Date().toISOString(), reason, log_hint: '', count: 1 };
     fs.appendFileSync(file, `${sep}${JSON.stringify(record)}\n`);
-    if (process.platform !== 'win32') {
-      try {
-        fs.chmodSync(file, 0o600);
-      } catch {
-        /* best-effort */
+    const chmod = () => {
+      if (process.platform !== 'win32') {
+        try {
+          fs.chmodSync(file, 0o600);
+        } catch {
+          /* best-effort */
+        }
+      }
+    };
+    chmod(); // the append may have CREATED the file under umask
+    let size = 0;
+    try {
+      size = fs.statSync(file).size;
+    } catch {
+      size = 0;
+    }
+    const rows = readAlertRecords(file);
+    if (rows.length === 0) return; // C9 — the read failed; leave the appended file intact
+    // C6/C7 — collapse ONLY the just-appended record into its immediate predecessor,
+    // and only on an exact (job, reason) match compared with === on parsed strings.
+    // A non-adjacent match is left alone: merging it would reorder the log and break
+    // the oldest-first contract formatAlerts relies on for "last wins" on the reason.
+    let collapsed = false;
+    if (rows.length >= 2) {
+      const last = rows[rows.length - 1];
+      const prev = rows[rows.length - 2];
+      if (prev.job === last.job && prev.reason === last.reason) {
+        prev.count = Math.min(prev.count + 1, ALERT_MAX_COUNT); // prev.at (the FIRST occurrence) is kept
+        rows.pop();
+        collapsed = true;
       }
     }
+    if (!collapsed && rows.length <= ALERT_MAX_RECORDS && size <= ALERT_MAX_FILE_BYTES) return;
+    // C10 — count budget first, then byte budget; never drop the newest record.
+    let kept = rows.slice(Math.max(0, rows.length - ALERT_MAX_RECORDS));
+    const serialize = (rw) => rw.map((a) => JSON.stringify(a)).join('\n') + '\n';
+    let text = serialize(kept);
+    while (kept.length > 1 && Buffer.byteLength(text) > ALERT_MAX_FILE_BYTES) {
+      kept = kept.slice(1); // drop oldest
+      text = serialize(kept);
+    }
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, text, { mode: 0o600 });
+    fs.renameSync(tmp, file); // atomic replace (mirrors appendAlert/clearAlerts)
+    chmod();
   } catch {
     /* the alert is best-effort — the refusal (non-zero exit, zero spawn) stands regardless */
   }
@@ -552,7 +674,7 @@ function main(argv, opts = {}) {
   return code;
 }
 
-module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, main };
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, appendRefuseAlert, main };
 
 // When the vendored copy at <core>/launcher/launch.js is executed by the OS
 // scheduler, run main with the real argv.

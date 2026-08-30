@@ -6,6 +6,7 @@ const { defaultLayout } = require('./layout');
 const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 const { parse, readBool, INVALID } = require('./frontmatter');
 const { hashBytes, foldKey } = require('./identity-approvals');
+const { MAX_COUNT } = require('./alerts');
 // Module-object require (not destructured): EP4's test seam stubs
 // secretScan.scanAndRedact to prove a failing scanner omits, never throws.
 const secretScan = require('./secret-scan');
@@ -287,11 +288,21 @@ function newestDaily(dir) {
  */
 function formatAlerts(alerts) {
   if (!alerts || alerts.length === 0) return '';
+  // The banner counts FAILURES, not rows (WP-launcher-alert-bound, Table C12): the
+  // launcher collapses a repeating identical refusal into one row carrying the streak
+  // in `count`, so summing rows would understate a real recurring failure. `count` is
+  // parsed input, so coerce it fail-closed BEFORE the arithmetic — mirroring
+  // sanitizeAlert (Table C2) for callers that pass records readAlerts did not
+  // sanitize, and reading a pre-WP record with no `count` as 1 (Table C13).
+  const countOf = (a) => {
+    const n = Number(a && a.count);
+    return Number.isSafeInteger(n) && n >= 1 ? Math.min(n, MAX_COUNT) : 1;
+  };
   /** @type {Map<string, {count:number, first:string, lastReason:string, hint:string}>} */
   const byJob = new Map();
   for (const a of alerts) {
     const cur = byJob.get(a.job) || { count: 0, first: a.at, lastReason: a.reason, hint: a.log_hint };
-    cur.count += 1;
+    cur.count = Math.min(cur.count + countOf(a), MAX_COUNT); // clamp the SUM too: 200 rows at MAX_COUNT stays a safe integer
     if (a.at < cur.first) cur.first = a.at;
     cur.lastReason = a.reason; // alerts are oldest-first → last wins
     cur.hint = a.log_hint;
