@@ -16,8 +16,8 @@ epic: digest-delivery
 Wienerdog renders a **digest** — `~/.wienerdog/state/digest.md`, produced by
 `renderDigest` in `src/core/digest.js` — and delivers it into every AI session. After
 `WP-managed-block-by-reference`, Claude Code gets it by **reference**: the managed
-block in `~/.claude/CLAUDE.md` holds a fixed preamble plus one `@<abs path>` import
-line, and nothing else. Codex, which has **no** include syntax in `AGENTS.md`, still
+block in `~/.claude/CLAUDE.md` holds a fixed preamble plus **two** `@<abs path>` import
+lines — the digest, then the refusal banner — and nothing else. Codex, which has **no** include syntax in `AGENTS.md`, still
 gets the whole digest copied into its block.
 
 **IRON RULE (ADR-0004): Wienerdog is just files.** This WP changes how one file's
@@ -154,13 +154,13 @@ import of `state/digest.md`. `src/adapters/codex.js` still copies the whole dige
 | modify | src/core/digest.js | `renderDigestParts`; `renderDigest` keeps its signature and composes from it |
 | modify | src/cli/sync.js | write both files; pass the stable text to the adapters |
 | modify | src/cli/dream.js | `regenerateDigest` writes both files |
-| modify | src/core/private-fs.js | add **both** `'digest-stable.md'` and `'digest-volatile.md'` to `A5_PRIVATE_FILE_BASENAMES` (E5) |
+| modify | src/core/private-fs.js | add **all three** of `'digest-stable.md'`, `'digest-volatile.md'`, `'digest-prefix.md'` to `A5_PRIVATE_FILE_BASENAMES` (E5) |
 | modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it (precedent: `docs/specs/done/WP-attended-alert-acknowledgement.md`) |
 | modify | src/adapters/claude.js | import the **volatile** file; inline the stable text (Table E) |
-| modify | src/adapters/codex.js | copy the **stable** text only |
+| modify | src/adapters/codex.js | `buildCodexBlock({prefix, stable, pointerLine})` reading `digest-prefix.md` + `digest-stable.md`; E7a order and 24 KiB cap |
 | modify | tests/unit/digest.test.js | apportionment, caps, part membership |
 | modify | tests/unit/claude-adapter.test.js | block shape |
-| modify | tests/unit/codex-adapter.test.js | stable-only copy |
+| modify | tests/unit/codex-adapter.test.js | `buildCodexBlock` order, the 24 KiB cap, the maximum-size fixture |
 | modify | tests/golden/claude-adapter/CLAUDE.md | new block shape |
 | modify | tests/golden/codex-adapter/AGENTS.md | stable-only content |
 
@@ -198,10 +198,12 @@ The single place these facts are decided.
 | E1 | Stable membership | The four injected identity sections (`profile.md`, `preferences.md`, `goals.md`, `instructions.md`) that pass the ADR-0021 hash gate, the provenance gate and the EP4 secret scan. Nothing else, ever |
 | E2 | Volatile membership | Every banner in the prefix (refusal, identity-exclusion, alerts, transcript quarantine, secret quarantine, insecure modes, scheduler, update), `## Active projects`, and the fenced `## Latest daily log` |
 | E3 | `digest.md` | **Unchanged** — still the full render (`prefix` + `stable` + `volatile`, E11), still `writeFilePrivate` 0600, still byte-identical to today for a given input. `tests/golden/digest-default.md` is frozen |
-| E4 | New files | `<core>/state/digest-stable.md` = the `stable` body alone (no prefix). `<core>/state/digest-volatile.md` = `prefix` + `volatile` body — the banners ride with the volatile half, because they are the part that must stay fresh. Both `writeFilePrivate` 0600, both written by the same two callers that write `digest.md` |
-| E5 | Privacy | `'digest-stable.md'` **and** `'digest-volatile.md'` both join `A5_PRIVATE_FILE_BASENAMES`. Adding either **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
+| E4 | New files | **Three**, all `writeFilePrivate` 0600, all written by the same two callers that write `digest.md`: `<core>/state/digest-stable.md` = the `stable` body alone (no prefix); `<core>/state/digest-volatile.md` = `prefix` + `volatile` body (the banners ride with the volatile half, because they are the part that must stay fresh); `<core>/state/digest-prefix.md` = the `prefix` alone |
+| E4a | Why `digest-prefix.md` exists | The Codex compositor (E7) needs the banners **without** the projects list and daily log, and Codex cannot import — so it must read them from a file. Deriving them by parsing `digest-volatile.md` would mean re-implementing the prefix/body boundary in a second place. Writing the prefix once, as its own artifact, keeps `renderDigestParts` the single decider. The prefix bytes therefore appear in both `digest-volatile.md` and `digest-prefix.md`; both are 0600 in-core derived artifacts, so the duplication costs nothing and removes a parser |
+| E5 | Privacy | `'digest-stable.md'`, `'digest-volatile.md'` **and** `'digest-prefix.md'` all join `A5_PRIVATE_FILE_BASENAMES`. Adding any of them **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
 | E6 | Claude block | Preamble + the **stable** text inline + one blank line + **two** import lines: `@<abs path to digest-volatile.md>` then `@<abs path to refusal-banner.md>`. The banner keeps its own import (Table D, D2a) because it must stay fresh precisely when nothing is re-rendering the digest |
-| E7 | Codex block | Preamble + the **stable** text + the **code-owned state-derived banners** (the `prefix`: refusal, identity-exclusion, alerts, transcript quarantine, secret quarantine, insecure modes, scheduler, update) as of the last sync. **Not** the projects list and **not** the daily log. No import line (Codex has none). The pointer line is added by `WP-codex-block-pointer-line`. Amended in round 2 by finding F7 (D3 amended 2026-08-30): making *all* volatile content absent removed Codex's proactive warnings, which is a fail-loud regression, not a fail-safe one |
+| E7 | Codex block | Composed by `buildCodexBlock({prefix, stable, pointerLine})` in `src/adapters/codex.js`, which reads **`digest-prefix.md`** and **`digest-stable.md`** (never `digest-volatile.md`, which carries the projects list and daily log). Order and budget are fixed by E7a. No import line — Codex has none. Amended in round 2 by finding F7 (D3 amended 2026-08-30): making *all* volatile content absent removed Codex's proactive warnings, which is a fail-loud regression, not a fail-safe one |
+| E7a | Codex block order and cap | **Order:** preamble, then the banners (`prefix`), then the pointer line, then the **stable** identity truncated into whatever remains, with the standard `DigestCaps.TRUNCATION_MARKER`. **Cap: 24 KiB for the whole composed block.** Codex's `project_doc_max_bytes` default is 32 KiB **combined across documents**, and the user's own `AGENTS.md` content shares that budget — so Wienerdog takes at most three quarters and leaves ~8 KiB for the user. The order is the priority order: a warning the user must see outranks identity they mostly already know, and identity is the only component allowed to truncate |
 | E8 | Line cap | `MAX_LINES` 120 applies to **each** rendered file independently. The volatile render reserves its prefix lines exactly as `capDigest` does today; the stable render has no prefix, so its whole budget is body |
 | E9 | Byte cap | `MAX_BYTES` 32 KiB applies to **each** rendered file independently, with the same prefix reservation rule as E8 |
 | E10 | Truncation marker | Unchanged text, appended independently to whichever half truncates |
@@ -248,6 +250,7 @@ discipline is on, and Table E above is the canonical table.
   | `digest.md` (E3, frozen) | `prefix` + `stable` + `volatile` | `prefix` |
   | `digest-volatile.md` (E4) | `prefix` + `volatile` | `prefix` |
   | `digest-stable.md` (E4) | `stable` | `''` |
+  | `digest-prefix.md` (E4) | `prefix` | `''` |
 
   Never call `capDigest` on a concatenation and then split the result — that apportions
   the budget by accident and silently changes `digest.md`'s bytes, breaking E3.
@@ -267,10 +270,22 @@ discipline is on, and Table E above is the canonical table.
   skipped, a previous run's content stays on disk and gets imported into a session as
   though current. Write the empty file.
 - **The adapters read the files they need, not the full digest.** After this WP,
-  `claude.js` reads `digest-stable.md` for the inline half and points its import at
-  `digest-volatile.md`; `codex.js` reads `digest-stable.md` only. The existing
-  "digest not found → skip the block with a notice" precondition applies to
+  `claude.js` reads `digest-stable.md` for the inline half and points its two imports at
+  `digest-volatile.md` and `refusal-banner.md`; `codex.js` reads **`digest-prefix.md`
+  and `digest-stable.md`** and composes them through `buildCodexBlock` (E7, E7a). The
+  existing "digest not found → skip the block with a notice" precondition applies to
   `digest-stable.md` for both.
+- **`buildCodexBlock` is a real compositor, not a concatenation (round-3 R8).** Round 2
+  left E7/AC-9 saying the Codex block carries stable identity *plus* banners while the
+  Deliverables and notes still said `codex.js` copies `digest-stable.md` only — the
+  table and its own mirrors disagreed. Give it an explicit signature, an explicit pair
+  of input files, and the E7a order, so there is one answer.
+- **The 24 KiB cap is on the FINAL block, after composition (round-3 R9, E7a).** Each
+  rendered component already has its own 32 KiB budget (E9), so concatenating three of
+  them can exceed Codex's 32 KiB *combined* `project_doc_max_bytes` on its own — before
+  the user's `AGENTS.md` content is counted at all. Cap the composed block, and truncate
+  **only** the stable identity tail; the banners and the pointer line are never dropped
+  to make room.
 - When uncertain: choose the simpler option and record it under "Decisions made" in the
   PR body. Do NOT expand scope.
 
@@ -311,16 +326,19 @@ discipline is on, and Table E above is the canonical table.
       and its exclusion banner appears in `volatile` (E1, E2).
 - [ ] AC-4 — A distinctive token in the fixture's daily note appears in
       `digest-volatile.md` and in **neither** `CLAUDE.md` nor `AGENTS.md`.
-- [ ] AC-5 — Both new files are written on every `sync` and every `dream`
+- [ ] AC-5 — All **three** new files are written on every `sync` and every `dream`
       `regenerateDigest`, with mode 0600 on POSIX (E4).
-- [ ] AC-6 — **Both** `'digest-stable.md'` and `'digest-volatile.md'` are members of
-      `A5_PRIVATE_FILE_BASENAMES`, pinned by `tests/unit/private-fs.test.js` (E5).
+- [ ] AC-6 — **All three** of `'digest-stable.md'`, `'digest-volatile.md'` and
+      `'digest-prefix.md'` are members of `A5_PRIVATE_FILE_BASENAMES`, pinned by
+      `tests/unit/private-fs.test.js` (E5).
 - [ ] AC-7 — An empty half still produces a written, empty file (E12).
-- [ ] AC-8 — The Claude block is preamble + stable text + one import line pointing at
-      `digest-volatile.md`; the updated golden matches (E6).
-- [ ] AC-9 — The Codex block is preamble + stable text + the **prefix banners** as of
-      the last sync, with **no** import line and **no** projects list or daily log; the
-      updated golden matches (E7).
+- [ ] AC-8 — The Claude block is preamble + stable text + **two** import lines, in
+      order: `digest-volatile.md` then `refusal-banner.md`; the updated golden matches
+      (E6, and Table D rows D2/D2a in `WP-managed-block-by-reference`).
+- [ ] AC-9 — The Codex block is produced by `buildCodexBlock({prefix, stable,
+      pointerLine})` reading `digest-prefix.md` and `digest-stable.md`, in the E7a order
+      — preamble, banners, pointer line, stable identity — with **no** import line and
+      **no** projects list or daily log; the updated golden matches (E7, E7a).
 - [ ] AC-9a — A fixture with an active alert renders that alert's banner **into** the
       Codex golden (F7: Codex keeps proactive warnings), while the same fixture's daily
       log token appears in neither user-owned file (AC-4).
@@ -333,6 +351,12 @@ discipline is on, and Table E above is the canonical table.
 - [ ] AC-13 — A planted secret in an approved identity note omits that section and
       raises the exclusion banner, exactly as today.
 - [ ] AC-14 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
+- [ ] AC-15 — **Maximum-size fixture (round-3 R9).** With a `prefix` and a `stable` half
+      each near their own 32 KiB budget, the composed Codex block is **≤ 24 KiB**, the
+      banners and the pointer line are **fully present**, and only the stable identity is
+      truncated — carrying `DigestCaps.TRUNCATION_MARKER` (E7a).
+- [ ] AC-16 — `digest-prefix.md` contains the banner prefix alone: no `## Active
+      projects`, no `## Latest daily log`, no identity sections (E4, E4a).
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -345,8 +369,10 @@ npm run lint
 git diff --stat -- tests/golden/digest-default.md
 # AC-4 — no daily-log content in either user-owned file (expect NO output):
 grep -rn "Latest daily log" tests/golden/claude-adapter tests/golden/codex-adapter
-# E5 — both basenames registered:
-grep -n "digest-stable.md\|digest-volatile.md" src/core/private-fs.js
+# E5 — all three basenames registered and pinned:
+grep -n "digest-stable.md\|digest-volatile.md\|digest-prefix.md" src/core/private-fs.js tests/unit/private-fs.test.js
+# E7/E7a — the Codex compositor reads prefix+stable, never the volatile file:
+grep -n "buildCodexBlock\|digest-prefix.md\|digest-volatile.md" src/adapters/codex.js
 # E6/E7 — two import lines for Claude, none for Codex:
 grep -c "^@" tests/golden/claude-adapter/CLAUDE.md   # expect 2
 grep -c "^@" tests/golden/codex-adapter/AGENTS.md    # expect 0
@@ -413,3 +439,27 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
     membership by value and the boundary check rejects the PR without it.
   - **E6.** The Claude block now carries **two** import lines (volatile digest, refusal
     banner) per the F1 resolution in `WP-managed-block-by-reference`.
+- **2026-08-30 — Codex round-2 findings R7, R8, R9 (owner: ACCEPTED).**
+  - **R7.** AC-8 still described **one** import line, contradicting round 2's own F1
+    resolution (two: volatile digest, then refusal banner). Fixed here and in the Context
+    paragraph; the chain-wide grep for `@` lines and `buildReferenceBody(` is in the PR
+    body.
+  - **R8 — the round-2 F7 fix contradicted its own mirrors.** E7 and AC-9 said the Codex
+    block carries stable identity **plus** banners, while the Deliverables row and the
+    implementation notes still said `codex.js` copies `digest-stable.md` **only**, and
+    the GLOSSARY and ADR-0039 still said volatile banners are absent on Codex. Resolved
+    with an explicit compositor: **`buildCodexBlock({prefix, stable, pointerLine})`** in
+    `src/adapters/codex.js`, reading **`digest-prefix.md`** and **`digest-stable.md`**.
+    That required a **third** rendered file (new **E4**, rationale in **E4a**): the
+    compositor needs the banners without the projects list and daily log, and parsing
+    them back out of `digest-volatile.md` would re-implement the prefix/body boundary in
+    a second place. `A5_PRIVATE_FILE_BASENAMES` gains all three (E5); AC-5, AC-6, AC-9
+    and the capDigest table updated; new AC-16.
+  - **R9 — the Codex block could exceed Codex's own limit.** Each component carries its
+    own 32 KiB budget (E9), so concatenating three of them can pass Codex's 32 KiB
+    *combined* `project_doc_max_bytes` before the user's own `AGENTS.md` content is
+    counted. New **E7a**: the composed block is capped at **24 KiB** — three quarters of
+    the combined budget, leaving ~8 KiB for the user — in the priority order preamble,
+    banners, pointer line, stable identity, with only the identity tail allowed to
+    truncate and the standard truncation marker applied. New AC-15 is a maximum-size
+    fixture asserting the banners survive.

@@ -254,7 +254,7 @@ The second target is normally **absent** on disk, and is skipped silently when i
 
 | Gate | Blocked until | Why |
 |------|---------------|-----|
-| R2 — does a hermetic run load user-level `CLAUDE.md`? | `WP-memory-import-hermetic-canary` reaches **Done**, whose criteria are disjunctive: either *"not loaded — recorded"*, **or** *"loaded — and `WP-hermetic-user-memory-suppression` is merged"* | Round 2 finding F4: a canary whose adverse verdict has no consequence is a measurement, not a gate. If user memory **is** loaded hermetically, the managed block already carries the digest into the dream's own brain, and this WP would change *which* digest reaches it. That must be resolved, not noted, before the block shape changes |
+| R2 — does a hermetic run load user-level `CLAUDE.md`? | `WP-memory-import-hermetic-canary` is **Done** **AND** ( its verdict is **not loaded** **OR** `WP-hermetic-user-memory-suppression` is **Done** ) | Round-2 finding F4: a canary whose adverse verdict has no consequence is a measurement, not a gate. If user memory **is** loaded hermetically, the managed block already carries the digest into the dream's own brain, and this WP would change *which* digest reaches it — that must be resolved, not noted, before the block shape changes. Round-3 finding R6 moved the conditional **here**, onto the consumer: round 2 had put it in the canary's own Done criteria, which made the canary wait on its own descendant (a cycle). The gate is unchanged in strength; only its location moved |
 
 ### Table D — the Claude Code managed-block delivery contract
 
@@ -365,8 +365,9 @@ the spot:
 ## Acceptance criteria
 
 - [ ] AC-1 — With a digest present, the block equals
-      `buildBlock(buildReferenceBody(digestAbsPath))` byte-for-byte, and the updated
-      golden matches (D1).
+      `buildBlock(buildReferenceBody(digestAbsPath, bannerAbsPath))` byte-for-byte —
+      **both** arguments, **both** import lines — and the updated golden matches
+      (D1, D2, D2a).
 - [ ] AC-2 — The block contains exactly **two** lines beginning with `@`: the absolute
       digest path, then the absolute refusal-banner path, in that order, neither
       indented nor fenced (D2, D2a, D3).

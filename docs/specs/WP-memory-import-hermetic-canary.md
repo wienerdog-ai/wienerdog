@@ -39,14 +39,20 @@ whose adverse outcome had no consequence — "report, do not decide" — which i
 gate at all. It now is one. `WP-managed-block-by-reference` depends on this WP, and
 this WP's Done criteria are **disjunctive**:
 
-| Verdict | This WP is Done when |
-|---------|----------------------|
-| **not loaded** | the finding is recorded in the logbook entry (below) |
-| **loaded** | the finding is recorded **and** `WP-hermetic-user-memory-suppression` is merged |
+**This WP is Done when the measurement is recorded — under either verdict.** Round 2
+made Done depend on `WP-hermetic-user-memory-suppression` being merged, while that WP
+`depends_on` this one: a **dependency cycle** neither could exit (Codex round-2 R6).
+The gate lives on the *consumer* instead:
 
-So an adverse measurement stops the block-shape work until it is resolved, rather than
-being noted and stepped over. "Report, do not decide" still governs *this* WP's code —
-you do not change `composeClaudeArgs` here — but the reporting now has teeth.
+| Verdict | This WP | `WP-managed-block-by-reference` proceeds when |
+|---------|---------|----------------------------------------------|
+| **not loaded** | Done once the finding is recorded | this WP is Done |
+| **loaded** | Done once the finding is recorded **and** `WP-hermetic-user-memory-suppression`'s Current state is filled in | this WP is Done **and** `WP-hermetic-user-memory-suppression` is Done |
+
+So an adverse measurement still stops the block-shape work until it is resolved, but it
+stops it at the WP that would ship the change — not by making this WP wait on its own
+descendant. "Report, do not decide" still governs *this* WP's code — you do not change
+`composeClaudeArgs` here — but the reporting now has teeth.
 
 Two outcomes, and both are actionable:
 
@@ -132,6 +138,7 @@ registers per-harness scripts (`scenarios`, `scenarios:negative`, `broker:selfch
 | create | tests/scenarios/memory-canary/README.md | how to run it, what each verdict means |
 | modify | package.json | add `"scenarios:memory-canary"` script only |
 | create | docs/specs/logbook/2026-08-30-hermetic-user-memory-canary.md | the recorded finding, filled in after the run |
+| modify | docs/specs/WP-hermetic-user-memory-suppression.md | **adverse branch only** — fill in its Current-state placeholder with the measured fact (AC-9). On the *not loaded* branch, flip its `status:` to `Superseded` with a one-line pointer to the logbook entry |
 
 **Note on the logbook file:** create it in the same PR with the measured result. It is
 the deliverable — a probe whose finding is not written down has not gated anything.
@@ -241,10 +248,11 @@ as an amendment candidate for ADR-0025.
       sentence on what it means for ADR-0025 and ADR-0039 §2.
 - [ ] AC-9 — **The gate is honoured (round-2 finding F4).** If case A reports
       **loaded**, `WP-hermetic-user-memory-suppression`'s Current-state placeholder is
-      filled in with the measured fact in this same PR, and this WP's `status:` is
-      **not** advanced past `In-Review` until that WP is merged. If case A reports **not
-      loaded**, say so explicitly in the PR body and in the logbook entry, and note that
-      the suppression WP is not needed.
+      filled in with the measured fact **in this same PR** — that is this WP's whole
+      obligation to the adverse branch, and it is what lets this WP reach Done without
+      waiting on its own descendant. If case A reports **not loaded**, say so explicitly
+      in the PR body and in the logbook entry, and close the suppression WP as
+      `Superseded` with a one-line pointer to the logbook entry.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -290,3 +298,13 @@ grep -n "composeClaudeArgs\|getProfile" tests/scenarios/memory-canary/run-memory
   Current-state placeholder this WP fills in with the measured fact; new **AC-9** pins
   the gate. The "report, do not decide" discipline still governs this WP's own code —
   what changed is that the report now stops the chain instead of annotating it.
+- **2026-08-30 — Codex round-2 finding R6 (owner: ACCEPTED).** Round 2 created a
+  **dependency cycle**: this WP's Done criteria required
+  `WP-hermetic-user-memory-suppression` to be merged, while that WP `depends_on` this
+  one — neither could ever start. Fixed by moving the conditional onto the **consumer**:
+  this WP is Done once the measurement is recorded under either verdict (plus, on the
+  adverse branch, filling in the successor's Current-state placeholder), and
+  `WP-managed-block-by-reference`'s Blocked-by row carries the disjunction. Same gate,
+  no cycle. AC-9 reworded accordingly. **From the round-3 AC-to-Deliverables consistency
+  pass:** AC-9 requires editing `WP-hermetic-user-memory-suppression.md`, which was not
+  in the Deliverables — an unsatisfiable criterion under the permission boundary. Added.

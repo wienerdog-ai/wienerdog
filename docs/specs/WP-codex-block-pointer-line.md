@@ -22,9 +22,9 @@ symlinks into `~/.codex/skills/`.
 text to one generated block. It adds no process.
 
 **Where the chain has got to.** `WP-managed-block-by-reference` made Claude Code's
-block a **reference**: a preamble plus one `@<abs path>` memory import, so the block's
-bytes change only at an attended `wienerdog sync` while the content follows the
-digest file. `WP-digest-stable-volatile-split` then split the render in two — the
+block a **reference**: a preamble plus two `@<abs path>` memory imports (the volatile
+digest, then the refusal banner), so the block's bytes change only at an attended
+`wienerdog sync` while the content follows those files. `WP-digest-stable-volatile-split` then split the render in two — the
 **stable digest** (the ADR-0021 hash-gated identity notes, human-ratified byte-for-byte)
 and the **volatile digest** (banners, `## Active projects`, and the ADR-0032
 untrusted-fenced latest daily log) — and established that only the stable half is ever
@@ -131,7 +131,8 @@ normalizer used for Windows-safe paths.
 | modify | src/adapters/codex.js | append the pointer lines to the block body; fix the false hook-trust notice |
 | modify | src/adapters/shared.js | `buildPointerLines(digestAbsPath)` |
 | modify | tests/golden/codex-adapter/AGENTS.md | block with the pointer lines |
-| modify | tests/unit/codex-adapter.test.js | pointer content, idempotence, notice wording |
+| modify | tests/unit/codex-adapter.test.js | pointer content, E7a order, the 24 KiB cap, idempotence, notice wording |
+| modify | tests/unit/refusal-banner-delivery.test.js | un-skip and complete the chain end-to-end assertion (AC-11) |
 
 **Golden files:** you **DO** have permission to update
 `tests/golden/codex-adapter/AGENTS.md`, and only that one.
@@ -172,7 +173,8 @@ activity is not injected automatically — the block names the file to read inst
 | Row | Fact | Value |
 |-----|------|-------|
 | F1 | Applies to | Harnesses with **no** import mechanism. Today: Codex only. Never emitted into the Claude Code block, which imports instead |
-| F2 | Position | Last element of the block body: stable text, the state-derived banners (Table E, E7), one blank line, then the pointer paragraph |
+| F2 | Position | The composed block order is fixed by `WP-digest-stable-volatile-split` **Table E row E7a**: preamble, banners, **pointer paragraph**, then the stable identity. The pointer line sits **before** the identity, not last — round 3 (finding R9) made the order a priority order, because identity is the only component allowed to truncate under the 24 KiB cap and a pointer that truncates away is worse than useless |
+| F2a | Block cap | The whole composed Codex block is capped at **24 KiB** (Table E, E7a), leaving ~8 KiB of Codex's 32 KiB combined `project_doc_max_bytes` for the user's own `AGENTS.md`. The pointer paragraph is **never** the component that truncates |
 | F3 | Path | The **absolute** path to `<core>/state/digest.md` — the full render, not `digest-volatile.md`, because a human or model reading one file should get the whole picture |
 | F4 | Path separators | Forward slashes on every platform, via `toPosixCommand` |
 | F5 | Path rendering | Inside backticks, so a path with spaces reads correctly and markdown does not mangle it |
@@ -231,9 +233,12 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
 
 ## Acceptance criteria
 
-- [ ] AC-1 — The Codex block ends with the literal paragraph from Exact contracts,
-      preceded by one blank line after the stable text; the updated golden matches
-      (F2).
+- [ ] AC-1 — The composed Codex block carries the literal paragraph from Exact
+      contracts in the E7a order — preamble, banners, **pointer paragraph**, stable
+      identity — and the updated golden matches (F2).
+- [ ] AC-1a — **Under the cap (round-3 R9).** With oversized inputs the composed block
+      is ≤ 24 KiB, the pointer paragraph and the banners are fully present, and only the
+      stable identity is truncated (F2a, Table E E7a).
 - [ ] AC-2 — The path in the paragraph is the absolute path to `state/digest.md`,
       backtick-wrapped, forward-slashed (F3, F4, F5).
 - [ ] AC-3 — The block contains **no** date, time, or "as of" text; two consecutive
@@ -251,6 +256,15 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
       any (F7, Table E E7).
 - [ ] AC-9 — `buildPointerLines` throws on a relative path.
 - [ ] AC-10 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
+- [ ] AC-11 — **The chain's end-to-end test, NOT skipped (round-3 R7).** This is the
+      last WP in the digest-delivery chain, so it owns the assertion that the whole
+      thing works: with `app/current` unresolvable, the launcher having refused, and the
+      Claude Code SessionStart hook **de-registered**, the refusal banner reaches a
+      Claude Code session through the block's **second import line**. Assert on the
+      resolved artifacts — the block's banner import line points at a concatenated
+      banner file whose content is the refusal. `WP-refusal-banner-delivery`'s AC-12 was
+      allowed to land `skip`ped pending the block work; **this one may not be skipped**,
+      and if it cannot pass, the chain is not finished.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -308,3 +322,22 @@ grep -n "\[!warning\]" tests/golden/codex-adapter/AGENTS.md
   paragraph's wording ("only as fresh as the last `wienerdog sync`"), the corrected
   hook-trust notice, AC-8, the security checklist and the verification greps all follow.
   The constant pointer line and the no-timestamp rule (F6) are unchanged.
+- **2026-08-30 — Codex round-2 findings R7, R8 and R9 (owner: ACCEPTED).**
+  - **R9 — the block could exceed Codex's own limit, and the pointer could truncate
+    away.** Each rendered component carries its own 32 KiB budget, so the composed block
+    could pass Codex's 32 KiB *combined* `project_doc_max_bytes` before the user's own
+    `AGENTS.md` content is counted. New **F2a**: a 24 KiB cap on the composed block
+    (~8 KiB left for the user), and **F2 reordered** to the E7a priority order —
+    preamble, banners, **pointer**, identity — because identity is the only component
+    allowed to truncate and a pointer line that truncates away is worse than no pointer
+    at all. New AC-1a with an oversized fixture.
+  - **R8.** The block is now assembled by `buildCodexBlock({prefix, stable,
+    pointerLine})` (defined in `WP-digest-stable-volatile-split` Table E E7); this spec
+    supplies the `pointerLine` argument rather than appending text itself. Every
+    superseded "all volatile content is absent on Codex" statement was purged from the
+    GLOSSARY and ADR-0039 §3/Consequences in the same pass.
+  - **R7.** As the **last** WP in the chain, this spec now owns the **non-skipped**
+    end-to-end assertion (new AC-11): unresolvable `app/current` + hook de-registered →
+    the banner reaches the session through the block's second import.
+    `WP-refusal-banner-delivery`'s AC-12 remains the earlier, skip-permitted placeholder;
+    this one is the real gate, and un-skipping that test is a Deliverable here.

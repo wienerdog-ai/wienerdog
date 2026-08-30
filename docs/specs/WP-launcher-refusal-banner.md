@@ -183,13 +183,14 @@ implemented on `origin/wp/launcher-refusal-banner` (PR #174, HEAD `e17d638`), wh
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/launcher.js | per-job `writeRefusalBanner`; `clearRefusalBannerFor(p, job)` on a passing verdict before spawn; `rebuildRefusalBanner(p)` |
+| modify | src/scheduler/launcher.js | `entryFileName` (B14); `writeRefusalBanner`; `clearRefusalBannerFor`; `rebuildRefusalBanner`; the spawn-failure banner path (B16); the launcher lock (Table L) |
 | create | src/core/refusal-banner.js | app-side read + whole-directory clear. The launcher NEVER requires this |
-| modify | src/core/private-fs.js | `'refusal-banner.md'` in `A5_PRIVATE_FILE_BASENAMES`; the `refusal-banner/` dir in the A5 dirs set |
+| modify | src/core/private-fs.js | `'refusal-banner.md'` in `A5_PRIVATE_FILE_BASENAMES`; `refusal-banner/` **and** `launcher.lock/` in the A5 dirs set (B13) |
 | modify | tests/unit/private-fs.test.js | **required** — it pins A5 membership by value; the boundary check rejects the PR without it |
-| modify | src/cli/sync.js | clear the whole directory **after** `manifestMod.save`; render this sync's digest banner-free |
+| modify | src/cli/sync.js | clear the whole directory **after** `manifestMod.save`, **only on a clean reconciliation** (B17); render the digest banner-free only in that same case |
 | create | tests/unit/refusal-banner.test.js | app-side reader/clearer |
-| modify | tests/unit/launcher.test.js | per-job write, clear-on-verify, rebuild, cross-job isolation, failure swallowing |
+| modify | tests/unit/launcher.test.js | per-job write, clear-after-spawn, rebuild, cross-job isolation, filename collisions, spawn-failure paths, lock contention + stale takeover |
+| modify | tests/unit/sync-repoint.test.js | B17: a failed descriptor write leaves entries in place and the digest carries the banner |
 
 **Removed from round 1:** `src/cli/run-job.js` is **no longer a deliverable**. If your
 branch carries the round-1 `clearRefusalBanner` call there, delete it and its `require`
@@ -222,46 +223,85 @@ function clearRefusalBanner(paths)
 ```js
 // src/scheduler/launcher.js — self-contained; Node built-ins only (Table B, B9).
 
-/** Sanitize a job name into one safe path component (Table B, B14). Strip leading
- *  '-', replace every char outside [A-Za-z0-9._-] with '_', cut to 64 chars; an
- *  empty, '.' or '..' result becomes 'unknown'. '--catch-up' -> 'catch-up'.
- *  @param {string} job @returns {string} */
-function safeJobFile(job)
+/** The per-job entry filename (Table B, B14). INJECTIVE in practice: the hash is
+ *  taken over the RAW job name, so '--catch-up' and a job named 'catch-up' land in
+ *  different files, and two names sharing a 48-char prefix do not collide.
+ *    '--catch-up'  -> '_catch-up-9f2a1c3d.md'
+ *    'catch-up'    -> 'catch-up-4b7e0a15.md'
+ *  @param {string} job the RAW job name, exactly as it arrived in argv
+ *  @returns {string} */
+function entryFileName(job)
+
+/** Acquire the launcher lock (Table L). Returns a release function, or null when the
+ *  lock could not be taken within the bounded wait — callers MUST handle null by
+ *  taking the L6 fallback, never by skipping their write.
+ *  @param {{state:string}} p @returns {(() => void)|null} */
+function acquireLauncherLock(p)
 
 /** Write THIS job's banner entry, then rebuild the concatenated file. Overwrites only
- *  this job's entry (B7); other jobs' entries are untouched. Atomic (temp + rename,
- *  with rmSync of the temp on rename failure — B5). Best-effort in EVERY step: a
- *  failure here must never affect the refusal, which stands on its non-zero exit and
- *  zero spawn (B8).
- *  @param {{state:string}} p @param {string} job @param {string} text refusalText() output */
+ *  this job's entry (B7). Atomic (B5). Takes the lock around the mutation + rebuild
+ *  (B1c); without the lock, still writes the entry and skips ONLY the rebuild (L6).
+ *  Best-effort throughout (B8).
+ *  @param {{state:string}} p @param {string} job @param {string} text */
 function writeRefusalBanner(p, job, text)
 
-/** Remove THIS job's entry (if any), then rebuild the concatenated file. Called
- *  immediately before spawn, once the job's verdict is ok (B10a). Best-effort.
+/** Remove THIS job's entry (if any), then rebuild. Called only AFTER a spawn returns
+ *  a numeric status (B10a/B15). Same lock discipline as the writer.
  *  @param {{state:string}} p @param {string} job */
 function clearRefusalBannerFor(p, job)
 
 /** Rebuild <core>/state/refusal-banner.md from the entries in
  *  <core>/state/refusal-banner/, joined by a blank line in SORTED FILENAME ORDER
  *  (B1a). With no entries, REMOVE the concatenated file rather than writing it empty
- *  (B1b). Best-effort; 0600 (B6).
+ *  (B1b). Caller holds the lock. Best-effort; 0600 (B6).
  *  @param {{state:string}} p */
 function rebuildRefusalBanner(p)
+
+/** The code-owned sentence for a spawn that never produced an exit status (B16).
+ *  Deliberately NOT refusalText(): verification PASSED here, so "integrity mismatch"
+ *  and the reinstall/sync remedies would all be false. Names no remedy — and, like
+ *  every launcher message, never names `wienerdog doctor` (F27).
+ *  @param {string} jobName @param {string} why 'spawn failed' | 'terminated by signal <sig>'
+ *  @returns {string} */
+function spawnFailureText(jobName, why)
 ```
 
+**`spawnFailureText` output**, for a job killed by SIGKILL:
+
+```text
+wienerdog: "dream" passed its integrity checks but could not be started — terminated by signal SIGKILL. No job ran. This alert will appear in your next digest.
+```
+
+**The spawn site after this WP** (B15, B16). Today it is three lines that collapse every
+non-numeric outcome into a silent `exit(1)`:
+
+```js
+const r = spawn(verdict.command, verdict.args, { stdio: 'inherit', env: childEnv });
+const code = r && typeof r.status === 'number' ? r.status : 1;
+exit(code);
+```
+
+It becomes: wrap the spawn in `try/catch`; on a throw, or on `r.status === null`, call
+`writeRefusalBanner(p, name, spawnFailureText(name, why))` and `appendRefuseAlert(p,
+name, …)` with the same sentence, write it to stderr, and `exit(1)`. Only on a numeric
+`r.status` — **any** number, including non-zero — call `clearRefusalBannerFor(p, name)`
+and `exit(r.status)`.
+
 **Literal expected content.** A catch-up refusal whose verdict reason is
-`cannot resolve app/current` writes `<core>/state/refusal-banner/catch-up.md`
-containing exactly one line plus a trailing newline:
+`cannot resolve app/current` writes `<core>/state/refusal-banner/_catch-up-9f2a1c3d.md`
+containing exactly one line plus a trailing newline (the filename carries the B14
+hash — `9f2a1c3d` below is illustrative, compute the real one):
 
 ```text
 > [!warning] wienerdog: refusing to run "--catch-up" — cannot resolve app/current (integrity mismatch); no job was run. This alert will appear in your next digest. Do not run `wienerdog sync` — this check could not confirm the app files are the ones you installed, so syncing is not the safe next step. Reinstall Wienerdog from a trusted source, then investigate.
 ```
 
 That is `> [!warning]`, one space, then the **folded** `refusalText()` output. Folding
-(Table B, B4) is the only transformation applied. With `catch-up.md` the sole entry,
+(Table B, B4) is the only transformation applied. With that entry alone,
 `<core>/state/refusal-banner.md` contains those same bytes. With a second entry
-`dream.md`, the concatenated file is `catch-up.md`'s line, a blank line, then
-`dream.md`'s line — sorted by filename, so `catch-up` precedes `dream`.
+`dream-4b7e0a15.md`, the concatenated file is the `_catch-up-…` line, a blank line, then
+the `dream-…` line — **sorted by filename**, and `_` sorts before `d` in the byte order
+`Array.prototype.sort()` uses by default, so the pseudo-job namespace groups first.
 
 ## Contract reference
 
@@ -275,29 +315,56 @@ module, the private-file set and the tests. Four of seven — the discipline is 
 ### Table B — the refusal banner contract
 
 This table is the single place these facts are decided. Every other statement in this
-spec, in the code, and in successor specs defers to it. **Rewritten in round 2** by
-Codex finding F5; rows B10–B12 replace an unconditional clearing rule that let one
-job's success erase another job's warning.
+spec, in the code, and in successor specs defers to it. **Rewritten in round 2** (Codex
+F5: per-job state) and **revised again in round 3** (Codex R1, R2/R5, R3, R4). Rows are
+internally consistent by construction: B10 names *when* each clearer runs, B10a/B10b
+name *what* each one requires first, and B11 states the scope rule they both obey.
 
 | Row | Fact | Value |
 |-----|------|-------|
-| B1 | Per-job entry | `<core>/state/refusal-banner/<safe-job>.md` — one file per job, the source of truth |
-| B1a | Concatenated file | `<core>/state/refusal-banner.md` — a **derived** artifact: every entry, joined by a blank line, in **sorted filename order**. Rebuilt by whoever mutates the directory, immediately after the mutation. This is the single path every reader and the Claude Code import point at, because an `@import` cannot glob a directory |
+| B1 | Per-job entry | `<core>/state/refusal-banner/<entry-name>.md` — one file per job, the source of truth |
+| B1a | Concatenated file | `<core>/state/refusal-banner.md` — a **derived** artifact: every entry, joined by a blank line, in **sorted filename order**. Rebuilt from the directory after every mutation. This is the single path every reader and the Claude Code import point at, because an `@import` cannot glob a directory |
 | B1b | Empty directory | No entries → the concatenated file is **removed**, not written empty. A missing import target is skipped silently, which is the healthy state |
-| B2 | Sole writer | `writeRefusalBanner` in `src/scheduler/launcher.js`, called from `refuse()` only |
-| B3 | Entry content | Exactly one line: `> [!warning]`, one space, then the folded `refusalText()` output, then one `\n`. Nothing else — no frontmatter, no second line |
-| B4 | Folding | Replace every run of `\s+` with a single space, then trim. Then hard-cut to **2000** characters (matching `MAX_FIELD_CHARS` in `src/core/alerts.js`). Applied to the `refusalText()` output before the `> [!warning]` prefix (with its trailing space) is added |
-| B5 | Write mode | Atomic: write `<path>.<pid>.tmp` then `renameSync` onto the target. `mkdirSync` the directory `recursive:true, mode:0o700` first. **On a rename failure, `fs.rmSync(tmp, {force:true})`** so a failed write leaves no orphan temp beside the artifact (Codex P2) |
+| B1c | Mutation lock | Every banner-directory mutation **and** its rebuild happen while holding the launcher lock (Table L). A writer that cannot acquire the lock still writes its own entry and **skips only the rebuild** (Table L, L6) |
+| B2 | Sole writer | `writeRefusalBanner` in `src/scheduler/launcher.js`, called from `refuse()` and from the spawn-failure path (B16) |
+| B3 | Entry content | Exactly one line: `> [!warning]`, one space, then the folded reason, then one `\n`. Nothing else — no frontmatter, no second line |
+| B4 | Folding | Replace every run of `\s+` with a single space, then trim. Then hard-cut to **2000** characters (matching `MAX_FIELD_CHARS` in `src/core/alerts.js`). Applied before the `> [!warning]` prefix (with its trailing space) is added |
+| B5 | Write mode | Atomic: write `<path>.<pid>.tmp` then `renameSync` onto the target. `mkdirSync` the directory `recursive:true, mode:0o700` first. **On a rename failure, `fs.rmSync(tmp, {force:true})`** so a failed write leaves no orphan temp (Codex P2) |
 | B6 | Permissions | `0600` on each entry and on the concatenated file, best-effort `fs.chmodSync` after rename, skipped on `win32` — identical to `appendRefuseAlert`'s handling |
-| B7 | Multiplicity | One entry **per job**. A new refusal for the same job **overwrites** that job's entry; entries for other jobs are untouched. Entries never accumulate within a job |
-| B8 | Failure policy | Every step wrapped so nothing throws. A failed banner write or rebuild is silent and changes nothing about the refusal (non-zero exit, zero spawn) |
-| B9 | Dependencies | The launcher's writer, clearer and rebuilder use Node built-ins only. They must NOT require `src/core/refusal-banner.js` or any other `src/` module |
-| B10 | Clearers | **(a)** the launcher removes `<safe-job>.md` for the job it just verified, immediately **before spawn**, then rebuilds; **(b)** attended `sync` removes the whole directory and the concatenated file, **after** `manifestMod.save`. `run-job` clears **nothing** |
-| B11 | Clearing scope | **Per job.** A job's entry is cleared only by that job verifying, or by an attended `sync` clearing everything. A *different* job succeeding clears nothing — the launcher refuses on per-job verdicts, so one job's health is no evidence about another's |
-| B12 | Dry-run and sync's own digest | `wienerdog sync --dry-run` never clears. A real `sync` renders its own digest **banner-free** (pass `''`), even though the clear itself happens later at B10(b) — the digest must not carry a banner the sync is about to invalidate |
-| B13 | Privacy | `'refusal-banner.md'` joins `A5_PRIVATE_FILE_BASENAMES` and `<core>/state/refusal-banner/` joins the A5 private **dirs** set, so `repairPrivateModes` and `scanPrivateModes` cover both. Adding either **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
-| B14 | Job-name sanitization | Strip leading `-` (so `--catch-up` → `catch-up`), then replace every character outside `[A-Za-z0-9._-]` with `_`, then cut to 64 characters. If the result is empty, `.`, or `..`, use `unknown`. Applied to **every** path component derived from a job name, in the writer and the clearer alike |
-| B15 | Readers | The SessionStart hook, `renderDigest`, and the Claude Code managed-block import — all of them read the **concatenated** file (B1a), never the directory. Implemented in `WP-refusal-banner-delivery` and `WP-managed-block-by-reference` |
+| B7 | Multiplicity | One entry **per job**. A new refusal for the same job **overwrites** that job's entry; entries for other jobs are untouched |
+| B8 | Failure policy | Every step wrapped so nothing throws. A failed write, clear or rebuild is silent and changes nothing about the refusal (non-zero exit, zero spawn) |
+| B9 | Dependencies | The launcher's writer, clearer, rebuilder and lock use Node built-ins only (`node:fs`, `node:path`, `node:crypto`). They must NOT require `src/core/refusal-banner.js` or any other `src/` module |
+| B10 | Clearers | **(a)** the launcher removes the job's entry **after** its spawn returns a numeric status (B15); **(b)** attended `sync` removes the whole directory, after `manifestMod.save`, **only on a fully clean reconciliation** (B17). `run-job` clears **nothing** |
+| B11 | Clearing scope | **Per job.** A job's entry is cleared only by that job completing a spawn, or by a clean attended `sync` clearing everything. A *different* job succeeding clears nothing — the launcher refuses on per-job verdicts, so one job's health is no evidence about another's |
+| B12 | Dry-run | `wienerdog sync --dry-run` never clears and never rebuilds |
+| B13 | Privacy | `'refusal-banner.md'` joins `A5_PRIVATE_FILE_BASENAMES`; `<core>/state/refusal-banner/` and `<core>/state/launcher.lock/` join the A5 private **dirs** set. Adding any of them **requires** updating `tests/unit/private-fs.test.js`, which pins membership by value |
+| B14 | Entry filename | `<readable>-<hash>.md`, where `<hash>` is the **first 8 lowercase hex characters of `sha256(raw job name)`** and `<readable>` is the sanitized form cut to **48** characters. Sanitize by replacing every character outside `[A-Za-z0-9._-]` with `_`. A **pseudo-job** — any raw name beginning with `--` — is namespaced with a leading `_` after its dashes are stripped, so `--catch-up` → `_catch-up-<hash>.md` and a real job named `catch-up` → `catch-up-<hash>.md`. An empty `<readable>` becomes `job`. The hash makes the mapping **injective in practice**, which the round-2 sanitizer was not: it collided `--catch-up` with a job named `catch-up`, and collided any two names sharing a 64-character prefix |
+| B15 | Clear timing | The launcher clears a job's entry **only after `spawnSync` returns an object with a numeric `status`** — any number. A non-zero child exit is a job-level failure and is `run-job`'s fail-loud to report, so it still clears the *launcher's* banner. Clearing **before** the spawn (round 2) lost the banner whenever the spawn itself failed |
+| B16 | Spawn-failure banner | If the spawn **throws**, or returns `status === null` (killed by a signal, or never started), the launcher **writes** a banner entry for that job with a code-owned reason — `spawn failed` or `terminated by signal <sig>` — appends a refuse-class alert, writes stderr, and exits 1. It does **not** clear |
+| B17 | Sync's clean-reconciliation precondition | `sync` clears (B10b) **only** when `descriptorFailures === 0` **and** `heal.failed` is empty. Otherwise it clears **nothing** and renders its digest **with** the banner. A sync that just warned "job descriptor(s) could not be written" has not fixed the machine, and must not silence the warning that says so |
+| B18 | Readers | The SessionStart hook, `renderDigest`, and the Claude Code managed-block import — all read the **concatenated** file (B1a), never the directory. Implemented in `WP-refusal-banner-delivery` and `WP-managed-block-by-reference` |
+
+### Table L — the launcher lock contract
+
+A single lock serialises **both** mutable launcher-owned state files. Introduced in
+round 3 (Codex R2 + R5) after the owner **reversed** the round-2 compare-and-retry
+ruling: compare-and-retry narrowed the lost-update window on `alerts.jsonl` but left an
+identical, unclosed window on the banner rebuild, and two half-guards are worse than
+one real one.
+
+| Row | Fact | Value |
+|-----|------|-------|
+| L1 | Path | `<core>/state/launcher.lock/` — a **directory** |
+| L2 | Acquire | `fs.mkdirSync(lockPath)`. Success = acquired; `EEXIST` = held by someone else. Directory creation is atomic on every supported filesystem, which is what makes this a lock at all |
+| L3 | Release | `fs.rmdirSync(lockPath)` in a `finally`, so an exception on the guarded path still releases |
+| L4 | Staleness | A lock whose directory `mtime` is older than **10 000 ms** is stale: `rmdirSync` it and retry `mkdirSync` **once**. Same shape as the dream lock's steal (`src/core/dream/lock.js`, WP-008), which likewise treats an expired holder as dead rather than blocking forever |
+| L5 | Bounded wait | **5 attempts, 200 ms apart** (~1 s worst case). The launcher is synchronous, so sleep with `Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)` — a real blocking sleep on Node's main thread, no busy spin, no timer, no async |
+| L6 | Fallback on failure to acquire | **Fail-loud is never sacrificed to the lock.** A writer that cannot acquire still (a) appends its `alerts.jsonl` record atomically, **skipping compaction**, and (b) writes its own banner entry atomically, **skipping the rebuild**. Only the derived/optimising work is skipped |
+| L7 | Accepted residual | After an L6 fallback the concatenated banner file may be **one mutation behind** until the next lock-holding mutation rebuilds it, and `alerts.jsonl` may exceed its bound until the next lock-holding append. Both are self-correcting and neither loses a record |
+| L8 | Guarded regions | (i) `appendRefuseAlert`'s append **plus** compaction; (ii) every banner-directory mutation **plus** its rebuild. Nothing else. Hold the lock for the shortest possible span |
+| L9 | Scope | **Launcher-only.** The app-side `appendAlert` in `src/core/alerts.js` does **not** take this lock; its own documented residual (lines 87–88) is unchanged by this WP. Out of scope here — noted so the boundary is not mistaken for coverage |
+| L10 | Not a daemon | The lock directory is a file, created and removed within one synchronous call. Nothing outlives the process. ADR-0004 is preserved |
+| L11 | Dependencies | Node built-ins only (B9). Implemented inline in `src/scheduler/launcher.js`; **not** a `require` of `src/core/dream/lock.js`, which lives in the app tree the launcher is verifying |
 
 ### Mirrored Surface Checklist
 
@@ -319,7 +386,10 @@ in one pass, and any new mirror found in review is added here on the spot:
 - [ ] **`docs/GLOSSARY.md`'s `refusal banner` entry** (mirrors B1, B1a, B10, B11, B15) —
       registered in round 2; it states the clearing rule in user-facing words and must
       move whenever B10/B11 move
-- [ ] ADR-0039 §5 and its Amendment 1 F5 paragraph (mirror B10, B11)
+- [ ] ADR-0039 §5 and its Amendment 1 F5/R1–R4 paragraphs (mirror B10, B11, B14–B17)
+- [ ] Table L's L8 "guarded regions" row and `WP-launcher-alert-bound`'s Table C row
+      C8d (mirror L1–L11 — the lock is one contract used by two specs; a change to
+      Table L must move C8d in the same pass)
 
 ## Implementation notes & constraints
 
@@ -329,23 +399,63 @@ in one pass, and any new mirror found in review is added here on the spot:
   `clearRefusalBannerFor` and `rebuildRefusalBanner` physically inside `launcher.js`,
   next to `appendRefuseAlert`, and keep the `BANNER_MAX_CHARS` duplication comment
   naming `MAX_FIELD_CHARS` as its twin. That duplication is deliberate (B4).
-- **Where the clear-on-verify call goes (B10a).** In `main()`, after
-  `if (!verdict.ok) return refuse(...)` and **before** the spawn. Use the same `name`
-  the verdict was computed for, so the entry cleared is provably the entry that job
-  would have written. Do not clear before verification, and do not clear on a refusal
-  path.
-- **`sync` ordering is two separate facts, and both matter (B10b, B12).** The clear
-  moves to **after** `manifestMod.save(paths, manifest)` — Codex P1: a Ctrl-C between a
-  state mutation and its manifest save strands the mutation, which is the same
-  reversibility rule `WP-105` already had to learn. Independently, the digest that sync
-  renders earlier in the same run must pass `''` for the banner, so it does not carry a
-  banner the sync is about to invalidate. Round 1 achieved the second by clearing
-  early; that is no longer available, so pass `''` explicitly.
-- **Sanitize every path component (B14), in both the writer and the clearer.** A job
-  name reaches `safeJobFile` from argv. An unsanitized `..` or `/` would let the entry
-  path escape `state/refusal-banner/` — a write primitive in the one process that runs
-  before integrity verification completes. The rule is fully specified in B14; implement
-  it once and call it from both sites.
+- **Where the clear call goes (B10a/B15) — round 3 moved it.** Round 2 cleared
+  *before* the spawn, which silently threw the banner away in exactly the cases worth
+  banner-ing: `spawnSync` throwing, or returning `status === null` because the child was
+  killed by a signal or never started. The current code collapses both into
+  `const code = r && typeof r.status === 'number' ? r.status : 1` — a bare `exit(1)`
+  with no alert and no banner. Clear **after** the spawn returns a numeric status, and
+  take the B16 write path when it does not.
+- **A non-zero child exit still clears (B15).** The launcher's banner answers "did this
+  job get to run?", not "did it succeed?". A job that ran and failed is `run-job`'s
+  fail-loud, which has the richer `alerts.jsonl` channel. Keeping the launcher banner
+  alive for a job-level failure would double-report it and never self-clear.
+- **`sync` clearing is now conditional, and the condition is computed before the
+  digest render (B17).** `src/cli/sync.js` already warns and **continues** on two
+  reconciliation failures: `descriptorFailures > 0` (":  job descriptor(s) could not be
+  written … the affected job(s) will fail closed at fire time") and a non-empty
+  `heal.failed` ("could not reload N scheduled job(s)"). Both are computed in the
+  scheduler block, which runs **before** the digest render, so hoist one flag:
+
+  ```js
+  let reconciliationClean = true; // no scheduler block ran → nothing observed to be broken
+  // …inside the scheduler block, after each warning:
+  if (r.descriptorFailures > 0) reconciliationClean = false;
+  if (heal.failed.length > 0) reconciliationClean = false;
+  ```
+
+  Then the digest passes `reconciliationClean ? '' : readRefusalBanner(paths)`, and
+  **after** `manifestMod.save(paths, manifest)`:
+  `if (!dryRun && reconciliationClean) clearRefusalBanner(paths);`
+
+  Two independent facts, both load-bearing. **Ordering** (after the manifest save) is
+  Codex P1: a Ctrl-C between a state mutation and its save strands the mutation — the
+  reversibility rule `WP-105` already learned. **Conditionality** is R4: a sync that
+  just told the user a descriptor could not be written has not fixed the machine, and
+  must not silence the banner that says the same thing.
+- **B14 must be injective, not merely safe.** Round 2's sanitizer was safe — it could
+  not escape the directory — but it was **not injective**: `--catch-up` and a real job
+  named `catch-up` both produced `catch-up.md`, so one job's refusal overwrote the
+  other's and one job's clear erased the other's. Any two names sharing a 64-character
+  prefix collided the same way. The `-<8 hex of sha256(raw name)>` suffix fixes the
+  collision and the `_` pseudo-job namespace makes the two `catch-up` cases visibly
+  distinct. Both properties still hold on the safety side: the result can never contain
+  `/`, `\` or `..`, and can never be `.` or `..` because it always ends `-<hash>.md`.
+  Implement `entryFileName` **once** and call it from the writer and the clearer —
+  two implementations that drift is precisely how a clear stops matching its write.
+- **The lock is a real lock, not an advisory comment (Table L).** Round 2 used
+  compare-and-retry on `alerts.jsonl`; the owner reversed that in round 3 because the
+  banner rebuild has the same unclosed window and a second, differently-shaped
+  half-guard is worse than one shared real one. `mkdirSync` is the atomic primitive —
+  `EEXIST` means held. Release in a `finally`. Steal a lock older than 10 s, once, the
+  way `src/core/dream/lock.js` (WP-008) treats an expired holder as dead rather than
+  blocking forever. Sleep synchronously with `Atomics.wait` on a `SharedArrayBuffer`;
+  the launcher has no event loop to yield to and a busy spin would burn a core.
+- **L6 is the rule that keeps the lock from becoming the new failure mode.** If the
+  lock cannot be acquired, the writer still writes — its own alert record, its own
+  banner entry — and skips only the derived work (compaction, rebuild). A lock that can
+  swallow a fail-loud record would be a worse bug than the race it closes. Test the
+  contended path explicitly by pre-creating the lock directory.
 - **Fold before prefixing (B4), never after.** `refusalText()` output is a single
   logical sentence today, but `why` comes from a verdict and may grow a newline. An
   unfolded newline would end the markdown blockquote and let the tail of the reason
@@ -396,44 +506,82 @@ in one pass, and any new mirror found in review is added here on the spot:
 
 ## Acceptance criteria
 
-- [ ] AC-1 — A refusal for job `dream` writes
-      `<core>/state/refusal-banner/dream.md` containing exactly one line matching
-      `^> \[!warning\] wienerdog: refusing to run` plus a trailing newline (B1, B3).
-- [ ] AC-2 — The entry content equals `> [!warning]`, one space, then the folded
-      `refusalText()` output for that refusal, byte-for-byte (B3, B4).
+Every criterion names the Table B / Table L row it enforces, and every one is satisfied
+by a Deliverables row (see the AC-to-Deliverables map in the PR body).
+
+- [ ] AC-1 — A refusal for job `dream` writes an entry under
+      `<core>/state/refusal-banner/` whose name is `dream-<8 hex>.md`, containing
+      exactly one line matching `^> \[!warning\] wienerdog: refusing to run` plus a
+      trailing newline (B1, B3, B14).
+- [ ] AC-2 — The entry content equals `> [!warning]`, one space, then the folded reason,
+      byte-for-byte (B3, B4).
 - [ ] AC-3 — A reason containing `\n` or runs of spaces/tabs folds to single spaces, so
       the entry is still exactly one line (B4).
 - [ ] AC-4 — A reason longer than 2000 characters is cut to 2000 before prefixing (B4).
-- [ ] AC-5 — A `--catch-up` refusal writes `catch-up.md` (B14).
-- [ ] AC-6 — `safeJobFile` maps every hostile input in the Security checklist to a
-      single safe component, and never to `.`, `..` or `''` (B14).
-- [ ] AC-7 — A second refusal for the **same** job overwrites that job's entry; the
+- [ ] AC-5 — `--catch-up` writes `_catch-up-<hash>.md` (B14).
+- [ ] AC-6 — **Injectivity (round-3 R1).** `--catch-up` and a job literally named
+      `catch-up` produce **different** filenames; refusing both leaves **two** entries;
+      clearing one leaves the other intact. Two job names sharing a 48-character prefix
+      but differing later likewise produce different filenames (B14).
+- [ ] AC-7 — `entryFileName` never emits `/`, `\`, `..`, `.` or an empty name. Test
+      `../../etc/passwd`, `a/b`, `..`, `.`, `''`, a 300-character name, and a name
+      containing a newline (B14).
+- [ ] AC-8 — A second refusal for the **same** job overwrites that job's entry; the
       directory still holds exactly one entry for it (B7).
-- [ ] AC-8 — **Cross-job isolation (the F5 regression test).** Job A refuses on a
-      descriptor drift; job B then verifies and spawns. A's entry **survives** and the
-      concatenated file still carries A's line (B11).
-- [ ] AC-9 — **Self-clearing.** After AC-8, job A verifies. A's entry is gone, and with
-      no entries left the concatenated file is **removed**, not left empty (B10a, B1b).
-- [ ] AC-10 — With entries `dream.md` and `catch-up.md`, the concatenated file contains
-      `catch-up`'s line, a blank line, then `dream`'s line — sorted filename order
-      (B1a).
-- [ ] AC-11 — On POSIX both an entry and the concatenated file are `0600` after a
+- [ ] AC-9 — **Cross-job isolation.** Job A refuses on a descriptor drift; job B then
+      verifies and spawns. A's entry **survives** and the concatenated file still
+      carries A's line (B11).
+- [ ] AC-10 — **Self-clearing after a completed spawn.** After AC-9, job A verifies and
+      its spawn returns status `0`. A's entry is gone, and with no entries left the
+      concatenated file is **removed**, not left empty (B10a, B15, B1b).
+- [ ] AC-11 — **A non-zero child exit still clears** the launcher's banner for that job,
+      and the launcher exits with the child's code (B15).
+- [ ] AC-12 — **Spawn threw (round-3 R3).** `spawnSync` throwing produces a banner entry
+      for that job whose text is `spawnFailureText(name, 'spawn failed')`, a
+      refuse-class `alerts.jsonl` record with the same sentence, stderr output, and
+      `exit(1)`. The entry is **not** cleared (B16).
+- [ ] AC-13 — **Null status (round-3 R3).** `spawnSync` returning `{status: null,
+      signal: 'SIGKILL'}` produces a banner entry reading `terminated by signal SIGKILL`,
+      the matching alert, and `exit(1)` (B16).
+- [ ] AC-14 — `spawnFailureText` contains neither "integrity mismatch" nor any remedy
+      sentence, and never names `wienerdog doctor` or `wienerdog sync` (B16, F27).
+- [ ] AC-15 — With entries `_catch-up-<h>.md` and `dream-<h>.md`, the concatenated file
+      contains the `_catch-up` line, a blank line, then the `dream` line — sorted
+      filename order (B1a).
+- [ ] AC-16 — On POSIX both an entry and the concatenated file are `0600` after a
       refusal (B6).
-- [ ] AC-12 — Making the banner write fail (unwritable `state`) still produces the
+- [ ] AC-17 — Making the banner write fail (unwritable `state`) still produces the
       refusal: non-zero exit, zero spawn, and the `alerts.jsonl` record is still
       appended (B8).
-- [ ] AC-13 — A `renameSync` failure leaves **no** `*.tmp` file behind (B5).
-- [ ] AC-14 — `clearRefusalBanner` (app-side) removes every entry and the concatenated
+- [ ] AC-18 — A `renameSync` failure leaves **no** `*.tmp` file behind (B5).
+- [ ] AC-19 — **Lock contention (round-3 R2/R5).** With `<core>/state/launcher.lock/`
+      pre-created and fresh, a refusal still writes its banner entry and still appends
+      its alert record; only the rebuild is skipped, so the concatenated file is one
+      mutation behind. Nothing throws (L2, L5, L6, L7).
+- [ ] AC-20 — **Stale takeover.** A lock directory whose `mtime` is older than 10 s is
+      removed and re-acquired, once, and the guarded work then runs normally (L4).
+- [ ] AC-21 — The lock is released even when the guarded work throws — assert the
+      directory is gone after an injected failure (L3).
+- [ ] AC-22 — **Write/clear interleaving under the lock.** A write for job A and a clear
+      for job B, serialised through the lock, leave exactly A's entry and a concatenated
+      file matching it (L8, B11).
+- [ ] AC-23 — `clearRefusalBanner` (app-side) removes every entry and the concatenated
       file, and is a no-op — no throw — when the directory is already absent (B10b).
-- [ ] AC-15 — `'refusal-banner.md'` is a member of `A5_PRIVATE_FILE_BASENAMES` and the
-      `refusal-banner/` directory is in the A5 dirs set, both pinned by
+- [ ] AC-24 — `'refusal-banner.md'` is in `A5_PRIVATE_FILE_BASENAMES`, and
+      `refusal-banner/` and `launcher.lock/` are in the A5 dirs set, all pinned by
       `tests/unit/private-fs.test.js` (B13).
-- [ ] AC-16 — `grep -n "require(.*\.\./src" src/scheduler/launcher.js` returns nothing
-      (B9), and `src/cli/run-job.js` contains no reference to the refusal banner (B10).
-- [ ] AC-17 — `wienerdog sync --dry-run` with entries present leaves them in place; a
-      real `sync` clears them **after** the manifest save and renders its own digest
-      banner-free (B12, B10b).
-- [ ] AC-18 — Running `wienerdog sync` twice is idempotent: the second run reports zero
+- [ ] AC-25 — `grep -n "require(.*\.\./src" src/scheduler/launcher.js` returns nothing
+      (B9, L11), and `src/cli/run-job.js` contains no reference to the refusal banner
+      (B10).
+- [ ] AC-26 — **Sync's clean-reconciliation gate (round-3 R4).** A `sync` run in which
+      one descriptor write fails leaves every banner entry **in place** and renders its
+      digest **with** the banner. A run in which `heal.failed` is non-empty behaves the
+      same way (B17).
+- [ ] AC-27 — A fully clean `sync` clears the directory **after** `manifestMod.save`,
+      and renders its own digest banner-free (B10b, B12, B17).
+- [ ] AC-28 — `wienerdog sync --dry-run` with entries present leaves them in place and
+      rebuilds nothing (B12).
+- [ ] AC-29 — Running `wienerdog sync` twice is idempotent: the second run reports zero
       changes.
 
 ## Verification steps (run these; paste output in the PR)
@@ -442,16 +590,21 @@ in one pass, and any new mirror found in review is added here on the spot:
 npm test -- --test-name-pattern refusal-banner
 npm test -- --test-name-pattern launcher
 npm test -- --test-name-pattern private-fs
+npm test -- --test-name-pattern sync
 npm test
 npm run lint
-# B9 — the launcher still requires no app-tree code (expect NO output):
+# B9/L11 — the launcher still requires no app-tree code (expect NO output):
 grep -n "require(['\"]\.\./src\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
 # B10 — run-job clears NOTHING (expect NO output):
 grep -n "refusal-banner\|clearRefusalBanner" src/cli/run-job.js
-# B10b — sync's clear is AFTER the manifest save (the clear line must come second):
-grep -n "manifestMod.save\|clearRefusalBanner" src/cli/sync.js
-# B13 — both A5 memberships are registered and pinned:
-grep -n "refusal-banner" src/core/private-fs.js tests/unit/private-fs.test.js
+# B10b/B17 — sync's clear is AFTER the manifest save AND gated on a clean run:
+grep -n "manifestMod.save\|clearRefusalBanner\|reconciliationClean" src/cli/sync.js
+# B13 — all three A5 memberships are registered and pinned:
+grep -n "refusal-banner\|launcher.lock" src/core/private-fs.js tests/unit/private-fs.test.js
+# B14 — one implementation of the filename rule, used by writer and clearer:
+grep -n "entryFileName" src/scheduler/launcher.js
+# L5 — the synchronous sleep is Atomics.wait, not a busy spin:
+grep -n "Atomics.wait\|SharedArrayBuffer" src/scheduler/launcher.js
 ```
 
 ## Out of scope (do NOT do these)
@@ -515,3 +668,43 @@ grep -n "refusal-banner" src/core/private-fs.js tests/unit/private-fs.test.js
     `e17d638`)**, which is open and held: the implementer reworks that branch rather
     than starting fresh, so the section now says explicitly what survives and what is
     deleted.
+- **2026-08-30 — Codex round-2 review, findings R1–R5 (owner: ACCEPTED; the Q3 ruling
+  REVERSED).** Round 2 fixed the per-job premise but introduced defects of its own.
+  - **R1 — the sanitizer was safe but not injective.** `--catch-up` and a job literally
+    named `catch-up` both mapped to `catch-up.md`, so one job's refusal overwrote the
+    other's entry and one job's clear erased the other's warning — the same
+    cross-contamination F5 had just been fixed for. Any two names sharing the 64-char
+    prefix collided identically. **B14 rewritten**: `<readable>-<8 hex of sha256(raw
+    name)>.md`, readable cut to 48 chars, pseudo-jobs namespaced with a leading `_`
+    (`_catch-up-<hash>.md`). New AC-6 and AC-7.
+  - **R2 + R5 — the owner REVERSED round 2's compare-and-retry (Q3).** Compare-and-retry
+    narrowed the lost-update window on `alerts.jsonl` but left an identical, unclosed
+    window on the banner rebuild (another writer between the final `readdir` and the
+    rename). Two differently-shaped half-guards are worse than one shared real one.
+    **New Table L**: a single launcher-owned lock at `<core>/state/launcher.lock/`,
+    acquired by atomic `fs.mkdirSync` (`EEXIST` = held), released by `rmdirSync` in a
+    `finally`, 10 s mtime staleness with a single takeover — the same shape as the dream
+    lock in `src/core/dream/lock.js` (**WP-008**, not WP-029 as the round-3 brief cited;
+    WP-029 is adopt-snapshot-robustness). Bounded wait of 5 × 200 ms via `Atomics.wait`
+    on a `SharedArrayBuffer`, because the launcher is synchronous. **L6 is the important
+    row**: a writer that cannot acquire still writes its alert record and its banner
+    entry, skipping only compaction and rebuild — a lock that could swallow a fail-loud
+    record would be a worse bug than the race it closes. New B1c, AC-19 … AC-22.
+  - **R3 — clearing before spawn lost the banner exactly when it mattered.** The spawn
+    site collapses a thrown `spawnSync` and a `status === null` (signal-killed, or never
+    started) into a bare `exit(1)` with no refusal path — so a pre-spawn clear deleted
+    the banner and nothing replaced it. **B15**: clear only after a **numeric** status
+    (any number — a non-zero child exit is `run-job`'s fail-loud, not the launcher's).
+    **B16**: on a throw or null status, *write* an entry with a code-owned
+    `spawnFailureText` — deliberately not `refusalText`, whose "integrity mismatch" and
+    remedy tails would both be false here — plus a refuse-class alert, then exit 1. New
+    AC-11 … AC-14.
+  - **R4 — `sync` cleared even after reporting its own failures.** `src/cli/sync.js`
+    warns and **continues** on `descriptorFailures > 0` and on a non-empty `heal.failed`,
+    then reached the unconditional clear: a sync that had just told the user a job
+    descriptor could not be written would silence the banner saying so. **B17**: clear
+    only on a fully clean reconciliation; otherwise clear nothing and render the digest
+    **with** the banner. New AC-26, AC-27, and `tests/unit/sync-repoint.test.js` added
+    to the Deliverables.
+  - Table B rows renumbered and made internally consistent (B10 names *when*, B15/B16/B17
+    name *what each clearer requires first*, B11 states the shared scope rule).

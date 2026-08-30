@@ -4,7 +4,7 @@ title: Bound the launcher's alert writer without understating a real failure str
 status: Draft
 model: opus
 size: M
-depends_on: []
+depends_on: [WP-launcher-refusal-banner]
 adrs: [ADR-0004, ADR-0024, ADR-0028, ADR-0031, ADR-0039]
 epic: digest-delivery
 ---
@@ -174,9 +174,10 @@ copies are updated together.
 | C6 | Collapse key | The **exact** pair `(job, reason)` of the **last** record in the file. Not a prefix, not a fuzzy match, and never a non-adjacent record |
 | C7 | Collapse effect | Increment that last record's `count` by 1 and rewrite it. `at` keeps the **original first** occurrence's timestamp, so the banner's "since \<first\>" stays truthful |
 | C8 | Write order | Append the new record atomically FIRST, then collapse-and-bound in a temp+rename rewrite — mirroring `appendAlert`, so the writer never loses its own record to a concurrent compaction |
-| C8a | Lost-update guard | **Compare-and-retry.** Capture the live file's `size` and `mtimeMs` at read time. Immediately before the rename, re-`stat` and compare both. If either differs, another writer appended in the window: discard the temp (`fs.rmSync(tmp,{force:true})`) and retry the read-compact **once**. If it differs again, leave the appended file **uncompacted** and return — the bound applies on the next append |
-| C8b | Accepted residual | Two launchers appending within the same filesystem timestamp granularity, with no net size change, can still interleave undetected. This is the same class of residual `src/core/alerts.js` already accepts and documents at lines 87–88; it is accepted here for the same reason (full cross-process locking is out of scope per ADR-0004) |
-| C8c | Temp cleanup | Every temp-plus-rename in this file `rmSync`s the temp on a rename failure, so a failed atomic write never leaves an orphan beside the artifact (Codex P2) |
+| C8c | Temp cleanup | The compaction's temp-plus-rename `rmSync`s the temp on a rename failure, so a failed atomic write never leaves an orphan beside `alerts.jsonl` (Codex P2). Retained unchanged from round 2 |
+| C8d | Lock | **Introduced by `WP-launcher-refusal-banner` (Table L); consumed here.** This WP must not define a second lock — if that WP has not landed, this one is blocked. The append **and** its compaction run while holding the launcher lock — `<core>/state/launcher.lock/`, `fs.mkdirSync` to acquire (`EEXIST` = held), `rmdirSync` in a `finally` to release, a 10 s mtime staleness takeover retried once, and a bounded wait of 5 × 200 ms slept with `Atomics.wait` on a `SharedArrayBuffer`. The full contract is `WP-launcher-refusal-banner` **Table L**, which this row mirrors; the lock is implemented once, in `launcher.js`, and serialises both launcher-owned state files |
+| C8e | Fallback | If the lock cannot be acquired, **still append the record atomically** and skip **only** the compaction. Fail-loud is never sacrificed to the lock (Table L, L6) |
+| C8f | Accepted residual | After an C8e fallback `alerts.jsonl` may exceed its bound until the next lock-holding append — self-correcting, and no record is lost. The app-side `appendAlert` in `src/core/alerts.js` does **not** take this lock; its own documented residual at lines 87–88 is unchanged and out of scope here (Table L, L9) |
 | C9 | Empty-read guard | If the read-back yields zero records, skip the rewrite entirely and leave the atomically-appended file intact |
 | C10 | Bound order | Count budget first (keep newest `MAX_ALERTS`), then drop oldest until the serialized bytes fit `MAX_FILE_BYTES`; always keep at least the newest record |
 | C11 | Launcher dependencies | Node built-ins only. `appendRefuseAlert` must NOT require `src/core/alerts.js` or any other `src/` module |
@@ -194,8 +195,11 @@ every box below in one pass, and any new mirror found in review is registered he
       (mirror C1, C2, C3)
 - [ ] The `formatAlerts` change description in Exact contracts (mirrors C12)
 - [ ] Acceptance criteria AC-1 … AC-12 (mirror C1 … C13)
-- [ ] Verification greps for the duplicated constants and for the absence of a `src/`
-      require in the launcher (mirror C3, C4, C5, C11)
+- [ ] Verification greps for the duplicated constants, the lock, and the absence of a
+      `src/` require in the launcher (mirror C3, C4, C5, C8d, C11)
+- [ ] **`WP-launcher-refusal-banner` Table L** (mirrored by C8d/C8e/C8f) — the lock is
+      ONE contract used by two specs and defined in one place; a change to Table L must
+      move these three rows in the same pass
 - [ ] Current-state quotations of `MAX_ALERTS`/`MAX_FILE_BYTES` and of `appendAlert`'s
       three load-bearing properties (mirror C4, C5, C8, C9, C10)
 - [ ] The Implementation-notes paragraph on `at` semantics (mirrors C7)
@@ -230,18 +234,24 @@ and Table C above is the canonical table.
   C10): append-first durability, the empty-read guard, and count-then-bytes budgeting
   keeping at least one record. They are quoted in Current state with the reasoning;
   each exists because of a real prior bug.
-- **C8a is a round-2 correction, and the reasoning is worth carrying.** Append-first
-  durability protects *this* writer's record. It does **not** protect a record another
-  launcher appended between our read and our rename — that one is silently discarded by
-  the rewrite. `appendAlert` tolerates this because its writers are `run-job` processes
-  that rarely overlap; the launcher's writers are **scheduled**, so a catch-up and a
-  nightly firing at the same minute is an ordinary Tuesday, not an edge case.
-  Compare-and-retry closes the detectable window: `size` catches an append that changed
-  the length, `mtimeMs` catches one that did not. Retry **once** and then give up
-  compacting — never spin, and never drop the append to win the race. An uncompacted
-  file is a bounded, self-correcting cost; a lost fail-loud record is not.
-- **Compare against values captured at read time, not at function entry**, or the guard
-  has a hole exactly the size of the read itself.
+- **Why a lock and not compare-and-retry (round-3 R2/R5, owner REVERSED the round-2
+  ruling).** Append-first durability protects *this* writer's record. It does **not**
+  protect a record another launcher appended between our read and our rename — that one
+  is silently discarded by the rewrite. `appendAlert` tolerates this because its writers
+  are `run-job` processes that rarely overlap; the launcher's writers are **scheduled**,
+  so a catch-up and a nightly firing in the same minute is an ordinary Tuesday. Round 2
+  answered with compare-and-retry (`size` + `mtimeMs` captured at read, re-checked before
+  rename). Codex round 2 pointed out that it **narrows** the window rather than closing
+  it, and that the banner rebuild in the sibling WP has an identical unclosed window —
+  so the codebase would carry two differently-shaped half-guards for one problem. The
+  owner reversed to a **single launcher-owned lock** covering both. Implement the lock
+  **once**, in `launcher.js`, per `WP-launcher-refusal-banner` Table L; this WP consumes
+  it (C8d) and does not define a second one.
+- **C8e is what keeps the lock from becoming the new failure mode.** An unacquirable
+  lock must never cost a fail-loud record: append anyway, skip only the compaction. Test
+  the contended path by pre-creating the lock directory.
+- **Hold the lock for the shortest span (Table L, L8)** — the append plus the compaction,
+  nothing more. Do not hold it across the `stat`, the console output, or the exit.
 - **`redactOnly` is app-side only.** `sanitizeAlert` scrubs; the launcher's writer
   deliberately does not, because its reasons are code-owned (its header comment says
   so). Keep it that way — do not add a second scrubber to the launcher, and do not
@@ -303,13 +313,14 @@ and Table C above is the canonical table.
       renders as before (C13) — no migration step anywhere.
 - [ ] AC-13 — With `state/` unwritable, `appendRefuseAlert` throws nothing and the
       refusal still exits non-zero with zero spawn.
-- [ ] AC-13a — **Lost-update guard (round-2 finding F6).** Simulate the interleaving by
-      mutating `alerts.jsonl` between the read and the rename — append a foreign
-      record via a test seam or a stubbed `statSync`/`renameSync` — and assert the
-      foreign record **survives**: the compaction is discarded and retried (C8a).
-- [ ] AC-13b — When the file changes again during the retry, the function leaves the
-      appended file uncompacted, throws nothing, and leaves no `*.tmp` behind
-      (C8a, C8c).
+- [ ] AC-13a — **Serialised under the lock (round-3 R2/R5).** Two `appendRefuseAlert`
+      calls that would interleave are serialised by the launcher lock, and **both**
+      records survive (C8d).
+- [ ] AC-13b — **Contended fallback.** With `<core>/state/launcher.lock/` pre-created and
+      fresh, `appendRefuseAlert` still appends its record atomically, skips compaction,
+      throws nothing, and leaves no `*.tmp` behind (C8e, C8f, C8c).
+- [ ] AC-13c — The lock is released after a successful append+compact, and also when the
+      compaction throws (Table L, L3).
 - [ ] AC-14 — `grep -n "require(.*src" src/scheduler/launcher.js` shows no app-tree
       require (C11).
 
@@ -323,6 +334,8 @@ npm test
 npm run lint
 # C11 — the launcher still requires no app-tree code (expect NO output):
 grep -n "require(['\"]\.\./src\|require(['\"]\.\./\.\./src" src/scheduler/launcher.js
+# C8d — the lock is used here and defined once, in launcher.js:
+grep -n "launcher.lock\|acquireLauncherLock" src/scheduler/launcher.js
 # C3/C4/C5 — the duplicated bounds are present in both places:
 grep -n "MAX_ALERTS\|MAX_FILE_BYTES\|MAX_COUNT" src/core/alerts.js
 grep -n "200\|512 \* 1024\|1000000\|1_000_000" src/scheduler/launcher.js
@@ -367,3 +380,20 @@ git diff --stat -- tests/golden/digest-default.md
   cited to `src/core/alerts.js` lines 87–88), and **C8c** (`rmSync` the temp on rename
   failure — Codex P2). New AC-13a and AC-13b assert the interleaving by mutating the
   file between read and rename.
+- **2026-08-30 — Codex round-2 findings R2 + R5 (owner: ACCEPTED, REVERSING the round-2
+  Q3 ruling).** Round 2's C8a compare-and-retry **narrowed** the lost-update window
+  rather than closing it, and the sibling WP's banner rebuild had an identical unclosed
+  window — so the chain would have shipped two differently-shaped half-guards for one
+  problem. Replaced by a **single launcher-owned lock** (`WP-launcher-refusal-banner`
+  Table L) serialising both launcher-owned state files. **C8a and C8b dropped**; **C8c
+  retained** (temp cleanup); new **C8d** (the lock, mirroring Table L), **C8e** (the
+  unacquirable-lock fallback: append anyway, skip only compaction — fail-loud is never
+  sacrificed to the lock), **C8f** (the residual, plus the explicit note that the
+  app-side `appendAlert` does **not** take this lock and its `alerts.js:87–88` residual
+  is unchanged and out of scope). AC-13a/13b rewritten and AC-13c added. Table L is
+  registered in the Mirrored Surface Checklist so the two specs move together.
+  **Also, from the round-3 AC-to-Deliverables consistency pass:** this WP had
+  `depends_on: []` while consuming a lock that `WP-launcher-refusal-banner` introduces —
+  shipping it first would have meant either a second lock implementation or a broken
+  build. `depends_on` now names that WP, and C8d says explicitly that the lock is
+  introduced there and only consumed here.

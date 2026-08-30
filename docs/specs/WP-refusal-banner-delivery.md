@@ -260,8 +260,11 @@ local fact stated once, in Exact contracts.
 - [ ] AC-8 — `renderDigest` with `refusalBanner` absent, `''`, or `undefined` produces
       byte-identical output to before the change; `tests/golden/digest-default.md`
       still matches with no golden update.
-- [ ] AC-9 — A successful `wienerdog sync` clears the banner and its rendered digest
-      contains no banner line.
+- [ ] AC-9 — A **fully clean** `wienerdog sync` (no descriptor-write failures, no
+      scheduler reload failures) clears the banner and its rendered digest contains no
+      banner line. A sync that reported either failure clears nothing and renders the
+      digest **with** the banner — `WP-launcher-refusal-banner` Table B row B17 owns
+      that rule; this WP only has to pass whatever `readRefusalBanner` returns.
 - [ ] AC-10 — `shellcheck --severity=warning templates/hooks/session-start.sh` passes
       and `shfmt -i 2 -d templates/hooks/session-start.sh` reports no diff.
 - [ ] AC-11 — Running `wienerdog sync` twice is idempotent (second run: zero changes).
@@ -330,3 +333,7 @@ grep -n "readdir\|refusal-banner/" templates/hooks/session-start.sh
     the directory — which keeps the hook's "read one file, no computation" property
     intact and gives the Claude import a single path to point at. Current state updated;
     a verification grep now asserts the hook does no directory reads.
+- **2026-08-30 — round-3 consistency pass.** AC-9 still asserted that *any* successful
+  `sync` clears the banner, which round-3 finding R4 had just narrowed to a **fully
+  clean** reconciliation. Reworded, with the rule itself left where it belongs — Table B
+  row B17 in `WP-launcher-refusal-banner` — so this spec mirrors rather than restates it.

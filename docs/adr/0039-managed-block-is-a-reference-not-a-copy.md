@@ -151,10 +151,11 @@ Codex has **no** include or import syntax in `AGENTS.md` (official docs checked
 rather than merges, and its hooks engine — merged in `codex-rs` with TOML config and
 per-hook `trusted_hash` — has no documentation page and is not a stable surface.
 
-Therefore a hook-less Codex session gets the **stable** content plus a constant
-pointer line naming the live digest path, and the **volatile** content is
-**ABSENT** rather than stale. This asymmetry between Claude Code and Codex is
-**accepted and documented**, not engineered around (owner rulings D2, D3).
+Therefore a hook-less Codex session gets copied content plus a constant pointer line
+naming the live digest path, rather than a live reference. This asymmetry between Claude
+Code and Codex is **accepted and documented**, not engineered around (owner rulings D2,
+D3). *What exactly is copied was settled by Amendment 1 (F7) below — the round-1 answer,
+"the stable half only, everything volatile ABSENT", is superseded.*
 
 *Amended by Amendment 1 (round-2 finding F7, D3 amended 2026-08-30).* Making
 **all** volatile content absent on Codex silently removed that platform's proactive
@@ -310,9 +311,12 @@ status quo on both counts.
   dream's own brain today and this ADR changes only *which* digest — not a
   regression either way, but ADR-0025's "no ambient authority inheritance" claim
   depends on the answer, so it is measured by canary before the block shape changes.
-- A hook-less Codex user, and a Cowork user, lose alert banners entirely rather than
-  seeing stale ones. Accepted (D2/D3); the tradeoff is that "absent" is a fail-safe
-  direction and "stale" is not.
+- A hook-less Codex user, and a Cowork user, see the **untrusted-derived** daily log and
+  the enumerated projects list not at all, rather than stale. *Amended by Amendment 1
+  (F7): they do **not** lose alert banners — the code-owned state-derived banners are
+  copied into the Codex block as of the last sync, because an absent warning is a
+  fail-loud regression, not a fail-safe outcome. "Absent beats stale" governs
+  untrusted-derived content only.*
 - ADR-0031's density trigger fires for this work: the channel/content-class/harness/
   freshness contract is mirrored across `src/adapters/claude.js`,
   `src/adapters/codex.js`, `src/core/digest.js`,
@@ -339,14 +343,16 @@ ADR-0021, ADR-0028 and ADR-0035 need no amendment. ADR-0035 is cited for why an
 
 ## Amendments
 
-### Amendment 1 (2026-08-30) — round-2 Codex findings
+### Amendment 1 (2026-08-30) — round-2 and round-3 Codex findings
 
 **Status: Proposed — awaiting owner signature.** (The ADR's own `Status` line is
 unchanged: the decision of 2026-08-30 stands as signed. This amendment records the
-round-2 corrections to it and is not itself in force until signed.)
+round-2 **and round-3** corrections to it and is not itself in force until signed.)
 
-An adversarial Codex design review of the round-1 ADR and spec chain found seven
-issues. The owner accepted all seven with the dispositions below. Four are corrections
+Two adversarial Codex design reviews of this ADR and its spec chain found sixteen
+issues in total — seven in round 1 of review (**F1–F7**, below) and nine in round 2
+(**R1–R9**, at the end of this amendment). The owner accepted all sixteen, and in
+round 2 **reversed** one of his own round-1 rulings. The dispositions follow. Four are corrections
 to this ADR — two of them to claims that were simply **wrong** — and they are marked in
 place in the sections they affect, so no reader of §2–§5 can act on a superseded
 statement without seeing the correction beside it.
@@ -400,16 +406,10 @@ self-clearing, which dissolves the 2026-08-01 logbook's arithmetic trap at its s
 
 **F6 — the alert-bound rewrite had a lost-update race.** `WP-launcher-alert-bound`'s
 C8 appended atomically and then rewrote the compacted file, so a concurrent launcher's
-append landing between the read and the rename was discarded. **Resolution
-(owner chose compare-and-retry):** capture size and `mtimeMs` at read time; re-`stat`
-immediately before the rename; on any difference discard the temp and retry the compact
-once; on a second difference leave the file uncompacted and let the bound apply on the
-next append. **Accepted residual:** two launchers firing within the same filesystem
-timestamp granularity can still interleave undetected. This is the same class of
-residual `src/core/alerts.js` already accepts and documents at lines 87–88 ("a
-compaction by one run-job can still drop a record a DIFFERENT run-job appended in the
-same window; that residual is accepted — full cross-process locking is out of scope per
-ADR-0004"), and it is accepted here for the same reason.
+append landing between the read and the rename was discarded. The round-1 resolution was
+**compare-and-retry** (capture size and `mtimeMs` at read, re-`stat` before rename,
+discard and retry once, then leave uncompacted). **⚠ SUPERSEDED in round 2 — see R2/R5
+below: the owner reversed this ruling in favour of a single launcher-owned lock.**
 
 **F7 — D3 amended: Codex was losing proactive warnings.** Ruling D3 made *all*
 volatile content absent on a hook-less Codex install, on the reasoning that absent is
@@ -434,3 +434,109 @@ and is deliberately **not** done in this round — it is logged as a follow-up.
 **Atomic-write hardening (Codex P2):** every temp-plus-rename in this chain adds
 `fs.rmSync(tmp, {force:true})` on a rename failure, so a failed atomic write leaves no
 orphan temp file beside the artifact it was replacing.
+
+#### Round 2 of review — findings R1–R9 (2026-08-30)
+
+The round-1 corrections above were themselves reviewed. Nine further issues, all
+accepted; several are defects **introduced by** the round-1 fixes, which is the useful
+signal in this round — a correction is as capable of shipping a bug as the thing it
+corrects.
+
+**R1 — the per-job filename was safe but not injective.** F5's sanitizer mapped both
+`--catch-up` and a real job named `catch-up` to `catch-up.md`, and collided any two
+names sharing its 64-character prefix. One job's refusal then overwrote another's entry
+and one job's clear erased another's warning — the exact cross-contamination F5 had just
+been written to prevent. **Resolution:** the entry filename becomes
+`<readable>-<first 8 lowercase hex of sha256(raw job name)>.md`, with `<readable>` the
+sanitized form cut to 48 characters and pseudo-jobs (`--…`) namespaced by a leading `_`,
+so `--catch-up` → `_catch-up-<hash>.md` and `catch-up` → `catch-up-<hash>.md`.
+
+**R2 + R5 — two unclosed lost-update windows, and the reversal of F6.** The banner
+rebuild (B1a) and the alerts compaction (F6's compare-and-retry) each had a window
+between the final `readdir`/`stat` and the rename. Compare-and-retry **narrows** its
+window rather than closing it, and would have left the codebase carrying two
+differently-shaped half-guards for one problem. **The owner reversed the F6 ruling** in
+favour of a **single launcher-owned lock**: `<core>/state/launcher.lock/`, acquired by
+atomic `fs.mkdirSync` (`EEXIST` = held), released by `rmdirSync` in a `finally`, with a
+10 000 ms mtime staleness takeover retried once — the same shape as the dream lock in
+`src/core/dream/lock.js` (**WP-008**), which likewise treats an expired holder as dead
+rather than blocking forever. The launcher is synchronous, so the bounded wait
+(5 attempts × 200 ms) sleeps via `Atomics.wait` on a `SharedArrayBuffer`. It guards two
+regions and no more: the alerts append-plus-compaction, and every banner-directory
+mutation plus its rebuild.
+
+The rule that keeps the lock from becoming its own failure mode: **fail-loud is never
+sacrificed to the lock.** A writer that cannot acquire still appends its alert record
+atomically and still writes its own banner entry — it skips only the *derived* work
+(compaction, rebuild). **Accepted residual:** after such a fallback the concatenated
+banner file may be one mutation behind, and `alerts.jsonl` may exceed its bound, until
+the next lock-holding mutation; both are self-correcting and neither loses a record. The
+app-side `appendAlert` does **not** take this lock, so its own residual
+(`src/core/alerts.js` lines 87–88) is unchanged — a boundary, not coverage. A lock
+directory created and removed inside one synchronous call starts no process, so
+**ADR-0004 is preserved**.
+
+**R3 — clearing before the spawn lost the banner in exactly the cases worth
+banner-ing.** F5 cleared a job's entry immediately before spawning it, but the spawn site
+collapses a thrown `spawnSync` and a `status === null` (signal-killed, or never started)
+into a bare `exit(1)` with no refusal path — so the banner was deleted and nothing
+replaced it. **Resolution:** clear **only after** the spawn returns a **numeric** status
+(any number — a non-zero child exit is `run-job`'s fail-loud to report, not the
+launcher's). On a throw or a null status the launcher **writes** a banner entry with a
+code-owned reason (`spawn failed` / `terminated by signal <sig>`), appends a
+refuse-class alert, and exits 1. The reason text is deliberately **not** `refusalText`,
+whose "integrity mismatch" framing and remedy tails would all be false when verification
+has already passed.
+
+**R4 — `sync` cleared even after reporting its own failures.** `src/cli/sync.js` warns
+and **continues** when `descriptorFailures > 0` or `heal.failed` is non-empty, then
+reached F5's unconditional clear — so a sync that had just told the user a job descriptor
+could not be written would silence the banner saying the same thing. **Resolution:**
+`sync` clears **only** on a fully clean reconciliation (`descriptorFailures === 0` **and**
+`heal.failed` empty), after the manifest save; otherwise it clears nothing and renders its
+digest **with** the banner.
+
+**R6 — F4 created a dependency cycle.** F4 made the canary's Done criteria require
+`WP-hermetic-user-memory-suppression` to be merged, while that WP `depends_on` the
+canary: neither could start. **Resolution:** the canary is Done once the measurement is
+recorded, under either verdict; the conditional moves onto the **consumer**, so
+`WP-managed-block-by-reference` proceeds when the canary is Done **and** (the verdict is
+*not loaded* **or** the suppression WP is Done). Same gate strength, no cycle.
+
+**R7 — F1's second import line was contradicted by its own mirrors.** An AC in
+`WP-digest-stable-volatile-split` still described one import line, and an AC in
+`WP-managed-block-by-reference` still called `buildReferenceBody` with a single
+argument. **Resolution:** every example, signature and criterion in all three specs now
+requires **both** imports, in order (volatile digest, then refusal banner). The **last**
+WP in the chain owns a **non-skipped** end-to-end test — unresolvable `app/current` plus
+a de-registered hook, and the banner still reaches the session through the second import.
+
+**R8 — F7's fix contradicted its own mirrors too.** After F7, `E7`/`AC-9` said the Codex
+block carries stable identity **plus** banners while the Deliverables and implementation
+notes still said `codex.js` copies `digest-stable.md` **only**, and the GLOSSARY and this
+ADR still said volatile content is absent on Codex. **Resolution:** an explicit
+compositor, `buildCodexBlock({prefix, stable, pointerLine})` in `src/adapters/codex.js`,
+reading `digest-stable.md` and a **new** `digest-prefix.md`. The third rendered file is
+what makes the compositor honest: it needs the banners without the projects list and the
+daily log, and parsing them back out of `digest-volatile.md` would re-implement the
+prefix/body boundary in a second place. Every superseded "absent" statement in the
+GLOSSARY and in §3 / Consequences above was purged in the same pass.
+
+**R9 — the Codex block could exceed Codex's own limit.** Each rendered component carries
+its own 32 KiB budget, so concatenating three of them can pass Codex's 32 KiB *combined*
+`project_doc_max_bytes` before the user's own `AGENTS.md` content is counted at all.
+**Resolution:** cap the **composed** block at **24 KiB**, leaving roughly 8 KiB for the
+user, in an explicit priority order — preamble, banners, pointer line, then the stable
+identity truncated into the remainder with the standard truncation marker. Only identity
+truncates; a warning the user must see outranks identity they mostly already know, and a
+pointer line that truncates away is worse than no pointer at all.
+
+**The pattern worth recording.** Six of these nine (R1, R2/R5, R3, R4, R7, R8) are
+defects in round-1's *corrections*, not in the original design, and two of them (R7, R8)
+are the same shape: a canonical table was updated and its registered mirrors were not.
+ADR-0031's Mirrored Surface Checklist exists precisely to prevent that, and it did not,
+because a checklist tracks mirrors **outward** from a table and nothing verifies a
+table's rows against **each other** or against the Deliverables that must satisfy them.
+The remedy adopted for round 3 is procedural rather than structural: every canonical
+table is re-read row-against-row after any edit, and every acceptance criterion is
+matched to the Deliverables row that satisfies it before the spec is handed on.
