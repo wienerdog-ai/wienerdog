@@ -39,12 +39,24 @@ file, it depends on it.
 | 1 | `WP-quarantine-warnings-file` | — | the enumeration's one home; every sibling points at it. Owns the size reader and exports the path constant |
 | 2 | `WP-doctor-quarantine-counts` | `[1]` | its pointer line names that file, and its missing-file branch promises "the next dream run writes it" |
 | 2 | `WP-quarantine-banner-decay` | `[1]` | same pointer, same reason |
-| 3 | `WP-dream-report-run-skips` | `[1, WP-dream-promote-in-workspace]` | same pointer, plus the in-flight rewrite of the report |
+| 3 | `WP-dream-report-run-skips` | `[1, WP-quarantine-banner-decay, WP-dream-promote-in-workspace]` | same pointer, plus the in-flight rewrite of the report, plus the banner edge below |
 
 **The chain became a fan.** Packages 2 and 2 are now genuine parallel siblings —
 they no longer touch a shared file and neither blocks the other. That is not a
 happy accident: it is what happens when three surfaces stop each owning a copy of
 the same list and start deferring to one owner.
+
+> **Amended 2026-08-30, PR review gate (owner-flagged).** The fan claim held for
+> the two tier-2 packages and was read one package too wide. The banner package
+> and package 4 both modify `src/core/dream/ledger.js`,
+> `tests/unit/ledger.test.js` and `tests/integration/dream.test.js`, so parallel
+> dispatch guarantees a three-file merge conflict — the tier order above says
+> banner-before-report, and a tier order is prose no dispatcher reads.
+> `WP-quarantine-banner-decay` is therefore in package 4's `depends_on`, and the
+> table row above records it. **It is an ORDERING edge, not a contract one**: no
+> claim of package 4 rests on the banner's, and the edge delays nothing, because
+> `WP-dream-promote-in-workspace` already gates that package. Packages 2 and 2
+> remain genuine parallel siblings — the tier-2 fan is unchanged.
 
 ## The dropped second pointer
 
@@ -188,8 +200,14 @@ absent: the Current-conditions block is time-invariant by contract, so `doctor`
 could re-render it from the ledger and compare. Rejected — it would make `doctor` a
 second authority on that file's bytes, for a condition the next dream run heals on
 its own, and a false "stale" warning is worse than a missing one. A pointer to a
-slightly-old file is still a good pointer; a pointer to no file is not. Existence
-alone is the line.
+slightly-old file is still a good pointer; a pointer to no file is not.
+**USABILITY, not freshness, is the line** — and "usable" hardened well past mere
+existence after this passage was written: review round 4 pinned the probe to a
+non-symlink regular file that opens for reading, and the PR review gate
+(2026-08-30) added the parent chain, because a symlinked `<vault>/reports` leaves
+an ordinary readable file at a destination `writeIntoVault` refuses. Staleness
+stayed rejected through both. The probe is owned by
+`WP-doctor-quarantine-counts`'s Table B and is not restated here.
 
 ## One stale cross-reference found and corrected in passing
 

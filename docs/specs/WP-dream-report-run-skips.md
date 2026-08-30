@@ -1,10 +1,10 @@
 ---
 id: WP-dream-report-run-skips
-title: A dream run that skipped sessions says so in its own report
+title: Make the dream report account for the sessions a run could not consume
 status: Ready
 model: opus
 size: S
-depends_on: [WP-quarantine-warnings-file, WP-dream-promote-in-workspace]
+depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace]
 adrs: [ADR-0004, ADR-0012, ADR-0023]
 epic: quarantine-surface
 ---
@@ -130,14 +130,14 @@ rewrite and are not re-derived.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/ledger.js | one exported pure formatter for the section, per **Table A**. It belongs beside `secretRevertSummaryLine`, which it mirrors; nothing else in the module changes |
+| modify | src/core/dream/ledger.js | **STABLE** — one exported pure formatter for the section, per **Table A**. It belongs beside `secretRevertSummaryLine`, which it mirrors; nothing else in the module changes. Stable because no spec of the promotion family lists this module: `WP-dream-promote-module` and `WP-dream-promote-report` deliver `src/core/dream/promote.js` and its test, and `WP-dream-promote-in-workspace` delivers `src/cli/dream.js`, `src/core/dream/validate.js`, `docs/adr/0012` and three test files. (`WP-quarantine-banner-decay`, this package's dependency, edits `quarantineBannerLine` in this module first — a different function, and the reason for the ordering edge in Definition of done item 0(b)) |
 | modify | src/core/dream/scratch.js | **STABLE — one addition only:** `collectExtracts` also returns the count **Table B**'s `stillQuarantined` row names. No other returned field changes shape and no selection behaviour changes. Stable because `WP-dream-promote-in-workspace`'s Out of scope states that `src/core/dream/scratch.js` is not modified by the rewrite |
 | modify | src/core/dream/validate.js | thread the counts in (**Table B**) and append the section. **PROVISIONAL — at dispatch this row is expected to become `src/core/dream/promote.js`** |
-| modify | src/cli/dream.js | pass the counts **Table B** names; nothing else in the run changes |
-| modify | tests/unit/ledger.test.js | cover the formatter only |
+| modify | src/cli/dream.js | pass the counts **Table B** names; nothing else in the run changes. **PROVISIONAL — the path is expected to stand, but the site does not:** `WP-dream-promote-in-workspace` rewrites this whole file (its Deliverables note reads "the whole of Table G"), and `WP-quarantine-warnings-file` adds three refresh call sites to it, so every `:NNN` citation in Table B's Source column and Current state is re-derived at dispatch |
+| modify | tests/unit/ledger.test.js | **STABLE** — cover the formatter only. Stable for the same reason as the module it tests: no promotion-family spec lists this file |
 | modify | tests/unit/dream-collect.test.js | **STABLE** — cover the new count only (**Table B**); no existing assertion on `collectExtracts`'s return shape is weakened. This is `scratch.js`'s test file (its test names are prefixed `dream-collect:`) |
 | modify | tests/unit/dream-validate.test.js | cover the appended section. **PROVISIONAL — at dispatch this row is expected to become `tests/unit/dream-promote.test.js`** |
-| modify | tests/integration/dream.test.js | extend the quarantine-run coverage to the report |
+| modify | tests/integration/dream.test.js | extend the quarantine-run coverage to the report. **PROVISIONAL — the path is expected to stand, but its fixtures do not:** `WP-dream-promote-in-workspace` lists this file for "pipeline wiring and abort behaviour", so the run shape this coverage extends is re-derived at dispatch |
 
 If a further file appears necessary, that is a finding, not a fix: record it under
 "Discovered issues" in the PR body.
@@ -387,8 +387,17 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'could not consolidate' ski
 0. **DISPATCH PRECONDITION — three parts.** (a) ADR-0023's Amendment 2
    (2026-08-29) carries the owner's hand-written
    `Status: **ACCEPTED — OWNER-SIGNED <date>.**` line in place of its `PROPOSED`
-   line. (b) `WP-quarantine-warnings-file` and `WP-dream-promote-in-workspace` are
-   both `Done` on `main`. (c) **Every PROVISIONAL marker in this spec has been
+   line. (b) `WP-quarantine-warnings-file`, `WP-quarantine-banner-decay` and
+   `WP-dream-promote-in-workspace` are all `Done` on `main`. **The banner package
+   is a dependency for an ORDERING reason, not a contract one** (PR review gate,
+   2026-08-30): it and this package both modify `src/core/dream/ledger.js`,
+   `tests/unit/ledger.test.js` and `tests/integration/dream.test.js`, so
+   dispatching them in parallel guarantees a three-file merge conflict. The
+   charter's tier order already put the banner first
+   (`docs/specs/logbook/2026-08-29-quarantine-surface-split.md`); this edge is that
+   order encoded where a dispatcher can see it, and it delays nothing, because
+   `WP-dream-promote-in-workspace` gates this package anyway. Nothing in this
+   spec's contract depends on the banner's. (c) **Every PROVISIONAL marker in this spec has been
    discharged BY A COMMITTED REVISION OF THIS SPEC.** wd-architect re-derives the
    marked Deliverables rows, the Current-state citations, Table B's Source column
    and the verification commands against the tree the implementer will find,

@@ -256,7 +256,9 @@ per-surface label maps owned by `WP-doctor-quarantine-counts` and
 - [ ] Current-state description (the current partition, the caller list, the
       golden-fixture finding, the four pinned tests)
 - [ ] The two literals and the three worked examples under "Exact contracts"
-- [ ] Implementation notes (the pointer-honesty ordering and the named residuals)
+- [ ] Implementation notes (the pointer-honesty ordering and the three named
+      residuals — the time-dependence one is what the idempotence criterion defers
+      to, so a change to either moves both)
 - [ ] Security checklist (what stops reaching the digest, and why that is a
       strict improvement)
 
@@ -342,6 +344,14 @@ per-surface label maps owned by `WP-doctor-quarantine-counts` and
       `state/digest.md` for a fresh quarantine, and render no intake banner for a
       stale-only one.
 - [ ] Every file under `tests/golden/` is byte-identical (Table C).
+- [ ] Idempotence: `N/A — this package ships no command and writes nothing; it
+      changes one pure render, and that render is DELIBERATELY time-dependent, so
+      two calls on the same ledger legitimately differ across the 7-day boundary
+      (Table B; the first named residual under Implementation notes).` The
+      repeatable property it ships instead is the contract's own: the render
+      is a function of the ledger and `opts.now` alone, so two calls with the same
+      ledger and the same `opts.now` are byte-equal, and no call writes, mutates
+      or expires a record.
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)

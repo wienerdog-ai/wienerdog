@@ -471,6 +471,12 @@ Three writers use it and no others: each promoted note; the dream report (whose 
       appended to, and no surface may state the COMMIT half as a flat
       present-tense guarantee** — until row G8 lands the commit path is the
       current wholesale stage, and the residual is where that is said
+- [ ] **Table D's note-count exclusion, which has a second mirror across the
+      package boundary.** `WP-dream-promote-in-workspace`'s row G11 takes the
+      counting over when the pipeline replaces the validator, and it inherits this
+      exclusion by citing this table rather than restating it — so a change to
+      Table D moves that row and its counts acceptance criterion too. **No surface
+      may state the exclusion's shape anywhere but here.**
 - [ ] Current-state description (the ledger shape, `writeIntoVault`'s contract, the
       `dream.js` line ranges — including `:467-470`, where point 3 goes — and the
       validator's counting loop)
@@ -554,9 +560,9 @@ Three writers use it and no others: each promoted note; the dream report (whose 
   pass:** `WP-dream-promote-in-workspace` carries
   `depends_on: WP-quarantine-warnings-file`, its row G6 removes
   `precommitSessionEdits`, its row G8 makes the commit a render-versus-HEAD
-  reconciliation, and **its acceptance criterion "The dream commit contains the
-  promoted paths, the report, and the code-owned `reports/warnings.md` whenever its
-  canonical render differs from HEAD" already carries this exact case** in its
+  reconciliation, and **its dream-commit acceptance criterion — row G8's, cited by
+  name and deliberately not requoted here, because the commit eligibility is G8's
+  to state — already carries this exact case** in its
   closing paragraph: with a stray edit **anywhere** in the file on disk, the commit
   carries the canonical render, none of the edited bytes appear in it, and the edit
   stays in the working tree, uncommitted and undeleted. **Why the window is
@@ -781,7 +787,16 @@ test -f skills/wienerdog-dream/SKILL.md && ! grep -q 'warnings.md' skills/wiener
   gates, or `validate.js` Step 2 — Table D is a counting change and nothing more.
 - A `warnings_file` key in `src/core/layout.js`, or any change to `LAYOUT_KEYS`.
 - Refreshing this file from `wienerdog sync`, `doctor`, or any command other than
-  `dream`: only the dream run knows the before/after ledger a delta needs.
+  `dream`: **neither of those commands may write vault content at all.** `doctor`
+  is diagnostic and never mutates — the invariant its own file states at
+  `src/cli/doctor.js:60-61`, `:367-368` and `:406`, and the reason
+  `WP-doctor-quarantine-counts` probes this path read-only instead of healing it —
+  and `sync` reads the vault to render the digest and the managed block rather
+  than writing into it. Table B's three refresh points, all inside the dream run,
+  are the only writers. (An earlier form of this bullet reasoned from "only the
+  dream run knows the before/after ledger a delta needs"; the 2026-08-30 run-log
+  ruling deleted that model — there is no delta, only a byte comparison against
+  the file (Table C) — so the exclusion now rests on the reason that survives it.)
 - Any way to *clear* a quarantine — `WP-quarantine-review-cli`, named in ADR-0023
   Amendment 1 and not shipped.
 - Re-opening ADR-0023's intake ceiling, fingerprint, selection rule, or Amendment
