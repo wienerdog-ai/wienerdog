@@ -1648,6 +1648,11 @@ test('dream-promote report-fallback: the second write is refused after the first
     assert.equal(res.report.accounting.published, false, cause);
     assert.equal(typeof res.report.accounting.reason, 'string', cause);
     assert.ok(res.report.accounting.reason.length > 0, `${cause}: the primitive's reason, carried unchanged`);
+    // ROW Z5(e) ON THIS ARM-FORM. `rel` is the BODY's own spelling, because
+    // both writes targeted it — and this is the one form of the union's `rel`
+    // that nothing measured until round 3, which is exactly the form Table Y
+    // row Y12 says the pipeline's G8 commits from.
+    assert.equal(res.report.rel, REPORT, `${cause}: row Z5(e) — the BODY's own rel on published:false`);
     // Row Y3/Y5 — `bytes` is the FIRST write's returned buffer, never the
     // composed-but-unpublished section and never a fresh read.
     assert.deepEqual(res.report.bytes, firstPublished, cause);
@@ -1889,6 +1894,31 @@ test('dream-promote report-fallback: the body is matched by CANONICAL path ident
   assert.equal(written.length, 1, `exactly one report file: ${written.join(', ')}`);
   assert.equal(String(get(sc.vaultDir, written[0])), `${body('one')}\n${sectionOf(res)}`);
   assert.deepEqual(res.report.bytes, get(sc.vaultDir, written[0]));
+});
+
+test('dream-promote report-fallback: an UNREADABLE report path fails closed, and the record still reaches the caller', () => {
+  // The fallback's base READ can fail before any write is attempted — an EACCES,
+  // or, as here, a directory sitting where the report file belongs. That is
+  // R4-SHAPED BUT NOT R4: R4 is a refusal of the write, this is a failure to
+  // read. Round 2 accepted the branch as a residual BEFORE Table Z existed; row
+  // Z5(e) then made a positive claim over it — the DERIVED path on `refused` —
+  // and nothing checked it, so a mutation deleting `rel` here survived the whole
+  // suite (round-3 finding 2).
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  fs.mkdirSync(abs(sc.vaultDir, REPORT), { recursive: true });
+
+  const res = run(sc);
+
+  assert.equal(res.report.outcome, 'refused', 'an unreadable path is not evidence the fallback is safe');
+  assert.equal(res.report.rel, REPORT, 'row Z5(e): the DERIVED path on `refused`');
+  assert.match(res.report.reason, /could not be read/, 'the refusal NAMES ITS REASON');
+  assert.equal(res.report.bytes, undefined, 'the refused arm carries no bytes');
+  // FAIL CLOSED, and the record is not lost with the read: it goes back to the
+  // caller for the run's log and output, exactly as on R4.
+  assert.ok(res.report.record.includes(H_ENFORCE));
+  assert.ok(res.promoted.some((p) => p.rel === NOTE), 'the rest of the run promoted normally');
+  // The vault object is untouched — still the directory that caused the failure.
+  assert.ok(fs.statSync(abs(sc.vaultDir, REPORT)).isDirectory(), 'nothing was written over it');
 });
 
 // ── Idempotence's stand-in: a run that writes nothing promotes nothing ───────
