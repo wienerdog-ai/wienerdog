@@ -553,7 +553,7 @@ cost of the append-only form, and worth knowing before the next sweep.
 | Gate | Raw output | Introduced by | Verdict on `1ea9d37` |
 |---|---|---|---|
 | PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-6-gptsol-raw.txt` | `096385e` | **patch is correct — zero findings** |
-| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-6-wd-reviewer-raw.txt` | `096385e` | REQUEST-CHANGES — 4 contract, 2 quality, ALL spec-side |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-6-wd-reviewer-raw.txt` | `096385e` | REQUEST-CHANGES — 3 contract, 1 criteria, 2 quality, ALL spec-side (corrected 2026-08-30 from "4 contract, 2 quality": finding 2 is banded `criteria`, and the disposition table below was always the accurate surface — round 7's finding 7, which the gate traced to its own round-6 summary line) |
 
 **The extraction was verified to have lost nothing** — the gate mapped all 21
 old bullets to the 21 rows and did a token-level set difference per pair; every
@@ -616,3 +616,65 @@ worth recording: completing the signature removes the divergence that produced
 two of the six findings, and a third structural pass on a spec at merge is the
 ratchet this repo has twice been burned by. The recommendation is queued, not
 refused on its merits.
+
+## Round 7 — BOTH GATES CLEAN ON THE SAME TIP
+
+| Gate | Raw output | Introduced by | Verdict on `d13f192` |
+|---|---|---|---|
+| PR rubric (gptsol) | `2026-08-30-promote-module-pr-gate-round-7-gptsol-raw.txt` | (this commit) | **patch is correct — zero findings** |
+| Spec fidelity (wd-reviewer) | `2026-08-30-promote-module-pr-gate-round-7-wd-reviewer-raw.txt` | (this commit) | **APPROVE — seven findings, ALL C-band, none blocking** |
+
+**Same-tip achieved on `d13f192`.** The owner pinned the reading before the round
+ran: clean or C-band-only closes it and the merge decision follows; anything
+above C returns to the owner with the bands rather than triggering another
+round. Both gates landed inside that reading. The rubric gate's verdict is its
+third consecutive clean one.
+
+**What the closing round proved rather than read.** The spec gate parsed both
+`@param` blocks by brace balance, split members at depth 0 so `Map<string,object>`
+was not split on its own comma, and compared the sets: **eleven top-level members
+and four `gates` members, identical in both, and the two type expressions
+byte-identical once whitespace is normalised.** It then extended the comparison
+to the rest of `MS-02`'s mirror set — `@returns` and all three typedefs — all
+IDENTICAL. It re-ran the registry greps (21/6/15) and reproduced the
+`adopt-e2e` failure on a `git archive` export of the merge base, confirming for
+the fourth round that it is environmental.
+
+**Cross-package, measured:** neither sibling restates the options list —
+the report package uses an explicit placeholder under its anti-restatement
+ruling, the pipeline package cites by path, and `extractsBySession` and
+`registry?` occur ZERO times in both. Completing seven members to eleven created
+no cross-package divergence and owes no new registration.
+
+### The seven residuals — recorded, not fixed
+
+All are spec- or logbook-side; **no implementer action and no code change is
+called for**, and the gate said so explicitly. They are left standing because
+the owner's pinned reading makes C-band non-blocking, and fixing them would move
+the tip off the one both gates cleared.
+
+| # | Residual | Where |
+|---|---|---|
+| 1 | the new prose disclaims a rule it states four lines earlier | spec `:271-279` |
+| 2 | a missing sentence terminator makes the paragraph read into the member entry; the two new entries also sit out of declaration order | spec `:275-276` |
+| 3 | finding 2's narrowing landed in the paragraph, not in the walk-state cell the section declares canonical | spec `:757` vs `:795-801` |
+| 4 | the narrowing understates what it withdrew, leaving three cells with no stated evidence | spec `:797-798` |
+| 5 | the errata's characterisation of `MS-13` is wider than the row | spec `:891-893` |
+| 6 | the compressed rule (b) dropped the gate-scoping the module keeps, where it could read as "these two options are required" (they default) | spec `:271-272` |
+| 7 | the round-6 header's band count disagreed with its own disposition table | this file `:556` |
+
+**Residual 7 is fixed in this commit** — it is a count in this record, band counts
+are load-bearing for the routing pin, and the gate traced the error to its own
+round-6 summary line while its per-finding tags were right all along. Corrected
+as a subordinate clause naming what it said before, per the append-only form.
+
+**Residual 3 deserves naming as the class one last time:** the fix for a
+"certification wider than its evidence" finding was itself placed beside the
+certification rather than in it. Ten windows, the same shape. The gate banded it
+C on materiality — `MS-02`'s whole mirror set is verified identical, so nothing
+is uncovered — and that is the right call, but the record should not pretend the
+pattern stopped.
+
+**One drift note the gate declined to file, worth carrying:** the words "ELEVEN
+MEMBERS" are themselves an unregistered numeral mirroring the type three lines
+above. If a twelfth member ever lands, that word goes stale first.
