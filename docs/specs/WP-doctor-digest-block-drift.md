@@ -187,6 +187,10 @@ theirs.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+<!-- Always allowed without listing, per scripts/boundary-check.js: this spec file
+     itself (you flip its `status:` — Definition of done item 4), package-lock.json,
+     memory/lessons/inbox.md, and docs/specs/logbook/. Everything else must be listed. -->
+
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/adapters/shared.js | add `locateManagedBlock` to `module.exports`; no behaviour change |
@@ -498,4 +502,8 @@ npm run lint
 2. Conventional commits; PR titled
    `feat(doctor): report managed-block drift against the digest (WP-doctor-digest-block-drift)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
-4. This spec's `status:` flipped to `In-Review` in the same PR.
+4. This spec's `status:` flipped to `In-Review` in the same PR. **This is not a
+   Deliverables-boundary violation and needs no table row** — `scripts/boundary-check.js`
+   allows the spec file by path, with or without one (proven: it exits 0 on a diff
+   containing only the spec plus a listed file). If a boundary rule anywhere seems to
+   forbid it, that rule is the stale one.
