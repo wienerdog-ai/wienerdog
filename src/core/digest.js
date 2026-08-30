@@ -20,9 +20,10 @@ const secretScan = require('./secret-scan');
  *            exclusion: null|'absent'|'untrusted-exact'|'untrusted-invalid'|'malformed'}} ReadNoteResult
  */
 
-/** Digest size caps (audit A6, F3/F5). Values OWNER-APPROVED 2026-07-17 — see the spec. */
+/** Digest size caps (audit A6, F3/F5). Values OWNER-APPROVED 2026-07-17; MAX_LINES
+ *  re-approved at its current value OWNER-APPROVED 2026-08-30 — see the spec. */
 const DigestCaps = {
-  MAX_LINES: 120, // the historically-claimed line cap, now enforced
+  MAX_LINES: 400, // secondary guard only; MAX_BYTES is the primary cap (WP-digest-line-cap-raise)
   MAX_BYTES: 32 * 1024, // hard byte ceiling on the injected digest
   MAX_NOTE_BYTES: 8 * 1024, // per identity note: cap the compacted body before it joins parts[]
   MAX_PROJECTS: 50, // cap the number of `- name` project lines
