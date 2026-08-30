@@ -96,3 +96,38 @@ for the un-freeze; the alternative is keeping `daily-summary-injection` closed.
   fix-pass (large cross-cutting contract; deferred).
 - **Secret-scan-only (status quo).** Rejected: a secret scan does not detect
   instructions; it is not an injection defense.
+
+## Amendments
+
+### Amendment 1 (2026-08-30) — the daily summary leaves the managed block entirely (ADR-0039)
+
+§Consequences above says `renderDigest` is the single chokepoint for the daily
+`## Summary`, "so every consumer of its output (SessionStart injection and any
+managed-block compile) inherits the fence — the fix is made once, at the source."
+That remains true of the chokepoint. ADR-0039 (Proposed) changes the consumer list,
+and in a direction stronger than inheriting the fence.
+
+**The gap this closes.** The fence is a **soft** boundary — §Why the fence closes the
+vector states that residual plainly. Its strength therefore depends on the *channel*
+the fenced text arrives in, which this ADR did not consider. A harness presents
+`CLAUDE.md`/`AGENTS.md` as instructions (Claude Code's own preamble tells the model
+those instructions **override** default behavior); a SessionStart hook's
+`additionalContext` is presented as context. Copying the whole digest into the
+managed block therefore placed the fenced, mixed-provenance daily summary into the
+*instruction* channel — the worst available home for it — while the identical bytes
+also arrived through the data channel via the hook.
+
+**The amended consumer list.** Under ADR-0039 the digest renders in two parts. The
+**stable** part (the ADR-0021 hash-gated identity notes) is the only part ever copied
+into a user-owned file. The daily summary is **volatile**, so it reaches a session
+only by reference (Claude Code's memory import of `<core>/state/digest.md`) or not at
+all (a hook-less Codex session, or a Cowork session that skips user-scope imports —
+both get the stable half only). The managed block no longer carries the daily summary
+in any form, on any harness.
+
+**What is unchanged.** The fence itself, `DAILY_FENCE_OPEN`/`DAILY_FENCE_CLOSE`, the
+bounded read (`MAX_DAILY_READ_BYTES`), the `readNote` provenance gate, the EP4
+per-section secret scan, and the `daily-summary-injection` capability gate all stand
+exactly as decided. The accepted residual stands too — a fence is still soft where
+the summary *is* injected. Entry-level daily provenance remains the named future WP
+and is still the only full elimination.
