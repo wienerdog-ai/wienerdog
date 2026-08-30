@@ -523,4 +523,4 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
   }
 }
 
-module.exports = { recordOnce, recordSettingsEntry, buildBlock, applyManagedBlock, copyHookScript, toPosixCommand, applySettings, applySkillLinks };
+module.exports = { recordOnce, recordSettingsEntry, buildBlock, locateManagedBlock, applyManagedBlock, copyHookScript, toPosixCommand, applySettings, applySkillLinks };

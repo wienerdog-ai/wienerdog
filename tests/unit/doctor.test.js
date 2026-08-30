@@ -1061,3 +1061,140 @@ test('doctor: the quarantine group sits immediately after Google readiness and i
   assert.match(r.stdout, /^\[ok\] config\.yaml exists and is non-empty$/m);
   assert.match(r.stdout, /^\[warn\] no memory vault yet — run \/wienerdog-setup/m);
 });
+
+// ---------------------------------------------------------------------------
+// Managed-block drift against the current digest (WP-doctor-digest-block-drift).
+// One test per Table D row; fixtures start from `init --yes --fresh-vault`
+// with the harness config dir created so detectHarnesses reports it present.
+
+const { buildBlock } = require('../../src/adapters/shared');
+
+/** tempEnv plus an EXISTING Claude config dir (harness present). */
+function tempEnvWithClaude() {
+  const t = tempEnv();
+  fs.mkdirSync(t.env.CLAUDE_CONFIG_DIR, { recursive: true });
+  return t;
+}
+
+test('doctor: no digest (plain init --yes) → no block line at all, even with a present harness (D1)', () => {
+  const { core, env } = tempEnvWithClaude();
+  run(['init', '--yes'], env);
+  // Fixture fact: a no-vault init writes no state/digest.md.
+  assert.equal(fs.existsSync(path.join(core, 'state', 'digest.md')), false);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /^\[ok\] AI tools — Claude Code: found/m); // non-vacuity: D1, not D2
+  assert.doesNotMatch(r.stdout, /Wienerdog block in/);
+});
+
+test('doctor: fresh-vault install → the block matches the current digest (D7)', () => {
+  const { env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.ok(
+    r.stdout.includes(`[ok] the Wienerdog block in ${claudeMd} matches the current digest`),
+    r.stdout
+  );
+});
+
+test('doctor: digest rewritten after the last sync → out-of-date warn, exit 0, and doctor mutates nothing (D6, D9, no-mutation)', () => {
+  const { core, env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  const digestPath = path.join(core, 'state', 'digest.md');
+  fs.appendFileSync(digestPath, 'a new line the block does not carry\n');
+  // AC9: doctor never mutates — snapshot both files before the run.
+  const beforeBlock = { bytes: fs.readFileSync(claudeMd), mtime: fs.statSync(claudeMd).mtimeMs };
+  const beforeDigest = { bytes: fs.readFileSync(digestPath), mtime: fs.statSync(digestPath).mtimeMs };
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.ok(
+    r.stdout.includes(`[warn] the Wienerdog block in ${claudeMd} is out of date — run 'wienerdog sync'`),
+    r.stdout
+  );
+  assert.deepEqual(fs.readFileSync(claudeMd), beforeBlock.bytes);
+  assert.deepEqual(fs.readFileSync(digestPath), beforeDigest.bytes);
+  assert.equal(fs.statSync(claudeMd).mtimeMs, beforeBlock.mtime);
+  assert.equal(fs.statSync(digestPath).mtimeMs, beforeDigest.mtime);
+});
+
+test('doctor: CLAUDE.md without any sentinel line → no-block warn, exit 0 (D4)', () => {
+  const { env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  fs.writeFileSync(claudeMd, '# my own instructions\n\nnothing wienerdog-shaped here\n');
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.ok(
+    r.stdout.includes(`[warn] no Wienerdog block in ${claudeMd} — run 'wienerdog sync'`),
+    r.stdout
+  );
+});
+
+test('doctor: CLAUDE.md deleted → the same no-block warn, exit 0 (D3)', () => {
+  const { env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  fs.rmSync(claudeMd);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.ok(
+    r.stdout.includes(`[warn] no Wienerdog block in ${claudeMd} — run 'wienerdog sync'`),
+    r.stdout
+  );
+});
+
+test('doctor: ambiguous sentinels → the WienerdogError message verbatim, exit 0 (D5)', () => {
+  const { core, env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  const digest = fs.readFileSync(path.join(core, 'state', 'digest.md'), 'utf8');
+  const block = buildBlock(digest);
+  fs.writeFileSync(claudeMd, `${block}\n${block}\n`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.ok(
+    r.stdout.includes(
+      `[warn] ambiguous wienerdog managed-block markers in ${claudeMd} — refusing to edit (resolve by hand)`
+    ),
+    r.stdout
+  );
+});
+
+test('doctor: both harnesses present → one line per harness, Claude first, each independently resolved (D8)', () => {
+  const { core, env } = tempEnvWithClaude();
+  fs.mkdirSync(env.CODEX_HOME, { recursive: true });
+  run(['init', '--yes', '--fresh-vault'], env);
+  const claudeMd = path.join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md');
+  const agentsMd = path.join(env.CODEX_HOME, 'AGENTS.md');
+  // Make the Codex block stale: rewrite AGENTS.md from a DIFFERENT digest.
+  assert.ok(fs.existsSync(agentsMd), 'fixture: sync must have written AGENTS.md');
+  fs.writeFileSync(agentsMd, `${buildBlock('# some other digest\n\nnot the current one\n')}\n`);
+  // Keep the Claude side untouched so the two harnesses resolve differently.
+  const digest = fs.readFileSync(path.join(core, 'state', 'digest.md'), 'utf8');
+  assert.ok(fs.readFileSync(claudeMd, 'utf8').includes(buildBlock(digest)));
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const okLine = `[ok] the Wienerdog block in ${claudeMd} matches the current digest`;
+  const warnLine = `[warn] the Wienerdog block in ${agentsMd} is out of date — run 'wienerdog sync'`;
+  assert.ok(r.stdout.includes(okLine), r.stdout);
+  assert.ok(r.stdout.includes(warnLine), r.stdout);
+  assert.ok(r.stdout.indexOf(okLine) < r.stdout.indexOf(warnLine), `Claude line must come first:\n${r.stdout}`);
+});
+
+test('doctor: the block group sits after the skill-link lines and before the quarantine line (AC12)', () => {
+  const { core, env } = tempEnvWithClaude();
+  run(['init', '--yes', '--fresh-vault'], env);
+  fs.appendFileSync(path.join(core, 'state', 'digest.md'), 'drift\n');
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const idxSkills = lines.findIndex((l) => l.includes('Claude Code skills registered'));
+  const idxBlock = lines.findIndex((l) => l.startsWith('[warn] the Wienerdog block in '));
+  const idxQuarantine = lines.findIndex((l) => l === '[ok] no session transcripts are being skipped');
+  assert.ok(idxSkills >= 0 && idxBlock >= 0 && idxQuarantine >= 0, r.stdout);
+  assert.ok(idxSkills < idxBlock, `block line must follow the skill-link lines:\n${r.stdout}`);
+  assert.ok(idxBlock < idxQuarantine, `block line must precede the quarantine line:\n${r.stdout}`);
+});
