@@ -134,11 +134,60 @@ nothing touching the index they were trivially true and had no possible RED.
 **One assertion replaces all four** —
 `tests/unit/dream-pipeline.test.js`, *"the run does not touch the user's git
 index — at all"*: ordinary staged content, a staged deletion, a staged mode
-change and an unresolved merge in one fixture, asserting `git ls-files --stage`
-is **byte-identical** across the run. It has a real RED against any reintroduced
+change and a real unresolved merge in one fixture, asserting the contract is
+**byte-identical** across the run. It has a real RED against any reintroduced
 write, and it covers shapes nobody has enumerated. **A total is what the
 per-shape tests could not be:** each of them named a shape, and the mechanism
 lost a different one every round.
+
+**The REPRESENTATION that assertion compares is Table W row W1's, and this
+entry deliberately does not name the command.** An earlier form of this
+paragraph spelled it — `git ls-files --stage` — and that second copy is how the
+contract came to say two different things: the spec's row was patched to
+`-v --stage` while this sentence was not, so the record and the contract
+disagreed about what enforces the total. **One contract, one place that spells
+its command.** Row W1 is that place; this entry cites it.
+
+## The projection representation, retired with ITS cause
+
+Recorded to the same standard as the mechanism above, because it is the second
+thing this work retired and the first thing a later reader will be tempted to
+put back.
+
+Between the drop and the extraction pass of 2026-08-31, the total was enforced
+through a `git ls-files` projection of the index — `--stage`, then `-v --stage`
+after a review round found `--stage` blind to index flags. **The retired thing
+is that pattern: a column added per round.** Its cause is a mismatch of kind — a
+projection ENUMERATES the index, and the contract is a TOTAL over it, so the
+projection is only ever as complete as the last shape someone thought of.
+
+Two measurements ended it, both reproduced at `cbc7240` on git 2.50.1, and both
+show the index file changing while `ls-files -v --stage` compares EQUAL:
+
+| # | the act | raw `.git/index` | `ls-files -v --stage` | `ls-files -f` |
+|---|---------|------------------|------------------------|----------------|
+| 1 | re-stage an entry with its **own identical mode and sha** | **differs** | equal — blind | equal — blind |
+| 2 | set or clear **`fsmonitor-valid`** (needs `core.fsmonitor` configured) | **differs** | equal — blind | differs |
+
+Neither is exotic. Shape 1 is what any "refresh" that decides an entry is
+already correct still does to the file, which is defect 3's neighbourhood; and
+no projection catches both, because they are blind in different places.
+
+**The RED was measured too, not assumed.** With `commitNamedSet` mutated to
+perform shape 1 against the user's index, the raw comparison went red on every
+run state that reaches the publish — normal, bare-marker-after-writes,
+secret-note, near-marker — while `ls-files -v --stage` stayed green on all four.
+The run states that abort before the publish stayed green in both, correctly.
+
+**And the raw representation was measured to be STABLE**, which is the condition
+that makes it usable at all: across those eight run states, plus a racily-clean
+index, `core.fsmonitor` on, and untracked-cache/split-index on, the file's
+content was byte-identical — and its inode and mtime were unchanged too, so
+nothing in the run opens it. **The one false-positive class is named in row
+W1(e):** a git command that refreshes the stat cache (`status`, `diff`) rewrites
+the index with no semantic edit. The run issues none in the user's repo — row W6
+is that measurement — and W6's standing clause already requires owner review
+before one is added.
 
 Assertions that asked the index a question now ask **HEAD**, which is what they
 meant; the warnings-file check asks the **file**, because `status` and
