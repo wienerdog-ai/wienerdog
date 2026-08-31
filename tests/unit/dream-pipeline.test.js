@@ -1357,9 +1357,13 @@ test('dream-pipeline: the run does not touch the user\'s git index — at all (r
   const r = await runDream(ctx);
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
   // NON-VACUITY: the RUN's own bytes are at HEAD for this path. Asserting mere
-  // presence could not fail — the fixture commits `rel` itself nine lines above,
-  // so `HEAD:<rel>` exists before the run starts. Measured: with the run stubbed
-  // to a no-op, a presence check still passed.
+  // presence could not fail — the fixture commits `rel` itself in the
+  // `seed for the index fixture` commit, so `HEAD:<rel>` exists before the run
+  // starts. Measured: with the run stubbed to a no-op, a presence check still
+  // passed. (A comment citing a RELATIVE DISTANCE rots the moment anything is
+  // inserted between it and its referent: this one carried such a distance and
+  // was off by nineteen once the unresolved-merge fixture landed in the gap.
+  // Cite the NAME of what you mean — names do not move.)
   assert.match(
     headBytes(ctx.vault, rel).toString('utf8'), /A legitimately-learned resource note\./,
     'non-vacuity: HEAD carries the RUN\'s bytes, not the fixture\'s seed'
