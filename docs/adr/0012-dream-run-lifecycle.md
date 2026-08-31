@@ -16,12 +16,38 @@ by the next sync — proved transient exactly when durability was needed.
 
 The dream run adopts a three-part lifecycle (WP-039/WP-041):
 
-1. **Pre-commit of session edits.** After acquiring the lock and before the
+> **WITHDRAWN IN PART — read this BEFORE parts 1 and 2.** The 2026-08-30
+> amendment at the end of this ADR **RETIRES part 1 and REPLACES part 2**. They
+> are kept below verbatim as the record of what was decided on 2026-07-04, not
+> as a description of current behaviour, and this note exists because a
+> top-down reader otherwise meets them ~180 lines before meeting their
+> retirement. **Three specific claims below are withdrawn:**
+>
+> 1. **Part 1's pre-commit no longer happens**, so the vault's history no longer
+>    interleaves `vault: session edits before dream` commits, and the run now
+>    leaves the user's uncommitted vault edits untouched in BOTH directions.
+> 2. **Part 1's "preserves one-commit-per-dream revertibility" is superseded.**
+>    One commit per run still holds and is unchanged. What changed is the undo:
+>    it is now `git reset` **then** `git revert <sha>` — two commands, because
+>    the run no longer touches the user's git index, so that index still
+>    describes the pre-run HEAD until the reset re-syncs it. Skipping the reset
+>    makes the revert **refuse** (exit 128) rather than apply in part. **The
+>    guarantee is unchanged in substance — a run is deterministically and loudly
+>    undoable — and only the "one command" phrasing stopped being accurate.**
+> 3. **Part 2's crash revert is replaced by workspace teardown**, and a
+>    `reset --hard` on the vault would now be a data-loss regression rather than
+>    a recovery.
+>
+> **Part 3 (durable alerts) stands unchanged.**
+
+1. **[RETIRED — see the 2026-08-30 amendment]**
+   **Pre-commit of session edits.** After acquiring the lock and before the
    brain runs, the orchestrator commits any uncommitted vault changes as its
    own commit (`vault: session edits before dream`). This is versioning of the
    user's OWN working-tree state — no model-authored content — and it
    preserves one-commit-per-dream revertibility for the dream's writes.
-2. **Crash revert by construction.** Because of (1), any dirt present after a
+2. **[REPLACED — see the 2026-08-30 amendment]**
+   **Crash revert by construction.** Because of (1), any dirt present after a
    nonzero brain exit is brain-authored by construction; the orchestrator
    reverts it (scoped git restore/clean of the vault) before releasing the
    lock. A crashed dream can no longer starve future dreams.
@@ -32,7 +58,8 @@ The dream run adopts a three-part lifecycle (WP-039/WP-041):
 
 ## Consequences
 
-- Users' vault edits get committed automatically with a fixed, recognizable
+- **[WITHDRAWN by the 2026-08-30 amendment — this consequence no longer
+  occurs.]** Users' vault edits get committed automatically with a fixed, recognizable
   message — a new durable behavior: the vault's git history now interleaves
   `vault: session edits before dream` commits with dream commits. Documented
   in user-facing docs; reversible like any commit.
@@ -242,6 +269,29 @@ it stays as an ordinary uncommitted modification.
   preservation both failed (the workspace then holds the sole surviving copy).
   The lifecycle of a workspace left behind is a successor's subject, not this
   ADR's.
+- **Undoing a run takes TWO commands, and this ADR is where that fact is
+  decided.** The run assembles its commit in a private index outside the vault's
+  `.git` and publishes it with `commit-tree` + `update-ref`, and it **never
+  writes, refreshes or resets the user's own git index — in any run state.** So
+  after a run HEAD has advanced and the index has not: `git status` reports the
+  committed paths as staged deletions or reverse modifications and `git diff
+  HEAD` shows phantom deletions, while the committed history is correct
+  throughout. **`git reset` in the vault (no `--hard`, no paths) clears all of
+  it**, and it is safe precisely because the run wrote nothing there — the only
+  state it drops is the user's own pre-run staging. **Until that reset,
+  `git revert <sha>` REFUSES** (`your local changes would be overwritten by
+  revert`, exit 128) rather than applying in part. **The property this ADR
+  guarantees is therefore that a run is deterministically and loudly undoable,
+  which is unchanged; the "one command" phrasing is what stopped being
+  accurate, and the conditional form is not a weakening of the guarantee but
+  the guarantee stated accurately.** An earlier mechanism did refresh the user's
+  index so the second command would be unnecessary; it was **withdrawn** after
+  silently destroying staged content, a staged deletion, a staged mode change
+  and an unresolved merge's stages in four successive review rounds, each patch
+  fixing the shape it had just been shown. **Having the run perform the reset
+  itself is REJECTED for the same reason** — it reimports exactly that
+  destruction as designed behaviour. The full record is
+  `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md`.
 - **A refused run changes no vault note and advances no transcript ledger.**
   A dream run is not idempotent — it consumes a moving watermark and writes a
   date-stamped report — so this, not repeatability, is the property that makes
