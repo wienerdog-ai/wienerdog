@@ -365,7 +365,8 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
 
   // `git revert` cleanly undoes the whole run — AFTER the one-command remedy the
   // dropped index refresh leaves the user (owner ruling, 2026-08-31). The run
-  // does not touch the user's index, so it still describes the pre-run HEAD and
+  // does not touch the user's index — the claim ranges over the run's OWN acts
+  // (row W1(a) defines the scope) — so it still describes the pre-run HEAD and
   // `git revert` REFUSES ("your local changes would be overwritten") until
   // `git reset` re-syncs it. That is the accepted cost, and this asserts its
   // exact shape rather than hiding it: one command, then ADR-0012's
