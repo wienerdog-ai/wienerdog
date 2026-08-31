@@ -230,6 +230,11 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 | modify | tests/integration/dream.test.js | pipeline wiring and abort behaviour |
 | modify | tests/unit/frontmatter-digest-differential.test.js | **AMENDED IN, owner ruling of 2026-08-30 (see the amendment note below).** Row G7 retires `validateAndCommit`, and this file is the ONE surface outside this table that still calls it (`:72`) — for the validator half of a two-sided parity assertion. It is re-pointed at the extracted `tier3` gate, which IS that decision after the extraction. Nothing else about the file changes |
 | modify | docs/adr/0012-dream-run-lifecycle.md | the lifecycle this package changes |
+| modify | docs/specs/MILESTONES.md | **AMENDED IN, owner ruling of 2026-08-31 (amendment note 3 below).** Release gate **M3**'s acceptance cell asserts "`git revert` cleanly undoes a run" — the exact claim Table W row W4 measured to be conditional. ONE cell changes; no other milestone row moves |
+| modify | docs/THREAT-MODEL.md | **AMENDED IN, owner ruling of 2026-08-31.** Two W4 mirrors: T1's one-commit mitigation bullet (`:84`) and T3's rollback-story sentence (`:115`). **`:415`'s "one revertible commit" is deliberately NOT changed** — it names the PROPERTY, which survives; see amendment note 3 |
+| modify | docs/adr/0010-vault-adoption-paths.md | **AMENDED IN, owner ruling of 2026-08-31.** Its Context (`:20`) rests the whole adoption-requires-git decision on the immediate-revert form of the T1 guarantee, so the premise moves with W4 while the decision it supports does not |
+| modify | docs/adr/0020-skill-revision-lifecycle.md | **AMENDED IN, owner ruling of 2026-08-31.** Decision part 4's rollback sentence (`:147`) and the Consequences' literal "git revert is one command" (`:188`). **`:180`'s "plain, revertible commit" is deliberately NOT changed** — same reason as `docs/THREAT-MODEL.md:415` |
+| modify | docs/PRD.md | **AMENDED IN, owner ruling of 2026-08-31 — AND THIS SURFACE WAS MISSED BY THE STOP-POINT'S OWN FIVE-SURFACE LIST.** `:21` reads "revert any night with **one git command**" — the literal claim the ruling retires, in the product's first-person voice. The checklist bullet above exculpated `docs/PRD.md` by name, but that exculpation was measured at `:11` (one commit per run, which W1 genuinely does not touch) and never reached `:21` ten lines below. **A file cleared by association at one line is not cleared at another**, which is this package's own grep-the-claim-not-the-sentence rule turned on its own register |
 
 **Not in this package, and the exclusions are load-bearing.**
 `src/core/dream/promote.js`, `src/core/dream/vault-write.js`,
@@ -256,6 +261,53 @@ already say. **The grant is ONE EXACT FILE ROW, never a directory prefix**
 (`WP-dream-workspace-retarget`'s amendment of 2026-08-27 is the precedent, and
 its reason holds here: a trailing-slash row under `tests/unit/` would open the
 integrity guards this family's designs exist to satisfy).
+
+**AMENDMENT NOTE 3 — 2026-08-31, owner ruling, FIVE rows added and the
+STOP-POINT discharged.** Table W row W4 measured that this package makes
+ADR-0012's revertability conditional on `git reset`, and the Mirrored Surface
+Checklist registered five OUT-OF-BOUNDARY surfaces that still state it as
+immediate. That divergence was routed to the owner rather than papered over.
+**The owner ruled AMEND: the drop stands, and the five surfaces are rewritten to
+the CONDITIONAL form.** The rows above are that ruling's boundary.
+
+**What the ruling preserves, and what it retires.** What survives is the
+PROPERTY — *a run is deterministically and loudly undoable* — which is what the
+M3 gate and THREAT-MODEL T1 actually guarantee. What dies is the literal **"one
+command"**. **The conditional form is not a weakening of the guarantee; it is the
+guarantee stated accurately.** A reversibility mechanism that silently destroyed
+unresolved merge stages was self-defeating, and every rewritten surface carries
+that reading so a later reader cannot mistake the change for a retreat.
+
+**The route is amendment note 1's rule applied a second time:** *when a contract
+retires a surface, the Deliverables table must list that surface's consumers.*
+Row W4 retires the immediate-revert claim; these five files are its consumers.
+**The grant is FIVE EXACT FILE ROWS, never a directory prefix** — `docs/` carries
+ADRs this package has no business editing, and a prefix row would open every one
+of them.
+
+**ONE CANONICAL PHRASING, used byte-identically on every amended surface:**
+`git reset` **then** `git revert <sha>`, plus the loudness limb — the revert
+**refuses (exit 128) rather than applying in part** when the reset is skipped.
+Five surfaces paraphrasing one fact five ways is how this family earned Table W
+in the first place, so the phrasing is fixed rather than left to each site.
+
+**TWO SURFACES ARE DELIBERATELY NOT CHANGED, and the exclusions are load-bearing
+because they look like misses.** `docs/THREAT-MODEL.md:415` (*"every run is one
+revertible commit surfaced in a readable report"*) and
+`docs/adr/0020-skill-revision-lifecycle.md:180` (*"each is a plain, revertible
+commit"*) both name the PROPERTY the ruling explicitly preserves, not the
+mechanism it retires. Amending them would assert that revertability itself
+weakened, which is the misreading this whole note exists to prevent.
+`README.md:69` (*"Every night is at most one git commit; anything can be
+reverted"*) is excluded on the same ground and therefore takes no row.
+**Each is named here so the next sweep does not "fix" it.**
+
+**THREE CONSUMERS FOUND OUTSIDE THE STOP-POINT'S LIST, and two of them are NOT
+DOCUMENTATION.** `docs/PRD.md:21` is granted above. The other two are
+`src/` and `tests/`, are NOT granted here, and are recorded under
+"Discovered issues" instead — see the Implementation-notes bullet
+*"the immediate-revert claim outside `docs/`"*, which states what each is and why
+neither is fixed from a documentation ruling.
 
 **AMENDMENT NOTE 2 — 2026-08-30, owner ruling, one verification step's POLARITY
 inverted.** The step read `grep -q "assertCleanTree" src/cli/dream.js` — a
@@ -456,7 +508,7 @@ hazard that disqualified the free letters.
 | W1 | **The user's index is not this run's property, and the run does not write it** | The commit is assembled in a PRIVATE index outside the vault's `.git` (`GIT_INDEX_FILE`, `cli/dream.js:230`) and published with `commit-tree` + `update-ref` (`:261-263`). **No dream run writes, refreshes, resets or otherwise touches the user's index — at all, in any run state, success or failure.** This is stated as a total, and the thing that enforces it is the byte-identity assertion named in W5, not this sentence. The scope is deliberately the WHOLE index rather than "the user's staged entries survive": that narrower form is what the retired mechanism kept claiming while losing a different shape each round, and a total has no shape to miss |
 | W2 | **The cost, stated rather than hidden** | Because HEAD advances and the index does not, the user's index still describes the PRE-RUN HEAD. `git status` therefore reports the paths the run committed as staged deletions or reverse modifications, and `git diff HEAD` reports phantom deletions. **Measured at `dd18370`** against a reproduction of the exact publish shape: a path the run modified reports `MM`, a path the run added reports `D` in the index column (with the worktree column blank) plus a separate `??` for the same path, and `git diff HEAD --stat` shows a deletion of a file that HEAD contains. **The committed content is unaffected** — `git cat-file -p HEAD:<path>` returns the promoted bytes in every case. The noise is in the index-mediated VIEWS, never in the history |
 | W3 | **The remedy, and it is one command** | `git reset` in the vault (no `--hard`, no paths) re-syncs the index to HEAD and clears every symptom in W2. It is safe precisely because W1 holds: the run wrote nothing there, so there is no run state for the reset to destroy — only the user's own pre-run staging, which the user is the party entitled to drop. **Any surface that states the cost states the remedy in the same breath**; a cost recorded without its one-command fix reads as a defect |
-| W4 | **`git revert` REFUSES until the remedy is applied — a real precondition on a property ADR-0012 states** | With the stale index in place, `git revert <dream sha>` fails: `error: your local changes would be overwritten by revert` / `fatal: revert failed`, exit 128. **Measured at `dd18370`**, both directions: refusal before `git reset`, clean success after it. So ADR-0012's one-commit-per-run revertability is now **conditional on `git reset`** rather than immediate. **Its registered mirror is the assertion that already pins this exact shape** — `tests/integration/dream.test.js`, the test *"full run commits valid tiers, reverts injection + weak skill, deletes out-of-vault, one revertable commit"*: revert throws, `git reset -q`, revert succeeds, and the post-revert check is made against `HEAD` rather than against `status`. **The wording of that conditionality in ADR-0012, ADR-0010, ADR-0020, `docs/THREAT-MODEL.md` and `docs/specs/MILESTONES.md` M3 is NOT settled by this row and is NOT amended by this package** — those are owner rulings and a release gate, routed as a STOP-POINT on 2026-08-31 and listed in the checklist below as mirrors that this table has OUTRUN. Until the owner rules, the divergence is recorded here rather than papered over |
+| W4 | **`git revert` REFUSES until the remedy is applied — a real precondition on a property ADR-0012 states** | With the stale index in place, `git revert <dream sha>` fails: `error: your local changes would be overwritten by revert` / `fatal: revert failed`, exit 128. **Measured at `dd18370`**, both directions: refusal before `git reset`, clean success after it. So ADR-0012's one-commit-per-run revertability is now **conditional on `git reset`** rather than immediate. **Its registered mirror is the assertion that already pins this exact shape** — `tests/integration/dream.test.js`, the test *"full run commits valid tiers, reverts injection + weak skill, deletes out-of-vault, one revertable commit"*: revert throws, `git reset -q`, revert succeeds, and the post-revert check is made against `HEAD` rather than against `status`. **The wording of that conditionality was NOT settled by this row and was routed as a STOP-POINT on 2026-08-31; the owner ruled AMEND the same day**, so ADR-0012, ADR-0010, ADR-0020, `docs/THREAT-MODEL.md`, `docs/specs/MILESTONES.md` M3 and `docs/PRD.md` are rewritten to the conditional form under the five Deliverables rows amendment note 3 grants. **What the ruling preserves is the PROPERTY — a run is deterministically and loudly undoable — and what it retires is the literal "one command"; the conditional form is the guarantee stated accurately, not a weakening of it.** The canonical phrasing every amended surface carries byte-identically is fixed in that note. **THE MIDDLE PATH — having the run perform the `git reset` itself — IS REJECTED BY NAME** and its reasons are recorded in `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md`, so that it is not re-proposed as an obvious improvement: it would reimport the defect-4 class as designed behaviour, and it would violate row W1 |
 | W5 | **The compare/update race retires WITH its mechanism, and the cause is named so a later reader cannot read this as a silent weakening** | The retired refresh read each path's existing index entry and then conditionally rewrote it. Two operations over a mutable index with a window between them is a TOCTOU, and a concurrent `git add` in the user's own shell landing in that window was overwritten — one of the four measured data-loss defects. **That race is not mitigated here; it is unrepresentable, because the act that created it — this package writing the user's index — is gone.** No compare, no update, no window. Nothing inherits the race, and nothing needs to: it was created entirely by the mechanism that no longer exists. **The single assertion that replaces the four retired tests** is `tests/unit/dream-pipeline.test.js`, *"the run does not touch the user's git index — at all (row G8)"*: it seeds ordinary staged content, a staged deletion, a staged mode change and an unresolved merge, then asserts `git ls-files --stage` is BYTE-IDENTICAL across the run. That assertion has a real RED against any reintroduced write and covers shapes nobody has enumerated — which the four per-shape tests, two of which passed after the mechanism was deleted, did not. **The pattern this row is an instance of is `docs/specs/logbook/2026-08-30-toctou-class-retired-with-its-cause.md`'s**, and the full record is `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md` |
 | W6 | **No downstream consumer reads the user's index — re-derived, not inherited** | The standing condition on the drop is that nothing in the package depends on a refreshed index, **and it was re-derived at `dd18370` rather than taken from the removal commit's claim.** What the sweep found: the run's only index writes go to `GIT_INDEX_FILE`; `core/dream/validate.js` runs exactly four git commands (`rev-parse --git-dir`, `status --porcelain -uall`, `reset --hard HEAD`, `clean -fd`) of which **only `rev-parse --git-dir` still has a caller** (`cli/dream.js:582`) — `assertCleanTree` and `restoreVaultToHead` are exported but called nowhere in `src/`, having been retired by row G3's re-base onto the workspace; `core/vault.js`'s `add -A` + `commit` is the vault-CREATION path, guarded on the repo having no HEAD, and is not on any dream path; `core/dream/promote.js` invokes only `merge-file`; and the two `--cached` strings left in `src/` are PROSE about retired git-derived evidence, one a JSDoc `@param` on a pure string parser with no `src/` caller and one a comment stating that the property is now established from the delta's `addedLineNumbers` over workspace bytes **instead of** from `git diff --cached`. **The gates consult git nowhere**, which is the ADR-0012 amendment's own claim, and it is what makes W1 affordable. **A future change that gives any gate, report or accounting field an index-derived input falsifies this row and must come back to the owner before it lands** |
 
@@ -479,25 +531,41 @@ hazard that disqualified the free letters.
       vault property through `git status` or `git diff HEAD`** — both are
       index-mediated and now carry W2's noise, so an assertion built on them is
       measuring the drop rather than the property it names.
-- [ ] **TABLE W's OUT-OF-BOUNDARY mirrors — this table has OUTRUN them, and the
-      divergence is RECORDED, not resolved (STOP-POINT, 2026-08-31).** Five
-      surfaces state the dream's revertability as immediate, which W4 measured to
-      be conditional on `git reset`: `docs/adr/0012-dream-run-lifecycle.md:23`
-      (inside RETIRED part 1's rationale — its carrier is gone but the claim was
-      never restated or withdrawn, and a top-down reader meets it 180 lines before
-      learning the part is retired), `docs/adr/0010-vault-adoption-paths.md:20`,
+- [ ] **TABLE W's ONCE-OUT-OF-BOUNDARY mirrors — the STOP-POINT was raised on
+      2026-08-31 and RULED the same day (AMEND), so this entry is now the sweep's
+      register rather than the gap's.** These surfaces stated the dream's
+      revertability as immediate, which W4 measured to be conditional on
+      `git reset`. **All are granted rows by amendment note 3 and all move in ONE
+      pass, in the canonical phrasing that note fixes:**
+      `docs/adr/0012-dream-run-lifecycle.md:23` (inside RETIRED part 1's
+      rationale — its carrier is gone but the claim was never restated or
+      withdrawn, and a top-down reader meets it 180 lines before learning the part
+      is retired, **which is why the ruling requires an explicit WITHDRAWAL NOTE
+      legible at the point of reading and not only in the later amendment**),
+      `docs/adr/0010-vault-adoption-paths.md:20`,
       `docs/adr/0020-skill-revision-lifecycle.md:147` and `:188`,
-      `docs/THREAT-MODEL.md:84` and `:115`, and `docs/specs/MILESTONES.md:14`
-      (release gate **M3**, "`git revert` cleanly undoes a run"). **None is
-      amended by this package and none may be:** ADR wording is an owner ruling,
-      `docs/THREAT-MODEL.md` and `docs/specs/MILESTONES.md` are outside the
-      Deliverables table, and widening that table is itself an owner ruling (the
-      two amendment notes above are the precedent). **This entry is the register
-      that keeps the gap visible until the owner rules**, and whoever applies that
-      ruling sweeps all five in one pass and ticks this box. `docs/PRD.md:11` and
-      the ADR-0012 amendment's Part 8 state only ONE COMMIT PER RUN, which W1 does
-      not touch — they are correct as written and are named here so the sweep does
-      not change them by association.
+      `docs/THREAT-MODEL.md:84` and `:115`, `docs/specs/MILESTONES.md:14`
+      (release gate **M3**, "`git revert` cleanly undoes a run"), and — **found by
+      the re-sweep this ruling ordered, and absent from the STOP-POINT's own
+      five-surface list** — `docs/PRD.md:21` ("revert any night with one git
+      command").
+      **THE PRD MISS IS THE INSTRUCTIVE ONE and is recorded rather than quietly
+      corrected:** the previous form of this entry cleared `docs/PRD.md` BY NAME,
+      on a measurement taken at `:11`, which states only ONE COMMIT PER RUN and is
+      genuinely untouched by W1. The claim itself sat ten lines below, unread.
+      **A file cleared by association at one line is not cleared at another** —
+      the same grep-the-claim-not-the-sentence failure this family has now paid
+      for at the acceptance-criterion, mutation-row and checklist layers alike.
+      **THREE SURFACES ARE DELIBERATELY NOT SWEPT, named so the next pass does not
+      "fix" them:** `docs/THREAT-MODEL.md:415`,
+      `docs/adr/0020-skill-revision-lifecycle.md:180` and `README.md:69` all name
+      the PROPERTY the ruling preserves (*undoable*), never the "one command"
+      mechanism it retires. **TWO CONSUMERS LIE OUTSIDE `docs/` and are NOT swept
+      here:** `src/cli/adopt.js:275-277` (user-facing CLI text promising "one
+      commit you can undo with a single `git revert`") and
+      `tests/integration/adopt-e2e.test.js:212-217`, which are the
+      Implementation-notes bullet *"the immediate-revert claim outside `docs/`"*'s
+      subject and a Discovered-issues item, not this documentation ruling's.
 - [ ] **ROW G13 — the code-owned `reason` invariant (registered 2026-08-31).**
       Its mirrors are the JSDoc on `records` (`cli/dream.js:884`), whose two bare
       `string` fields are exactly the missing signal the row supplies; the render
@@ -778,6 +846,28 @@ hazard that disqualified the free letters.
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types only; no build step
   (CLAUDE.md). ADR-0004: nothing outlives the job.
+- **The immediate-revert claim outside `docs/` — TWO consumers, NEITHER fixed
+  here, and the second one may be RED right now.** The 2026-08-31 AMEND ruling
+  rewrote six documentation surfaces to the conditional form (amendment note 3).
+  The re-sweep that ruling ordered found the same claim in two places this
+  package's Deliverables do not grant, and **a documentation ruling is not
+  authorization to change code or tests**:
+  **(1)** `src/cli/adopt.js:275-277` prints, to the user, at adoption time:
+  *"Wienerdog needs git so a night of auto-written memory is one commit you can
+  undo with a single `git revert`."* Its JSDoc says the same at `:123`. That is
+  the literal retired claim in USER-FACING product text, and it is the one place
+  the user is asked to make a decision on the strength of it.
+  **(2)** `tests/integration/adopt-e2e.test.js:212-217` runs
+  `git revert --no-edit <sha>` with **no preceding `git reset`** and then asserts
+  `git status --porcelain` is empty. **Both halves are now falsified by Table W:**
+  W4 measured that the revert REFUSES (exit 128) in exactly that state, and the
+  Table W checklist forbids asserting a post-run vault property through
+  `git status`, which is index-mediated and now carries W2's noise. Its sibling
+  in `tests/integration/dream.test.js` was re-pointed at `dd18370` to the
+  throw-`reset`-succeed shape; **this one was not, and the file is one that runs
+  red in this environment for unrelated reasons — which is precisely how a real
+  regression hides.** Record both under "Discovered issues"; do not fix either
+  from this WP.
 - **The reap verdict already exists** (`cli/dream.js:286`) and is discarded.
   Surfacing it is a return-value change, not new machinery — resist rebuilding a
   reap check beside the one that is already there. What IS new is making it
