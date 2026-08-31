@@ -44,7 +44,10 @@ for PREFLIGHT_PREFIX in "ai.wienerdog." "wienerdog-"; do
     PREFLIGHT_STATE="live"
     PREFLIGHT_MATCHES="$PREFLIGHT_MATCHES$PREFLIGHT_OUT
 "
-  elif [ "$PREFLIGHT_RC" -eq 2 ] && [ "$PREFLIGHT_STATE" != "live" ]; then
+  elif [ "$PREFLIGHT_RC" -ne 0 ] && [ "$PREFLIGHT_STATE" != "live" ]; then
+    # Any non-0, non-1 probe status (2, or an unexpected 127/126/3/...) is
+    # NOT-PROBEABLE, not CLEAN: a deleted, non-executable, or crashing probe
+    # must never be read as "the domain is safe".
     PREFLIGHT_STATE="not-probeable"
   fi
 done

@@ -26,7 +26,7 @@ LAUNCHCTL_PATH="/bin/launchctl"
 PREFIX="${1:-ai.wienerdog.}"
 
 not_probeable() {
-  printf 'not-probeable: %s\n' "$1"
+  printf 'not-probeable: %s\n' "$1" >&2
   exit 2
 }
 
@@ -62,9 +62,20 @@ Linux)
   ;;
 esac
 
-MATCHES="$(printf '%s\n' "$OUT" | grep -F "$PREFIX" || true)"
-if [ -n "$MATCHES" ]; then
+# -- terminates option parsing so a prefix that looks like a flag (e.g. "-e")
+# is matched as a literal string, never interpreted as a grep option.
+if MATCHES="$(printf '%s\n' "$OUT" | grep -F -- "$PREFIX")"; then
+  GREP_RC=0
+else
+  GREP_RC=$?
+fi
+if [ "$GREP_RC" -eq 0 ]; then
   printf '%s\n' "$MATCHES"
   exit 1
+elif [ "$GREP_RC" -eq 1 ]; then
+  # No match: CLEAN input, not a failure.
+  exit 0
 fi
-exit 0
+# grep exited >=2: a real failure (bad pattern, I/O error, ...), not "no
+# match" — an absence of evidence, not evidence of absence.
+not_probeable "grep exited $GREP_RC matching the prefix"
