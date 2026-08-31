@@ -187,7 +187,7 @@ channel.
 - Skill quality can now drift *down* as well as up: a bad revision is possible.
   We accept this in v1 because (a) revision is gated at the same bar as creation,
   (b) every revision is reported and digest-surfaced, and (c) undoing the night
-  that carried the revision is two fixed commands — `git reset`, then
+  that carried the revision is two fixed commands — `git reset` then
   `git revert <sha>` — which refuse loudly (exit 128) rather than half-apply if
   the reset is skipped (ADR-0012). Voyager's "self-verification-or-perf-drop"
   result (research memo, open question 1) flags that we have no "does the revised skill still work"

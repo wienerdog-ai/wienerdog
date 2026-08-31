@@ -28,7 +28,7 @@ The dream run adopts a three-part lifecycle (WP-039/WP-041):
 >    leaves the user's uncommitted vault edits untouched in BOTH directions.
 > 2. **Part 1's "preserves one-commit-per-dream revertibility" is superseded.**
 >    One commit per run still holds and is unchanged. What changed is the undo:
->    it is now `git reset` **then** `git revert <sha>` — two commands, because
+>    it is now `git reset` then `git revert <sha>` — two commands, because
 >    the run no longer touches the user's git index, so that index still
 >    describes the pre-run HEAD until the reset re-syncs it. Skipping the reset
 >    makes the revert **refuse** (exit 128) rather than apply in part. **The

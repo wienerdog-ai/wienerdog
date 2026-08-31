@@ -294,6 +294,17 @@ when the reset is skipped. The comma is pinned because it was not: the first
 draft ran `` `git reset` then `` on four surfaces and `` `git reset`, then `` on
 two, which falsifies the word "byte-identically" in the very sentence that
 claims it (C-band nit, 2026-08-31).
+
+**AND THE FIRST FIX OF THAT NIT MISSED TWO MORE, WHICH IS THE LESSON RATHER THAN
+THE TYPO (round 5, C1/C2).** It reported normalising "all seven occurrences"; the
+family-wide, multiline-aware count over every tracked file is **TWELVE**. Two
+deviations survived — a comma form in `docs/adr/0020` that WRAPS A LINE BREAK, so
+no single-line grep could see it, and a bolded `` **then** `` in `docs/adr/0012`,
+on the very surface that says of itself that it decides this fact. **The
+denominator failed, not the edit.** So the standing discipline for this phrase,
+owner-ruled: **the proof of a fix is the RE-GREP, never the edit** — flattened
+across whitespace, over every tracked file, with the output pasted. Measured
+after the round-5 pass: 12 occurrences, 12 canonical, 0 deviations.
 Five surfaces paraphrasing one fact five ways is how this family earned Table W
 in the first place, so the phrasing is fixed rather than left to each site.
 
