@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-in-workspace
 title: Rewire the dream pipeline onto the workspace and promotion
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive, WP-dream-promote-module, WP-dream-promote-report, WP-quarantine-warnings-file]
@@ -228,6 +228,7 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 | create | tests/unit/dream-pipeline.test.js | Table G, and pipeline-level CLAIM 1 and CLAIM 2b |
 | modify | tests/unit/dream-validate.test.js | the gates' new inputs and the removed enforcement half |
 | modify | tests/integration/dream.test.js | pipeline wiring and abort behaviour |
+| modify | tests/unit/frontmatter-digest-differential.test.js | **AMENDED IN, owner ruling of 2026-08-30 (see the amendment note below).** Row G7 retires `validateAndCommit`, and this file is the ONE surface outside this table that still calls it (`:72`) — for the validator half of a two-sided parity assertion. It is re-pointed at the extracted `tier3` gate, which IS that decision after the extraction. Nothing else about the file changes |
 | modify | docs/adr/0012-dream-run-lifecycle.md | the lifecycle this package changes |
 
 **Not in this package, and the exclusions are load-bearing.**
@@ -240,6 +241,59 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 
 If a further file appears necessary, that is a finding, not a fix: record it
 under "Discovered issues" in the PR body.
+
+**AMENDMENT NOTE — 2026-08-30, owner ruling, one row added.** The implementer
+stopped on the boundary rather than working around it, which is what this
+paragraph asks for. **The rule the ruling states: when a contract RETIRES a
+surface, the Deliverables table must list that surface's consumers too — a
+table that lists only the surface leaves its callers red with no in-boundary
+fix.** Row G7 requires the EP2 revert core to be UNREACHABLE, and its three
+named spans (`validate.js:1325-1333`, `:1334-1338`, `:1362-1364`, re-verified
+on `152ae3a`) all sit inside `validateAndCommit`'s Step 3; removing them leaves
+a validator that preserves a secret and then commits it, so the function is
+retired rather than reduced — which is also what Table V's six inheritances
+already say. **The grant is ONE EXACT FILE ROW, never a directory prefix**
+(`WP-dream-workspace-retarget`'s amendment of 2026-08-27 is the precedent, and
+its reason holds here: a trailing-slash row under `tests/unit/` would open the
+integrity guards this family's designs exist to satisfy).
+
+**AMENDMENT NOTE 2 — 2026-08-30, owner ruling, one verification step's POLARITY
+inverted.** The step read `grep -q "assertCleanTree" src/cli/dream.js` — a
+PRESENCE check. **The rule the ruling states: when a contract requires a call to
+disappear, its verification step asserts the ABSENCE, and a presence check
+inherited from the pre-contract shape is a mirror the contract already
+falsified.** Row G3 says the abort keys off the marker AND an empty workspace
+delta, "never off the vault"; the row G6 criterion says the guard discriminates
+"without reading the vault". After that re-base there is no vault read left to
+grep FOR, so the presence form could only be satisfied by keeping the very call
+the contract deletes — and an implementer following the contract would have
+shipped a red step. The step is now
+`test -f src/cli/dream.js && ! grep -q "assertCleanTree" src/cli/dream.js`,
+with the same absence-guard the `precommitSessionEdits` step already carries
+(grep on a missing file exits 2, which `!` would turn into a false green).
+
+**Its mirrors were swept in the same pass, which is the part the last inversion
+of this class did not do:** row **G6**'s "does NOT go" sentence, now stating that
+the CONSUMER is the guard and the guard's CALL is what re-basing replaces; the
+Implementation-notes bullet, whose "deleting both, or neither, are both wrong"
+became "deleting the GUARD is wrong; keeping the CALL is wrong"; the **row G6
+acceptance criterion**, whose RED moved off the withdrawn "deletes both
+`assertCleanTree` uses" — not a mutation at all once the correct implementation
+has no such use — and onto dropping the guard's DELTA half, which is the vacuity
+that matters; the red-proof bullet under Verification steps; and the note
+classifying what that grep is worth, now an ABSENCE check. Current state keeps
+its `:508`/`:251` citations unchanged: they describe the tree this package
+starts from, which the amendment does not move.
+
+**The row is scoped by MEASUREMENT, not by estimate.** Every consumer of
+`validateAndCommit` outside `src/` was swept:
+`tests/unit/dream-validate.test.js` (a Deliverables row already),
+`tests/unit/frontmatter-digest-differential.test.js:72` (granted here) and
+**two hits in `tests/fixtures/dream/fake-brain.js` that are COMMENTS**
+(`:187`, `:195`) — prose describing the old pipeline, not a call. The fixture
+is not granted and the comments are not a contract; their staleness is recorded
+under "Discovered issues" instead, exactly as the excluded-file discipline
+requires.
 
 ### Exact contracts
 
@@ -258,7 +312,7 @@ are currently trapped inside it:
  *  abort itself, at `:224-266`, from a `result` local. Table G needs both
  *  signals in the caller, so both are surfaced:
  *  @returns {Promise<{sawUnknownCommand:boolean,
- *                     reap:{verified:boolean, why?:string}}>}
+ *                     reap:{verified:boolean, why:string}}>}
  *    sawUnknownCommand  the brain's rejection marker. **The abort DECISION
  *          moves out of this function to its caller (row G3)**, because the
  *          second half of that decision — an empty workspace delta — is not
@@ -311,7 +365,7 @@ Surface Checklist, and its claim was false in one of them.
 | G3 | **The unknown-command non-vacuity signal** | today the "the brain did not run — the CLI rejected the trigger prompt" abort keys off vault-cleanliness (`cli/dream.js:251`, `assertCleanTree`, inside the marker branch that opens at `:224`), sound only because the tree was asserted clean immediately before spawn — the premise `precommitSessionEdits` supplied and G6 removes. Under this package the brain writes the WORKSPACE, so the non-vacuity evidence moves there: a genuine rejection produced an EMPTY workspace delta (the brain did no work), so the abort keys off `sawUnknownCommand` AND an empty `computeDelta` result, never off the vault. **The abort DECISION therefore moves out of `runBrainWithWatchdog` (`:224-266`) into its caller**, which is the only place both halves of it are known; the marker is surfaced instead (`### Exact contracts`). The function's other two aborts — a non-zero brain exit, the watchdog timeout — stay where they are. **This is why the pipeline calls `computeDelta` and hands the result to `promote()` rather than letting the module compute it (split decision, `2026-08-28-promote-split.md`): the run needs that result for a decision `promote()` is not making, and computing it twice would let the two answers disagree.** A run that emitted the marker but DID write the workspace proceeds into promotion, exactly as today's guard let a writing run proceed into validation. The vault's cleanliness is no longer evidence of anything the brain did |
 | G4 | **The pipeline consumes EP2's disposition** | `promote()` returns a typed EP2 disposition summary (its `### Exact contracts`), and the pipeline's transcript-advance consumes it the way today's `secretReverts` signal does (`cli/dream.js:582-610`): a transcript whose only note was **WITHHELD** for a secret is NOT marked processed, so it regenerates next run rather than being silently lost. **A REDACTED note does NOT defer** — measured canonical semantics (`validate.js:1064-1072`: redacted files "consumed their transcripts normally and MUST NOT defer, which is why they are counted separately and never enter `reverted[]`"): the sanitized note WAS promoted, so its transcript was consumed and regenerating it would re-do consumed work and mint a second quarantine artifact. `redactions` is an accounting and reporting field, never a deferral trigger. **The pipeline reads the typed fields, never a human-readable refusal reason — parsing prose would be an undocumented security interface.** A refusal for a NON-secret reason (allowlist, conflict) advances the transcript normally. **The digest is regenerated AFTER the ledger is persisted, and the ORDER is the content (Table V, row V10):** `state/digest.md` is the next session's context, so regenerating it before the ledger lands shows that session a state this run has already changed. This row changes what the ledger records, not when the digest runs — but it is the row that could break the ordering, so it owns it |
 | G5 | Teardown wiring | the workspace is removed on every exit path — success, refusal, brain failure, timeout — **with one named exception: a run that refused because the reap was not verified (G2) does NOT tear down.** Removing a tree a surviving process may still be writing is not a cleanup, and G2 is the whole reason that state is distinguishable. Teardown never touches the vault. A workspace left behind by that refusal, or by a crash, is the residue-lifecycle successor's subject, not this package's. **THE ONLY-COPY INVARIANT BINDS TEARDOWN (`WP-dream-promote-module`, Table Q row Q4, cited not restated):** under promotion the destruction risk moves from the vault to the WORKSPACE rather than vanishing, so nothing here may remove a workspace holding the sole surviving copy of a note whose redaction and whose withheld preservation both failed — that run refuses fail-loud instead, exactly as the shipped abort does. **Scratch and the lock keep their shipped ordering (Table V, row V9):** scratch is removed, then the lock is released, and both only if this process still owns the lock, which is what keeps a superseded stale holder from deleting the current owner's live extracts |
-| G6 | **`precommitSessionEdits` does not survive, and one of its two neighbours must be re-based** | measured: its stated job is "so the subsequent dream diff is exactly the brain's writes" (`validate.js:113-115`). Under this package the brain writes nothing in the vault, so there is no such diff, and `promote()`'s three-way compare reads `vault-now` from the **filesystem** rather than from git. What remains is only its cost: it commits the user's in-flight edits under the `wienerdog` identity without asking. The call at `cli/dream.js:507` goes, and the `assertCleanTree(vaultDir)` at `:508` — its precommit-pairing use — goes with it. **The SECOND consumer of `assertCleanTree` does NOT go and must be re-based: G3 owns it.** `cli/dream.js:251` uses vault-cleanliness to tell a genuine brain rejection from a working run, and that signal's premise (the tree was clean immediately before spawn) is exactly what removing the precommit destroys |
+| G6 | **`precommitSessionEdits` does not survive, and one of its two neighbours must be re-based** | measured: its stated job is "so the subsequent dream diff is exactly the brain's writes" (`validate.js:113-115`). Under this package the brain writes nothing in the vault, so there is no such diff, and `promote()`'s three-way compare reads `vault-now` from the **filesystem** rather than from git. What remains is only its cost: it commits the user's in-flight edits under the `wienerdog` identity without asking. The call at `cli/dream.js:507` goes, and the `assertCleanTree(vaultDir)` at `:508` — its precommit-pairing use — goes with it. **The SECOND consumer of `assertCleanTree` does NOT go and must be re-based: G3 owns it.** `cli/dream.js:251` uses vault-cleanliness to tell a genuine brain rejection from a working run, and that signal's premise (the tree was clean immediately before spawn) is exactly what removing the precommit destroys. **What "re-based" COSTS that consumer was settled by owner ruling on 2026-08-30, because this row and G3 read as opposite instructions for one round: the CONSUMER is the GUARD, and the guard survives; the guard's CALL to `assertCleanTree` does NOT, because replacing that call IS the re-basing.** G3 says the abort keys off the marker and an empty workspace delta, "never off the vault" — so a guard that still called `assertCleanTree` would not have been re-based at all. The verification step's grep was inverted to match (`! grep -q`), and the amendment note under Deliverables records why a PRESENCE check could not hold beside G3 |
 | G7 | **The gate-extraction handoff, discharged here** | `WP-dream-promote-module`'s Table D states what `promote()` does with the four gates it is HANDED, and names the extraction as this package's. Discharged here: the four gates become functions this pipeline can inject — the EP2 gate returning the ADR-0034 taxonomy, the other three returning `reason\|null` — each taking the input `WP-dream-promote-module`'s Table D assigns it, none consulting git. **`validate.js`'s EP2 enforcement half goes with them:** the revert core at `:1324-1332` reverts, re-stages and drops index entries for bytes that, under promotion, were never written to the vault, so it has no subject; the refusal-reason suffixes it composes (`:1333-1337`) go with it; and so does the `reverted[]` accounting they feed (`:1361-1363`) — `promote()`'s own refusal accounting replaces all three. **What must NOT go with them is the identity-gated deletion of the redact arm's redundant copy (`:1338-1360`), which sits between the suffixes and the accounting, inside the same per-path loop (`:1233-1364`), and is durable-lifecycle behaviour rather than enforcement** (row V3). **An earlier form of this row named `:1324-1364` as the removal — a range that CONTAINS that deletion and ends on the enclosing loop's own closing brace, so it could not be applied literally without unbalancing the function. Corrected 2026-08-29.** **AND THE MUST-SURVIVE SPAN TAKES EXACTLY ONE CHANGE, which is this row's hardest instruction and was found by a design round the same day: its KEEP BRANCH (`:1357-1359`) announces the copy it keeps by appending to `reason`, and `reason`'s only consumer in the loop is `:1361`, inside the removal — so preserving that span byte-for-byte would preserve a behaviour whose output channel this row deletes.** The DECISION is unchanged and stays exactly as its owner decides it — the byte-identity guard, which copy is deleted, which is kept. **What changes is the CARRIER: the kept copy becomes an entry on the PRESERVATION RECORD** (`WP-dream-promote-module`, Table Q rows Q1 and Q9) — the GATE fills that entry's `artifact` and `location`, and `promote()` fills its `remediation`, which is that spec's row Q9's per-field provenance and is cited here rather than restated, reaching the user through the dream report's preserved-copy line instead of through a refusal reason — which is also what Table Q row Q8 requires of every fact about a preserved copy, and why prose could not have stayed the carrier. **This is an owner-authorized change to how a shipped `Done` package's contract item is carried, ruled 2026-08-29, not an implementer's latitude:** that package's own Table Q registers the suffix as the only thing announcing that copy, so the obligation is discharged rather than dropped, and an extraction that removes the suffix without adding the record entry loses the copy. **What survives the removal is the redact DISPOSITION, on the promotion side rather than the revert side** — Table D's EP2 row is the owner of that distinction and this row does not restate it. **The gates' semantics are not this package's to change, WITH ONE ANNOUNCED EXCEPTION — the named input below, which is PENDING and NOT authorized**: the extraction moves where their evidence comes from, per that Table D, and beyond that one input, nothing else. **An earlier form closed this sentence with "and nothing else" and then appended the input AFTER the closing universal, leaving a universal the next sentence falsifies — round 5's H2, and the contrast is the carrier change above, which is announced BEFORE its universal closes.** **ONE NAMED INPUT, PENDING, and it IS a semantic change — routed here by the owner ruling of 2026-08-29 (round 4's B1) because this package owns `src/core/dream/validate.js` and extracts this gate: the extracted EP2 gate WOULD return, as its redaction accounting's `lines`, THE NUMBER OF ADDED LINES WHOSE POST-REDACTION BYTES DIFFER FROM THEIR CAPTURED BYTES.** Today's shipped value is `addedLineNumbers.length` (`validate.js:1286`) — every added line the scrub RAN OVER, because `scrubAddedLines` rewrites each one as `scanAndRedact(line).text` (`:838-840`) and a clean line is rewritten byte-identically — so the shipped count can exceed the number of lines whose bytes CHANGED, and the shipped report line renders it as "line(s) scrubbed" (`:1401`). **`WP-dream-promote-module`'s Table Q row Q10 states that shipped truth and names the gap in place; the FIELD's shape, its provenance and its carriers are that row's and are not restated here — what is this package's is the counting.** **PENDING, AND THE BLOCKER IS QUOTED HERE RATHER THAN ONLY CITED — the authorization is NOT granted (owner ruling, 2026-08-29, round 5's C4).** The value this input changes is PINNED in a shipped `Done` package, `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`, which pins the dream report's redaction line and says so in as many words — quoted here rather than only cited, per the ruling. **QUOTED VERBATIM: the three fragments below are exact contiguous text of that source, ellipses appear only BETWEEN exact fragments, the source's own bold markers are not reproduced, and no emphasis is added here** — "The line format is pinned here, not illustrated. … Every byte outside the angle-bracket placeholders is literal … where `<n>` is `addedLineNumbers.length`". **An earlier form re-cased two of the three fragments and still called itself a quotation (round 6's CD-2). The mis-quoted sentence was the one saying that every byte outside the placeholders is literal, which is why this is a contract defect and not a typo: this is the family's ONE exception to cite-never-restate, and an exception that alters the bytes it exists to reproduce has not been taken.** **So the input changes exactly `<n>`, in the spec that pins it. UNBLOCKING IT REQUIRES AN OWNER DECISION AGAINST THAT PIN — it is not this package's to grant, not an implementer's latitude, and not resolvable by reading this row. If the owner authorizes it at the pipeline round, the settlement is an AMENDMENT to that `Done` spec, exactly as the carrier change's is.** **UNTIL THAT DECISION AN IMPLEMENTER OF THIS PACKAGE BUILDS THE SHIPPED COUNT AND NOT THIS ONE**, and no surface in this family may describe `lines` as a count of CHANGED lines (`WP-dream-promote-module`, row Q10). **THIS IS THE SECOND EXCEPTION IN THIS ROW'S OUT-OF-SCOPE BULLET AND IT IS THE PENDING ONE; the carrier change above is the AUTHORIZED one, and the two do NOT have the same status** — round 5's C4 was exactly that contradiction, this row reading as an instruction to ship while both Out-of-scope bullets said there was exactly one authorized exception and this was not it. **No acceptance criterion is added for it, deliberately and now doubly so:** the pass ROUTES the change rather than performing it, the change is not authorized, and growing this package's verification surface for work it has not been given is what this family's stop criterion forbids. The criterion lands with the counting change, after the decision |
 | G8 | **The dream commit, and the staged-bytes handoff discharged here** | `WP-dream-promote-module`'s Table E states the rule and names it as this package's to satisfy: the commit contains **nothing but the run's NAMED commit set, each member carrying ITS CLASS's decided bytes** — three classes, and that table names the byte source of each (promoted and redacted outcomes, and the published report arm, from Table S; the code-owned warnings file from this row's third clause, which Table E cites rather than restates). **Table E's pre-round-2 shorthand for this — "only promoted paths" — is superseded and no surface may state it**, this row included: it read as exhaustive while the set is not. First: with no pre-commit (G6), a wholesale stage would sweep the user's uncommitted edits into the dream commit, so the commit carries a NAMED set of paths and nothing else — the promoted paths, the report, and the third clause's warnings file — which is also what keeps a staging object surviving a primitive refusal (Table H, the PRIMITIVE's row H7) out of it. Second: **naming the path is not enough** — staging re-reads the working tree, so a user save landing between the publish and the staging call is what enters the commit, ungated. Measured: with a save in that gap, `git add -- <path>` stages the user's post-publish bytes. **For classes (i) and (ii) the committed content must therefore be the DECIDED BYTES — `WP-dream-promote-module`'s Table S, which owns what they are, which outcomes carry them and what may be derived from them, and which this row cites rather than restates.** That table was extracted after two consecutive rounds landed on it; this row is one of its two named consumers. **How that is achieved is the implementer's — round-4 CUT ruling.** ADR-0012's "one dream run = one git commit in the vault" is unchanged. **The user's post-publish save remains as an uncommitted working-tree modification**: it is not committed and it is not discarded. **WHICH PATH THE REPORT IS COMMITTED AT — READ, NEVER DERIVED HERE.** The path this row stages for the report is `report.rel`, read off the arm `promote()` returned. `WP-dream-promote-report`'s **Table Z** owns it: row **Z1** gives the derivation a SINGLE OWNER inside `promote()`, and row **Z5(e)** decides the field's value arm by arm — the matched body's own `rel` on `promoted`, the derived path on `fallback` and on `refused` — so this row cites those rows and restates neither the derivation nor its segment rule. **THAT FIELD EXISTS BECAUSE THIS ROW READS IT, and row Z5(e)'s own prohibition forbids a second derivation here:** a path this package derived would be wrong on the `promoted` arm in exactly the runs where the brain's spelling and the derived path differ. The two PUBLISHED arms are the ones whose bytes reach this commit; the `refused` arm carries none (`WP-dream-promote-module`, Table S row **S3**). **THE REPORT PATH ON A PARTIAL PUBLISH (round 4's A1, ruled 2026-08-29):** when `promote()` returns `report.outcome === 'promoted'` with `accounting.published === false`, **THIS RUN PUBLISHED the body and the enforcement section never reached the vault**. This row commits the report path on BOTH forms of `accounting`, and what it commits is that arm's `bytes` — **the bytes THIS RUN PUBLISHED for that path** — never `report.record` and never a fresh read (`WP-dream-promote-module`, Table S rows S1 and S4). **`bytes` IS NOT A CLAIM ABOUT WHAT THE TARGET HOLDS, and this row may not make one:** on the `published:false` form the refusal's own cause can be, and on an `expect` conflict IS, the target no longer holding those bytes, so what it holds at the end of the run is refusal-cause-specific (`WP-dream-promote-report`, **Table Y**, rows **Y4** and **Y5**). **This row was NOT TOUCHED in the window that killed that claim and carried it one round longer in the reworded form "the bytes the vault holds" — while this spec's checklist entry for the partially published report NAMED THIS VERY CLAUSE as a mirror, four lines above its own prohibition against the claim (round 6's CD-1). The registration was correct and nothing walked it; `scripts/mirror-walk.js` exists because of this finding.** **A commit that SKIPS the report path on that form drops a published, gated file out of the run's one commit; a commit that MANUFACTURES the missing section commits bytes no gate judged and no primitive published.** The outcome itself is `WP-dream-promote-report`'s **Table Y** and is not restated here. Third, **the commit RECONCILES the code-owned vault warnings file — by CONTENT, never by authorship (quarantine-surface review, round 1 finding 3 and round 2 finding 3; owner-ruled direction A, 2026-08-29).** `WP-quarantine-warnings-file` writes `reports/warnings.md` into the vault at run points the dream commit does not cover, and it relied on the NEXT run's `precommitSessionEdits` to sweep it in — the call row G6 removes. **The eligibility test is therefore NOT "did this run write the file"** — that wording, which this row carried until round 2, misses the two refresh points that matter: point 2 runs AFTER this commit and point 3 runs on an idle run that makes no commit at all, and on the next run the file is already correct on disk so nothing rewrites it and the authorship test excludes it forever. **The test is a comparison instead.** At commit construction the run composes this file's canonical bytes with `composeWarnings` — `WP-quarantine-warnings-file`'s `### Exact contracts`, the family's ONLY composer of that document, whose module is CONSUMED and never modified here — over the **pinned state** (that spec's Table C pinned-state row, which pins exactly ONE argument: the run's in-memory `ledger` binding, not mutated between its refresh point 1 and this commit — the post-commit `recordProcessed` / `recordSecretExhausted` mutations are deliberately outside it). **The render takes the ledger and NOTHING else — no carried snapshot, no date, and never the file on disk** (owner ruling of 2026-08-30, which dropped that file's `## Run log` section; before it, a carried snapshot and a date were pinned here too, and round 3 found the date unpinned across the two callers and the carried bytes user-controlled). **Passing a different LEDGER is therefore the only way these bytes can disagree with what the run wrote, which is why that row pins it and this row does not restate it.** **If those composed bytes differ from the file's content at `HEAD`, the commit includes `reports/warnings.md` with THOSE COMPOSED BYTES as its decided bytes — no matter whether, or when, anything wrote the file on disk. If `HEAD` does not hold the file at all, the same is true PROVIDED the ledger holds at least one active quarantine; a vault that has never had one gets no file (`WP-quarantine-warnings-file`'s Table C row 4, cited not restated). If the composed bytes equal the content at `HEAD`, the file is omitted: no churn commit.** So the commit contains **the promoted paths, the report, AND `reports/warnings.md` whenever its canonical render differs from HEAD — subject, on the absent-`HEAD` arm alone, to the empty-ledger guard just stated: a vault whose ledger holds no active quarantine gets no file** — and still nothing else. Two consequences this row states rather than leaves implicit. **(a) A stray user edit to this code-owned file is never committed — and that now holds for the WHOLE file, not merely part of it:** the entire document is rendered from the ledger and the composer is never shown the bytes on disk, so nothing a user or another process leaves anywhere in the file can be in the composed bytes; the commit carries the canonical render and **writes nothing to disk**, so the user's edit survives as an uncommitted working-tree modification until a refresh point legitimately rewrites the file whole. (An earlier form of that spec carried the file's `## Run log` section forward verbatim, which made those bytes user-controlled input to this commit — round 3, finding 1. The owner dropped the section on 2026-08-30, so there is no carry left to qualify this claim with.) **(b) The decided bytes for this path come from the commit-time render, NOT from Table S** — nothing was promoted, no primitive returned a buffer, and no buffer is carried across the pipeline; that is why direction A dissolved round 2's finding 2 rather than answering it. Naming the path is safe for exactly the reason naming a user path is not: the file is **CODE-OWNED**, written whole from the transcript quarantine ledger, never brain-authored, so committing it sweeps no user bytes. This is still an INHERITANCE, not a new contract: `WP-quarantine-warnings-file` owns what the file contains, when it is written and how it is composed, and is cited, not restated; this row owns only the render-versus-HEAD test and the passage into the run's single commit |
 | G9 | **The abort paths change, and leaving them would be a data-loss regression** | `restoreVaultToHead` (`validate.js:139-149` — `reset --hard` + `clean -fd`) is called at `cli/dream.js:549` and `:564`. Both mean "discard the brain's unvalidated writes". Under this package the brain wrote nothing in the vault, so there is nothing to discard — and with `precommitSessionEdits` gone (G6), a `reset --hard` there would destroy **all** of the user's uncommitted work for a failure that never touched the vault. Both call sites become `destroyWorkspace`. `restoreVaultToHead` itself is left in place and exported: this row changes only which function the two sites call, not the crash-replay, journal or uninstall-restore subject, which is the residue-lifecycle successor's |
@@ -350,7 +404,7 @@ revisited.
 
 | # | What the validator owns today | Consumes | Durably produces | Inherited by |
 |---|---|---|---|---|
-| V1 | **Step 1 — scratch integrity** (`validate.js:1107-1142`) | `scratchDir`, `expectedScratch`, `scratchBaseline` | deletes any scratch file that is not an expected extract, deletes an expected extract whose content changed, and **RECORDS each as an out-of-vault violation** (`outOfVaultDetailed`), which reaches the enforcement section (`:1385-1386`) and the return (`:1450-1458`) | **row G12.** **NOT already covered by the pipeline's `scratchIntact`** (`cli/dream.js:57-78`), which only checks that expected extracts still exist and byte-match — measured, an extra `EVIL.json` passes it. The delete-and-record half has no other owner (round 3, F3) |
+| V1 | **Step 1 — scratch integrity** (`validate.js:1107-1142`) | `scratchDir`, `expectedScratch`, `scratchBaseline` | **TWO HALVES, and they are stated separately because their INHERITANCE DIFFERS.** **(a) UNEXPECTED WRITES** — deletes any scratch file that is not an expected extract. **(b) CHANGED EXPECTED EXTRACTS** — deletes an expected extract whose content changed. Today BOTH halves end the same way: each is **RECORDED as an out-of-vault violation** (`outOfVaultDetailed`), which reaches the enforcement section (`:1385-1386`) and the return (`:1450-1458`) | **row G12 — which takes the two halves in DIFFERENT SHAPES, and this cell names which, because an earlier form handed both to G12 in half (a)'s shape and so contradicted the very row it names (PR #55, round 1).** **(a) survives INTACT as enumerate-delete-record**, and it is **NOT already covered by the pipeline's `scratchIntact`** (`cli/dream.js:57-78`), which only checks that expected extracts still exist and byte-match — measured, an extra `EVIL.json` passes it; that half has no other owner (round 3, F3). **(b) does NOT survive as delete-and-record. Under G12 a missing or changed expected input is the FAIL-LOUD ABORT, unchanged** — and the reason is structural rather than a preference: the run consolidated nothing, so it is aborted before promotion and there is no report, no return and no `records` handoff for a violation to be recorded INTO. A record produced on that path would have no channel, which is the exact defect round 4's F1 named one row over. **No surface here may say a changed expected extract is deleted-and-recorded under the pipeline** |
 | V2 | **Step 2 — per-path classification and three gates** (`:1144`) | git evidence in the vault; the four gates' own inputs | the promote/refuse decision per path | rows **G7** (the gates' extraction and evidence) and, for the decision itself, `WP-dream-promote-module`'s Tables C and D |
 | V3 | **Step 3 — the EP2 secret gate, its enforcement half, and its DURABLE LIFECYCLE** (`:1211`; revert core `:1324-1332` with its reason suffixes at `:1333-1337` and its `reverted[]` accounting at `:1361-1363`; quarantine `:669-738`; preservation-failure abort `:1298-1323`; identity-gated deletion of the redundant `redacted/` copy `:1338-1360`; retention `:906-946,1365-1366`; report metadata `:1392-1409`) | staged git diffs; the pre-change bytes it preserves; the set of artifacts this run created | withheld/redacted dispositions; **a durable quarantine artifact under a collision-resolved name; a fail-loud abort that refuses to destroy a working copy unless a durable artifact byte-identically holds the CURRENT bytes; once-per-run retention of `redacted/`; and the per-redaction report line carrying path, scrubbed-line count, labels and artifact name**; and the revert, re-stage and index-drop machinery | **rows G7 and G5**, and — for what the gate's RESULT carries into promotion and what promotion does with it — `WP-dream-promote-module`'s **Table Q**, CITED here and never restated. **The DURABLE half of the lifecycle above is neither package's, and saying it was Table Q's was wrong until the reconciliation pass of 2026-08-29 corrected it:** the preservation-failure abort, the identity-gated deletion of a redundant copy and the once-per-run retention of `redacted/` are decided, asserted and mutation-covered in the shipped `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — cited by spec path because its table letters collide with this family's, the canonical map (`docs/specs/logbook/2026-08-29-promote-family-map.md`) being the one surface that states which — and Table Q rows Q5 and Q6 are pure pointers at it, while row Q4 points at that package's enforcement while owning the invariant as it binds this family. **The extraction here must therefore PRESERVE them, which is what row G7's acceptance criterion asserts:** the geometry is what makes that hard, and it is stated exactly rather than approximately — the revert core that goes (`:1324-1332`) sits below the abort (`:1298-1323`), its reason suffixes (`:1333-1337`) follow it, the identity-gated deletion (`:1338-1360`) follows those, and its `reverted[]` accounting (`:1361-1363`) follows the deletion; all five are inside the per-path loop (`:1233-1364`), and the prune (`:1365-1366`) fires immediately after that loop closes. **The identity-gated deletion is the dangerous one: it is the only must-survive behaviour that lies INSIDE the span an over-wide removal would take**, and until 2026-08-29 this row and rows G7's own Deliverables entry both named a removal range that contained it. **AND PRESERVING IT IS NOT THE SAME AS LEAVING IT BYTE-IDENTICAL:** its keep branch (`:1357-1359`) announces the kept copy through `reason`, whose only consumer in this loop is `:1361` and therefore goes — so row G7 re-carries that announcement on the EP2 gate's preservation record (`WP-dream-promote-module`, Table Q rows Q1 and Q9), by owner ruling of 2026-08-29. Row G7 owns that instruction; this row records that the behaviour is on the must-survive side of the cut and not why. The enforcement half has no subject once nothing is written to the vault, and goes. **Row G5 cites Table Q's row Q4 because under promotion the destruction risk moves to the workspace rather than vanishing. An earlier form of this row listed only "dispositions and the revert machinery" — round 4's F2, and the reason Table Q exists.** **THE SCRUBBED-LINE COUNT's VALUE IS NOT CHANGED BY THIS EXTRACTION:** row G7 carries a PENDING named input that would narrow it, blocked on an owner decision against `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1387`, which pins it as `addedLineNumbers.length`. This row records that the shipped value is what survives the cut until that decision, and not why (round 5's H3: the input reached row G7 alone, where the carrier change reached every surface its own checklist entry registers). **A number stood here — "six surfaces" — and is DROPPED: it was correct the day it was written and stale the moment a seventh was registered, which is exactly the failure row G11 names one row over (round 6's NIT-3). The registered mirror list is the checkable form, and `scripts/mirror-walk.js` walks it** |
 | V4 | **Step 4 — the dream report** (`:1375-1411`; re-pinned 2026-08-30, the shipped span having moved) | the run's records | the report body plus the appended enforcement section | `WP-dream-promote-report`'s report row, Table Y and Table R. Its REFUSED arm's delivery, **and the delivery of a `promoted` arm whose SECOND write was refused** (that spec's **Table Y**, round 4's A1), are **row G11**'s; the commit of the report path on that partial form is **row G8**'s. **AND THE SHIPPED SECTION HEADING RETIRES WITH THE STEP.** Today's append writes `## Reverted by orchestrator (policy enforcement)` (`validate.js:1391`); under promotion the section is composed by `promote()` under the heading `WP-dream-promote-report`'s **Table R** pins — `## Refused by policy (promotion enforcement)` — and no run may write both. **The RENAME is that package's to decide and is cited here, never restated; the RETIREMENT of the shipped string is THIS package's act**, because this is the package that removes the append: until it lands, both strings live in the tree. The shipped assertions on the old string IN THE REPORT sit in two files this spec already lists as deliverables (`tests/unit/dream-validate.test.js`, `tests/integration/dream.test.js`). **Another surface names the old string to the BRAIN and is NOT this package's — stated without an ordinal, this family's counts beside lists having gone stale before:** `skills/wienerdog-dream/SKILL.md` is Out of scope here, its sentence goes stale when this lands, and its assertion (`tests/unit/dream-skill-structure.test.js`) is not a deliverable either — **recorded as a follow-up rather than silently carried** |
@@ -568,9 +622,52 @@ revisited.
       both would leave the other's channel unasserted, which is the shape round
       6's CD-3 closed on the other side** (registered 2026-08-30, with that
       channel's own Table N row; PR #42, round 1's finding 5).
+- [ ] **THE NEUTRALISER'S SECOND CODE CARRIER — registered because one security
+      contract has TWO code carriers and neither owns it (PR #55, round 1;
+      routed to the architect because no in-boundary carrier could be the
+      owner).** `WP-dream-promote-report`'s **Table N** classifies the channels,
+      and its owner ruling of 2026-08-29 makes **THE MECHANISM THE
+      IMPLEMENTER'S** — so Table N names no code carrier, and this entry does not
+      give it one. **A second carrier is CONTRACTED, not accidental:** Table N's
+      `report.reason` and `accounting.reason` rows both read *"redact, then
+      sanitise, **wherever it is RENDERED**"* and name THIS package as the party
+      that renders them, because the section composer never touches either
+      value. **So the drift risk is not the two-line body — it is the ORDER
+      RATIONALE.** Row **N1** is the single owner of WHY redact precedes
+      sanitise, and its grounds are a measurement about
+      `sanitizeProjectName`'s character class, not a fact about either carrier.
+      `src/core/dream/promote.js` restates it above its own composer; **this
+      package's carrier CITES row N1 by letter and may not restate the
+      measurement, the character class or the `token=…` result** — a rationale
+      stated twice is two places to falsify the day the order is re-decided, and
+      the second copy is the one nobody walks. Its mirrors here are row
+      **G11**'s obligation **(i)** and the report-refusal criterion's cases
+      **(a)** and **(b)** — the two channels this package's carrier serves.
+      **ROUTED, NOT SETTLED.** Collapsing the two carriers into one is a
+      SUCCESSOR's, and this entry pins the two shapes that are already ruled
+      out: it may not be an export added to `src/core/dream/promote.js`, whose
+      exclusion from the Deliverables table is load-bearing and whose
+      `module.exports` a `Done` package pins name by name; and it may not be a
+      code carrier named in Table N, which would reverse that table's owner
+      ruling. The remaining home is `src/core/secret-scan.js`, which already
+      owns `redactOnly` and is what N1's measurement is about — three files
+      across two `Done` packages, so it is a WP and not an amendment here.
 - [ ] **The `records` handoff** — row G12 produces them, row G11 delivers one
       copy, and `WP-dream-promote-report`'s `records` input takes the other.
       **Two channels, deliberately: a log line is not a durable record.**
+      **WHICH SCRATCH EVENTS PRODUCE A RECORD AT ALL is part of this
+      registration (PR #55, round 1).** Row G12 splits the retired Step 1 into
+      two shapes — enumerate-delete-record for UNEXPECTED writes, the fail-loud
+      ABORT for a missing or CHANGED expected input — and only the first
+      produces a record. Its mirrors are row **G12**, **Table V row V1**'s
+      production and "Inherited by" cells, and the scratch-integrity acceptance
+      criterion. **No surface may say a changed expected extract is
+      deleted-and-recorded under the pipeline**, and none may assign
+      delete-and-record to G12 without naming which half it means. **V1 carried
+      exactly that conflation for a round while this entry named G12 as the
+      producer and nothing walked the pair** — the same shape as the round-6
+      CD-1 finding two entries up, in a table extracted to make owner cells
+      checkable.
 - [ ] **Table V — what the validator owns and who inherits it.** Its mirrors are
       Current state's step list, every Table G row named in its "Inherited by"
       column, and the acceptance criteria those rows carry. **The claim this
@@ -593,10 +690,18 @@ revisited.
   Surfacing it is a return-value change, not new machinery — resist rebuilding a
   reap check beside the one that is already there. What IS new is making it
   unconditional (row G2).
-- **`assertCleanTree` has two consumers and they are not the same consumer.**
-  Removing `precommitSessionEdits` removes one of them (`:508`) and destroys the
-  PREMISE of the other (`:251`). Row G6 says which is which; deleting both, or
-  neither, are both wrong.
+- **`assertCleanTree` has two consumers and they are not the same consumer, and
+  the distinction survives the 2026-08-30 amendment — what changed is what
+  "re-based" costs the SECOND one.** Removing `precommitSessionEdits` removes
+  one of them (`:508`) outright. The other (`:251`) is the unknown-command
+  non-vacuity GUARD, and that guard does NOT go: it is re-based onto the
+  workspace delta (row G3). **Its CALL to `assertCleanTree` does go, because
+  re-basing it is exactly the act of replacing that call** — the premise the call
+  rested on (a tree asserted clean immediately before the spawn) is what removing
+  the precommit destroys, and the amendment's point is that a re-based guard
+  cannot still be reading the vault. **Deleting the GUARD is wrong; keeping the
+  CALL is wrong.** What discriminates a genuine rejection is now the empty
+  delta, and the criterion below is where that is proven.
 - **Do not build a containment check.** The one rule the family has is the
   primitive's, and it took eleven review rounds — see the Dispatch precondition.
 - When uncertain: choose the simpler option and record it under "Decisions made"
@@ -690,9 +795,15 @@ revisited.
 - [ ] **`precommitSessionEdits` is gone and the second `assertCleanTree`
       consumer is re-based (row G6).** The pipeline no longer pre-commits the
       user's edits, and the unknown-command guard still discriminates a genuine
-      rejection from a working run without reading the vault. Proven RED against
-      an implementation that deletes both `assertCleanTree` uses, which makes
-      the non-vacuity guard vacuous.
+      rejection from a working run without reading the vault. **Proven RED
+      against an implementation that drops the guard's DELTA half and aborts on
+      the marker alone** — which is the vacuity that matters, because the marker
+      is attacker-influenceable and a guard resting on it alone re-opens the
+      nightly retry-DoS a writing run used to be protected from. **The RED that
+      stood here until 2026-08-30 — "deletes both `assertCleanTree` uses" — is
+      WITHDRAWN and the reason is the amendment's:** after the re-base the
+      correct implementation HAS no `assertCleanTree` use, so that mutation is
+      not a mutation at all and the criterion could not fail on it.
 - [ ] **The gates keep their meaning after extraction (row G7).** Each extracted
       gate returns the same verdict for the same content as its pre-extraction
       form, judged on the input `WP-dream-promote-module`'s Table D assigns it and
@@ -721,7 +832,28 @@ revisited.
       redact arm's copy survives the withhold — the run's result carries that
       copy as an entry on the EP2 gate's preservation record, with its own
       `location`, and the refusal reason names no copy at all
-      (`WP-dream-promote-module`, Table Q rows Q1, Q8 and Q9). **Proven RED
+      (`WP-dream-promote-module`, Table Q rows Q1, Q8 and Q9).
+      **AND ONE TRIGGER NARROWED, WITH ITS CAUSE, AND THE NARROWING IS NAMED
+      RATHER THAN LEFT TO BE DISCOVERED (owner ruling, 2026-08-30).** The
+      preservation-failure abort's identity check used to RE-READ THE VAULT and
+      compare that read against the preserved copy; the extracted gate is HANDED
+      the bytes it preserves, so the copy holds them by construction. **A whole
+      TOCTOU class therefore retired together with its CAUSE — the vault
+      re-read — and the two arms only that class could reach ("a copy exists but
+      is of the WRONG bytes", "the identity read cannot be performed") are
+      unreachable by construction, not by weakening.** What remains is asserted
+      in BOTH directions: both preserves failed → fail-loud refuse; a durable
+      copy exists → recoverable, no abort. **THE PROTECTION DID NOT VANISH, IT
+      MOVED, and this is where a future reader is told so:** a user save landing
+      between the judgment and the publish is the vault-write primitive's
+      `expect` guard — Table H row **H5**
+      (`docs/specs/done/WP-dream-vault-write-primitive.md`), which states the
+      conditional publish and names its own residual — and it is ASSERTED THERE,
+      in `tests/unit/dream-vault-write.test.js`. This package CITES it and does
+      not re-assert it; a second copy here would be a drifting duplicate of a
+      contract this package does not own. The move is recorded in
+      `docs/specs/logbook/2026-08-30-toctou-class-retired-with-its-cause.md`.
+      **Proven RED
       against an extraction that preserves `:1338-1360` byte-for-byte**, which
       keeps the append at `:1358` to a `reason` whose only consumer this package
       deletes — the copy is then kept and announced to nobody — **and separately
@@ -952,9 +1084,11 @@ test -f tests/unit/dream-pipeline.test.js && npm test -- --test-name-pattern "cl
 # grep on a file that MUST exist, so guard the absence case first: grep on a
 # missing file exits 2, which `!` would turn into a false green.
 test -f src/cli/dream.js && ! grep -q "precommitSessionEdits" src/cli/dream.js
-# The unknown-command guard's re-based consumer survives (row G6): deleting
-# both assertCleanTree uses would make it vacuous.
-test -f src/cli/dream.js && grep -q "assertCleanTree" src/cli/dream.js
+# The unknown-command guard is RE-BASED off the vault (rows G3 and G6), so the
+# call goes with the premise it rested on. This is a grep on a file that MUST
+# exist, so guard the absence case first: grep on a missing file exits 2, which
+# `!` would turn into a false green.
+test -f src/cli/dream.js && ! grep -q "assertCleanTree" src/cli/dream.js
 # Step 4's report append goes with the step (Table V row V4), retiring the
 # shipped `## Reverted by orchestrator` heading. Guard the absence case first:
 # grep on a missing file exits 2, which `!` would turn into a false green.
@@ -969,8 +1103,8 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   real red from a deliberately broken state — the sibling's transitional vault
   argument restored at the call site (reddens `claim-1-pipeline`); a git call
   added with the workspace as cwd (reddens `claim-2b-pipeline`); the
-  `precommitSessionEdits` call restored (reddens its grep); both
-  `assertCleanTree` uses deleted (reddens its grep); the Step-4 append restored
+  `precommitSessionEdits` call restored (reddens its grep); the
+  `assertCleanTree` call restored in the guard (reddens its grep); the Step-4 append restored
   (reddens the heading grep); the ADR text reverted
   (reddens the docs grep) — so a check that cannot fail is caught before anyone
   believes it. Verify each **also** goes red when its deliverable is ABSENT —
@@ -980,9 +1114,17 @@ test -f docs/adr/0012-dream-run-lifecycle.md && grep -qi "promot" docs/adr/0012-
   on a correct implementation, and green on a broken one that passes the path
   through a variable. Measured during the pre-split spec's round zero — the grep
   that section originally carried was green on the unmodified tree.
-- **The `assertCleanTree` grep is a presence check, not a proof.** It catches
-  the delete-both mistake and nothing finer; the behaviour is proven by the
+- **The `assertCleanTree` grep is an ABSENCE check, not a proof.** It catches a
+  guard still reading the vault and nothing finer; that the guard still
+  DISCRIMINATES a genuine rejection from a working run is proven by the
   non-vacuity acceptance criterion, which is where the discrimination lives.
+  **Its polarity was inverted on 2026-08-30 (owner ruling — see the amendment
+  note under Deliverables).** It was a PRESENCE check, and a presence check
+  cannot hold beside row G3: G3 says the abort keys off the marker and an empty
+  workspace delta, "never off the vault", and the criterion below says the guard
+  discriminates "without reading the vault". After the re-base there is no vault
+  read left to grep FOR, so the presence form could only be satisfied by keeping
+  a call the contract deletes.
 
 ## Out of scope (do NOT do these)
 

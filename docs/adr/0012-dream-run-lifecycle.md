@@ -169,3 +169,85 @@ so is blind to total scratch deletion.
 - The fail-loud `reason` for the vanished-inputs case is a fixed control-plane
   string (no brain stderr, no session content), consistent with part-3 / WP-041
   separation; ADR-0004 (just files) and the brain sandbox are unchanged.
+
+## Amendment (2026-08-30): the run writes a workspace and PROMOTES out of it — WP-dream-promote-in-workspace
+
+### Context
+
+Parts 1 and 2 above rest on one premise: **the brain writes into the vault.**
+The pre-commit existed so the post-brain diff would be exactly the brain's
+writes, and the crash revert existed to discard those writes when the run
+failed. Both are correct only while the vault is the brain's write target.
+
+It no longer is. Three shipped packages built the replacement and none was
+wired in: `WP-dream-workspace-retarget` builds a **workspace** (a private copy
+of the vault's readable content plus a constructed baseline of the exact bytes
+it just wrote) and re-targets the brain at it;
+`WP-dream-vault-write-primitive` built the one sanctioned way to put a content
+file into the vault; `WP-dream-promote-module` and
+`WP-dream-promote-report` built **promotion**, which decides per path what
+happens and publishes what survives. This amendment is the run adopting them.
+
+The direction inverts. The old lifecycle let the brain write the user's
+namespace and then took writes BACK; the new one never lets them in until they
+have passed. Everything the old direction needed in the vault — pre-committing
+the user's edits so the diff would be clean, reverting the brain's unvalidated
+writes on failure, deriving gate evidence from git — either has no subject any
+more or becomes a data-loss regression if left in place.
+
+### Decision (replaces parts 1 and 2; adds parts 8 and 9)
+
+1. **~~Pre-commit of session edits.~~ RETIRED.** There is no dream diff in the
+   vault to keep clean, and promotion's three-way compare reads the vault's
+   current bytes from the filesystem rather than from git. What remained was
+   only the cost: it committed the user's in-flight edits under the
+   `wienerdog` identity without asking. **The consequence recorded below — that
+   the vault's history interleaves `vault: session edits before dream` commits
+   — no longer holds for runs after this amendment.**
+2. **~~Crash revert by construction.~~ REPLACED BY WORKSPACE TEARDOWN.** The
+   brain wrote nothing in the vault, so there is nothing to discard; and with
+   the pre-commit gone, a `reset --hard` on that path would destroy **all** of
+   the user's uncommitted work for a failure that never touched the vault. The
+   failure paths remove the WORKSPACE instead. The vault is left byte-identical,
+   uncommitted user edits included.
+3. **Durable alerts.** Unchanged.
+
+Two parts are ADDED, numbered from where the WP-069 amendment left off and
+written in that amendment's own `**Part N —**` form.
+
+**Part 8 — the run's shape.** Build the workspace → spawn the brain at it → require a
+**verifiably empty** brain process group before reading the workspace →
+classify what the brain wrote against the constructed baseline with a git-free
+walk → promote what policy admits → commit exactly that → tear the workspace
+down. `wienerdog dream` still makes **one git commit in the vault per run**,
+which this amendment does not change.
+**Part 9 — what the commit contains.** A NAMED set of paths, each carrying its
+class's decided bytes, and nothing else: the promoted paths (redacted ones
+included), the dream report, and the code-owned quarantine warnings file
+whenever its canonical render differs from `HEAD`. The bytes committed are the
+ones promotion approved — not a re-read of the working tree, so a user save
+landing between the publish and the commit is neither committed nor discarded;
+it stays as an ordinary uncommitted modification.
+
+### Consequences
+
+- **The user's uncommitted vault edits are never touched by a dream** — not
+  committed on the way in, not reverted on the way out. This removes the
+  automatic-commit behaviour part 1 introduced, and the interleaved
+  `vault: session edits before dream` commits stop appearing.
+- **Two run states deliberately leave the workspace on disk**, because removing
+  a tree is the wrong act in both: a run refused because the brain's process
+  group could not be verified empty (a surviving process may still be writing
+  it), and a run that failed because a note's redaction AND its withheld
+  preservation both failed (the workspace then holds the sole surviving copy).
+  The lifecycle of a workspace left behind is a successor's subject, not this
+  ADR's.
+- **A refused run changes no vault note and advances no transcript ledger.**
+  A dream run is not idempotent — it consumes a moving watermark and writes a
+  date-stamped report — so this, not repeatability, is the property that makes
+  a failed night safe.
+- Threat model: the brain's write target is no longer inside the user's
+  namespace, so a write that policy refuses never existed in the vault to be
+  taken back. Classification consults git nowhere, so a brain-written
+  `.gitignore` has no gate to blind. ADR-0004 (just files) is unchanged: the
+  workspace is removed on every ordinary exit path and outlives no job.

@@ -1,0 +1,41 @@
+GATE: PR review, independent second opinion (gptsol / pr-rubric.md)
+ROUND: 1
+TIP: 42056d6569f713af9d10936ac728027d9f357ba9
+READ-ONLY CHECK: git status --porcelain empty before and after, byte-identical.
+RAW OUTPUT, RELAYED VERBATIM:
+
+{
+  "findings": [
+    {
+      "title": "[P1] Hash the approved bytes without worktree filters",
+      "body": "When the vault enables `core.autocrlf` or a `.gitattributes` clean filter for this path, `git hash-object --path` transforms `m.bytes` before storing the blob. For example, with `core.autocrlf=true`, an approved CRLF buffer is committed with LF bytes; a clean filter can similarly inject content that no promotion gate approved. Hash the exact decided buffer without applying worktree conversion.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": { "absolute_file_path": "src/cli/dream.js", "line_range": { "start": 234, "end": 234 } }
+    },
+    {
+      "title": "[P1] Preserve staged content before updating the live index",
+      "body": "When the user has a distinct staged version of a path that the dream also promotes, this unconditional `update-index` replaces that staged snapshot with the dream blob. The user's staged work is then silently lost even though the surrounding comment claims pre-existing staged state is preserved; retain or rebase the existing index entry rather than overwriting it.",
+      "confidence_score": 0.94,
+      "priority": 1,
+      "code_location": { "absolute_file_path": "src/cli/dream.js", "line_range": { "start": 259, "end": 260 } }
+    },
+    {
+      "title": "[P2] Surface failures while synchronizing the user index",
+      "body": "When another Git process holds `index.lock` or the index is otherwise unwritable, `allowFail: true` suppresses the failed synchronization after `update-ref` has already moved HEAD. The dream then reports success while the user's index still describes the old HEAD, making newly committed paths appear as staged deletions or reverse modifications; this failure needs explicit recovery or a loud diagnostic.",
+      "confidence_score": 0.98,
+      "priority": 2,
+      "code_location": { "absolute_file_path": "src/cli/dream.js", "line_range": { "start": 259, "end": 260 } }
+    },
+    {
+      "title": "[P2] Record unexpected non-regular scratch entries",
+      "body": "When the brain creates a symlink, FIFO, socket, or other non-directory entry in the writable scratch tree, this `e.isFile()` filter omits it entirely. The final scratch cleanup deletes the entry without adding the required out-of-vault record to the report or output, whereas the previous enumerator returned every non-directory entry; enumerate and record these entry types instead of silently skipping them.",
+      "confidence_score": 0.98,
+      "priority": 2,
+      "code_location": { "absolute_file_path": "src/cli/dream.js", "line_range": { "start": 79, "end": 82 } }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The patch can commit bytes different from those approved by promotion, overwrite a user's staged snapshot, silently leave the index inconsistent, and erase some scratch-policy violations without reporting them. Executed `npm test` (exit 1; the adopt end-to-end test failed again in isolation with exit 1 because its fake Claude path differed from the ambient pin), the four changed dream test files together (exit 0), and `npm run lint` (exit 0); `git status --porcelain` was empty before and after and byte-identical.",
+  "overall_confidence_score": 0.98
+}
