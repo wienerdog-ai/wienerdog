@@ -29,6 +29,25 @@ const SECRET_REVERT_EXHAUSTED_REASON = 'secret-revert-exhausted';
  *  dream_max_input_bytes against genuinely new sessions. */
 const SECRET_REVERT_MAX_DEFERRALS = 3;
 
+/** The quarantine reasons this module classifies as INFORMATIONAL (ADR-0023
+ *  Amendment 2): the user cannot act on any of them, so their banner sentence
+ *  is allowed to decay. Exported so every surface reads the same set rather
+ *  than re-deciding it. `read-error` is here by owner decision, 2026-08-29: a
+ *  genuinely actionable read failure still surfaces through the durable
+ *  pull-based surfaces, which never decay.
+ *  A reason OUTSIDE this set and outside SECRET_REVERT_EXHAUSTED_REASON is
+ *  UNRECOGNIZED: still counted, and never decayed — fail loud, so a future
+ *  reason class cannot be retired by old code that assumed it was harmless. */
+const INFORMATIONAL_QUARANTINE_REASONS = Object.freeze(['over-ceiling', 'too-many-lines', 'read-error']);
+
+/** How long after a record's `updated_at` the informational quarantine sentence
+ *  keeps rendering: 7 days (owner decision, 2026-08-29: 7 over 14). Past it the
+ *  BANNER retires and nothing else does — the record stays quarantined, stays
+ *  skipped, stays counted by every durable surface and stays listed in the
+ *  vault's reports/warnings.md. No acknowledgement state, no new field, no new
+ *  file (ADR-0004). */
+const QUARANTINE_BANNER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Case-folded absolute-path key (ADR-0021/0023: path identity folded, content exact).
  *  @param {string} absPath @returns {string} */
 function foldKey(absPath) {
@@ -357,23 +376,64 @@ function quarantineSizeBytes(rec) {
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
+/** Is at least one INFORMATIONAL-or-unrecognized active quarantine still FRESH,
+ *  i.e. recorded within QUARANTINE_BANNER_WINDOW_MS of `now`?
+ *
+ *  Fail loud in every direction the ledger cannot prove: a missing `updated_at`,
+ *  a non-string one, an unparseable string and a future timestamp all count as
+ *  FRESH, so an unreadable or skewed clock keeps the warning up rather than
+ *  silently retiring it. Likewise an UNRECOGNIZED reason never decays at all.
+ *  `updated_at` is only ever parsed into a number and compared; no branch here
+ *  renders it.
+ *
+ *  The membership rule mirrors `activeQuarantines` (a truthy record with
+ *  `outcome === 'quarantined'`, its reason normalized the same way) — but only
+ *  the COUNT is authoritative, and that comes from `activeQuarantines` itself.
+ *  @param {Ledger} ledger @param {number} now epoch ms @returns {boolean} */
+function hasFreshInformationalQuarantine(ledger, now) {
+  for (const rec of Object.values(ledger.files || {})) {
+    if (!rec || rec.outcome !== 'quarantined') continue;
+    const reason = String(rec.reason || 'unreadable');
+    if (reason === SECRET_REVERT_EXHAUSTED_REASON) continue;
+    if (!INFORMATIONAL_QUARANTINE_REASONS.includes(reason)) return true;
+    const parsed = typeof rec.updated_at === 'string' ? Date.parse(rec.updated_at) : NaN;
+    if (!Number.isFinite(parsed)) return true;
+    if (now - parsed <= QUARANTINE_BANNER_WINDOW_MS) return true;
+  }
+  return false;
+}
+
 /** The code-owned transcript-quarantine banner, derived from the ledger ALONE:
- *  displayName output plus the code-owned reason enum, never a path, never
- *  content, never a matched value. The two sentences are partitioned by reason —
- *  an UNRECOGNIZED reason falls into the first one, so a quarantine is never
- *  silently dropped from the banner. When both apply the intake sentence comes
- *  first, separated by a blank line.
- *  @param {Ledger} ledger @returns {string} '' when no quarantine is active */
-function quarantineBannerLine(ledger) {
+ *  never a path, never content, never a matched value. The two sentences are
+ *  partitioned by reason — an UNRECOGNIZED reason falls into the first one, so a
+ *  quarantine is never silently dropped from the banner. When both apply the
+ *  informational sentence comes first, separated by a blank line.
+ *
+ *  The INFORMATIONAL sentence is built from ONE INTEGER and fixed code-owned
+ *  text: no filename and no stored `reason` reaches it (ADR-0023 Amendment 2).
+ *  The enumeration has exactly one home — reports/warnings.md in the vault — and
+ *  this sentence points there and nowhere else. Its count stays EXACT (stale
+ *  records included), which is what carries the anti-silent-drop invariant, and
+ *  it renders only while at least one of those quarantines is fresh: an EVENT
+ *  belongs in the digest for a bounded window, STANDING STATE belongs in the
+ *  pull-based surfaces. The ACTIONABLE sentence never decays and keeps its
+ *  enumeration verbatim — a decaying banner is only ever correct for a condition
+ *  the user cannot act on.
+ *  @param {Ledger} ledger
+ *  @param {{now?:number}} [opts] epoch ms; defaults to Date.now(). The ONLY
+ *    clock this function reads, and the seam its tests need.
+ *  @returns {string} '' when nothing renders */
+function quarantineBannerLine(ledger, opts) {
+  const now = opts && Number.isFinite(opts.now) ? opts.now : Date.now();
   const active = activeQuarantines(ledger);
   const intake = active.filter((e) => e.reason !== SECRET_REVERT_EXHAUSTED_REASON);
   const spent = active.filter((e) => e.reason === SECRET_REVERT_EXHAUSTED_REASON);
   /** @type {string[]} */
   const lines = [];
-  if (intake.length > 0) {
+  if (intake.length > 0 && hasFreshInformationalQuarantine(ledger, now)) {
     lines.push(
-      `> [!warning] Wienerdog: ${intake.length} session transcript(s) could not be read and were skipped — ` +
-        `${intake.map((e) => `${e.file} (${e.reason})`).join(', ')}. Dreaming continues over your other sessions; ` +
+      `> [!warning] Wienerdog: ${intake.length} session transcript(s) are being skipped and will not be dreamed over. ` +
+        'Which ones, and why: reports/warnings.md in your vault. Dreaming continues over your other sessions; ' +
         'a skipped file is retried automatically if it changes.'
     );
   }
@@ -418,6 +478,8 @@ module.exports = {
   SECRET_REVERT_REASON,
   SECRET_REVERT_EXHAUSTED_REASON,
   SECRET_REVERT_MAX_DEFERRALS,
+  INFORMATIONAL_QUARANTINE_REASONS,
+  QUARANTINE_BANNER_WINDOW_MS,
   foldKey,
   fingerprint,
   displayName,

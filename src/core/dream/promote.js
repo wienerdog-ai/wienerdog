@@ -73,6 +73,13 @@ const { writeIntoVault } = require('./vault-write');
 // "is this path inside that directory" was measured wrong, in both directions,
 // and eleven review rounds went into the one that holds.
 const { isAtOrBeneath } = require('./workspace');
+// Table N's two transformations, both SHIPPED and both imported rather than
+// re-implemented. `redactOnly` is the ONE shared detector's redact-only face
+// (ADR-0024); `sanitizeProjectName` is the display-name sanitiser Table R's
+// measured-cost row names. A second detector here would be the defect
+// `src/core/transcripts/index.js:60` already warns against.
+const { redactOnly } = require('../secret-scan');
+const { sanitizeProjectName } = require('../digest');
 
 /**
  * The CURRENT harness instruction-file basenames, canonicalised and
@@ -245,17 +252,12 @@ function makeAdmit(layout) {
   };
 }
 
-/**
- * True when `buf` survives a UTF-8 round trip unchanged.
- *
- * A decode that replaces an invalid sequence with U+FFFD is lossy, and a scan
- * over the replaced text is a scan over bytes that are not in the file. This is
- * the second half of "unscannable" — the first is the delta's own `binary` flag.
- * @param {Buffer} buf @returns {boolean}
- */
-function isLosslessUtf8(buf) {
-  return Buffer.from(buf.toString('utf8'), 'utf8').equals(buf);
-}
+// THE UTF-8 ROUND-TRIP CHECK IS NOT HERE, AND ITS ABSENCE IS THE CONTRACT
+// (`WP-ep2-unscannable-preserve`, Table U row U2). Both halves of "unscannable"
+// — the delta's `binary` flag and the round trip — are decided by the EP2 gate,
+// which is the party that preserves; a second copy of the predicate in this
+// module is what put the refusal ahead of the preservation before. This module
+// hands the gate the delta `record` and the after-bytes and honours its verdict.
 
 /**
  * Read the live vault's bytes for `rel`, or `null` when the path is absent.
@@ -539,6 +541,214 @@ function withRemediation(record, remediation) {
   return record.map((e) => ({ artifact: e.artifact, location: e.location, remediation }));
 }
 
+// ── The dream report (WP-dream-promote-report) ───────────────────────────────
+//
+// THE REPORT IS BOTH A PROMOTION CANDIDATE AND THE RECORD OF THE PROMOTION
+// DECISIONS. The brain authors its body — including the `## Gated out (and why)`
+// accounting no filesystem outcome can reconstruct
+// (`skills/wienerdog-dream/SKILL.md:409-425`) — and it travels through the
+// decision phase, the gates and the primitive exactly like any other note. Code
+// then appends its own measured accounting beneath it.
+//
+// The hard case, and the reason the fallback exists: the report can itself be
+// refused, and then the run's enforcement record has nowhere to live. Table R
+// preserves BOTH values rather than choosing between them.
+
+/** The heading the run's refusal accounting is written under. */
+const ENFORCEMENT_HEADING = '## Refused by policy (promotion enforcement)';
+
+/** The heading the redaction lines are written under — the shipped section name. */
+const REDACTION_HEADING = '## Redacted in place (secret scan)';
+
+/** The heading the preserved-copy lines of REFUSED paths are written under. */
+const PRESERVED_HEADING = '## Preserved copies (secret quarantine)';
+
+/**
+ * What the report tells the user to do with one preserved copy, keyed by the
+ * `remediation` the record carries. **READ, never decided here:** Table Q row
+ * Q9 owns the field's values and which arm takes which, and this map is the
+ * rendering of a value already on the entry — not a second derivation of it.
+ * @type {Record<string, string>}
+ */
+const REMEDIATION_GUIDANCE = {
+  'restore-or-delete':
+    'If the redaction was wrong, restore from that copy while it is there; otherwise delete it.',
+  delete: 'Nothing was promoted for this path; delete that copy.',
+};
+
+/**
+ * TABLE N's TRANSFORMATION, IN TABLE N's ORDER: redact FIRST, then sanitise.
+ *
+ * The order is not interchangeable and the reason is measured, not reasoned
+ * from reading (row N1): EP2's context-dependent detectors need the RAW bytes,
+ * separators included, and `sanitizeProjectName` replaces every character
+ * outside `[\p{L}\p{N}\p{M} ._-]` — `=` and `:` among them. Measured,
+ * `token=abcdefghijkl` sanitises to `token_abcdefghijkl`, on which the detector
+ * does not fire. The justification is NOT that the placeholder survives the
+ * sanitiser unchanged (measured, `[REDACTED:generic-secret]` becomes
+ * `_REDACTED_generic-secret_`); it is that sanitising a placeholder cannot
+ * restore the secret the redactor already removed.
+ * @param {unknown} value @returns {string}
+ */
+function neutralise(value) {
+  return sanitizeProjectName(redactOnly(String(value)));
+}
+
+/**
+ * One preserved copy, rendered from the entry's own fields and nothing else.
+ *
+ * `location` is interpolated RAW because Table N classifies it as needing no
+ * transformation — it is the state-relative directory the GATE reported, drawn
+ * from a code-owned closed set (Table Q, row Q9). Classified rather than
+ * omitted: a channel with no classification is indistinguishable from one
+ * nobody thought about, and that is how two leaks arose. `artifact` derives
+ * from the brain-chosen path, so it is treated as attacker text.
+ * @param {PreservedCopy} entry @returns {string}
+ */
+function copyClause(entry) {
+  const guidance = REMEDIATION_GUIDANCE[entry.remediation];
+  if (guidance === undefined) {
+    throw new WienerdogError(
+      `promote: a preserved copy carries no known remediation (\`${entry.remediation}\`) and the report cannot announce it`
+    );
+  }
+  return `unredacted copy at state/${entry.location}/${neutralise(entry.artifact)}. ${guidance}`;
+}
+
+/**
+ * The redaction line for ONE source — an entry of `redacted[]`, or the report
+ * arm that is `promoted` with a non-null `redaction` (Table R's redaction-lines
+ * row, and its disclosure-parity ruling). Both sources compose the SAME line
+ * from the SAME shape, which is what parity of disclosure means here.
+ *
+ * `lines` and `labels` are READ off the accounting and NEVER recomputed: only
+ * the gate held the pre-scrub bytes (Table Q, row Q10). Neither needs
+ * neutralising — a count, and detector names from a code-owned closed set.
+ * @param {string} rel @param {RedactionAccounting} redaction
+ * @param {PreservedCopy[]} preserved @returns {string}
+ */
+function redactionLine(rel, redaction, preserved) {
+  const copies = preserved.map(copyClause).join(' ');
+  const head = `- \`${neutralise(rel)}\` — ${redaction.lines} line(s) scrubbed (${redaction.labels})`;
+  return copies === '' ? `${head}.` : `${head}; ${copies}`;
+}
+
+/**
+ * The preserved-copy line for ONE entry of a record whose path has NO redaction
+ * accounting — a `refused[]` entry, or a `report` arm carrying none (Table R's
+ * preserved-copy row). One line per ENTRY, in the record's own order, because
+ * the redact-arm fall-through keeps two copies on two shelves and each needs
+ * its own `location`.
+ * @param {string} rel @param {PreservedCopy} entry @returns {string}
+ */
+function preservedLine(rel, entry) {
+  return `- \`${neutralise(rel)}\` — ${copyClause(entry)}`;
+}
+
+/**
+ * Compose the run's COMPLETE enforcement record.
+ *
+ * ONE COMPOSER, ONE RECORD. The returned lines ARE the section: the normal
+ * second write and Table R's fallback both render exactly these, and
+ * `report.record` carries exactly these to the caller when no write took them.
+ * That is what makes "the complete record still reaches the user" a property
+ * rather than a hope — the three surfaces cannot drift because there is one.
+ *
+ * THE PARTITION (Table R): every preserved copy is rendered EXACTLY ONCE, and
+ * the split is over whether that copy's PATH HAS A REDACTION ACCOUNTING —
+ * never over the outcome, and never over where the entry sits. A copy on a
+ * `redacted[]` entry, and a copy on a `report` arm that is `promoted` with a
+ * non-null `redaction`, ride the redaction line; every other copy rides its
+ * own preserved-copy line.
+ *
+ * The two arrays are typed BY REFERENCE to `promote()`'s own return rather than
+ * by writing their fields out again: the Mirrored Surface Checklist forbids any
+ * surface here restating the fields of the module half's returned shapes, and a
+ * second structural statement of them in this same file is how they went stale
+ * twice (round-1 PR gate, finding 7).
+ * @param {{records:Array<{path:string, reason:string}>,
+ *          refused:ReturnType<typeof promote>['refused'],
+ *          redacted:ReturnType<typeof promote>['redacted'],
+ *          reportRel:string, reportRefusal:string|null,
+ *          reportRedaction:RedactionAccounting|null,
+ *          reportPreserved:PreservedCopy[]}} o
+ * @returns {string[]} the record, heading lines included
+ * @throws {WienerdogError} when the composed record does not survive its own
+ *   neutralisation — Table N row N2's fail-closed default
+ */
+function composeRecord(o) {
+  /** @type {string[]} */
+  const lines = [ENFORCEMENT_HEADING];
+
+  // The CALLER's pre-promotion accounting first — it happened before promotion
+  // did — then this run's own refusals, then the report body's own refusal,
+  // which is about the file the record is being written into.
+  /** @type {string[]} */
+  const enforcement = [];
+  for (const r of o.records) {
+    enforcement.push(`- \`${neutralise(r.path)}\` — ${neutralise(r.reason)}`);
+  }
+  for (const r of o.refused) {
+    enforcement.push(`- \`${neutralise(r.rel)}\` — ${neutralise(r.reason)}`);
+  }
+  // Table R's accounting row: the run states plainly that the brain's body was
+  // refused, and why. The body is not a member of `refused[]`, so this line has
+  // no other source.
+  if (o.reportRefusal !== null) {
+    enforcement.push(`- \`${neutralise(o.reportRel)}\` — ${neutralise(o.reportRefusal)}`);
+  }
+  lines.push(...(enforcement.length > 0 ? enforcement : ['- none']));
+
+  /** @type {string[]} */
+  const redactionLines = [];
+  for (const r of o.redacted) redactionLines.push(redactionLine(r.rel, r.redaction, r.preserved));
+  if (o.reportRedaction !== null) {
+    redactionLines.push(redactionLine(o.reportRel, o.reportRedaction, o.reportPreserved));
+  }
+  // Written only when there is something in it: an empty section is noise on
+  // the common path, and `- none` is never written under this heading.
+  if (redactionLines.length > 0) lines.push('', REDACTION_HEADING, ...redactionLines);
+
+  /** @type {string[]} */
+  const preservedLines = [];
+  for (const r of o.refused) {
+    for (const entry of r.preserved) preservedLines.push(preservedLine(r.rel, entry));
+  }
+  // The report body's copies land here on every arm that has no accounting to
+  // name — the fallback's and the refused arm's, and the `promoted` arm whose
+  // `redaction` is null. Preservation is ORTHOGONAL to outcome (Table Q, row
+  // Q8), so the condition is the accounting's presence, never the arm.
+  if (o.reportRedaction === null) {
+    for (const entry of o.reportPreserved) preservedLines.push(preservedLine(o.reportRel, entry));
+  }
+  if (preservedLines.length > 0) lines.push('', PRESERVED_HEADING, ...preservedLines);
+
+  // TABLE N, ROW N2 — THE FAIL-CLOSED DEFAULT, AND IT IS THE CONTRACT'S ACTUAL
+  // ENFORCEMENT. The rows above classify the channels this composer knows
+  // about; this check is what makes a channel nobody classified a failure
+  // rather than a silent pass-through, which is exactly how both prior leaks
+  // happened. It is stated over the COMPOSED text rather than per value, so it
+  // also catches a context the composition itself creates between two values
+  // that were each harmless alone.
+  //
+  // Measured, the check is sound in both directions: a neutralised value is a
+  // FIXED POINT of `redactOnly` (`token=abcdefghijkl` → `token__REDACTED_…_`,
+  // which redacts to itself), so a correctly wired channel never trips it,
+  // while an unwired one carrying a context-dependent secret always does.
+  //
+  // Composition REFUSES fail-loud rather than per-path, because an unclassified
+  // interpolation is a caller-side implementation defect and not a policy
+  // outcome — the same reason the gate-contract violations above throw.
+  const text = lines.join('\n');
+  if (redactOnly(text) !== text) {
+    throw new WienerdogError(
+      "promote: the report's enforcement section did not survive its own neutralisation — " +
+        'a channel reached it unneutralised and composition is refused'
+    );
+  }
+  return lines;
+}
+
 /**
  * @typedef {{artifact:string, location:string}} GateReportedCopy
  *   One preserved unredacted copy, as the EP2 GATE reported it. BOTH fields are
@@ -580,6 +790,7 @@ function withRemediation(record, remediation) {
  *          layout:import('../layout').VaultLayout,
  *          gates:{secret:Function, skillBody:Function, tier3:Function, ledger:Function},
  *          registry?:object, extractsBySession?:Map<string,object>,
+ *          records?:Array<{path:string, reason:string}>,
  *          writeFile?:typeof writeIntoVault,
  *          spawnGit?:typeof spawnGitForMerge}} o
  *   vaultDir   the vault root — the only thing this module knows about the
@@ -614,6 +825,12 @@ function withRemediation(record, remediation) {
  *              run-level value a gate needs has to arrive as an input
  *   extractsBySession this run's extracts keyed by session, threaded to the
  *              ledger validator for the same reason
+ *   records    code-owned accounting the CALLER produced before promotion and
+ *              cannot compose into the report itself, because the report is
+ *              composed here. Today's only producer is the pipeline's scratch
+ *              enforcement (`WP-dream-promote-in-workspace`, row G12). Each is
+ *              neutralised at composition exactly like this module's own
+ *              records (Table N)
  *   writeFile  test seam — the vault-write primitive. Defaults to the real
  *              `writeIntoVault`; a JS-only injection point, never an env one
  *   spawnGit   test seam — the merge's git invocation. Defaults to
@@ -625,7 +842,16 @@ function withRemediation(record, remediation) {
  *                            preserved:Array<PreservedCopy>}>,
  *            refused:Array<{rel:string, reason:string,
  *                           preserved:Array<PreservedCopy>}>,
- *            secretDisposition:{withheld:number, redactions:number}}}
+ *            secretDisposition:{withheld:number, redactions:number},
+ *            report:{outcome:'promoted', rel:string, bytes:Buffer,
+ *                    redaction:RedactionAccounting|null,
+ *                    preserved:Array<PreservedCopy>, record:string[],
+ *                    accounting:({published:true}
+ *                               |{published:false, reason:string})}
+ *                  |{outcome:'fallback', rel:string, bytes:Buffer,
+ *                    preserved:Array<PreservedCopy>, record:string[]}
+ *                  |{outcome:'refused', rel:string, reason:string,
+ *                    preserved:Array<PreservedCopy>, record:string[]}}}
  *   EVERY PUBLISHED ENTRY CARRIES BOTH HALVES — `rel` AND `bytes` (Table S).
  *   The bytes are the exact buffer the primitive returned: not the candidate
  *   this module composed, not a read of the target afterwards, and not a digest
@@ -660,6 +886,60 @@ function withRemediation(record, remediation) {
  *   transcript; `redactions` is accounting, because the sanitized note WAS
  *   promoted and its transcript was therefore consumed. Named `withheld`, not
  *   `reverts`: promotion never wrote the bytes, so there is nothing to revert.
+ *
+ *   `report` is the dream report's own outcome, never folded into `promoted`:
+ *   the body is a promotion candidate like any other, but it is NOT a member of
+ *   `promoted[]`, `redacted[]` or `refused[]` — its whole disposition travels
+ *   here, and Table R's fallback publish is recorded as itself. It is a
+ *   DISCRIMINATED UNION: a published arm REQUIRES `bytes` and the refused arm
+ *   cannot carry them, because an optional field spanning success and refusal
+ *   guarantees nothing on the successful branch. The published arms' `bytes`
+ *   are decided bytes under Table S, and which of the two writes' buffer
+ *   travels is Table Y's row Y3.
+ *
+ *   On `refused` — and on `promoted` when `accounting.published` is `false` —
+ *   the COMPLETE enforcement record is in `record` and reaches the user through
+ *   no other channel. RETURNING IT IS NOT DELIVERING IT: the caller delivers
+ *   (`WP-dream-promote-in-workspace`, row G11).
+ *
+ *   `preserved` is on EVERY ARM, required and possibly empty, because the union
+ *   discriminates on OUTCOME while preservation is ORTHOGONAL to outcome
+ *   (Table Q, rows Q8 and Q9): the gate can redact the body and see the
+ *   SANITIZED body publish, withhold it and see the fallback publish, or
+ *   preserve a copy for a body that C4, C7, C8 or an H-rule then refuses. The
+ *   body is not a member of `refused[]`, so without this field on the arm the
+ *   run actually took, those copies leave the return entirely.
+ *
+ *   `redaction` is on the `promoted` arm ALONE, required and NULLABLE — the arm
+ *   that means THIS CANDIDATE'S SANITIZED BYTES PUBLISHED, which is exactly
+ *   where an ordinary note's accounting reaches it (Table Q, row Q10, which
+ *   owns the fields and the scope). `null` states positively that the gate did
+ *   not redact the body.
+ *
+ *   `accounting` is on the `promoted` arm ALONE, required, and is itself a
+ *   discriminated sub-union. TABLE Y IS THE SINGLE OWNER OF THAT CONTRACT AND
+ *   THIS BLOCK RESTATES NO PART OF IT — what is declared here is the TYPE and
+ *   its two-arm shape, and nothing else.
+ *
+ *   `rel` is on EVERY ARM and required — the vault-relative path this arm's
+ *   outcome is ABOUT. It exists because a single owner only holds while
+ *   downstream READS the owner's value: `WP-dream-promote-in-workspace`'s row
+ *   G8 commits the report path and has no other source for it, and any source
+ *   it derived itself would be a SECOND derivation, wrong on the `promoted` arm
+ *   in exactly the runs where the two spellings differ.
+ *
+ *   **ITS MEANING IS NOT CONSTANT ACROSS THE ARMS, and that is stated here
+ *   rather than left to symmetry, per the per-field-provenance pattern
+ *   (`WP-dream-promote-module`'s Table Q preamble).** On `promoted` it is the
+ *   BODY's own `rel` — the spelling the brain wrote and both writes targeted.
+ *   On `fallback` and on `refused` it is the DERIVED path, because no body was
+ *   published on those arms and the fallback targets the derived path by
+ *   decision, not by accident: where CODE-authored content lands in the user's
+ *   vault is a code decision, and a brain-chosen spelling must not create a
+ *   second report directory. Table Z's row Z5 owns which consumer takes which
+ *   value; this block declares the field and its per-arm meaning and decides
+ *   nothing else. A consumer that assumes one value for all arms is the defect
+ *   row Z5's sixth prohibition names.
  */
 function promote(o) {
   const opts = o || {};
@@ -713,6 +993,19 @@ function promote(o) {
   const spawnGit = typeof opts.spawnGit === 'function' ? opts.spawnGit : spawnGitForMerge;
   const registry = opts.registry === undefined ? null : opts.registry;
   const extractsBySession = opts.extractsBySession === undefined ? new Map() : opts.extractsBySession;
+  // FAIL LOUD LIKE THE OTHERS. `records` is accounting the caller could not
+  // compose itself, and a malformed entry would reach the report as
+  // `undefined — undefined` rather than as the refusal it stands for: a
+  // silently mangled record is worse than a caller bug that says so.
+  const callerRecords = opts.records === undefined ? [] : opts.records;
+  if (
+    !Array.isArray(callerRecords) ||
+    callerRecords.some((r) => !r || typeof r.path !== 'string' || typeof r.reason !== 'string')
+  ) {
+    throw new WienerdogError(
+      'promote: `records` must be an array of `{path, reason}` entries, both strings'
+    );
+  }
   const admit = makeAdmit(layout);
 
   const disposition = { withheld: 0, redactions: 0 };
@@ -728,6 +1021,78 @@ function promote(o) {
    *   redaction?:RedactionAccounting|null}>}
    */
   const decisions = new Map();
+
+  // ── TABLE Z — the report path: one derivation, one identity, one authority ─
+  //
+  // ROW Z1 — THE DERIVATION, AND ITS SINGLE OWNER. Derived ONCE per run, here,
+  // and by no other surface: `<reports_dir>/<date>.md` with every EMPTY and
+  // every `.` segment DROPPED. `date`'s shape is validated above precisely
+  // because it is an unsanitized component of this name (Table D's `date` row).
+  //
+  // ROW Z2 — THE SPLIT OF OBLIGATIONS, and it is stated in BOTH directions
+  // because it failed in both, one round each. The PRIMITIVE's row H1 requires
+  // four shapes absent from a `rel` — no segment empty, none `.`, none `..`,
+  // none containing a separator — and a violation THROWS rather than refusing,
+  // so it cannot be reported, dispositioned or survived. `isSafeRelativePath`
+  // (`layout.js:65-71`) already guarantees TWO of the four: no `..`, and
+  // nothing absolute or backslashed. THE CALLER THEREFORE CLOSES EXACTLY THE
+  // OTHER TWO — empty and `.` — and the other two need no handling here.
+  // Stating that absence matters: a reader who re-adds a `..` check writes the
+  // duplicated containment rule the spec forbids, and a reader who assumes the
+  // layout closes everything writes the defect this row exists to end.
+  // Measured, each returned UNCHANGED by `readVaultLayout`: `reports/dreams/`,
+  // `reports//dreams`, `.`, `./reports`, `reports/./dreams`.
+  //
+  // DROPPING, not throwing and not defaulting: a throw would crash every run on
+  // a legitimate config and take the whole run's enforcement record with it,
+  // and substituting the built-in default would silently move the user's
+  // reports. Only no-op segments are removed and `..` cannot be present, so
+  // this can never move the report out of the directory the user configured.
+  const reportRel = [
+    ...String(layout.reports_dir)
+      .split('/')
+      .filter((seg) => seg !== '' && seg !== '.'),
+    `${date}.md`,
+  ].join('/');
+  /**
+   * ROW Z3 — THE IDENTITY, DECIDED ONCE PER RUN. Segment-wise NFC-normalised
+   * and case-folded, the same predicate row C9 matches with and for the same
+   * measured reasons: the primary filesystem is case-insensitive, and macOS
+   * enumerates DECOMPOSED names while accepting composed ones. An identity
+   * rule, never a containment rule — containment stays the primitive's.
+   *
+   * THE MATCHING SET IS DETERMINED ONCE, OVER THE WHOLE DELTA, BEFORE ANY
+   * RECORD IS ROUTED. Evaluating the predicate independently at each routing
+   * site is how a second match silently overwrote the first, and one evaluation
+   * is what makes row Z4 statable at all.
+   * @type {string[]}
+   */
+  const reportKey = foldedSegments(reportRel).join('/');
+  const reportMatches = delta.records
+    .map((r) => r.rel)
+    .filter((rel) => foldedSegments(rel).join('/') === reportKey);
+  /**
+   * ROW Z4 — MORE THAN ONE MATCH: THE RUN HAS NO BODY. Folding is correct on a
+   * case-INsensitive volume and OVER-matches on a case-SENSITIVE one, where two
+   * spellings that fold alike are two different files. Both are supported
+   * targets, so the collision is reachable and is decided here rather than left
+   * to whichever branch runs last.
+   *
+   * The invariant this protects: EVERY delta record has EXACTLY ONE carrier in
+   * the return. Measured before row Z4 existed, two folding matches left BOTH
+   * records with NO carrier — the state this module throws for one branch
+   * earlier, reached without the throw. Refusal rather than a throw is
+   * deliberate: a throw loses the enforcement record for every other path.
+   * @type {string|null} the body's own `rel`, or `null` when there is no body
+   */
+  const bodyRel = reportMatches.length === 1 ? reportMatches[0] : null;
+  /** @param {string} rel @returns {boolean} */
+  const isReport = (rel) => bodyRel !== null && rel === bodyRel;
+  /** The collision reason, composed once so both refusal routes carry it. */
+  const collisionReason =
+    reportMatches.length > 1
+      ? `more than one candidate is the dream report for this date (${reportMatches.length} paths differ only by case or Unicode normalisation); none is promoted as the report`
+      : null;
 
   // ── Phase 1: decide. No vault byte is written in this loop. ───────────────
   for (const record of delta.records) {
@@ -790,25 +1155,22 @@ function promote(o) {
 
     // ── Gate 1 of 4: EP2 (ADR-0034), BEFORE the merge ─────────────────────
     //
-    // UNSCANNABLE CONTENT IS A REFUSAL, NEVER A PASS, and the check is this
-    // module's rather than the gate's. The delta primitive returns no line
-    // numbers for a binary record — deliberately, so a consumer "withholds what
-    // it cannot scan" (`delta.js:517-520`) — and a gate defined only over added
-    // lines sees an empty scan and passes it, after which nothing else stops an
-    // ordinary `.md` and it is promoted raw. Today's validator does the missing
-    // work explicitly (`validate.js:1240-1256`), so passing it would be a
-    // regression against shipped behaviour.
-    if (record.binary === true) {
-      disposition.withheld += 1;
-      refuse('EP2: content is binary and cannot be secret-scanned; not promoted');
-      continue;
-    }
-    if (!isLosslessUtf8(afterBytes)) {
-      disposition.withheld += 1;
-      refuse('EP2: content is not lossless UTF-8 and cannot be secret-scanned; not promoted');
-      continue;
-    }
-
+    // UNSCANNABLE CONTENT IS A REFUSAL, NEVER A PASS — AND THE CLASSIFICATION
+    // IS THE GATE'S, NOT THIS MODULE'S (`WP-ep2-unscannable-preserve`, Table U;
+    // owner ruling of 2026-08-31). The delta primitive returns no line numbers
+    // for a binary record — deliberately, so a consumer "withholds what it
+    // cannot scan" (`delta.js:517-520`) — so a gate defined only over added
+    // lines would see an empty scan and pass it. The EP2 gate therefore asks
+    // "can these bytes be scanned at all?" before it scans, and routes the
+    // no-answer to its own withhold arm, which PRESERVES the bytes to
+    // `state/quarantine/` and then refuses. This module ran that check itself in
+    // an earlier form, and the ordering cost the class its durable artifact and
+    // its digest banner while the hard-secret class beside it kept both.
+    //
+    // What this module still owns is unchanged: the `verdict.refuse` branch
+    // below counts the withhold and carries the gate's preservation record.
+    // `record` is handed to the gate BECAUSE of this — the `binary` flag is the
+    // primitive's answer and only this module holds it.
     const verdict = gates.secret({
       rel,
       record,
@@ -1023,6 +1385,21 @@ function promote(o) {
     }
   }
 
+  // ── Phase 1d: Table Z row Z4 — the report-path collision ─────────────────
+  //
+  // Re-decided HERE rather than refused up front, for the same reason phase 1c
+  // re-decides a pair: a colliding path is an ORDINARY refused candidate, so it
+  // goes through the gates like any other and keeps whatever preservation
+  // record EP2 produced for it. Refusing before the gates ran would silently
+  // drop those copies, which is the data-loss shape row Q3 names.
+  if (collisionReason !== null) {
+    for (const rel of reportMatches) {
+      const d = decisions.get(rel);
+      if (!d) continue;
+      decisions.set(rel, { rel, refuse: collisionReason, preserved: d.preserved });
+    }
+  }
+
   // ── Phase 2: write. Every vault byte goes through the primitive. ──────────
   /** @type {Array<{rel:string, bytes:Buffer}>} */
   const promoted = [];
@@ -1030,6 +1407,22 @@ function promote(o) {
   const redacted = [];
   /** @type {Array<{rel:string, reason:string, preserved:PreservedCopy[]}>} */
   const refused = [];
+
+  /**
+   * The report body's own outcome, kept OUT of the three arrays above: the body
+   * is not a member of `refused[]`, and its whole disposition travels on
+   * `report`. `null` until the write phase reaches it — and still `null`
+   * afterwards when the brain wrote no report at all, which is one member of
+   * Table R's trigger class.
+   * Carries the DECIDED path as well as the outcome: the second write must
+   * target the object the FIRST write published, which on a normalisation- or
+   * case-insensitive filesystem can be a different spelling of `reportRel`.
+   * @type {{rel:string, published:true, bytes:Buffer,
+   *         redaction:RedactionAccounting|null, preserved:PreservedCopy[]}
+   *       |{rel:string, published:false, reason:string,
+   *         preserved:PreservedCopy[]}|null}
+   */
+  let reportBody = null;
 
   for (const record of delta.records) {
     const d = decisions.get(record.rel);
@@ -1041,7 +1434,12 @@ function promote(o) {
     if (d.refuse) {
       // Nothing was promoted for this path, so any copy the gate preserved is a
       // delete. The value is filled HERE because only here is the outcome known.
-      refused.push({ rel: d.rel, reason: d.refuse, preserved: withRemediation(d.preserved, 'delete') });
+      const outcome = { rel: d.rel, reason: d.refuse, preserved: withRemediation(d.preserved, 'delete') };
+      if (isReport(d.rel)) {
+        reportBody = { rel: d.rel, published: false, reason: d.refuse, preserved: outcome.preserved };
+      } else {
+        refused.push(outcome);
+      }
       continue;
     }
 
@@ -1061,15 +1459,30 @@ function promote(o) {
       // A redaction refused HERE — after the gate already preserved its copy —
       // still names that copy (Table Q, row Q3), exactly as the decision-phase
       // refusals do.
-      refused.push({
-        rel: d.rel,
-        reason: (res && res.reason) || 'the vault write was refused',
-        preserved: withRemediation(d.preserved, 'delete'),
-      });
+      const reason = (res && res.reason) || 'the vault write was refused';
+      const preserved = withRemediation(d.preserved, 'delete');
+      // A PRIMITIVE refusal of the body — its H5 `expect` guard, a symlinked
+      // target under H3, any H-rule — is one member of Table R's trigger class,
+      // and the class is what this branch routes on rather than a list.
+      if (isReport(d.rel)) reportBody = { rel: d.rel, published: false, reason, preserved };
+      else refused.push({ rel: d.rel, reason, preserved });
       continue;
     }
 
     // Table S — the DECIDED bytes are the ones the primitive returned.
+    if (isReport(d.rel)) {
+      // The body published. Its copy is restorable for the same reason an
+      // ordinary redacted note's is: this run promoted its sanitized content.
+      reportBody = {
+        rel: d.rel,
+        published: true,
+        bytes: res.bytes,
+        redaction: d.redaction || null,
+        preserved: withRemediation(d.preserved, 'restore-or-delete'),
+      };
+      if (d.redaction) disposition.redactions += 1;
+      continue;
+    }
     if (d.redaction) {
       redacted.push({
         rel: d.rel,
@@ -1084,7 +1497,131 @@ function promote(o) {
     }
   }
 
-  return { promoted, redacted, refused, secretDisposition: disposition };
+  // ── Phase 3: the report's SECOND write, or Table R's fallback ─────────────
+  //
+  // Composed HERE, after every other path has its outcome, because the record
+  // is BUILT FROM those outcomes. One composer feeds all three destinations:
+  // the appended section, the fallback's candidate, and `report.record`.
+  const bodyPublished = reportBody !== null && reportBody.published === true;
+  const reportRedaction = bodyPublished ? reportBody.redaction : null;
+  const reportPreserved = reportBody === null ? [] : reportBody.preserved;
+  // The path the record NAMES, and the path the second write TARGETS, is the one
+  // the body was actually decided and published at — `reportRel` only when there
+  // is no body to have a path of its own.
+  const effectiveRel = reportBody === null ? reportRel : reportBody.rel;
+  const record = composeRecord({
+    records: callerRecords,
+    refused,
+    redacted,
+    reportRel: effectiveRel,
+    reportRefusal: bodyPublished || reportBody === null ? null : reportBody.reason,
+    reportRedaction,
+    reportPreserved,
+  });
+  const section = Buffer.from(`${record.join('\n')}\n`, 'utf8');
+  /**
+   * Appended form: a blank line, then the section — the shipped separator.
+   * The base is normalised to end in a newline first, because on Table R's R3
+   * the base is whatever the USER's file holds and a file with no trailing
+   * newline would put the heading directly under a paragraph line. The shipped
+   * append guaranteed a `\n`-terminated base; this keeps that guarantee.
+   */
+  const appendedTo = (base) =>
+    Buffer.concat([
+      base,
+      Buffer.from(base.length > 0 && base[base.length - 1] === 0x0a ? '\n' : '\n\n', 'utf8'),
+      section,
+    ]);
+
+  /** @type {ReturnType<typeof promote>['report']} */
+  let report;
+  if (bodyPublished) {
+    // TABLE Y — THE SECOND WRITE. Through the primitive, never an in-place
+    // append, with `expect` set to the bytes the FIRST publish RETURNED (the
+    // primitive's rows H5 and H6). The first write published the body; this one
+    // publishes body-plus-section, and the two can disagree.
+    const second = writeFile({
+      vaultDir,
+      rel: reportBody.rel,
+      bytes: appendedTo(reportBody.bytes),
+      admit,
+      expect: reportBody.bytes,
+    });
+    report =
+      second && second.written === true
+        ? {
+            outcome: 'promoted',
+            rel: reportBody.rel,
+            bytes: second.bytes,
+            redaction: reportRedaction,
+            preserved: reportPreserved,
+            record,
+            accounting: { published: true },
+          }
+        : {
+            // Row Y2 — grounded in the PUBLISH EVENT: this run's first write
+            // published the body, which is why this is not `fallback` (the body
+            // did not publish) and not `refused` (nothing published at all).
+            // Row Y3 — the FIRST write's buffer travels, never a fresh read.
+            // Row Y5 — what this states positively is that the enforcement
+            // section never reached the vault; what the target holds now is
+            // refusal-cause-specific and nothing here represents it (row Y4).
+            outcome: 'promoted',
+            rel: reportBody.rel,
+            bytes: reportBody.bytes,
+            redaction: reportRedaction,
+            preserved: reportPreserved,
+            record,
+            accounting: {
+              published: false,
+              // Row Y9 — the reason ORIGINATES WITH THE PRIMITIVE (its row H7)
+              // and is carried unchanged; this module composes none of its own.
+              reason: (second && second.reason) || 'the vault write was refused',
+            },
+          };
+  } else {
+    // TABLE R — PRESERVE-AND-EXTEND. The fallback preserves BOTH values at
+    // stake — the report already in the vault AND this run's enforcement record
+    // — and never chooses between them. The shape is the second write
+    // generalised: read, compose in memory, publish once with `expect` set to
+    // what was read. The only difference is what the base bytes are.
+    const now = readVaultNow(vaultDir, reportRel);
+    if ('error' in now) {
+      // Fail closed. An unreadable report path is not evidence the fallback is
+      // safe, and R4's outcome is the one that holds: the vault object is left
+      // untouched and the complete record goes back to the caller.
+      report = { outcome: 'refused', rel: reportRel, reason: now.error, preserved: reportPreserved, record };
+    } else {
+      /** @type {{vaultDir:string, rel:string, bytes:Buffer, admit:Function, expect?:Buffer}} */
+      const call =
+        now.bytes === null
+          ? // R1 — no report for this date; the code section alone is published,
+            // and the OMITTED `expect` is how the primitive is told the target
+            // must not exist.
+            { vaultDir, rel: reportRel, bytes: section, admit }
+          : // R2 and R3 are ONE rule: the base is the bytes ACTUALLY there, and
+            // the fallback never reconstructs or "corrects" a diverged file.
+            { vaultDir, rel: reportRel, bytes: appendedTo(now.bytes), admit, expect: now.bytes };
+      const res = writeFile(call);
+      report =
+        res && res.written === true
+          ? { outcome: 'fallback', rel: reportRel, bytes: res.bytes, preserved: reportPreserved, record }
+          : {
+              // R4 — the file mutated between the read and the publish, or the
+              // primitive refused for any other reason. The vault object is left
+              // untouched, the complete record goes to the caller, and the
+              // refusal NAMES ITS REASON. In this narrow window an overwrite
+              // would be the worse failure: it would clobber the user's edit.
+              outcome: 'refused',
+              rel: reportRel,
+              reason: (res && res.reason) || 'the vault write was refused',
+              preserved: reportPreserved,
+              record,
+            };
+    }
+  }
+
+  return { promoted, redacted, refused, secretDisposition: disposition, report };
 }
 
 module.exports = {
@@ -1095,5 +1632,4 @@ module.exports = {
   // be substitutable for the CLAIM 2b assertion to observe every `cwd`.
   makeAdmit,
   spawnGitForMerge,
-  isLosslessUtf8,
 };

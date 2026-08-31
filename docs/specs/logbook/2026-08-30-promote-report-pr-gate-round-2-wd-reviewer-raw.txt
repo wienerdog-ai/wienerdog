@@ -1,0 +1,321 @@
+Gate: PR review, spec fidelity (wd-reviewer) — ROUND 2
+PR: #42 (WP-dream-promote-report)
+Tip reviewed: 795f904 (the branch advanced to 83609fc during the run through a
+  logbook-only commit; the reviewer verified the reviewed diff is byte-identical
+  at both SHAs with `git diff --exit-code 795f904 83609fc -- <the three
+  deliverables>` exit 0, and its review stands unchanged at 83609fc)
+Merge base: 14e2a70
+Date: 2026-08-30
+
+Returned VERBATIM below. Committed before it was adjudicated.
+
+=== VERDICT ===
+REQUEST-CHANGES
+
+=== READ-ONLY COMPLIANCE ===
+git status --porcelain BEFORE: empty. AFTER: empty. Byte-identical — the run is
+valid. All mutation work was done on `git archive` exports under /tmp/wdr2/; the
+working tree was never touched. Every command ran with WIENERDOG_LOADER_NOOP=1.
+No wienerdog init/adopt/sync was run; nothing wrote to ~/Library/LaunchAgents.
+
+=== WHAT WAS EXECUTED ===
+B    boundary-check                                                    exit 0  clean
+B2   git diff --name-status 14e2a70...795f904                           exit 0
+       2 deliverables + the spec file + 3 docs/specs/logbook/ files (all
+       always-allowed). Spec diff is `status: Ready` -> `In-Review`, one line.
+V1   npm test -- --test-name-pattern "dream-promote"                    exit 0  165 pass / 0 fail
+V2   npm test -- --test-name-pattern "report-fallback"                  exit 0  125 pass / 0 fail
+       NOT vacuous — 16 report-fallback tests executed (round 1: 14)
+V3   npm test                                                           exit 1  2246 tests, 1 fail: adopt-e2e
+V4   npm run lint                                                       exit 0
+V5   consumed-by-nothing grep                                           exit 0
+V5r  same, with a planted src/core/dream/planted.js                     exit 1  RED verified independently
+BASE node --test adopt-e2e on a /tmp export of MERGE BASE 14e2a70       exit 1
+       fails identically. Environment-caused, pre-existing, correctly disclosed
+       in the PR body. NOT this diff's defect.
+MUT  14 mutations on fresh /tmp exports of 795f904, each against the whole test
+       file (baseline 56 pass / 0 fail, up from round 1's 54)
+P1   Pinned-line byte comparison, re-measured on the moved surface      exit 0
+P2-P5 Four executed probes against the new mechanisms                   exit 0
+
+=== JOB 1 — ARE THE ROUND-1 FINDINGS GENUINELY FIXED? ===
+YES. All three, verified independently by re-running the mutations, not by
+re-reading the code.
+
+Mutation                                          R1            R2
+I   PRIMITIVE-refusal routing removed             0 fail (GAP)  1 fail   CLOSED
+L   published:false record truncated to heading   0 fail (GAP)  1 fail   CLOSED
+M   published:false drops redaction + preserved   0 fail (GAP)  1 fail   CLOSED
+A   unwired, unclassified composer interpolation  2             2        held
+G   *wired* new channel through neutralise        0             0        green control still green
+C   sanitiser skipped                             4             5        strengthened
+D   redact arm skipped                            2             2        held
+E   sanitise FIRST                                2             2        held
+F   redacted[].rel unneutralised                  1             2        strengthened
+H   R3 repairs the diverged file                  4             4        held
+I2  gate-refusal routing removed                  1             1        held
+J   Y3 bytes from a fresh read                    1             1        held
+K   report folded into promoted[]                 1             2        strengthened
+N   fallback arm drops preserved                  1             2        strengthened
+
+Zero regressions; five mutations are now caught by more tests than before. The
+fixes are real assertions on real values, not re-wordings.
+
+Findings 4/5/6 (spec faults) were correctly routed. Finding 4's condition (a) is
+satisfied — PR body "Decisions made" #5 records all three headings and names the
+shipped "## Reverted by orchestrator" string it declines to reuse. Condition (b)
+remains wd-architect's. Finding 7 was applied as recommended. Finding 9 is
+recorded as decision #9. Finding 8 was fixed rather than left residual.
+
+Re-confirmed on the moved surface:
+- Pinned redaction line, byte-for-byte (P1): IDENTICAL to
+  WP-secret-fence-ep2-redact-arm.md:1379 outside the <vault-relative path>
+  placeholder, which is sanitised — the divergence Table R's measured-cost row
+  explicitly accepts. Unchanged from round 1.
+- The partition's exactly-once property (P3): measured across all four arms —
+  body-published-redacted, body-refused, body-primitive-refused, no-body. Every
+  preserved copy renders EXACTLY ONCE on every arm. Holds.
+- Y4 prohibition (/usr/bin/grep -a sweep of every claim-shaped variant across
+  both changed files): no surviving instance. The Y2 arm asserts the opposite at
+  tests:1690. The byte-unchanged/untouched statements at promote.js:1516, :1536
+  and tests:1710 all sit on R4, where they are true.
+
+=== JOB 2 — ATTACKING THE NEW MECHANISMS ===
+VERDICT: REQUEST-CHANGES. Two product defects in the round-1 fixes themselves,
+both measured.
+
+FINDING 1 [criteria] src/core/dream/promote.js:1322 — BLOCKER.
+The reportRel normalisation fix is INCOMPLETE: it drops empty segments but not
+"." segments, and the same crash-every-run defect survives for three reports_dir
+values readVaultLayout really returns.
+
+    const reportRel = [...String(layout.reports_dir).split('/').filter((s) => s !== ''), `${date}.md`].join('/');
+
+The obligation is Table H row H1 (WP-dream-vault-write-primitive.md:213), which
+is explicit that a valid rel has "no segment equal to `.` or `..`, none
+containing a separator, none empty", and :193 that a non-segment-valid rel is a
+caller-contract violation that throws. The filter closes one of those three, and
+readVaultLayout's isSafeRelativePath (src/core/layout.js:65-71) rejects only
+empty, absolute, backslash and ".." — it accepts and preserves a "." segment
+exactly as it accepts and preserves a trailing slash.
+
+Executed (/tmp/wdr2/probeA.js):
+
+    readVaultLayout("reports/dreams/").reports_dir = "reports/dreams/"   << PRESERVED
+    readVaultLayout(".").reports_dir               = "."                 << PRESERVED
+    readVaultLayout("reports/./dreams").reports_dir= "reports/./dreams"  << PRESERVED
+    readVaultLayout("./reports").reports_dir       = "./reports"         << PRESERVED
+    readVaultLayout("/reports/dreams").reports_dir = "reports/dreams"    (defaulted)
+
+    promote(reports_dir="reports/dreams/")  -> outcome=fallback              <- fixed
+    promote(reports_dir="reports//dreams")  -> outcome=fallback              <- fixed
+    promote(reports_dir=".")                -> THREW: `rel` has a "." path segment: "./2026-08-29.md"
+    promote(reports_dir="reports/./dreams") -> THREW: `rel` has a "." path segment: "reports/./dreams/2026-08-29.md"
+    promote(reports_dir="./reports")        -> THREW: `rel` has a "." path segment: "./reports/2026-08-29.md"
+
+Same blast radius the rubric gate rated P2 — promote() throws, INCLUDING on a run
+where the brain wrote nothing, and when other notes did promote first the throw
+lands AFTER they published (/tmp/wdr2/probeE.js):
+
+    brain-wrote-nothing: THREW -> `rel` has a "." path segment: "./2026-08-29.md"
+    partial-run:         THREW -> `rel` has a "." path segment: "./2026-08-29.md"
+    vault after the throw = [ '01-Projects/a/n.md' ]   <- promoted, but no
+                                                          enforcement record
+                                                          reached anyone
+
+THE REGRESSION TEST SPENDS A CASE ON AN UNREACHABLE INPUT WHILE MISSING EVERY
+REACHABLE BROKEN ONE. tests/unit/dream-promote.test.js:1722:
+
+    for (const dir of ['reports/dreams/', 'reports//dreams', '/reports/dreams']) {
+
+'/reports/dreams' CANNOT come out of readVaultLayout — isSafeRelativePath rejects
+a leading / and the key falls back to the default (measured above). The three
+values that CAN come out and DO crash are absent.
+
+Disposition: FIX. Filter on segment validity rather than on emptiness alone, and
+align the comment at :1316-1321 with H1's actual rule ("." and "..", not just
+empty):
+
+    const reportRel = [
+      ...String(layout.reports_dir).split('/').filter((s) => s !== '' && s !== '.'),
+      `${date}.md`,
+    ].join('/');
+
+(".." needs no handling here — isSafeRelativePath rejects it upstream, verified
+above; note that as the reason it is absent rather than leaving it unstated.) In
+the test at :1722, replace '/reports/dreams' with '.', './reports' and
+'reports/./dreams', and assert the report lands under the layout's directory in
+each case — the current assert.deepEqual(get(sc.vaultDir, REPORT), ...) hardcodes
+reports/dreams and cannot express the "." cases.
+
+Consistency with isUnder/makeAdmit, checked as briefed: for every value that
+survives the fix the derived reportRel is admitted. No value can make the report
+land outside reports_dir — filtering only shortens the directory prefix, and ".."
+never arrives. BUT THE MIRROR IS ONLY HALF-ALIGNED: isUnder does not drop "."
+either, so with reports_dir "." makeAdmit would ADMIT ./2026-08-29.md while the
+primitive throws before admit is ever called. Dropping "." at :1322 closes that
+too.
+
+FINDING 2 [quality] src/core/dream/promote.js:1335-1336 — isReport's case-folding
+over-matches on a case-sensitive filesystem: two spellings in one run silently
+lose an outcome and write the report twice.
+
+    const reportKey = foldedSegments(reportRel).join('/');
+    const isReport = (rel) => foldedSegments(rel).join('/') === reportKey;
+
+fold is NFC + toLowerCase (:136-138). On a CASE-SENSITIVE volume — Linux, a
+case-sensitive APFS volume, both supported targets — reports/dreams/... and
+reports/Dreams/... are two distinct files that fold to one key. Measured
+(/tmp/wdr2/probeC.js; the delta record is cloned so the probe does not depend on
+this Mac's case-insensitive tmpdir, which cannot hold both):
+
+    delta rels = [ 'reports/dreams/2026-08-29.md', 'reports/Dreams/2026-08-29.md' ]
+    promoted = []   redacted = []   refused  = []
+    report.outcome = promoted
+    writes (in order) = [ 'reports/dreams/2026-08-29.md',
+                          'reports/Dreams/2026-08-29.md',
+                          'reports/Dreams/2026-08-29.md' ]
+    delta records with NO entry in any of the three arrays =
+      [ 'reports/dreams/2026-08-29.md', 'reports/Dreams/2026-08-29.md' ]
+
+Both records match, reportBody is assigned twice and THE SECOND ASSIGNMENT
+SILENTLY DISCARDS THE FIRST. Two report files are published; the first is
+accounted for NOWHERE — not in promoted[], redacted[], refused[], nor in report.
+That is precisely the state the module throws for one branch earlier
+(promote.js:1358, "no outcome was decided for ..."), reached without the throw.
+The record names neither path.
+
+Reachability: the brain must write two case- or normalisation-variants of
+<reports_dir>/<date>.md in one workspace, on a case-sensitive volume. Genuinely
+unlikely — but the fix is one line and it lands in the same window as finding 1.
+
+Disposition: FIX (defensible as a named residual if the implementer prefers; say
+which). Make the second match an ordinary refusal rather than a silent overwrite
+— at each of the three routing sites (:1362, :1393, :1398) guard with
+reportBody === null and push the loser to refused[] with a reason naming the
+collision. Add a test that clones the delta record as above and asserts every
+delta record has exactly one carrier.
+
+FINDING 3 [quality] src/core/dream/promote.js:1437 vs :1512, :1525, :1528 — on
+the published:false -> fallback arm the record NAMES reportBody.rel while the
+fallback READS AND WRITES reportRel; the two can disagree.
+
+    const effectiveRel = reportBody === null ? reportRel : reportBody.rel;   // :1437 -> the record
+    const now = readVaultNow(vaultDir, reportRel);                           // :1512 -> the fallback's base
+    { vaultDir, rel: reportRel, bytes: appendedTo(now.bytes), ... }          // :1528 -> the fallback's target
+
+The second write's move to reportBody.rel (:1471) is right and strictly better.
+But effectiveRel also feeds composeRecord on the arm that does NOT take that
+write. Measured (/tmp/wdr2/probeD.js), body at an NFD spelling, layout NFC, gate
+refuses:
+
+    report.outcome = fallback
+    WRITE targeted = ["reports/dreáms/2026-08-29.md"]        (NFC — the layout's)
+    RECORD names   = ["- `reports_dreáms_2026-08-29.md` — EP2_ hard secret", ...]   (NFD — the body's)
+
+On macOS both spellings resolve to one file, so the vault effect is correct and
+only the record's spelling differs — cosmetic. On a case-sensitive volume the
+record names a file the fallback did not touch.
+
+Disposition: RESIDUAL, or a one-line fix if the file is being touched for
+findings 1-2: pass reportRel to composeRecord on the !bodyPublished branch, or
+read and write effectiveRel there. Whichever is chosen, record it under
+"Decisions made" — right now neither surface says which path is authoritative on
+that arm.
+
+FINDING 4 [quality] src/core/dream/promote.js:1458 — the separator normalisation
+fires on an empty base, prefixing the report with two blank lines.
+
+Round-1 finding 8 is FIXED — measured (/tmp/wdr2/probeS.js):
+
+    SEP ends-with-newline    outcome=fallback base-preserved=true prefix="run1 report\n\n## "
+    SEP no-trailing-newline  outcome=fallback base-preserved=true prefix="run1 report\n\n##"    <- fixed
+    SEP triple-newline       outcome=fallback base-preserved=true prefix="x\n\n\n\n## "         <- unchanged, pre-existing
+    SEP EMPTY FILE           outcome=fallback base-preserved=true prefix="\n\n##"               <- new nit
+
+NO interaction with the expect guard and none with R2/R3's byte-preservation
+claim, both re-checked: expect is now.bytes (:1528) and reportBody.bytes (:1474),
+neither of which appendedTo touches — the base is only ever appended to.
+base-preserved = true in every case. The guard yields '\n\n' for an EXISTING BUT
+EMPTY report file, so the report opens with two blank lines where the shipped
+append gave one.
+
+Disposition: RESIDUAL or DROP — cosmetic. If touched:
+base.length === 0 ? '' : base[base.length - 1] === 0x0a ? '\n' : '\n\n'.
+
+=== ESCALATION — TRIGGER (i) HAS FIRED ===
+The stop criterion pinned before either gate's output was read
+(docs/specs/logbook/2026-08-30-promote-report-pr-gates.md) names three escalation
+triggers, "any one of which stops the loop and routes an owner question rather
+than another patch". Trigger (i) — two consecutive rounds landing findings of the
+same KIND — HAS FIRED.
+
+Round 1's rubric gate landed both of its findings on REPORT-PATH DERIVATION AND
+IDENTITY (P2 empty segments; P2 canonical matching). Round 2 lands findings 1, 2
+and 3 on THE SAME FAMILY: the derivation is still not H1-valid, the matching
+predicate over-matches, and the derived path and the matched path disagree at the
+record. That is the same contract family twice running.
+
+ROUTE TO wd-architect, AND THIS IS A CANONICAL-EXTRACTION CALL, NOT A PATCH CALL.
+The reviewer grepped all four family specs (WP-dream-promote-report,
+WP-dream-promote-module, WP-dream-promote-in-workspace,
+WP-dream-vault-write-primitive) for reportRel / segment-valid / empty segment /
+canonical path identity: NO ROW ANYWHERE PINS how the report path is derived from
+reports_dir, or how a delta record is matched to it. The only thing the family
+pins is the primitive's OBLIGATION — Table H row H1 — leaving the caller-side
+half of that contract to be invented by an implementer, twice, under gate
+pressure. That is exactly the shape ADR-0031's detector exists to catch, and it
+is why three rounds have now hit it.
+
+Recommend a short canonical table (or Table R/Y rows) fixing three facts, so the
+fix lands against a contract instead of against the last gate's example:
+1. DERIVATION — reportRel from layout.reports_dir + <date>.md, and its standing
+   obligation to satisfy H1 (no empty, "." or ".." segment), naming which of
+   those readVaultLayout already guarantees ("..", absolute) and which the caller
+   must drop (".", empty).
+2. IDENTITY — the predicate matching a delta record to the report body, its
+   folding rule, and what happens when MORE THAN ONE record matches.
+3. AUTHORITY — which path the record NAMES and which the fallback TARGETS on the
+   published:false arm, since after this diff they are two different values.
+
+=== CLOSED-CONTRACT DRIFT CHECK ===
+No refinement in this diff silently reinterprets a settled canonical contract or
+promotes a mirror to primary. Table Y's rows are still cited by id at
+promote.js:1481-1503 and glossed nowhere; Y3's "first write's buffer travels" and
+Y7's unchanged carriers are now ASSERTED rather than merely commented, which
+strengthens the mirror instead of drifting it. Table R's R4 untouched-vault clause
+stays correctly scoped away from the Y2 arm on both surfaces. Table Q's typedefs
+are read, never recomputed. The Mirrored Surface Checklist prohibition is now
+respected at composeRecord's @param (round-1 finding 7 applied, :672-673).
+
+ONE DRIFT DOES EXIST AND IT IS THE FINDING-1/2 FAMILY: promote.js:1316-1321
+states the derivation rule as "empty segments are dropped, exactly as isUnder
+reads a layout directory", which is a true statement of the code but a PARTIAL
+STATEMENT OF TABLE H1'S RULE — the surface it mirrors rejects three segment
+shapes, this one handles one. tests:1717-1721 repeats the same partial rule. That
+is a mirror that has fallen out of agreement with its canonical table, and it is
+the same mirror both product defects came through — which is why the routing
+above is to extract the canonical row rather than to patch the two comments.
+
+=== BOTTOM LINE ===
+The round-1 findings are GENUINELY FIXED, verified by executed mutation and not by
+re-reading: the three gaps (I, L, M) are each caught now, no previously-caught
+mutation regressed, five are caught more tightly, and the wired-channel green
+control (G) still measures 0 fail. Boundary clean, lint clean, both pattern runs
+non-vacuous with their RED directions verified, the pinned redaction line still
+reproduces byte-for-byte, the partition still renders every copy exactly once on
+all four arms, and Y4 is respected across code comments and test names alike.
+npm test's single failure is the pre-existing adopt-e2e environment defect,
+confirmed on a merge-base export.
+
+What blocks approval is the NEW work. Finding 1 is a product defect of the same
+class and the same severity as the rubric gate's P2, reachable from three
+reports_dir values readVaultLayout really returns, crashing promote() outright and
+losing the enforcement record after other notes have already published — HEAVY
+under the pinned criterion. Finding 2 is a second product defect introduced BY the
+round-1 fix. Findings 3 and 4 are residuals.
+
+And the loop should not simply run a third round: ESCALATION TRIGGER (i) HAS
+FIRED, the family has no canonical row for the contract that keeps breaking, and
+the right next move is wd-architect pinning that row before the implementer
+touches promote.js:1322 again.

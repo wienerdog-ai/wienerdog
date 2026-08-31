@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-banner-decay
 title: Collapse the quarantine banner to an exact count and a pointer, on a 7-day window
-status: Ready
+status: Done
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file]
@@ -75,12 +75,18 @@ cannot act on.
 
 ## Current state
 
+Every line number in this section was re-measured against `main` at `8f93bc4`
+on 2026-08-30. Each citation is paired with the anchor text it points at, so a
+number that has shifted again is re-derivable by searching for that anchor —
+never by applying an offset to the number.
+
 ### `src/core/dream/ledger.js`
 
 ```js
 function displayName(absPath)          // :319 basename of the case-folded path, whitelisted to [A-Za-z0-9._-]
 function activeQuarantines(ledger)     // :328 → Array<{file, reason, harness}>, sorted by file
-function quarantineBannerLine(ledger)  // :346 → string; '' when no quarantine is active
+function quarantineSizeBytes(rec)      // :351 → number|null; reads no clock, NOT touched here
+function quarantineBannerLine(ledger)  // :367 → string; '' when no quarantine is active
 const SECRET_REVERT_EXHAUSTED_REASON   // :21  = 'secret-revert-exhausted'
 ```
 
@@ -99,7 +105,12 @@ buckets on `reason !== SECRET_REVERT_EXHAUSTED_REASON` and emits up to two
 ```
 
 `${intake.map(...).join(', ')}` is the unbounded enumeration, and it is the only
-place a stored `reason` string is rendered into the injected digest.
+place a **ledger**-stored `reason` string is rendered into the injected digest.
+(Two other prefix blocks render a `reason` of their own — the failure-alert block
+from `alerts.json` at `digest.js:490-493`, and the identity-exclusion banner's
+code-owned exclusion enum at `digest.js:799`. Neither is this ledger's and
+neither is touched here; they are named only so this claim can be re-run without
+a false hit.)
 
 The record typedef (`:58-66`) already carries `updated_at:string` — an ISO
 timestamp written by every recording function (`recordProcessed` `:256`,
@@ -112,7 +123,7 @@ this package.
 Exactly two, both passing the ledger and nothing else, both unchanged by this
 package:
 
-- `src/cli/dream.js:391` — `const quarantineLine = ledgerLib.quarantineBannerLine(ledger);` inside `regenerateDigest`, consumed at `:396`.
+- `src/cli/dream.js:392` — `const quarantineLine = ledgerLib.quarantineBannerLine(ledger);` inside `regenerateDigest`, consumed at `:397` (`quarantineLine,` in the `renderDigest` options object).
 - `src/cli/sync.js:288` — `quarantineLine: ledgerLib.quarantineBannerLine(ledgerLib.readLedger(paths.state)),`
 
 `src/core/digest.js` takes the finished string as `opts.quarantineLine`
@@ -121,9 +132,10 @@ does not know what is in it and needs no change.
 
 ### Tests that pin the current banner
 
-- `tests/unit/ledger.test.js:406` `quarantineBannerLine reproduces the intake banner byte for byte`; `:421` the exhausted sentence; `:441` both sentences, intake first; `:453` an unrecognized reason lands in the intake sentence.
+- `tests/unit/ledger.test.js:454` `quarantineBannerLine reproduces the intake banner byte for byte`; `:469` the exhausted sentence; `:489` both sentences, intake first; `:501` an unrecognized reason lands in the intake sentence.
+- `tests/unit/ledger.test.js:265` `adding the size reader left activeQuarantines and the banner exactly as they were` also calls `quarantineBannerLine`, but only to assert that a byte string is ABSENT from it. Its record is written by `recordQuarantined`, so its `updated_at` is `now` and the informational sentence still renders. **It passes unchanged and is not edited by this package** — do not touch it.
 - `tests/unit/sync-digest-quarantine.test.js:86` `sync re-renders BOTH transcript-quarantine banners into the digest`; `:113`; `:134`.
-- `tests/integration/dream.test.js:757`, `:789`, and `:860` — the last is `a hostile quarantined filename reaches the banner and console only in sanitized form`, **whose premise this package changes**: after it, no filename reaches the banner at all.
+- `tests/integration/dream.test.js:758` `an over-ceiling transcript is quarantined while the valid neighbour is consolidated` (its banner assertion is `:801`); `:806` `a quarantine-only run records + banners + exits 0; unchanged not retried; changed retried`; `:997` `a hostile quarantined filename reaches the banner and console only in sanitized form`, **whose premise this package changes**: after it, no filename reaches the banner at all.
 - `tests/unit/digest.test.js:184`, `:192`, `:1101` carry the old banner text as *literal inputs* to `renderDigest`. They still pass unchanged, but they would stand as stale examples of a banner shape that no longer exists.
 
 ### Golden fixtures
@@ -141,7 +153,7 @@ edited by this package, and that is an acceptance criterion, not an omission.**
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/ledger.js | `quarantineBannerLine` per **Tables A, B, C**, plus the two new exported constants **Table B** names. `activeQuarantines`, `displayName`, `selectState`, `secretDeferralCount` and every recording function keep their exact current behaviour and signatures |
+| modify | src/core/dream/ledger.js | `quarantineBannerLine` per **Tables A, B, C**, plus the two new exported constants **Table B** names. `activeQuarantines`, `displayName`, `selectState`, `secretDeferralCount`, `quarantineSizeBytes` and every recording function keep their exact current behaviour and signatures |
 | modify | tests/unit/ledger.test.js | the four banner tests named under Current state, plus the new decay cases |
 | modify | tests/unit/sync-digest-quarantine.test.js | its fixture records need a `updated_at` inside the window for the intake banner to render (**Table B**) |
 | modify | tests/integration/dream.test.js | the banner assertions, including the changed premise of the hostile-filename test |
@@ -175,9 +187,13 @@ decided:
 informational: > [!warning] Wienerdog: <N> session transcript(s) are being skipped and will not be dreamed over. Which ones, and why: reports/warnings.md in your vault. Dreaming continues over your other sessions; a skipped file is retried automatically if it changes.
 ```
 
-The **actionable** sentence is byte-identical to today's — reproduce it from
-`src/core/dream/ledger.js:365-371` unchanged, including its enumeration, its
-`state/quarantine/` instructions, and its deliberate silence about any command.
+The **actionable** sentence is byte-identical to today's — reproduce it from the
+`lines.push(...)` call inside `quarantineBannerLine`'s `if (spent.length > 0)`
+branch, **`src/core/dream/ledger.js:386-392`**, unchanged, including its
+enumeration, its `state/quarantine/` instructions, and its deliberate silence
+about any command. The comment that explains that silence is `:381-385` and is
+also kept. (Search for the anchor `'The withheld copies are in state/quarantine/:'`
+if these numbers have shifted again — the literal is the contract, not the range.)
 
 Worked examples. 191 `over-ceiling` records, the newest recorded 2 days ago, `now`
 = 2026-08-29:
@@ -242,7 +258,7 @@ per-surface label maps owned by `WP-doctor-quarantine-counts` and
 | Fact / rule | Value |
 |---|---|
 | The actionable sentence | byte-identical, including the enumeration, the `state/quarantine/` instructions and its deliberate silence about any command |
-| The two call sites | `src/cli/dream.js:391` and `src/cli/sync.js:288` keep passing one argument; neither file is a deliverable |
+| The two call sites | `src/cli/dream.js:392` and `src/cli/sync.js:288` keep passing one argument; neither file is a deliverable |
 | `src/core/digest.js` | unchanged. It receives a finished string, splices it at prefix position 3 (`:833-838`), and reserves the prefix's bytes and lines before capping the body |
 | Golden fixtures | `tests/golden/**` is byte-identical after this package. `tests/golden/digest-default.md` is the no-banner reference and is not edited |
 | Other banners | identity exclusions, failure alerts, secret quarantine, insecure modes, scheduler status and update availability are untouched. Nothing here generalizes a decay rule to any of them |
