@@ -233,6 +233,8 @@ promotion allowlist and is `WP-dream-promote-module`'s to claim, not this one's.
 | modify | docs/specs/MILESTONES.md | **AMENDED IN, owner ruling of 2026-08-31 (amendment note 3 below).** Release gate **M3**'s acceptance cell asserts "`git revert` cleanly undoes a run" — the exact claim Table W row W4 measured to be conditional. ONE cell changes; no other milestone row moves |
 | modify | docs/THREAT-MODEL.md | **AMENDED IN, owner ruling of 2026-08-31.** Two W4 mirrors: T1's one-commit mitigation bullet (`:84`) and T3's rollback-story sentence (`:115`). **`:415`'s "one revertible commit" is deliberately NOT changed** — it names the PROPERTY, which survives; see amendment note 3 |
 | modify | docs/adr/0010-vault-adoption-paths.md | **AMENDED IN, owner ruling of 2026-08-31.** Its Context (`:20`) rests the whole adoption-requires-git decision on the immediate-revert form of the T1 guarantee, so the premise moves with W4 while the decision it supports does not |
+| modify | tests/integration/adopt-e2e.test.js | **AMENDED IN, owner ruling of 2026-08-31.** Three assertions Table W row W4 falsifies — `git ls-files` (`:208`), the unguarded `git revert` (`:213`) and the `git status --porcelain` emptiness check (`:217`). **They were unreachable on the author's machine**, which dies earlier at `:204` on an executable-pin mismatch, so the file's measured `+0` delta said nothing about them. **CONDITION: they may not be fixed blind** — the die-point is bypassed in a local scratch run so the amended assertions are proven EXECUTED, red against the old shape and green against the new, before the commit lands |
+| modify | src/cli/adopt.js | **AMENDED IN, owner ruling of 2026-08-31.** The adoption-time CLI text carrying the retired one-command claim (`:123`, `:275-277`), moved to the same user-voice phrasing `docs/PRD.md` now carries. User-facing text, not logic |
 | modify | docs/adr/0020-skill-revision-lifecycle.md | **AMENDED IN, owner ruling of 2026-08-31.** Decision part 4's rollback sentence (`:147`) and the Consequences' literal "git revert is one command" (`:188`). **`:180`'s "plain, revertible commit" is deliberately NOT changed** — same reason as `docs/THREAT-MODEL.md:415` |
 | modify | docs/PRD.md | **AMENDED IN, owner ruling of 2026-08-31 — AND THIS SURFACE WAS MISSED BY THE STOP-POINT'S OWN FIVE-SURFACE LIST.** `:21` reads "revert any night with **one git command**" — the literal claim the ruling retires, in the product's first-person voice. The checklist bullet above exculpated `docs/PRD.md` by name, but that exculpation was measured at `:11` (one commit per run, which W1 genuinely does not touch) and never reached `:21` ten lines below. **A file cleared by association at one line is not cleared at another**, which is this package's own grep-the-claim-not-the-sentence rule turned on its own register |
 
@@ -285,13 +287,17 @@ Row W4 retires the immediate-revert claim; these five files are its consumers.
 ADRs this package has no business editing, and a prefix row would open every one
 of them.
 
-**ONE CANONICAL PHRASING, used byte-identically on every amended surface:**
-`git reset` **then** `git revert <sha>`, plus the loudness limb — the revert
-**refuses (exit 128) rather than applying in part** when the reset is skipped.
+**ONE CANONICAL PHRASING, used byte-identically on every amended surface —
+`git reset` then `git revert <sha>`, WITHOUT a comma before `then`**, plus the
+loudness limb: the revert **refuses (exit 128) rather than applying in part**
+when the reset is skipped. The comma is pinned because it was not: the first
+draft ran `` `git reset` then `` on four surfaces and `` `git reset`, then `` on
+two, which falsifies the word "byte-identically" in the very sentence that
+claims it (C-band nit, 2026-08-31).
 Five surfaces paraphrasing one fact five ways is how this family earned Table W
 in the first place, so the phrasing is fixed rather than left to each site.
 
-**TWO SURFACES ARE DELIBERATELY NOT CHANGED, and the exclusions are load-bearing
+**THREE SURFACES ARE DELIBERATELY NOT CHANGED, and the exclusions are load-bearing
 because they look like misses.** `docs/THREAT-MODEL.md:415` (*"every run is one
 revertible commit surfaced in a readable report"*) and
 `docs/adr/0020-skill-revision-lifecycle.md:180` (*"each is a plain, revertible
