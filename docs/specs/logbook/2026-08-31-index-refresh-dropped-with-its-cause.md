@@ -21,6 +21,11 @@ it as a silent weakening.
 After publishing its commit, the run used to refresh the user's git index so
 `git status` would not report freshly committed paths as staged deletions. That
 mechanism is gone. **The run now touches the user's index in no way at all.**
+**SCOPE, per Table W row W1(a), which defines it and which this sentence cites
+rather than restates:** the claim ranges over the run's OWN acts — its own git
+invocations and its own file writes. A write performed by the user's own git
+hooks is outside it, and W1(a) records that residual and the two remedies the
+owner rejected by name.
 
 ## Why — four defects in four rounds, each fixing the case it was shown
 
@@ -100,9 +105,15 @@ the two-command cost without meeting this entry.
    name.
 2. **It violates the just-contracted Table W row W1**, which is a total: *the
    run never writes, refreshes, resets or otherwise touches the user's index —
-   at all, in any run state.* The total is what makes the contract checkable by
-   a single byte-identity assertion; a sanctioned exception re-opens exactly the
-   per-shape reasoning that lost a different shape every round.
+   at all, in any run state.* **SCOPE: that total ranges over the package's OWN
+   acts — its own git invocations and its own file writes — and row W1(a) is
+   where it is defined; a write performed by the user's own git hooks is out of
+   its scope, and the residual is stated there (owner ruling, 2026-08-31).** A
+   sanctioned exception re-opens exactly the per-shape reasoning that lost a
+   different shape every round. **This paragraph originally added that the total
+   "is what makes the contract checkable by a single byte-identity assertion";
+   that clause is withdrawn** — a later round measured an endpoint compare
+   insufficient for a total over acts, and W1(c) now carries the enforcement.
 
 **The cost of rejecting it is one command the user runs, once, when they choose
 to undo a night — and a refusal that is loud rather than silent if they skip
@@ -132,9 +143,14 @@ SURVIVED the deletion and passed — which is exactly why they had to go:** with
 nothing touching the index they were trivially true and had no possible RED.
 
 **One assertion replaces all four** —
-`tests/unit/dream-pipeline.test.js`, *"the run does not touch the user's git
-index — at all"*: ordinary staged content, a staged deletion, a staged mode
-change and a real unresolved merge in one fixture. It has a real RED against any
+`tests/unit/dream-pipeline.test.js`, cited by the stable stem of its name,
+*"the run does not touch the user's git index — at all, `<layout>` vault"*
+(**one `test()` call, three tests at run time, one per vault layout; the stem is
+the citable part because the suffix moves with the layout list**): ordinary
+staged content, a staged deletion, a staged mode change and a real unresolved
+merge in one fixture. **SCOPE — the claim in that name ranges over the run's OWN
+acts, its own git invocations and its own file writes; Table W row W1(a) defines
+it and states the user-hook residual this entry does not restate.** It has a real RED against any
 reintroduced write, and it covers shapes nobody has enumerated. **A total is what
 the per-shape tests could not be:** each of them named a shape, and the mechanism
 lost a different one every round.
@@ -145,10 +161,15 @@ correction to it.** The first form of this paragraph said the run is
 **byte-identical** across the run, which was true and was not enough. **An
 artifact compared at two ENDPOINTS cannot enforce a total over ACTS:** a write
 followed by a restore lands between the endpoints and reads green. The
-enforcement is now the git execution seam — every invocation in the user's
-repository is on a measured index-safe allowlist or carries a private
-`GIT_INDEX_FILE` — and the byte comparison is retained as a DIAGNOSTIC, kept on
-stated grounds. **That is a change of KIND, not a fourth representation**, which
+enforcement is now the git execution seam, whose invariant **Table W row W1(c)
+states and this entry does not**, and the byte comparison is retained as a
+DIAGNOSTIC, kept on stated grounds. **The gloss that used to stand here — "on a
+measured index-safe allowlist or carries a private `GIT_INDEX_FILE`" — was
+removed on 2026-08-31 for the reason the next paragraph gives, and it had
+already drifted while it stood:** W1(c) requires that file to RESOLVE to an index
+that is neither the user's own nor under the vault, and the gloss was the
+presence-only form the row's trap (3) exists to forbid. **A second copy does not
+stay a copy — that is the whole finding, demonstrated on itself.** **That is a change of KIND, not a fourth representation**, which
 matters because the three preceding rounds each answered a finding with a wider
 representation and the fourth found the next gap. There is no fifth
 representation worth reaching for.
