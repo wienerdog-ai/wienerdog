@@ -162,8 +162,11 @@ correction to it.** The first form of this paragraph said the run is
 artifact compared at two ENDPOINTS cannot enforce a total over ACTS:** a write
 followed by a restore lands between the endpoints and reads green. The
 enforcement is now the git execution seam, whose invariant **Table W row W1(c)
-states and this entry does not**, and the byte comparison is retained as a
-DIAGNOSTIC, kept on stated grounds. **The gloss that used to stand here — "on a
+states and this entry does not** — **and WHAT that seam decides changed once
+more on 2026-08-31, from classifying each invocation to matching it against the
+run's own pinned calls; the section below records that retirement with its
+cause.** The byte comparison is retained as a DIAGNOSTIC, kept on stated
+grounds. **The gloss that used to stand here — "on a
 measured index-safe allowlist or carries a private `GIT_INDEX_FILE`" — was
 removed on 2026-08-31 for the reason the next paragraph gives, and it had
 already drifted while it stood:** W1(c) requires that file to RESOLVE to an index
@@ -275,6 +278,105 @@ Assertions that asked the index a question now ask **HEAD**, which is what they
 meant; the warnings-file check asks the **file**, because `status` and
 `diff HEAD` are both index-mediated and now carry the cost's noise.
 
+## The intent-classification direction, retired with ITS cause
+
+**The fourth thing this work retired, and the only one of the four that is not a
+representation problem.** The first three were the same mistake at three depths —
+a projection of the index, a wider projection, then the artifact itself. This one
+is different in kind, and the difference is why it is worth its own section.
+
+After the enforcement moved to the git execution seam, the seam decided each
+invocation by **understanding** it: resolve the subcommand past leading global
+options, ask git which repository — later, which index file — the invocation
+would reach, and admit it if the verb was on a twelve-entry index-safe allowlist
+(`INDEX_SAFE_GIT`). **Two independent refutations, two rounds apart, each
+reproduced independently, retired that direction. Either alone is sufficient, and
+they break it in different places.**
+
+| # | the exploit | what it did | why the classifier missed it |
+|---|---|---|---|
+| 1 | `git --attr-source log update-index --chmod=+x f.txt` | wrote the user's index — mode `100644` → `100755`, exit 0 | `--attr-source` is a value-consuming global option added in git **2.40**; the resolver did not know it, so it read the verb as `log`, which WAS on the allowlist |
+| 2 | `GIT_INDEX_FILE=<private> git read-tree --index-output=<user index> HEAD` | **destroyed the user's staged content** — `two` staged became the committed `one`; index sha `dd271d29…` → `0097ddb9…` | `--index-output` is a **subcommand** flag, not a global option, so no replay of global options reaches it; the index-identity probe reported the PRIVATE index |
+
+**Refutation 1's lesson is not the missing entry.** The round before had patched
+the identical shape for `--namespace`. **Git's global-option grammar is not ours
+and it grows**, so a resolver built on it can always be one entry short — and one
+entry short HERE grants by omission, at exactly the layer that refuses to grant by
+omission one line above.
+
+**Refutation 2's lesson is that the destination is not a property of the
+configuration.** A subcommand's own grammar can name the file it writes, and no
+amount of global-option or environment replay sees it.
+
+### What replaced it, and the structural ground
+
+**Option C, owner-ruled 2026-08-31: the run's own calls are PINNED. Default-deny;
+an unknown shape is a violation.** The owner's words, which are the whole reason
+this closes where the others did not:
+
+> enumerating the BAD is unclosable because git's grammar is not ours;
+> enumerating our OWN GOOD is closable because the run's call set is ours —
+> default-deny, unknown shape = violation.
+
+Nine shapes, measured as forty-five invocations across all three vault layouts.
+**Both exploits above fail against it as UNKNOWN SHAPES**, measured RED at
+`578d17b`, each for that reason and no other — nothing had to understand either
+one. **The set itself is Table W row W1(c)'s and this entry does not spell it**,
+on the same one-contract-one-place rule the projection paragraph above is an
+instance of.
+
+**Matching is strict shape-equality, never re-classification.** A fuzzy matcher —
+prefix matching, option-order tolerance — would smuggle the retired direction
+back in under a new name, because every such tolerance is a small
+re-classification.
+
+### What was measured SOUND and is kept rather than dropped
+
+A retirement that discards its predecessor's correct results loses them twice.
+
+- **The twelve allowlisted verbs were measured to write no index**, at `1ac82ac`
+  on git 2.50.1 against a vault carrying deliberately stale cached stat data.
+  **That measurement never failed and it is not what retired**: the members were
+  right; the RESOLVER that mapped an argv onto a member could not be closed. Six
+  of those verbs are exactly the six `unset`-disposition shapes of the pinned set,
+  so the measurement now underwrites them directly.
+- The ADR-0012 restoration was byte-equal across three surfaces; boundary clean;
+  `mirror-walk` +0.
+
+### The rule this section adds
+
+**A superseded rationale is retired WITH its mechanism.** Removed with the
+direction: `INDEX_SAFE_GIT`, the verb resolver, the global-option collector, the
+vault-git-dir binding they fed, **and the comment block arguing the retired
+predicate in the present tense** (*"WHICH REPOSITORY DOES THIS CALL REACH? ASK
+GIT — DO NOT ENUMERATE"*). The last of those was a gate finding in its own right,
+and it is the instructive one: **a rationale left standing beside a new mechanism
+is read as describing it**, so it does not merely go stale — it misinforms with
+the authority of a contract comment.
+
+### The proof standard this direction introduced
+
+**Instrumentation may not make seam calls of its own.** Measured at `578d17b`: a
+first pass of the three exploit cells reddened all three, but for the harness's
+own reason — it located the index with `rev-parse --git-path index` THROUGH the
+production seam, which is an unpinned shape. Routed around the seam and re-run,
+each cell failed for its own reason. **Under the retired direction this was
+harmless**, since the extra read resolved to a repository and passed. **A gate
+that inherits a pre-C harness therefore inherits a false red**, and a red whose
+reason is not the cell's is not a measurement.
+
+### One prose/code divergence settled with the direction
+
+The seam's JSDoc promised a private index that is *"neither the user's nor inside
+their working tree"*; the shipped predicate checked only the first clause. So
+`GIT_INDEX_FILE=<vault>/scratch-index` had been a violation and had silently
+become permitted. **Settled towards the stronger side by owner ruling — the row
+decides, and it decided BOTH clauses** — because an index materialised inside the
+vault is a file this run writes into the user's working tree, which row W1(a)'s
+scope names in as many words. Measured RED at `578d17b`. **The pair is now a
+registered mirror**, which is the actual remedy: the drift was possible because
+nothing said the two had to move together.
+
 ## The standing condition, re-derived rather than inherited
 
 The drop was conditional on nothing downstream depending on a refreshed index.
@@ -305,10 +407,15 @@ block opening `THE USER'S INDEX IS NOT THIS RUN'S PROPERTY`). A user who has
 `GIT_DIR` or `GIT_WORK_TREE` exported at dream time therefore propagates a
 repository redirect into every git invocation the run makes.
 
-**What this is not.** It is not a hole in row W1's enforcement: the seam's
-classifier replays each invocation's own environment, so a redirect carried
-this way is classified exactly as one carried in argv, and the row's contract
-holds either way. That was measured, not assumed.
+**What this is not.** It is not a hole in row W1's enforcement, and the REASON
+was rewritten on 2026-08-31 when the enforcement changed direction — the old
+reason described the retired classifier and could not simply be carried
+forward. Under the pinned call set, an ambient `GIT_INDEX_FILE` arriving on a
+shape whose disposition is `unset` is itself a violation, and the three shapes
+that write an index carry an explicit private `GIT_INDEX_FILE` that a `GIT_DIR`
+redirect does not override. **Row W1(c) is where that rule lives; this entry
+cites it and does not restate it** — including the ground's status, which the
+row marks as REASONED rather than measured.
 
 **What it is.** A question about whether the run should PIN its git environment
 rather than inherit it — product hardening, with its own trade-off (pinning
