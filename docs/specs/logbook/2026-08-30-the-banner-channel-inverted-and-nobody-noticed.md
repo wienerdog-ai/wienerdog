@@ -81,4 +81,4 @@ specified as `WP-launcher-alert-bound` rather than deferred again.
 **Incident status.** Resolved on the maintainer's machine the same day by running
 `sync` from the real checkout (dev stance), which repointed `app/current` and
 regenerated the digest. The structural defects are unaffected by that repair and are
-the subject of ADR-0039.
+the subject of ADR-0040.

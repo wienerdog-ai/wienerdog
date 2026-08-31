@@ -1,15 +1,25 @@
 ---
 id: WP-digest-stable-volatile-split
 title: Split the digest into a stable half safe to copy and a volatile half that is only ever referenced
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: [WP-managed-block-by-reference]
-adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0031, ADR-0032, ADR-0039]
+adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0031, ADR-0032, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-digest-stable-volatile-split: two renders, one chokepoint
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
@@ -25,7 +35,7 @@ content is apportioned between two files. It adds no process.
 
 **Why split at all, now that the freshness problem is solved.** The remaining reason
 is not freshness — it is **which trust channel each kind of content lands in**, and it
-is the strongest argument in ADR-0039 (§4).
+is the strongest argument in ADR-0040 (§4).
 
 The digest mixes content from two genuinely different trust classes:
 
@@ -52,7 +62,7 @@ untrusted-derived, softly-fenced content into the **instruction** channel, and i
 durable 0644 file the user owns and may commit to their own git. ADR-0024 separately
 names the managed block as one of four durable **secret sinks**.
 
-**The decision (ADR-0039 §4).** Only content that has passed ADR-0021's
+**The decision (ADR-0040 §4).** Only content that has passed ADR-0021's
 human-ratification gate is ever **copied** into a file the user owns. Everything else
 is delivered by reference, or not at all. Concretely:
 

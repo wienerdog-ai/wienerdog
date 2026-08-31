@@ -31,7 +31,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { promote, makeAdmit, spawnGitForMerge, isLosslessUtf8 } = require('../../src/core/dream/promote');
+const { promote, makeAdmit, spawnGitForMerge } = require('../../src/core/dream/promote');
 const { isAtOrBeneath } = require('../../src/core/dream/workspace');
 const { captureBaseline, computeDelta } = require('../../src/core/dream/delta');
 const { defaultLayout } = require('../../src/core/layout');
@@ -167,6 +167,26 @@ function promotionFor(res, rel) {
 }
 
 const NOTE = '01-Projects/alpha/note.md';
+
+/** The report body's path for every scenario built here: `reports_dir/<date>.md`. */
+const REPORT = 'reports/dreams/2026-08-29.md';
+
+/** The three headings the enforcement record is composed under. */
+const H_ENFORCE = '## Refused by policy (promotion enforcement)';
+const H_REDACT = '## Redacted in place (secret scan)';
+const H_PRESERVED = '## Preserved copies (secret quarantine)';
+
+/**
+ * A hostile value: markdown-active text AND a CONTEXT-DEPENDENT secret. Both
+ * halves matter. A prefix-shaped secret survives the sanitiser intact and is
+ * caught in EITHER order, so a fixture built only from one goes green against
+ * the leaking implementation — these two are the shapes that discriminate.
+ */
+const SECRET = 'abcdefghijkl';
+const HOSTILE = `](evil)\`token=${SECRET}\` client_secret: ${SECRET}`;
+
+/** @param {string} s @returns {boolean} */
+const leaks = (s) => s.includes(SECRET);
 
 // ── Table C — the decision matrix, one case per row ──────────────────────────
 
@@ -353,7 +373,21 @@ test('dream-promote: policy is judged on the RESOLVED path, not the candidate', 
       `the policy judged the resolved path, not the candidate: ${reason}`
     );
     assert.equal(res.promoted.length, 0);
-    assert.deepEqual(fs.readdirSync(victim).sort(), before, 'the victim directory gains nothing');
+    // Table R's fallback publishes this run's record on EVERY run — here the
+    // brain wrote no report at all, which is one member of its trigger class —
+    // and for `target === '..'` the "victim" IS the vault root, so it
+    // legitimately gains the report's own top directory. The guarantee under
+    // test is that the SYMLINKED ALIAS publishes nothing, so that one directory
+    // is excluded BY NAME and the fallback's outcome is pinned beside it,
+    // rather than the assertion being weakened to "roughly unchanged".
+    assert.equal(res.report.outcome, 'fallback');
+    const reportTop = sc.layout.reports_dir.split('/')[0];
+    const notTheReport = (/** @type {string} */ e) => e !== reportTop;
+    assert.deepEqual(
+      fs.readdirSync(victim).filter(notTheReport).sort(),
+      before.filter(notTheReport),
+      'the victim directory gains nothing'
+    );
   }
 });
 
@@ -498,34 +532,71 @@ test('dream-promote D: the gates receive the evidence Table D enumerates, not by
   assert.deepEqual(pairedSeen[0], B('BRAIN\nb\nc\nd\nLIVE\n'), "the pair's MERGED candidate, never the live vault");
 });
 
-test('dream-promote D: unscannable content is refused, even by a gate that passes the empty scan', () => {
+test('dream-promote D: unscannable content reaches the EP2 gate WITH the binary flag, and its refusal carries the preservation record', () => {
   // A `.md` whose delta record is BINARY. The delta primitive returns no line
-  // numbers for it, so a gate defined only over added lines sees an empty scan.
+  // numbers for it, so a gate defined only over added lines sees an empty scan
+  // — which is why the gate must ask "can this be scanned?" before it scans.
   const binary = Buffer.from([0x23, 0x20, 0x00, 0xff, 0xfe, 0x0a]);
   const sc = scenario({ brain: { [NOTE]: binary } });
   const record = sc.delta.records.find((r) => r.rel === NOTE);
   assert.equal(record.binary, true, 'the fixture must really produce a binary record');
   assert.deepEqual(record.addedLineNumbers, [], 'and therefore an empty scan');
 
-  // The injected gate treats the empty scan as a pass — the module must refuse
-  // anyway. This is the RED side: an implementation that delegated the decision
-  // to the gate would promote it raw.
-  const res = run(sc, { gates: gates({ secret: () => ({ ok: true }) }) });
-  assert.match(refusalFor(res, NOTE), /EP2: content is binary/);
+  // WHAT THIS MODULE OWES THE GATE (`WP-ep2-unscannable-preserve`, Table U row
+  // U2): the delta `record` — only this module holds the primitive's `binary`
+  // answer — and the UNDECODED after-bytes. Without both, the gate cannot make
+  // the classification that is now its own.
+  /** @type {object[]} */
+  const seen = [];
+  const res = run(sc, {
+    gates: gates({
+      secret: (g) => {
+        seen.push(g);
+        return {
+          refuse: true,
+          reason: 'content is binary and cannot be secret-scanned; not promoted',
+          preserved: [{ artifact: '2026-08-29-note.md', location: 'quarantine' }],
+        };
+      },
+    }),
+  });
+  assert.equal(seen.length, 1, 'the gate is CALLED on unscannable content — it is not pre-refused');
+  assert.equal(seen[0].record.binary, true, 'and it is handed the primitive’s binary flag');
+  assert.deepEqual(seen[0].afterBytes, binary, 'and the raw bytes, undecoded');
+
+  assert.equal(refusalFor(res, NOTE), 'EP2: content is binary and cannot be secret-scanned; not promoted');
   assert.equal(get(sc.vaultDir, NOTE), null, 'it does not reach the vault');
   assert.equal(res.secretDisposition.withheld, 1);
+  // SIBLING PARITY, at this module's boundary: the withhold path reports the
+  // gate's preservation record for unscannable content exactly as it does for a
+  // hard-secret finding (Table Q rows Q8/Q9). An empty record here is the shape
+  // the regression had.
+  assert.deepEqual(
+    res.refused.find((r) => r.rel === NOTE).preserved,
+    [{ artifact: '2026-08-29-note.md', location: 'quarantine', remediation: 'delete' }]
+  );
 });
 
-test('dream-promote D: content that is not lossless UTF-8 is refused for the same reason', () => {
-  assert.equal(isLosslessUtf8(B('ok\n')), true);
-  assert.equal(isLosslessUtf8(Buffer.from([0xc3, 0x28])), false, 'an invalid sequence does not round-trip');
+test('dream-promote D: this module runs NO unscannable check of its own — the classification is the gate’s', () => {
+  // THE CONTRACT MOVE, asserted as the absence it is. An injected gate that
+  // passes binary content gets it promoted, because there is no second copy of
+  // the predicate here to catch it. With the REAL gate this cannot happen —
+  // tests/unit/dream-validate.test.js pins that refusal AND its quarantine copy
+  // — and that split is the point: one owner, one place the decision is made.
+  const binary = Buffer.from([0x23, 0x20, 0x00, 0xff, 0xfe, 0x0a]);
+  const sc = scenario({ brain: { [NOTE]: binary } });
+  assert.equal(sc.delta.records.find((r) => r.rel === NOTE).binary, true);
+  const res = run(sc, { gates: gates({ secret: () => ({ ok: true }) }) });
+  assert.deepEqual(get(sc.vaultDir, NOTE), binary, 'a passing gate is obeyed; nothing here second-guesses it');
+  assert.equal(res.secretDisposition.withheld, 0);
 
-  // No NUL, so the delta calls it text; the bytes are still unscannable.
-  const sc = scenario({ brain: { [NOTE]: Buffer.from([0x61, 0xc3, 0x28, 0x0a]) } });
-  assert.equal(sc.delta.records.find((r) => r.rel === NOTE).binary, false);
-  const res = run(sc);
-  assert.match(refusalFor(res, NOTE), /not lossless UTF-8/);
-  assert.equal(get(sc.vaultDir, NOTE), null);
+  // Same for the round-trip half: no NUL, so the delta calls it text, and the
+  // module has no opinion about whether the bytes decode.
+  const sc2 = scenario({ brain: { [NOTE]: Buffer.from([0x61, 0xc3, 0x28, 0x0a]) } });
+  assert.equal(sc2.delta.records.find((r) => r.rel === NOTE).binary, false);
+  const res2 = run(sc2, { gates: gates({ secret: () => ({ ok: true }) }) });
+  assert.equal(res2.secretDisposition.withheld, 0);
+  assert.deepEqual(get(sc2.vaultDir, NOTE), Buffer.from([0x61, 0xc3, 0x28, 0x0a]));
 });
 
 test('dream-promote D: the skill ↔ ledger pair promotes atomically AT THE DECISION', () => {
@@ -800,9 +871,15 @@ test('dream-promote E: every vault content write goes through the primitive', ()
   }
   assert.deepEqual(changed.sort(), throughSeam.sort(), 'every changed vault file went through the primitive');
 
-  const published = [...res.promoted, ...res.redacted].map((p) => p.rel).sort();
+  // THE REPORT WRITE IS IN THIS SET TOO, and that is the point of asserting it
+  // here rather than only in the report's own tests: the security checklist's
+  // "every report write goes through the primitive" is the same property this
+  // oracle measures, and the fallback's publish is a vault write like any
+  // other. The brain wrote no report, so Table R's row R1 fired.
+  assert.equal(res.report.outcome, 'fallback');
+  const published = [...res.promoted, ...res.redacted].map((p) => p.rel).concat(REPORT).sort();
   assert.deepEqual(throughSeam.sort(), published);
-  assert.deepEqual(published, ['00-Inbox/new.md', NOTE].sort());
+  assert.deepEqual(published, ['00-Inbox/new.md', NOTE, REPORT].sort());
   assert.equal(get(sc.vaultDir, 'CLAUDE.md'), null);
 });
 
@@ -1068,14 +1145,836 @@ test('dream-promote S: every published outcome carries BOTH rel and the primitiv
   assert.deepEqual(res.refused[0].preserved, [], 'nothing was preserved for a path denied before EP2 ran');
 });
 
+// ── The dream report (WP-dream-promote-report) ───────────────────────────────
+//
+// The tables these mirror:
+//   the report row — the body as an ordinary promotion candidate
+//   Y — the report's SECOND write, and the accounting that must never be silent
+//   N — the neutralisation contract: which channels, which transformation, in
+//       which order
+//   R — the report's publish decision, and its preserve-and-extend fallback
+//
+// THE REPORT IS NOT A MEMBER OF THE THREE ARRAYS. Its whole disposition travels
+// on `report`, which is why every assertion below reads that field rather than
+// looking for the path in `promoted[]`/`redacted[]`/`refused[]`.
+
+/** The real primitive, for tests that wrap it in a fault-injecting seam. */
+const { writeIntoVault: realWrite } = require('../../src/core/dream/vault-write');
+
+/** @param {string} root @param {string} rel @returns {string} */
+const abs = (root, rel) => path.join(root, ...rel.split('/'));
+
+/** A brain-authored body carrying the one section no filesystem outcome can
+ *  reconstruct (`skills/wienerdog-dream/SKILL.md:409-425`). */
+const GATED_OUT = '## Gated out (and why)\n- alpha/plan — Tier 3 blocked: derived_from_untrusted\n';
+/** @param {string} [tag] @returns {string} */
+const body = (tag = 'one') => `# Dream report — 2026-08-29\n\nrun ${tag}\n\n${GATED_OUT}`;
+
+/** The record as the section it is rendered into. @param {object} res */
+const sectionOf = (res) => `${res.report.record.join('\n')}\n`;
+
+test('dream-promote: the brain-authored report body survives end to end, and a same-date second run lands', () => {
+  const sc = scenario({ brain: { [REPORT]: body('one') } });
+  const res = run(sc);
+
+  // The body is a promotion candidate like any other — C9 admits `reports_dir`
+  // and the gates that match it judge it — but its outcome is `report`, never a
+  // member of the three arrays.
+  assert.equal(res.report.outcome, 'promoted');
+  assert.deepEqual(res.report.accounting, { published: true });
+  assert.equal(res.report.redaction, null, 'the gate did not redact the body — stated, not omitted');
+  assert.deepEqual(res.report.preserved, []);
+  assert.deepEqual([...res.promoted, ...res.redacted, ...res.refused], []);
+
+  const published = get(sc.vaultDir, REPORT);
+  // BYTE-FOR-BYTE. A code-composed report drops `## Gated out (and why)`
+  // entirely, because it names candidates the brain did NOT write and no
+  // filesystem outcome can reconstruct a file that never existed.
+  assert.equal(String(published), `${body('one')}\n${sectionOf(res)}`);
+  assert.ok(String(published).includes(GATED_OUT), "the brain's own accounting survives");
+  // Table Y, row Y3 — on `published:true` the SECOND write's returned buffer.
+  assert.deepEqual(res.report.bytes, published);
+
+  // ── The same date, a second time ──────────────────────────────────────────
+  // Run 1's report is in the baseline, so run 2 sees a MODIFIED note, not an
+  // added one that C4 would refuse for existing.
+  const sc2 = scenario({ vault: { [REPORT]: published }, brain: { [REPORT]: body('two') } });
+  assert.equal(sc2.delta.records[0].status, 'modified');
+  const res2 = run(sc2);
+  assert.equal(res2.report.outcome, 'promoted');
+  assert.deepEqual(res2.report.accounting, { published: true });
+  // NO APPEND-IN-PLACE: the second run REPLACES the body through the primitive,
+  // so run 1's record is gone. An implementation that appended to the file on
+  // disk would leave it here, and that is the shape this assertion kills.
+  assert.equal(String(get(sc2.vaultDir, REPORT)), `${body('two')}\n${sectionOf(res2)}`);
+  assert.ok(!String(get(sc2.vaultDir, REPORT)).includes('run one'));
+});
+
+test('dream-promote report-fallback R1: with no report for the date, the code section alone is published', () => {
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  const res = run(sc);
+  assert.equal(res.report.outcome, 'fallback');
+  assert.deepEqual(res.report.preserved, []);
+  assert.equal(String(get(sc.vaultDir, REPORT)), sectionOf(res));
+  assert.deepEqual(res.report.bytes, get(sc.vaultDir, REPORT));
+  // The fallback publish is recorded as ITSELF, never as a normal promotion.
+  assert.ok(!res.promoted.some((p) => p.rel === REPORT));
+});
+
+test('dream-promote report-fallback R2: run 1\'s report is byte-preserved and this run\'s section appended below it', () => {
+  const run1 = '# Dream report — 2026-08-29\n\nrun one\n';
+  const sc = scenario({ vault: { [REPORT]: run1 }, brain: { [REPORT]: body('two') } });
+  const res = run(sc, { gates: gates({ secret: ({ rel }) => (rel === REPORT ? { refuse: true, reason: 'hard secret' } : { ok: true }) }) });
+
+  assert.equal(res.report.outcome, 'fallback');
+  const now = String(get(sc.vaultDir, REPORT));
+  assert.ok(now.startsWith(run1), "run 1's report is preserved INTACT");
+  assert.equal(now, `${run1}\n${sectionOf(res)}`);
+  // Both values are preserved: neither the existing report nor this run's
+  // record is lost, and the brain's body is accounted as refused with a reason.
+  assert.ok(sectionOf(res).includes('hard secret'));
+  assert.ok(sectionOf(res).includes('reports_dreams_2026-08-29.md'));
+});
+
+test('dream-promote report-fallback R3: a report the USER edited is preserved verbatim and appended to, never repaired', () => {
+  // Diverged from anything this run could reconstruct: a hand-written note in
+  // the middle of the file, and no trailing newline.
+  const edited = '# my own report\n\nI deleted the machine section and wrote this instead.';
+  const sc = scenario({ vault: { [REPORT]: edited }, brain: { [REPORT]: body('two') } });
+  const res = run(sc, { gates: gates({ secret: ({ rel }) => (rel === REPORT ? { refuse: true, reason: 'hard secret' } : { ok: true }) }) });
+
+  assert.equal(res.report.outcome, 'fallback');
+  const now = String(get(sc.vaultDir, REPORT));
+  // R3 IS THE SAME RULE AS R2. The instinct to repair a diverged file is what
+  // would break it, so the assertion is on the user's bytes surviving EXACTLY.
+  // The fixture deliberately has NO trailing newline: the separator normalises
+  // to a blank line so the heading never lands directly under a paragraph line,
+  // which is the guarantee the shipped append had (round-1 PR gate, finding 8).
+  // Preserving the user's bytes and normalising the SEPARATOR are different
+  // things — nothing is added to, removed from or repaired inside `edited`.
+  assert.ok(!edited.endsWith('\n'));
+  assert.equal(now, `${edited}\n\n${sectionOf(res)}`);
+  assert.ok(now.startsWith(edited), "the user's bytes survive EXACTLY, byte for byte");
+  assert.ok(!now.includes(`${edited}\n${H_ENFORCE}`), 'the heading never lands under a paragraph line');
+  assert.ok(!now.includes('Dream report — 2026-08-29'), 'nothing reconstructed the machine header');
+});
+
+test('dream-promote report-fallback R4: a report mutated between the read and the publish is refused, and the record goes to the caller', () => {
+  const edited = '# my own report\n\nlive edit\n';
+  const sc = scenario({ vault: { [REPORT]: edited }, brain: { [NOTE]: 'fresh\n' } });
+  const res = run(sc, {
+    writeFile: (o) => {
+      // The user saves between the fallback's read and its publish, so the
+      // primitive's `expect` guard (H5) abandons the write.
+      if (o.rel === REPORT) fs.writeFileSync(abs(sc.vaultDir, REPORT), 'saved again\n');
+      return realWrite(o);
+    },
+  });
+
+  assert.equal(res.report.outcome, 'refused');
+  assert.equal(typeof res.report.reason, 'string');
+  assert.ok(res.report.reason.length > 0, 'the refusal NAMES ITS REASON');
+  assert.equal(res.report.bytes, undefined, 'the refused arm cannot carry bytes');
+  // In this narrow window an overwrite would be the WORSE failure: it would
+  // clobber the user's live edit. The vault object is left untouched.
+  assert.equal(String(get(sc.vaultDir, REPORT)), 'saved again\n');
+  // And the record is not lost — it goes back to the caller for the run's log
+  // and output. Returning it is not delivering it; the caller delivers.
+  assert.ok(Array.isArray(res.report.record) && res.report.record.length > 0);
+  assert.ok(res.report.record.includes(H_ENFORCE));
+});
+
+test('dream-promote report-fallback: EVERY unpublished-body path enters the fallback, not the gate-refusal case alone', () => {
+  // (i) A C4 conflict — the USER creates a report at that path during the run.
+  const user = '# the user got there first\n';
+  const scC4 = scenario({ brain: { [REPORT]: body('two') } });
+  put(scC4.vaultDir, REPORT, user);
+  const resC4 = run(scC4);
+  assert.equal(resC4.report.outcome, 'fallback', 'a promotion-decision refusal is in the trigger class');
+  assert.equal(String(get(scC4.vaultDir, REPORT)), `${user}\n${sectionOf(resC4)}`);
+  assert.ok(sectionOf(resC4).includes('already exists'), "the body's refusal is accounted, with its reason");
+
+  // (ii) A PRIMITIVE refusal — the target changes between decision and publish,
+  // so the body's own write is abandoned by H5 with no gate involved.
+  const run1 = '# Dream report — 2026-08-29\n\nrun one\n';
+  const scH5 = scenario({ vault: { [REPORT]: run1 }, brain: { [REPORT]: body('two') } });
+  let reportWrites = 0;
+  const resH5 = run(scH5, {
+    // The gate preserved a copy for the body BEFORE the primitive refused it, so
+    // this route has a record to carry — without one the arm-scoping rule below
+    // has nothing to bite on.
+    gates: gates({
+      secret: ({ rel }) =>
+        rel === REPORT
+          ? { redact: true, sanitizedBytes: B(body('two')), redaction: { lines: 1, labels: 'high-entropy' },
+              preserved: [{ artifact: '2026-08-29-report.md', location: 'quarantine/redacted' }] }
+          : { ok: true },
+    }),
+    writeFile: (o) => {
+      if (o.rel === REPORT) {
+        reportWrites += 1;
+        // Only the BODY's write is sabotaged; the fallback's own write then
+        // reads the intervening bytes and appends to them.
+        if (reportWrites === 1) fs.writeFileSync(abs(scH5.vaultDir, REPORT), 'user saved mid-run\n');
+      }
+      return realWrite(o);
+    },
+  });
+  assert.equal(resH5.report.outcome, 'fallback', 'a primitive refusal is in the trigger class too');
+  assert.equal(String(get(scH5.vaultDir, REPORT)), `user saved mid-run\n\n${sectionOf(resH5)}`);
+  // THE EXCLUSION IS ASSERTED ON THIS ROUTE TOO. `### Exact contracts` says flatly
+  // that the body is not a member of `refused[]`, and until the round-1 gate
+  // measured it, deleting the report routing from the PRIMITIVE-refusal branch
+  // passed the whole suite: the fallback fires from `reportBody === null` as well,
+  // so the outcome and the vault content both still looked right while the body's
+  // copies were announced under an ordinary refused-path line.
+  assert.ok(!resH5.refused.some((r) => r.rel === REPORT), 'the body is not a member of refused[]');
+  assert.deepEqual(resH5.report.preserved, [
+    { artifact: '2026-08-29-report.md', location: 'quarantine/redacted', remediation: 'delete' },
+  ], 'the copies travel on the arm the run actually took');
+  assert.ok(sectionOf(resH5).includes('state/quarantine/redacted/2026-08-29-report.md'));
+});
+
+test('dream-promote report-fallback: the preserved region is not re-gated', () => {
+  // The report ALREADY IN THE VAULT carries secret-shaped text. Gates guard
+  // content ENTERING the vault, not content residing in it: re-scanning these
+  // bytes protects nothing — that content is already exposed — while it can
+  // destroy the enforcement record or mutate user-edited bytes.
+  const existing = `# Dream report — 2026-08-29\n\ntoken=${SECRET}\nclient_secret: ${SECRET}\n`;
+  const sc = scenario({ vault: { [REPORT]: existing }, brain: { [NOTE]: 'fresh\n' } });
+  let scanned = 0;
+  const res = run(sc, {
+    gates: gates({
+      secret: (o) => {
+        scanned += 1;
+        // A gate that DID see these bytes would withhold them.
+        if (leaks(String(o.afterBytes))) return { refuse: true, reason: 'hard secret', preserved: [] };
+        return { ok: true };
+      },
+    }),
+  });
+
+  assert.equal(res.report.outcome, 'fallback');
+  assert.equal(scanned, 1, 'only the brain-written note was scanned; the vault-resident report was not');
+  const now = String(get(sc.vaultDir, REPORT));
+  assert.ok(now.startsWith(existing), 'republished byte-identical — no gate withheld, redacted or altered it');
+  assert.equal(now, `${existing}\n${sectionOf(res)}`);
+});
+
+test('dream-promote report-fallback: the caller\'s `records` reach the report, neutralised like the module\'s own', () => {
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  const res = run(sc, {
+    records: [
+      { path: `scratch/${HOSTILE}.md`, reason: `dropped from the scratch tree: ${HOSTILE}` },
+      { path: 'scratch/ordinary.md', reason: 'dropped from the scratch tree' },
+    ],
+  });
+
+  const text = String(get(sc.vaultDir, REPORT));
+  assert.ok(text.includes('dropped from the scratch tree'), "the CALLER's accounting reaches the report");
+  assert.ok(text.includes('scratch_ordinary.md'));
+  // Neutralised by Table N's rules exactly as this module's own records are.
+  assert.ok(!leaks(text), 'the caller\'s channels are not a bypass');
+  assert.ok(!leaks(sectionOf(res)));
+});
+
+test('dream-promote report-fallback: a malformed `records` entry fails loud rather than reaching the report mangled', () => {
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  for (const bad of ['not an array', [null], [{ path: 'a.md' }], [{ path: 1, reason: 'x' }]]) {
+    assert.throws(
+      () => run(sc, { records: bad }),
+      (err) => err instanceof WienerdogError && /`records` must be an array/.test(err.message),
+      `records of ${JSON.stringify(bad)} must fail loud`
+    );
+  }
+});
+
+// ── Table N — the neutralisation contract ────────────────────────────────────
+
+test('dream-promote report-fallback: the code-authored section cannot carry refusable bytes, on the normal write AND on the fallback', () => {
+  /**
+   * Every channel Table N classifies as attacker-influenceable AND the composer
+   * interpolates, exercised at once with a value carrying BOTH markdown-active
+   * text and a context-dependent secret.
+   * @param {'normal'|'fallback'} branch
+   */
+  const exercise = (branch) => {
+    const hostileRel = `01-Projects/${HOSTILE}/note.md`;
+    const brain = {
+      [hostileRel]: 'refused content\n',
+      '01-Projects/a/red.md': 'raw\n',
+      // On the NORMAL branch the brain's body publishes and the section rides
+      // its second write; on the FALLBACK branch there is no body at all.
+      ...(branch === 'normal' ? { [REPORT]: body('one') } : {}),
+    };
+    const sc = scenario({ brain });
+    return {
+      sc,
+      res: run(sc, {
+        records: [{ path: `scratch/${HOSTILE}.md`, reason: `scratch: ${HOSTILE}` }],
+        gates: gates({
+          secret: ({ rel }) => {
+            if (rel.endsWith('red.md')) {
+              return {
+                redact: true,
+                sanitizedBytes: B('sanitized\n'),
+                redaction: { lines: 1, labels: 'high-entropy' },
+                preserved: [{ artifact: `${HOSTILE}.md`, location: 'quarantine/redacted' }],
+              };
+            }
+            if (rel === hostileRel) {
+              // A refusal whose REASON embeds brain-chosen text, and a preserved
+              // copy whose basename derives from it.
+              return { refuse: true, reason: `EP2 refused ${HOSTILE}`, preserved: [{ artifact: `${HOSTILE}.md`, location: 'quarantine/withheld' }] };
+            }
+            return { ok: true };
+          },
+        }),
+      }),
+    };
+  };
+
+  for (const branch of ['normal', 'fallback']) {
+    const { sc, res } = exercise(/** @type {'normal'|'fallback'} */ (branch));
+    assert.equal(res.report.outcome, branch === 'normal' ? 'promoted' : 'fallback', branch);
+    const publishedText = String(get(sc.vaultDir, REPORT));
+
+    // Every channel actually reached the report — an assertion that passed
+    // because nothing was composed would prove nothing about neutralisation.
+    assert.ok(publishedText.includes(H_ENFORCE), branch);
+    assert.ok(publishedText.includes(H_REDACT), branch);
+    assert.ok(publishedText.includes(H_PRESERVED), branch);
+    assert.ok(publishedText.includes('scratch'), branch);
+
+    // THE PROPERTY: the raw secret bytes appear NOWHERE in the published bytes.
+    assert.ok(!leaks(publishedText), `${branch}: no raw secret in the published report`);
+    assert.ok(!leaks(sectionOf(res)), `${branch}: nor in the record returned to the caller`);
+    // And the placeholder IS there, so the value travelled and was transformed
+    // rather than being dropped on the floor.
+    assert.ok(publishedText.includes('REDACTED'), branch);
+    // Table N, row N1's ORDER, observable in the output: a sanitiser running
+    // FIRST would leave `token_abcdefghijkl` — both arms present and still
+    // leaking, which is the round (c) implementation.
+    assert.ok(!publishedText.includes(`token_${SECRET}`), `${branch}: sanitise-first would leave this`);
+  }
+});
+
+// ── Table R — every preserved copy is announced, exactly once ────────────────
+
+test('dream-promote report-fallback: EVERY preserved copy is announced — a redaction\'s, a refused path\'s, and the report body\'s', () => {
+  const sc = scenario({
+    brain: { '01-Projects/a/red.md': 'raw\n', '01-Projects/a/no.md': 'raw\n' },
+  });
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) =>
+        rel.endsWith('red.md')
+          ? {
+              redact: true,
+              sanitizedBytes: B('sanitized\n'),
+              redaction: { lines: 2, labels: 'high-entropy, aws-key' },
+              preserved: [{ artifact: '2026-08-29-red.md', location: 'quarantine/redacted' }],
+            }
+          : { refuse: true, reason: 'hard secret', preserved: [{ artifact: '2026-08-29-no.md', location: 'quarantine/withheld' }] },
+    }),
+  });
+
+  const text = String(get(sc.vaultDir, REPORT));
+  // The REDACTION line: the path, the scrubbed-line count and the labels read
+  // off `redaction`, plus the entry's `artifact`, `location` and `remediation`
+  // read off the record. The values are READ, never recomputed: only the gate
+  // held the pre-scrub bytes.
+  assert.ok(
+    text.includes(
+      '- `01-Projects_a_red.md` — 2 line(s) scrubbed (high-entropy, aws-key); unredacted copy at ' +
+        'state/quarantine/redacted/2026-08-29-red.md. If the redaction was wrong, restore from that copy ' +
+        'while it is there; otherwise delete it.'
+    ),
+    text
+  );
+  // The REFUSED path's preserved-copy line, on the NORMAL branch — a refused
+  // path with a preserved copy is the ORDINARY case and occurs on runs where
+  // the report publishes perfectly well.
+  assert.ok(
+    text.includes(
+      '- `01-Projects_a_no.md` — unredacted copy at state/quarantine/withheld/2026-08-29-no.md. ' +
+        'Nothing was promoted for this path; delete that copy.'
+    ),
+    text
+  );
+  // The two guidances DIFFER, read from each entry's `remediation` rather than
+  // hardcoded: an implementation that hardcodes one renders them identically.
+  assert.ok(text.includes('restore from that copy') && text.includes('delete that copy.'));
+  // EXACTLY ONCE each — the partition is over whether the path has a redaction
+  // accounting, never over the outcome or where the entry sits.
+  assert.equal(text.split('2026-08-29-red.md').length - 1, 1, 'the redacted copy is announced once');
+  assert.equal(text.split('2026-08-29-no.md').length - 1, 1, 'the refused copy is announced once');
+});
+
+test('dream-promote report-fallback: the REPORT BODY\'s own preserved copies are announced on every arm of the union', () => {
+  /** @param {object} verdict @param {object} [over] */
+  const withBody = (verdict, over = {}) => {
+    const sc = scenario({ brain: { [REPORT]: body('one') } });
+    return { sc, res: run(sc, { gates: gates({ secret: ({ rel }) => (rel === REPORT ? verdict : { ok: true }) }), ...over }) };
+  };
+
+  // (i) `promoted` — EP2 redacts the body and the SANITIZED body publishes. The
+  // copy rides the REDACTION line, not a second preserved-copy line.
+  const redacted = withBody({
+    redact: true,
+    sanitizedBytes: B('# sanitized report\n'),
+    redaction: { lines: 1, labels: 'high-entropy' },
+    preserved: [{ artifact: '2026-08-29-report.md', location: 'quarantine/redacted' }],
+  });
+  assert.equal(redacted.res.report.outcome, 'promoted');
+  assert.deepEqual(redacted.res.report.redaction, { lines: 1, labels: 'high-entropy' });
+  assert.deepEqual(redacted.res.report.preserved, [
+    { artifact: '2026-08-29-report.md', location: 'quarantine/redacted', remediation: 'restore-or-delete' },
+  ]);
+  const redactedText = String(get(redacted.sc.vaultDir, REPORT));
+  assert.ok(redactedText.includes(H_REDACT) && redactedText.includes('2026-08-29-report.md'));
+  // NOT double-announced: a composer that renders both rows for the same copy
+  // announces it twice, and the partition exists to stop exactly that.
+  assert.ok(!redactedText.includes(H_PRESERVED), 'no second preserved-copy line for the same copy');
+  assert.equal(redactedText.split('2026-08-29-report.md').length - 1, 1);
+
+  // (ii) `fallback` — a HARD secret: the gate skips the redact arm entirely, so
+  // the record holds exactly ONE entry and one copy is named.
+  const withheld = withBody({ refuse: true, reason: 'hard secret', preserved: [{ artifact: '2026-08-29-report.md', location: 'quarantine/withheld' }] });
+  assert.equal(withheld.res.report.outcome, 'fallback');
+  assert.deepEqual(withheld.res.report.preserved, [
+    { artifact: '2026-08-29-report.md', location: 'quarantine/withheld', remediation: 'delete' },
+  ]);
+  const withheldText = String(get(withheld.sc.vaultDir, REPORT));
+  assert.ok(withheldText.includes(H_PRESERVED) && withheldText.includes('state/quarantine/withheld/2026-08-29-report.md'));
+  assert.ok(!withheldText.includes(H_REDACT), 'a withheld body has no accounting to name');
+
+  // (iii) The redact arm's FALL-THROUGH: a soft finding whose scrub did not
+  // complete, so the gate KEPT the redact-shelf copy and then wrote a withheld
+  // one. TWO entries, BOTH named, each with its own `location`, rendered in the
+  // record's own order.
+  const fell = withBody({
+    refuse: true,
+    reason: 'the scrub did not complete',
+    preserved: [
+      { artifact: '2026-08-29-report.md', location: 'quarantine/redacted' },
+      { artifact: '2026-08-29-report.md', location: 'quarantine/withheld' },
+    ],
+  });
+  const fellText = String(get(fell.sc.vaultDir, REPORT));
+  const iRedactShelf = fellText.indexOf('state/quarantine/redacted/2026-08-29-report.md');
+  const iWithheld = fellText.indexOf('state/quarantine/withheld/2026-08-29-report.md');
+  assert.ok(iRedactShelf > 0 && iWithheld > 0, 'BOTH entries are named');
+  assert.ok(iRedactShelf < iWithheld, "in the record's own order — the redact-shelf copy first");
+
+  // (iv) `refused` — a preserved body that the fallback write is then refused
+  // for. The copies are on the arm the run actually took, or they leave the
+  // return entirely: the body is not a member of `refused[]`.
+  const sc = scenario({ brain: { [REPORT]: body('one') } });
+  put(sc.vaultDir, REPORT, 'user got there first\n');
+  const refusedRes = run(sc, {
+    gates: gates({ secret: ({ rel }) => (rel === REPORT ? { refuse: true, reason: 'hard secret', preserved: [{ artifact: '2026-08-29-report.md', location: 'quarantine/withheld' }] } : { ok: true }) }),
+    writeFile: (o) => {
+      if (o.rel === REPORT) fs.writeFileSync(abs(sc.vaultDir, REPORT), 'saved again\n');
+      return realWrite(o);
+    },
+  });
+  assert.equal(refusedRes.report.outcome, 'refused');
+  assert.deepEqual(refusedRes.report.preserved, [
+    { artifact: '2026-08-29-report.md', location: 'quarantine/withheld', remediation: 'delete' },
+  ]);
+  // Nothing published, so the line reaches the user only through `record`.
+  assert.ok(sectionOf(refusedRes).includes('state/quarantine/withheld/2026-08-29-report.md'));
+  assert.equal(String(get(sc.vaultDir, REPORT)), 'saved again\n');
+});
+
+test('dream-promote report-fallback: no field of a preserved copy is recovered from a refusal reason', () => {
+  // A skill/ledger PAIR refusal: the pair's reason embeds its sibling's, so an
+  // implementation reading a basename back out of `reason` names the WRONG
+  // file's copy first. Every field comes from the typed record instead.
+  const SKILL = '05-Skills/alpha/SKILL.md';
+  const LEDGER = '05-Skills/alpha/LEARNINGS.md';
+  const sc = scenario({ brain: { [SKILL]: 'skill\n', [LEDGER]: 'ledger\n' } });
+  const artifacts = { [SKILL]: '2026-08-29-SKILL.md', [LEDGER]: '2026-08-29-LEARNINGS.md' };
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) => ({
+        redact: true,
+        sanitizedBytes: B('sanitized\n'),
+        redaction: { lines: 1, labels: 'high-entropy' },
+        preserved: [{ artifact: artifacts[rel], location: 'quarantine/redacted' }],
+      }),
+      skillBody: ({ rel }) => (rel === SKILL ? 'the skill body is not authorized' : null),
+    }),
+  });
+
+  const text = String(get(sc.vaultDir, REPORT));
+  // Each path names ITS OWN copy, once.
+  assert.ok(text.includes('`05-Skills_alpha_SKILL.md` — unredacted copy at state/quarantine/redacted/2026-08-29-SKILL.md.'), text);
+  assert.ok(text.includes('`05-Skills_alpha_LEARNINGS.md` — unredacted copy at state/quarantine/redacted/2026-08-29-LEARNINGS.md.'), text);
+  assert.equal(text.split('2026-08-29-SKILL.md').length - 1, 1);
+  assert.equal(text.split('2026-08-29-LEARNINGS.md').length - 1, 1);
+  // Both were refused, so both copies are deletes — read from `remediation`.
+  assert.equal(res.refused.length, 2);
+  for (const entry of res.refused) assert.equal(entry.preserved[0].remediation, 'delete');
+});
+
+// ── Table Y — the second write, and the accounting that must never be silent ──
+
+test('dream-promote report-fallback: the second write is refused after the first published — `promoted` with `accounting.published === false`', () => {
+  for (const cause of ['expect-conflict', 'symlink']) {
+    // THE SCENARIO CARRIES WHAT THE CRITERION ASKS ABOUT. A run whose only
+    // content is a clean report body cannot exercise "the COMPLETE record, the
+    // redaction line and every preserved-copy line included", nor Table Y row
+    // Y7's "`preserved`, `record` and `redaction` are UNCHANGED on this arm":
+    // measured by the round-1 gate, truncating `record` to its heading and
+    // blanking `redaction`/`preserved` BOTH passed the whole suite. So the run
+    // also redacts the body, redacts a sibling note and refuses a third path,
+    // each with its own preserved copy.
+    const RED = '01-Projects/alpha/red.md';
+    const NO = '01-Projects/alpha/no.md';
+    const sc = scenario({
+      brain: { [REPORT]: body('one'), [RED]: 'raw\n', [NO]: 'raw\n' },
+    });
+    const other = '01-Projects/alpha/other.md';
+    put(sc.vaultDir, other, 'a different user note\n');
+    /** @type {Buffer|null} */
+    let firstPublished = null;
+    let reportWrites = 0;
+
+    const res = run(sc, {
+      gates: gates({
+        secret: ({ rel }) => {
+          if (rel === REPORT) {
+            return { redact: true, sanitizedBytes: B(body('one')),
+              redaction: { lines: 3, labels: 'high-entropy, aws-key' },
+              preserved: [{ artifact: '2026-08-29-report.md', location: 'quarantine/redacted' }] };
+          }
+          if (rel === RED) {
+            return { redact: true, sanitizedBytes: B('sanitized\n'),
+              redaction: { lines: 1, labels: 'high-entropy' },
+              preserved: [{ artifact: '2026-08-29-red.md', location: 'quarantine/redacted' }] };
+          }
+          return { refuse: true, reason: 'hard secret',
+            preserved: [{ artifact: '2026-08-29-no.md', location: 'quarantine/withheld' }] };
+        },
+      }),
+      writeFile: (o) => {
+        if (o.rel !== REPORT) return realWrite(o);
+        reportWrites += 1;
+        const out = realWrite(o);
+        if (reportWrites === 1 && out.written) {
+          firstPublished = out.bytes;
+          // Between the two writes the target stops holding the first write's
+          // buffer — by a user save, or by becoming a symlink.
+          const target = abs(sc.vaultDir, REPORT);
+          if (cause === 'expect-conflict') fs.writeFileSync(target, 'the user saved over it\n');
+          else {
+            fs.rmSync(target);
+            fs.symlinkSync(abs(sc.vaultDir, other), target);
+          }
+        }
+        return out;
+      },
+    });
+
+    assert.equal(reportWrites, 2, `${cause}: the normal path makes TWO report writes`);
+    // NOT `fallback` — the body DID publish; NOT `refused` — something published.
+    // The ground of the classification is the PUBLISH EVENT.
+    assert.equal(res.report.outcome, 'promoted', cause);
+    assert.equal(res.report.accounting.published, false, cause);
+    assert.equal(typeof res.report.accounting.reason, 'string', cause);
+    assert.ok(res.report.accounting.reason.length > 0, `${cause}: the primitive's reason, carried unchanged`);
+    // ROW Z5(e) ON THIS ARM-FORM. `rel` is the BODY's own spelling, because
+    // both writes targeted it — and this is the one form of the union's `rel`
+    // that nothing measured until round 3, which is exactly the form Table Y
+    // row Y12 says the pipeline's G8 commits from.
+    assert.equal(res.report.rel, REPORT, `${cause}: row Z5(e) — the BODY's own rel on published:false`);
+    // Row Y3/Y5 — `bytes` is the FIRST write's returned buffer, never the
+    // composed-but-unpublished section and never a fresh read.
+    assert.deepEqual(res.report.bytes, firstPublished, cause);
+    assert.equal(String(res.report.bytes), body('one'), `${cause}: the body THIS RUN PUBLISHED`);
+    assert.ok(!String(res.report.bytes).includes(H_ENFORCE), `${cause}: the section never reached the vault`);
+
+    // THE COMPLETE RECORD REACHES THE CALLER — not just its heading. Every line
+    // the unpublished section would have carried is asserted by content: the
+    // report's OWN redaction line, the sibling's, and the refused path's
+    // preserved-copy line. `record.includes(H_ENFORCE)` alone is satisfied by a
+    // record truncated to that heading, which is what the gate measured.
+    const rec = res.report.record.join('\n');
+    assert.ok(rec.includes(H_ENFORCE) && rec.includes(H_REDACT) && rec.includes(H_PRESERVED), cause);
+    assert.ok(
+      rec.includes(
+        '- `reports_dreams_2026-08-29.md` — 3 line(s) scrubbed (high-entropy, aws-key); unredacted copy at ' +
+          'state/quarantine/redacted/2026-08-29-report.md.'
+      ),
+      `${cause}: the REPORT's own redaction line: ${rec}`
+    );
+    assert.ok(rec.includes('state/quarantine/redacted/2026-08-29-red.md'), `${cause}: the sibling's`);
+    assert.ok(rec.includes('state/quarantine/withheld/2026-08-29-no.md'), `${cause}: the refused path's`);
+    assert.ok(rec.includes('hard secret'), cause);
+
+    // TABLE Y, ROW Y7 — `preserved`, `record` and `redaction` are UNCHANGED on
+    // this arm: the body published, so row Q10's carrier rule still reaches it
+    // and this outcome widens nothing. Blanking either passed the whole suite
+    // before the round-1 gate measured it.
+    assert.deepEqual(res.report.redaction, { lines: 3, labels: 'high-entropy, aws-key' }, cause);
+    assert.deepEqual(res.report.preserved, [
+      { artifact: '2026-08-29-report.md', location: 'quarantine/redacted', remediation: 'restore-or-delete' },
+    ], cause);
+
+    // ROW Y4 — WHAT THE TARGET HOLDS IS REFUSAL-CAUSE-SPECIFIC, and nothing
+    // this arm carries represents it. Byte-equality with the live vault is
+    // asserted NOWHERE on this form.
+    if (cause === 'expect-conflict') {
+      // The vault RETAINS the intervening user bytes that caused the refusal.
+      assert.equal(String(get(sc.vaultDir, REPORT)), 'the user saved over it\n');
+      assert.notDeepEqual(res.report.bytes, get(sc.vaultDir, REPORT), 'the two are UNEQUAL');
+    } else {
+      assert.ok(fs.lstatSync(abs(sc.vaultDir, REPORT)).isSymbolicLink(), 'still a symlink');
+      assert.equal(String(get(sc.vaultDir, other)), 'a different user note\n', 'not written through');
+    }
+  }
+});
+
+test('dream-promote report-fallback: a symlinked report target refuses the FALLBACK\'s write and delivers the record', () => {
+  const other = '01-Projects/alpha/other.md';
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  put(sc.vaultDir, other, 'a different user note\n');
+  fs.mkdirSync(path.dirname(abs(sc.vaultDir, REPORT)), { recursive: true });
+  fs.symlinkSync(abs(sc.vaultDir, other), abs(sc.vaultDir, REPORT));
+
+  const res = run(sc);
+  // Rejected for the record: writing THROUGH the symlink would overwrite a
+  // different user note, and this assertion is what goes red on it.
+  assert.equal(res.report.outcome, 'refused');
+  assert.ok(res.report.reason.length > 0);
+  assert.equal(String(get(sc.vaultDir, other)), 'a different user note\n', 'the vault object is byte-unchanged');
+  assert.ok(fs.lstatSync(abs(sc.vaultDir, REPORT)).isSymbolicLink(), 'the symlink is not replaced');
+  assert.ok(res.report.record.includes(H_ENFORCE), 'the COMPLETE record still reaches the caller');
+});
+
+test('dream-promote report-fallback: a `reports_dir` with a trailing slash still produces a report', () => {
+  // `reports_dir` is a USER CONFIG value and `readVaultLayout` accepts and
+  // PRESERVES a trailing slash — `isSafeRelativePath` does not reject one.
+  // Joining it naively yields `reports/dreams//<date>.md`, whose empty segment
+  // the primitive's validation THROWS on, failing every run of the module,
+  // including one where the brain wrote nothing. Empty segments are dropped
+  // exactly as `isUnder` reads a layout directory (round-1 PR gate, gptsol P2).
+  // THE CASE LIST IS EVERY VALUE `readVaultLayout` CAN RETURN UNCHANGED, and it
+  // may contain no value it CANNOT return (Table Z, prohibition (iv)). The
+  // first version of this test spent its one case on `/reports/dreams`, which
+  // `isSafeRelativePath` rejects so the key falls back to the default — an
+  // unreachable input, while all three reachable broken ones were missing. That
+  // is what let a `.` segment survive a whole round.
+  const {readVaultLayout} = require('../../src/core/layout');
+  for (const dir of ['reports/dreams/', 'reports//dreams', '.', './reports', 'reports/./dreams']) {
+    const cfgDir = tmp('cfg');
+    fs.writeFileSync(path.join(cfgDir, 'config.yaml'), `vault_layout:\n  reports_dir: ${dir}\n`);
+    assert.equal(
+      readVaultLayout(path.join(cfgDir, 'config.yaml')).reports_dir,
+      dir,
+      `${dir}: the case list may only hold values readVaultLayout returns UNCHANGED`
+    );
+
+    const sc = scenario({ layout: { ...defaultLayout(), reports_dir: dir }, brain: { [NOTE]: 'fresh\n' } });
+    const res = run(sc);
+    // The derived path, per row Z1: every empty and every `.` segment dropped.
+    const derived = [...dir.split('/').filter((seg) => seg !== '' && seg !== '.'), '2026-08-29.md'].join('/');
+    assert.equal(res.report.rel, derived, `${dir}: row Z5(e) carries the derived path on this arm`);
+    // Row Z3's NAMED RESIDUAL: `isUnder` (row C9's matching) does not drop `.`,
+    // so a `.` in the layout admits nothing under the reports directory at all.
+    // The consequence is FAIL-CLOSED and the record still reaches the caller —
+    // which is what makes it a residual rather than a data loss.
+    const admits = !dir.split('/').includes('.');
+    assert.equal(res.report.outcome, admits ? 'fallback' : 'refused', dir);
+    assert.ok(res.report.record.includes(H_ENFORCE), `${dir}: the record reaches the caller either way`);
+    if (admits) assert.deepEqual(get(sc.vaultDir, derived), res.report.bytes, dir);
+  }
+});
+
+test('dream-promote report-fallback: two fold-equal candidates collide — neither is the body, and every delta record keeps exactly one carrier', () => {
+  // ROW Z4. Folding is CORRECT on a case-insensitive volume and OVER-matches on
+  // a case-sensitive one, where two spellings that fold alike are two different
+  // files. Both are supported targets. The delta record is CLONED rather than
+  // written to disk, so the case does not depend on this host's case
+  // sensitivity — on a case-insensitive tmpdir the two files cannot coexist.
+  const sc = scenario({ brain: { [REPORT]: body('one'), [NOTE]: 'fresh\n' } });
+  const original = sc.delta.records.find((r) => r.rel === REPORT);
+  assert.ok(original, 'the brain wrote the report');
+  sc.delta.records.push({ ...original, rel: 'reports/Dreams/2026-08-29.md', afterBytes: B(body('two')) });
+
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) =>
+        rel.toLowerCase().startsWith('reports/')
+          ? {
+              redact: true,
+              sanitizedBytes: B('sanitized\n'),
+              redaction: { lines: 1, labels: 'high-entropy' },
+              preserved: [{ artifact: `2026-08-29-${rel.split('/')[1]}.md`, location: 'quarantine/redacted' }],
+            }
+          : { ok: true },
+    }),
+  });
+
+  // NEITHER is the body: the collision means no record was identified as one,
+  // so refusing both does not breach "the body is not a member of refused[]".
+  assert.equal(res.report.outcome, 'fallback');
+  assert.deepEqual(res.report.preserved, [], 'no body, so no body copies');
+  assert.equal(res.report.rel, REPORT, 'the fallback targets the DERIVED path (row Z5(d))');
+
+  for (const rel of [REPORT, 'reports/Dreams/2026-08-29.md']) {
+    const hit = res.refused.find((r) => r.rel === rel);
+    assert.ok(hit, `${rel} is an ordinary refused candidate`);
+    assert.match(hit.reason, /more than one candidate is the dream report/, 'the reason NAMES the collision');
+    // Refused AFTER the gates ran, so EP2's preserved copy is kept rather than
+    // silently dropped — the data-loss shape row Q3 names.
+    assert.equal(hit.preserved.length, 1, `${rel}: the gate's copy survives the collision refusal`);
+    assert.equal(hit.preserved[0].remediation, 'delete');
+  }
+
+  // THE INVARIANT ROW Z4 PROTECTS, asserted directly: before it existed BOTH
+  // records ended with no carrier at all — the state this module throws for one
+  // branch earlier, reached without the throw.
+  const carried = [...res.promoted, ...res.redacted, ...res.refused].map((r) => r.rel);
+  assert.deepEqual(
+    sc.delta.records.map((r) => r.rel).sort(),
+    carried.sort(),
+    'EVERY delta record has EXACTLY ONE carrier in the return'
+  );
+  assert.equal(new Set(carried).size, carried.length, 'and exactly one, not two');
+});
+
+test('dream-promote report-fallback: each consumer takes the path Table Z names, and `rel` carries it per arm', () => {
+  // ROW Z5. Five consumers, three answers — asserted where the two spellings
+  // actually differ, which is the only run in which the answers are separable.
+  const NFC = 'reports/dre\u00e1ms';
+  const NFD = 'reports/drea\u0301ms';
+  const derived = `${NFC}/2026-08-29.md`;
+
+  // (a)+(b)+(c)+(e) on `promoted`: the body's OWN rel. Both writes target it,
+  // the record names it, and `report.rel` carries it.
+  const scP = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  const targeted = [];
+  const resP = run(scP, { writeFile: (o) => { targeted.push(o.rel); return realWrite(o); } });
+  assert.equal(resP.report.outcome, 'promoted');
+  assert.equal(resP.report.rel, `${NFD}/2026-08-29.md`, "row Z5(e): the BODY's own rel on `promoted`");
+  assert.deepEqual(targeted, [`${NFD}/2026-08-29.md`, `${NFD}/2026-08-29.md`], 'both writes target the body');
+
+  // (d)+(e) on `fallback`: the DERIVED path. Where CODE-authored content lands
+  // is a code decision — a brain-chosen spelling must not be able to create a
+  // second report directory in the user's vault.
+  //
+  // ASSERTED ON BOTH FALLBACK SHAPES, because they reach the target through
+  // DIFFERENT code: R1 (no report for the date) publishes the section alone,
+  // while R2/R3 read the existing bytes and append. A version of this test that
+  // exercised R1 only left the read-and-append target unasserted — measured, a
+  // mutation pointing that branch at the body's path passed it.
+  for (const existing of [null, '# run one\n']) {
+    const scF = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+    if (existing !== null) put(scF.vaultDir, derived, existing);
+    const targetedF = [];
+    const readF = [];
+    const resF = run(scF, {
+      gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+      writeFile: (o) => { targetedF.push(o.rel); readF.push(o.expect === undefined ? 'R1' : 'R2/R3'); return realWrite(o); },
+    });
+    const shape = existing === null ? 'R1' : 'R2/R3';
+    assert.equal(resF.report.outcome, 'fallback', shape);
+    assert.equal(resF.report.rel, derived, `${shape}: row Z5(e) carries the DERIVED path on \`fallback\``);
+    assert.deepEqual(targetedF, [derived], `${shape}: row Z5(d) — the fallback WRITES the derived path`);
+    assert.deepEqual(readF, [shape], `${shape}: and reached it through the branch this case exercises`);
+    if (existing !== null) {
+      // The base it READ is the derived path's bytes, not the body's — R2's
+      // preservation would otherwise silently start from the wrong file.
+      assert.ok(String(get(scF.vaultDir, derived)).startsWith(existing), `${shape}: the existing report is preserved`);
+    }
+  }
+  const scF = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  const resF = run(scF, {
+    gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+  });
+  // Row Z5(c): the record names the file THE BRAIN WROTE, not the derived path.
+  // This is where the round-2 gate's own proposed fix would have gone wrong.
+  assert.ok(sectionOf(resF).includes(neutralisedNfd()), `the record names the body's path: ${sectionOf(resF)}`);
+});
+
+/** The NFD report path as the record renders it — redact-then-sanitise applied. */
+function neutralisedNfd() {
+  const {redactOnly} = require('../../src/core/secret-scan');
+  const {sanitizeProjectName} = require('../../src/core/digest');
+  return sanitizeProjectName(redactOnly('reports/drea\u0301ms/2026-08-29.md'));
+}
+
+test('dream-promote report-fallback: the body is matched by CANONICAL path identity, not by literal equality', { skip: !POSIX }, () => {
+  // macOS enumerates DECOMPOSED names while accepting composed ones, so the
+  // delta can hand back an NFD spelling of the NFC path the layout holds. Under
+  // a literal `===` the body is folded into `promoted[]` as an ordinary note
+  // while the fallback fires as though no body existed — the report written
+  // twice, its copies announced under the wrong row, and `report.preserved`
+  // empty on the arm the run actually took (round-1 PR gate, gptsol P2).
+  const NFC = 'reports/dre\u00e1ms';
+  const NFD = 'reports/drea\u0301ms';
+  assert.notEqual(NFC, NFD, 'the two spellings are different strings');
+  assert.equal(NFC.normalize('NFC'), NFD.normalize('NFC'), 'and the same path');
+
+  const sc = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  assert.equal(sc.delta.records.length, 1);
+  const res = run(sc);
+
+  assert.equal(res.report.outcome, 'promoted', "the body's own disposition, not a fallback");
+  assert.deepEqual(res.report.accounting, { published: true });
+  assert.deepEqual([...res.promoted, ...res.redacted, ...res.refused], [], 'the body is in none of the three arrays');
+  // ONE report file, carrying the body AND the record — not two.
+  const written = walkVault(sc.vaultDir);
+  assert.equal(written.length, 1, `exactly one report file: ${written.join(', ')}`);
+  assert.equal(String(get(sc.vaultDir, written[0])), `${body('one')}\n${sectionOf(res)}`);
+  assert.deepEqual(res.report.bytes, get(sc.vaultDir, written[0]));
+});
+
+test('dream-promote report-fallback: an UNREADABLE report path fails closed, and the record still reaches the caller', () => {
+  // The fallback's base READ can fail before any write is attempted — an EACCES,
+  // or, as here, a directory sitting where the report file belongs. That is
+  // R4-SHAPED BUT NOT R4: R4 is a refusal of the write, this is a failure to
+  // read. Round 2 accepted the branch as a residual BEFORE Table Z existed; row
+  // Z5(e) then made a positive claim over it — the DERIVED path on `refused` —
+  // and nothing checked it, so a mutation deleting `rel` here survived the whole
+  // suite (round-3 finding 2).
+  const sc = scenario({ brain: { [NOTE]: 'fresh\n' } });
+  fs.mkdirSync(abs(sc.vaultDir, REPORT), { recursive: true });
+
+  const res = run(sc);
+
+  assert.equal(res.report.outcome, 'refused', 'an unreadable path is not evidence the fallback is safe');
+  assert.equal(res.report.rel, REPORT, 'row Z5(e): the DERIVED path on `refused`');
+  assert.match(res.report.reason, /could not be read/, 'the refusal NAMES ITS REASON');
+  assert.equal(res.report.bytes, undefined, 'the refused arm carries no bytes');
+  // FAIL CLOSED, and the record is not lost with the read: it goes back to the
+  // caller for the run's log and output, exactly as on R4.
+  assert.ok(res.report.record.includes(H_ENFORCE));
+  assert.ok(res.promoted.some((p) => p.rel === NOTE), 'the rest of the run promoted normally');
+  // The vault object is untouched — still the directory that caused the failure.
+  assert.ok(fs.statSync(abs(sc.vaultDir, REPORT)).isDirectory(), 'nothing was written over it');
+});
+
 // ── Idempotence's stand-in: a run that writes nothing promotes nothing ───────
 
-test('dream-promote: a run in which the brain writes nothing promotes nothing and changes no note', () => {
+test('dream-promote: a run in which the brain writes nothing promotes nothing and changes no existing note', () => {
   const sc = scenario({ vault: { [NOTE]: 'v1\n' } });
   assert.equal(sc.delta.records.length, 0);
   const res = run(sc);
-  assert.deepEqual(res, { promoted: [], redacted: [], refused: [], secretDisposition: { withheld: 0, redactions: 0 } });
+  assert.deepEqual(
+    { promoted: res.promoted, redacted: res.redacted, refused: res.refused, secretDisposition: res.secretDisposition },
+    { promoted: [], redacted: [], refused: [], secretDisposition: { withheld: 0, redactions: 0 } }
+  );
   assert.deepEqual(get(sc.vaultDir, NOTE), B('v1\n'));
+  // THE RECORD LANDS EVEN ON A RUN THAT PROMOTED NOTHING, which is what the
+  // report half adds to the module half's no-op: Table R's row R1, with no
+  // report for the date, publishes the code section alone.
+  assert.equal(res.report.outcome, 'fallback');
+  assert.deepEqual(res.report.record, ['## Refused by policy (promotion enforcement)', '- none']);
+  assert.deepEqual(get(sc.vaultDir, REPORT), res.report.bytes);
 });
 
 // ── Caller-contract violations fail loud rather than degrading ───────────────

@@ -1,22 +1,32 @@
 ---
 id: WP-memory-import-hermetic-canary
 title: Measure whether a hermetic run loads user-level CLAUDE.md — the research gate that unblocks the block-as-reference change
-status: Draft
+status: Superseded
 model: opus
 size: S
 depends_on: []
-adrs: [ADR-0004, ADR-0025, ADR-0039]
+adrs: [ADR-0004, ADR-0025, ADR-0040]
 epic: digest-delivery
 ---
 
-# WP-memory-import-hermetic-canary: measure it before ADR-0039 §2 ships
+# WP-memory-import-hermetic-canary: measure it before ADR-0040 §2 ships
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
-ADR-0039 (Proposed) replaces the digest **copy** in the `~/.claude/CLAUDE.md`
+ADR-0040 (Proposed) replaces the digest **copy** in the `~/.claude/CLAUDE.md`
 **managed block** with a memory **import** of the digest's absolute path, and
 de-registers the now-redundant Claude Code SessionStart hook. That change is gated on
-one unmeasured fact, recorded in ADR-0039's Consequences as the only open
+one unmeasured fact, recorded in ADR-0040's Consequences as the only open
 measurement:
 
 > Whether `--setting-sources ''` (emitted by `composeClaudeArgs` in
@@ -38,12 +48,12 @@ Two outcomes, and both are actionable:
 
 - **If user-level `CLAUDE.md` is NOT loaded** in a hermetic run, ADR-0025's "no
   ambient authority inheritance" claim holds as written, and the import line changes
-  nothing about hermetic runs. ADR-0039 §2 proceeds unchanged.
+  nothing about hermetic runs. ADR-0040 §2 proceeds unchanged.
 - **If it IS loaded**, then the managed block **already** carries the whole digest
   into the dream's own brain today — a pre-existing condition ADR-0025 does not
   describe, and one the SessionStart hook's `WIENERDOG_JOB` guard was written to
   prevent for the hook channel ("so unattended runs start context-free and never
-  re-read state mid-job"). ADR-0039 §2 would then change only *which* digest reaches
+  re-read state mid-job"). ADR-0040 §2 would then change only *which* digest reaches
   that brain (last-sync bytes → current bytes), which is not a regression — but the
   finding needs recording against ADR-0025, and the owner may want the import line
   scoped or the hermetic argv extended.
@@ -148,7 +158,7 @@ stdout.
 | D | `@<abs path>` import only | **file absent** | that a missing target degrades silently — no crash, no error text |
 
 Cases B–D also serve `WP-managed-block-by-reference`: they are the direct evidence for
-the import mechanics ADR-0039 §2 relies on, measured against the installed Claude
+the import mechanics ADR-0040 §2 relies on, measured against the installed Claude
 rather than the docs.
 
 **Non-vacuity control (required).** A fifth run with the token in the **prompt itself**
@@ -220,7 +230,7 @@ as an amendment candidate for ADR-0025.
 - [ ] AC-7 — `npm test` and `npm run lint` do not invoke the probe.
 - [ ] AC-8 — `docs/specs/logbook/2026-08-30-hermetic-user-memory-canary.md` exists and
       states: the `claude --version`, the date, the argv, the five verdicts, and one
-      sentence on what it means for ADR-0025 and ADR-0039 §2.
+      sentence on what it means for ADR-0025 and ADR-0040 §2.
 
 ## Verification steps (run these; paste output in the PR)
 

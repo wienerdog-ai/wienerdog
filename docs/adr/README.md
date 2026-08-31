@@ -9,7 +9,7 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-mit-license.md) | MIT license | Accepted |
 | [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted (amended by 0006, 0013) |
-| [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted |
+| [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted — Amendment 1 (hook clause) ACCEPTED, OWNER-SIGNED 2026-08-31 |
 | [0005](0005-spec-driven-agent-development.md) | Spec-driven agent development | Accepted |
 | [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted (amended by 0011, 0013) |
 | [0007](0007-graduated-sending.md) | Graduated sending (send grants) instead of no-send | Accepted |
@@ -44,4 +44,5 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0036](0036-mechanism-cell-schema-for-contract-tables.md) | A contract table's `mechanism` cell states its trigger separately from its patch, identifies every seam structurally, and states one mutation per row | Accepted (amends 0031) — OWNER-SIGNED 2026-07-28 |
 | [0037](0037-verified-registration-postcondition.md) | A register that cannot verify what the OS now holds must not report success | Accepted (amends 0018 decision 2, heal-only replace) — OWNER-SIGNED 2026-07-28. 0036 is deliberately skipped — reserved by the in-flight ADR amending 0031 |
 | [0038](0038-untrusted-manifest-fields-narrow-deletion-only.md) | An untrusted manifest field may only narrow a deletion, never widen one | Accepted |
-| [0039](0039-managed-block-is-a-reference-not-a-copy.md) | The managed block is a reference, not a copy — no unattended job read-modify-writes a file Wienerdog does not own | Proposed (amends 0024 and 0032; awaiting owner signature) |
+| [0039](0039-session-start-injects-only-what-the-block-lacks.md) | The SessionStart hook injects the digest only when the managed block does not already carry it | Accepted — OWNER-SIGNED 2026-08-30 |
+| [0040](0040-managed-block-is-a-reference-not-a-copy.md) | The managed block is a reference, not a copy | Withdrawn 2026-08-31 — signed as ADR-0039 pre-fork-adoption; the fork's 0039 (session-start dedup) stands by owner ruling. Carries a salvage note (write rule, refusal banner) |

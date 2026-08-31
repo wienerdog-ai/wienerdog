@@ -1,7 +1,7 @@
 ---
 id: WP-dream-promote-report
 title: Promote the dream report and deliver the enforcement record
-status: Ready
+status: Done
 model: opus
 size: S
 depends_on: [WP-dream-workspace-retarget, WP-dream-vault-write-primitive, WP-dream-baseline-delta-primitive, WP-dream-promote-module]
@@ -39,9 +39,13 @@ published. The pipeline half then consumes the whole. **It also ships consumed
 by nothing** — `promote()` gains its report behaviour here, and nothing calls
 `promote()` until the pipeline package lands.
 
-**Why the report is its own package and not a section.** Measured, it is seven
-acceptance criteria and a table with four cases plus its own gate rules — more
-contract than several shipped packages carry in total. And its subject is
+**Why the report is its own package and not a section.** Measured AT THE T1 CUT
+it was seven acceptance criteria and a table with four cases plus its own gate
+rules — more contract than several shipped packages carry in total, and it has
+only grown since. **The reading is pinned to the cut rather than stated in the
+present tense, which is this family's own measured lesson: a count beside a
+claim is a count waiting to be falsified, and this one was — by Table Z's
+criterion on 2026-08-30.** And its subject is
 different in kind from the module's: the module decides what may enter the
 vault, while this package guarantees that **the record of those decisions
 reaches the user even when nothing enters the vault at all.**
@@ -109,6 +113,15 @@ take it.
   (`:1385-1386`). `:1392-1409` is the shipped "Redacted in place" section.
 - `src/core/digest.js:414-418` — `sanitizeProjectName`, exported at `:867`.
 - `src/core/layout.js:21-29` — the seven `LAYOUT_KEYS`, including `reports_dir`.
+  **`isSafeRelativePath` (`:65-71`) is the ONLY filter a layout value passes: it
+  rejects the empty string, an absolute value, a `\` anywhere, and any `..`
+  segment — and a value failing one of those is discarded PER KEY, so the
+  built-in default is used for it and the rest of the block still applies.
+  Measured, it ACCEPTS AND RETURNS UNCHANGED `reports/dreams/`,
+  `reports//dreams`, `.`, `./reports` and `reports/./dreams`.** **This bullet is
+  a Table Z mirror and is registered as one** — row **Z2** owns the split
+  between what this filter guarantees and what the caller must close, and this
+  bullet states the measurement rather than the rule.
 - **`src/core/secret-scan.js` — `redactOnly` (`:314`), exported at `:325`, is THE
   shipped redactor Table N's "redact" step means.** Named because the sanitiser
   is named: an implementer told to "redact" with no function to reach for may
@@ -125,8 +138,8 @@ take it.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/promote.js | the report row (the body as a candidate), Table Y (the second write), Table R (the fallback), and the `records` input |
-| modify | tests/unit/dream-promote.test.js | the report row, Table Y and Table R |
+| modify | src/core/dream/promote.js | the report row (the body as a candidate), Table Z (the report path), Table Y (the second write), Table R (the fallback), and the `records` input |
+| modify | tests/unit/dream-promote.test.js | the report row, Table Z, Table Y and Table R |
 
 **Nothing else.** In particular this package does not touch
 `src/core/dream/validate.js` or `src/cli/dream.js`: like the module half, **it
@@ -167,14 +180,14 @@ below, and that is the only one it writes out.
  *             records (Table R's gate rules). **Round 4's F1: the obligation
  *             existed with no field to travel on**
  *  @returns {{ <the module half's four returned fields>,
- *             report:{outcome:'promoted', bytes:Buffer,
+ *             report:{outcome:'promoted', rel:string, bytes:Buffer,
  *                     redaction:RedactionAccounting|null,
  *                     preserved:Array<PreservedCopy>, record:string[],
  *                     accounting:({published:true}
  *                                |{published:false, reason:string})}
- *                   |{outcome:'fallback', bytes:Buffer,
+ *                   |{outcome:'fallback', rel:string, bytes:Buffer,
  *                     preserved:Array<PreservedCopy>, record:string[]}
- *                   |{outcome:'refused', reason:string,
+ *                   |{outcome:'refused', rel:string, reason:string,
  *                     preserved:Array<PreservedCopy>, record:string[]} }}
  *    report  the dream report's own outcome, never folded into `promoted` —
  *            Table R's fallback publish is recorded as itself. **A DISCRIMINATED
@@ -183,6 +196,16 @@ below, and that is the only one it writes out.
  *            success and refusal guarantees nothing on the successful branch).
  *            The published arms' `bytes` are decided bytes under the module
  *            half's Table S, whose row S6 names their consumers.
+ *            **`rel` IS ON EVERY ARM, REQUIRED** — on the two published arms
+ *            the vault path this arm's `bytes` were published to, on `refused`
+ *            the path the refused write targeted. **WHICH of the two path
+ *            values that is, arm by arm, is TABLE Z's row Z5, and this block
+ *            restates no part of it.** The field exists because a SINGLE OWNER
+ *            of the derivation holds only while downstream READS the owner's
+ *            value: `WP-dream-promote-in-workspace`'s row G8 commits the report
+ *            path and had no source for it, and any source it invented would be
+ *            a SECOND derivation — wrong on the `promoted` arm in exactly the
+ *            runs where the derived and the published spellings differ.
  *            On `refused` — and on `promoted` when `accounting.published`
  *            is `false` — the COMPLETE enforcement record is in `record` and
  *            reaches the user through no other channel, and **returning it is
@@ -268,11 +291,14 @@ package's whole subject; (vi) the pipeline package inherits the contract.
 
 ### Contract table(s)
 
-`N/A — this spec's dense contracts are THREE NAMED canonical tables (N, R and Y)
-rather than one unnamed table under this heading.` Naming a table is what makes
-its rows addressable by letter across the whole family
+`N/A — this spec's dense contracts are FOUR NAMED canonical tables (N, R, Y and
+Z) rather than one unnamed table under this heading.` Naming a table is what
+makes its rows addressable by letter across the whole family
 (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to owners,
-and its ownership row for this package reads "Tables N, R, Y and the report row").
+and its ownership row for this package reads "Tables N, R, Y, Z and the report
+row"). **`Z` was added on 2026-08-30 by owner ruling, after escalation trigger
+(i) fired on PR #42; the extraction ground and the letter's justification are
+Table Z's own preamble's and the canonical map's, and are not restated here.**
 **Until 2026-08-30 this spec ALSO carried an UNLETTERED contract table — the
 report row's rule cell — and said it was "deliberately outside that scheme".
 The owner ruled that concession closed** (round 6): a cell holding roughly
@@ -296,7 +322,70 @@ a row because the module half's Table D owns the gates it refers to:
 
 | Contract | Today | The rule here | Position | Refusal remedy |
 |---|---|---|---|---|
-| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1409` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against `WP-dream-promote-module`'s Table D: three of its four gates do not match a path under `reports_dir` and pass it through, and that table — not this one, and not anything above this line — is what says which gate applies where.** (Corrected 2026-08-29: this cell was moved here whole by the T1 cut and kept saying "the table above", which in this spec resolves to the Deliverables table.) **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** **THE SECOND WRITE, AND EVERY RULE ABOUT IT, IS TABLE Y's — CITED HERE AND RESTATED IN NO PART.** After promotion, code appends its own measured accounting to the promoted report through a SECOND primitive write. Its mechanism is row **Y1**; its outcome and the classification `outcome:'promoted'` with `accounting:{published:false, reason}` is **Y2**; which buffer travels in `bytes` is **Y3**; the prohibition on any claim that this arm's `bytes` equals what the target then holds is **Y4**; what the arm states positively is **Y5**; its relation to Table R's R4 is **Y6**; the unchanged carriers are **Y7**; the measurement that scopes the field to this arm is **Y8**; its per-field provenance is **Y9**; why the TYPE discriminates is **Y10**; where the contract is decided is **Y11**; and its downstream consumers are **Y12**. **EXTRACTED 2026-08-30 BY OWNER RULING (round 6), and this row is where the growth happened:** this cell carried roughly fifteen separable rules across five unrelated subjects in 8,082 characters, was referred to 37 times across the family, and not one of those references could address a rule inside it. **What remains here is the report row's own subject — the body as an ordinary promotion candidate — and nothing about the second write.** **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (its H5 `expect` guard, its H3 symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4. **A refusal of the SECOND write on the NORMAL path is a DIFFERENT case and R4 does not govern it** — there this run's first write already PUBLISHED the body, so R4's untouched-target clause does not hold, and the outcome is the `accounting:{published:false, reason}` **Table Y** decides (its rows **Y2** and **Y6**) |
+| The dream report (owner ruling, 2026-08-27) | `validate.js:1374-1409` — the brain writes the body into the vault, then code APPENDS its enforcement section to that same file | **BRAIN-AUTHORED, and gated like any other file.** The brain writes `<reports_dir>/<date>.md` in the WORKSPACE; `reports_dir` is copied in (sibling Table A) so a same-day second run's existing report is in the baseline. **HOW CODE DERIVES THAT PATH, HOW A DELTA RECORD IS MATCHED TO IT, AND WHICH PATH VALUE EACH CONSUMER TAKES IS TABLE Z — cited here by row and restated in no part: the derivation is row Z1, the split of obligations between the primitive, the layout and this caller is Z2, the identity predicate is Z3, the multiple-match case is Z4, and the per-consumer authority is Z5.** The body is a normal promotion candidate: the delta sees it, C9 admits `reports_dir`, the gates that match it judge it, and it is published by the primitive like any other note. **Read this row against `WP-dream-promote-module`'s Table D: three of its four gates do not match a path under `reports_dir` and pass it through, and that table — not this one, and not anything above this line — is what says which gate applies where.** (Corrected 2026-08-29: this cell was moved here whole by the T1 cut and kept saying "the table above", which in this spec resolves to the Deliverables table.) **Code does not own the body** — the earlier code-owned design is withdrawn because it silently destroyed the `## Gated out (and why)` accounting the shipped skill requires (`SKILL.md:409-425`): that accounting names candidates the brain did NOT write, and **no filesystem outcome can reconstruct a file that never existed.** **THE SECOND WRITE, AND EVERY RULE ABOUT IT, IS TABLE Y's — CITED HERE AND RESTATED IN NO PART.** After promotion, code appends its own measured accounting to the promoted report through a SECOND primitive write. Its mechanism is row **Y1**; its outcome and the classification `outcome:'promoted'` with `accounting:{published:false, reason}` is **Y2**; which buffer travels in `bytes` is **Y3**; the prohibition on any claim that this arm's `bytes` equals what the target then holds is **Y4**; what the arm states positively is **Y5**; its relation to Table R's R4 is **Y6**; the unchanged carriers are **Y7**; the measurement that scopes the field to this arm is **Y8**; its per-field provenance is **Y9**; why the TYPE discriminates is **Y10**; where the contract is decided is **Y11**; and its downstream consumers are **Y12**. **EXTRACTED 2026-08-30 BY OWNER RULING (round 6), and this row is where the growth happened:** this cell carried roughly fifteen separable rules across five unrelated subjects in 8,082 characters, was referred to 37 times across the family, and not one of those references could address a rule inside it. **What remains here is the report row's own subject — the body as an ordinary promotion candidate — and nothing about the second write.** **The appended section is neutralised at composition time, per Table R's gate rules, which govern it here exactly as they do on the fallback branch.** **The fallback — whenever the brain-authored body is NOT successfully published, for ANY reason — is Table R**, which this row does not restate. **The trigger is stated as a complete class, not a list:** an earlier form said "when a gate refuses the body, or no body exists", which silently excluded the promotion-decision refusals (C4, C7, C8) and the primitive's own refusals (its H5 `expect` guard, its H3 symlinked target). On any of those the body is unpublished with no gate involved, and under the narrow trigger the enforcement record had nowhere to go | judged with the rest, before the append | the body is refuse-and-reported like any note; the code section is then published on its own — **and if THAT write is refused too, Table R's R4 governs: vault untouched, record returned in `report.record` for the caller's log and output, reason named.** This row does not restate R4. **A refusal of the SECOND write on the NORMAL path is a DIFFERENT case and R4 does not govern it** — there this run's first write already PUBLISHED the body, so R4's untouched-target clause does not hold, and the outcome is the `accounting:{published:false, reason}` **Table Y** decides (its rows **Y2** and **Y6**) |
+
+### Table Z — the report PATH: one derivation, one identity, one authority
+
+**Extracted by owner ruling on 2026-08-30, after escalation trigger (i) fired on
+PR #42.** The round record — both gates' raw output, every disposition, the two
+overlap measurements and the ruling — is
+`docs/specs/logbook/2026-08-30-promote-report-pr-gates.md`, and this preamble
+cites it rather than restating it. **The ground is a MEASUREMENT, not a
+preference.** Two consecutive PR-gate rounds landed their findings on ONE
+contract family — the report path's derivation and its identity — and in round 2
+the two gates CONVERGED on the same two lines, the first convergence this family
+has measured. Both gates then grepped all four family specs for the derivation
+and the identity rule and found the same thing: **the family pins the
+PRIMITIVE's obligation (`WP-dream-vault-write-primitive`'s Table H, row H1) and
+pins the CALLER-SIDE half of it nowhere.** So each fix could only be measured
+against the last example rather than against a rule, and the curve was two
+rounds, two fixes, two new defects. **This table is the rule.**
+
+**WHY A LETTER AT ALL, rather than rows in Table R or Table Y — both were
+weighed, and both cost no letter.** Table R's subject is the report's PUBLISH
+DECISION and Table Y's is its SECOND WRITE. The path is an input to both, and
+also to the body's FIRST write, to the record composer and to the pipeline's
+commit — **five consumers across three tables and two packages, which is exactly
+the shape that has no home inside any one of them.** **Hosting a contract in a
+table whose subject is something else is the failure mode this family has
+already measured and named:** "the owner surface absorbs everything" is how the
+report row became an 8,082-character cell with roughly fifteen separable rules
+and no addressable rows, which is what Table Y was extracted to end. Rows in R
+or Y would reproduce it one contract later.
+
+**WHY THE LETTER `Z`, and what spending it costs.** Measured with
+`grep -rhoE '^### Table [A-Z]' docs/specs/` over the whole tree **at `0d27dc5`**:
+used are A–H, J–W and Y; **free are I, X and Z.** `I` is rejected because its row
+ids (`I1`) are misread as `11` or `Il` in running prose, and `X` because this
+family already uses `### Table X` as its METASYNTACTIC placeholder for "some
+table" — Table Y's preamble records both rejections and this preamble does not
+re-derive them. **That leaves `Z`, which Table Y's preamble deliberately
+PRESERVED so it would not be spent on a table that is not last. The reservation
+is spent here, by ruling, and the reasoning is recorded rather than left
+implicit:** it was a reading convenience with no consumer, weighed against a
+contract two independent review gates have now proved is not inferable — and
+**the family's letter space does not END at `Z`.** The canonical map already
+records FIVE deliberate collisions with
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, mitigated by
+path-qualified citation, so a further table takes a documented collision rather
+than having nowhere to go. **`Z` collides with nothing today: the map's
+collision table stays at five rows and gains none.**
+
+**WHAT THIS TABLE DOES NOT OWN:** the primitive's segment-validity obligation
+(`WP-dream-vault-write-primitive`'s Table H, row **H1** — cited by row Z2,
+restated nowhere here); the ADMISSION of the derived path
+(`WP-dream-promote-module`'s row **C9**); the report's publish decision
+(Table R); the second write and its accounting (Table Y); and which channels are
+neutralised (Table N, whose report-path row cites row **Z5** for WHICH path
+value it classifies).
+
+| Rule | Value |
+|---|---|
+| Z1 — **THE DERIVATION, AND ITS SINGLE OWNER** | `reportRel` — the vault-relative path of this run's report — is derived ONCE per run, inside `promote()`, from `layout.reports_dir` and the run `date`, and **no other surface derives it**: `<reports_dir>/<date>.md` with **every EMPTY segment and every `.` segment dropped**. `<date>` is the run date, whose shape `/^\d{4}-\d{2}-\d{2}$/` is `WP-dream-promote-module`'s Table D `date` row's and is not restated here. **DROPPING is the treatment, and both alternatives are rejected on the record:** THROWING — a legitimate user config would then crash every run of the dream, including one where the brain wrote nothing, and the run's enforcement record for every other path dies with it; and SUBSTITUTING THE BUILT-IN DEFAULT — the user's reports silently move to a directory they did not configure. **The derived path denotes the SAME filesystem location as the naive join**: only no-op segments are removed and `..` cannot be present (row Z2), **so this normalisation can never move the report out of the directory the user configured** — the safety statement a reader would otherwise have to reconstruct, and the one a reviewer asked for twice |
+| Z2 — **THE SPLIT OF OBLIGATIONS, stated so nobody re-derives it** | **H1's obligation is the PRIMITIVE's** (`WP-dream-vault-write-primitive`'s Table H, row **H1**): a `rel` handed to `writeIntoVault` is segment-valid — no segment empty, none equal to `.` or `..`, none containing a separator. **A non-compliant `rel` is a CALLER-CONTRACT VIOLATION AND THROWS** (that spec's row **H7**): it is not a refusal, so it cannot be reported, cannot be dispositioned and cannot be survived. **WHAT `readVaultLayout` ALREADY GUARANTEES** for `layout.reports_dir` — `isSafeRelativePath`, `src/core/layout.js:65-71`, a value failing any of these being discarded per-key so the built-in default is used for it — is: not the empty string, not absolute, no `\` anywhere, no `..` segment. **WHAT IT DOES NOT GUARANTEE, measured, each of these five returned UNCHANGED: `reports/dreams/`, `reports//dreams`, `.`, `./reports`, `reports/./dreams`.** **THE CALLER THEREFORE CLOSES EXACTLY TWO of H1's four shapes — EMPTY and `.` — and the other two need no handling here.** **That absence is stated rather than left silent, and it fails in both directions:** a reader who re-adds a `..` or separator check writes the duplicated containment rule the Dispatch precondition forbids, and a reader who assumes the layout closes everything writes the defect this table exists to end — which is what happened, in that order, in two consecutive rounds. **`/reports/dreams` is NOT a value this contract handles:** `isSafeRelativePath` rejects a leading `/`, so the key falls back to the default (measured) and the value never reaches `layout.reports_dir` at all |
+| Z3 — **THE IDENTITY, and it is decided ONCE per run** | a delta record IS the report body when its `rel` equals the derived `reportRel` **compared segment-wise on NFC-normalised, case-folded names** — the same predicate `WP-dream-promote-module`'s row **C9** matches with, and for the same measured reasons that row records: the primary filesystem is case-insensitive, and macOS enumerates DECOMPOSED names while accepting composed ones. **This is an IDENTITY rule and not a containment rule; containment stays the primitive's (Table H).** **THE MATCHING SET IS DETERMINED ONCE, over the whole delta, BEFORE any record is routed to an outcome.** Evaluating the predicate independently at each routing site is how a second match silently overwrote the first, and one evaluation is what makes row Z4 statable at all. **NAMED RESIDUAL, measured, and deliberately left to its owner:** `isUnder` — row **C9**'s matching, in `WP-dream-promote-module`, which is `Done` — filters empty segments but not `.`, so with `reports_dir: reports/./dreams` no candidate is admitted under the reports directory at all. **The consequence is FAIL-CLOSED and is not this contract's to change:** the body is refused, Table R's fallback fires, its write is refused by the same `admit`, and row **R4** delivers the complete record to the caller. Widening C9's matching is a change to a closed spec and belongs in its own work package |
+| Z4 — **MORE THAN ONE MATCH: the run has NO body, and every match is refused** | folding is CORRECT on a case-INsensitive volume and OVER-matches on a case-SENSITIVE one, where two spellings that fold alike are two different files. **Both are supported targets, so the collision is a reachable state and it is decided here rather than left to whichever branch runs last.** **When two or more delta records match, NONE of them is the report body.** Each is an ordinary refused candidate: it enters `refused[]` with a reason NAMING the collision, `report` therefore takes Table R's fallback with `report.preserved` empty, and the fallback targets row Z5's DERIVED path, which no refused candidate published to. **This does not breach the rule that the body is not a member of `refused[]`** — the collision means no record was identified as the body, so none of them is one, and the preserved copies of those paths are announced by Table R's preserved-copy row exactly as any other refused path's are. **THE INVARIANT THIS PROTECTS, and the reason a collision may not be silent: EVERY delta record has EXACTLY ONE carrier in the return** — an entry of `promoted[]`, `redacted[]` or `refused[]`, or the `report` arm. Measured before this row existed: two folding matches left BOTH records with NO carrier, which is the state `promote()` throws for one branch earlier (`promote: no outcome was decided for …`) reached without the throw. **REFUSAL RATHER THAN A THROW, deliberately:** a throw loses the enforcement record for every other path in the run, which is the failure this package exists to prevent. **Rejected: FIRST MATCH WINS** — the code has no ground to prefer either spelling, it would publish as the report a file the brain may not have meant as one, and the loser's refusal would have to describe a choice nothing recorded. **Rejected: probing the filesystem for whether the two paths alias** — a new mechanism, and racy against the user's own editor |
+| Z5 — **AUTHORITY: which path each consumer takes, and it is not one answer** | after row Z3 there are TWO values — the DERIVED path, and the MATCHED body's own `rel`, which can be a different spelling of the same object — and **every consumer names which of the two it takes.** **(a) The body's FIRST write** targets the body's own `rel`: the body is an ordinary promotion candidate and the module half publishes it as one. **(b) The SECOND write (Table Y, row Y1)** targets the body's own `rel` — it must land on the object the FIRST write published, and its `expect` is that write's returned buffer (the PRIMITIVE's rows H5 and H6). **(c) The RECORD's mentions of the report path** — the body's refusal line, its redaction line and its preserved-copy lines — name the body's own `rel`, because each states a fact about THE FILE THE BRAIN WROTE, and all three exist only when a body exists. **(d) Table R's FALLBACK, both its base read and its write, targets the DERIVED path, on all four of its cases.** The fallback publishes CODE-authored content, and where that lands in the user's vault is a code decision: a brain-chosen spelling must not be able to create a second report directory in the vault. **(e) `report.rel`** carries the body's own `rel` on `promoted` and the DERIVED path on `fallback` and on `refused` — on the published arms the path this arm's `bytes` were published to, on `refused` the path the refused write targeted. **THE FIELD EXISTS BECAUSE SINGLE OWNER MEANS DOWNSTREAM READS THIS VALUE:** `WP-dream-promote-in-workspace`'s row **G8** commits the report path and had no source for it, and any source it invented would be a SECOND derivation — wrong on the `promoted` arm in exactly the runs where (c) and (d) differ. **THIS ROW RESOLVES THE ROUND-2 GATE'S FINDING 3, AND RESOLVES IT AGAINST THE FIX THAT FINDING PROPOSED:** passing the derived path to the record composer would make the body's refusal line name a file the brain never wrote. Under (c) and (d) the behaviour that gate measured is already correct on both a case-sensitive and a case-insensitive volume; **what was missing was this row, which is the whole shape of this round** |
 
 ### Table Y — the report's SECOND write, and the accounting that must never be silent
 
@@ -329,18 +418,24 @@ family's letters already collide with
 `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` on **five** — B, H, N, Q and
 R — and that the mitigation is path-qualified citation rather than renaming.
 **A sixth collision was therefore the one outcome to avoid.** Measured with
-`grep -rhoE '^### Table [A-Z]' docs/specs/`: the letters live anywhere under
-`docs/specs/` are A, B, C, D, E, F, G, H, J, K, L, M, N, O, P, Q, R, S, T, U, V
-and W. **`Y` occurs nowhere** — not in this family's thirteen (A, B, C, D, E, F,
-G, H, N, Q, R, S, V), not in that shipped package's nine (B, H, J, K, N, P, Q, R,
-T), and not in any other spec in the tree, so the map's collision table stays at
-five and gains no row. **Of the four letters free tree-wide — I, X, Y, Z — `I`
-is rejected because its row ids (`I1`) are misread as `11` or `Il` in prose, and
-`X` is rejected because this family already uses `### Table X` as its
+`grep -rhoE '^### Table [A-Z]' docs/specs/` **at `98f0cef`, the revision the
+measurement was RUN at and before this table existed**: the letters live
+anywhere under `docs/specs/` were A, B, C, D, E, F, G, H, J, K, L, M, N, O, P,
+Q, R, S, T, U, V and W, so **`Y` occurred nowhere** — not in this family's, not
+in that shipped package's, and not in any other spec in the tree — and the map's
+collision table stayed at five rows and gained none. **The reading is pinned to
+its revision and carries no count beside a list, on this file's own two measured
+lessons: a present-tense measurement is falsified by the very change it
+justifies, and a number beside a list inside a cell is a number waiting to be
+falsified.** **Of the letters free tree-wide at that revision — I, X, Y, Z —
+`I` is rejected because its row ids (`I1`) are misread as `11` or `Il` in prose,
+and `X` is rejected because this family already uses `### Table X` as its
 METASYNTACTIC placeholder for "some table"** (`2026-08-29-promote-family-design-round-zero-raw.txt:164`),
-so a real Table X would collide with the family's own notation. **`Y` is chosen
-over `Z` so that `Z` — which reads as "the last one" — is not spent on a table
-that is not last.**
+so a real Table X would collide with the family's own notation. **`Y` was chosen
+over `Z` so that `Z` — which reads as "the last one" — would not be spent on a
+table that is not last. THAT RESERVATION WAS SPENT ON 2026-08-30 BY OWNER
+RULING, on Table Z; the reasoning is that table's preamble's and the canonical
+map's, and is not restated here.**
 
 **WHAT STAYS IN THE REPORT ROW AND IS NOT HERE, stated so the cut is checkable:**
 that the body is brain-authored and gated like any other file, that `reports_dir`
@@ -352,7 +447,7 @@ this table owns the SECOND write and nothing else.**
 
 | Rule | Value |
 |---|---|
-| Y1 — **The second write, and its mechanism** | after promotion, code appends its own measured accounting to the promoted report — a SECOND write **through the primitive**, with `expect` set to the bytes the FIRST publish RETURNED (the PRIMITIVE's rows H5 and H6), **never an in-place append**. The first write publishes the body; the second publishes body-plus-section. **The two can disagree, and that is the whole reason this table exists** |
+| Y1 — **The second write, and its mechanism** | after promotion, code appends its own measured accounting to the promoted report — a SECOND write **through the primitive**, with `expect` set to the bytes the FIRST publish RETURNED (the PRIMITIVE's rows H5 and H6), **never an in-place append**. **WHICH PATH it targets is Table Z's row Z5(b) — the MATCHED BODY's own `rel`, never the derived path — and this row does not restate why.** The first write publishes the body; the second publishes body-plus-section. **The two can disagree, and that is the whole reason this table exists** |
 | Y2 — **The outcome and its classification, GROUNDED IN THE PUBLISH EVENT and never in what the target holds now** | the state in which the FIRST write succeeded and the SECOND was refused — by the primitive's H5 `expect` guard, by a symlinked target under its H3, by any of its H-rules — is a real outcome the union carried NOWHERE before the owner ruling of 2026-08-29 (round 4's A1), whose ruled property is that **NO REAL OUTCOME IS SILENT**. It is **`outcome:'promoted'` with `accounting:{published:false, reason}`**. **THE GROUND OF THAT CLASSIFICATION IS THE PUBLISH EVENT: this run's first write PUBLISHED the body.** That is why the outcome is not `fallback`, which means the body did NOT publish, and not `refused`, which means nothing published at all. **AN EARLIER FORM GROUNDED IT INSTEAD IN "the body IS in the vault" — a present-tense claim about the target, and FALSE ON BOTH REFUSAL CAUSES (round 6's CD-1, see row Y4).** The event ground is not a weaker substitute: it is the only ground the classification ever needed, because `fallback` and `refused` are discriminated by what this run PUBLISHED and by nothing else |
 | Y3 — **WHICH BUFFER TRAVELS IN `bytes`** | on `accounting:{published:true}` it is the **SECOND** write's returned buffer; on `accounting:{published:false}` the **FIRST** write's. **Neither is ever a fresh read.** Which of the two travels to the caller is decided HERE because `WP-dream-promote-module`'s Table S row **S5** puts this two-write sequence in this package; that spec's rows **S1** and **S4** still govern what either buffer must be |
 | Y4 — **THE PROHIBITION: no surface may equate this arm's `bytes` with what the TARGET then holds, and none may say the body IS in the vault on this form** | **row S1's qualifier is load-bearing — "the only bytes the vault is KNOWN TO HOLD AT PUBLISH TIME" — and the unqualified form is FALSE BY CONSTRUCTION on the `published:false` form, for the very refusal that produced it** (round 5's C5, filed by BOTH gates independently, the first such overlap in this loop). The primitive's H5 abandons the second write unless the target STILL holds exactly the `expect` bytes, so an `expect` conflict MEANS the target no longer holds the first write's buffer — it holds whatever intervened — and under its H3 a symlinked report target is a symlink and not those bytes at all. **WHAT THE TARGET HOLDS AT THE END OF THE RUN IS THEREFORE REFUSAL-CAUSE-SPECIFIC, AND NOTHING THIS ARM CARRIES REPRESENTS IT:** the intervening bytes on an `expect` conflict, a symlink under H3. **THE SECOND HALF OF THIS PROHIBITION IS ROUND 6's CD-1**, which found the killed claim alive in two reworded forms — "the bytes the vault holds" and "the body IS in the vault" — on four surfaces, **one of them the very row this table's Mirrored Surface Checklist entry names as its own mirror four lines above the prohibition it broke.** A phrase-shaped sweep finds the wordings its author remembers writing; this prohibition is stated over the CLAIM |
@@ -415,6 +510,9 @@ pass-through — the defect both prior A-bands shared.
 | `preserved[].remediation` | one of two code-owned values the MODULE half ASSIGNS at outcome time, the gate reporting none (module half, Table Q row Q9, which owns the per-field provenance) | **NO** | none — same reason |
 | `redaction.labels`, wherever a redaction accounting travels — on a `redacted[]` entry and on the `report` arm's `promoted` form (module half, Table Q row Q10, which owns both the fields and that scope) | detector names from a code-owned closed set, never the matched bytes | **NO** | none — **and stated rather than omitted**, because a channel with no row is indistinguishable from a channel nobody thought about, which is exactly how round (d)'s finding arose |
 | `redaction.lines`, on the same two carriers | a count | **NO** | none — same reason |
+| **the REPORT PATH, wherever the record NAMES it** — the body's refusal line, its redaction line and its preserved-copy lines — **and `report.rel`, which carries the same value on the `promoted` arm** (Table **Z**, row **Z5**, decides which of the two path values each of those is, and this row does not restate it) | **the BRAIN chose it** on every line the composer writes, and on `report.rel`'s `promoted` arm: row Z5 makes that value the MATCHED BODY's own `rel`, which came out of the delta's walk of what the brain wrote. `report.rel` on the `fallback` and `refused` arms is the code-derived path instead | **YES.** The classification is stated over the CHANNEL rather than per arm, because every report-path line the composer writes exists only when a body exists, and therefore only ever carries the brain-chosen value (no count is stated: the preserved-copy lines are one per preserved entry) | **redact, then sanitise.** **Classified because the plausible misreading is the dangerous one:** the DERIVED `reportRel` is code-derived and the brain cannot reach it, so a channel with no row here reads as licence to treat "the report path" as code-owned and skip it — and the value the composer actually interpolates is not that path. **Where `report.rel` is RENDERED by the pipeline rather than composed here, the obligation is the RENDERING party's, exactly as this table's `accounting.reason` row states for its own channel** (`WP-dream-promote-in-workspace`, row **G11**) |
+| **the report body's OWN refusal reason** — the value the composer interpolates on the body's refusal line, beside the report path (Table R's accounting row: the run states plainly that the brain's body was refused, and why). Added 2026-08-30; PR #42, round 1's finding 5 | code-composed, but it embeds brain-chosen path text exactly as `refused[].reason` does — the promotion decision's own refusals (module half, Table C) and the primitive's rows **H7** and **H9**, which name a surviving object | **YES** — the same classification `refused[].reason` carries and for the same reason: **the body is an ordinary promotion candidate, so its refusal reason is composed by the very surfaces that compose a refused entry's** | **redact, then sanitise.** Row **N2**'s fail-closed default already reaches it — the composer interpolates it — so this row makes an already-covered case EXPLICIT rather than adding an obligation, on this table's own ground: a channel with no row is indistinguishable from a channel nobody thought about |
+| **`report.reason`, on the `refused` arm** (`### Exact contracts`). Added 2026-08-30; PR #42, round 1's finding 5 | either the failed read of the report path, or the vault-write primitive's refusal (its row **H7**), whose rows H7 and H9 name a surviving staging object or directory whose name derives from the brain-chosen path | **YES, by derivation** — the same classification `accounting.reason` carries and for the same reason, and a value derived from attacker text is treated as attacker text | **redact, then sanitise, wherever it is RENDERED — and this row names where that obligation is ASSERTED, exactly as the `accounting.reason` row does for its own channel.** **THE SECTION COMPOSER NEVER INTERPOLATES IT:** it is produced by the read or the write that FAILED, AFTER the record was composed, so row **N2**'s fail-closed default — which binds "any string the COMPOSER interpolates" — does not reach it. **Its DELIVERY is the run's log and output** (`WP-dream-promote-in-workspace`, row **G11**, obligation (i)), and the obligation is discharged and asserted BY THE RENDERING PARTY: that spec's report-refusal acceptance criterion, case **(a)**. **This spec's code-authored-section criterion scopes it out of its own domain BY NAME, for the same reason it scopes `accounting.reason` out** |
 | `records[].path`, `records[].reason` | the CALLER's pre-promotion accounting; today the pipeline's scratch enforcement, whose paths are filenames the brain wrote | **YES** | **redact, then sanitise** |
 | `accounting.reason`, on the `promoted` arm's `published:false` form (**Table Y**) | COMPOSED BY THE VAULT-WRITE PRIMITIVE (its row H7) and carried unchanged by this package; the primitive's rows H7 and H9 name a surviving staging object or directory, whose name derives from the brain-chosen path | **YES, by derivation** — the same classification `refused[].reason` carries and for the same reason, and a value derived from attacker text is treated as attacker text | **redact, then sanitise, wherever it is RENDERED — and this row names where that obligation is ASSERTED, which is the half round 5 left off (round 6's CD-3).** **Its DELIVERY on that form is the run's log and output rather than the composed section** (`WP-dream-promote-in-workspace`, row G11) — the write carrying the section is the very one that was refused. **THAT MAKES IT THE ONE CHANNEL IN THIS TABLE THAT THE SECTION COMPOSER NEVER INTERPOLATES**, so row N2's fail-closed default — which binds "any string the COMPOSER interpolates" — does not reach it, and saying that it did was this row's own error for one round. **The obligation is discharged BY THE RENDERING PARTY, and asserted there:** `WP-dream-promote-in-workspace`'s report-refusal acceptance criterion, case (b), which is the criterion that already owns the sentence "the run's accounting names `report.accounting.reason`". **This spec's code-authored-section criterion does NOT assert it and says so in place** — that criterion's domain is the COMPOSED SECTION on the normal second write and on the fallback, and this channel exists on neither form, so stretching its universal over a member it cannot exercise was the alternative and it was rejected. **Classified rather than omitted (round 5's N1):** the field was added by round 4's A1 and this table had no row for it, which is the state row N1's own ground calls indistinguishable from a channel nobody thought about. **Row N2 states that enforcement is the fail-closed default PLUS the acceptance criterion; for one round this channel had a classification and neither half** |
 | **any string the composer interpolates that is not classified above** | — | **treated as YES — the classification is not a permission list** | **redact-then-sanitise, or composition REFUSES. This is the fail-closed default and it is the contract's actual enforcement**, not a note about the rows above: a channel nobody classified must not be able to reach the report unneutralised, and that is exactly how both prior A-bands leaked |
@@ -439,8 +537,12 @@ between them.** The shape is the normal path's second write, generalised: read
 the vault's current report bytes, compose IN MEMORY (what is there, plus this
 run's enforcement section appended), publish the whole as ONE write through the
 primitive with `expect` set to the bytes just read. No new mechanism and no new
-naming: the only difference from the normal second write is that the base is
-"what the vault currently holds" rather than "what we just published".
+naming. **It differs from the normal second write in TWO respects and both are
+named here, because an earlier form said "the only difference" and the sentence
+that follows it falsified that word:** the BASE is "what the vault currently
+holds" rather than "what we just published", and **the TARGET is TABLE Z's row
+Z5(d)'s — the DERIVED path, on all four cases below, never the matched body's
+spelling, and this table cites that row rather than restating why.**
 
 | # | The vault's report for this date, at fallback time | Candidate bytes | `expect` | Outcome |
 |---|---|---|---|---|
@@ -454,6 +556,7 @@ naming: the only difference from the normal second write is that the base is
 | Gates — **owner ruling, 2026-08-27; two rules, neither flagged option alone** | **(1) The PRESERVED REGION is not re-gated.** Gates guard content ENTERING the vault, not content residing in it. The preserved bytes are already vault content and stay byte-identical; re-scanning them protects nothing — that content is already exposed — while it can destroy the enforcement record or mutate user-edited bytes, which R3 forbids. **(2) The CODE-AUTHORED SECTION is neutralised at COMPOSITION time.** **TABLE N owns which channels are neutralised, with what, and in what order, and this rule does not restate it.** Two A-band findings came from this rule trying to carry that contract inline — first with no order, then with an incomplete set — which is why it was extracted. **WHICH values, with what, and in what order is TABLE N's — cited, never restated here. An earlier form of this cell hand-listed `r.path` and `r.reason`, and that list was already stale against Table N's own rows the day it was written (round (e)); a member list in a citing surface is the defect, not the shorthand** — measured, today's enforcement line interpolates two values, not one (`validate.js:1385-1386`), and under this design a refusal REASON carries brain-chosen path text too (C1's allowlist refusal, and the primitive's rows H9 and H7, which name in the refusal a directory or a staging object). An earlier form said "`r.path` and kin", which quantifies over nothing — and this universal is what justifies having no gate exemption, so an unneutralised reason channel would make that justification false. A redacted path still serves the record: "`sk-…[redacted]` — refused: secret-shaped path" says everything the user needs without the secret. **Scope: this rule governs the code-authored enforcement section WHEREVER it is composed — the normal second write and this fallback alike**, since the same interpolation happens in both |
 | The observable property the two rules buy | **Table N, row N4 owns this claim and its history** — it has been false twice, and N4 names its own prerequisites. This row does not restate them |
 | Measured cost of rule (2), named rather than absorbed | the shipped sanitizer is `sanitizeProjectName` (`digest.js:414-418`, exported at `:867`), built for display NAMES: it replaces every character outside `[\p{L}\p{N}\p{M} ._-]` with `_`, **path separators included**. Measured: `01-Projects/customer/note.md` → `01-Projects_customer_note.md`. The refused note stays identifiable, which is what the record is for, but the line is no longer a copy-pasteable path. **Accepted as stated, not silently**: swapping in a path-preserving sanitizer would be a new product surface, and the ruling chose the shipped one. **Under the ruled order this cost is unchanged and its cause is now visible: the same character class that flattens a path is what would flatten a secret's separator, which is exactly why the sanitizer runs second** |
+| **The three section HEADINGS the record is written under — pinned here because an implementer had to invent two of them** (PR #42, round 1's finding 4, routed to the architect and pinned 2026-08-30) | the record is up to THREE sections, each a `##` heading followed by its own lines; this row decides the heading STRINGS and the two rows below decide their lines. **`## Refused by policy (promotion enforcement)`** heads the enforcement lines and is written on EVERY compose, with `- none` beneath it when the run refused nothing — the shipped placeholder behaviour, carried over unchanged. **`## Redacted in place (secret scan)` IS NOT DECIDED HERE:** it is the shipped section name, pinned byte-for-byte together with its line template — and with the rule that `- none` is never written under it — in `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1391`, **cited by SPEC PATH because that package's table letters collide with this family's** (canonical map). This row's only statement about it is that this package REPRODUCES it rather than renaming it. **`## Preserved copies (secret quarantine)`** heads the preserved-copy lines, is NEW with this package, and is written only when the preserved-copy row below renders at least one line; `- none` is never written under it either. **THE FIRST HEADING RENAMES A SHIPPED STRING, AND THE RENAME IS THE POINT:** `src/core/dream/validate.js:1391` writes `## Reverted by orchestrator (policy enforcement)` today, and **under promotion nothing is reverted** — a candidate that fails policy is never published, so there is nothing to revert (`WP-dream-promote-module`'s **Table D**, its EP2 row, which says so in as many words and is not restated here). **THE RETIREMENT OF THE OLD STRING IS NOT THIS PACKAGE'S ACT:** this package ships consumed by nothing, so both strings live in the tree until `WP-dream-promote-in-workspace` removes the validator's Step-4 append — that spec's **Table V row V4** owns the retirement and its retired-heading acceptance criterion asserts it. **No surface may state a heading this row does not carry, and a heading changed here is a change to a USER-VISIBLE string:** it walks to row V4 and to that criterion |
 | The redaction lines — **TWO sources, ONE shape, by the disclosure-parity ruling of 2026-08-29** | one line per entry of `redacted[]`, **and one line for the REPORT PATH when the `report` arm is `promoted` and its `redaction` is non-null**, each carrying the path, the scrubbed-line count and the labels read off that source's own `redaction` field — the module half's `RedactionAccounting`, whose two fields, their GATE provenance and their permitted carriers are its Table Q row **Q10**'s and are restated in neither source — and **each ENTRY of that path's preservation record, read field by field — its `artifact`, its `location` and its `remediation`** (module half, Table Q rows Q1–Q3, Q9 and Q10; `preserved` is an array and it is its ENTRIES that carry those fields, the record itself carrying none — round 3's F9. How many entries an arm holds is row Q9's and not this row's: the redact arm preserves one). **BOTH sources compose the SAME line from the SAME shape, and that is what parity of disclosure means here** — it is also why the accounting is ONE named field rather than two loose ones, because two look-alike field pairs would be two shapes. **An earlier form of this row was scoped to `redacted[]` alone**, which left a body the gate redacted and promotion published sanitized with no line at all — round 3 named it a residual and the ruling closed it. **NEITHER VALUE MAY BE RECOMPUTED HERE** (row Q10): only the gate held the pre-scrub bytes. **Table Q owns why this is data-loss-critical and what each field means; this row restates neither, and in particular it does not decide the guidance — `remediation` carries it.** Composed wherever the enforcement section is composed (Table N, row N3); the `report` source rides the normal second write, `promoted` being by construction an arm on which the body published — **and when that second write is REFUSED the line travels in `report.record` rather than into the vault, which Table Y's row Y6 owns and this row does not restate.** **THE PARTITION, stated here as well as in the preserved-copy row below, because it is a TWO-SIDED rule and a checklist that protects it needs both sides to carry it (round 4's F-7):** every preserved copy is rendered EXACTLY ONCE, and the partition is over whether that copy's PATH HAS A REDACTION ACCOUNTING — never over the outcome, and no longer over where the entry sits. A copy on a `redacted[]` entry, and a copy on a `report` arm that is `promoted` with a non-null `redaction`, are rendered HERE; every other copy is the preserved-copy row's |
 | **The preserved-copy line on a REFUSAL — added by the Table Q reconciliation pass, 2026-08-29, and re-cut by the shape ruling of the same day** | one line per entry of a preservation record that is not on a `redacted[]` entry, naming the path and reading the entry's `artifact`, `location` and `remediation` off it, **from BOTH of its sources: every `refused[]` entry, and the `report` arm's own record WHATEVER THAT ARM'S OUTCOME — save the copies the redaction-lines row above already names, per the partition stated below.** Both, because the report body is subject to the identical sequence and is not a member of `refused[]`: it is a promotion candidate under `reports_dir`, the report row above records that EP2 is the one gate that judges a path there, so the gate can preserve a copy for the body and the body can then be published sanitized, replaced by the fallback, or refused by C4, C7, C8 or an H-rule. **The arm's OUTCOME does not decide whether the line exists — preservation is orthogonal to outcome, which is round 3's F1 and is why the module half's row Q8 quantifies over arms that exist after a preservation rather than over refusals.** **The line names the path and the entry's fields and nothing else.** Until the disclosure-parity ruling of 2026-08-29 that was FORCED — the `report` union carried no scrubbed-line count and no labels at all, on any arm — and it is now a CONSEQUENCE OF THE PARTITION rather than a limitation: a body the gate redacted and promotion published sanitized is the redaction-lines row's, and every copy that still reaches THIS row sits on a path with no accounting to name (module half, row Q10, which owns why a refused path has none). A row scoped to `refused[]` alone left the report's own copy unannounced, found by the round-zero pass of 2026-08-29, one surface over from the defect that created this row. **THE TWO SOURCES ARE SCOPED DIFFERENTLY, and conflating them was a defect this row carried for one round (round-2 coherence, C-2):** the `refused[]` lines are composed **wherever the enforcement section is composed — the normal second write and the fallback alike (Table N, row N3)** — because a refused path with a preserved copy is the ORDINARY case and occurs on runs where the report body publishes perfectly well; scoping them to the fallback left the common case with no surface saying who writes the line. The `report` arm's line travels with the enforcement section too, on whichever write carries it — the normal second write when the body published sanitized, the fallback when the fallback fired, and `report.record` when the write that would have carried it was REFUSED — **which is TWO states and not one (round 5's C2): Table R's row R4, where no write published at all, AND the normal path's SECOND write refused after the first published the body (`accounting:{published:false}`, **Table Y's** outcome), where THIS RUN PUBLISHED the body and the section never reached the vault at all. **The travel rule turns on the PUBLISH EVENT, never on what the target holds afterwards — an earlier form said "the body IS in the vault", which Table Y's row Y4 forbids and which is false on both refusal causes (round 6's CD-1).** **An earlier form said "when every write was refused", which is false on the second state: this row is the STRUCTURAL TWIN of the redaction-lines row above, that row was given exactly this sentence in the same window, and this one was not.** **An earlier form of this sentence put that line on the fallback branch "by construction"; that was true only while the arm carrying a copy was the refused one (round 3's F1).** **Each preserved copy is rendered exactly once, and the partition is over WHETHER THAT PATH HAS A REDACTION ACCOUNTING, not over the outcome and no longer over where the entry sits — re-cut by the disclosure-parity ruling of 2026-08-29, which gave one `report` arm an accounting and so made the old partition send that arm's copies to the wrong row:** a copy on a `redacted[]` entry is the redaction-lines row's, always, because membership of that array IS a redaction; a copy on the `report` arm is that row's TOO when the arm is `promoted` with a non-null `redaction`; every other copy — on a `refused[]` entry, or on a `report` arm carrying no accounting — is this row's. **The guidance is NOT decided here and is NOT restated here — it is READ from the entry's `remediation`, whatever that entry holds.** The values, which arm takes which, their grounds, and the fact that the module half ASSIGNS the field at outcome time are all `WP-dream-promote-module`'s Table Q row Q9. **An earlier form of this cell restated the values and their rationale (round 3's F7) — which re-created, in the one surface that says it does not decide the guidance, the second independent statement the field exists to remove.** **Why the line exists at all:** the gate wrote those copies before promotion knew the path would be refused, a copy on the redacted shelf carries no digest banner, and the path is not in `redacted[]` — so without this line an unredacted copy of secret-shaped content sits unannounced until retention silently removes it (module half, Table Q rows Q3, Q8 and Q9, which own all three facts). **Every field is READ FROM THE TYPED RECORD; this row may not recover one from `reason`** — measured in the module half's own PR gate, a prose carrier on a paired refusal named the SIBLING's copy first. Neutralised at composition exactly like every other channel (Table N) |
 | Accounting | the run's accounting states plainly that the brain's body was refused, and why. A fallback publish is never recorded as a normal report promotion — `report.outcome` carries it as its own value (`### Exact contracts`) |
@@ -521,6 +624,62 @@ left for a gate to refuse.
       **The `accounting` field on the `promoted` arm is registered in its OWN
       entry below** — it became a lettered table on 2026-08-30 and a table gets
       an entry, not a paragraph inside another contract's.
+      **`rel` IS ON EVERY ARM, REQUIRED, and its per-arm value is TABLE Z's row
+      Z5(e) — registered 2026-08-30. No surface may omit it from an arm and none
+      may decide its value here:** the pipeline commits the path it carries
+      (`WP-dream-promote-in-workspace`, row **G8**), and an arm without it forces
+      that package into a SECOND derivation of a path this spec's row Z1 gives a
+      single owner.
+- [ ] **Table Z — the report PATH: its derivation, its identity and its
+      per-consumer authority** (owner ruling, 2026-08-30, after escalation
+      trigger (i) fired on PR #42). **THE OWNER IS TABLE Z, ROW BY ROW**, and a
+      citing surface names a ROW.
+      Its mirrors are: the Deliverables table's two `Notes` cells;
+      **`### Contract table(s)`, which names this spec's canonical tables —
+      their COUNT is stated there and in no mirror**; `### Exact contracts`'
+      `rel` field on all three arms of the `report` union; the report row's `<reports_dir>/<date>.md` sentence, which
+      cites rows Z1–Z5 and restates none; **Table Y's row Y1** (the second
+      write's target, row **Z5(b)**); **Table R's preserve-and-extend preamble**
+      (the fallback's base read and write target, row **Z5(d)**); **Table N's
+      report-path channel row** (row **Z5(c)** decides which of the two path
+      values it classifies); the Current-state bullet for `src/core/layout.js`,
+      which carries row **Z2**'s measurement and not its rule; the acceptance
+      criterion **"The report path is derived once, matched once, and each
+      consumer takes the path Table Z names"**;
+      **`docs/specs/logbook/2026-08-29-promote-family-map.md`'s ownership row
+      for this package AND its letter-justification paragraph — the map is a
+      LIVING surface, a new letter is a change to it, and the `Z` reservation it
+      recorded is spent by this table**; **Table Y's own preamble, whose
+      "`Y` over `Z`" sentence that reservation lived in**; and, in
+      `WP-dream-promote-in-workspace`, row **G8** (which commits the path
+      `report.rel` now supplies) and that spec's Out-of-scope bullet naming this
+      package's tables — **whose own side of the registration is that spec's
+      checklist entry for the report path, added 2026-08-30 after the round-3
+      gate found G8 registered here while that spec had ZERO occurrences of
+      `report.rel` and no entry of its own** (PR #42, round 3's finding 3).
+      **SIX prohibitions, each earned by a measured defect: (i)** no surface may
+      derive the report path a SECOND time — downstream READS `report.rel`
+      (row **Z5(e)**), and a second derivation is wrong on the `promoted` arm in
+      exactly the runs where the two spellings differ; **(ii)** no surface may
+      state the derivation's segment rule as "empty segments are dropped" —
+      that is HALF of row H1's rule, and it is the mirror BOTH product defects
+      came through; **(iii)** no surface may state the caller's duty without
+      stating what `readVaultLayout` already guarantees, because the SPLIT is
+      what stops the next reader either re-deriving it or re-adding a
+      containment check the Dispatch precondition forbids (row **Z2**);
+      **(iv)** no case list of `reports_dir` values may contain a value
+      `readVaultLayout` cannot RETURN — `/reports/dreams` is the measured
+      example and it is what made the shipped regression test spend its one case
+      on an unreachable input while missing all three reachable broken ones;
+      **(v)** no surface may describe the identity predicate as matching at most
+      one record BY CONSTRUCTION, and none may leave the multiple-match case
+      unstated — it is reachable on every case-sensitive target and its outcome
+      is row **Z4**'s; **(vi)** no surface may claim ONE path value is
+      authoritative for ALL consumers — row **Z5** gives five consumers three
+      answers, and the round-2 gate's own proposed fix was an instance of
+      exactly this claim. **The count is of prohibitions INSIDE one cell,
+      re-countable in place** — the same animal Table Y's entry distinguishes
+      from a count of mirror surfaces.
 - [ ] **Table Y — the report's SECOND write and its `accounting`** (owner
       ruling, 2026-08-29, round 4's A1; extracted into a lettered table by
       owner ruling, 2026-08-30, round 6). **THE OWNER IS TABLE Y, ROW BY ROW.**
@@ -531,7 +690,8 @@ left for a gate to refuse.
       lettered it. `### Exact contracts` declares the TYPE; **Table Y decides
       everything else, and a citing surface names a ROW.**
       Its mirrors are `### Exact contracts`, **`### Contract table(s)` (which
-      now names Y among this spec's three canonical tables)**, the report row's
+      names Y among this spec's canonical tables; the COUNT of them is stated
+      there and in no mirror, this one included)**, the report row's
       rule cell (reduced to a row-by-row pointer) and its refusal-remedy cell,
       **Table R's row R4 (whose untouched-vault clause is scoped AWAY from it,
       and whose narrowing clause states the PUBLISH EVENT rather than what the
@@ -596,6 +756,22 @@ left for a gate to refuse.
       `scripts/mirror-walk.js` and are not hand-maintained anywhere.**
 - [ ] **Table R's four cases and its named residual** — the report row (which
       cites, never restates), and the acceptance criteria
+- [ ] **The three section HEADINGS the record is written under** — Table R's
+      headings row, pinned 2026-08-30 after PR #42's round-1 finding 4 routed
+      it here. **THE OWNER IS THAT ROW** for the two headings this package
+      decides; the third, `## Redacted in place (secret scan)`, is
+      `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1373-1391`'s and is
+      cited BY SPEC PATH, that package's letters colliding with this family's.
+      Its mirrors are, in `WP-dream-promote-in-workspace`, **Table V row V4**
+      — which owns the RETIREMENT of the shipped
+      `## Reverted by orchestrator (policy enforcement)` string — and that
+      spec's retired-heading acceptance criterion. **Three prohibitions: no
+      surface may state a heading the row does not carry; no surface may write
+      `- none` under either CONDITIONAL heading (only the enforcement heading
+      takes the placeholder); and no surface HERE may claim the shipped string
+      is retired by THIS package** — this package ships consumed by nothing, and
+      both strings live in the tree until the pipeline removes the validator's
+      Step-4 append.
 - [ ] **Table N — the neutralisation contract.** Its mirrors are Table R's gate
       rule (2), Table R's observable-property row (which defers to N4), the
       **redaction-lines row (which cites row N3 for its composition scope)**,
@@ -607,11 +783,15 @@ left for a gate to refuse.
       F8)**, the `records` input in `### Exact contracts`, the
       code-authored-section criterion **(including its DOMAIN sentence, which
       scopes `accounting.reason` out of the universal — round 6's CD-3)**, and
-      **`WP-dream-promote-in-workspace`'s report-refusal criterion case (b),
-      which is where the `accounting.reason` channel's neutralisation is
-      ASSERTED because the pipeline is the party that renders it (round 6's
-      CD-3; that spec's checklist entry for the partially published report is
-      the registration on its side)**. **Three prohibitions, each earned by a
+      **`WP-dream-promote-in-workspace`'s report-refusal criterion cases (b)
+      AND (a) — where the `accounting.reason` and `report.reason` channels'
+      neutralisation is ASSERTED, because the pipeline is the party that renders
+      each and this spec's composer interpolates neither (round 6's CD-3 for
+      case (b); case (a) added 2026-08-30 with `report.reason`'s own row, PR #42
+      round 1's finding 5). That spec's checklist entry for the partially
+      published report is the registration on its side for case (b), and its
+      checklist entry for the refused arm's reason is the registration for case
+      (a)**. **Three prohibitions, each earned by a
       finding: no surface may state a neutralisation rule without its ORDER; no
       surface may carry a hand-listed value set, because a list in a citing surface
       goes stale — measured, two did (round (e)); and no surface may restate
@@ -810,15 +990,21 @@ left for a gate to refuse.
       asserts Table N's PROPERTY, and how it is achieved is not asserted.**
       **THE DOMAIN IS THE COMPOSED SECTION, and stating it is round 6's CD-3.**
       This criterion asserts Table N over every channel the SECTION COMPOSER
-      interpolates, on the normal second write and on the fallback. **ONE
-      classified channel is outside that domain and is named here rather than
-      swept under the universal: `accounting.reason` on the `promoted` arm's
-      `published:false` form.** It exists on neither of this criterion's two
-      forms — the write that would have carried the section is the very one
-      that was refused — so it is RENDERED by the pipeline rather than composed
-      here, and its assertion is `WP-dream-promote-in-workspace`'s
-      report-refusal criterion, case (b). **Stretching this universal over a
-      member it cannot exercise was the alternative and was rejected: a
+      interpolates, on the normal second write and on the fallback. **THE
+      CLASSIFIED CHANNELS OUTSIDE THAT DOMAIN ARE NAMED HERE rather than swept
+      under the universal, and NO COUNT IS STATED beside the list** — this
+      spec's own measured lesson, and the one that stood here said ONE while a
+      SECOND was already routed against this very table in the same round (PR
+      #42, round 1's finding 5). They are `accounting.reason` on the `promoted`
+      arm's `published:false` form, and `report.reason` on the `refused` arm.
+      **Neither is a value this composer can interpolate: each is produced by
+      the read or the write that FAILED, after the section was composed** — for
+      the first, the write that would have carried the section is the very one
+      that was refused; for the second, no write published at all (Table R's row
+      R4). Each is therefore RENDERED by the pipeline rather than composed here,
+      and their assertions are `WP-dream-promote-in-workspace`'s report-refusal
+      criterion, case (b) and case (a) respectively. **Stretching this universal
+      over a member it cannot exercise was the alternative and was rejected: a
       universal with an unexercisable member is the shape that made row N4
       false twice.**
       **GREEN:** for every channel Table N classifies as attacker-influenceable
@@ -896,6 +1082,55 @@ left for a gate to refuse.
       in `records` appear in the report's enforcement section, neutralised by
       Table R's rules exactly as this module's own are. Proven RED against a
       module that composes the report from its own records alone.
+- [ ] **The report path is derived once, matched once, and each consumer takes
+      the path Table Z names.** Three cases, asserted apart, because the two
+      gate rounds that produced Table Z landed on all three.
+      **(a) DERIVATION (rows Z1 and Z2).** For every `reports_dir` value
+      `readVaultLayout` can RETURN, a full `promote()` run completes **without
+      throwing** — including a run where the brain wrote nothing. The case list
+      is the five values row Z2 measures: `reports/dreams/`, `reports//dreams`,
+      `.`, `./reports`, `reports/./dreams`. **It may NOT contain
+      `/reports/dreams`** — `isSafeRelativePath` rejects a leading `/`, so that
+      key falls back to the built-in default and a case built on it exercises
+      the default and asserts nothing about the derivation. Where the derived
+      path is admitted by `WP-dream-promote-module`'s row C9 the report
+      publishes at it; where C9 denies it the run refuses and the complete
+      record comes back in `report.record` (Table R, row R4) — **both branches
+      are outcomes, and neither is a throw.** **RED against an implementation
+      that drops empty segments ALONE**, which is what the tree carries: the
+      three `.`-bearing values throw in the primitive. **Separately RED against
+      one that drops nothing**, where the two separator-bearing values throw.
+      **Separately RED against one that substitutes the built-in default** for a
+      value carrying an empty or `.` segment, which silently retargets the
+      user's reports to a directory they did not configure.
+      **(b) IDENTITY AND COLLISION (rows Z3 and Z4).** With two delta records
+      whose paths fold to one key — **constructed so the case does not depend on
+      the host filesystem's case sensitivity**, since the primary development
+      volume cannot hold both spellings — **neither becomes the report body**:
+      both appear in `refused[]` with a reason naming the collision, `report`
+      takes Table R's fallback, `report.preserved` is empty, and **every delta
+      record has EXACTLY ONE carrier across `promoted[]`, `redacted[]`,
+      `refused[]` and the `report` arm.** **RED against the predicate the tree
+      carries**, where both records match, `reportBody` is assigned twice and
+      BOTH records end with NO carrier — measured, and the state `promote()`
+      throws for one branch earlier reached without the throw. **Separately RED
+      against a first-match-wins implementation**, which produces a body and
+      leaves the collision unnamed. **Separately RED against one that throws**,
+      which loses the enforcement record for every other path in the run.
+      **(c) AUTHORITY (row Z5).** On a run where the matched body's spelling
+      differs from the derived one: the record's report-path mentions name the
+      BODY's path; the second write targets the BODY's path with `expect` set to
+      the first write's returned buffer; the fallback's base read AND its write
+      target the DERIVED path; and `report.rel` carries the body's path on
+      `promoted` and the derived path on `fallback` and `refused`. **RED against
+      an implementation that passes the derived path to the record composer** —
+      the body's refusal line then names a file the brain never wrote, which is
+      the direction the round-2 gate proposed and row Z5 rejects. **Separately
+      RED against one whose fallback targets the body's path**, where a
+      brain-chosen spelling decides where the run's record lands in the user's
+      vault. **Separately RED against one that omits `rel` from any arm**, which
+      leaves `WP-dream-promote-in-workspace`'s row G8 with no source for the
+      path it commits.
 - [ ] Idempotence: `N/A — this package extends a module, not a command, and
       writes nothing outside the repo.` What it ships in its place is Table R's
       partition: every fallback case preserves both values or refuses and

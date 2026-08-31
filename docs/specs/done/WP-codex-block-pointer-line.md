@@ -1,15 +1,25 @@
 ---
 id: WP-codex-block-pointer-line
 title: Give the Codex block a constant pointer line to the live digest, and document the Claude/Codex staleness asymmetry
-status: Draft
+status: Superseded
 model: sonnet
 size: S
 depends_on: [WP-digest-stable-volatile-split]
-adrs: [ADR-0004, ADR-0031, ADR-0039]
+adrs: [ADR-0004, ADR-0031, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-codex-block-pointer-line: the degraded tier, stated honestly
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
@@ -41,12 +51,12 @@ not a stable surface, and Codex requires the user to trust new hooks interactive
 - the **volatile** half arrives only if the user has trusted the hook, and otherwise is
   **absent** — not stale, absent.
 
-That asymmetry is an owner ruling (D2, D3), recorded in ADR-0039 §3, and this WP does
+That asymmetry is an owner ruling (D2, D3), recorded in ADR-0040 §3, and this WP does
 **not** try to close it. What it does is stop the absence from being *silent*: the
 block gains a constant line naming the live digest path, so a Codex session can be
 told where the current context is and can read it if the user asks.
 
-**Why a constant line and not a timestamp.** ADR-0039's Alternatives rejects a
+**Why a constant line and not a timestamp.** ADR-0040's Alternatives rejects a
 `rendered: <ISO>` stamp explicitly: it would make every `sync` produce different block
 bytes, so `applyManagedBlock` would report `changed` on every run and the repo's
 idempotence invariant ("running twice = zero changes") would be false. Day granularity
@@ -182,7 +192,7 @@ of ADR-0031's seven triggers fire; the apportionment it depends on is decided in
 
 - **F6 is the one that will bite.** Any instinct to add "as of \<date\>" must be
   resisted — it breaks idempotence, which CI and the acceptance criteria both check.
-  ADR-0039 rejected the timestamp explicitly; the reason is recorded there.
+  ADR-0040 rejected the timestamp explicitly; the reason is recorded there.
 - **Do not emit the pointer into the Claude block (F1).** Claude Code imports the
   volatile half; a pointer line there would be noise telling the model to read a file
   it has already been given.
@@ -256,10 +266,10 @@ grep -n "Latest daily log\|\[!warning\]" tests/golden/codex-adapter/AGENTS.md
 ## Out of scope (do NOT do these)
 
 - Building anything on Codex's undocumented `codex-rs` hooks engine, or changing how
-  `hooks.json` is written. It is not a stable surface (ADR-0039 §3).
+  `hooks.json` is written. It is not a stable surface (ADR-0040 §3).
 - Closing the Claude/Codex asymmetry. It is an accepted, documented outcome (owner
   rulings D2, D3).
-- Adding a timestamp or freshness stamp anywhere in any block (ADR-0039 Alternatives).
+- Adding a timestamp or freshness stamp anywhere in any block (ADR-0040 Alternatives).
 - Changing `renderDigest`, the apportionment, or `DigestCaps` —
   `WP-digest-stable-volatile-split` owns those.
 - Merging `AGENTS.override.md` automatically. The manual-merge notice stands.

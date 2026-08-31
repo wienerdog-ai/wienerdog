@@ -204,16 +204,28 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     await dream.run(['--yes'], { skipContainmentProbe: true, now: NOW });
     assert.equal(commitCount(adopted), before + 1, 'exactly one dream commit');
 
-    const tracked = git(adopted, ['ls-files']);
-    assert.ok(tracked.includes('06-Identity/adopted-fact.md'), 'mapped Tier-3 identity note committed');
-    assert.ok(tracked.includes('05-Daily/2026/07/2026-07-03.md'), 'mapped Tier-1 nested daily committed');
+    // ASKED OF HEAD, NOT THE INDEX (Table W row W1). The run does not touch the
+    // user's index — a total ranging over the run's OWN acts, its own git
+    // invocations and its own file writes (row W1(a) defines the scope) — so
+    // `git ls-files` answers a question about their staging area rather than
+    // about what this run committed.
+    const committed = git(adopted, ['ls-tree', '-r', '--name-only', 'HEAD']);
+    assert.ok(committed.includes('06-Identity/adopted-fact.md'), 'mapped Tier-3 identity note committed');
+    assert.ok(committed.includes('05-Daily/2026/07/2026-07-03.md'), 'mapped Tier-1 nested daily committed');
     assert.ok(fs.existsSync(path.join(adopted, 'reports/dreams', `${DATE}.md`)), 'mapped report exists');
 
-    // 7. git revert cleanly undoes the whole dream run.
+    // 7. `git reset` then `git revert <sha>` cleanly undoes the whole dream run
+    //    (Table W row W4). The index still describes the pre-run HEAD, so the
+    //    revert REFUSES rather than applying in part until the reset re-syncs it
+    //    — the loudness limb, asserted here rather than assumed.
     const sha = git(adopted, ['rev-parse', 'HEAD']).trim();
+    assert.throws(() => git(adopted, ['revert', '--no-edit', sha]), /revert failed|local changes/,
+      'the revert REFUSES before the reset — loudly, not in part');
+    git(adopted, ['reset', '-q']);
     git(adopted, ['revert', '--no-edit', sha]);
     assert.equal(fs.existsSync(path.join(adopted, '06-Identity/adopted-fact.md')), false);
     assert.equal(fs.existsSync(path.join(adopted, '05-Daily/2026/07/2026-07-03.md')), false);
+    // Clean AFTER the reset, which is what re-synced the index.
     assert.equal(git(adopted, ['status', '--porcelain']).trim(), '', 'working tree clean after revert');
   } finally {
     console.log = origLog;

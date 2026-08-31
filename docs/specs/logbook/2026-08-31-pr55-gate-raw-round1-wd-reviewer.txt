@@ -1,0 +1,183 @@
+GATE: PR review, spec-fidelity merge gate (wd-reviewer)
+ROUND: 1
+TIP: 42056d6569f713af9d10936ac728027d9f357ba9
+READ-ONLY CHECK: git status --porcelain empty before and after ("CLEAN-END" confirmed) — run valid.
+RAW OUTPUT, RELAYED VERBATIM. (Archived late: round 2 could not certify findings
+7, 8, 11, 12 and 13 because this file did not exist. That is the gap this file closes.)
+
+---
+
+## EXECUTED
+
+Read-only review, WIENERDOG_LOADER_NOOP=1 exported on every call. No wienerdog
+install/init/sync/setup command was run, HOME was never set. git status
+--porcelain was empty before and empty after — the run is valid.
+
+Everything below is from commands I ran myself on tip 42056d6, not from the PR body:
+
+  npm test                     -> 2298 tests, 2288 pass, 1 fail, 9 skipped, exit non-zero.
+                                  The single failure is tests/integration/adopt-e2e.test.js:72,
+                                  failing inside resolvePinnedSpawn because a real `claude` on
+                                  this machine's PATH defeats the test's temp-bin pin — raised in
+                                  spawnBrain before any pipeline logic in this diff runs.
+                                  Environmental; matches the PR's measured +0 claim in shape.
+  npm run lint                 -> passed (markdownlint 0 errors, shellcheck ran, frontmatter
+                                  check passed; PSScriptAnalyzer skipped — no pwsh locally)
+  --test-name-pattern
+    "dream-pipeline"           -> 139/139 pass
+    "dream-validate"           -> 186/186 pass
+    "claim-1-pipeline" /
+    "claim-2b-pipeline"        -> exit 0, and the patterns are NON-VACUOUS — matching tests exist
+                                  at tests/unit/dream-pipeline.test.js:170,242,261
+  the four grep steps          -> all exit 0
+  boundary-check.js            -> exit 0
+
+I did not re-run the PR's RED mutations (that would write to the repo).
+
+# REQUEST-CHANGES
+
+Boundary is clean, the contract work is unusually good, and the two amendments
+hold. The blockers are all one shape: five acceptance criteria are implemented in
+src/ and asserted by nothing — including the two the spec's own history says were
+lost once already.
+
+## Blockers
+
+1. [criteria] Row G11's report-refusal criterion is entirely unasserted — both
+   cases. src/cli/dream.js:1112-1123 implements the delivery and the
+   neutralisation; tests/ contains ZERO occurrences of report.reason,
+   report.accounting.reason, accounting.published, "the complete record of this
+   run follows", or "could not be written to your vault". The criterion pins its
+   fixture content literally ("at least token=abcdefghijkl AND client_secret:
+   abcdefghijkl, because a prefix-shaped secret survives the sanitiser intact")
+   and demands a GREEN plus a RED against a pipeline that renders raw for EACH arm
+   separately. Nothing in the suite would go red if neutralise() were deleted from
+   either call site. This is registered twice in the Mirrored Surface Checklist.
+   Add both cases with the pinned fixture strings.
+
+2. [criteria] Row G10's registry criterion is unasserted at pipeline level.
+   src/cli/dream.js:1019-1034 implements it. recordSkills / skill-registry appears
+   in NO pipeline test and NO integration assertion. Meanwhile
+   tests/unit/dream-validate.test.js:575,2369 still exercise recordSkills and pass.
+   That is precisely the shape the criterion names: "Proven RED against a pipeline
+   that never calls recordSkills — the failure mode round 2 found, where the
+   validator's own unit test still passes while production registration is dead."
+   Green tests, unproven product. Needs: a promoted new SKILL.md yielding a
+   state/skill-registry.json entry with id/created from the decided bytes, the
+   REDACTED-acceptance case, and the three negative cases.
+
+3. [criteria] Row G8's report-path-on-partial-publish clause is unasserted.
+   src/cli/dream.js:945-947 commits the report on `promoted` and `fallback`. No test
+   constructs report.outcome === 'promoted' with accounting.published === false.
+   The decided-bytes criterion requires that case explicitly, plus RED against
+   skipping the path and separately RED against manufacturing the missing section.
+
+4. [criteria] Row G5's only-copy teardown exception is unasserted.
+   src/cli/dream.js:929-931 sets retainWorkspace on a promote() throw.
+   tests/unit/dream-pipeline.test.js:310 covers only the reap exception; :325
+   asserts the success path tears down. Nothing proves the only-copy workspace
+   survives.
+
+5. [criteria] Row G4's REDACTED case is unasserted as its own case.
+   :595 asserts the withheld deferral; :605 asserts a CLEAN run marks its
+   transcript processed. Neither is a redacted run. A clean run cannot discriminate
+   a correct implementation from one that defers on `redactions`.
+
+6. [criteria] The counts criterion's discriminating input is missing.
+   :678 runs the default fixture and asserts "2 notes, 0 skills". The criterion
+   requires a run whose brain writes "a note, a file under the skills directory
+   that is NOT SKILL.md, a deletion, and the report", and names RED against an
+   implementation that counts only SKILL.md — with zero skills in the fixture,
+   that RED cannot fire. The reports/warnings.md clause is also unasserted.
+
+## Residuals
+
+7.  [criteria] Warnings case (b) is missing. :479,489,511,528 cover (e), (a), (c)
+    and the stray-edit clause. Case (b) — "the same for a write-if-absent write on
+    a fully idle run that makes no commit at all" — has no test;
+    tests/integration/dream.test.js:915 asserts the idle write itself but never
+    that the file then rides a later run's commit. The spec calls (a) and (b) "the
+    ones an authorship test fails", so (b) is not decorative. Case (d) is covered
+    only transitively (:508 deep-equals against the on-disk file rather than
+    against a direct composeWarnings(ledger) render).
+
+8.  [criteria] The retired-heading criterion's output half is unasserted.
+    tests/integration/dream.test.js:329 asserts the new "## Refused by policy
+    (promotion enforcement)". Nothing asserts the criterion's other half — that
+    "## Reverted by orchestrator (policy enforcement)" appears in neither the
+    committed report nor the run's output. The verification grep covers only
+    validate.js source. (tests/unit/dream-skill-structure.test.js:101 still asserts
+    the retired string in skills/wienerdog-dream/SKILL.md — that is the follow-up
+    the spec deliberately carries openly, not a defect.)
+
+9.  [contract] neutralise() is duplicated across two files with no single owner.
+    src/cli/dream.js:286-289 re-implements src/core/dream/promote.js:598-600
+    verbatim, including a re-stated version of Table N's order rationale.
+    promote.js does not export it and is out of boundary here, so the implementer
+    had no in-boundary alternative — which is exactly why this is a spec finding,
+    not an implementer one. One security contract with two independent code
+    carriers is the mirror-drift class ADR-0031 exists to catch. Route to
+    wd-architect.
+
+10. [contract] commitNamedSet may not commit the decided bytes on a vault with
+    .gitattributes. src/cli/dream.js:234: git hash-object -w --path <rel> --stdin.
+    --path makes git apply that path's clean filter and eol/text attributes to the
+    piped buffer, so in a vault carrying `* text=auto` or any filter, the committed
+    blob is not byte-equal to m.bytes — the exact property row G8 and Table S
+    require. The mode is looked up separately via ls-tree, so --path buys nothing
+    else here. Either drop --path or record filter application as a deliberate
+    "Decisions made" entry.
+
+11. [quality] Dead code: reportRels. src/cli/dream.js:948-950 constructs a Set
+    that is never read anywhere in the file. Remove it, or wire it to whatever it
+    was meant to guard.
+
+12. [quality] The teardown exception is wider than row G5's named one.
+    src/cli/dream.js:929-931 sets retainWorkspace = true on ANY throw out of
+    promote(), not only the only-copy preservation abort. A programming error
+    inside promote() then leaks a workspace tree nothing ever cleans, in a package
+    whose iron rule is that nothing outlives the job. Conservative direction, but
+    broader than the contract; narrow it to the abort's signature or record it as
+    a deliberate decision.
+
+13. [quality] A durable-evidence narrowing that no surface names. The retired
+    validator preserved a quarantine copy for BINARY and non-lossless-UTF-8 content
+    before withholding it. promote() now refuses both BEFORE the gate
+    (src/core/dream/promote.js:1171-1179) with no preservation, and the new gate's
+    JSDoc (src/core/dream/validate.js:945-947) correctly defers to it. Under
+    promotion the brain's unscannable note therefore reaches no durable artifact
+    and is destroyed with the workspace. promote.js is Done and out of boundary, so
+    this is not fixable here — but it is the same class Table V row V3 was extracted
+    to catch, and the TOCTOU logbook's own rule applies to it and was not applied.
+    Route to wd-architect.
+
+14. [contract] Table V row V1 and row G12 disagree about the changed-extract
+    record. V1 says Step 1 "deletes an expected extract whose content changed, and
+    RECORDS each as an out-of-vault violation", and assigns that to row G12. Row
+    G12 keeps only the fail-loud abort for that case and preserves
+    enumerate-delete-record for UNEXPECTED writes alone. The implementation follows
+    G12 — so the code is right and V1's "Inherited by" cell is the stale mirror.
+    Route to wd-architect.
+
+## The five judgement calls (abridged in transit; the round-2 raw carries the
+## verified restatements of items 1-5)
+
+1. The two amendments — legitimate, and the sweep really happened. All five
+   registered mirrors of the grep inversion were walked and confirmed.
+2. The EP2 extraction is faithful; all three durable behaviours reachable and
+   still owner-decided. The one carrier change is correctly the only change.
+3. The narrowed abort trigger is a faithful extraction, and H5 checks out —
+   verified at WP-dream-vault-write-primitive.md:217 and asserted at
+   tests/unit/dream-vault-write.test.js:409,438.
+4. The commit contains nothing but the named set and carries decided bytes —
+   with the --path caveat (finding 10). The real-index refresh touching only the
+   named paths is a genuinely good call.
+5. Row G11 is delivered in code and unproven in tests; the neutralisation is
+   correctly placed but unasserted (blocker 1).
+
+Note for a later round: six of my seven criteria findings land on ONE family
+(the criterion exists, the code exists, the assertion does not), all in the same
+two deliverable test files. If a second round lands there again, that is the
+signal that the acceptance-criteria list needs a machine-checkable
+criterion->test-name mapping the way the mirror lists got scripts/mirror-walk.js,
+rather than a third round of patching.

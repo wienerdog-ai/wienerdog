@@ -181,15 +181,18 @@ test('renderDigest prepends opts.quarantineLine; empty/absent leaves the golden 
   );
   // A non-empty quarantine line is prepended, then a blank line, then the body.
   const line =
-    '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling). ' +
-    'Dreaming continues over your other sessions; a skipped file is retried automatically if it changes.';
+    '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over. ' +
+    'Which ones, and why: reports/warnings.md in your vault. Dreaming continues over your other sessions; ' +
+    'a skipped file is retried automatically if it changes.';
   const withLine = renderDigest(FIXTURE, undefined, { quarantineLine: line, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
 test('renderDigest places quarantineLine after alerts and before schedulerLine/updateLine', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
-  const quarantineLine = '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling).';
+  const quarantineLine =
+    '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over. ' +
+    'Which ones, and why: reports/warnings.md in your vault.';
   const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
   const updateLine = '> [!note] update available';
   const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
@@ -430,7 +433,11 @@ test('renderDigest truncates over-MAX_LINES content at a line boundary with the 
   // Many short lines: well under MAX_NOTE_BYTES for the note itself, but pushes
   // the assembled digest well past MAX_LINES — isolates the LINE cap.
   const items = [];
-  for (let i = 0; i < 200; i++) items.push(`- item ${i}`);
+  for (let i = 0; i < DigestCaps.MAX_LINES + 80; i++) items.push(`- i ${i}`);
+  assert.ok(
+    Buffer.byteLength(items.join('\n'), 'utf8') < DigestCaps.MAX_NOTE_BYTES,
+    'fixture must stay under the per-note byte cap so the LINE cap is what truncates'
+  );
   const note =
     '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
     `# Standing instructions\n\n${items.join('\n')}\n`;
@@ -443,10 +450,10 @@ test('renderDigest truncates over-MAX_LINES content at a line boundary with the 
     `expected <= ${DigestCaps.MAX_LINES + 1} lines (cap + marker), got ${lines.length}`
   );
   assert.equal(lines[lines.length - 1], DigestCaps.TRUNCATION_MARKER, 'last line is the marker');
-  // Line-boundary safety: every kept "- item N" line is verbatim from the source
+  // Line-boundary safety: every kept "- i N" line is verbatim from the source
   // (never a partial line split mid-content).
   for (const l of lines) {
-    if (l.startsWith('- item ')) assert.ok(items.includes(l), `unexpected partial line: ${JSON.stringify(l)}`);
+    if (l.startsWith('- i ')) assert.ok(items.includes(l), `unexpected partial line: ${JSON.stringify(l)}`);
   }
 });
 
@@ -532,7 +539,11 @@ test('more than MAX_PROJECTS project dirs render at most MAX_PROJECTS lines plus
 test('with over-cap content AND active banners, all banner lines are still present (prefix preserved)', () => {
   const tmp = tmpVault();
   const items = [];
-  for (let i = 0; i < 300; i++) items.push(`- item ${i}`);
+  for (let i = 0; i < DigestCaps.MAX_LINES + 80; i++) items.push(`- i ${i}`);
+  assert.ok(
+    Buffer.byteLength(items.join('\n'), 'utf8') < DigestCaps.MAX_NOTE_BYTES,
+    'fixture must stay under the per-note byte cap so the LINE cap is what truncates'
+  );
   const note =
     '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
     `# Standing instructions\n\n${items.join('\n')}\n`;
@@ -551,6 +562,25 @@ test('with over-cap content AND active banners, all banner lines are still prese
   assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'truncation marker present');
   const lines = digest.split('\n');
   assert.ok(lines.length <= DigestCaps.MAX_LINES + 1, 'overall line cap still enforced with banners active');
+});
+
+test('a real-vault-sized identity body (205+ lines) is NOT truncated (WP-digest-line-cap-raise)', () => {
+  const tmp = tmpVault();
+  // 205 lines is the measured uncapped body of the maintainer's live vault
+  // (2026-08-30) — the size that the old 120-line cap cut mid-Preferences,
+  // dropping ## Goals and ## Standing instructions entirely.
+  const items = [];
+  for (let i = 0; i < 170; i++) items.push(`- i ${i}`);
+  const note =
+    '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
+    `# Standing instructions\n\n${items.join('\n')}\n`;
+  fs.writeFileSync(path.join(tmp, '06-Identity', 'instructions.md'), note);
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+  assert.ok(digest.split('\n').length > 200, 'fixture renders past the old 120-line cap');
+  assert.ok(!digest.includes(DigestCaps.TRUNCATION_MARKER), 'no truncation at real-vault size');
+  assert.ok(digest.includes('## Standing instructions'), 'the last identity section survives');
+  assert.ok(digest.includes('- i 169'), 'the last line of the last identity note survives');
 });
 
 // -------------------------------------------------------------------------
@@ -1098,7 +1128,7 @@ test('framing: no other emitter opens a line with the marker, and the block is c
     identityApprovals: approvals(tmp),
     profile: allowAll(),
     alerts: [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }],
-    quarantineLine: '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped.',
+    quarantineLine: '> [!warning] Wienerdog: 1 session transcript(s) are being skipped and will not be dreamed over.',
     schedulerLine: '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active.',
     updateLine: '> [!note] A newer Wienerdog is available.',
     secretQuarantine: ['2026-07-17-leak.md'],
@@ -1320,7 +1350,7 @@ test('AC4 — the banner template and cap constants are unchanged; entries keep 
     line.indexOf('profile.md') < line.indexOf('daily-summary'),
     'identity entries precede the daily entry — existing list order preserved'
   );
-  assert.equal(DigestCaps.MAX_LINES, 120, 'cap constants unchanged');
+  assert.equal(DigestCaps.MAX_LINES, 400, 'cap constants unchanged by that WP; raised by WP-digest-line-cap-raise');
 });
 
 test('AC4 — under cap pressure WITH a daily entry, both caps hold and the marker is retained', () => {
@@ -1331,13 +1361,12 @@ test('AC4 — under cap pressure WITH a daily entry, both caps hold and the mark
   writeDailyRaw(tmp, MALFORMED_DAILY); // puts `daily-summary` in the prefix
   // Fill ALL FOUR identity notes, not just one: each is capped to
   // MAX_NOTE_BYTES (8 KiB) before it joins the digest, so one fat note can
-  // never approach the 32 KiB whole-digest ceiling. Long lines rather than
-  // many short ones, so the bytes that survive the line cap are near the byte
-  // ceiling too — measured 31.7 KiB of 32 KiB here. See the note below on
-  // why the byte path still cannot be driven all the way.
+  // never approach the 32 KiB whole-digest ceiling. Enough short lines per
+  // note that the LINE cap is what trims — measured ~24.5 KiB of 32 KiB here.
+  // See the note below on why the byte path still cannot be driven all the way.
   for (const f of ['profile.md', 'preferences.md', 'goals.md', 'instructions.md']) {
     const note = path.join(tmp, '06-Identity', f);
-    const bulk = Array.from({ length: 60 }, (_, i) => `- ${f}-${i} ${'x'.repeat(400)}`).join('\n');
+    const bulk = Array.from({ length: 110 }, (_, i) => `- ${f}-${i} ${'x'.repeat(50)}`).join('\n');
     fs.writeFileSync(note, `${fs.readFileSync(note, 'utf8')}\n${bulk}\n`);
   }
 
@@ -1351,8 +1380,8 @@ test('AC4 — under cap pressure WITH a daily entry, both caps hold and the mark
   // The LINE half above is tight: mutating `lineBudget` to drop its prefix
   // reservation turns this test red. The BYTE half below is NOT, and saying so
   // is more useful than implying otherwise. Measured: with all four identity
-  // notes filled to their per-note ceiling AND 60 projects, renderDigest tops
-  // out at ~31.4 KiB against MAX_BYTES = 32 KiB, because MAX_NOTE_BYTES (8 KiB)
+  // notes filled with shorter lines AND 60 projects, renderDigest tops out at
+  // ~24.5 KiB against MAX_BYTES = 32 KiB, because MAX_NOTE_BYTES (8 KiB)
   // x 4 notes cannot reach it and the line cap trims first. Dropping
   // `prefixBytes` from `bodyByteBudget` leaves the whole suite green. Closing
   // that needs either an exported `capDigest` or different caps — neither is in

@@ -87,7 +87,7 @@ User knowledge lives **in the vault** (vendor-neutral markdown by nature); `~/.w
 | Identity digest | Managed block in `~/.claude/CLAUDE.md` between `<!-- wienerdog:begin -->` / `<!-- wienerdog:end -->` | Same block in `~/.codex/AGENTS.md` |
 | Skills (SKILL.md folders — both harnesses natively support this format) | Symlink into `~/.claude/skills/wienerdog-*` (copy on Windows) | `[skills]` entries in `config.toml` |
 | Capture hooks (optional enrichment) | `settings.json`: SessionStart → inject digest; SessionEnd → enqueue | `hooks.json`: SessionStart / Stop command hooks; AGENTS.md-block digest as fallback (≤24h stale) |
-| Session digest | Pre-rendered `~/.wienerdog/state/digest.md` — refreshed by every dream run and by `sync`; the SessionStart hook only cats it (<200ms, no computation) | Same file |
+| Session digest | Pre-rendered `~/.wienerdog/state/digest.md` — refreshed by every dream run and by `sync`; the SessionStart hook injects it only when the managed block is not already carrying the same bytes (<200ms; one string compare, no computation over the vault — ADR-0039) | Same file |
 
 Wienerdog never owns the user's CLAUDE.md/AGENTS.md — it owns one clearly marked region. `uninstall` removes exactly that region. Edits inside sentinels are overwritten by `sync` (documented); edits outside are never touched.
 

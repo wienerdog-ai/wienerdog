@@ -121,7 +121,8 @@ function printLayout(layout) {
 /**
  * Adopt an existing vault in place as THE Wienerdog vault. Gated on a local
  * (non-TCC) path and a git repo (so every night's memory writes are one commit
- * that `git revert` can undo), confirms an inferred folder mapping, then points
+ * you can undo with `git reset` then `git revert <sha>`), confirms an inferred
+ * folder mapping, then points
  * config at the vault, writes the layout, and seeds only MISSING mapped dirs —
  * never overwriting the user's files. Reversible: adopted-vault artifacts are
  * recorded under manifest kinds uninstall skips, so uninstall leaves the vault
@@ -274,7 +275,9 @@ async function run(argv, opts = {}) {
       console.log(
         '\nThis folder is not yet tracked by git.\n' +
           'Wienerdog needs git so a night of auto-written memory is one commit you can undo\n' +
-          'with a single `git revert`. Without it, adopted memory would not be recoverable.'
+          'with two commands — `git reset` then `git revert <sha>` — and if you get that\n' +
+          'wrong, git refuses rather than half-undoing it. Without git, adopted memory\n' +
+          'would not be recoverable.'
       );
     }
 

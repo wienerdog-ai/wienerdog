@@ -1,15 +1,25 @@
 ---
 id: WP-launcher-refusal-banner
 title: Give a launcher-stage refusal its own delivery channel — a code-owned banner file the launcher writes without app-tree code
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: []
-adrs: [ADR-0004, ADR-0024, ADR-0028, ADR-0039]
+adrs: [ADR-0004, ADR-0024, ADR-0028, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-launcher-refusal-banner: a refusal banner the launcher can actually write
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
@@ -40,7 +50,7 @@ of fail-loud was dead too — it spawns the CLI shim, which is unusable when
 `app/current` is exactly what failed. See
 `docs/specs/logbook/2026-08-30-the-banner-channel-inverted-and-nobody-noticed.md`.
 
-**The fix (ADR-0039 §5).** The launcher writes a **refusal banner**: a code-owned,
+**The fix (ADR-0040 §5).** The launcher writes a **refusal banner**: a code-owned,
 fixed-text markdown file at `<core>/state/refusal-banner.md`, using the same
 self-contained, no-app-tree-require discipline `appendRefuseAlert` already uses. A
 later WP (`WP-refusal-banner-delivery`) makes the SessionStart hook and `renderDigest`
@@ -328,7 +338,7 @@ grep -n "clearRefusalBanner" src/cli/run-job.js src/cli/sync.js
 - Bounding or restructuring `alerts.jsonl` / `appendRefuseAlert` — that is
   `WP-launcher-alert-bound`.
 - Making the CLI shim fail with a human message — that is `WP-shim-recovery-message`.
-- Rendering alerts live inside the hook from `alerts.jsonl` (option E1). ADR-0039 §6
+- Rendering alerts live inside the hook from `alerts.jsonl` (option E1). ADR-0040 §6
   retains it as a **documented fallback that is not built**.
 - Changing `refusalText`, `REMEDY_TAIL`, the remedy discriminator, or any verification
   logic in the launcher.

@@ -1,15 +1,25 @@
 ---
 id: WP-managed-block-by-reference
 title: Make the Claude Code managed block a reference to the digest instead of a copy, and de-register the now-redundant SessionStart hook
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: [WP-memory-import-hermetic-canary]
-adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0031, ADR-0032, ADR-0035, ADR-0038, ADR-0039]
+adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0031, ADR-0032, ADR-0035, ADR-0038, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-managed-block-by-reference: the block points at the digest, it does not contain it
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
@@ -27,7 +37,7 @@ warning banners), rendered by `renderDigest` in `src/core/digest.js`:
 **IRON RULE (ADR-0004): Wienerdog is just files.** This WP changes what bytes go into
 one file and removes one hook registration. It adds no process.
 
-**The four defects (ADR-0039 Context, all verified in code).**
+**The four defects (ADR-0040 Context, all verified in code).**
 
 1. **Both channels carry identical bytes.** Measured on the maintainer's machine:
    `digest.md` is 8,764 B, the managed block is 8,812 B of a 12,975 B `CLAUDE.md` —
@@ -46,7 +56,7 @@ one file and removes one hook registration. It adds no process.
    0644 exactly the bytes A5 hardened. ADR-0024 separately names the managed block as
    one of four durable **secret sinks**.
 
-**The fix (ADR-0039 §1, §2).** The ratified rule is:
+**The fix (ADR-0040 §1, §2).** The ratified rule is:
 
 > No unattended job performs a read-modify-write on a file Wienerdog does not own.
 > Freshness is delivered by rewriting a Wienerdog-owned file that the user-owned file
@@ -77,7 +87,7 @@ gate, preserved), and `wienerdog doctor` **checks that the target resolves**.
 `AGENTS.md` (official docs checked 2026-08-30; `openai/codex#17401` is an open feature
 request), so its block keeps the full copy for now. `WP-digest-stable-volatile-split`
 and `WP-codex-block-pointer-line` give Codex its final shape. The resulting
-Claude/Codex asymmetry is accepted and documented (ADR-0039 §3, owner rulings D2/D3).
+Claude/Codex asymmetry is accepted and documented (ADR-0040 §3, owner rulings D2/D3).
 
 ## Current state
 
@@ -119,7 +129,7 @@ shared.applySettings(settingsPath, [['SessionStart', startAbs], ['SessionEnd', e
 Its file header still states the old intent — "The managed block holds the whole digest
 so a Claude Code session has its context even with zero hooks; the SessionStart hook is
 enrichment only (fresher digest between syncs)" — and must be rewritten to match
-ADR-0039.
+ADR-0040.
 
 `src/adapters/shared.js`:
 
@@ -299,7 +309,7 @@ the spot:
 - **Drop emptied groups and emptied events** on removal, exactly as the existing pruner
   does, so `settings.json` does not accumulate `{"hooks":{"SessionStart":[]}}`.
 - **D6 — no timestamp in the block, ever.** A `rendered:` line was considered and
-  rejected in ADR-0039's Alternatives: it would make every `sync` produce different
+  rejected in ADR-0040's Alternatives: it would make every `sync` produce different
   block bytes, breaking the repo's idempotence invariant ("running twice = zero
   changes"). The block must be a pure function of the digest's path.
 - **D2 — the import line must survive markdown.** Emit it as a bare line. Do not indent

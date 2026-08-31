@@ -22,9 +22,14 @@ starts something that keeps running, it is wrong.
   `docs/runbooks/codex-review.md`, "When it runs" — and the work
   package is finished only when both are clean or every finding has a
   disposition. Running them is yours; merging is the maintainer's.
-- Touch ONLY files listed in the spec's Deliverables table. CI rejects PRs
-  that touch unlisted files. Found something else broken? Note it under
-  "Discovered issues" in the PR body; do not fix it.
+- Touch ONLY files listed in the spec's Deliverables table, plus a small fixed
+  set that never needs listing: **your spec file itself** (you flip its
+  `status:` — see Definition of done), `package-lock.json`,
+  `memory/lessons/inbox.md`, and anything under `docs/specs/logbook/`. That set
+  is decided by `scripts/boundary-check.js`, which is also the CI check — read
+  it rather than any restatement if the two ever disagree. CI rejects PRs that
+  touch anything else. Found something else broken? Note it under "Discovered
+  issues" in the PR body; do not fix it.
 - Ambiguity → choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 - `docs/GLOSSARY.md` names are canonical. Never invent synonyms for vault,
