@@ -1,0 +1,32 @@
+
+  Round-4 fixes 1 and 2 are genuinely complete. Fix 3 adds deterministic branch checks, but its forced-CLEAN technique is unsafe. The test-
+  channel inventory includes the :613 decline correctly; paired CLEAN/LIVE/malformed-result tests plus invocation counts prevent a merely
+  consulted-but-ignored probe from passing.
+
+  1. The post-confirm manifest reload can execute a plan the user never approved.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:351 (lines 351–367)
+     Scenario: the early manifest produces plan A, which the user confirms. A concurrent sync or edit changes it to plan B. Uninstall
+     reloads B and passes it to reverse() without disclosing or confirming B. The scheduler probe can still answer CLEAN because it says
+     nothing about newly added non-scheduler deletion entries. Reload failure behavior is also unspecified.
+     Impact: files absent from the disclosed plan can be deleted after confirmation. The reload improves freshness but breaks the command’s
+     consent boundary.
+     Recommendation: after confirmation, reload and compare against the exact disclosed snapshot. If loading fails or the manifest differs,
+     abort and require the user to rerun—or display the new plan and reconfirm before probing. Probe only after a stable confirmed snapshot,
+     then reverse that same snapshot.
+
+  2. The forced-CLEAN smoke verification can reproduce issue #169.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:813 (lines 813–832)
+     Scenario: on a maintainer machine with live registrations, the probe client is repointed to a stub that falsely reports CLEAN. The
+     smoke script consequently exports WIENERDOG_ALLOW_REAL_SCHEDULER=1 and runs its real teardown/uninstall lifecycle against the shared
+     scheduler identifiers.
+     Impact: the prescribed local verification can unload the maintainer’s real dream and catch-up jobs—the original incident.
+     Recommendation: force the CLEAN branch only with scheduler mutation independently neutralized, such as WIENERDOG_LOADER_NOOP=1 with its
+     precedence asserted, or on a disposable runner whose domain was independently verified clean. Explicitly prohibit a false-CLEAN stub
+     with real mutation enabled.
+
+─ Worked for 1m 30s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…

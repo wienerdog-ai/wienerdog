@@ -1,0 +1,21 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship: the revised uninstall can delete a plan the user never approved, and the prescribed forced-CLEAN verification can reproduce the live-scheduler incident.
+
+Findings:
+- [high] Post-confirm reload invalidates the user's approved deletion plan (docs/specs/WP-scheduler-mutation-home-authority.md:353-356)
+  The interactive path discloses a plan from the early manifest, waits for consent, then reloads the manifest and passes that newer object to `reverse()`. A concurrent `sync` or edit during the prompt can therefore add deletion entries that were never shown to the user. A concurrently missing manifest is also unsafe: the current `manifestLib.load()` converts ENOENT into an empty manifest, so an authorized uninstall can proceed to recursive mechanics cleanup without replaying scheduler entries, potentially orphaning live jobs. This is distinct from the accepted probe-to-delete race: it violates the existing disclose-before-consent invariant and is not acknowledged as a residual.
+  Recommendation: After confirmation, reload and compare the manifest with the disclosed snapshot. If it changed, recompute and redisplay the complete plan and require confirmation again; if it is missing, corrupt, or partially written, abort. Reload dependent state such as `vaultPath` from the same accepted snapshot.
+- [high] Forced-CLEAN verification grants real authority against an unverified live domain (docs/specs/WP-scheduler-mutation-home-authority.md:813-832)
+  The prescribed local test repoints the read-only probe to a stub that always reports CLEAN and then runs the full smoke lifecycle. That false CLEAN causes Table C to export `WIENERDOG_ALLOW_REAL_SCHEDULER=1`, selecting the real-spawn branch despite redirected HOME. On a maintainer account with live Wienerdog registrations, the smoke run can replace and unload the real per-user-global identifiers—the exact issue #169 failure. The preceding row-4 checks do not protect this run because the explicit marker overrides the default refusal.
+  Recommendation: Require forced branch verification to run in a disposable OS-user scheduler namespace or with `WIENERDOG_LOADER_NOOP=1`, and assert that no real scheduler client was invoked. Do not allow a fabricated CLEAN result to authorize mutations on a maintainer's live domain.
+
+Next steps:
+- Specify stable manifest/consent semantics and add concurrent-change, missing-manifest, and corrupt-reload tests.
+- Replace the forced-CLEAN verification instructions with a mutation-neutralized or isolated procedure.
+
+Codex session ID: 01a05a07-6881-7312-a4de-d5f2ff1e0569
+Resume in Codex: codex resume 01a05a07-6881-7312-a4de-d5f2ff1e0569
