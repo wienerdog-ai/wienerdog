@@ -152,7 +152,14 @@ const INDEX_SAFE_GIT = new Set([
 function gitVerb(args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree') { i++; continue; }
+    // `--namespace` MUST be here even though it is not a redirect: it CONSUMES
+    // a value, and a value that happens to spell an allowlisted verb was
+    // resolved AS that verb — the unsafe direction. Measured: `git --namespace
+    // log update-index --assume-unchanged a.txt` resolved to `log`, which is
+    // allowlisted, and the write went unflagged. The general "an incomplete
+    // verb resolver fails safe" claim is RETRACTED: it holds only while the
+    // consumed value does not collide with an allowlisted verb name.
+    if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace') { i++; continue; }
     if (a.startsWith('-')) continue;
     return a;
   }
@@ -232,21 +239,44 @@ function watchIndexWrites(vault) {
     // git itself accounts for it. A non-zero probe means git found no
     // repository at all, which is a definitive answer rather than a gap: with
     // no repository there is no index to write.
+    // ASK GIT THE CONTRACT'S OWN QUESTION: WHICH INDEX FILE WOULD THIS WRITE?
+    //
+    // The question used to be "which REPOSITORY does this call reach", and that
+    // was one question short of the scope this enforces. `GIT_INDEX_FILE` is
+    // precisely what decouples the index from the git dir — so a call can
+    // select another repository and still write the user's index. Measured
+    // 2026-08-31: `GIT_INDEX_FILE=<vault>/.git/index git -C <other> update-index
+    // --chmod=+x README.md` moved the vault's entry from `100644` to `100755`
+    // while `rev-parse --absolute-git-dir` reported `<other>/.git`, so a
+    // repository-keyed gate never classified it. The same mis-keying left a
+    // linked worktree's main repo unclassifiable; both close here together.
+    //
+    // `--git-path index` is the row's own locator (W1(d1)) and it accounts for
+    // every route in ONE answer — `GIT_INDEX_FILE`, `--git-dir`, worktree
+    // layout. That also RETIRES the separate private-index exemption: a call
+    // carrying a private `GIT_INDEX_FILE` resolves to that private path, which
+    // is not the user's index, so it falls out of scope by the same test rather
+    // than by a second arm that could disagree with the first.
     const probe = spawnPinnedSync('git', getPaths(), {
-      args: ['-C', o.cwd, ...globalOpts(args), 'rev-parse', '--absolute-git-dir'],
+      args: ['-C', o.cwd, ...globalOpts(args), 'rev-parse', '--path-format=absolute', '--git-path', 'index'],
       env: o.env, platform: process.platform, encoding: 'utf8',
     });
-    const landedIn = probe.status === 0 ? realish(String(probe.stdout).trim()) : null;
-    const reachesVault = landedIn !== null && under(landedIn, vaultGitDir);
-    if (reachesVault) {
+    // `--path-format=absolute` (git >= 2.31) so there is NO resolution base to
+    // get wrong. A bare `--git-path` answers relative to the invocation's
+    // EFFECTIVE cwd — after its own `-C` composition — not to `o.cwd`, and
+    // resolving against `o.cwd` silently mislocated the index for a call
+    // carrying its own `-C`. Caught by the repeated-`-C` regression cell going
+    // green: ask git for an absolute answer rather than reconstructing one.
+    const wouldWrite = probe.status === 0 ? realish(String(probe.stdout).trim()) : null;
+    // NON-VACUITY EVIDENCE ONLY — deliberately NOT the classifier. This says the
+    // seam observed real git calls in the vault; it makes no totality claim, so
+    // it needs no probe of its own.
+    if (under(realish(o.cwd), vaultReal)) seen.push(gitVerb(args));
+    if (wouldWrite !== null && wouldWrite === userIndex) {
       const verb = gitVerb(args);
-      seen.push(verb);
       if (!INDEX_SAFE_GIT.has(verb)) {
         const gif = o.env && o.env.GIT_INDEX_FILE;
-        const priv = gif ? realish(gif) : null;
-        if (!priv || priv === userIndex || under(priv, vaultReal)) {
-          violations.push(`git ${args.join(' ')}  [cwd=${o.cwd}, GIT_INDEX_FILE=${gif || '<unset>'}]`);
-        }
+        violations.push(`git ${args.join(' ')}  [cwd=${o.cwd}, GIT_INDEX_FILE=${gif || '<unset>'}, would write ${wouldWrite}]`);
       }
     }
     return spawnPinnedSync('git', getPaths(), {

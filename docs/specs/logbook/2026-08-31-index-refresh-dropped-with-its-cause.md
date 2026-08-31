@@ -293,3 +293,26 @@ not a patch.** The fifth patch was available and cheap; what was missing was the
 surface that would have made the first one checkable. When the same contract is
 hit round after round, extract it — and record the cause that leaves with the
 mechanism, or the next reader cannot tell a retirement from a weakening.
+
+## REGISTERED, NOT FIXED — the run does not pin its git environment
+
+Recorded here on the owner's ruling of 2026-08-31 so it is carried openly
+rather than discovered later, and explicitly **not** repaired in that round.
+
+`commitNamedSet` builds its private-index environment by spreading the ambient
+one — `{ ...process.env, GIT_INDEX_FILE: tmpIndex }` (`src/cli/dream.js`, the
+block opening `THE USER'S INDEX IS NOT THIS RUN'S PROPERTY`). A user who has
+`GIT_DIR` or `GIT_WORK_TREE` exported at dream time therefore propagates a
+repository redirect into every git invocation the run makes.
+
+**What this is not.** It is not a hole in row W1's enforcement: the seam's
+classifier replays each invocation's own environment, so a redirect carried
+this way is classified exactly as one carried in argv, and the row's contract
+holds either way. That was measured, not assumed.
+
+**What it is.** A question about whether the run should PIN its git environment
+rather than inherit it — product hardening, with its own trade-off (pinning
+overrides a configuration the user set deliberately, which is the same
+objection that retired the `core.hooksPath` proposal in this entry's ruling).
+It belongs to the post-family queue, and it is registered rather than taken
+because a product change must not be adopted under review pressure.

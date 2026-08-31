@@ -276,10 +276,11 @@ it stays as an ordinary uncommitted modification.
   W1 in `WP-dream-promote-in-workspace` is canonical for that, and this bullet
   states it rather than deciding it. The run assembles its commit in a private
   index outside the vault's `.git` and publishes it with `commit-tree` +
-  `update-ref`, and it **never writes, refreshes or resets the user's own git
-  index — in any run state** — a statement about the run's OWN acts, its own
-  git invocations and its own file writes (row W1(a) defines the scope); a hook
-  the user has set to fire on ref updates is their own code, not the run's. So
+  `update-ref`, and it **never writes, refreshes, resets or otherwise touches
+  the user's own git index — in any run state** — a statement about the run's
+  OWN acts, its own git invocations and its own file writes (row W1(a) defines
+  the scope); a hook the user has set to fire on ref updates is their own code,
+  not the run's. So
   after a run HEAD has advanced and the index has not: `git status` reports the
   committed paths as staged deletions or reverse modifications and `git diff
   HEAD` shows phantom deletions, while the committed history is correct

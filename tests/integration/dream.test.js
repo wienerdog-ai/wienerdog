@@ -790,7 +790,9 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   //
   // Asserted on the file itself, not on `status` or `diff HEAD`: both are
   // index-mediated, and the run leaves the user's index describing the pre-run
-  // HEAD (the refresh was dropped, owner ruling 2026-08-31), so both report the
+  // HEAD (the refresh was dropped, owner ruling 2026-08-31 — the claim ranges
+  // over the run's OWN acts, row W1(a); a user hook that writes the index
+  // during publish is a stated residual), so both report the
   // whole commit as staged deletions — noise that says nothing about refresh
   // point 2. The precise question is whether point 2 wrote again, and the
   // precise answer is whether the bytes on disk still match the committed ones.
