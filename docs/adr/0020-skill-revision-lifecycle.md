@@ -144,8 +144,9 @@ ownership registry), WP-081 (learnings accumulation + ledger validator), WP-084
 4. **No approval gate; report + git are the rollback story (v1).** Revisions apply
    automatically. Every revision is listed in the dream report with a summary of
    what changed, and surfaced in the next session's digest line. Rollback is
-   vault git (`git revert` / history) — the dream is already one-commit-per-run
-   (ADR-0012), so a revision is reverted like any commit. There is no staged
+   vault git (`git reset` then `git revert <sha>`, or history) — the dream is
+   already one-commit-per-run (ADR-0012), so a revision is undone exactly like
+   any other dream commit, by that same two-command sequence. There is no staged
    queue, no approval command.
 
 5. **No probation cycle (v1).** A revised skill keeps its existing `status`
@@ -185,9 +186,11 @@ channel.
   residual is confidence (brain-asserted at the Tier-3 floor, invariant 3).
 - Skill quality can now drift *down* as well as up: a bad revision is possible.
   We accept this in v1 because (a) revision is gated at the same bar as creation,
-  (b) every revision is reported and digest-surfaced, and (c) git revert is
-  one command. Voyager's "self-verification-or-perf-drop" result (research memo,
-  open question 1) flags that we have no "does the revised skill still work"
+  (b) every revision is reported and digest-surfaced, and (c) undoing the night
+  that carried the revision is two fixed commands — `git reset`, then
+  `git revert <sha>` — which refuse loudly (exit 128) rather than half-apply if
+  the reset is skipped (ADR-0012). Voyager's "self-verification-or-perf-drop"
+  result (research memo, open question 1) flags that we have no "does the revised skill still work"
   check; Wienerdog skills are markdown procedures with no execution harness, so
   such a check has no obvious meaning here. Deferred as a known limitation.
 - LEARNINGS.md being exempt from the Tier-3 numeric floor means an attacker *can*
