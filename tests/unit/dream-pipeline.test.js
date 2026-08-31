@@ -1346,13 +1346,28 @@ test('dream-pipeline: the run does not touch the user\'s git index — at all (r
   }
   assert.match(git(ctx.vault, ['ls-files', '--unmerged']), /CONFLICT\.md/, 'precondition: a real unresolved merge is staged');
 
-  // THE REPRESENTATION MUST SEE FLAGS, NOT ONLY ENTRIES. `--stage` alone is
-  // blind to assume-unchanged / skip-worktree: a run that set one would pass a
-  // `--stage`-only comparison while having written the user's index. `-v`
-  // prefixes each row with its flag letter, so the two together are entries,
-  // modes, stages AND flags.
-  const snapshot = () => git(ctx.vault, ['ls-files', '-v', '--stage']);
-  const before = snapshot();
+  // THE RAW INDEX IS THE ASSERTION; THE PROJECTIONS ARE THE MESSAGE (Table W row
+  // W1). No projection can enforce W1's total: `--stage` had no flag column,
+  // `-v` adds one letter and still misses BOTH an identical-mode-and-sha
+  // re-stage and the `fsmonitor-valid` bit. The enumeration has no last column,
+  // so the comparison is the file's own bytes.
+  //
+  // CONTENT, NEVER STAT METADATA. A read-only `git status` replaces `.git/index`
+  // with a NEW INODE while the content stays byte-identical — comparing stat
+  // data would be a false red.
+  //
+  // `-v` AND `-f` ARE READ SEPARATELY, never combined: their flag letters share
+  // one column, so `-v -f` prints `h` for a path carrying only `fsmonitor-valid`
+  // — indistinguishable from `-v`'s spelling of assume-unchanged.
+  const rawIndex = () => {
+    const f = path.join(ctx.vault, '.git', 'index');
+    return fs.existsSync(f) ? fs.readFileSync(f) : null; // ABSENT is a value
+  };
+  const projV = () => git(ctx.vault, ['ls-files', '-v', '--stage']);
+  const projF = () => git(ctx.vault, ['ls-files', '-f']);
+  const before = rawIndex();
+  const vBefore = projV();
+  const fBefore = projF();
 
   const r = await runDream(ctx);
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
@@ -1372,5 +1387,19 @@ test('dream-pipeline: the run does not touch the user\'s git index — at all (r
   // THE WHOLE INDEX, BYTE-IDENTICAL. Not "the user's entry survived" — that is
   // what the retired mechanism kept claiming while losing a different shape each
   // round. Nothing this run does is allowed to write the index.
-  assert.equal(snapshot(), before, 'the index is untouched');
+  const after = rawIndex();
+  const same = before === null ? after === null : after !== null && after.equals(before);
+  if (!same) {
+    const v = projV();
+    const f = projF();
+    assert.fail(
+      "the run wrote the user's git index (Table W row W1)\n" +
+        `ls-files -v --stage:\n${v}\nls-files -f:\n${f}\n` +
+        (v === vBefore && f === fBefore
+          ? 'BOTH PROJECTIONS COMPARE EQUAL — the change is in index bytes no projection '
+            + 'surfaces (an identical-mode-and-sha re-stage, or an entry flag git does not '
+            + 'print here). Diff the raw file.'
+          : '')
+    );
+  }
 });
