@@ -5,7 +5,7 @@ status: Draft
 model: sonnet
 size: S
 depends_on: []
-adrs: [ADR-0004, ADR-0018]
+adrs: [ADR-0004, ADR-0018, ADR-0031]
 epic: scheduler-domain-safety
 ---
 
@@ -28,14 +28,14 @@ user's OS scheduler: `launchd` on macOS (labels `ai.wienerdog.dream`,
 entire file namespace — and none of the scheduler namespace. A process running
 against a throwaway core still resolves `launchctl bootout
 gui/501/ai.wienerdog.dream` to the *live* user's service. ADR-0018 Decision 2
-(`docs/adr/0018-windows-scheduled-dreaming.md:165-179`) states this invariant and
+(`docs/adr/0018-windows-scheduled-dreaming.md:166-180`) states this invariant and
 records the 2026-07 incident where a temp-`HOME` test boot-out'd a real agent.
 
 `scripts/smoke-install.sh` is the end-to-end install gate: it runs the real CLI
 lifecycle (`init` → `sync` → `doctor` → `safety` → a managed-block drill →
 catch-up teardown → `uninstall`) against a real install in a throwaway `HOME`.
 Its header states the assumption it depends on — *"against a REAL install in a
-throwaway HOME on a clean CI runner, where nothing collides"* (`:8-10`) — and
+throwaway HOME on a clean CI runner, where nothing collides"* (`:10-11`) — and
 **nothing enforces it**. Issue #169: run locally on a maintainer machine with a
 live install, its catch-up teardown loop (`:117-121`) and its `uninstall`
 (`:128`) removed the maintainer's live `ai.wienerdog.dream` and
@@ -83,7 +83,7 @@ safe — is `WP-scheduler-mutation-home-authority` and is **out of scope here**.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | scripts/live-scheduler-probe.sh | the read-only probe; exit codes and prefix argument per Table A |
-| modify | scripts/smoke-install.sh | one preflight block per Table B, placed before the sandbox exports at `:28`; no other change |
+| modify | scripts/smoke-install.sh | **one** contiguous block per Table B — the preflight plus the comment lines documenting its two bypass variables — inserted at the placement Table B fixes. Nothing else in the file changes; in particular the existing header comment (`:1-17`) is **not** edited |
 
 ### Exact contracts
 
@@ -128,18 +128,21 @@ and the verification commands.
 
 | Fact / rule | Value |
 |-------------|-------|
-| Placement | at the top of `scripts/smoke-install.sh`, **before** the sandbox `export HOME=…` block currently at `:28` — so the probe sees the real environment and nothing has been created when it aborts |
-| Bypass conditions | skip the whole preflight when `${CI:-}` is non-empty **or** `${WIENERDOG_SMOKE_I_KNOW:-}` is non-empty. Both are documented in the script's header |
+| Placement | **after `set -euo pipefail` (`:18`) and before the `SB="$(mktemp -d …)"` line currently at `:23`.** This is the single window both this row and the "On live" row below refer to: at abort time no sandbox root exists, no `EXIT` trap is installed (`:24`), and the real `HOME` is still in effect (`:28` has not run). Inserting it anywhere at or after `:23` fails this row even though the `HOME` exports are still ahead |
+| Bypass conditions | skip the whole preflight when `${CI:-}` is non-empty **or** `${WIENERDOG_SMOKE_I_KNOW:-}` is non-empty. Both variables are documented in comment lines **inside this same block**, not in the script's header — the header at `:1-17` is not edited, which keeps the file's diff to one contiguous insertion (Deliverables) |
 | Probe calls | the macOS prefix `ai.wienerdog.` and the Linux prefix `wienerdog-`, both delegated to `scripts/live-scheduler-probe.sh` (Table A). A single call per platform is enough; a caller may pass both prefixes as separate calls |
-| On live (probe exit 1) | abort with exit 1 before creating `$SB`, printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` as the deliberate override |
+| On live (probe exit 1) | abort with exit 1 inside the window this table's Placement row fixes — i.e. before `mktemp -d` runs, so no `$SB` and no `EXIT` trap exist — printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` as the deliberate override |
 | On clean (probe exit 0) | proceed unchanged. Every existing step, check and `ok`/`die` message in the script is untouched |
 | Check count | the preflight does **not** call `ok()`; the script's final `SMOKE PASS — $pass checks.` count is unchanged from today |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (both rows cite Table A / Table B)
-- [ ] Acceptance criteria that assert the exit codes and the bypass conditions
+- [ ] Acceptance criteria that assert the exit codes, the placement window and
+      the bypass conditions
 - [ ] Verification commands (they exercise Table A's exit 0 and exit 1 arms)
+- [ ] The Deliverables note on the one-contiguous-block boundary (it mirrors
+      Table B's Placement and Bypass rows)
 - [ ] Current-state description (the measured `launchctl` exit codes and the
       absent `systemctl`)
 - [ ] The "Exact contracts" prose describing the prefix argument
@@ -183,8 +186,13 @@ and the verification commands.
 - [ ] Running the probe leaves the live scheduler domain byte-for-byte as it was:
       the same registrations are loaded before and after.
 - [ ] `scripts/smoke-install.sh` run with a live registration present, `CI` unset
-      and `WIENERDOG_SMOKE_I_KNOW` unset, exits non-zero **before** creating its
-      sandbox, and its message names issue #169 and the override variable.
+      and `WIENERDOG_SMOKE_I_KNOW` unset, exits non-zero within Table B's
+      Placement window — no `wd-smoke.*` directory is left in `${TMPDIR:-/tmp}`
+      and no `== 1. init …` banner is printed — and its message names issue #169
+      and the override variable.
+- [ ] The inserted block sits after `set -euo pipefail` and before the `mktemp -d`
+      line (Table B, Placement), and both bypass variables are named in comment
+      lines inside that same block; the script's header comment is unmodified.
 - [ ] With `WIENERDOG_SMOKE_I_KNOW=1` (or `CI` non-empty) the preflight is
       skipped and the script's behavior is exactly today's.
 - [ ] The preflight adds no `ok()` call: the script's `SMOKE PASS — N checks.`
@@ -201,11 +209,14 @@ bash -n scripts/smoke-install.sh scripts/live-scheduler-probe.sh
 test -x scripts/live-scheduler-probe.sh
 
 # Table A, LIVE arm (red side): on a machine with a live install this must exit 1
-# and name the services. Assertion, not a number to eyeball.
-! bash scripts/live-scheduler-probe.sh
+# and name the services. NOT written as `! bash …` — a missing or broken script
+# exits 127 and the negation would turn that into a pass, which is exactly the
+# deliverable-absent state this check must catch. Capture rc, assert it is 1.
+bash scripts/live-scheduler-probe.sh; rc=$?; test "$rc" -eq 1
 
-# Table A, CLEAN arm (green side): a prefix that matches nothing must exit 0.
-bash scripts/live-scheduler-probe.sh ai.definitely-absent.
+# Table A, CLEAN arm (green side): a prefix that matches nothing must exit 0 —
+# asserted explicitly, symmetrical with the LIVE arm.
+bash scripts/live-scheduler-probe.sh ai.definitely-absent.; rc=$?; test "$rc" -eq 0
 
 # Table A, no-side-effect arm: the loaded domain is identical before and after.
 # (macOS; on Linux substitute the systemctl listing.)
@@ -216,11 +227,17 @@ diff /tmp/wd-before.txt /tmp/wd-after.txt
 
 # Table B: on a machine with a live registration, the smoke script aborts at the
 # preflight and creates nothing. Run with CI and the override BOTH unset.
+# SAFE ONLY ONCE THE PREFLIGHT EXISTS — see the warning below.
 env -u CI -u WIENERDOG_SMOKE_I_KNOW bash scripts/smoke-install.sh; echo "exit=$?"
 ```
 
 - The last command must exit non-zero with the issue-#169 message and **must not**
   print the `== 1. init …` banner. Paste its full output.
+- **The last command is destructive on the pre-implementation tree.** With both
+  variables unset and no preflight present, it is exactly the run that caused
+  issue #169: it proceeds into the full lifecycle and removes this user's live
+  `ai.wienerdog.*` services. Run it only *after* the preflight block is in place,
+  and never as a "before" measurement.
 - Both arms of the probe were observed on this tree before this spec was written
   (Current state); observe them again on the finished script and paste both, plus
   a red run of the Table B abort with a deliberately broken preflight (e.g. the
@@ -236,7 +253,7 @@ env -u CI -u WIENERDOG_SMOKE_I_KNOW bash scripts/smoke-install.sh; echo "exit=$?
   (ADR-0041), which also wires this script's CI opt-in.
 - Changing any existing smoke-install step, assertion, helper or message.
 - Making the smoke script assert live scheduler registration. Registration stays
-  best-effort and unasserted (`.github/workflows/install-smoke.yml:9-10`).
+  best-effort and unasserted (`.github/workflows/install-smoke.yml:11`).
 - Any change to `tests/scenarios/scheduler-guard.js`, the unit-suite guard, or
   `tests/run.js`.
 - Teaching `wienerdog doctor` about this. It already probes live registrations.

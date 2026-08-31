@@ -19,7 +19,7 @@ throwaway core therefore registers, replaces and boots out the *live* user's
 `ai.wienerdog.*` services.
 
 This is the second recorded instance of that exact class. The first is ADR-0018
-Decision 2 (`docs/adr/0018-windows-scheduled-dreaming.md:165-179`), which stated
+Decision 2 (`docs/adr/0018-windows-scheduled-dreaming.md:166-180`), which stated
 the invariant — *"launchd/systemd/schtasks identifiers are per-user-global, NOT
 HOME-scoped"* — and closed it **for the unit suite only**, with one chokepoint
 (`schedulerSpawn`, `src/scheduler/spawn.js:24-36`) plus an **opt-out** env var
@@ -31,7 +31,7 @@ sets nothing. Run locally on a machine with a live install, its catch-up teardow
 loop (`:117-121`) and its `uninstall` (`:128`) resolved to the maintainer's live
 `ai.wienerdog.dream` and `ai.wienerdog.catchup` and removed both from launchd.
 The script's own header states the assumption that was violated — *"on a clean CI
-runner, where nothing collides"* (`:8-10`) — and nothing enforced it.
+runner, where nothing collides"* (`:10-11`) — and nothing enforced it.
 
 Measured on this tree (HEAD `a6e0803`), from a `mktemp -d` `HOME` with neither
 guard variable set, `schedulerSpawn(['true'])` returns `{status:0}` having really
@@ -85,7 +85,7 @@ developer accident — the sandbox that isolates every file and forgets that
 
 | Option | Why not adopted |
 |---|---|
-| **Guard the script only** (issue #169 fix 1) | Closes the entry point that bit, not the class. The measured leak surface is wider — 16 real mutation attempts from the suite without the guard variable. Adopted **as well**, as `WP-smoke-live-scheduler-preflight`, because it is cheap, needs no ADR, and covers the window before this one ships |
+| **Guard the script only** (issue #169 fix 1) | Closes the entry point that bit, not the class. The leak surface is wider: the issue's reporter measured *"16 real mutation attempts"* from the suite run without the guard variable and with a logging `launchctl` shim on `PATH` — **quoted from the issue, deliberately not re-measured here**, because reproducing it means running the suite unguarded against a live domain. Nothing in this decision depends on the exact number; the qualitative claim it supports is that the smoke script is one entry point among several. Adopted **as well**, as `WP-smoke-live-scheduler-preflight`, because it is cheap, needs no ADR, and covers the window before this one ships |
 | **Marker set by `bin/wienerdog.js`** | Vacuous. The smoke script's entry point *is* `node <repo>/bin/wienerdog.js` — the same file the real CLI uses |
 | **Marker set only by interactive/TTY runs** | The incident ran `WD init --yes --fresh-vault </dev/null`; TTY state is an accident of redirection, not of intent, and it makes CI and `--yes` legitimacy indistinguishable |
 | **Refuse on a dev checkout** (`isDevCheckout(packageRoot())`) | Measured fail-broken: the maintainer's own install is dev-stance (`~/.wienerdog/app/current` → the git checkout), so this refuses his `wienerdog sync` — the very command issue #169 names as the repair. He would set the variable permanently and re-open the hole for exactly the person it bit |
@@ -93,13 +93,21 @@ developer accident — the sandbox that isolates every file and forgets that
 
 ## Reconciliation with the two ADRs this sits between
 
-- **ADR-0028 amendment §3 / Table D — "no environment variable may select a
-  verification path."** Honored, and the direction is what makes it so. Today
-  every value of every variable results in a real mutation; the variables this
-  decision reads can only move an outcome from *mutate* to *refuse*, except the
-  single opt-in, which restores today's behavior and can never produce a state
-  weaker than today's. No verification arm is selected, no check is skipped, and
-  nothing here reads a signal from inside the app tree.
+- **ADR-0028 amendment §3 — stated as it actually reads, not as the broader rule
+  it is easy to remember it as.** ADR-0028 contains no "Table D"; the durable
+  rule is at `docs/adr/0028-scheduler-app-executable-integrity.md:865-870` and is
+  narrower: *"No mechanism may choose between the enforced (prod) and reduced
+  (dev) verification paths on the basis of a signal that an A7-scoped write can
+  produce."* **That rule is not engaged by this decision.** Nothing here chooses
+  between the prod and dev verification arms, or between any two arms; the only
+  question decided is whether a scheduler-mutating argv is spawned at all.
+  Separately, and honestly: `WIENERDOG_ALLOW_REAL_SCHEDULER` **is** a signal an
+  A7-scoped write can produce — ADR-0028 treats `environment.d` / `launchctl
+  setenv` writes as in scope (`:502`, `:523-525`). What bounds that is the
+  marker's ceiling rather than its provenance: its sole effect is to restore
+  exactly the behavior this tree ships today, so no value of it skips a check,
+  selects a verification arm, or reaches any state weaker than today's. Nothing
+  here reads a signal from inside the app tree.
 - **ADR-0035 — "an app-tree write is code execution at the next attended run; do
   not add guard number seven."** Honored by claiming nothing. This decision makes
   **no** security claim, defends against **no** adversary, and does not appear in
@@ -119,9 +127,11 @@ developer accident — the sandbox that isolates every file and forgets that
   that reached the chokepoint at all.
 - **Two legitimate flows must now opt in, and both are attended.** A
   `WIENERDOG_HOME`-relocated install (core outside the passwd home) and
-  `scripts/smoke-install.sh` on a clean CI runner. The smoke script sets the
-  variable only when `$CI` is non-empty, so a local run of it still refuses even
-  past its own preflight — two independent stops for the same accident.
+  `scripts/smoke-install.sh` on a clean CI runner. Neither exists on the tree
+  today: `WP-scheduler-mutation-home-authority` will have the smoke script set
+  the variable only when `$CI` is non-empty, so a local run of it still refuses
+  even past the preflight `WP-smoke-live-scheduler-preflight` will have added —
+  two independent stops for the same accident, both of them work not yet done.
 - **A refusal is a silent-until-read stderr line, not an abort.** Wienerdog
   writes the schedule *file* either way; only the OS registration is skipped.
   That keeps `uninstall` reversible and `init` completable, and it matches how

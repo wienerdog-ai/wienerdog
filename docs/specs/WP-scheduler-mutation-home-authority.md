@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-smoke-live-scheduler-preflight]
-adrs: [ADR-0004, ADR-0018, ADR-0028, ADR-0035, ADR-0041]
+adrs: [ADR-0004, ADR-0018, ADR-0027, ADR-0028, ADR-0031, ADR-0035, ADR-0041]
 epic: scheduler-domain-safety
 ---
 
@@ -27,7 +27,7 @@ sandboxes the entire file namespace and **none** of the scheduler namespace: a
 process running against a throwaway core still resolves `launchctl bootout
 gui/501/ai.wienerdog.dream` to the *live* user's service.
 
-ADR-0018 Decision 2 (`docs/adr/0018-windows-scheduled-dreaming.md:165-179`) named
+ADR-0018 Decision 2 (`docs/adr/0018-windows-scheduled-dreaming.md:166-180`) named
 this invariant after the 2026-07 incident and closed it **for the unit suite
 only**: every real scheduler mutation was routed through one chokepoint,
 `schedulerSpawn` (`src/scheduler/spawn.js:24-36`), and an **opt-out** environment
@@ -37,8 +37,9 @@ the test runner sets it (`tests/run.js:7`).
 Issue #169 is the second instance. `scripts/smoke-install.sh` runs the real CLI
 lifecycle under a redirected `HOME` and is not the test runner, so it set
 nothing; run locally it removed the maintainer's live `ai.wienerdog.dream` and
-`ai.wienerdog.catchup` from launchd. `WP-smoke-live-scheduler-preflight` (this
-WP's dependency, already merged) stops *that script*. This work package closes
+`ai.wienerdog.catchup` from launchd. `WP-smoke-live-scheduler-preflight` — this
+WP's `depends_on`, drafted in the same commit as this spec and **not yet
+implemented** — stops *that script*. This work package closes
 the **class**: it inverts the chokepoint's default so a real mutation happens
 only under a positive authority, and every dev checkout, test wrapper, scenario
 harness and CI script fails safe without having to remember a variable.
@@ -55,12 +56,22 @@ opt-in.* Two constraints ADR-0041 carries and this WP inherits verbatim:
   against no adversary, and must not be described as doing either. (ADR-0035
   found that additive "guards" in this codebase relocate rather than close;
   removing a default is the subtractive shape that held.)
-- **No environment variable may select a weaker verification path** (ADR-0028
-  amendment §3 / Table D). The direction here is what satisfies that: today every
-  value of every variable ends in a real mutation, and the variables read below
-  can only move an outcome from *mutate* to *refuse* — except the single opt-in,
-  which restores exactly today's behavior and can never produce a state weaker
-  than today's.
+- **ADR-0028 amendment §3's durable rule is narrower than "no env var may gate
+  anything", and this WP must not stretch it.** It reads, verbatim
+  (`docs/adr/0028-scheduler-app-executable-integrity.md:865-870`): *"No mechanism
+  may choose between the enforced (prod) and reduced (dev) verification paths on
+  the basis of a signal that an A7-scoped write can produce."* That rule is **not
+  engaged here**: nothing below chooses between the prod and dev verification
+  arms, or between any two arms — it decides only whether a scheduler-mutating
+  argv is spawned at all. State the relationship honestly rather than claiming
+  compliance with a rule about a different decision.
+- **`WIENERDOG_ALLOW_REAL_SCHEDULER` *is* an A7-producible signal**, and this WP
+  says so rather than implying otherwise: ADR-0028 treats an `environment.d` /
+  `launchctl setenv` write as in scope (`:502`, `:523-525`). What makes that
+  acceptable is the marker's ceiling, not its provenance — its only effect is to
+  restore exactly today's unconditional behavior. No value of it skips a check,
+  selects a verification arm, or reaches any state weaker than the one this tree
+  ships today.
 
 ## Current state
 
@@ -73,7 +84,7 @@ opt-in.* Two constraints ADR-0041 carries and this WP inherits verbatim:
 3. `:34-35` — otherwise `spawnSync(argv[0], argv.slice(1), { encoding: 'utf8' })`,
    returning `{ status: r.status == null ? 1 : r.status, stdout: <string> }`.
 
-Its JSDoc (`:14-17`) already documents the trap this WP closes — *"launchd/
+Its JSDoc (`:15-16`) already documents the trap this WP closes — *"launchd/
 systemd/schtasks identifiers are NOT HOME-scoped — a temp-HOME test still hits
 the real agent"* — as a note for tests only.
 
@@ -107,9 +118,14 @@ the real agent"* — as a note for tests only.
 - `scripts/smoke-install.sh` exports its sandbox at `:28-32` (`HOME`,
   `CLAUDE_CONFIG_DIR`, `CODEX_HOME`; unsets `WIENERDOG_HOME`/`WIENERDOG_VAULT`)
   and is run by `.github/workflows/install-smoke.yml:42` on
-  `[ubuntu-latest, macos-latest]`. GitHub Actions sets `CI=true`.
-  `WP-smoke-live-scheduler-preflight` has already added a preflight above `:28`.
-- `tests/unit/scheduler-guard.test.js` (61 lines) is the chokepoint's own test:
+  `[ubuntu-latest, macos-latest]`. GitHub Actions sets `CI=true`. **On this tree
+  the script has no preflight**; `WP-smoke-live-scheduler-preflight` adds one
+  between `set -euo pipefail` and the `mktemp -d` at `:23`, so after that
+  dependency merges the line numbers quoted here shift. Every `:NN` in this
+  Current-state section was measured on HEAD `a6e0803`; re-verify them at
+  dispatch (`docs/specs/README.md`'s dispatch-time re-verification gate), since
+  the dependency merging is exactly the window in which they go stale.
+- `tests/unit/scheduler-guard.test.js` (66 lines) is the chokepoint's own test:
   a `withEnv({guard, noop})` helper that saves and restores both variables, and
   four tests covering branches 1 and 2 directly and through both default loaders.
   **No test exercises branch 3.**
@@ -163,7 +179,7 @@ module load, because tests and the CLI both mutate the environment after load.
 | 1 | `process.env.WIENERDOG_LOADER_NOOP` truthy | no | `{ status: 0 }` | nothing |
 | 2 | `process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER` truthy | no | throws the existing `WienerdogError` naming the argv, message unchanged | nothing |
 | 3 | authority present (Table B) | **yes** | `{ status, stdout }` exactly as today (`status` is `1` when `spawnSync` returns `null`; `stdout` is best-effort UTF-8, `''` when absent) | nothing |
-| 4 | otherwise — **the new default** | no | `{ status: 1, stdout: '' }` | exactly one line, Table D |
+| 4 | otherwise — **the new default** | no | `{ status: 1, stdout: '' }` | exactly one line, Table R |
 
 Rows 1 and 2 keep today's precedence and today's behavior byte for byte. Row 4 is
 what row 3 used to do unconditionally.
@@ -186,18 +202,19 @@ failure to evaluate one is not a failure of the other.
 | Evaluation failure | any throw while evaluating either authority (`getPaths` rejects an unsafe `WIENERDOG_HOME`; `os.userInfo()` can throw when the uid has no passwd entry) is caught and treated as **authority absent** → row 4. Fail safe, never crash the chokepoint |
 | Not consulted | the install stance, `.git`, `packageRoot()`, TTY state, argv contents, the manifest, and anything under `<core>/app`. ADR-0041 records why each was rejected; do not add one |
 | Platform note | if some platform derives `os.userInfo().homedir` from the environment, the predicate degrades to today's behavior (allow) and never to a new refusal. Verified on darwin only; the failure direction is the safe one |
+| CI and containers | no special case. A runner or container whose `HOME` **is** the passwd home (GitHub Actions' `/home/runner`, a Docker image running as root with `HOME=/root`) satisfies the coherence arm exactly like a workstation. A runner that *redirects* `HOME` — which is what `scripts/smoke-install.sh` does — does not, and must set the opt-in; Table C is that setting. No CI-detection variable is read by `schedulerSpawn` |
 
 ### Table C — the smoke-install opt-in
 
 | Fact / rule | Value |
 |-------------|-------|
 | What | `scripts/smoke-install.sh` exports `WIENERDOG_ALLOW_REAL_SCHEDULER=1` **only when `${CI:-}` is non-empty**, so a clean CI runner keeps exercising real registration exactly as today |
-| Where | adjacent to the existing sandbox exports at `:28-32`, after the preflight `WP-smoke-live-scheduler-preflight` added above them |
-| Local runs | a local run sets nothing, so it is stopped twice and independently: by that preflight, and — if the preflight is overridden — by row 4 of Table A |
+| Where | anchored to the **post-dependency** tree, not to this one: adjacent to the sandbox `export HOME=…` block (at `:28-32` on HEAD `a6e0803`, shifted down by whatever `WP-smoke-live-scheduler-preflight` inserted above it). Anchor by the surrounding `export`/`unset` lines, not by a line number |
+| Local runs | a local run sets nothing, so it is stopped twice and independently: by that dependency's preflight, and — if the preflight is overridden — by row 4 of Table A |
 | `set -e` trap | a bare `[ -n "${CI:-}" ] && export …` returns 1 when `CI` is unset and kills the script under `set -euo pipefail`. Use a form that cannot |
 | Everything else | unchanged: no step, assertion, helper, message or check count is touched |
 
-### Table D — the refusal line (row 4's only output)
+### Table R — the refusal line (row 4's only output)
 
 One line, written to stderr, terminated by `\n`. `<core>`, `<home>` and `<argv>`
 are interpolated; `<argv>` is `argv.join(' ')`.
@@ -215,13 +232,14 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (each row names the table it implements)
-- [ ] Acceptance criteria that assert Tables A–D
+- [ ] Acceptance criteria that assert Tables A, B, C and R
 - [ ] Verification commands (they exercise rows 3 and 4 and Table C)
 - [ ] Current-state description (today's three branches and the measured row-3 leak)
 - [ ] "Exact contracts" — the unchanged signature and return shape
 - [ ] Implementation notes (the require-cycle note and the `set -e` trap)
 - [ ] Security checklist (the coherence-not-security sentence and the ADR-0028
-      Table D reconciliation)
+      amendment §3 rule-not-engaged statement, which the Context section also
+      carries — the two move together)
 - [ ] **ADR-0041's Decision paragraph and its Consequences bullets** — they state
       Table B's predicate and Table A's refusal shape. Editable only while
       ADR-0041 is unsigned; once the owner signs it, a divergence is fixed by a
@@ -262,10 +280,12 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
       against the developer accident, not an adversary: the same user can set
       `WIENERDOG_ALLOW_REAL_SCHEDULER`. Nothing in `docs/THREAT-MODEL.md` changes
       and no claim of protection may be written into code comments or the PR.
-- [ ] ADR-0028 Table D ("no environment variable may select a verification path")
-      is honored by direction: the variables Table B reads can only move an
-      outcome from *mutate* to *refuse*, and the single opt-in restores exactly
-      today's behavior — no reachable state is weaker than today's.
+- [ ] ADR-0028 amendment §3's rule (`0028:865-870`) is **not engaged**: nothing
+      here chooses between the enforced (prod) and reduced (dev) verification
+      paths, or between any two verification arms. The opt-in marker is an
+      A7-producible signal (`0028:502`, `:523-525`), and what bounds it is its
+      ceiling: its only effect is to restore exactly today's unconditional
+      behavior — no reachable state is weaker than the one this tree ships today.
 
 ## Acceptance criteria
 
@@ -287,15 +307,18 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
       `os.homedir()`-based check still refuses.
 - [ ] Table B's evaluation-failure row: an environment that makes an authority
       lookup throw produces a refusal, not an exception out of `schedulerSpawn`.
-- [ ] Table D: a refusal writes exactly one line to stderr containing
+- [ ] Table R: a refusal writes exactly one line to stderr containing
       `WIENERDOG_ALLOW_REAL_SCHEDULER`, the resolved core path and the joined
       argv — and writes nothing to stdout.
 - [ ] Both default loaders inherit the behavior unchanged:
       `src/cli/schedule.js`'s `defaultLoader` and `src/scheduler/generators.js`'s
       `defaultCatchupLoader` refuse and throw under the same conditions as the
       chokepoint itself.
-- [ ] `src/core/sandbox-guard.js`'s diff adds `sameDir` to `module.exports` and
-      changes nothing else — `sandboxMismatchWarning`'s behavior is untouched.
+- [ ] `src/core/sandbox-guard.js`'s diff against `main` is **exactly one changed
+      line** (one insertion, one deletion — the `module.exports` line gaining
+      `sameDir`), asserted by the numstat gate in the verification steps.
+      `sandboxMismatchWarning`, `sameDir` and `physicalPath` are behaviorally
+      untouched.
 - [ ] Table C: `scripts/smoke-install.sh` exports the opt-in when `CI` is
       non-empty and does not when it is unset, and the script still parses and
       passes `shellcheck`.
@@ -337,14 +360,20 @@ env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
 
 # Table C: the opt-in is present and CI-gated.
 grep -q 'WIENERDOG_ALLOW_REAL_SCHEDULER' scripts/smoke-install.sh
+
+# sandbox-guard.js is EXPORT-ONLY: exactly one line added and one removed.
+test "$(git diff --numstat main -- src/core/sandbox-guard.js | cut -f1)" = 1
+test "$(git diff --numstat main -- src/core/sandbox-guard.js | cut -f2)" = 1
 ```
 
-- The three `node -e` steps and the two greps are NEW and each is an ASSERTION.
-  Paste a real green on the finished state AND a real red from a deliberately
-  broken state for each: for row 4, the pre-change tree already provides it (it
-  exits 0 today, measured); for the coherence arm, temporarily swap
-  `os.userInfo().homedir` for `os.homedir()` and watch it refuse; for Table C,
-  remove the export line.
+- The three `node -e` steps, the chokepoint-count test, the Table C grep and the
+  two numstat gates are NEW, and each is an ASSERTION that exits non-zero on
+  failure rather than printing a value to judge. Paste a real green on the
+  finished state AND a real red from a deliberately broken state for each: for
+  row 4, the pre-change tree already provides it (it exits 0 today, measured);
+  for the coherence arm, temporarily swap `os.userInfo().homedir` for
+  `os.homedir()` and watch it refuse; for Table C, remove the export line; for
+  the numstat gates, add one throwaway line to `sandbox-guard.js`.
 - **Do not** substitute a real scheduler command for `true` in any of these.
   `true` is chosen precisely so the row-3 arms can be observed on a machine with
   a live install without touching it.
@@ -352,7 +381,8 @@ grep -q 'WIENERDOG_ALLOW_REAL_SCHEDULER' scripts/smoke-install.sh
 ## Out of scope (do NOT do these)
 
 - Anything in `WP-smoke-live-scheduler-preflight` (the probe script and the smoke
-  preflight) — that WP is a dependency and is already merged; do not revise it.
+  preflight). It is this WP's `depends_on`, so it will have merged before this WP
+  is dispatched — do not revise, re-verify or extend what it shipped.
 - Removing or weakening `WIENERDOG_TEST_NO_REAL_SCHEDULER`, `WIENERDOG_LOADER_NOOP`,
   `tests/run.js`'s suite-wide setting, or `tests/scenarios/scheduler-guard.js`.
   All four stay exactly as they are.
