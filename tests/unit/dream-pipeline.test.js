@@ -1327,20 +1327,79 @@ test('dream-pipeline: the run does not touch the user\'s git index — at all (r
   writeFile(ctx.vault, rel, 'the user staged this\n');
   writeFile(ctx.vault, 'MODE.md', 'mode\n');
   writeFile(ctx.vault, 'GONE.md', 'gone\n');
+  writeFile(ctx.vault, 'CONFLICT.md', 'base\n');
   git(ctx.vault, ['add', '-A']);
   git(ctx.vault, ['commit', '-q', '-m', 'seed for the index fixture']);
   writeFile(ctx.vault, rel, 'the user staged THIS instead\n');
   git(ctx.vault, ['add', rel]);
   git(ctx.vault, ['update-index', '--chmod=+x', 'MODE.md']);
   git(ctx.vault, ['rm', '-q', '--cached', 'GONE.md']);
-  const before = git(ctx.vault, ['ls-files', '--stage']);
+  // AN ACTUAL UNRESOLVED MERGE — three stages for one path. Table W row W5 has
+  // always said this fixture seeds one; until now it did not, and a mutation
+  // flattening ONLY merge stages — defect 4's exact class, the one that ended
+  // the mechanism — left this test green.
+  {
+    const blob = (t) => execFileSync('git', ['-C', ctx.vault, 'hash-object', '-w', '--stdin'],
+      { input: t, encoding: 'utf8' }).trim();
+    const info = ['1', '2', '3'].map((st, n) => `100644 ${blob(`side${n}\n`)} ${st}\tCONFLICT.md`).join('\n') + '\n';
+    execFileSync('git', ['-C', ctx.vault, 'update-index', '--index-info'], { input: info });
+  }
+  assert.match(git(ctx.vault, ['ls-files', '--unmerged']), /CONFLICT\.md/, 'precondition: a real unresolved merge is staged');
+
+  // THE RAW INDEX IS THE ASSERTION; THE PROJECTIONS ARE THE MESSAGE (Table W row
+  // W1). No projection can enforce W1's total: `--stage` had no flag column,
+  // `-v` adds one letter and still misses BOTH an identical-mode-and-sha
+  // re-stage and the `fsmonitor-valid` bit. The enumeration has no last column,
+  // so the comparison is the file's own bytes.
+  //
+  // CONTENT, NEVER STAT METADATA. A read-only `git status` replaces `.git/index`
+  // with a NEW INODE while the content stays byte-identical — comparing stat
+  // data would be a false red.
+  //
+  // `-v` AND `-f` ARE READ SEPARATELY, never combined: their flag letters share
+  // one column, so `-v -f` prints `h` for a path carrying only `fsmonitor-valid`
+  // — indistinguishable from `-v`'s spelling of assume-unchanged.
+  const rawIndex = () => {
+    const f = path.join(ctx.vault, '.git', 'index');
+    return fs.existsSync(f) ? fs.readFileSync(f) : null; // ABSENT is a value
+  };
+  const projV = () => git(ctx.vault, ['ls-files', '-v', '--stage']);
+  const projF = () => git(ctx.vault, ['ls-files', '-f']);
+  const before = rawIndex();
+  const vBefore = projV();
+  const fBefore = projF();
 
   const r = await runDream(ctx);
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  assert.ok(headBytes(ctx.vault, rel), 'non-vacuity: the run really did commit this very path');
+  // NON-VACUITY: the RUN's own bytes are at HEAD for this path. Asserting mere
+  // presence could not fail — the fixture commits `rel` itself in the
+  // `seed for the index fixture` commit, so `HEAD:<rel>` exists before the run
+  // starts. Measured: with the run stubbed to a no-op, a presence check still
+  // passed. (A comment citing a RELATIVE DISTANCE rots the moment anything is
+  // inserted between it and its referent: this one carried such a distance and
+  // was off by nineteen once the unresolved-merge fixture landed in the gap.
+  // Cite the NAME of what you mean — names do not move.)
+  assert.match(
+    headBytes(ctx.vault, rel).toString('utf8'), /A legitimately-learned resource note\./,
+    'non-vacuity: HEAD carries the RUN\'s bytes, not the fixture\'s seed'
+  );
 
   // THE WHOLE INDEX, BYTE-IDENTICAL. Not "the user's entry survived" — that is
   // what the retired mechanism kept claiming while losing a different shape each
   // round. Nothing this run does is allowed to write the index.
-  assert.equal(git(ctx.vault, ['ls-files', '--stage']), before, 'the index is untouched');
+  const after = rawIndex();
+  const same = before === null ? after === null : after !== null && after.equals(before);
+  if (!same) {
+    const v = projV();
+    const f = projF();
+    assert.fail(
+      "the run wrote the user's git index (Table W row W1)\n" +
+        `ls-files -v --stage:\n${v}\nls-files -f:\n${f}\n` +
+        (v === vBefore && f === fBefore
+          ? 'BOTH PROJECTIONS COMPARE EQUAL — the change is in index bytes no projection '
+            + 'surfaces (an identical-mode-and-sha re-stage, or an entry flag git does not '
+            + 'print here). Diff the raw file.'
+          : '')
+    );
+  }
 });
