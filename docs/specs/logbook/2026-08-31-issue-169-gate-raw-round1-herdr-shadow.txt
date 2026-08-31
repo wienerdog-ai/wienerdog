@@ -1,0 +1,75 @@
+• needs-attention
+
+  1. Home-path equality does not prove scheduler/file-namespace coherence.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:187 (lines 187–205), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:62
+     (lines 62–82, 142–145)
+     Failure scenario: a container or filesystem sandbox has its own /home/user/.wienerdog at the same pathname as the passwd home while
+     retaining access to the host user bus or scheduler domain. Likewise, the contract explicitly permits platforms where
+     os.userInfo().homedir follows an environment-controlled profile directory. sameDir then succeeds even though the files and scheduler
+     occupy different namespaces.
+     Impact: a sandboxed run can still unload or replace the host user’s jobs; the claimed class closure does not hold. Calling this fail-
+     open degradation “safe” reverses the safety goal.
+     Recommendation: require explicit opt-in on platforms/environments where an account-home value independent of the sandbox is not proven.
+     Add a contract test for same-path/different-filesystem-namespace operation. If that cannot be detected reliably, make explicit opt-in
+     the sole authority for real mutations.
+
+  2. Ambient CI recreates the exact incident through a double bypass.
+     File: docs/specs/WP-smoke-live-scheduler-preflight.md:127 (lines 127–135, 188–197), docs/specs/WP-scheduler-mutation-home-
+     authority.md:207 (lines 207–215)
+     Failure scenario: CI=true, CI=false, or CI=0 is present on a self-hosted runner or a developer machine with live Wienerdog services.
+     WP-A skips the live-registration probe, then WP-B exports real-scheduler authority.
+     Impact: the smoke lifecycle can again remove the live dream and catch-up registrations. CI indicates automation, not an ephemeral or
+     clean scheduler domain.
+     Recommendation: never bypass the probe merely because CI is set. Require a purpose-specific exact-value marker supplied by the smoke
+     workflow, and grant scheduler authority only after the probe has positively established a clean domain. Self-hosted runners with live
+     registrations must still abort.
+
+  3. “Not probeable” is treated as “clean,” so the preflight fails open.
+     File: docs/specs/WP-smoke-live-scheduler-preflight.md:112 (lines 112–135)
+     Failure scenario: launchctl print or systemctl --user list-units fails because of a transient error, missing user bus, permissions, or
+     an unsupported execution context. The probe returns 0, and Table B proceeds exactly as if absence had been established. A later
+     mutation command may still succeed.
+     Impact: the safety preflight provides no protection precisely when it cannot inspect the dangerous domain.
+     Recommendation: use three distinct statuses: clean = 0, live = 1, not-probeable/error = 2. The smoke script should abort on 1 and 2,
+     permitting 2 only through the deliberate exact-value override.
+
+  4. Refusal permits destructive partial state, especially during uninstall.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:172 (lines 172–182, 264–266, 313–316), docs/adr/0041-real-scheduler-mutation-
+     is-opt-in.md:128 (lines 128–149)
+     Failure scenario: a relocated WIENERDOG_HOME installation was registered with the opt-in, then uninstall is run without it. The
+     unregister is refused and ignored, while schedule files and manifest state are removed. Similar refusals let init/sync finish with
+     files written but jobs inactive.
+     Impact: uninstall leaves an orphaned live scheduler entry and is not reversible; init/sync can appear successful while nightly jobs
+     never run. The ADR understates this as the first init needing “a second command,” but every later sync, update, schedule change, and
+     uninstall also needs authority.
+     Recommendation: define command-level refusal semantics. Uninstall must retain retryable manifest/files or abort before deletion when
+     unregistering is refused. Mutating install/sync commands should return non-zero or an explicit degraded result, and every affected
+     relocated-core workflow must be documented in this WP rather than deferred.
+
+  5. The evaluation-failure and refusal-message contracts cannot both be satisfied.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:197 (lines 197–203, 217–230, 305–312)
+     Failure scenario: getPaths() rejects WIENERDOG_HOME, so there is no resolved <core>, or os.userInfo() throws, so there is no <home>.
+     Table B requires this to become a non-throwing refusal, while Table R requires both values to be interpolated.
+     Impact: an implementation must either throw, violate the required diagnostic, or repeat the failing lookup. Tests cannot enforce the
+     stated contract consistently.
+     Recommendation: define a separate evaluation-error refusal line with stable fallbacks such as <unavailable> and the lookup error, and
+     give that case explicit tests.
+
+  6. The authority verification commands do not assert their stated outcomes.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:340 (lines 340–376)
+     Failure scenario: each node -e command is followed by echo and sometimes rm; without an explicit status assertion, the sequence
+     finishes successfully regardless of the Node exit code. The Table C check merely greps for the variable and does not prove CI gating.
+     Impact: a reversed authority predicate, unconditional opt-in, or permanently refusing implementation can pass the prescribed
+     verification.
+     Recommendation: capture and assert each exit code before cleanup, and execute the smoke script or source an isolated helper under both
+     CI-set and CI-unset environments to verify the actual export behavior.
+
+  7. The opt-in’s accepted values contradict the ADR and invite accidental authority.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:187 (lines 187–195), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:60
+     (lines 60–69)
+     Failure scenario: the ADR promises WIENERDOG_ALLOW_REAL_SCHEDULER=1, but Table B authorizes any truthy string. A user or harness
+     setting it to 0, false, or no grants real mutation. The smoke bypass has the same non-empty-value problem.
+     Impact: apparently disabling values silently enable the dangerous branch.
+     Recommendation: require strict equality to "1" for both deliberate override variables and test negative values explicitly.
+
+─ Worked for 6m 06s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
