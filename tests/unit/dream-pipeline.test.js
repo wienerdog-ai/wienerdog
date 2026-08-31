@@ -1349,3 +1349,36 @@ test('dream-pipeline: the FALLBACK report arm — the body was refused, the reco
   // The brain's own body did NOT displace it.
   assert.ok(!text.includes('Consolidated recent sessions.'), "the refused body is not what landed");
 });
+
+test('dream-pipeline: an ordinary TRACKED path the run modifies IS refreshed in the index (row G8)', async () => {
+  const ctx = setup();
+  // THE CASE THE DELETION/MODE TEST STRUCTURALLY CANNOT REACH, and the gap a
+  // gate found: both of those cases deliberately DIVERGE from the old HEAD, so
+  // they exercise only the skip branch. Nothing exercised the ordinary agreeing
+  // tracked entry — the one the refresh exists for — and a comparison bug that
+  // made every tracked path look divergent was therefore invisible. A NEW path
+  // has no entry on either side and still agrees, which is why the rest of the
+  // suite stayed green.
+  const rel = '03-Resources/valid-note.md';
+  writeFile(ctx.vault, rel, 'the committed version\n');
+  git(ctx.vault, ['add', '-A']);
+  git(ctx.vault, ['commit', '-q', '-m', 'a tracked note the dream will modify']);
+  // Precondition: the index agrees with HEAD, i.e. the user staged nothing.
+  assert.equal(git(ctx.vault, ['status', '--porcelain', rel]).trim(), '', 'precondition: clean');
+
+  const r = await runDream(ctx);
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(headBytes(ctx.vault, rel), 'the run committed this tracked path');
+
+  // THE INDEX MOVED FORWARD WITH HEAD. Without the refresh, HEAD holds the new
+  // bytes while the index still holds the old ones, and `git status` reports the
+  // freshly committed file as a staged REVERSE modification — a broken repo for
+  // the user even though the commit itself is right.
+  const idx = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
+  const atHead = git(ctx.vault, ['rev-parse', `HEAD:${rel}`]).trim();
+  assert.equal(idx, atHead, 'the index entry equals the new HEAD for this path');
+  assert.equal(
+    git(ctx.vault, ['diff', '--cached', '--name-only', rel]).trim(), '',
+    'so nothing shows as staged against HEAD'
+  );
+});
