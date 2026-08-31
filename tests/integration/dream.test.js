@@ -306,7 +306,8 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   const msg = git(ctx.vault, ['log', '-1', '--pretty=%s']).trim();
   assert.match(msg, /^dream: \d{4}-\d{2}-\d{2} — \d+ notes, \d+ skills$/);
 
-  // ASKED OF HEAD, NOT THE INDEX. The run does not touch the user's index
+  // ASKED OF HEAD, NOT THE INDEX. The run does not touch the user's index —
+  // the claim ranges over the run's own acts (row W1(a) defines the scope)
   // (owner ruling, 2026-08-31 — the refresh that used to keep them in step
   // produced four data-loss defects and was dropped), so `git ls-files` answers
   // a question about the user's staging area, not about what this run committed.
@@ -364,7 +365,8 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
 
   // `git revert` cleanly undoes the whole run — AFTER the one-command remedy the
   // dropped index refresh leaves the user (owner ruling, 2026-08-31). The run
-  // does not touch the user's index, so it still describes the pre-run HEAD and
+  // does not touch the user's index — the claim ranges over the run's OWN acts
+  // (row W1(a) defines the scope) — so it still describes the pre-run HEAD and
   // `git revert` REFUSES ("your local changes would be overwritten") until
   // `git reset` re-syncs it. That is the accepted cost, and this asserts its
   // exact shape rather than hiding it: one command, then ADR-0012's
@@ -788,7 +790,9 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   //
   // Asserted on the file itself, not on `status` or `diff HEAD`: both are
   // index-mediated, and the run leaves the user's index describing the pre-run
-  // HEAD (the refresh was dropped, owner ruling 2026-08-31), so both report the
+  // HEAD (the refresh was dropped, owner ruling 2026-08-31 — the claim ranges
+  // over the run's OWN acts, row W1(a); a user hook that writes the index
+  // during publish is a stated residual), so both report the
   // whole commit as staged deletions — noise that says nothing about refresh
   // point 2. The precise question is whether point 2 wrote again, and the
   // precise answer is whether the bytes on disk still match the committed ones.
