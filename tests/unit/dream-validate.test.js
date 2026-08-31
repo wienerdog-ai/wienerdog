@@ -166,29 +166,26 @@ function gateFixture(vault, scratch, stateDir, expectedScratch = [], o = {}) {
     const baseline = baselineOf(rel);
     const refuse = (reason) => reverted.push({ path: rel, reason });
 
-    // UNSCANNABLE CONTENT IS A REFUSAL, NEVER A PASS — and the check is
-    // `promote()`'s rather than the gate's (promote.js, Phase 1). Replayed here
-    // for the same reason it exists there: a gate defined only over added lines
-    // sees an empty scan and passes it, after which nothing else stops an
-    // ordinary `.md` and it is promoted raw.
-    if (isBinaryBytes(candidate)) {
-      secretDisposition.withheld += 1;
-      refuse('EP2: content is binary and cannot be secret-scanned; not promoted');
-      continue;
-    }
-    if (!isLosslessUtf8Bytes(candidate)) {
-      secretDisposition.withheld += 1;
-      refuse('EP2: content is not lossless UTF-8 and cannot be secret-scanned; not promoted');
-      continue;
-    }
-
     // ── Gate 1 of 4: EP2, BEFORE the merge, on the lines THIS run added.
     //    The fixture's added lines are every line of a new file, and for a
     //    modification the lines the diff reports — established here from the
     //    fixture, never by a gate.
-    const added = addedLineNumbersOf(baseline, candidate);
+    //
+    //    THIS HARNESS DOES NOT CLASSIFY UNSCANNABLE CONTENT — the gate does
+    //    (`WP-ep2-unscannable-preserve`, Table U). An earlier form replayed
+    //    `promote()`'s pre-refusal here, and while it did, no fixture in this
+    //    file could ever observe what the gate does with a binary note.
+    //
+    //    What the harness DOES supply is the delta primitive's own `binary`
+    //    flag, because only the primitive can answer that and the gate takes it
+    //    as an input. A binary record carries NO added line numbers — the
+    //    primitive omits them deliberately — so the fixture omits them too,
+    //    which is exactly the empty scan the gate must not read as a pass.
+    const isBinary = isBinaryBytes(candidate);
+    const added = isBinary ? [] : addedLineNumbersOf(baseline, candidate);
     const verdict = gates.secret({
-      rel, record: { status: baseline === null ? 'added' : 'modified' },
+      rel,
+      record: { status: baseline === null ? 'added' : 'modified', binary: isBinary },
       baselineBytes: baseline, afterBytes: candidate,
       addedLineNumbers: added, layout, date,
     });
@@ -1293,12 +1290,28 @@ test('dream-validate: EP2 a NUL-prefixed (binary-classified) note with a planted
   assert.equal(entry.reason, 'EP2: content is binary and cannot be secret-scanned; not promoted');
   assert.ok(!entry.reason.includes('wJalrXUtnFEMI'));
   assert.equal(res.secretDisposition.withheld, 1);
-  assert.deepEqual(res.preservedFor(rel), [], 'the refusal precedes preservation');
-  // NO QUARANTINE COPY IS ASSERTED, and the reason is an ORDERING this file does
-  // not own: unscannable content is refused BEFORE the secret gate runs
-  // (`promote()` Phase 1), so the refusal precedes the party that preserves.
-  // Nothing was written to the vault to preserve FROM, and the brain's own copy
-  // rides the workspace, whose transcript defers and regenerates it.
+
+  // ── SIBLING PARITY (`WP-ep2-unscannable-preserve`, Table U rows U1/U3). This
+  //    is the assertion whose DELETION was the regression the amendment undoes,
+  //    restored in the shape the withhold arm produces today: a preservation
+  //    RECORD naming the copy, plus the copy itself.
+  assert.deepEqual(
+    res.preservedFor(rel),
+    [{ artifact: '2026-07-02-nul-note.md', location: 'quarantine' }],
+    'the withhold arm preserved the unscannable bytes and reported the copy'
+  );
+  const copy = path.join(stateDir, 'quarantine', '2026-07-02-nul-note.md');
+  assert.deepEqual(fs.readFileSync(copy), bytes, 'RAW bytes, NUL and all — nothing decoded them');
+  assert.equal(fs.statSync(copy).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(path.join(stateDir, 'quarantine')).mode & 0o777, 0o700);
+  // AND THE BANNER: `listSecretQuarantine` reads this directory, so a direct
+  // file entry here is what makes the pending-review notice fire. The redact
+  // shelf one level down is excluded by design and is not what preserved this.
+  assert.equal(
+    fs.existsSync(path.join(stateDir, 'quarantine', 'redacted')),
+    false,
+    'not the redact shelf — the withhold arm, whose copies the banner can see'
+  );
 });
 test('dream-validate: EP2 a pure binary blob with an embedded secret fails closed', () => {
   const { root, vault, scratch } = tempVault();
@@ -1319,11 +1332,19 @@ test('dream-validate: EP2 a pure binary blob with an embedded secret fails close
   const entry = res.reverted.find((r) => r.path === '04-Atomic/blob.bin');
   assert.ok(entry && entry.reason === 'EP2: content is binary and cannot be secret-scanned; not promoted');
   assert.equal(res.secretDisposition.withheld, 1);
-  // NO QUARANTINE COPY IS ASSERTED, and the reason is an ORDERING this file does
-  // not own: unscannable content is refused BEFORE the secret gate runs
-  // (`promote()` Phase 1), so the refusal precedes the party that preserves.
-  // Nothing was written to the vault to preserve FROM, and the brain's own copy
-  // rides the workspace, whose transcript defers and regenerates it.
+  // The durable copy, and it is a COPY OF THE JUDGED BYTES: an embedded secret
+  // stays intact inside it, because quarantine is where the owner inspects what
+  // was refused. What must never leak is the REASON STRING, asserted above by
+  // its exact value — metadata only, never a matched byte.
+  assert.deepEqual(
+    res.preservedFor('04-Atomic/blob.bin'),
+    [{ artifact: '2026-07-02-blob.bin', location: 'quarantine' }]
+  );
+  assert.deepEqual(
+    fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-blob.bin')),
+    blob,
+    'byte-identical to what the gate judged'
+  );
 });
 
 test('dream-validate: EP2 a text change with only deleted lines is still skipped (no bytes added this run)', () => {
@@ -2107,17 +2128,30 @@ test('EP2 redact arm: a NOT-lossless-UTF-8 note is withheld, and not one byte of
   // stronger statement holds: the judged bytes are exactly as they were.)
   assert.deepEqual(fs.readFileSync(path.join(vault, rel)), withAdded);
   assert.ok(!fs.readFileSync(path.join(vault, rel)).includes(FFFD), 'no replacement characters');
-  // NO QUARANTINE COPY, AND NO "not rewritten" SUFFIX — and both absences are
-  // the same ORDERING fact, which this file does not own: `promote()` refuses
-  // content that is not lossless UTF-8 BEFORE the secret gate runs (Phase 1), so
-  // the refusal precedes the party that preserves and precedes the arm that
-  // composed that suffix. The DECISION is unchanged and is what this test pins:
-  // withheld, never scrubbed, and not one byte of the note rewritten.
+  // NO "not rewritten" SUFFIX — that suffix was composed by the enforcement
+  // half this package deleted, and the preservation record replaced it as the
+  // carrier (Table Q row Q8). The DECISION is unchanged: withheld, never
+  // scrubbed, and not one byte of the note rewritten.
   const entry = res.reverted.find((r) => r.path === rel);
   assert.ok(entry, JSON.stringify(res.reverted));
   assert.match(entry.reason, /not lossless UTF-8/, entry.reason);
-  assert.deepEqual(res.preservedFor(rel), [], 'the refusal precedes preservation');
-  assert.deepEqual(lsRedacted({ stateDir }), [], 'and precedes the redact arm entirely');
+
+  // ── THE SECOND HALF OF "unscannable" PRESERVES TOO, and this fixture is the
+  //    one that proves the round-trip check is what caught it: git calls these
+  //    bytes text (asserted above), so the `binary` flag is false here.
+  assert.equal(isLosslessUtf8Bytes(withAdded), false, 'the fixture really is not lossless UTF-8');
+  assert.deepEqual(
+    res.preservedFor(rel),
+    [{ artifact: '2026-07-02-l1.md', location: 'quarantine' }],
+    'the withhold arm preserved it, exactly as it does for a hard-secret finding'
+  );
+  assert.deepEqual(
+    fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-l1.md')),
+    withAdded,
+    'the preserved copy is the Latin-1 bytes themselves — no U+FFFD anywhere'
+  );
+  assert.ok(!fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-l1.md')).includes(FFFD));
+  assert.deepEqual(lsRedacted({ stateDir }), [], 'and the redact arm was never entered');
 });
 
 // RETIRED with the EP2 enforcement half (WP-dream-promote-in-workspace, row G7):

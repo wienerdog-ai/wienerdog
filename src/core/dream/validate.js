@@ -943,9 +943,14 @@ function makeGates(o = {}) {
    * from the delta's `addedLineNumbers` over the workspace's after-bytes instead
    * of from `git diff --cached`.
    *
-   * `promote()` refuses binary and non-lossless-UTF-8 content BEFORE calling
-   * this gate, so both arms below may assume decodable text.
-   * @param {{rel:string, record:object, baselineBytes:Buffer|null,
+   * UNSCANNABLE CONTENT IS THIS GATE'S CLASSIFICATION, and it lands in the
+   * WITHHOLD ARM — preserved to `state/quarantine/`, then refused, exactly as a
+   * hard-secret finding is (`WP-ep2-unscannable-preserve`, Table U). Two
+   * consequences a reader needs: the redact arm below may assume decodable text
+   * because unscannable content never reaches it, and `record.binary` is a
+   * REQUIRED input — a caller that omits `record` gets only the round-trip half
+   * of the check.
+   * @param {{rel:string, record:{binary?:boolean}, baselineBytes:Buffer|null,
    *          afterBytes:Buffer, addedLineNumbers:number[],
    *          layout:import('../layout').VaultLayout, date:string}} g
    * @returns {{ok:true}
@@ -959,53 +964,76 @@ function makeGates(o = {}) {
   const secret = (g) => {
     const { rel, afterBytes, date } = g;
     const nums = Array.isArray(g.addedLineNumbers) ? g.addedLineNumbers : [];
-    // The scanned blob is the added LINES, joined — the same text the staged
-    // `+` lines produced, minus git's leading `+`.
-    const raw = afterBytes.toString('utf8');
-    const body = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
-    const lines = body.split('\n');
-    const addedText = nums
-      .filter((l) => Number.isInteger(l) && l >= 1 && l <= lines.length)
-      .map((l) => lines[l - 1])
-      .join('\n');
-    if (addedText === '') return { ok: true }; // added no bytes this run
-    const { findings } = scanAndRedact(addedText);
-    if (findings.length === 0) return { ok: true };
-
-    // Metadata-only reason: distinct code-owned labels, never the matched bytes.
-    const labels = findings.map((f) => f.label).join(', ');
-    const reason = `content matched a secret pattern (${labels}); not promoted`;
-
+    /** @type {string|null} the refusal reason, once some branch has one */
+    let reason = null;
     /** @type {{name:string, bytes:Buffer}|null} the `redacted/` copy the arm wrote */
     let redactCopy = null;
     /** true once the redact arm was entered and did not complete */
     let redactFellThrough = false;
 
-    if (!hasHardFinding(findings)) {
-      // ── The redact arm. Preserve the unredacted original FIRST, then scrub
-      //    only the lines this run added, against the very bytes that were
-      //    preserved. Never redact a note whose original could not be preserved:
-      //    that is the permanent-corruption outcome this design exists to avoid.
-      //    Anything short of a verified scrub falls through to the withhold.
-      redactCopy = quarantinePreserve(stateDir, afterBytes, rel, date, 'redacted');
-      if (redactCopy) redactedCreated.add(redactCopy.name);
-      const sanitized = redactCopy ? scrubAddedLines(nums, redactCopy.bytes) : null;
-      if (sanitized) {
-        completedRedactions += 1; // increments LAST, only after a verified scrub
-        return {
-          redact: true,
-          sanitizedBytes: sanitized,
-          // `lines` is the SHIPPED count — every added line the scrub ran over.
-          // Row G7 carries a PENDING named narrowing of it, blocked on an owner
-          // decision against the pin in
-          // `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. Until that
-          // decision this is the value, and no surface may call it a count of
-          // CHANGED lines.
-          redaction: { lines: nums.length, labels },
-          preserved: [{ artifact: redactCopy.name, location: `quarantine/${REDACTED_SUBDIR}` }],
-        };
+    // ── UNSCANNABLE CONTENT: classified HERE, and it FALLS THROUGH to the
+    //    withhold arm rather than returning (`WP-ep2-unscannable-preserve`,
+    //    Table U). This gate is the party that holds the bytes and the party
+    //    that preserves, so this is where "cannot be scanned" has to be decided
+    //    — deciding it in the caller put the refusal AHEAD of the preservation
+    //    and the class lost its durable artifact and its digest banner, while
+    //    the hard-secret class beside it kept both. Same origin, same fate.
+    //
+    //    The check runs BEFORE the decode below, because that decode is exactly
+    //    what is unsafe on these bytes: `toString('utf8')` substitutes U+FFFD
+    //    and never fails, so a scan over the decoded text is a scan over bytes
+    //    that are not in the file. The delta primitive's own `binary` flag is
+    //    the first half of the question and this file's round-trip check is the
+    //    second; neither is a finding, so neither can reach the redact arm.
+    const deltaRecord = g.record && typeof g.record === 'object' ? g.record : {};
+    if (deltaRecord.binary === true) {
+      reason = 'content is binary and cannot be secret-scanned; not promoted';
+    } else if (!isLosslessUtf8(afterBytes)) {
+      reason = 'content is not lossless UTF-8 and cannot be secret-scanned; not promoted';
+    } else {
+      // The scanned blob is the added LINES, joined — the same text the staged
+      // `+` lines produced, minus git's leading `+`.
+      const raw = afterBytes.toString('utf8');
+      const body = raw.endsWith('\n') ? raw.slice(0, -1) : raw;
+      const lines = body.split('\n');
+      const addedText = nums
+        .filter((l) => Number.isInteger(l) && l >= 1 && l <= lines.length)
+        .map((l) => lines[l - 1])
+        .join('\n');
+      if (addedText === '') return { ok: true }; // added no bytes this run
+      const { findings } = scanAndRedact(addedText);
+      if (findings.length === 0) return { ok: true };
+
+      // Metadata-only reason: distinct code-owned labels, never the matched bytes.
+      const labels = findings.map((f) => f.label).join(', ');
+      reason = `content matched a secret pattern (${labels}); not promoted`;
+
+      if (!hasHardFinding(findings)) {
+        // ── The redact arm. Preserve the unredacted original FIRST, then scrub
+        //    only the lines this run added, against the very bytes that were
+        //    preserved. Never redact a note whose original could not be preserved:
+        //    that is the permanent-corruption outcome this design exists to avoid.
+        //    Anything short of a verified scrub falls through to the withhold.
+        redactCopy = quarantinePreserve(stateDir, afterBytes, rel, date, 'redacted');
+        if (redactCopy) redactedCreated.add(redactCopy.name);
+        const sanitized = redactCopy ? scrubAddedLines(nums, redactCopy.bytes) : null;
+        if (sanitized) {
+          completedRedactions += 1; // increments LAST, only after a verified scrub
+          return {
+            redact: true,
+            sanitizedBytes: sanitized,
+            // `lines` is the SHIPPED count — every added line the scrub ran over.
+            // Row G7 carries a PENDING named narrowing of it, blocked on an owner
+            // decision against the pin in
+            // `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. Until that
+            // decision this is the value, and no surface may call it a count of
+            // CHANGED lines.
+            redaction: { lines: nums.length, labels },
+            preserved: [{ artifact: redactCopy.name, location: `quarantine/${REDACTED_SUBDIR}` }],
+          };
+        }
+        redactFellThrough = true;
       }
-      redactFellThrough = true;
     }
 
     // ── The withhold arm.

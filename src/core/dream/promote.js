@@ -252,17 +252,12 @@ function makeAdmit(layout) {
   };
 }
 
-/**
- * True when `buf` survives a UTF-8 round trip unchanged.
- *
- * A decode that replaces an invalid sequence with U+FFFD is lossy, and a scan
- * over the replaced text is a scan over bytes that are not in the file. This is
- * the second half of "unscannable" — the first is the delta's own `binary` flag.
- * @param {Buffer} buf @returns {boolean}
- */
-function isLosslessUtf8(buf) {
-  return Buffer.from(buf.toString('utf8'), 'utf8').equals(buf);
-}
+// THE UTF-8 ROUND-TRIP CHECK IS NOT HERE, AND ITS ABSENCE IS THE CONTRACT
+// (`WP-ep2-unscannable-preserve`, Table U row U2). Both halves of "unscannable"
+// — the delta's `binary` flag and the round trip — are decided by the EP2 gate,
+// which is the party that preserves; a second copy of the predicate in this
+// module is what put the refusal ahead of the preservation before. This module
+// hands the gate the delta `record` and the after-bytes and honours its verdict.
 
 /**
  * Read the live vault's bytes for `rel`, or `null` when the path is absent.
@@ -1160,25 +1155,22 @@ function promote(o) {
 
     // ── Gate 1 of 4: EP2 (ADR-0034), BEFORE the merge ─────────────────────
     //
-    // UNSCANNABLE CONTENT IS A REFUSAL, NEVER A PASS, and the check is this
-    // module's rather than the gate's. The delta primitive returns no line
-    // numbers for a binary record — deliberately, so a consumer "withholds what
-    // it cannot scan" (`delta.js:517-520`) — and a gate defined only over added
-    // lines sees an empty scan and passes it, after which nothing else stops an
-    // ordinary `.md` and it is promoted raw. Today's validator does the missing
-    // work explicitly (`validate.js:1240-1256`), so passing it would be a
-    // regression against shipped behaviour.
-    if (record.binary === true) {
-      disposition.withheld += 1;
-      refuse('EP2: content is binary and cannot be secret-scanned; not promoted');
-      continue;
-    }
-    if (!isLosslessUtf8(afterBytes)) {
-      disposition.withheld += 1;
-      refuse('EP2: content is not lossless UTF-8 and cannot be secret-scanned; not promoted');
-      continue;
-    }
-
+    // UNSCANNABLE CONTENT IS A REFUSAL, NEVER A PASS — AND THE CLASSIFICATION
+    // IS THE GATE'S, NOT THIS MODULE'S (`WP-ep2-unscannable-preserve`, Table U;
+    // owner ruling of 2026-08-31). The delta primitive returns no line numbers
+    // for a binary record — deliberately, so a consumer "withholds what it
+    // cannot scan" (`delta.js:517-520`) — so a gate defined only over added
+    // lines would see an empty scan and pass it. The EP2 gate therefore asks
+    // "can these bytes be scanned at all?" before it scans, and routes the
+    // no-answer to its own withhold arm, which PRESERVES the bytes to
+    // `state/quarantine/` and then refuses. This module ran that check itself in
+    // an earlier form, and the ordering cost the class its durable artifact and
+    // its digest banner while the hard-secret class beside it kept both.
+    //
+    // What this module still owns is unchanged: the `verdict.refuse` branch
+    // below counts the withhold and carries the gate's preservation record.
+    // `record` is handed to the gate BECAUSE of this — the `binary` flag is the
+    // primitive's answer and only this module holds it.
     const verdict = gates.secret({
       rel,
       record,
@@ -1640,5 +1632,4 @@ module.exports = {
   // be substitutable for the CLAIM 2b assertion to observe every `cwd`.
   makeAdmit,
   spawnGitForMerge,
-  isLosslessUtf8,
 };
