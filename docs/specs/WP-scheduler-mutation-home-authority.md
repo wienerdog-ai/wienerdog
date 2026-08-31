@@ -163,9 +163,9 @@ the real agent"* — as a note for tests only.
 |--------|------|-------|
 | modify | src/scheduler/spawn.js | the four-branch precedence of Table A and the authority of Table B; refresh the JSDoc so it describes the new default. Export the authority predicate so `uninstall` uses the same one (Table U) rather than a second copy |
 | modify | src/core/sandbox-guard.js | add `sameDir` to `module.exports` (`:115`). **Export only — no behavior change, no new function, no edit to `sameDir`, `physicalPath` or `sandboxMismatchWarning`** |
-| modify | src/cli/uninstall.js | Table U's clearance gate and the `opts.probe` seam of Table T, placed before the confirm prompt and before any deletion |
+| modify | src/cli/uninstall.js | Table U's clearance gate and the `opts.probe` seam of Table T, placed **after** the confirm prompt and immediately before the first deletion (Table U's ordering rows) |
 | modify | tests/unit/scheduler-guard.test.js | cover the acceptance criteria below (the implementer designs the cases) |
-| modify | tests/unit/uninstall.test.js | cover Table U/T's acceptance criteria, and give the existing callers what Table T's inventory says they need: `opts.probe` on the 6 in-process calls, `WIENERDOG_ALLOW_REAL_SCHEDULER: '1'` in the `tempEnv()` builder (`:14-41`) that feeds the 14 non-dry-run subprocess uninstalls |
+| modify | tests/unit/uninstall.test.js | cover Table U/T's acceptance criteria, and give the existing callers what Table T's inventory says they need: `opts.probe` **with authority absent** on the 6 in-process calls, and the authority marker on the env of the 14 non-dry-run subprocess uninstalls **only**. Note `tempEnv()`'s `env` is shared with the in-process path via `Object.assign(process.env, env)` (`:278`), so the marker must not simply be added to it — Table T's separation row |
 | modify | tests/integration/uninstall-core-e2e.test.js | `WIENERDOG_ALLOW_REAL_SCHEDULER: '1'` in its env builder (`:22-35`), for the one non-dry-run subprocess uninstall at `:88`. **Env addition only** — no test logic, no assertion changes |
 | modify | scripts/smoke-install.sh | exactly two edits, both enumerated in Table C: (1) the probe-gated opt-in export; (2) the step-7 conditional — wrap step 7's body so it runs unchanged when the preflight was CLEAN, and on a non-CLEAN preflight prints one notice and skips the step's assertions. Nothing else in the file changes |
 
@@ -215,16 +215,20 @@ async function run(argv, opts = {})
 
 | Probe outcome | Treated as |
 |---|---|
-| returns `{status:'clean', identifiers:[]}` | **CLEAN** — deletion clearance granted (Table U) |
+| returns `{status:'clean', identifiers:[]}` | **CLEAN** — deletion clearance granted (Table U). This is the **only** shape that grants it |
 | returns `{status:'live', identifiers:[…]}` | **LIVE** — abort, naming the identifiers |
 | **throws** | **NOT-PROBEABLE** — abort (fail-closed) |
 | returns a **thenable / Promise** | **NOT-PROBEABLE.** The contract is synchronous; a returned promise is malformed, not awaited. A gate that awaited an unexpected thenable could resolve after the decision it was supposed to inform |
 | returns a **malformed** value — not an object, `status` not exactly `'clean'` or `'live'`, or `identifiers` not an array of strings | **NOT-PROBEABLE** |
-| returns `{status:'live'}` with an absent or empty `identifiers` | **LIVE** — the abort still happens; the message says the identifiers were not reported. `status` decides, never the payload's shape |
+| returns `{status:'clean'}` with a **non-empty** `identifiers`, or with `identifiers` absent | **NOT-PROBEABLE** — the **cross-field invariant**: `clean` is valid only with `identifiers.length === 0`. A result that says "nothing is live" while listing something live is internally contradictory, and the one reading that must never win is the permissive one. Validity is a property of the whole object, not of `status` alone |
+| returns `{status:'live'}` with an absent or empty `identifiers` | **LIVE** — the abort still happens; the message says the identifiers were not reported. In the *aborting* direction the payload cannot soften the verdict |
 
-Every uncertain case lands on NOT-PROBEABLE, which Table U fails closed. There is
-no input to this function — malformed, hostile, or merely refactored — that
-produces a deletion the domain did not positively clear.
+The rule, stated so the two rows above do not read as a contradiction: **`status`
+alone can never grant clearance, and the payload can never withdraw an abort.**
+Granting requires the whole object to be coherent; aborting requires only
+`status`. Every uncertain, malformed, hostile or self-contradictory case lands on
+NOT-PROBEABLE, which Table U fails closed — so there is no input to this function
+that produces a deletion the domain did not coherently clear.
 
 What changes is which branch `schedulerSpawn` takes: Table A. Whether the
 mutating branch is reachable: Table B. What it prints when it refuses: Table R.
@@ -346,13 +350,16 @@ code.
 
 | Fact / rule | Value |
 |-------------|-------|
-| Where | in `src/cli/uninstall.js`'s `run()`, **after** the manifest is loaded (`:49-54`) and **before** any deletion — i.e. before the `manifestLib.reverse(…, { dryRun: false })` call at `:114`, which is the first thing that removes anything |
+| Where | in `src/cli/uninstall.js`'s `run()`, **after** the `confirm()` at `:95-112` and **immediately before** the first deletion — the `manifestLib.reverse(…, { dryRun: false })` call at `:114` |
 | Applies to | a **non-dry-run** `uninstall` only |
-| Ordering vs. the confirm prompt | the gate runs **before** the plan disclosure and the `confirm()` at `:95-112`, not just before `reverse()`. Refusing before asking the user to approve something that cannot happen is the better order — and it is why the interactive-decline test at `tests/unit/uninstall.test.js:613` reaches the gate too (Table T's inventory) |
+| Ordering vs. the confirm prompt — **after, not before** | clearance is evidence with a shelf life, and an interactive prompt has no bound on how long it is left open. Establishing it *before* the prompt lets a CLEAN answer go stale for as long as the user takes to reply: a concurrent authorized `sync` for the same core can register a job in that window, and the uninstall then proceeds on pre-prompt evidence, has its unloads refused for want of authority, and orphans the job it just learned nothing about. Deciding immediately before the first deletion shrinks the window from prompt-length to the milliseconds between the probe and `reverse()` |
+| Manifest freshness | the manifest is **(re)loaded after the confirm**, in the same step as the clearance decision, so the deletion plan and the clearance evidence describe the same moment. The early load at `:49-54` still happens — it feeds the plan disclosure — but it is not what `reverse()` acts on |
+| Consequence for the interactive-decline path | a user who answers `n` is never probed, because the gate now sits after the prompt. `tests/unit/uninstall.test.js:613` therefore declines exactly as it does today; it is covered by the subprocess authority marker anyway (Table T), which costs nothing and keeps every subprocess caller uniform |
 | Step 1 — scheduler authority | evaluate Table B. Present → **clearance granted**, no probe, no change from today |
 | Step 2 — probe (only when authority is absent) | call the `SchedulerProbe` (typed under "Exact contracts"): a **read-only** query of this user's live scheduler domain for Wienerdog's **own** identifiers — `ai.wienerdog.*` (launchd `gui/$UID`), `wienerdog-*` (systemd `--user`), the Wienerdog-named Task Scheduler tasks. Same rules as WP-A's probe: absolute client path, fixed-string matching, no mutation of any kind |
 | Step 3 — decide clearance | `clean` → **clearance granted, proceed** (an install with no live own identifier has nothing to orphan; the gate must not brick it). `live` → **abort**. Throw, thenable, or malformed result → NOT-PROBEABLE → **abort**, per the fail-closed row below |
-| Effect of an abort | throw a `WienerdogError`. **Nothing is deleted and the manifest is untouched** — the abort precedes both the confirm and `reverse()`, so no deletion has begun |
+| Effect of an abort | throw a `WienerdogError`. **Nothing is deleted and the manifest is untouched** — the abort precedes `reverse()`, so no deletion has begun. A user who confirmed and is then refused has lost nothing but the prompt |
+| Residual, already accepted | the probe-to-delete window does not close, it shrinks. That is the **same point-in-time contract** the owner accepted as **R-probe-race**, whose wording now names this window explicitly alongside the smoke preflight's. No lock and no serialization — both were weighed and rejected (ADR-0041's rejected options) |
 | Message | names the live identifiers found (or that the domain could not be queried), the resolved core, and `WIENERDOG_ALLOW_REAL_SCHEDULER=1` as the deliberate way to proceed |
 | Fail-closed on an unanswerable probe | a client that is absent, errors, or has no supported query counts as **possibly live** → abort. Justification: fail-open here is round-2's own defect one level down — absence of evidence read as evidence of absence. The asymmetry decides it: a wrong abort costs the user one command (the message names the exact variable, so nobody is ever permanently stuck), while a wrong proceed silently orphans a job that keeps firing |
 | `--dry-run` | never aborts and never probes. It deletes nothing, so it prints its plan exactly as today |
@@ -382,9 +389,24 @@ and **neither of them is a "pretend the domain is clean" switch**:
 
 | Caller class | Channel | What it does to the gate | Why it is not a bypass |
 |---|---|---|---|
-| **In-process** (`require(...).run(argv, opts)`) | the `opts.probe` **seam** | the gate still arms, still decides, but inspects the domain the test supplies | the test controls the *evidence*, not the *verdict*. The gate's decision is exactly what is under test |
+| **In-process** (`require(...).run(argv, opts)`) | the `opts.probe` **seam**, with **authority absent** | the gate still arms, still decides, but inspects the domain the test supplies | the test controls the *evidence*, not the *verdict*. The gate's decision is exactly what is under test |
 | **Subprocess** (`node bin/wienerdog.js uninstall …`) | the **environment**, the only channel a subprocess has: `WIENERDOG_ALLOW_REAL_SCHEDULER=1` | Table B grants authority, so the gate is **never armed** — no probe, no query, no domain contact at all | authority is the real product predicate. The run genuinely *is* authorized; it is not being told a falsehood about the world |
 | **Neither channel** (a test that sets up neither) | — | the gate refuses to answer (row below) | a forgotten seam fails deterministically instead of depending on the host |
+
+**The two channels must not be mixed, and on this tree they would be by
+accident.** `tests/unit/uninstall.test.js`'s `tempEnv()` returns one `env` object
+that its subprocess helper passes to `execFileSync` **and** its in-process tests
+splat into the live environment — `Object.assign(process.env, env)` at `:278`.
+Putting the authority marker in that shared object would therefore grant
+authority to the six in-process calls as well, the gate would never arm, and
+their injected probes would be **dead seams** that keep passing after the
+in-process path breaks. The channels are separated by where the marker is placed:
+
+| Rule | Value |
+|---|---|
+| Where the marker may be set | **only on the env handed to a subprocess invocation.** It must not reach the object that in-process tests assign into `process.env` |
+| In-process calls | run with `WIENERDOG_ALLOW_REAL_SCHEDULER` **absent**, so the gate arms and the injected `SchedulerProbe` is what decides |
+| Observable invocation | an in-process test must assert its probe was **actually consulted** — a call count, not just a return value. A seam that is never called cannot be distinguished from a broken gate by its result alone, which is the failure this row exists to make impossible |
 
 | Fact / rule | Value |
 |-------------|-------|
@@ -403,12 +425,15 @@ re-run, not take on trust):
 |---|---|---|---|
 | `tests/unit/uninstall.test.js` | in-process `run()` | **6** | `:284`, `:348`, `:364`, `:411`, `:427`, `:470` — all non-dry-run |
 | `tests/unit/uninstall.test.js` | subprocess via its `run()` helper (`:51-58`) | **15** | `:81`, `:93`, `:104`, `:114`, `:124`, `:131`, `:141`, `:173`, `:185`, `:217`, `:241`, `:253`, `:496`, `:523`, `:643` — of which `:81` and `:185` are `--dry-run` and the other 13 are `--yes` |
-| `tests/unit/uninstall.test.js` | subprocess via `spawnSync` | **1** | `:613`, no `--yes`, stdin `n\n` — an interactive decline. It is non-dry-run, so it reaches the gate *before* the confirm prompt |
+| `tests/unit/uninstall.test.js` | subprocess via `spawnSync` | **1** | `:613`, no `--yes`, stdin `n\n` — an interactive decline. It declines *at* the confirm, so with the gate now sitting after it (Table U) this call never reaches the gate; it carries the marker anyway, so every subprocess caller stays uniform |
 | `tests/integration/uninstall-core-e2e.test.js` | subprocess via its `run()` helper (`:39-46`) | **1** | `:88`, `--yes` |
 
 So **14 non-dry-run subprocess uninstalls in the unit file and 1 in the
-integration file** must gain the authority marker, and the 6 in-process calls
-must gain the seam. Both files are in the Deliverables.
+integration file** carry the authority marker — 14 of those 15 actually reach the
+gate, the exception being `:613`, which declines at the confirm before the gate
+runs and carries the marker only for uniformity. The 6 in-process calls take the
+seam instead, with the marker **absent** (the separation rows above). Both files
+are in the Deliverables.
 
 ### Table R — the refusal line (row 4's only output)
 
@@ -616,7 +641,13 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
       **thenable/Promise**, or that returns a malformed value (not an object,
       `status` outside `'clean'|'live'`, `identifiers` not an array of strings)
       is treated as NOT-PROBEABLE and **aborts**. No such input can produce a
-      deletion. A `{status:'live'}` with absent/empty `identifiers` still aborts.
+      deletion.
+- [ ] Both contradictory-payload cases, explicitly: `{status:'clean',
+      identifiers:['ai.wienerdog.dream']}` and `{status:'clean'}` with
+      `identifiers` absent **abort** as NOT-PROBEABLE (the cross-field
+      invariant); `{status:'live'}` with absent or empty `identifiers` **aborts**
+      as LIVE. Granting needs the whole object coherent; aborting needs only
+      `status`.
 - [ ] Table T, in-process channel: `run(argv, opts)` accepts an injected
       `opts.probe`; `bin/wienerdog.js` still calls `run(rest)` with one argument
       and is not edited.
@@ -642,8 +673,22 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
 - [ ] Table C: `scripts/smoke-install.sh` contains the opt-in export exactly once,
       it is not an unconditional top-level `export`, and the script reads no `CI`
       variable; the script still parses and passes `shellcheck`.
-- [ ] `npm test` and `npm run lint` pass, with no test disabled, skipped or
-      granted a new environment variable to keep it passing.
+- [ ] Table C's step-7 conditional, on a **forced NOT-PROBEABLE** preflight:
+      exactly one notice line is printed, `WD uninstall` is not invoked, none of
+      step 7's three `ok` calls run, and no `die` fires.
+- [ ] Table C's step-7 conditional, on a **CLEAN** preflight: step 7 runs
+      byte-unchanged — `WD uninstall` is invoked and all three `ok` calls run —
+      and the printed total equals today's.
+- [ ] The two printed `SMOKE PASS — N checks.` totals differ by **exactly 3**.
+- [ ] `npm test` and `npm run lint` pass, with no test disabled or skipped, and
+      none given an environment variable to paper over a failing assertion. The
+      subprocess authority marker (Table T) is **not** an exception to that rule
+      and should not be read as one: it is not a switch that suppresses a check,
+      it is the product's real authority predicate, supplied through the only
+      channel a subprocess has, to a run that genuinely is authorized. The
+      distinction is testable — it grants the *same* thing a user grants, and it
+      is forbidden on the in-process path precisely because there the seam, not
+      the variable, is the correct channel.
 - [ ] Idempotence: **N/A — this WP changes one in-process decision; it ships no
       command and writes nothing outside the repo.**
 
@@ -758,14 +803,33 @@ grep -qE '^[[:space:]]*await loader\(\)\.run\(rest\);[[:space:]]*$' bin/wienerdo
   manifest carrying a `scheduler-entry` — is **safe only after this WP is
   implemented** (before it, the unload argv reaches the live domain), so it is
   not a "before" measurement and is not required.
-- **Table C's behavioral half is proven by CI on this PR, not locally.** The
-  local checks above are structural, because the only way to exercise the export
-  end to end is to run the full smoke lifecycle, which is the run that caused
-  issue #169. The `install-smoke` workflow runs it on a clean runner: paste the
-  step's log showing either real registration attempts (a CLEAN-probing runner,
-  which granted authority) or Table R refusal lines (a NOT-PROBEABLE runner,
-  which did not). Either outcome confirms the gating; a run showing real
-  registration on a runner whose probe was *not* CLEAN is a failure.
+- **Table C's export gating is proven by CI on this PR**, because the only way to
+  exercise the export end to end is to run the full smoke lifecycle. The
+  `install-smoke` workflow runs it on a clean runner: paste the step's log showing
+  either real registration attempts (a CLEAN-probing runner, which granted
+  authority) or Table R refusal lines (a NOT-PROBEABLE runner, which did not).
+  Either outcome confirms the gating; a run showing real registration on a runner
+  whose probe was *not* CLEAN is a failure.
+- **Table C's step-7 conditional is proven LOCALLY and DETERMINISTICALLY, because
+  CI cannot be relied on to reach it.** If both hosted runners happen to probe
+  CLEAN, the non-CLEAN branch never executes and could ship broken — surfacing
+  only later, on the unprobeable runner it exists for. Force both branches with
+  the technique this family already uses for `WP-smoke-live-scheduler-preflight`'s
+  exit-2 arm: temporarily point the probe's client constant at a path that cannot
+  answer (→ NOT-PROBEABLE), and at a stub that exits 0 printing nothing (→ CLEAN).
+  Both are local edits, reverted after the observation; **no product code, no new
+  variable and no new seam is added for them**. Run the script once per branch and
+  paste both outputs, asserting:
+
+  | Branch | Must hold |
+  |---|---|
+  | forced **NOT-PROBEABLE** (with `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` so the preflight proceeds) | exactly **one** notice line; `WD uninstall` is **not** invoked; **zero** of step 7's three `ok` calls run; no `die` |
+  | forced **CLEAN** | step 7 runs byte-unchanged: `WD uninstall` invoked, **all three** `ok` calls run, and the printed total equals today's |
+  | the pair | the two printed `SMOKE PASS — N checks.` totals differ by **exactly 3** |
+
+  Run these only after the row-4 and Table C structural arms above are green: a
+  forced-non-CLEAN lifecycle is safe precisely *because* no authority is granted
+  and every mutation refuses, and those two facts are what the earlier arms prove.
 
 ## Out of scope (do NOT do these)
 

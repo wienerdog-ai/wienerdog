@@ -176,7 +176,7 @@ Two more residuals are named and accepted, so the full set lives in one place:
 |---|---|---|
 | **R-namespace-bridge** | a sandbox presenting its own filesystem at the passwd home's pathname, or a platform whose `os.userInfo().homedir` follows the environment, satisfies the coherence arm | scoping, not detection (above) |
 | **R-failed-unload** | a *failed* or *suppressed* unload during `uninstall` still proceeds to delete, leaving an orphan. Pre-existing on `main`, unchanged by this ADR | transactional uninstall is its own work package; `wienerdog doctor` surfaces the orphan |
-| **R-probe-race** | Decision 3's probe answers for the instant it ran; a process that registers real jobs afterwards is not seen by the run that already earned authority | a per-user lock across all mutators is machinery a maintainer-run smoke script does not justify. The promise is "the domain was clean when this run started", and no more |
+| **R-probe-race** | a probe answers for the instant it ran, and a process that registers real jobs afterwards is not seen by whatever that answer already licensed. **Two windows, one residual:** Decision 3's smoke preflight, whose answer licenses the lifecycle that follows; and Decision 2's uninstall clearance, whose answer licenses the deletion that follows. The second is deliberately kept to the milliseconds between the probe and `reverse()` — the clearance is established *after* the interactive confirm, never before it, so a prompt left open for minutes cannot stretch it | a per-user lock across all mutators is machinery neither a maintainer-run smoke script nor a single uninstall justifies, and it was weighed and rejected above. The promise both windows make is "the domain answered this way at that instant", and no more |
 
 ### The owner's rulings this Decision carries
 
@@ -187,8 +187,8 @@ review:
 | # | Question | Ruling |
 |---|---|---|
 | D1 | Sign the coherence rule, or narrow to opt-in-only? | **Coherence + exact-value opt-in as drafted** (Decision 1) |
-| D2 | Soft refusal, or hard abort? | **Both, by command class**: soft for `init` / `sync` / `schedule`; `uninstall` checks authority before deleting and aborts loudly (Decision 2). **Round-2 refinement to the same ruling:** what arms that check is a live-domain probe, not a manifest record — the ruling stood, the trigger was wrong |
-| D3 | Special-case a `WIENERDOG_HOME`-relocated install? | **No — a named residual.** Such an install sets the opt-in for *every* scheduler-touching command (`init`, `sync`, `update`, `schedule add/remove`, `uninstall`), and documenting that is a follow-up work package, not a code branch |
+| D2 | Soft refusal, or hard abort? | **Both, by command class**: soft for `init` / `sync` / `schedule`; `uninstall` establishes **deletion clearance** before deleting and aborts loudly without it (Decision 2). Two later refinements to the same ruling, neither reopening it: **round 2** — what supplies the evidence is a live-domain probe, not a manifest record; **round 3** — clearance is *authority OR an answered-CLEAN probe*, so `uninstall` does not require scheduler authority outright |
+| D3 | Special-case a `WIENERDOG_HOME`-relocated install? | **No — a named residual.** Such an install sets the opt-in for the scheduler-*mutating* commands (`init`, `sync`, `update`, `schedule add/remove`). `uninstall` is the exception the clearance split creates: it needs the marker **only** when its probe reports a live Wienerdog identifier or cannot answer; on an answered-CLEAN domain it proceeds without one. Documenting that is a follow-up work package, not a code branch |
 
 ### Why not the alternatives
 
@@ -204,7 +204,7 @@ review:
 | **Arm the uninstall gate on a `scheduler-entry` in the manifest** | Drafted for round 1, refuted by both channels in round 2. The manifest is untrusted and its records go missing for ordinary reasons — stripping, hand-editing, an older format, a partial earlier run — so a live registration with no record left the gate unarmed and orphanable, which is the original failure with one more step. Calling that "the safe failure direction" confused ADR-0038's *deletion-narrowing* rule with a safety guarantee: absence of an untrusted record is not a positive fact. Replaced by Decision 2's live-domain probe |
 | **Make the coherence and opt-in arms independent, with any lookup failure meaning no authority** | Drafted for round 1, refuted by both channels in round 2: `WIENERDOG_ALLOW_REAL_SCHEDULER=1` plus a throwing `os.userInfo()` had two opposite outcomes, and the reading that refuses disabled the escape hatch precisely in the degraded environments where this ADR names it the correct authority. Decision 1 is therefore **ordered**: the exact opt-in short-circuits without evaluating coherence, and a lookup failure disables only the coherence arm |
 | **Transactional uninstall** (propagate the unload result, order scheduler entries first, abort mid-reversal retaining recovery metadata) | Not rejected on the merits — it is the real fix for residual R-failed-unload. Rejected *here*: it rewrites `reverseSchedulerEntry` and `reverse()`'s ordering, and must define what a partially-reversed install looks like. Its own work package |
-| **A per-user scheduler lock, or re-verifying ownership before each destructive step** | Rejected for residual R-probe-race (a concurrent process registering real jobs after a CLEAN probe). Serializing every mutator behind a lock is machinery a maintainer-run smoke script does not justify; the probe's contract is stated as point-in-time instead |
+| **A per-user scheduler lock, or re-verifying ownership before each destructive step** | Rejected for residual R-probe-race, in **both** its windows (a concurrent process registering real jobs after a CLEAN smoke preflight, or after an uninstall's clearance probe). Serializing every mutator behind a lock is machinery neither justifies; the probes' contract is stated as point-in-time instead, and the uninstall window is bounded by placing the decision after the confirm rather than before it |
 | **A separate test-only wrapper instead of an `opts.probe` parameter on the production `run()`** | Weighed at round 3 and not adopted. It trades one risk for another: a second entry point is a second thing that can drift from the real one, and the tests would then exercise the wrapper rather than the gate. The parameter matches the codebase's existing seam pattern (`status.probeAll`), and what actually makes it safe is the **call-site gate** — `src/cli/uninstall` is required from exactly one production place, the `bin/wienerdog.js` dispatch table, which is invoked with exactly one argument. Both facts are asserted, not asserted-about |
 | **A blanket "no production `.run(` passes a second argument" assertion** | Refuted by measurement on `a6e0803`: six `.run(` sites exist under `bin/` and `src/`, and three of them (`src/gws/index.js:117`, `:148`, `src/cli/init.js:182`) legitimately pass options today. A gate written that way would have been false on arrival. Replaced by the uninstall-scoped pair above — the enumerate-your-own-good form |
 
@@ -259,14 +259,17 @@ review:
   job with its recovery metadata deleted — so Decision 2 probes the live domain
   and aborts instead. The cost is one read-only query per unauthorized uninstall,
   and one command for a user who genuinely means it.
-- **The relocated-core cost is stated in full, not understated.** It is not just
-  a first `init` needing a second command: **every** scheduler-touching command on
-  such an install needs the marker — `init`, `sync`, `update`, `schedule
-  add/remove` and `uninstall`. Without it, `init`/`sync` complete with files
-  written and jobs inactive (the stderr line is the only signal, and `wienerdog
-  doctor` reports the missing registrations), and `uninstall` refuses outright.
-  Owner ruling D3 accepts this as a named residual with a documentation
-  follow-up, not a code branch.
+- **The relocated-core cost is stated in full, and no wider than it is.** It is
+  not just a first `init` needing a second command: every scheduler-*mutating*
+  command on such an install needs the marker — `init`, `sync`, `update`,
+  `schedule add/remove`. Without it they complete with files written and jobs
+  inactive (the stderr line is the only signal, and `wienerdog doctor` reports the
+  missing registrations). **`uninstall` is the one that differs**, because it
+  gates on deletion clearance rather than scheduler authority: it needs the marker
+  only when its probe reports a live Wienerdog identifier or cannot answer, and on
+  an answered-CLEAN domain it uninstalls normally with no marker at all. Owner
+  ruling D3 accepts this as a named residual with a documentation follow-up, not a
+  code branch.
 - **Windows and container-shaped environments are weaker, and that is a limit
   rather than a property.** `os.userInfo().homedir` is measured here on darwin
   only; a platform that derives it from the environment, or a sandbox presenting
