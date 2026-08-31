@@ -1,11 +1,12 @@
 ---
 id: WP-private-state-writers-mode-pin
-title: Pin 0600 on every private-listed state file whose writer replaces it by temp+rename
+title: Write every private-listed state file through the private writer, so no rewrite can loosen it
 status: Draft
 model: sonnet
 size: S
-depends_on: []
+depends_on: [WP-failloud-survives-state-write-failure]
 adrs: [ADR-0004, ADR-0024]
+epic: issue-168
 ---
 
 # WP-private-state-writers-mode-pin: make the writers agree with the private-file policy
@@ -21,8 +22,8 @@ must be `0700`, files that must be `0600` — and exposes a single read predicat
 that one predicate so they can never disagree: `wienerdog doctor` warns per
 offending path (`src/cli/doctor.js:641-656`), `wienerdog sync` repairs
 (`repairPrivateModes` at `src/cli/sync.js:263`; the dry-run branch only counts,
-at `:260`), and the injected digest carries an `insecureModes`
-count (`src/cli/dream.js:643`, `src/cli/sync.js:289`).
+at `:260`), and the injected digest carries an `insecureModes` count
+(`src/cli/dream.js:643`, `src/cli/sync.js:289`).
 
 The policy names the files; it does not write them. Each file has its own writer,
 and a writer that produces the wrong mode is not corrected until the next
@@ -38,17 +39,30 @@ in-place `fs.writeFileSync(file, data)` opens an existing file `O_TRUNC` and
 leaves its mode alone, so a file that is already `0600` stays `0600`. A
 **temp+rename** writer instead creates a brand-new inode — at the process
 default mode, `0666 & ~umask` — and renames it over the destination, so the new
-inode's loose mode replaces the correct one. Every writer in this repo that
-already gets this right does the same two things: pass `{ mode: 0o600 }` at
-create *and* `chmod` the temp before the rename, because the create mode is
-masked by umask while the chmod is not (`src/core/identity-approvals.js:98-102`,
-`src/core/dream/ledger.js:131-134`, `src/gws/client.js:139-142`,
-`src/core/dream/validate.js:667-669`). This WP applies that established shape to
-the writers that lack it.
+inode's loose mode replaces the correct one. Three writers do exactly that.
 
-Scope is one claim, stated once and checked once: **every private-listed file is
-`0600` on disk immediately after its own writer runs, under any umask.** Table A
-is the measured audit that defines which writers that claim touches.
+The tree already has the right tool. `writeFilePrivate`
+(`src/core/private-fs.js:280-371`) is the audited private-write primitive that 11
+production call sites across 10 files already use: it creates a **crypto-random**
+temp with `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW`, writes and `fchmod`s **through
+that fd**, then renames. Because the mode is set on the descriptor rather than
+requested at creation, it is umask-independent; because the temp name is random
+and `O_EXCL`, no stale or symlinked temp can be written through; and because the
+mode is fixed before the rename, the bytes are never observable at a loose mode.
+This WP moves the three outliers onto it, so the private set has one writer
+shape instead of four.
+
+Scope is one claim: **every private-listed file written by a temp+rename writer
+is `0600` under any umask, in both the destination-absent and destination-present
+states, with no loose-mode window.** Table A is the measured audit that defines
+which writers that claim touches.
+
+**Dependency.** `writeFilePrivate` refuses more anomalies than the current
+writers do, so it can throw where they did not. On three of `runJob`'s failure
+paths the watermark write is followed immediately by the durable failure alert,
+and a throw there escapes before the alert is written — a **pre-existing** defect
+measured on HEAD, fixed by `WP-failloud-survives-state-write-failure`, which is
+this WP's `depends_on`. Do not start this WP until that one is `Done`.
 
 ## Current state
 
@@ -69,7 +83,7 @@ enumerated as `0600` files by `listPrivateEntries` (`:640-646`) and flagged by
 `` — matching the issue's quoted warning exactly.
 
 **Measured behavior.** Running the three writers under `umask 000` against a
-temp core (the Table A gate under Verification steps) on HEAD:
+temp core (the Table C gate under Verification steps) on HEAD:
 
 ```text
 alerts.jsonl after appendAlert : 0600
@@ -78,27 +92,41 @@ watermarks.json   -> 0666
 alerts.jsonl      -> 0666
 ```
 
-The `0666` measured here and the `0644` issue #168 reports are the **same
-defect at two umasks**, not a discrepancy: the temp file is created at the
-process default `0666 & ~umask`, so the reporter's default `umask 022` yields
-`0644` while this gate runs under `umask 000` to show the raw `0666`. Fixing
-the mode makes the umask irrelevant, which is why Table B pins with `chmod`
-rather than relying on the create mode.
+The `0666` measured here and the `0644` issue #168 reports are the **same defect
+at two umasks**, not a discrepancy: the temp file is created at the process
+default `0666 & ~umask`, so the reporter's default `umask 022` yields `0644`
+while this gate runs under `umask 000` to show the raw `0666`. Both were
+reproduced — running `writeScheduleState` under `umask 022` yields exactly the
+`0644` the issue reports.
 
-The `appendAlert` line is the control: the append path already pins `0600` via
-`chmodAlerts` (`src/core/alerts.js:90`), so `alerts.jsonl`'s loose mode is
-produced by `clearAlerts` alone, not by the module generally.
+**Why a mode argument alone is not the fix.** `fs.writeFileSync(tmp, body,
+{ mode: 0o600 })` is masked by umask and ignored entirely when the path already
+exists. Measured:
+
+```text
+writeFileSync {mode:0600} under umask 0777 -> 0000     (mode is masked)
+stale temp starts at 0666
+after writeFileSync {mode:0600} onto it    -> 0666     (mode ignored; private bytes on disk at 0666)
+symlinked temp -> the OUTSIDE target received the bytes, mode 0666
+```
+
+The last line is the sharpest: the current writers build a **predictable** temp
+name (`${file}.${process.pid}.tmp`), and `writeFileSync` follows a symlink at
+that name, writing the private body outside the core. `writeFilePrivate`'s
+random `O_EXCL|O_NOFOLLOW` temp closes all three cases at once, which is why
+this WP adopts the primitive instead of adding a `chmod`.
 
 **The audit.** Table A enumerates every writer of every private-listed `0600`
-file and classifies it. Three writers are mode-dropping; every other writer of a
-private-listed file is already correct.
+file, classifies it, and — per the round-1 finding — states which
+destination states each row was measured in. Three writers are mode-dropping;
+every other writer of a private-listed file already lands `0600`.
 
 **One measured caveat, carried into Table A.** `writeWatermarks` has **no
 production caller** on HEAD — `src/core/dream/ledger.js:11` imports only
 `readWatermarks` (for the one-time ledger migration at `:153`), and the sole
 callers of `writeWatermarks` are `tests/unit/dream-collect.test.js` and
 `tests/unit/ledger.test.js`. It is fixed here because it is a mode-dropping
-writer of a private-listed file and the fix is two lines, not because it is
+writer of a private-listed file and the fix is a one-line swap, not because it is
 reachable in production today. Do not delete it; that is a separate question.
 
 **A dated owner decision stands against two of the three fixes.** `WP-a9-private-modes-repair`
@@ -122,9 +150,9 @@ Definition of done item 0. `alerts.jsonl` was never covered by it.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/jobs.js | `writeScheduleState` only — apply Table B at lines 238-239 |
-| modify | src/core/dream/watermarks.js | `writeWatermarks` only — apply Table B at lines 39-40 |
-| modify | src/core/alerts.js | `clearAlerts` only — apply Table B at lines 207-208. Do NOT touch `appendAlert`, its compaction branch, or `chmodAlerts` (Table A rows 2-3: already correct) |
+| modify | src/scheduler/jobs.js | `writeScheduleState` only — replace the hand-rolled temp+rename at lines 236-239 per Table B; thread `{ core: paths.core }` |
+| modify | src/core/dream/watermarks.js | `writeWatermarks` only — replace lines 37-40 per Table B; no core to thread (Table B's no-override row) |
+| modify | src/core/alerts.js | `clearAlerts` only — replace lines 206-208 per Table B; thread `{ core: paths.core }`. Do NOT touch `appendAlert`, its compaction branch, or `chmodAlerts` (Table A rows 2-3) |
 | modify | src/core/private-fs.js | **comment text only, zero code change** — correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited (config.yaml / install-manifest.json writers really are unchanged here) |
 | create | tests/unit/private-writer-modes.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
@@ -132,85 +160,127 @@ Definition of done item 0. `alerts.jsonl` was never covered by it.
 
 No exported signature changes. `writeScheduleState(paths, name, patch)`,
 `writeWatermarks(stateDir, {claude, codex})` and `clearAlerts(paths, job)` keep
-their parameters, return values, file contents, atomicity (temp+rename) and
-error behavior exactly as they are on HEAD. The only observable change is the
-POSIX mode of the file each leaves on disk.
+their parameters, return values, file contents and atomicity. Two observable
+changes: the POSIX mode of the file each leaves on disk (Table C), and the
+anomaly refusals `writeFilePrivate` adds (Table B).
 
 ## Contract reference
 
-Activation (ADR-0031, 2-of-7): **(v)** the writers emit the mode but
-`private-fs.js` owns the policy that judges it — the authority split *is* the
-bug; and **(vi)/(vii)** three surfaces (doctor, sync, digest) consume that one
-predicate, and the same per-writer facts appear in the audit, the Deliverables
-cells, the acceptance criteria and the verification gate.
+Activation (ADR-0031, 2-of-7): **(iv)** the writers gain `writeFilePrivate`'s
+refusal behavior; **(v)** the writers emit the mode but `private-fs.js` owns the
+policy that judges it — the authority split *is* the bug; and **(vi)/(vii)**
+three surfaces (doctor, sync, digest) consume that one predicate, and the same
+per-writer facts appear in the audit, the Deliverables cells, the acceptance
+criteria and the verification gate.
 
 ### Table A — every writer of a private-listed `0600` file (measured on HEAD a6e0803)
 
 "Shape" is what determines the mode: *in-place* preserves an existing file's
-mode, *temp+rename* replaces the inode and carries the temp's mode.
+mode, *temp+rename* replaces the inode and carries the temp's mode. "States
+measured" records which destination states the row was checked in — **absent**
+(the writer creates the file) and **present** (it replaces an existing one),
+because a writer can be correct in one and wrong in the other.
 
-| # | Private-listed file | Writer (file:line) | Shape | Mode it leaves | This WP |
-|---|---------------------|--------------------|-------|----------------|---------|
-| 1 | `state/digest.md` | `src/cli/sync.js:293`, `src/cli/dream.js:646` | `writeFilePrivate` | 0600 | unchanged |
-| 2 | `state/alerts.jsonl` | `src/core/alerts.js:89-90` (`appendAlert` append) | append + `chmodAlerts` | 0600 | unchanged |
-| 3 | `state/alerts.jsonl` | `src/core/alerts.js:117-120` (`appendAlert` compaction) | temp `{mode:0600}` + rename + `chmodAlerts` | 0600 | unchanged |
-| 4 | `state/alerts.jsonl` | `src/core/alerts.js:207-208` (`clearAlerts`) | temp+rename, **no mode, no chmod** | **0666** | **FIX (Table B)** |
-| 5 | `state/alerts-ack.json` | `src/core/alert-ack.js:88,113` | `writeFilePrivate` | 0600 | unchanged |
-| 6 | `state/transcript-ledger.json` | `src/core/dream/ledger.js:131-134` | temp `{mode:0600}` + chmod + rename + chmod | 0600 | unchanged |
-| 7 | `state/identity-approvals.json` | `src/core/identity-approvals.js:98-102` | temp `{mode:0600}` + chmod + rename + chmod | 0600 | unchanged |
-| 8 | `state/broker-grants.json` | `src/gws/broker/grant-store.js:168` | `writeFilePrivate` | 0600 | unchanged |
-| 9 | `state/exec-pins.json` | `src/core/exec-identity.js:410` | `writeFilePrivate` | 0600 | unchanged |
-| 10 | `state/run-evidence.jsonl` | `src/core/run-evidence.js:131` | `writeFilePrivate` | 0600 | unchanged |
-| 11 | `state/schedule.json` | `src/scheduler/jobs.js:238-239` (`writeScheduleState`) | temp+rename, **no mode** | **0666** | **FIX (Table B)** |
-| 12 | `state/watermarks.json` | `src/core/dream/watermarks.js:39-40` (`writeWatermarks`) | temp+rename, **no mode** | **0666** | **FIX (Table B)** — no production caller; see Current state |
-| 13 | `<core>/config.yaml` | `src/cli/init.js:158,168`, `src/cli/adopt.js:382`, `src/scheduler/jobs.js:164,180` | **in-place** `writeFileSync`, no temp | preserves the existing file's mode; umask default only at first create (init) | out of scope — see below |
-| 14 | `<core>/install-manifest.json` | `src/core/manifest.js:687` (`save`) | **in-place** `writeFileSync`, no temp | as row 13 | out of scope — see below |
-| 15 | `logs/<job>/*.log` | `createLogStreamPrivate`, `src/core/private-fs.js:951-987` | `O_CREAT` 0600 + `fchmod` on the fd | 0600 | unchanged |
-| 16 | `state/dream-scratch/*.json` | `src/core/dream/scratch.js:215` | `writeFilePrivate` | 0600 | unchanged |
-| 17 | `state/quarantine/*`, `state/quarantine/redacted/*` | `src/core/dream/validate.js:667-669` (`quarantinePreserve`) | temp `{mode:0600}` + chmod + rename | 0600 | unchanged |
-| 18 | `secrets/*` | `src/gws/client.js:139-142` (`writeSecretJson`) | temp `{mode:0600}` + chmod + rename + chmod | 0600 | unchanged |
-| 19 | `secrets/*.retired` | `src/gws/token-migration.js:36` | `renameSync` of an existing file | preserves its 0600 | unchanged |
+| # | Private-listed file | Writer (file:line) | Shape | States measured | Mode it leaves | This WP |
+|---|---------------------|--------------------|-------|-----------------|----------------|---------|
+| 1 | `state/digest.md` | `src/cli/sync.js:293`, `src/cli/dream.js:646` | `writeFilePrivate` | absent + present | 0600 | unchanged |
+| 2 | `state/alerts.jsonl` | `src/core/alerts.js:89-90` (`appendAlert` append) | append, then `chmodAlerts` | absent + present | 0600 **final**; on **absent** the create is `0666` until `:90` runs — see the named residual below | unchanged |
+| 3 | `state/alerts.jsonl` | `src/core/alerts.js:117-120` (`appendAlert` compaction) | temp `{mode:0600}` + rename + `chmodAlerts` | present (compaction implies the file exists) | 0600 | unchanged |
+| 4 | `state/alerts.jsonl` | `src/core/alerts.js:206-208` (`clearAlerts`) | temp+rename, **no mode, no chmod** | present (it rewrites; an empty result deletes instead) | **0666** | **FIX (Table B)** |
+| 5 | `state/alerts-ack.json` | `src/core/alert-ack.js:88,113` | `writeFilePrivate` | absent + present | 0600 | unchanged |
+| 6 | `state/transcript-ledger.json` | `src/core/dream/ledger.js:131-134` | temp `{mode:0600}` + chmod + rename + chmod | absent + present | 0600 | unchanged |
+| 7 | `state/identity-approvals.json` | `src/core/identity-approvals.js:98-102` | temp `{mode:0600}` + chmod + rename + chmod | absent + present | 0600 | unchanged |
+| 8 | `state/broker-grants.json` | `src/gws/broker/grant-store.js:168` | `writeFilePrivate` | absent + present | 0600 | unchanged |
+| 9 | `state/exec-pins.json` | `src/core/exec-identity.js:410` | `writeFilePrivate` | absent + present | 0600 | unchanged |
+| 10 | `state/run-evidence.jsonl` | `src/core/run-evidence.js:131` | `writeFilePrivate` | absent + present | 0600 | unchanged |
+| 11 | `state/schedule.json` | `src/scheduler/jobs.js:238-239` (`writeScheduleState`) | temp+rename, **no mode** | absent + present | **0666** | **FIX (Table B)** |
+| 12 | `state/watermarks.json` | `src/core/dream/watermarks.js:39-40` (`writeWatermarks`) | temp+rename, **no mode** | absent + present | **0666** | **FIX (Table B)** — no production caller; see Current state |
+| 13 | `<core>/config.yaml` | `src/cli/init.js:158,168`, `src/cli/adopt.js:382`, `src/scheduler/jobs.js:164,180` | **in-place** `writeFileSync`, no temp | absent + present | present → preserves the existing mode; **absent → umask default (measured `0644` at umask 022)** | out of scope — see below |
+| 14 | `<core>/install-manifest.json` | `src/core/manifest.js:687` (`save`) | **in-place** `writeFileSync`, no temp | absent + present | as row 13 | out of scope — see below |
+| 15 | `logs/<job>/*.log` | `createLogStreamPrivate`, `src/core/private-fs.js:951-987` | `O_CREAT` 0600 + `fchmod` on the fd | absent + present | 0600 | unchanged |
+| 16 | `state/dream-scratch/*.json` | `src/core/dream/scratch.js:215` | `writeFilePrivate` | absent (fresh scratch each run) | 0600 | unchanged |
+| 17 | `state/quarantine/*`, `state/quarantine/redacted/*` | `src/core/dream/validate.js:667-669` (`quarantinePreserve`) | temp `{mode:0600}` + chmod + rename | absent (names are uniquified at `:662-665`) | 0600 | unchanged |
+| 18 | `secrets/*` | `src/gws/client.js:139-142` (`writeSecretJson`) | temp `{mode:0600}` + chmod + rename + chmod | absent + present | 0600 | unchanged |
+| 19 | `secrets/*.retired` | `src/gws/token-migration.js:36` | `renameSync` of an existing file | present | preserves its 0600 | unchanged |
 
-**Why rows 13-14 are out of scope, not overlooked.** Their writers are in-place
-`writeFileSync` with no temp file, so they never replace the inode and never
-reset an already-correct mode — verified: an in-place rewrite of a `0600` file
-under `umask 000` leaves it `0600`, where a temp+rename leaves it `0666`. They
-are loose only if created loose, which happens once at `init`, before any
-scheduled job — exactly the init/sync-time window the 2026-07-19 residual
-covers, and which `wienerdog sync` repairs **durably** because nothing rewrites
-them at job end. They therefore fall outside this WP's claim, and the
-2026-07-19 decision continues to hold for them unmodified.
+**Why rows 13-14 are out of scope, and the narrowed claim.** Their writers are
+in-place `writeFileSync` with no temp file, so on a **present** destination they
+never replace the inode and never reset a correct mode — verified: an in-place
+rewrite of a `0600` file under `umask 000` leaves it `0600`, where a temp+rename
+leaves it `0666`. They are therefore not part of this WP's temp+rename claim.
+But the round-1 review was right that "loose only if created loose at init" was
+too strong: on an **absent** destination they mint the umask mode, and a
+destination can go absent after init through partial recovery, corruption or
+manual cleanup. Measured at `umask 022` — `config.yaml` recreated in place →
+`0644`; `state/` recreated by a mode-less `mkdirSync` → `0755`. So the honest
+claim is the narrower one: **this WP fixes the temp+rename writers; it does not
+make every private-listed path creation-safe.** Deletion-recreation is a
+**named accepted residual** — `wienerdog doctor` still reports it and
+`wienerdog sync` still repairs it durably, because unlike `schedule.json`
+nothing rewrites these at job end. Closing it belongs to the creation-path WP
+named under Out of scope.
 
-### Table B — the canonical private temp+rename write shape
+**Named residual, Table A row 2.** `appendAlert` creates an absent
+`alerts.jsonl` with `fs.appendFileSync` (`:89`) at the umask default and pins it
+with `chmodAlerts` only on the next line (`:90`) — measured `0666` at the create
+under `umask 000`. Its *final* mode is correct, so it is not a mode-dropping
+writer and is not fixed here, but the first alert's bytes are briefly on disk at
+a loose mode. This is a real, narrow window on a create-once path. It is
+recorded here rather than silently fixed, because folding the append path onto a
+private append primitive is a different change (`private-fs.js` exposes no
+`appendFilePrivate`) and would widen this WP past its claim.
 
-The single shape the three fixed writers adopt. It is not new: it is the shape
-already used at `src/core/identity-approvals.js:98-102`,
-`src/core/dream/ledger.js:131-134`, `src/gws/client.js:139-142` and
-`src/core/dream/validate.js:667-669`.
+### Table B — the private write primitive
+
+The three fixed writers stop hand-rolling temp+rename and call the audited
+primitive instead. It is not new: 11 production call sites across 10 files
+already use it (`cli/dream.js:646`, `cli/sync.js:293`, `core/alert-ack.js:88`
+and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
+`core/routine-runtime.js:117`, `core/run-evidence.js:131`,
+`core/runtime-settings.js:72`, `gws/broker/grant-store.js:168`,
+`scheduler/descriptor.js:296`).
 
 | Fact / rule | Value |
 |-------------|-------|
-| Shape | `fs.writeFileSync(tmp, body, { mode: 0o600 })` → `fs.chmodSync(tmp, 0o600)` → `fs.renameSync(tmp, dest)` |
-| Why both the mode and the chmod | the create mode is masked by umask (`0600 & ~umask` can be `0400` or less); `chmod` sets it exactly, umask-independently |
-| Why the temp and not the destination | the mode must be right *before* the rename, so no window exists in which `dest` is the new inode at a loose mode |
-| Ordering | the chmod goes between the write and the rename; the rename stays last, so atomicity is unchanged |
-| What must NOT change | the temp naming, the JSON/JSONL body bytes, the trailing newline, the `mkdirSync` calls, the return values, and which errors propagate |
-| Not adopted here | `writeFilePrivate` (`src/core/private-fs.js:280`) — see Implementation notes for the measured reason |
-| win32 | `chmodSync` is a POSIX-mode no-op there, matching `private-fs.js`'s stated win32 posture (`:23-25`); no platform branch is added |
+| Call | `writeFilePrivate(dest, data, opts)` — `src/core/private-fs.js:280` |
+| Why not `{mode:0o600}` + `chmod` | the create mode is umask-masked (measured `0000` under `umask 0777`) and is **ignored on an existing path**, so a stale temp keeps its loose mode while private bytes are written into it; and a symlink at the predictable temp name is followed out of the core (both measured, Current state) |
+| How it avoids all three | crypto-random temp name + `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, so a pre-existing file or symlink at the temp name cannot be written through; `fchmod(fd, 0o600)` on the descriptor, so the mode is umask-independent and fixed **before** the rename |
+| Core threading | pass `{ core: paths.core }` where the writer has `paths` (`writeScheduleState`, `clearAlerts`) so the ancestry check uses the caller's verified core |
+| No-override case | `writeWatermarks(stateDir, …)` has no `paths`; call it without `opts` and `assertInCoreAncestry` resolves the core via `getPaths()` (`:193-196`). Verified: writing to a state dir outside the resolved core is out of that guard's scope and proceeds, so the existing `stateDir`-based callers keep working |
+| Added refusals (the behavior change) | a pre-existing symlink or non-regular file at `dest` (F16, `:297-303`); a symlinked in-core ancestor or a symlink/non-dir at the parent (`mkdirPrivate`); a post-rename inode mismatch (F10, `:358-366`). Each throws `WienerdogError` instead of silently writing through — fail-closed, and the reason this WP depends on `WP-failloud-survives-state-write-failure` |
+| Directory creation | `writeFilePrivate` calls `mkdirPrivate` itself, so the writers' own `fs.mkdirSync` calls are removed rather than kept alongside |
+| What must NOT change | the JSON/JSONL body bytes, the trailing newline, the return values, the read paths, and the `remaining.length === 0` delete branch in `clearAlerts` (`:202-205`) |
+| win32 | `writeFilePrivate` keeps a plain `{mode:0o600}` temp+rename there (`:283-288`), matching `private-fs.js`'s stated POSIX-only posture (`:23-25`); no platform branch is added at the call sites |
+
+### Table C — the mode contract every fixed writer must satisfy
+
+| Fact / rule | Value |
+|-------------|-------|
+| Mode | exactly `0600` — `(mode & 0o777) === 0o600`, not "at most 0600" |
+| Umasks | verified under **both** `umask 000` (catches a mode-less create → `0666`) **and** `umask 0777` (catches a create-mode-only fix → `0000`). One umask alone cannot distinguish the required fix from an incomplete one |
+| Destination states | verified **absent** (the writer creates) and **present** (the writer replaces) |
+| Loose-mode window | none: the mode is set on the descriptor before the rename publishes the inode, so the destination is never observable at a mode other than `0600` |
+| Repeat runs | a second consecutive call leaves the same `0600` and the same contents for the same input |
+| Predicate agreement | `insecureEntries(paths)` reports none of the three files after its writer has run under either umask |
+| umask discipline | any check that changes the process umask restores it in a `finally` — it is process-global and leaks into later tests |
 
 ### Mirrored Surface Checklist
 
-Surfaces in this spec that mirror Table A / Table B — a finding updates the
-table and every surface below in one pass:
+Surfaces in this spec that mirror Tables A/B/C — a finding updates the table and
+every surface below in one pass:
 
 - [ ] Deliverables-table cells (the three writer rows cite Table B; the
       `private-fs.js` row cites the two comment mirrors)
-- [ ] Acceptance criteria that assert Table A's three FIX rows and its
-      "unchanged" rows
-- [ ] The Table A verification gate under Verification steps
-- [ ] Current-state (the measured probe output, the three mechanism citations,
-      and the `writeWatermarks`-has-no-production-caller caveat)
-- [ ] The out-of-scope justification for Table A rows 13-14
+- [ ] Acceptance criteria that assert Table C's facts and Table A's rows
+- [ ] The Table C verification gate under Verification steps
+- [ ] Current-state (the measured probe output, the mode-argument measurements,
+      the three mechanism citations, and the `writeWatermarks` caveat)
+- [ ] The out-of-scope justification for Table A rows 13-14, and the two named
+      residuals (row 2's create window; deletion-recreation)
+- [ ] Implementation notes: the umask/fixture trap and the core-threading rule
+- [ ] The `depends_on` on `WP-failloud-survives-state-write-failure`, its
+      Context paragraph, and Table B's added-refusals row — the dependency
+      exists because of that row and the three move together
 - [ ] **`src/core/private-fs.js:20-22` and `:129-134`** — prose in the product
       tree asserting these writers are unchanged. It goes false the moment the
       code changes, so it moves in the same PR (it is a Deliverable for exactly
@@ -221,36 +291,23 @@ table and every surface below in one pass:
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
-- **`writeFilePrivate` was considered and rejected, with a measured reason.**
-  `src/core/private-fs.js` exports it, 11 production call sites across 10 files
-  use it, and it is
-  strictly stronger (crypto-random `O_EXCL|O_NOFOLLOW` temp, `fchmod` on the fd,
-  post-rename inode check). But it **throws** where these three writers do not:
-  on a pre-existing symlink at the destination (F16, `:297-303`), on a symlinked
-  in-core ancestor (`assertInCoreAncestry`), and on a post-rename inode mismatch
-  (F10, `:358-366`). Three of `writeScheduleState`'s four production call sites
-  — `src/cli/run-job.js:797`, `:872` and `:1096` — run it **immediately before
-  `failLoud`**, and the fourth (`:1060`) sits on the success path. A new throw on
-  any of the first three would suppress the
-  durable alert that is the whole point of that path, converting a reported job
-  failure into a silent one. Adopting it is therefore a behavior change beyond
-  this WP's claim. It is also already named as separate work in the tree:
-  `private-fs.js:38-45` records "fold those core writers onto the
-  ancestry-validated private writer" as a cross-cutting follow-up WP. Use
-  Table B; do not import `writeFilePrivate` in this WP.
-- The three fixes are independent one-to-three-line edits. Do not refactor them
-  into a shared helper — three call sites of a four-line shape that already
-  recurs verbatim elsewhere in the tree do not earn an abstraction, and a new
-  helper would widen the diff past the claim.
-- **Test-file placement.** All three writers are covered by ONE new file rather
-  than by edits to `tests/unit/scheduler-schedule.test.js`,
-  `tests/unit/dream-collect.test.js` and `tests/unit/alerts.test.js`. Two
-  reasons: the claim is one claim and reads best in one place, and the draft
-  `WP-secret-sink-wiring-probes` already lists `tests/unit/alerts.test.js` and
-  `tests/unit/dream-collect.test.js` in its own Deliverables — a new file avoids
-  a merge conflict between two open work packages.
-- `umask` is process-global. Any test that sets it must restore it, or a later
-  test in the same `node:test` process inherits it.
+- Each of the three edits is a **replacement, not an addition**: delete the
+  writer's `mkdirSync` + temp construction + `writeFileSync` + `renameSync` and
+  call `writeFilePrivate` in their place. Leaving the old temp logic beside the
+  new call would keep the stale-temp hazard the swap exists to remove.
+- Do not add a `chmod` after `writeFilePrivate` — the `fchmod` already ran on the
+  descriptor, and a path-based `chmod` afterwards would reintroduce a
+  path-following call the primitive deliberately avoids.
+- **Known trap (cost me a failed measurement).** `fs.mkdtempSync` creates its
+  directory with mode `0700`, which under `umask 0777` becomes `0000` — the
+  fixture locks the test out of its own tree with `EACCES` before the writer is
+  ever called. Create every fixture directory **before** lowering the umask, and
+  restore the umask in a `finally`.
+- `writeFilePrivate` is imported as
+  `const { writeFilePrivate } = require('../core/private-fs')` — mind the
+  relative depth from each of the three files.
+- `clearAlerts` keeps its early `rmSync` branch when no records remain
+  (`:202-205`); only the rewrite branch changes.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -264,44 +321,51 @@ table and every surface below in one pass:
       mechanics root's state files.** `schedule.json` carries job names and run
       timestamps; `alerts.jsonl` carries failure reasons and log hints;
       `watermarks.json` carries transcript processing markers. On a multi-user
-      machine a `0644` file is readable by every local account. The containment
-      is Table B, applied so the file is never observable at a loose mode: the
-      mode is pinned on the temp inode *before* the rename publishes it.
-- [ ] Residual, named: the parent directory is out of scope. `state/` is created
-      `0700` by `src/cli/init.js:135` before any job runs, so the mode-less
-      `fs.mkdirSync(…, { recursive: true })` inside `writeScheduleState`
-      (`jobs.js:237`) and `writeWatermarks` (`watermarks.js:35`) is a no-op in
-      production; it could only create a loose `state/` on an install where
-      `init` never ran. This WP's claim is over the private-listed **file** set;
-      the directory case is left as stated work below, not silently fixed.
+      machine a `0644` file is readable by every local account.
+- [ ] Containment, and its exact reach: for the three writers this WP changes,
+      the destination is never observable at a loose mode (Table C) and the
+      private bytes can no longer be written into a stale or symlinked temp —
+      both hazards measured on the current shape and both closed by
+      `writeFilePrivate`'s `O_EXCL|O_NOFOLLOW` random temp and pre-rename
+      `fchmod`.
+- [ ] Three residuals, all named and none silently fixed: (1) `appendAlert`'s
+      absent-destination create window (Table A row 2); (2) deletion-recreation
+      of the in-place-written files and of `state/` itself (Table A rows 13-14),
+      which doctor reports and sync repairs durably; (3) the parent directory —
+      `state/` is created `0700` by `src/cli/init.js:135` before any job runs,
+      and `writeFilePrivate`'s `mkdirPrivate` now creates it `0700` rather than
+      at the umask default, which narrows but does not own the directory claim.
 
 ## Acceptance criteria
 
-- [ ] Under `umask 000`, `state/schedule.json` is `0600` immediately after
-      `writeScheduleState` returns (Table A row 11).
-- [ ] Under `umask 000`, `state/watermarks.json` is `0600` immediately after
-      `writeWatermarks` returns (Table A row 12).
-- [ ] Under `umask 000`, `state/alerts.jsonl` is `0600` immediately after a
-      `clearAlerts` call that rewrites the file — i.e. one that leaves at least
-      one other job's record, since a `clearAlerts` that empties the file
-      removes it instead (Table A row 4).
-- [ ] Each of the three holds on the **second** consecutive call as well: a
-      writer that runs twice leaves the file `0600`, and a file already `0600`
-      is still `0600` afterwards.
+- [ ] Each of the three writers leaves its file at exactly `0600` under **both**
+      `umask 000` and `umask 0777`, in **both** the destination-absent and
+      destination-present states (Table C). A change that only passes
+      `{ mode: 0o600 }` at create fails the `0777` case, and this must be true
+      of the delivered tests too.
+- [ ] `state/schedule.json`, `state/watermarks.json` and `state/alerts.jsonl`
+      each satisfy the above via `writeScheduleState`, `writeWatermarks` and a
+      `clearAlerts` call that rewrites the file — i.e. one leaving at least one
+      other job's record, since a `clearAlerts` that empties the file removes it
+      instead (Table A row 4).
+- [ ] A stale file left at the old predictable temp path
+      (`${file}.${process.pid}.tmp`) does not affect the result, and no private
+      body is ever written through a symlink at a temp path.
+- [ ] A pre-existing symlink at one of the three destinations is refused rather
+      than written through, and the symlink's target is left untouched.
+- [ ] Each of the three holds on the **second** consecutive call: same `0600`,
+      same contents for the same input (Table C repeat-runs row).
 - [ ] `insecureEntries(paths)` reports none of these three files after its
-      writer has run under `umask 000` — the writer and the policy now agree,
+      writer has run under either umask — the writer and the policy now agree,
       which is the issue's root cause closed at the source.
-- [ ] Behavior preserved: each writer's file contents, its return value, and its
-      error propagation are unchanged; `appendAlert` and its compaction branch
-      are untouched (Table A rows 2-3) and `clearAlerts` still deletes the file
-      when no records remain.
+- [ ] Behavior preserved: each writer's file contents and return value are
+      unchanged; `appendAlert` and its compaction branch are untouched (Table A
+      rows 2-3); `clearAlerts` still deletes the file when no records remain.
 - [ ] `src/core/private-fs.js` has **no code change** — only the two comment
       mirrors at `:20-22` and `:129-134` are edited, and both `:135-141` (the
       array literal) and `:143-148` are untouched.
 - [ ] Idempotence: this WP ships no new command. The surface it writes outside
-      the repo is the three state files, and the criterion above covers it —
-      running a writer twice produces the same mode and the same contents for
-      the same input.
+      the repo is the three state files, and the repeat-run criterion covers it.
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
@@ -312,47 +376,72 @@ npm test
 npm run lint
 ```
 
-Plus the **Table A gate** — it runs the three REAL writers under `umask 000` in
-a throwaway core and asserts each file is `0600`, exiting non-zero and naming
-every violation. The script goes through a quoted heredoc, not inline quotes, so
-what it asserts cannot be changed by a quoting accident. Run it from the repo
-root:
+Plus the **Table C gate** — it runs the three REAL writers under both umasks and
+both destination states, and asserts each file is exactly `0600`, exiting
+non-zero and naming every violation. The script goes through a quoted heredoc,
+not inline quotes, so what it asserts cannot be changed by a quoting accident.
+Run it from the repo root:
 
 ```bash
 cat > /tmp/wd-private-writer-modes.js <<'LITERAL'
-// Table A gate: run each private-listed file's REAL writer under umask 000 and
-// assert the file it produces is 0600. Exits non-zero naming every violation.
+// Table C gate: run each private-listed file's REAL writer under umask 000 AND
+// umask 0777, in the destination-absent and destination-present states, and
+// assert exactly 0600. Exits non-zero naming every violation.
+// Fixtures are created BEFORE the umask is lowered: mkdtempSync uses mode 0700,
+// which under umask 0777 would be 0000 and lock the probe out with EACCES.
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const R = process.cwd();
 const { getPaths } = require(R + '/src/core/paths');
-process.umask(0o000);
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-modes-'));
-const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd') });
-fs.mkdirSync(paths.state, { recursive: true, mode: 0o700 });
-require(R + '/src/scheduler/jobs').writeScheduleState(paths, 'dream', { last_status: 'ok' });
-require(R + '/src/core/dream/watermarks').writeWatermarks(paths.state, { claude: 1, codex: 2 });
-const A = require(R + '/src/core/alerts');
-const rec = (job) => ({ job, at: '2026-01-01T00:00:00Z', reason: 'r', log_hint: 'h' });
-A.appendAlert(paths, rec('a'));
-A.appendAlert(paths, rec('b'));
-A.clearAlerts(paths, 'a'); // leaves b's record → rewrites the file
+const { insecureEntries } = require(R + '/src/core/private-fs');
+const prevUmask = process.umask();
 const bad = [];
-for (const f of ['schedule.json', 'watermarks.json', 'alerts.jsonl']) {
-  const p = path.join(paths.state, f);
-  const m = fs.statSync(p).mode & 0o777;
-  if (m !== 0o600) bad.push(`${f} is ${m.toString(8).padStart(4, '0')}, expected 0600`);
-}
+try {
+  for (const um of [0o000, 0o777]) {
+    process.umask(0o022);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-modes-'));
+    const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd') });
+    fs.mkdirSync(paths.state, { recursive: true, mode: 0o700 });
+    const jobs = require(R + '/src/scheduler/jobs');
+    const wm = require(R + '/src/core/dream/watermarks');
+    const A = require(R + '/src/core/alerts');
+    const rec = (job) => ({ job, at: '2026-01-01T00:00:00Z', reason: 'r', log_hint: 'h' });
+    process.umask(um);
+    const tag = um.toString(8).padStart(4, '0');
+    const check = (f, state) => {
+      const p = path.join(paths.state, f);
+      const m = fs.statSync(p).mode & 0o777;
+      if (m !== 0o600) bad.push(`umask ${tag} ${state}: ${f} is ${m.toString(8).padStart(4, '0')}, expected 0600`);
+    };
+    jobs.writeScheduleState(paths, 'dream', { last_status: 'ok' });   // absent
+    check('schedule.json', 'absent');
+    jobs.writeScheduleState(paths, 'dream', { last_status: 'ok' });   // present
+    check('schedule.json', 'present');
+    wm.writeWatermarks(paths.state, { claude: 1, codex: 2 });
+    check('watermarks.json', 'absent');
+    wm.writeWatermarks(paths.state, { claude: 3, codex: 4 });
+    check('watermarks.json', 'present');
+    A.appendAlert(paths, rec('a'));
+    A.appendAlert(paths, rec('b'));
+    A.clearAlerts(paths, 'a'); // leaves b's record -> rewrites the file
+    check('alerts.jsonl', 'present');
+    const flagged = insecureEntries(paths).filter((p) =>
+      ['schedule.json', 'watermarks.json', 'alerts.jsonl'].includes(path.basename(p)));
+    if (flagged.length) bad.push(`umask ${tag}: insecureEntries still flags ${flagged.join(', ')}`);
+  }
+} finally { process.umask(prevUmask); }
 if (bad.length) { console.error('FAIL:\n  ' + bad.join('\n  ')); process.exit(1); }
-console.log('OK: schedule.json, watermarks.json, alerts.jsonl all 0600 under umask 000');
+console.log('OK: all three writers exactly 0600 under umask 000 and 0777, absent and present');
 LITERAL
 node /tmp/wd-private-writer-modes.js
 ```
 
 - The gate is a NEW step and is an ASSERTION, not a number to eyeball. Its RED
-  side is already observed: on HEAD `a6e0803` it exits **1** with
-  `schedule.json is 0666` / `watermarks.json is 0666` / `alerts.jsonl is 0666`.
-  Paste that red run alongside the green one from the finished branch, so a
-  check that cannot fail is caught before anyone believes it.
+  side is already observed: on HEAD `a6e0803` the earlier single-umask form
+  exits **1** with `schedule.json is 0666` / `watermarks.json is 0666` /
+  `alerts.jsonl is 0666`. Paste a red run AND the green run from the finished
+  branch. Also paste a red run from a deliberately incomplete fix — a writer
+  changed to pass only `{ mode: 0o600 }` — which must fail the `umask 0777`
+  case at `0000`; that is the case a single-umask gate could not see.
 - The gate deliberately calls `appendAlert` twice before `clearAlerts`: with one
   record, `clearAlerts` removes the file (`src/core/alerts.js:202-205`) and the
   `statSync` would throw rather than measure a mode.
@@ -360,16 +449,17 @@ node /tmp/wd-private-writer-modes.js
 ## Out of scope (do NOT do these)
 
 - **Table A rows 13-14** — the `config.yaml` and `install-manifest.json`
-  writers. Their in-place shape does not drop the mode (justified under Table
-  A), and the 2026-07-19 decision continues to hold for them.
-- **The parent-directory mode.** The mode-less `mkdirSync` calls in
-  `writeScheduleState` and `writeWatermarks` are named under Security checklist
-  as a latent, production-unreachable residual. Fixing them is a different claim
-  (the `0700` directory set, not the `0600` file set); note it under "Discovered
-  issues" in the PR body if you want it filed.
-- **Folding these writers onto `writeFilePrivate`**, or hardening any other
-  mutating CLI entry point against an untrusted mechanics root. That is the
-  cross-cutting follow-up WP that `src/core/private-fs.js:38-45` already names.
+  writers, and the creation-path/deletion-recreation residual generally
+  (justified under Table A). A WP that pins modes on every *creation* path —
+  those two files, `state/` itself, and the mode-less `mkdirSync` calls — is
+  separate work; note it under "Discovered issues".
+- **`appendAlert`'s absent-destination create window** (Table A row 2). Closing
+  it needs an `appendFilePrivate` primitive that `private-fs.js` does not have.
+- **The failure-path alert sequencing** — that is
+  `WP-failloud-survives-state-write-failure`, this WP's `depends_on`, and its
+  call sites are not touched here.
+- Hardening any other mutating CLI entry point against an untrusted mechanics
+  root — the cross-cutting follow-up `src/core/private-fs.js:38-45` already names.
 - Any change to the private set itself, to `insecureEntries`,
   `repairPrivateModes`, `scanPrivateModes`, or to doctor's/sync's/the digest's
   handling of them — the predicate is correct; it is the writers that were wrong.
@@ -381,22 +471,25 @@ node /tmp/wd-private-writer-modes.js
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** This WP is not dispatched until the owner
-   confirms that the dated 2026-07-19 decision — "the four metadata files enter
-   the predicate/repair set while their writers stay unchanged" — is **lifted
-   for `state/schedule.json` and `state/watermarks.json`**, on the ground that
-   issue #168 measured its premise ("sync-time repair suffices") to be false for
-   a file rewritten at every job run. The decision stays in force for
-   `config.yaml` and `install-manifest.json` (Table A rows 13-14), whose writers
-   this WP does not touch. No ADR is required: the decision lives in a `done`
-   spec and a logbook entry, not in an ADR, so its narrowing is recorded the
-   same way — in this spec and in the PR's logbook entry. `alerts.jsonl` (Table
-   A row 4) was never covered by that decision and needs no waiver. The dispatch
-   message records that the confirmation was observed.
-1. All verification steps pass locally, including the Table A gate's green run
-   and its red run; output pasted into the PR body.
+0. **DISPATCH PRECONDITIONS.** (a) `WP-failloud-survives-state-write-failure` is
+   `Done` — until then, `writeFilePrivate`'s added refusals (Table B) can throw
+   at an unguarded failure-path call site and suppress a durable alert. (b) The
+   owner confirms that the dated 2026-07-19 decision — "the four metadata files
+   enter the predicate/repair set while their writers stay unchanged" — is
+   **lifted for `state/schedule.json` and `state/watermarks.json`**, on the
+   ground that issue #168 measured its premise ("sync-time repair suffices") to
+   be false for a file rewritten at every job run. The decision stays in force
+   for `config.yaml` and `install-manifest.json` (Table A rows 13-14), whose
+   writers this WP does not touch. No ADR is required: the decision lives in a
+   `done` spec and a logbook entry, not in an ADR, so its narrowing is recorded
+   the same way — in this spec and in the PR's logbook entry. `alerts.jsonl`
+   (Table A row 4) was never covered by that decision and needs no waiver. The
+   dispatch message records that both preconditions were observed.
+1. All verification steps pass locally, including the Table C gate's green run,
+   a red run on the unfixed state, and a red run on a mode-argument-only fix;
+   output pasted into the PR body.
 2. Conventional commits; PR titled
-   `fix(state): pin 0600 on the temp+rename private-state writers (WP-private-state-writers-mode-pin)`.
+   `fix(state): write the private state files through writeFilePrivate (WP-private-state-writers-mode-pin)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. Both PR review gates have run on the diff and are clean or fully
