@@ -230,8 +230,6 @@ function commitNamedSet(o) {
   const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };
   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
 
-  /** @type {Array<{rel:string, mode:string, sha:string}>} what went into the tree */
-  const entries = [];
   try {
     withIndex(['read-tree', head]);
     for (const m of members) {
@@ -256,7 +254,6 @@ function commitNamedSet(o) {
       const sha = String(blob.stdout).trim();
       if (!sha) throw new WienerdogError(`dream commit: git could not hash ${m.rel}`);
       withIndex(['update-index', '--add', '--cacheinfo', mode, sha, m.rel]);
-      entries.push({ rel: m.rel, mode, sha });
     }
     const tree = withIndex(['write-tree']).stdout.toString().trim();
     const commit = g(
@@ -265,80 +262,24 @@ function commitNamedSet(o) {
     ).stdout.toString().trim();
     g(['update-ref', '-m', 'wienerdog dream', 'HEAD', commit, head]);
 
-    // THE USER'S OWN INDEX HAS TO AGREE WITH THE NEW HEAD for the paths this
-    // commit carries — and ONLY for those. Without this the run leaves a repo in
-    // which `git status` reports every file it just committed as a STAGED
-    // DELETION (HEAD holds it, the index does not), which is a broken state for
-    // the user even though the commit itself is right.
+    // THE USER'S INDEX IS NOT THIS RUN'S PROPERTY, and this run does not touch
+    // it. That is a decision with a cost, taken deliberately (owner ruling,
+    // 2026-08-31) after a refresh mechanism here produced FOUR data-loss defects
+    // in four review rounds: it destroyed staged content, then staged deletions
+    // and staged modes, then disabled itself through a parser bug, then flattened
+    // a user's unresolved merge stages into one entry.
     //
-    // THE USER'S STAGED WORK OUTRANKS THE REFRESH, and this is a data-loss rule
-    // rather than a preference. `update-index` overwrites whatever the index
-    // holds, so on a path the user had STAGED and this run also promoted, an
-    // unconditional refresh destroys the only reference to those staged bytes.
-    // Measured: a staged "v2" became the dream's "v3" with the user's version
-    // recoverable from nothing. So each path is refreshed ONLY when the index
-    // still agrees with the OLD head — i.e. the user staged nothing of their own
-    // there. Where they did, their entry stands and `git status` shows their
-    // staged change against the new HEAD, which is the truth.
+    // THE COST, STATED PLAINLY: after this commit the user's index still
+    // describes the OLD head, so `git status` reports the paths this run
+    // committed as staged deletions or reverse modifications until they run
+    // `git reset` in the vault. That is cosmetic and recoverable in one command.
+    // What the refresh risked was not.
     //
-    // A path whose WORKING TREE differs from the committed bytes — a user save
-    // that landed after the publish, or the code-owned warnings file this commit
-    // renders without writing — shows up as exactly what it is: an uncommitted
-    // working-tree modification, neither committed nor discarded.
-    // THE WHOLE INDEX ENTRY, NOT ITS BLOB. Comparing only the sha was measured to
-    // lose two shapes of the user's staged work: a staged DELETION has no index
-    // entry at all (so a sha check sees `null` and refreshes over it), and a
-    // staged MODE change keeps the same sha (so a sha check sees agreement and
-    // overwrites 100755 with 100644). Presence and mode are staged state too.
-    // TWO FORMATS, TWO PARSERS, NAMED FOR WHAT THEY PARSE. They differ by one
-    // field and treating them as one was measured to break the refresh entirely:
-    //   ls-files --stage : <mode> <sha>  <stage>  \t <path>
-    //   ls-tree          : <mode> <type> <sha>    \t <path>
-    // A shared "field 1 is the sha" reader yields `100644 blob` for every tree
-    // entry, so `idx !== old` held for EVERY ordinary tracked path and the user's
-    // index was never moved forward — reintroducing the stale-index bug this
-    // refresh exists to prevent, and doing it invisibly, because a NEW path has
-    // no entry on either side and still agreed.
-    /** @param {string} out `ls-files --stage` line → `<mode> <sha>`, or null */
-    const indexEntry = (out) => {
-      const f = String(out || '').trim().split(/\s+/);
-      return f.length >= 2 && f[0] !== '' ? `${f[0]} ${f[1]}` : null;
-    };
-    /** @param {string} out `ls-tree` line → `<mode> <sha>`, or null */
-    const treeEntry = (out) => {
-      const f = String(out || '').trim().split(/\s+/);
-      return f.length >= 3 && f[0] !== '' ? `${f[0]} ${f[2]}` : null;
-    };
-    for (const e of entries) {
-      const idx = indexEntry(g(['ls-files', '--stage', '--', e.rel], { allowFail: true }).stdout);
-      const atHead = g(['ls-tree', head, '--', e.rel], { allowFail: true });
-      const old = atHead.status === 0 ? treeEntry(atHead.stdout) : null;
-      // Refresh ONLY where the index still describes the old HEAD exactly —
-      // including both being absent, which is the ordinary case for a path this
-      // run added. Any divergence is the user's own staged state and it stands;
-      // `git status` then shows their staged change against the new HEAD, which
-      // is the truth.
-      //
-      // NAMED RESIDUAL, stated rather than hidden: the compare and the update are
-      // two commands, so a `git add` landing between them is still overwritten.
-      // Git offers no compare-and-swap on the index, so this narrows the window
-      // rather than closing it — the same component-swap class this program
-      // already carries as a residual on its write primitive.
-      if (idx !== old) continue;
-      const upd = g(['update-index', '--add', '--cacheinfo', e.mode, e.sha, e.rel], { allowFail: true });
-      if (upd.status !== 0) {
-        // NEVER SILENT. `update-ref` has already moved HEAD, so a failure here —
-        // a held `index.lock`, an unwritable index — leaves exactly the state
-        // this refresh exists to prevent, while the run would otherwise report
-        // success. The commit is sound and must not be undone; what is owed is
-        // that the user is told, in the terms they will see it in.
-        console.log(
-          `wienerdog: dream — committed ${commit.slice(0, 7)}, but your git index could not be ` +
-            `updated for ${e.rel} (${String(upd.stderr || '').trim() || 'index unavailable'}); ` +
-            'run `git reset` in your vault to resync it. Nothing was lost — the commit is complete.'
-        );
-      }
-    }
+    // Nothing downstream reads the index: the commit is built in a PRIVATE index
+    // above (`GIT_INDEX_FILE`) and published with `commit-tree` + `update-ref`,
+    // so the user's index is never an input to anything this package decides.
+    // Re-deriving git's own staging rules by hand — which is what any correct
+    // refresh would have to do — is not this package's business.
     return commit;
   } finally {
     fs.rmSync(tmpIndex, { force: true });

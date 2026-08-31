@@ -761,57 +761,7 @@ test('dream-pipeline: the commit stores the DECIDED bytes verbatim, through a va
   );
 });
 
-test('dream-pipeline: a user STAGED version of a promoted path is never overwritten by the index refresh (row G8)', async () => {
-  const ctx = setup();
-  const rel = '03-Resources/valid-note.md';
-  const STAGED = 'THE USER STAGED THEIR OWN VERSION\n';
-  // The user stages their own content at a path this run will also promote.
-  writeFile(ctx.vault, rel, STAGED);
-  git(ctx.vault, ['add', rel]);
-  const stagedSha = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
 
-  const r = await runDream(ctx);
-  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-
-  // The commit is still the dream's decided bytes — the user's staged version
-  // does not leak into it.
-  assert.ok(headBytes(ctx.vault, rel).toString('utf8').includes('A legitimately-learned resource note.'));
-  // AND the user's staged work survives: their index entry is untouched, so the
-  // bytes are still reachable. Destroying it would leave them recoverable from
-  // nothing.
-  const afterSha = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
-  assert.equal(afterSha, stagedSha, "the user's staged blob is still the index entry");
-  assert.equal(
-    git(ctx.vault, ['cat-file', 'blob', afterSha]), STAGED,
-    "and it still holds the user's own bytes"
-  );
-});
-
-test('dream-pipeline: an index refresh that FAILS is reported, never silent (row G8)', async () => {
-  const ctx = setup();
-  const { spawnPinnedSync } = require('../../src/core/exec-identity');
-  const { getPaths } = require('../../src/core/paths');
-  // `update-ref` has already moved HEAD by the time the refresh runs, so a
-  // failure here leaves the index describing the old HEAD — exactly the state
-  // the refresh exists to prevent. It must not pass silently.
-  const spawnGit = (o) => {
-    // ONLY the refresh of the USER's index — the tree-building call runs against
-    // the private index and carries GIT_INDEX_FILE. Breaking both would fail the
-    // commit itself and assert nothing about the refresh.
-    if (o.args[0] === 'update-index' && o.args.includes('--cacheinfo') && !(o.env && o.env.GIT_INDEX_FILE)) {
-      return { status: 1, stdout: '', stderr: 'fatal: Unable to create index.lock: File exists' };
-    }
-    return spawnPinnedSync('git', getPaths(), {
-      args: ['-C', o.cwd, ...o.args], env: o.env, platform: process.platform,
-      encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
-    });
-  };
-  const r = await runDream(ctx, ['--yes'], { opts: { spawnGit } });
-  assert.equal(r.thrown, null, 'the commit is sound and the run does not fail');
-  assert.match(r.output, /your git index could not be updated/, 'the failure reaches the user');
-  assert.match(r.output, /index\.lock/, 'naming the cause');
-  assert.match(r.output, /Nothing was lost/, 'and telling them the commit is complete');
-});
 
 test('dream-pipeline: a NON-REGULAR scratch entry is recorded, not silently swept (row G12)', async () => {
   const ctx = setup();
@@ -1269,36 +1219,6 @@ test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed f
   );
 });
 
-test('dream-pipeline: a staged DELETION and a staged MODE change both survive the index refresh (row G8)', async () => {
-  const ctx = setup();
-  const noteRel = '03-Resources/valid-note.md';
-  const idRel = '06-Identity/valid-identity.md';
-  // Both paths this run promotes already exist in the vault, so the user can
-  // have staged something of their own at each.
-  writeFile(ctx.vault, noteRel, 'the user had a version here\n');
-  writeFile(ctx.vault, idRel, 'and one here\n');
-  git(ctx.vault, ['add', '-A']);
-  git(ctx.vault, ['commit', '-q', '-m', 'user versions']);
-
-  // (a) a staged DELETION — no index entry at all, which a blob-sha comparison
-  //     reads as "nothing staged" and refreshes straight over.
-  git(ctx.vault, ['rm', '-q', '--cached', noteRel]);
-  // (b) a staged MODE-ONLY change — the blob sha is unchanged, so a blob-sha
-  //     comparison reads agreement and overwrites 100755 with 100644.
-  git(ctx.vault, ['update-index', '--chmod=+x', idRel]);
-  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'precondition: the mode is staged');
-
-  const r = await runDream(ctx);
-  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-
-  // (a) the staged deletion is STILL staged — the run did not resurrect the path
-  //     in the user's index.
-  assert.equal(git(ctx.vault, ['ls-files', '--stage', noteRel]).trim(), '', 'the staged deletion survives');
-  // (b) the staged mode is STILL 100755.
-  assert.match(git(ctx.vault, ['ls-files', '--stage', idRel]), /^100755 /, 'the staged mode survives');
-  // And the commit itself is unaffected — the dream's decided bytes still landed.
-  assert.ok(headBytes(ctx.vault, noteRel).toString('utf8').includes('A legitimately-learned resource note.'));
-});
 
 test('dream-pipeline: the report refusal on an EXPECT CONFLICT — the criterion\'s other named cause (row G11 case a)', async () => {
   const ctx = setup();
@@ -1377,35 +1297,50 @@ test('dream-pipeline: the FALLBACK report arm — the body was refused, the reco
   assert.ok(!text.includes('Consolidated recent sessions.'), "the refused body is not what landed");
 });
 
-test('dream-pipeline: an ordinary TRACKED path the run modifies IS refreshed in the index (row G8)', async () => {
+// RETIRED WITH THE INDEX REFRESH (owner ruling, 2026-08-31). Four tests lived on
+// that mechanism and all four go with it:
+//
+//   - "an index refresh that FAILS is reported, never silent" — there is no
+//     refresh to fail.
+//   - "an ordinary TRACKED path the run modifies IS refreshed in the index" —
+//     the behaviour it asserted no longer exists. It also carried the EIGHTH
+//     vacuous assertion (its guard re-read a path the test itself had committed),
+//     which goes with it rather than being fixed in place.
+//   - "a user STAGED version of a promoted path is never overwritten" and
+//     "a staged DELETION and a staged MODE change both survive" — these SURVIVED
+//     the removal and passed, which is exactly why they had to go: with nothing
+//     touching the index they are trivially true, they have no possible RED, and
+//     a test that cannot fail is the defect this package has now paid for eight
+//     times.
+//
+// What replaces all four is ONE assertion of the contract that is actually in
+// force — the run does not touch the user's index at all — which DOES have a RED.
+
+test('dream-pipeline: the run does not touch the user\'s git index — at all (row G8)', async () => {
   const ctx = setup();
-  // THE CASE THE DELETION/MODE TEST STRUCTURALLY CANNOT REACH, and the gap a
-  // gate found: both of those cases deliberately DIVERGE from the old HEAD, so
-  // they exercise only the skip branch. Nothing exercised the ordinary agreeing
-  // tracked entry — the one the refresh exists for — and a comparison bug that
-  // made every tracked path look divergent was therefore invisible. A NEW path
-  // has no entry on either side and still agrees, which is why the rest of the
-  // suite stayed green.
   const rel = '03-Resources/valid-note.md';
-  writeFile(ctx.vault, rel, 'the committed version\n');
+  // Every shape of user state the retired refresh managed to destroy, in one
+  // fixture: ordinary staged content, a staged deletion, a staged mode change,
+  // and an unresolved merge. Under the ruling none of them is this run's
+  // business, so the assertion is the simple one — the index is byte-identical
+  // afterwards — and it covers shapes nobody has thought of yet.
+  writeFile(ctx.vault, rel, 'the user staged this\n');
+  writeFile(ctx.vault, 'MODE.md', 'mode\n');
+  writeFile(ctx.vault, 'GONE.md', 'gone\n');
   git(ctx.vault, ['add', '-A']);
-  git(ctx.vault, ['commit', '-q', '-m', 'a tracked note the dream will modify']);
-  // Precondition: the index agrees with HEAD, i.e. the user staged nothing.
-  assert.equal(git(ctx.vault, ['status', '--porcelain', rel]).trim(), '', 'precondition: clean');
+  git(ctx.vault, ['commit', '-q', '-m', 'seed for the index fixture']);
+  writeFile(ctx.vault, rel, 'the user staged THIS instead\n');
+  git(ctx.vault, ['add', rel]);
+  git(ctx.vault, ['update-index', '--chmod=+x', 'MODE.md']);
+  git(ctx.vault, ['rm', '-q', '--cached', 'GONE.md']);
+  const before = git(ctx.vault, ['ls-files', '--stage']);
 
   const r = await runDream(ctx);
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  assert.ok(headBytes(ctx.vault, rel), 'the run committed this tracked path');
+  assert.ok(headBytes(ctx.vault, rel), 'non-vacuity: the run really did commit this very path');
 
-  // THE INDEX MOVED FORWARD WITH HEAD. Without the refresh, HEAD holds the new
-  // bytes while the index still holds the old ones, and `git status` reports the
-  // freshly committed file as a staged REVERSE modification — a broken repo for
-  // the user even though the commit itself is right.
-  const idx = git(ctx.vault, ['ls-files', '--stage', rel]).trim().split(/\s+/)[1];
-  const atHead = git(ctx.vault, ['rev-parse', `HEAD:${rel}`]).trim();
-  assert.equal(idx, atHead, 'the index entry equals the new HEAD for this path');
-  assert.equal(
-    git(ctx.vault, ['diff', '--cached', '--name-only', rel]).trim(), '',
-    'so nothing shows as staged against HEAD'
-  );
+  // THE WHOLE INDEX, BYTE-IDENTICAL. Not "the user's entry survived" — that is
+  // what the retired mechanism kept claiming while losing a different shape each
+  // round. Nothing this run does is allowed to write the index.
+  assert.equal(git(ctx.vault, ['ls-files', '--stage']), before, 'the index is untouched');
 });

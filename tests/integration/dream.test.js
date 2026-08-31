@@ -306,11 +306,16 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   const msg = git(ctx.vault, ['log', '-1', '--pretty=%s']).trim();
   assert.match(msg, /^dream: \d{4}-\d{2}-\d{2} — \d+ notes, \d+ skills$/);
 
-  const tracked = git(ctx.vault, ['ls-files']);
-  assert.ok(tracked.includes('06-Identity/valid-identity.md'));
-  assert.ok(tracked.includes('03-Resources/valid-note.md'));
-  assert.ok(!tracked.includes('06-Identity/injected.md'));
-  assert.ok(!tracked.includes('05-Skills/weak-skill/SKILL.md'));
+  // ASKED OF HEAD, NOT THE INDEX. The run does not touch the user's index
+  // (owner ruling, 2026-08-31 — the refresh that used to keep them in step
+  // produced four data-loss defects and was dropped), so `git ls-files` answers
+  // a question about the user's staging area, not about what this run committed.
+  // What the criterion is about is the commit.
+  const committed = git(ctx.vault, ['ls-tree', '-r', '--name-only', 'HEAD']);
+  assert.ok(committed.includes('06-Identity/valid-identity.md'));
+  assert.ok(committed.includes('03-Resources/valid-note.md'));
+  assert.ok(!committed.includes('06-Identity/injected.md'));
+  assert.ok(!committed.includes('05-Skills/weak-skill/SKILL.md'));
 
   // The injected instruction never lands under 06-Identity in the committed tree.
   let matches = '';
@@ -357,11 +362,21 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   // Summary output present.
   assert.match(output, /dream committed/);
 
-  // `git revert` cleanly undoes the whole run.
+  // `git revert` cleanly undoes the whole run — AFTER the one-command remedy the
+  // dropped index refresh leaves the user (owner ruling, 2026-08-31). The run
+  // does not touch the user's index, so it still describes the pre-run HEAD and
+  // `git revert` REFUSES ("your local changes would be overwritten") until
+  // `git reset` re-syncs it. That is the accepted cost, and this asserts its
+  // exact shape rather than hiding it: one command, then ADR-0012's
+  // revertability holds unchanged.
   const sha = git(ctx.vault, ['rev-parse', 'HEAD']).trim();
+  assert.throws(() => git(ctx.vault, ['revert', '--no-edit', sha]), /revert failed|local changes/,
+    'the stale index blocks revert until the user resets — the documented remedy');
+  git(ctx.vault, ['reset', '-q']);
   git(ctx.vault, ['revert', '--no-edit', sha]);
   assert.equal(fs.existsSync(path.join(ctx.vault, '06-Identity/valid-identity.md')), false);
-  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  // Working tree against HEAD — the index is not this run's property to judge.
+  assert.equal(git(ctx.vault, ['diff', '--name-only', 'HEAD']).trim(), '');
 });
 
 test('dream-integration: without a seeded registry the dream digest omits identity (dream never seeds, fails closed)', async () => {
@@ -432,12 +447,12 @@ test('dream-integration: a dirty vault is NOT pre-committed, and the dream proce
   assert.notEqual(subjects[1], 'vault: session edits before dream', 'the retired pre-commit is not there');
 
   // The user's file is neither committed nor lost.
-  assert.ok(!git(ctx.vault, ['ls-files']).includes('uncommitted.md'), 'not swept into the commit');
+  const committed = git(ctx.vault, ['ls-tree', '-r', '--name-only', 'HEAD']);
+  assert.ok(!committed.includes('uncommitted.md'), 'not swept into the commit');
   assert.equal(fs.readFileSync(path.join(ctx.vault, 'uncommitted.md'), 'utf8'), 'session edit\n', 'and not discarded');
   // The dream's own writes still landed.
-  assert.ok(git(ctx.vault, ['ls-files']).includes('06-Identity/valid-identity.md'));
-  // The tree is NOT clean any more, and that is correct: the user's own edit is
-  // still theirs to commit.
+  assert.ok(committed.includes('06-Identity/valid-identity.md'));
+  // The user's own edit is still theirs to commit.
   assert.match(git(ctx.vault, ['status', '--porcelain']), /uncommitted\.md/);
 });
 
@@ -768,8 +783,20 @@ test('dream-integration: an over-ceiling transcript is quarantined while the val
   // before the brain, and point 2 ran after the commit over an unchanged
   // quarantine set. Point 2 must therefore have taken Table C row 2 and written
   // nothing — and because row G8 already carried the file into the commit, the
-  // run ends with a CLEAN tree rather than a file waiting for a next-run sweep.
-  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '', 'point 2 took row 2 — no second write');
+  // run ends with the file on disk EQUAL to what the commit carries, rather than
+  // a rewrite waiting for a next-run sweep.
+  //
+  // Asserted on the file itself, not on `status` or `diff HEAD`: both are
+  // index-mediated, and the run leaves the user's index describing the pre-run
+  // HEAD (the refresh was dropped, owner ruling 2026-08-31), so both report the
+  // whole commit as staged deletions — noise that says nothing about refresh
+  // point 2. The precise question is whether point 2 wrote again, and the
+  // precise answer is whether the bytes on disk still match the committed ones.
+  assert.deepEqual(
+    fs.readFileSync(path.join(ctx.vault, WARNINGS_REL)),
+    Buffer.from(git(ctx.vault, ['show', `HEAD:${WARNINGS_REL}`]), 'utf8'),
+    'point 2 took row 2 — no second write'
+  );
   // The quarantine was surfaced plainly — basename + reason only.
   assert.match(output, /quarantined claude\/huge\.jsonl \(over-ceiling\); it will not be retried until it changes\./);
   assert.ok(!output.includes(path.join(ctx.claude, 'projects')), 'console line carries no full path');
