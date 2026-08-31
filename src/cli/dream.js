@@ -290,17 +290,29 @@ function commitNamedSet(o) {
     // entry at all (so a sha check sees `null` and refreshes over it), and a
     // staged MODE change keeps the same sha (so a sha check sees agreement and
     // overwrites 100755 with 100644). Presence and mode are staged state too.
-    /** `<mode> <sha> <stage>\t<path>` → `<mode> <sha>`, or null when absent. */
-    const entryOf = (out) => {
-      const t = String(out || '').trim();
-      if (t === '') return null;
-      const f = t.split(/\s+/);
-      return `${f[0]} ${f[1]}`;
+    // TWO FORMATS, TWO PARSERS, NAMED FOR WHAT THEY PARSE. They differ by one
+    // field and treating them as one was measured to break the refresh entirely:
+    //   ls-files --stage : <mode> <sha>  <stage>  \t <path>
+    //   ls-tree          : <mode> <type> <sha>    \t <path>
+    // A shared "field 1 is the sha" reader yields `100644 blob` for every tree
+    // entry, so `idx !== old` held for EVERY ordinary tracked path and the user's
+    // index was never moved forward — reintroducing the stale-index bug this
+    // refresh exists to prevent, and doing it invisibly, because a NEW path has
+    // no entry on either side and still agreed.
+    /** @param {string} out `ls-files --stage` line → `<mode> <sha>`, or null */
+    const indexEntry = (out) => {
+      const f = String(out || '').trim().split(/\s+/);
+      return f.length >= 2 && f[0] !== '' ? `${f[0]} ${f[1]}` : null;
+    };
+    /** @param {string} out `ls-tree` line → `<mode> <sha>`, or null */
+    const treeEntry = (out) => {
+      const f = String(out || '').trim().split(/\s+/);
+      return f.length >= 3 && f[0] !== '' ? `${f[0]} ${f[2]}` : null;
     };
     for (const e of entries) {
-      const idx = entryOf(g(['ls-files', '--stage', '--', e.rel], { allowFail: true }).stdout);
+      const idx = indexEntry(g(['ls-files', '--stage', '--', e.rel], { allowFail: true }).stdout);
       const atHead = g(['ls-tree', head, '--', e.rel], { allowFail: true });
-      const old = atHead.status === 0 ? entryOf(atHead.stdout) : null;
+      const old = atHead.status === 0 ? treeEntry(atHead.stdout) : null;
       // Refresh ONLY where the index still describes the old HEAD exactly —
       // including both being absent, which is the ordinary case for a path this
       // run added. Any divergence is the user's own staged state and it stands;

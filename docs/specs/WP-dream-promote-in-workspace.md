@@ -312,7 +312,7 @@ are currently trapped inside it:
  *  abort itself, at `:224-266`, from a `result` local. Table G needs both
  *  signals in the caller, so both are surfaced:
  *  @returns {Promise<{sawUnknownCommand:boolean,
- *                     reap:{verified:boolean, why?:string}}>}
+ *                     reap:{verified:boolean, why:string}}>}
  *    sawUnknownCommand  the brain's rejection marker. **The abort DECISION
  *          moves out of this function to its caller (row G3)**, because the
  *          second half of that decision — an empty workspace delta — is not
