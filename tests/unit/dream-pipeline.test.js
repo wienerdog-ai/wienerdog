@@ -131,160 +131,107 @@ function realish(p) {
 }
 
 /**
- * COMMANDS PROVEN TO TOUCH NO INDEX. An ALLOWLIST, on purpose.
+ * THE RUN'S OWN CALL SET — PINNED, and everything else is a violation.
  *
- * A denylist of index-WRITING commands would be an ENUMERATION, and enumerating
- * the ways an index can be written is the pattern row W5 retired: it cost four
- * data-loss defects and then three consecutive rounds of adding the column the
- * last gate found missing. An allowlist is total by construction — a command
- * nobody has classified yet defaults to VIOLATING.
+ * WHY THE DIRECTION IS THIS WAY ROUND (owner ruling, 2026-08-31). Enumerating
+ * the BAD is unclosable, because git's grammar is not ours and it grows.
+ * Enumerating our OWN GOOD is closable, because the run's call set is ours.
+ * Two independent refutations two rounds apart retired the other direction:
  *
- * `status` and `diff` are deliberately absent. Both refresh the index's cached
- * stat data in the user's repo, which row W1(e) rules a violation of this row
- * whether or not a staged entry changed.
+ *   1. THE GRAMMAR GROWS. `git --attr-source log update-index --chmod=+x f`
+ *      writes the user's index (measured: mode 100644 -> 100755). The verb
+ *      resolver did not know `--attr-source` consumes a value — it arrived in
+ *      git 2.40 — so it read the verb as `log`, which was ALLOWLISTED, and the
+ *      write went unflagged. The round before had patched `--namespace` for the
+ *      identical shape.
+ *   2. THE TARGET IS NOT A PROPERTY OF THE CONFIGURATION.
+ *      `GIT_INDEX_FILE=<private> git read-tree --index-output=<user> HEAD`
+ *      DESTROYED the user's staged content (measured: a staged entry reverted
+ *      to its committed blob) while an index-identity probe reported the
+ *      private index. `--index-output` is a SUBCOMMAND flag, so no replay of
+ *      global options can reach it.
+ *
+ * MATCHING IS STRICT SHAPE-EQUALITY, NEVER RE-CLASSIFICATION: same argument
+ * count, every literal equal, and `ANY` accepts one token WITHOUT INSPECTING
+ * IT. Nothing here parses git's grammar or judges what a call means — a fuzzy
+ * matcher would smuggle the retired direction back in. Both exploits above fail
+ * as UNKNOWN SHAPES rather than by being understood.
+ *
+ * Row W6 already requires owner review before any new git input lands on the
+ * dream path, so a new shape here is owner-visible by that rule.
  */
-const INDEX_SAFE_GIT = new Set([
-  'rev-parse', 'rev-list', 'ls-tree', 'cat-file', 'show', 'log',
-  'hash-object', 'commit-tree', 'update-ref', 'symbolic-ref', 'merge-file', 'config',
-]);
+const ANY = Symbol('any single token, never inspected');
 
-/** The subcommand, skipping global flags and the arguments they consume. */
-function gitVerb(args) {
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    // `--namespace` MUST be here even though it is not a redirect: it CONSUMES
-    // a value, and a value that happens to spell an allowlisted verb was
-    // resolved AS that verb — the unsafe direction. Measured: `git --namespace
-    // log update-index --assume-unchanged a.txt` resolved to `log`, which is
-    // allowlisted, and the write went unflagged. The general "an incomplete
-    // verb resolver fails safe" claim is RETRACTED: it holds only while the
-    // consumed value does not collide with an allowlisted verb name.
-    if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace') { i++; continue; }
-    if (a.startsWith('-')) continue;
-    return a;
-  }
-  return '';
+/** @type {{env:'unset'|'private', args:(string|symbol)[]}[]} */
+const KNOWN_CALLS = [
+  { env: 'unset',   args: ['ls-tree', ANY, '--', ANY] },
+  { env: 'unset',   args: ['hash-object', '-w', '--stdin'] },
+  { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, ANY, ANY] },
+  { env: 'unset',   args: ['show', ANY] },
+  { env: 'unset',   args: ['rev-parse', 'HEAD'] },
+  { env: 'private', args: ['read-tree', ANY] },
+  { env: 'private', args: ['write-tree'] },
+  { env: 'unset',   args: ['-c', 'user.name=wienerdog', '-c', 'user.email=wienerdog@localhost',
+    'commit-tree', ANY, '-p', ANY, '-m', ANY] },
+  { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', ANY, ANY] },
+];
+
+/** Strict shape-equality: positions and literals only, never token inspection. */
+function shapeMatches(shape, args) {
+  if (shape.length !== args.length) return false;
+  return shape.every((t, i) => t === ANY || t === args[i]);
 }
 
 /**
- * ROW W1'S ENFORCEMENT IS THE SEAM, NOT THE ARTIFACT.
+ * ROW W1'S ENFORCEMENT: THE RUN'S CALLS ARE PINNED, AND ANYTHING ELSE FAILS.
  *
- * W1(a) is a total over ACTS — no dream run writes, refreshes, resets or
- * otherwise touches the user's index, in any run state. THE TOTAL RANGES OVER
- * THE RUN'S OWN ACTS: its own git invocations and its own file writes (row
- * W1(a) defines the scope). A user hook fired by a ref update runs BELOW any
- * seam — git spawns it, we do not — and its write is the user's act, not this
- * run's; that residual is stated in the row, neither suppressed nor detected. An ARTIFACT compared at
- * two endpoints cannot enforce a total over acts: a write followed by a restore
- * lands between the endpoints and reads green. Measured 2026-08-31 — an
- * `update-index --assume-unchanged` that saved and rewrote the original bytes
- * passed the endpoint form. No further REPRESENTATION of the artifact closes
- * that gap; observing the acts is a different KIND of assertion, which is why
- * this is not a fourth column (owner ruling, 2026-08-31).
+ * W1(a) is a total over the package's OWN acts. Every git invocation the run
+ * makes must match one of KNOWN_CALLS exactly; an unrecognised shape is a
+ * violation by default rather than something to be understood. There is no
+ * question here about which repository a call reaches or which index it would
+ * write — those questions were the retired direction, and both were refuted by
+ * measurement (see KNOWN_CALLS).
  *
- * THE INVARIANT: every git invocation in the USER'S repository either is on
- * INDEX_SAFE_GIT, or carries `GIT_INDEX_FILE` naming an index that is neither
- * the user's nor inside their working tree. Naming the user's index by its
- * RESOLVED path rather than by "outside the vault" matters: in a linked
- * worktree the user's own index already lives outside the vault.
+ * A call declaring `env: 'private'` must additionally carry a `GIT_INDEX_FILE`
+ * that is NEITHER the user's index NOR inside their working tree. Both clauses
+ * are enforced: a private index placed inside the user's tree is a violation,
+ * which the previous single-clause form silently permitted.
  */
 function watchIndexWrites(vault) {
   const { spawnPinnedSync } = require('../../src/core/exec-identity');
   const { getPaths } = require('../../src/core/paths');
   const userIndex = realish(gitIndexPath(vault));
   const vaultReal = realish(vault);
-  const vaultGitDir = realish(git(vault, ['rev-parse', '--absolute-git-dir']).trim());
   const under = (p, dir) => p === dir || p.startsWith(dir + path.sep);
-  /**
-   * Git's own GLOBAL options — everything before the subcommand. Collected so
-   * the probe below can replay them; NOT interpreted here, because interpreting
-   * them is the thing that kept being incomplete.
-   */
-  const globalOpts = (args) => {
-    const out = [];
-    for (let i = 0; i < args.length; i++) {
-      const a = args[i];
-      if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace') {
-        out.push(a, args[i + 1]);
-        i += 1;
-        continue;
-      }
-      if (a.startsWith('-')) { out.push(a); continue; }
-      break; // the subcommand — global options end here
-    }
-    return out;
-  };
   /** @type {string[]} */
   const violations = [];
   /** @type {string[]} */
   const seen = [];
+  /** The decision, exposed so the vacuity guard can prove it still REJECTS. */
+  const classify = (args, env) => {
+    const gif = env && env.GIT_INDEX_FILE;
+    for (const k of KNOWN_CALLS) {
+      if (!shapeMatches(k.args, args)) continue;
+      if (k.env === 'unset') return gif ? 'known shape carrying an unexpected GIT_INDEX_FILE' : null;
+      if (!gif) return 'known shape missing its private GIT_INDEX_FILE';
+      const priv = realish(gif);
+      if (priv === userIndex) return "private index IS the user's index";
+      if (under(priv, vaultReal)) return "private index lies inside the user's working tree";
+      return null;
+    }
+    return 'UNKNOWN SHAPE — not one of the run\'s pinned calls';
+  };
   const spawnGit = (o) => {
     const args = o.args || [];
-    // WHICH REPOSITORY DOES THIS CALL REACH? ASK GIT — DO NOT ENUMERATE.
-    //
-    // Enumerating the redirects was wrong twice, and the second time proved the
-    // shape of the mistake rather than the mistake. Round 7 found `--git-dir`
-    // missing from a set that read only `cwd` and `-C`; round 8 then found an
-    // env-borne `GIT_DIR`/`GIT_WORK_TREE` redirect — the very shape this seam
-    // itself composes — and a REPEATED `-C`, which git composes and a
-    // first-hit reader misses. A list of flags can always be one entry short,
-    // and being one entry short here INVERTS the watcher's own direction: an
-    // unclassified COMMAND defaults to violating, so an unparsed REDIRECT must
-    // not default to invisible.
-    //
-    // So the target is a RESOLVED QUESTION, not a parsed list. Replay this
-    // invocation's own global options and env through `rev-parse
-    // --absolute-git-dir` — an allowlisted, index-safe read — and let git
-    // report where it lands. Whatever route git supports to find a repository,
-    // git itself accounts for it. A non-zero probe means git found no
-    // repository at all, which is a definitive answer rather than a gap: with
-    // no repository there is no index to write.
-    // ASK GIT THE CONTRACT'S OWN QUESTION: WHICH INDEX FILE WOULD THIS WRITE?
-    //
-    // The question used to be "which REPOSITORY does this call reach", and that
-    // was one question short of the scope this enforces. `GIT_INDEX_FILE` is
-    // precisely what decouples the index from the git dir — so a call can
-    // select another repository and still write the user's index. Measured
-    // 2026-08-31: `GIT_INDEX_FILE=<vault>/.git/index git -C <other> update-index
-    // --chmod=+x README.md` moved the vault's entry from `100644` to `100755`
-    // while `rev-parse --absolute-git-dir` reported `<other>/.git`, so a
-    // repository-keyed gate never classified it. The same mis-keying left a
-    // linked worktree's main repo unclassifiable; both close here together.
-    //
-    // `--git-path index` is the row's own locator (W1(d1)) and it accounts for
-    // every route in ONE answer — `GIT_INDEX_FILE`, `--git-dir`, worktree
-    // layout. That also RETIRES the separate private-index exemption: a call
-    // carrying a private `GIT_INDEX_FILE` resolves to that private path, which
-    // is not the user's index, so it falls out of scope by the same test rather
-    // than by a second arm that could disagree with the first.
-    const probe = spawnPinnedSync('git', getPaths(), {
-      args: ['-C', o.cwd, ...globalOpts(args), 'rev-parse', '--path-format=absolute', '--git-path', 'index'],
-      env: o.env, platform: process.platform, encoding: 'utf8',
-    });
-    // `--path-format=absolute` (git >= 2.31) so there is NO resolution base to
-    // get wrong. A bare `--git-path` answers relative to the invocation's
-    // EFFECTIVE cwd — after its own `-C` composition — not to `o.cwd`, and
-    // resolving against `o.cwd` silently mislocated the index for a call
-    // carrying its own `-C`. Caught by the repeated-`-C` regression cell going
-    // green: ask git for an absolute answer rather than reconstructing one.
-    const wouldWrite = probe.status === 0 ? realish(String(probe.stdout).trim()) : null;
-    // NON-VACUITY EVIDENCE ONLY — deliberately NOT the classifier. This says the
-    // seam observed real git calls in the vault; it makes no totality claim, so
-    // it needs no probe of its own.
-    if (under(realish(o.cwd), vaultReal)) seen.push(gitVerb(args));
-    if (wouldWrite !== null && wouldWrite === userIndex) {
-      const verb = gitVerb(args);
-      if (!INDEX_SAFE_GIT.has(verb)) {
-        const gif = o.env && o.env.GIT_INDEX_FILE;
-        violations.push(`git ${args.join(' ')}  [cwd=${o.cwd}, GIT_INDEX_FILE=${gif || '<unset>'}, would write ${wouldWrite}]`);
-      }
-    }
+    seen.push(args.join(' '));
+    const why = classify(args, o.env);
+    if (why !== null) violations.push(`${why}:\n    git ${args.join(' ')}\n    [cwd=${o.cwd}, GIT_INDEX_FILE=${(o.env && o.env.GIT_INDEX_FILE) || '<unset>'}]`);
     return spawnPinnedSync('git', getPaths(), {
       args: ['-C', o.cwd, ...args], env: o.env, platform: process.platform,
       encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
     });
   };
-  return { spawnGit, violations, seen };
+  return { spawnGit, violations, seen, classify };
 }
 
 /** A temp home + core + clean vault git repo + config.yaml, with a transcript. */
@@ -1617,10 +1564,31 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
 
     // NON-VACUITY OF THE SEAM: a run that invoked no git in the vault at all
     // would satisfy the enforcement trivially.
+    // THE GUARD MUST NOTICE ITS OWN DEATH — mandatory, and this exact shape is
+    // required because the previous form did not. When an earlier round
+    // decoupled the non-vacuity guard from the mechanism it guarded, breaking
+    // that mechanism left this assertion at 3 pass / 0 fail: enforcing nothing,
+    // silently. Observation alone is not evidence that the DECISION still
+    // works, so the decision is exercised here against a shape that must be
+    // rejected. If `classify` ever returns null for everything, this fails
+    // before any green can be reported.
     assert.ok(watch.seen.length > 0,
-      'the git seam was exercised inside the vault — a silent pass would prove nothing');
+      'the git seam was exercised — a silent pass would prove nothing');
+    assert.equal(
+      watch.classify(['read-tree', '--index-output=/tmp/anywhere', 'HEAD'], {}),
+      "UNKNOWN SHAPE — not one of the run's pinned calls",
+      'the classifier still REJECTS: an unpinned shape must not pass. This is the '
+        + 'measured exploit from 2026-08-31 — `read-tree --index-output=<user index>` '
+        + "destroyed a user's staged content while every configuration-derived "
+        + 'predicate reported the private index'
+    );
+    assert.equal(
+      watch.classify(['rev-parse', 'HEAD'], {}), null,
+      'the classifier still ACCEPTS: a pinned shape must not be rejected, or the '
+        + 'guard above would pass by rejecting everything'
+    );
     assert.deepEqual(watch.violations, [],
-      "a git command touched the user's index (Table W row W1)\n" + watch.violations.join('\n'));
+      "a git call was not one of the run's pinned shapes (Table W row W1)\n" + watch.violations.join('\n'));
 
     // NON-VACUITY: the RUN's own bytes are at HEAD for this path. Asserting mere
     // presence could not fail — the fixture commits `rel` itself in the
