@@ -103,6 +103,20 @@ the same mistake as Decision 3's, one level down. A wrong abort costs one comman
 — the message names the exact variable — while a wrong proceed silently orphans a
 job that keeps firing.
 
+**Deciding clearance late must not move the plan late with it.** Establishing
+clearance immediately before deletion means it is established *after* the
+interactive confirm — and that is licence to re-check the domain, not to change
+what gets deleted. `uninstall` therefore re-reads the manifest after the confirm
+and **compares it byte-for-byte against the list it disclosed**: identical, it
+proceeds and reverses those same bytes; different, missing or unreadable, it
+aborts and asks the user to rerun. Two rules follow, and they are the point of
+the comparison rather than details of it: **nothing is ever deleted that was not
+disclosed and consented to**, and **a manifest that vanished during the prompt is
+a change, not an empty install** — `manifestLib.load`'s ENOENT-to-empty fallback
+must not be reached here, or an uninstall would sweep the core having replayed no
+scheduler entry at all. The comparison is a consent check, never a safety one:
+clearance still comes only from authority or the live probe.
+
 **What Decision 2 does not claim.** It does not make uninstall transactional. A
 deletion that proceeds is *not* guaranteed to have been preceded by a successful
 unload: `reverseSchedulerEntry` ignores its unload's result

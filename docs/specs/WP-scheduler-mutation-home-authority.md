@@ -163,7 +163,7 @@ the real agent"* — as a note for tests only.
 |--------|------|-------|
 | modify | src/scheduler/spawn.js | the four-branch precedence of Table A and the authority of Table B; refresh the JSDoc so it describes the new default. Export the authority predicate so `uninstall` uses the same one (Table U) rather than a second copy |
 | modify | src/core/sandbox-guard.js | add `sameDir` to `module.exports` (`:115`). **Export only — no behavior change, no new function, no edit to `sameDir`, `physicalPath` or `sandboxMismatchWarning`** |
-| modify | src/cli/uninstall.js | Table U's clearance gate and the `opts.probe` seam of Table T, placed **after** the confirm prompt and immediately before the first deletion (Table U's ordering rows) |
+| modify | src/cli/uninstall.js | Table U's post-confirm sequence — reload + byte-compare against the disclosed snapshot, then the clearance gate — plus the `opts.probe` seam of Table T (Table U's ordering rows) |
 | modify | tests/unit/scheduler-guard.test.js | cover the acceptance criteria below (the implementer designs the cases) |
 | modify | tests/unit/uninstall.test.js | cover Table U/T's acceptance criteria, and give the existing callers what Table T's inventory says they need: `opts.probe` **with authority absent** on the 6 in-process calls, and the authority marker on the env of the 14 non-dry-run subprocess uninstalls **only**. Note `tempEnv()`'s `env` is shared with the in-process path via `Object.assign(process.env, env)` (`:278`), so the marker must not simply be added to it — Table T's separation row |
 | modify | tests/integration/uninstall-core-e2e.test.js | `WIENERDOG_ALLOW_REAL_SCHEDULER: '1'` in its env builder (`:22-35`), for the one non-dry-run subprocess uninstall at `:88`. **Env addition only** — no test logic, no assertion changes |
@@ -352,18 +352,24 @@ code.
 |-------------|-------|
 | Where | in `src/cli/uninstall.js`'s `run()`, **after** the `confirm()` at `:95-112` and **immediately before** the first deletion — the `manifestLib.reverse(…, { dryRun: false })` call at `:114` |
 | Applies to | a **non-dry-run** `uninstall` only |
+| **The full order** | `confirm` → **reload + compare** → **probe** (clearance) → `reverse(<accepted snapshot>)`. Three separate concerns in one place, deliberately not merged: consent integrity, then clearance, then deletion |
 | Ordering vs. the confirm prompt — **after, not before** | clearance is evidence with a shelf life, and an interactive prompt has no bound on how long it is left open. Establishing it *before* the prompt lets a CLEAN answer go stale for as long as the user takes to reply: a concurrent authorized `sync` for the same core can register a job in that window, and the uninstall then proceeds on pre-prompt evidence, has its unloads refused for want of authority, and orphans the job it just learned nothing about. Deciding immediately before the first deletion shrinks the window from prompt-length to the milliseconds between the probe and `reverse()` |
-| Manifest freshness | the manifest is **(re)loaded after the confirm**, in the same step as the clearance decision, so the deletion plan and the clearance evidence describe the same moment. The early load at `:49-54` still happens — it feeds the plan disclosure — but it is not what `reverse()` acts on |
-| Consequence for the interactive-decline path | a user who answers `n` is never probed, because the gate now sits after the prompt. `tests/unit/uninstall.test.js:613` therefore declines exactly as it does today; it is covered by the subprocess authority marker anyway (Table T), which costs nothing and keeps every subprocess caller uniform |
+| **Reload + compare (consent integrity)** | moving the clearance after the prompt is not licence to move the *plan* after it. The user consented to a specific disclosed list (`:59-60`, and the plan at `:101-102`); a concurrent `sync` or edit during the prompt could otherwise add entries that `reverse()` then deletes **undisclosed**. So after the confirm the manifest is re-read and compared against the exact disclosed snapshot: **identical → accept and proceed; different → abort** |
+| Comparison basis | **byte-exact on the raw manifest file contents**, compared against the bytes the disclosure was rendered from. Not a field-by-field or semantic diff: any concurrent write at all should stop the run, and a byte compare has no equality semantics to get subtly wrong |
+| Abort, not redisplay-and-reconfirm — **choice recorded** | the alternative (recompute, redisplay, ask again) was weighed and rejected: it needs a second consent state machine, and a concurrent writer can drive the loop indefinitely. Aborting with "the install changed while you were deciding; run `wienerdog uninstall` again" is simpler, and the rerun discloses the new plan from scratch — which is the same guarantee, reached without a loop |
+| Reload failure at this point → **abort** | missing, unreadable, or unparseable at the reload point aborts. In particular `manifestLib.load` converts **ENOENT into an empty manifest** (`src/core/manifest.js:662-664`, `return { version: 1, createdAt, entries: [] }`), and that fallback **must not** be used here: an empty manifest would make `reverse()` replay nothing — no scheduler entry unloaded — while `disposeCoreMechanics` still ran its recursive cleanup, orphaning exactly what this table exists to protect. A manifest that vanished during the prompt is a *change*, not an empty install |
+| What `reverse()` acts on | the **accepted snapshot** — the same bytes that were disclosed and confirmed. Nothing between the compare and `reverse()` re-derives a value: the snapshot object and the pre-confirm `vaultPath` (`:57`) are carried forward as they are, so no input to the deletion is newer than the consent |
+| Not part of the clearance gate (keeps ADR-0038 true) | the compare is a **consent** check, not a safety check. It asks "is this still the plan the user approved", never "is it safe to delete" — that remains the live-domain probe's job alone. The manifest therefore still never serves as safety evidence, and the compare can only ever *stop* a deletion, which is ADR-0038's permitted direction |
+| Consequence for the interactive-decline path | a user who answers `n` is never reloaded, compared or probed, because all three sit after the prompt. `tests/unit/uninstall.test.js:613` therefore declines exactly as it does today; it is covered by the subprocess authority marker anyway (Table T), which costs nothing and keeps every subprocess caller uniform |
 | Step 1 — scheduler authority | evaluate Table B. Present → **clearance granted**, no probe, no change from today |
 | Step 2 — probe (only when authority is absent) | call the `SchedulerProbe` (typed under "Exact contracts"): a **read-only** query of this user's live scheduler domain for Wienerdog's **own** identifiers — `ai.wienerdog.*` (launchd `gui/$UID`), `wienerdog-*` (systemd `--user`), the Wienerdog-named Task Scheduler tasks. Same rules as WP-A's probe: absolute client path, fixed-string matching, no mutation of any kind |
 | Step 3 — decide clearance | `clean` → **clearance granted, proceed** (an install with no live own identifier has nothing to orphan; the gate must not brick it). `live` → **abort**. Throw, thenable, or malformed result → NOT-PROBEABLE → **abort**, per the fail-closed row below |
-| Effect of an abort | throw a `WienerdogError`. **Nothing is deleted and the manifest is untouched** — the abort precedes `reverse()`, so no deletion has begun. A user who confirmed and is then refused has lost nothing but the prompt |
+| Effect of an abort | throw a `WienerdogError` — for a failed compare, a failed reload, or a refused clearance alike. **Nothing is deleted and the manifest is untouched** — all three aborts precede `reverse()`, so no deletion has begun. A user who confirmed and is then refused has lost nothing but the prompt |
 | Residual, already accepted | the probe-to-delete window does not close, it shrinks. That is the **same point-in-time contract** the owner accepted as **R-probe-race**, whose wording now names this window explicitly alongside the smoke preflight's. No lock and no serialization — both were weighed and rejected (ADR-0041's rejected options) |
 | Message | names the live identifiers found (or that the domain could not be queried), the resolved core, and `WIENERDOG_ALLOW_REAL_SCHEDULER=1` as the deliberate way to proceed |
 | Fail-closed on an unanswerable probe | a client that is absent, errors, or has no supported query counts as **possibly live** → abort. Justification: fail-open here is round-2's own defect one level down — absence of evidence read as evidence of absence. The asymmetry decides it: a wrong abort costs the user one command (the message names the exact variable, so nobody is ever permanently stuck), while a wrong proceed silently orphans a job that keeps firing |
 | `--dry-run` | never aborts and never probes. It deletes nothing, so it prints its plan exactly as today |
-| Manifest trust (ADR-0038) | the manifest is **not** consulted by this gate at all. It stays what ADR-0038 allows it to be — a list that narrows which files a deletion touches — and is never read as evidence that something is safe to delete |
+| Manifest trust (ADR-0038) | the **clearance decision** never consults the manifest — clearance comes from authority or the live-domain probe, and nothing else. The command does read the manifest twice (disclosure, then the reload+compare), but only to decide *what the user approved*, never *whether deleting is safe*. Both readings can only stop a deletion, which is ADR-0038's permitted direction; neither can widen one |
 | What is NOT changed | `reverseSchedulerEntry` (`src/core/manifest.js:501-545`), `manifestLib.reverse`, `reverse()`'s ordering, the three `schedulerSpawn` call sites, and Table A row 4's soft, non-throwing shape. The whole fix is one precondition at the command's entry |
 
 **What this gate does and does not guarantee** — stated precisely, because the
@@ -632,8 +638,22 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
       deletes nothing.
 - [ ] Table U, authority present: uninstall completes normally and **does not
       probe at all**.
-- [ ] Table U's `--dry-run`: never aborts, never probes, prints its plan and
-      deletes nothing under every combination above.
+- [ ] Table U's `--dry-run`: never aborts, never probes, never reloads or
+      compares, prints its plan and deletes nothing under every combination above.
+- [ ] Table U's reload + compare: when the manifest's bytes change between the
+      disclosure and the confirm, `uninstall` **aborts and deletes nothing**,
+      telling the user to rerun. The entry that appeared during the prompt is
+      never deleted, and neither is anything that was disclosed.
+- [ ] Table U's reload failure: when the manifest is **missing** at the reload
+      point, `uninstall` aborts — it must **not** take `manifestLib.load`'s
+      ENOENT-to-empty path (`src/core/manifest.js:662-664`) and proceed to
+      mechanics cleanup having replayed no scheduler entry. An unreadable or
+      unparseable manifest at that point aborts the same way.
+- [ ] Table U's accepted snapshot: when the compare passes, `reverse()` acts on
+      the **disclosed** bytes, and no value it or `disposeCoreMechanics` consumes
+      is re-derived after the confirm.
+- [ ] The compare runs **before** the probe, and a run that aborts on the compare
+      never probes the domain at all.
 - [ ] Table U's clearance/authority split: an uninstall with **no** scheduler
       authority whose probe answers CLEAN **completes**; the same run whose probe
       answers `live` aborts. Clearance, not authority, is what gates deletion.
@@ -680,6 +700,10 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
       byte-unchanged — `WD uninstall` is invoked and all three `ok` calls run —
       and the printed total equals today's.
 - [ ] The two printed `SMOKE PASS — N checks.` totals differ by **exactly 3**.
+- [ ] Both forced-branch runs were executed with `WIENERDOG_LOADER_NOOP=1` and a
+      `PATH`-first logging shim for the four bare-name loader commands, and the
+      shim log is **empty** afterwards — no real scheduler client was invoked by
+      either run.
 - [ ] `npm test` and `npm run lint` pass, with no test disabled or skipped, and
       none given an environment variable to paper over a failing assertion. The
       subprocess authority marker (Table T) is **not** an exception to that rule
@@ -827,9 +851,33 @@ grep -qE '^[[:space:]]*await loader\(\)\.run\(rest\);[[:space:]]*$' bin/wienerdo
   | forced **CLEAN** | step 7 runs byte-unchanged: `WD uninstall` invoked, **all three** `ok` calls run, and the printed total equals today's |
   | the pair | the two printed `SMOKE PASS — N checks.` totals differ by **exactly 3** |
 
-  Run these only after the row-4 and Table C structural arms above are green: a
-  forced-non-CLEAN lifecycle is safe precisely *because* no authority is granted
-  and every mutation refuses, and those two facts are what the earlier arms prove.
+  **Both forced runs are executed with `WIENERDOG_LOADER_NOOP=1`, and neither may
+  be run without it.** A forced CLEAN result is a *fabricated* CLEAN: it makes
+  Table C export the authority marker, which selects Table A's real-spawn branch
+  even though `HOME` is redirected — so on a maintainer machine the run would
+  replace and bootout the live `ai.wienerdog.*` identifiers. That is issue #169,
+  reproduced by its own verification step. `WIENERDOG_LOADER_NOOP` neutralizes it
+  because it is Table A **row 1**, ahead of both the test guard and the
+  authorized-spawn row — measured in Table T (`ALLOW=1 + NOOP=1 + GUARD=1` →
+  `status=0`, nothing spawned). Assert that neutralization rather than trusting
+  it: put a temp dir first on `PATH` holding logging stand-ins for the bare-name
+  loader commands the chokepoint can invoke (`launchctl`, `systemctl`, `loginctl`,
+  `schtasks` — the set `tests/scenarios/scheduler-guard.js:52` already names), and
+  require the log to be **empty** after both runs. The smoke preflight is
+  unaffected by that `PATH`: it invokes its client by absolute path by contract.
+
+  **Standing prohibition: a fabricated CLEAN probe result must never be run with
+  real mutation enabled**, on any machine, for any reason.
+
+  The NOT-PROBEABLE arm carries the same neutralization even though it earns no
+  authority and would refuse every mutation on its own. That is deliberate: a
+  verification procedure must not depend on the correctness of the thing it is
+  verifying. If the step-7 conditional or Table C's gating is implemented wrong,
+  the non-CLEAN run is exactly where that shows up — and it must show up as a
+  failed assertion, not as a destroyed agent. One rule for both arms, no exception
+  to remember.
+
+  Run these only after the row-4 and Table C structural arms above are green.
 
 ## Out of scope (do NOT do these)
 
