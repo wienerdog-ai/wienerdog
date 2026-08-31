@@ -52,3 +52,5 @@ of round outcomes.
 
 | Round | Backend | Raw output file | Raw committed in | Verdict / findings | Dispositions |
 |-------|---------|-----------------|------------------|--------------------|--------------|
+| 1 (gate) | Codex plugin (`adversarial-review`, branch vs main, on `ef4d139`) | `2026-08-31-issue-169-gate-raw-round1-codex-plugin.txt` | `4faadec` | needs-attention; 4 findings (2 high, 2 medium); all citations spot-checked accurate | all 4 FIX, owner-ratified 2026-08-31 with rulings D1 (coherence+opt-in), D2 (soft refusal + uninstall authority gate), D3 (relocated = named residual); applied in `24047be` |
+| 1 (shadow, comparison only) | herdr-spawned codex, hermetic `~/.codex-review-home`, read-only, same target | `2026-08-31-issue-169-gate-raw-round1-herdr-shadow.txt` | `6866c6f` | needs-attention; 7 findings — its 2/3/4/7 match the gate's 1/3/2/4; its 1/5/6 new | S5 FIX (evaluation-failure refusal line), S6 FIX (rc-capture verification arms), S1 FIX as boundary doc + named residual (no detection mechanism); applied in `24047be` |
