@@ -20,7 +20,8 @@ must be `0700`, files that must be `0600` — and exposes a single read predicat
 (`insecureEntries`) plus a repair (`repairPrivateModes`). Three surfaces consume
 that one predicate so they can never disagree: `wienerdog doctor` warns per
 offending path (`src/cli/doctor.js:641-656`), `wienerdog sync` repairs
-(`src/cli/sync.js:260,289`), and the injected digest carries an `insecureModes`
+(`repairPrivateModes` at `src/cli/sync.js:263`; the dry-run branch only counts,
+at `:260`), and the injected digest carries an `insecureModes`
 count (`src/cli/dream.js:643`, `src/cli/sync.js:289`).
 
 The policy names the files; it does not write them. Each file has its own writer,
@@ -77,6 +78,13 @@ watermarks.json   -> 0666
 alerts.jsonl      -> 0666
 ```
 
+The `0666` measured here and the `0644` issue #168 reports are the **same
+defect at two umasks**, not a discrepancy: the temp file is created at the
+process default `0666 & ~umask`, so the reporter's default `umask 022` yields
+`0644` while this gate runs under `umask 000` to show the raw `0666`. Fixing
+the mode makes the umask irrelevant, which is why Table B pins with `chmod`
+rather than relying on the create mode.
+
 The `appendAlert` line is the control: the append path already pins `0600` via
 `chmodAlerts` (`src/core/alerts.js:90`), so `alerts.jsonl`'s loose mode is
 produced by `clearAlerts` alone, not by the module generally.
@@ -108,7 +116,7 @@ Definition of done item 0. `alerts.jsonl` was never covered by it.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-<!-- Always allowed without listing, per scripts/boundary-check.js:46-54: this
+<!-- Always allowed without listing, per scripts/boundary-check.js:44-54: this
      spec file itself, package-lock.json, memory/lessons/inbox.md, and
      docs/specs/logbook/. -->
 
@@ -117,7 +125,7 @@ Definition of done item 0. `alerts.jsonl` was never covered by it.
 | modify | src/scheduler/jobs.js | `writeScheduleState` only — apply Table B at lines 238-239 |
 | modify | src/core/dream/watermarks.js | `writeWatermarks` only — apply Table B at lines 39-40 |
 | modify | src/core/alerts.js | `clearAlerts` only — apply Table B at lines 207-208. Do NOT touch `appendAlert`, its compaction branch, or `chmodAlerts` (Table A rows 2-3: already correct) |
-| modify | src/core/private-fs.js | **comment text only, zero code change** — correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 135-141 so they no longer claim these writers are unchanged. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 stays TRUE and is NOT edited (config.yaml / install-manifest.json writers really are unchanged here) |
+| modify | src/core/private-fs.js | **comment text only, zero code change** — correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited (config.yaml / install-manifest.json writers really are unchanged here) |
 | create | tests/unit/private-writer-modes.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
 ### Exact contracts
@@ -203,16 +211,19 @@ table and every surface below in one pass:
 - [ ] Current-state (the measured probe output, the three mechanism citations,
       and the `writeWatermarks`-has-no-production-caller caveat)
 - [ ] The out-of-scope justification for Table A rows 13-14
-- [ ] **`src/core/private-fs.js:20-22` and `:135-141`** — prose in the product
+- [ ] **`src/core/private-fs.js:20-22` and `:129-134`** — prose in the product
       tree asserting these writers are unchanged. It goes false the moment the
       code changes, so it moves in the same PR (it is a Deliverable for exactly
-      this reason). `:143-148` is NOT a mirror of a changed fact and stays
+      this reason). Neither `:135-141` (the array literal `:129-134` documents,
+      whose membership stays correct) nor `:143-148` is a mirror of a changed
+      fact; both stay
 
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
 - **`writeFilePrivate` was considered and rejected, with a measured reason.**
-  `src/core/private-fs.js` exports it, eight production sites use it, and it is
+  `src/core/private-fs.js` exports it, 11 production call sites across 10 files
+  use it, and it is
   strictly stronger (crypto-random `O_EXCL|O_NOFOLLOW` temp, `fchmod` on the fd,
   post-rename inode check). But it **throws** where these three writers do not:
   on a pre-existing symlink at the destination (F16, `:297-303`), on a symlinked
@@ -285,7 +296,8 @@ table and every surface below in one pass:
       are untouched (Table A rows 2-3) and `clearAlerts` still deletes the file
       when no records remain.
 - [ ] `src/core/private-fs.js` has **no code change** — only the two comment
-      mirrors at `:20-22` and `:135-141` are edited, and `:143-148` is untouched.
+      mirrors at `:20-22` and `:129-134` are edited, and both `:135-141` (the
+      array literal) and `:143-148` are untouched.
 - [ ] Idempotence: this WP ships no new command. The surface it writes outside
       the repo is the three state files, and the criterion above covers it —
       running a writer twice produces the same mode and the same contents for
