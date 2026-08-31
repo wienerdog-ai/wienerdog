@@ -189,14 +189,14 @@ const RUN_VALUE = Symbol('a value this run computed, observed at the seam');
 /** @type {{env:'unset'|'private', args:(string|symbol)[]}[]} */
 const KNOWN_CALLS = [
   { env: 'unset',   args: ['ls-tree', RUN_VALUE, '--', ANY] },
-  { env: 'unset',   args: ['hash-object', '-w', '--stdin'] },
+  { env: 'unset',   args: ['hash-object', '-w', '--stdin'], produces: true },
   { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, RUN_VALUE, ANY] },
   { env: 'unset',   args: ['show', ANY] },
-  { env: 'unset',   args: ['rev-parse', 'HEAD'] },
+  { env: 'unset',   args: ['rev-parse', 'HEAD'], produces: true },
   { env: 'private', args: ['read-tree', RUN_VALUE] },
-  { env: 'private', args: ['write-tree'] },
+  { env: 'private', args: ['write-tree'], produces: true },
   { env: 'unset',   args: ['-c', 'user.name=wienerdog', '-c', 'user.email=wienerdog@localhost',
-    'commit-tree', RUN_VALUE, '-p', RUN_VALUE, '-m', ANY] },
+    'commit-tree', RUN_VALUE, '-p', RUN_VALUE, '-m', ANY], produces: true },
   { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', RUN_VALUE, RUN_VALUE] },
 ];
 
@@ -274,8 +274,15 @@ function watchIndexWrites(vault) {
       args: ['-C', o.cwd, ...args], env: o.env, platform: process.platform,
       encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
     });
-    // Learn what the run computed, so a RUN_VALUE slot can be pinned to it.
-    if (res && res.status === 0 && res.stdout !== undefined && res.stdout !== null) {
+    // Learn what the run COMPUTED — from the four shapes that produce an object
+    // name, and no others. Recording every successful call was too wide, and
+    // measurably so: shape (4) reads the committed warnings file out of the
+    // USER'S VAULT (`show HEAD:<path>`, `cli/dream.js:1004`), so vault content
+    // that happens to be one line would have entered the own-value set and
+    // could then satisfy an own-value slot. The set must hold values the run
+    // MINTED, never values it READ BACK from the user.
+    const produces = KNOWN_CALLS.some((k) => k.produces && shapeMatches(k.args, args, computed));
+    if (produces && res && res.status === 0 && res.stdout !== undefined && res.stdout !== null) {
       const out = String(res.stdout).trim();
       if (out && !out.includes('\n')) computed.add(out);
     }
