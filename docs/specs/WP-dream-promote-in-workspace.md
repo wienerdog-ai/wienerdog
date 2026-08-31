@@ -337,14 +337,27 @@ across the run's exit paths; (v) this package emits the run's decisions but
 `WP-dream-promote-module` owns their interpretation; (vi) the residue-lifecycle
 successor inherits the pipeline contract.
 
-**Two canonical tables.** **Table G** is the pipeline's own contract. **Table V**
+**Three canonical tables.** **Table G** is the pipeline's own contract. **Table V**
 is the inheritance ledger — what the code this package replaces owns today, and
 which Table G row takes each piece — extracted by the ADR-0031 circuit-breaker
-after four findings in two rounds lived in the gap between them.
+after four findings in two rounds lived in the gap between them. **Table W** is
+the user's git index: the one vault resource this run deliberately does NOT
+write, extracted 2026-08-31 by the same circuit-breaker after **four data-loss
+defects in four review rounds** landed in an area no table owned.
+
+**Why Table W exists at all, stated because its absence is the defect it fixes.**
+The index-refresh mechanism's rules lived only in code comments, and the one
+spec sentence that reached the area declined to contract it. The round-4
+spec-fidelity gate's finding is the row above in one line: *a residual no spec
+names is a residual no gate can check.* **ADR-0036 does not reach Table W** — its
+scope is tables that tell an implementer how to PRODUCE a state (fault-injection
+and mutation tables, and any table carrying a `mechanism`/`seam` column), and
+Table W states what must be TRUE. It therefore carries this family's ordinary
+`Fact / rule | Value` shape, as Tables G and V do.
 
 ### Contract table(s)
 
-`N/A — this spec's dense contracts are two NAMED canonical tables (G and V)
+`N/A — this spec's dense contracts are three NAMED canonical tables (G, V and W)
 rather than one unnamed table under this heading.` Naming them is what makes a
 row addressable by letter across the whole family
 (`docs/specs/logbook/2026-08-29-promote-family-map.md` maps letters to owners).
@@ -372,6 +385,7 @@ Surface Checklist, and its claim was false in one of them.
 | G10 | **The skill-ownership registry survives the rewiring — a durable POST-COMMIT side effect the validator owns today and Table G must inherit (round 2, F1)** | today `validateAndCommit` does this in two halves: it collects accepted NEW dream-created skill drafts during classification (`validate.js:1200-1205`) and calls `recordSkills` after the commit (`:1443-1448`, Step 6), so the registry only ever names committed skills. **The shipped contract requires an entry for every new dream-created skill the orchestrator accepts and commits** (`docs/specs/done/WP-083-skill-ownership-registry.md`, its acceptance criteria) — and a skill that is committed but unregistered is not dream-owned, so every later autonomous revision of it fails closed. **Replacing the validator's classification, gates, report and commit without carrying this obligation would leave the old code and its passing unit test in place while production registration is dead** — green tests, missing product. This row assigns it. Three things it fixes, and each is a consequence of the inversion rather than a port: (i) **"NEW" can no longer be `change.untracked`** (`validate.js:1202`), which is a git INDEX fact — the same class of evidence whose absence made this family's predecessor `Superseded` — so newness comes from the run's delta status `added` for a path the promotion outcome shows PUBLISHED, ordinary or redacted alike; (ii) **`id` and `created` are derived from the DECIDED BYTES**, never by re-reading the vault path as `:1203` does today (`WP-dream-promote-module`, Table S, row S4 — this row is its second named consumer); (iii) **the call still runs only after the commit succeeds**, which is what keeps the registry from naming an uncommitted skill. Refused paths, modifications of existing tracked skills, and shipped `wienerdog-*` skills are registered by nobody, exactly as today. `src/core/dream/skill-registry.js` is NOT modified — `recordSkills` is called, not changed; `isNewSkillDraft` (`validate.js:300`) is reused, exported if the call site needs it |
 | G11 | **The run's accounting and output — every record this run produces reaches the user (round 3, F1 and F7 of Table V)** | today the run ends with a user-visible summary built from the validator's return (`cli/dream.js:667-670`, re-pinned 2026-08-30: the commit sha, note and skill counts, the reverted count and the out-of-vault count). Table V row V7 shows the pipeline consumes five of seven fields and that no row owned the channel. This row owns it. The obligations it must carry that the pre-round-3 text left homeless — **the COUNT is dropped rather than renumbered, exactly as round 4's F-3 dropped an orphaned ordinal: this cell said "two" and listed more, it was already wrong before the window that noticed it, and a later pass added an item without touching it (round 5's N2).** **THE SENTENCE THAT REPLACED IT THEN INTRODUCED TWO FRESH NUMBERS OF ITS OWN AND BOTH WERE FALSE (round 6's COH-2) — inside the very sentence warning that counts beside lists go stale.** **It is replaced by one that states no count at all, which is the only durable fix: a number beside a list inside a cell this long is a number waiting to be falsified, and a corrected number is only a number that has not been falsified yet** — are: **(i) the REFUSED report arm.** When `promote()` returns `report.outcome === 'refused'`, `report.record` holds the COMPLETE enforcement record and the vault holds none of it — `WP-dream-promote-report`'s Table R, row R4, is explicit that the vault object is left untouched and the record travels through the run's log and output instead. **The module RETURNS it; returning is not delivering, and this row is the delivery.** Nothing is staged or committed on that arm — there are no bytes to commit (`WP-dream-promote-module`, Table S, row S3). **THIS ROW ALSO DELIVERS `report.reason`, WHICH IS A SEPARATE FIELD FROM THE RECORD:** it is either the failed read of the report path or the vault-write primitive's refusal (Table H, the PRIMITIVE's row **H7**), whose rows H7 and H9 name a surviving staging object or directory whose name derives from the brain-chosen path — so `WP-dream-promote-report`'s **Table N** classifies it attacker-influenceable BY DERIVATION. **The section composer never interpolates it** — it is produced by the read or the write that FAILED, after the record was composed — **so it is neutralised WHERE THIS PACKAGE RENDERS IT, and the assertion is the report-refusal criterion's case (a), exactly as `report.accounting.reason`'s is that criterion's case (b).** **(i-b) THE PARTIALLY PUBLISHED REPORT ARM (round 4's A1, ruled 2026-08-29).** When `report.outcome` is `'promoted'` and `report.accounting.published` is `false`, **THIS RUN PUBLISHED the body**, the enforcement SECTION never reached the vault, and `report.record` again holds the COMPLETE record — the redaction line and every preserved-copy line the refused section would have carried included. **This row delivers it to the run's log and output exactly as it delivers R4's, and the run's accounting states plainly that the enforcement section was not published, naming `report.accounting.reason`.** It differs from (i) in ONE respect, and stating it is the point: here something IS committed — the report path, from that arm's `bytes` (row G8) — so (i)'s "nothing is staged or committed" is (i)'s clause alone. **What the target HOLDS at the end of such a run is refusal-cause-specific and this row states nothing about it (`WP-dream-promote-report`, Table Y row Y4); an earlier form said "the body is in the vault", which that row forbids (round 6's CD-1).** The outcome is `WP-dream-promote-report`'s **Table Y**'s. **(ii) the out-of-vault records from row G12**, which reach the same channel. **(iii) the note and skill COUNTS, whose semantics are exact and are inherited, not re-derived (Table V, row V7; inventory I078/I085):** today a count increments once per staged added-or-modified path, notes for anything outside the skills and reports directories, skills for **any** path under the skills directory — not only `SKILL.md` — with deletions and the report counted in neither. **The code-owned `reports/warnings.md` is counted in neither either, and that exclusion is INHERITED rather than invented here:** the file sits outside both the skills and the reports directories, so the rule as stated would count row G8's reconciliation of it as a user note. `WP-quarantine-warnings-file`'s Table D owns exactly that exclusion, and it is SHIPPED in today's counting code (`validate.js:1427-1431`, the exclusion itself at `:1430`; re-pinned 2026-08-30, that package having merged since this row was written); moving the counting into this row carries it, cited and not restated. They appear in the commit message and in this row's summary, so a changed rule silently changes what a user reads in their own git history. **This row is their producer; before pass (b) the summary promised counts no surface produced.** **(iv) the path list today returned as `committed[]` (inventory I081) is DROPPED, and dropped explicitly rather than by omission:** it has no production consumer — measured, `cli/dream.js` reads `sha`, `counts`, `reverted.length` and `outOfVault.length` and never `committed` — and promotion's own `promoted[]` carries the same information at the point it is decided. A reader looking for it finds this sentence instead of silence. A refusal that names its reason to nobody is the failure `WP-dream-promote-report`'s Table R exists to prevent, arriving one package later |
 | G12 | **Scratch integrity — the delete-and-RECORD half, which no row inherited (round 3, F3)** | Table V row V1: today Step 1 deletes any file in the read-only scratch dir that is not an expected extract, deletes an expected extract whose content changed, and RECORDS each as an out-of-vault violation that reaches the report and the run's return. **The pipeline's existing `scratchIntact` (`cli/dream.js:57-78`) is NOT equivalent and must not be mistaken for it: measured, it checks only that expected extracts still exist and byte-match, so an added `EVIL.json` passes it unchanged.** This row keeps both halves: the fail-loud abort for a missing or changed expected input stays exactly as it is, and the enumerate-delete-record behaviour for UNEXPECTED writes is preserved, running after the verified reap (row G2) and before promotion. **Its records reach the user through TWO channels, and needing both is the point:** row G11 delivers them to the run's log and output, and they are passed to `promote()` in its `records` input so they also reach the dream REPORT, which is the durable one (`WP-dream-promote-report`, `### Exact contracts`). **Round 4's F1 was exactly this: the obligation to put them in the report was assigned here with no field to carry them, and the report is composed inside `promote()` — after this row has already run.** A log line is not a durable record; a sandbox-policy breach that survives only in transient output is the observability loss this row exists to prevent. **Rationale, not ceremony:** an unexpected scratch write is a sandbox-policy breach; dropping the record would downgrade a security-visible event into routine teardown, and the file would be deleted by cleanup with nothing left to show it existed. `src/core/dream/scratch.js` is not modified |
+| G13 | **The out-of-vault line's `reason` is CODE-OWNED, and that is a contract rather than today's coincidence** | Row G11 renders the out-of-vault records to the run's log as `` `wienerdog: dream — out-of-vault: ${neutralise(r.path)} — ${r.reason}` `` (`cli/dream.js:1162`): the PATH goes through the neutraliser and the REASON does not. **That is correct today only because `records` (row G12) has exactly ONE producer** — `cli/dream.js:891`, whose reason is a fixed code-authored literal — **and nothing states that it must stay one.** The JSDoc types both fields as bare `string` (`:884`), so the two carry identical type-level signal while carrying opposite trust; a second producer composing a reason from anything the brain chose would leak an unneutralised value into a rendered line with no gate, no test and no review prompt to catch it. **The rule: every value interpolated into this line other than through `neutralise()` is code-authored — a literal or a code-owned constant — and a producer that cannot promise that must route its value through the path side's treatment instead.** The classification and the transformation are `docs/specs/done/WP-dream-promote-report.md`'s **Table N** (the neutralisation contract, path-qualified per the family's citation rule); this row does not restate them, it states WHICH FIELD is exempt and WHY the exemption is conditional. **This is a latent invariant being written down, not a defect being fixed** — no reachable input violates it at `dd18370`, measured: one producer, one literal. The same shape sits on the warnings-refresh line (`:657`, whose reasons come from code-owned templates in `core/dream/warnings.js` plus error text), so the rule is stated over the CLASS rather than over the one line that provoked it |
 
 ### Table V — what `validateAndCommit` owns today, and which row inherits it
 
@@ -415,8 +429,86 @@ revisited.
 | V9 | **Teardown ordering and lock ownership** (`cli/dream.js:633-642`) — inventory I095 | the lock's ownership state | scratch removed, then the lock released, **and only if this process still owns it** | **row G5.** A stale holder must touch neither the current owner's scratch nor its lock; the clean-before-release ordering is what closes the acquire-versus-clean race |
 | V10 | **The digest regenerated AFTER ledger persistence** (`cli/dream.js:623-625`) — inventory I093 | the run's final ledger and quarantine state | `state/digest.md`, which is the next session's context | **row G4.** The ORDER is the content: regenerating before the ledger is persisted shows the next session a state that has already changed |
 
+### Table W — the user's git index: not this run's property
+
+**Canonical for what a dream run does to the user's staging area, for the cost
+that decision carries, and for the remedy.** Every other statement of these
+facts — in `src/cli/dream.js`'s comment block, in the tests, in the acceptance
+criteria, in any ADR — is a mirrored summary that defers here.
+
+**Why the letter `W`, and the collision recorded rather than avoided.** `I` and
+`X` remain rejected on the grounds
+`docs/specs/logbook/2026-08-29-promote-family-map.md` records, and `Z` is spent,
+so this table takes the DELIBERATE collision that map's letter section
+anticipates. Measured at `dd18370` with
+`git grep -lE '^### Table W( |$)' dd18370 -- docs/specs/` — the file-listing
+form, because the letter-census `grep -rhoE '^### Table [A-Z]'` the map uses
+counts occurrences and cannot answer "how many specs": `W` occurs in exactly one
+spec tree-wide,
+`docs/specs/done/WP-symlink-lexical-fallback-removal.md` (its WP-153 mirror
+census) — outside this family, cited by no member of it, and reached only
+through the path-qualified-citation rule that already governs this family's
+neighbours. `W1` carries none of the `I1`-as-`11` or `O1`-as-`01` misreading
+hazard that disqualified the free letters.
+
+| # | Fact / rule | Value |
+|---|-------------|-------|
+| W1 | **The user's index is not this run's property, and the run does not write it** | The commit is assembled in a PRIVATE index outside the vault's `.git` (`GIT_INDEX_FILE`, `cli/dream.js:230`) and published with `commit-tree` + `update-ref` (`:261-263`). **No dream run writes, refreshes, resets or otherwise touches the user's index — at all, in any run state, success or failure.** This is stated as a total, and the thing that enforces it is the byte-identity assertion named in W5, not this sentence. The scope is deliberately the WHOLE index rather than "the user's staged entries survive": that narrower form is what the retired mechanism kept claiming while losing a different shape each round, and a total has no shape to miss |
+| W2 | **The cost, stated rather than hidden** | Because HEAD advances and the index does not, the user's index still describes the PRE-RUN HEAD. `git status` therefore reports the paths the run committed as staged deletions or reverse modifications, and `git diff HEAD` reports phantom deletions. **Measured at `dd18370`** against a reproduction of the exact publish shape: a path the run modified reports `MM`, a path the run added reports `D` in the index column (with the worktree column blank) plus a separate `??` for the same path, and `git diff HEAD --stat` shows a deletion of a file that HEAD contains. **The committed content is unaffected** — `git cat-file -p HEAD:<path>` returns the promoted bytes in every case. The noise is in the index-mediated VIEWS, never in the history |
+| W3 | **The remedy, and it is one command** | `git reset` in the vault (no `--hard`, no paths) re-syncs the index to HEAD and clears every symptom in W2. It is safe precisely because W1 holds: the run wrote nothing there, so there is no run state for the reset to destroy — only the user's own pre-run staging, which the user is the party entitled to drop. **Any surface that states the cost states the remedy in the same breath**; a cost recorded without its one-command fix reads as a defect |
+| W4 | **`git revert` REFUSES until the remedy is applied — a real precondition on a property ADR-0012 states** | With the stale index in place, `git revert <dream sha>` fails: `error: your local changes would be overwritten by revert` / `fatal: revert failed`, exit 128. **Measured at `dd18370`**, both directions: refusal before `git reset`, clean success after it. So ADR-0012's one-commit-per-run revertability is now **conditional on `git reset`** rather than immediate. **Its registered mirror is the assertion that already pins this exact shape** — `tests/integration/dream.test.js`, the test *"full run commits valid tiers, reverts injection + weak skill, deletes out-of-vault, one revertable commit"*: revert throws, `git reset -q`, revert succeeds, and the post-revert check is made against `HEAD` rather than against `status`. **The wording of that conditionality in ADR-0012, ADR-0010, ADR-0020, `docs/THREAT-MODEL.md` and `docs/specs/MILESTONES.md` M3 is NOT settled by this row and is NOT amended by this package** — those are owner rulings and a release gate, routed as a STOP-POINT on 2026-08-31 and listed in the checklist below as mirrors that this table has OUTRUN. Until the owner rules, the divergence is recorded here rather than papered over |
+| W5 | **The compare/update race retires WITH its mechanism, and the cause is named so a later reader cannot read this as a silent weakening** | The retired refresh read each path's existing index entry and then conditionally rewrote it. Two operations over a mutable index with a window between them is a TOCTOU, and a concurrent `git add` in the user's own shell landing in that window was overwritten — one of the four measured data-loss defects. **That race is not mitigated here; it is unrepresentable, because the act that created it — this package writing the user's index — is gone.** No compare, no update, no window. Nothing inherits the race, and nothing needs to: it was created entirely by the mechanism that no longer exists. **The single assertion that replaces the four retired tests** is `tests/unit/dream-pipeline.test.js`, *"the run does not touch the user's git index — at all (row G8)"*: it seeds ordinary staged content, a staged deletion, a staged mode change and an unresolved merge, then asserts `git ls-files --stage` is BYTE-IDENTICAL across the run. That assertion has a real RED against any reintroduced write and covers shapes nobody has enumerated — which the four per-shape tests, two of which passed after the mechanism was deleted, did not. **The pattern this row is an instance of is `docs/specs/logbook/2026-08-30-toctou-class-retired-with-its-cause.md`'s**, and the full record is `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md` |
+| W6 | **No downstream consumer reads the user's index — re-derived, not inherited** | The standing condition on the drop is that nothing in the package depends on a refreshed index, **and it was re-derived at `dd18370` rather than taken from the removal commit's claim.** What the sweep found: the run's only index writes go to `GIT_INDEX_FILE`; `core/dream/validate.js` runs exactly four git commands (`rev-parse --git-dir`, `status --porcelain -uall`, `reset --hard HEAD`, `clean -fd`) of which **only `rev-parse --git-dir` still has a caller** (`cli/dream.js:582`) — `assertCleanTree` and `restoreVaultToHead` are exported but called nowhere in `src/`, having been retired by row G3's re-base onto the workspace; `core/vault.js`'s `add -A` + `commit` is the vault-CREATION path, guarded on the repo having no HEAD, and is not on any dream path; `core/dream/promote.js` invokes only `merge-file`; and the two `--cached` strings left in `src/` are PROSE about retired git-derived evidence, one a JSDoc `@param` on a pure string parser with no `src/` caller and one a comment stating that the property is now established from the delta's `addedLineNumbers` over workspace bytes **instead of** from `git diff --cached`. **The gates consult git nowhere**, which is the ADR-0012 amendment's own claim, and it is what makes W1 affordable. **A future change that gives any gate, report or accounting field an index-derived input falsifies this row and must come back to the owner before it lands** |
+
 ### Mirrored Surface Checklist
 
+- [ ] **TABLE W — the user's git index (registered 2026-08-31).** Every mirror of
+      "what a dream does to the user's staging area", enumerated because the
+      absence of this enumeration is what let four data-loss defects land in four
+      review rounds. **In-boundary mirrors, which agree with Table W today:**
+      the comment block in `src/cli/dream.js` closing `commitNamedSet`
+      (`:270-287` at `dd18370` — the run's own statement of W1, W2 and W3, and the
+      surface an implementer reads first); `tests/unit/dream-pipeline.test.js`'s
+      byte-identity assertion (W1, W5) and the retirement note above it naming the
+      four tests it replaces; `tests/integration/dream.test.js`'s revert
+      throw-reset-succeed sequence (W4), its "ASKED OF HEAD, NOT THE INDEX"
+      comment on the committed-paths criterion, and the warnings-file check that
+      asks the FILE rather than `status` or `diff HEAD` (W2's reason for both).
+      **No surface may state the cost without the W3 remedy, none may narrow W1
+      to "the user's staged entries survive", and none may assert a post-run
+      vault property through `git status` or `git diff HEAD`** — both are
+      index-mediated and now carry W2's noise, so an assertion built on them is
+      measuring the drop rather than the property it names.
+- [ ] **TABLE W's OUT-OF-BOUNDARY mirrors — this table has OUTRUN them, and the
+      divergence is RECORDED, not resolved (STOP-POINT, 2026-08-31).** Five
+      surfaces state the dream's revertability as immediate, which W4 measured to
+      be conditional on `git reset`: `docs/adr/0012-dream-run-lifecycle.md:23`
+      (inside RETIRED part 1's rationale — its carrier is gone but the claim was
+      never restated or withdrawn, and a top-down reader meets it 180 lines before
+      learning the part is retired), `docs/adr/0010-vault-adoption-paths.md:20`,
+      `docs/adr/0020-skill-revision-lifecycle.md:147` and `:188`,
+      `docs/THREAT-MODEL.md:84` and `:115`, and `docs/specs/MILESTONES.md:14`
+      (release gate **M3**, "`git revert` cleanly undoes a run"). **None is
+      amended by this package and none may be:** ADR wording is an owner ruling,
+      `docs/THREAT-MODEL.md` and `docs/specs/MILESTONES.md` are outside the
+      Deliverables table, and widening that table is itself an owner ruling (the
+      two amendment notes above are the precedent). **This entry is the register
+      that keeps the gap visible until the owner rules**, and whoever applies that
+      ruling sweeps all five in one pass and ticks this box. `docs/PRD.md:11` and
+      the ADR-0012 amendment's Part 8 state only ONE COMMIT PER RUN, which W1 does
+      not touch — they are correct as written and are named here so the sweep does
+      not change them by association.
+- [ ] **ROW G13 — the code-owned `reason` invariant (registered 2026-08-31).**
+      Its mirrors are the JSDoc on `records` (`cli/dream.js:884`), whose two bare
+      `string` fields are exactly the missing signal the row supplies; the render
+      site itself (`:1162`); the single producer (`:891`); and the
+      warnings-refresh line of the same shape (`:657`). **No surface may describe
+      that line's `reason` as neutralised** — it is not, and the row's whole
+      content is that it does not need to be *while* it stays code-authored.
+      **The classification and the transformation are cited, never restated:**
+      `docs/specs/done/WP-dream-promote-report.md`'s Table N owns them, and a
+      second copy here would be a drifting duplicate of a contract this package
+      does not own.
 - [ ] Deliverables-table `Notes` cells (each cites its owning row or table)
 - [ ] `### Exact contracts`' `runBrainWithWatchdog` return shape (row G2)
 - [ ] Acceptance criteria that assert Table G's rows
@@ -897,8 +989,14 @@ revisited.
       user's post-publish bytes are neither committed nor lost. Proven RED
       against an implementation that stages by naming the path. Asserted for a
       REDACTED path as well as a promoted one, since both carry `bytes` and both
-      enter the commit. **How the bytes reach the index is not asserted** —
-      round-4 CUT ruling. **ASSERTED FOR THE REPORT PATH ON A PARTIAL PUBLISH
+      enter the commit. **How the bytes reach the run's PRIVATE index is not
+      asserted** — round-4 CUT ruling. **The word `index` is qualified here as of
+      2026-08-31, and the qualification is the point:** unqualified, this sentence
+      read as a decision not to contract the USER's index either, which is the
+      area four data-loss defects then landed in across four review rounds. The
+      CUT ruling reaches only the private index this criterion is about — the
+      staging mechanics behind `commit-tree`. **What happens to the user's index
+      is contracted, by Table W, and is not cut.** **ASSERTED FOR THE REPORT PATH ON A PARTIAL PUBLISH
       TOO (row G8, round 4's A1; this obligation carried no criterion until
       round 5's H4):** when `promote()` returns `report.outcome === 'promoted'`
       with `accounting.published === false`, the report path IS in the run's one
