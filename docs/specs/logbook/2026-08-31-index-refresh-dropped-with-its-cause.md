@@ -65,6 +65,49 @@ overwritten by revert`, exit 128. Re-derived at `dd18370` in both directions.
 That makes ADR-0012's one-commit-per-run revertability **conditional on one
 command** rather than immediate.
 
+## The owner ruling, and the alternative REJECTED BY NAME
+
+**Ruled 2026-08-31: AMEND. The drop stands.** The conditional cost above was
+routed to the owner as a STOP-POINT rather than papered over, because it
+diverges from a release gate (M3) and four owner-ruled documents. The ruling:
+the five surfaces stating immediate revertability are **rewritten to the
+conditional form**, and `docs/PRD.md:21` joined them when the re-sweep the
+ruling ordered found it.
+
+**What survives is the property, not the phrasing:** a run is
+**deterministically and loudly undoable**. That is what M3 and THREAT-MODEL T1
+actually guarantee. What dies is the literal *"one command"*. **The conditional
+form is not a weakening of the guarantee — it is the guarantee stated
+accurately**, and a reversibility mechanism that silently destroyed unresolved
+merge stages was self-defeating.
+
+### REJECTED: the middle path — have the run perform the `git reset` itself
+
+The obvious-looking third option, and the reason it is recorded rather than
+merely not taken: it will be re-proposed as an improvement by anyone who meets
+the two-command cost without meeting this entry.
+
+**It is rejected on two independent grounds, either sufficient.**
+
+1. **It reimports the defect-4 class as DESIGNED behaviour.** `git reset` is
+   precisely the act that flattens a user's staged state — it is the mechanism
+   that destroyed the unresolved merge's three stages in round 4 of the table
+   above. Automating it does not fix that; it makes it unconditional and
+   removes the user from the decision. **The reason `git reset` is the correct
+   REMEDY is that the user chooses to run it**, on their own staging, at a
+   moment they pick. The same command issued by a background nightly job over
+   whatever the user happened to have staged is a different act with the same
+   name.
+2. **It violates the just-contracted Table W row W1**, which is a total: *the
+   run never writes, refreshes, resets or otherwise touches the user's index —
+   at all, in any run state.* The total is what makes the contract checkable by
+   a single byte-identity assertion; a sanctioned exception re-opens exactly the
+   per-shape reasoning that lost a different shape every round.
+
+**The cost of rejecting it is one command the user runs, once, when they choose
+to undo a night — and a refusal that is loud rather than silent if they skip
+it.** That is a smaller cost than any version of the run touching the index.
+
 ## The root cause of the DEFECTS, which is not the mechanism
 
 The round-4 spec-fidelity gate's finding, and the reason this entry exists:
