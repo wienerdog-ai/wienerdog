@@ -155,31 +155,61 @@ function realish(p) {
  * count, every literal equal, and `ANY` accepts one token WITHOUT INSPECTING
  * IT. Nothing here parses git's grammar or judges what a call means — a fuzzy
  * matcher would smuggle the retired direction back in. Both exploits above fail
- * as UNKNOWN SHAPES rather than by being understood.
+ * against this set rather than by being understood — refutation 1 as an unknown
+ * shape, refutation 2 by the RUN_VALUE slot below, which is the narrower claim
+ * and the true one.
  *
- * Row W6 already requires owner review before any new git input lands on the
- * dream path, so a new shape here is owner-visible by that rule.
+ * OWNER-VISIBILITY RESTS ON W1(c)'s CANONICITY, not on row W6. W6's standing
+ * clause is keyed on index-derived INPUTS and independently reaches only that
+ * subset; the two are NOT co-extensive, and a new shape that feeds nothing
+ * index-derived is still an owner-visible change to the canonical table.
  */
 const ANY = Symbol('any single token, never inspected');
+/**
+ * A slot holding A VALUE THIS RUN ITSELF COMPUTED, observed at the seam.
+ *
+ * `ANY` was too wide for the object-name slots, and measurably so: `read-tree`
+ * accepts `--index-output=<path>` as its sole argument, so
+ * `['read-tree', '--index-output=<user index>']` matched `['read-tree', ANY]`
+ * on arity and EMPTIED the user's index — with a legitimate private
+ * `GIT_INDEX_FILE` set and every disposition clause satisfied. A data slot that
+ * cannot tell data from an option is not pinned at all.
+ *
+ * The repair does NOT inspect the token, because inspecting tokens is the
+ * retired direction. It compares the token to values THIS RUN PRODUCED and the
+ * watcher watched it produce — the head from `rev-parse HEAD`, blobs from
+ * `hash-object`, the tree from `write-tree`, the commit from `commit-tree`.
+ * Every object name the run passes is one it computed through a pinned read
+ * first, so identity to an observed value is available without any grammar.
+ * That is the same structural ground the pinned set stands on: our own values
+ * are ours to enumerate; git's grammar is not.
+ */
+const RUN_VALUE = Symbol('a value this run computed, observed at the seam');
 
 /** @type {{env:'unset'|'private', args:(string|symbol)[]}[]} */
 const KNOWN_CALLS = [
-  { env: 'unset',   args: ['ls-tree', ANY, '--', ANY] },
+  { env: 'unset',   args: ['ls-tree', RUN_VALUE, '--', ANY] },
   { env: 'unset',   args: ['hash-object', '-w', '--stdin'] },
-  { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, ANY, ANY] },
+  { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, RUN_VALUE, ANY] },
   { env: 'unset',   args: ['show', ANY] },
   { env: 'unset',   args: ['rev-parse', 'HEAD'] },
-  { env: 'private', args: ['read-tree', ANY] },
+  { env: 'private', args: ['read-tree', RUN_VALUE] },
   { env: 'private', args: ['write-tree'] },
   { env: 'unset',   args: ['-c', 'user.name=wienerdog', '-c', 'user.email=wienerdog@localhost',
-    'commit-tree', ANY, '-p', ANY, '-m', ANY] },
-  { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', ANY, ANY] },
+    'commit-tree', RUN_VALUE, '-p', RUN_VALUE, '-m', ANY] },
+  { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', RUN_VALUE, RUN_VALUE] },
 ];
 
-/** Strict shape-equality: positions and literals only, never token inspection. */
-function shapeMatches(shape, args) {
+/**
+ * Strict shape-equality: positions and literals only, never token inspection.
+ * `computed` is the set of values this run was observed to produce; a
+ * RUN_VALUE slot admits membership of that set and nothing else.
+ */
+function shapeMatches(shape, args, computed) {
   if (shape.length !== args.length) return false;
-  return shape.every((t, i) => t === ANY || t === args[i]);
+  return shape.every((t, i) => (
+    t === ANY ? true : t === RUN_VALUE ? computed.has(args[i]) : t === args[i]
+  ));
 }
 
 /**
@@ -207,11 +237,17 @@ function watchIndexWrites(vault) {
   const violations = [];
   /** @type {string[]} */
   const seen = [];
+  /**
+   * Values THIS RUN produced, learned by watching it produce them. Recorded
+   * AFTER each call returns, which is the order the run itself uses: every
+   * object name it passes was computed by an earlier pinned read.
+   */
+  const computed = new Set();
   /** The decision, exposed so the vacuity guard can prove it still REJECTS. */
   const classify = (args, env) => {
     const gif = env && env.GIT_INDEX_FILE;
     for (const k of KNOWN_CALLS) {
-      if (!shapeMatches(k.args, args)) continue;
+      if (!shapeMatches(k.args, args, computed)) continue;
       if (k.env === 'unset') return gif ? 'known shape carrying an unexpected GIT_INDEX_FILE' : null;
       if (!gif) return 'known shape missing its private GIT_INDEX_FILE';
       const priv = realish(gif);
@@ -225,11 +261,25 @@ function watchIndexWrites(vault) {
     const args = o.args || [];
     seen.push(args.join(' '));
     const why = classify(args, o.env);
-    if (why !== null) violations.push(`${why}:\n    git ${args.join(' ')}\n    [cwd=${o.cwd}, GIT_INDEX_FILE=${(o.env && o.env.GIT_INDEX_FILE) || '<unset>'}]`);
-    return spawnPinnedSync('git', getPaths(), {
+    if (why !== null) {
+      // THE RED CARRIES ITS INVOCATION, AND WHERE THE ENV RESOLVED — both
+      // private-arm clauses test `realish(gif)`, so printing only the raw
+      // string names a value that need not explain the verdict on a symlinked
+      // or `..`-bearing path.
+      const raw = (o.env && o.env.GIT_INDEX_FILE) || null;
+      violations.push(`${why}:\n    git ${args.join(' ')}\n    [cwd=${o.cwd}, `
+        + `GIT_INDEX_FILE=${raw || '<unset>'}${raw ? ` -> resolved ${realish(raw)}` : ''}]`);
+    }
+    const res = spawnPinnedSync('git', getPaths(), {
       args: ['-C', o.cwd, ...args], env: o.env, platform: process.platform,
       encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
     });
+    // Learn what the run computed, so a RUN_VALUE slot can be pinned to it.
+    if (res && res.status === 0 && res.stdout !== undefined && res.stdout !== null) {
+      const out = String(res.stdout).trim();
+      if (out && !out.includes('\n')) computed.add(out);
+    }
+    return res;
   };
   return { spawnGit, violations, seen, classify };
 }
@@ -1581,6 +1631,18 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
         + 'measured exploit from 2026-08-31 — `read-tree --index-output=<user index>` '
         + "destroyed a user's staged content while every configuration-derived "
         + 'predicate reported the private index'
+    );
+    // THE TWO-TOKEN FORM IS THE ONE THAT SLIPPED. The three-token canary above
+    // missed it by ARITY, so it certified a rejection the set did not make:
+    // `['read-tree', '--index-output=<user index>']` matched `['read-tree', ANY]`
+    // and emptied the user's index. It is rejected now because the slot is
+    // RUN_VALUE — an option string is not a value this run computed.
+    assert.equal(
+      watch.classify(['read-tree', `--index-output=${indexFile}`], { GIT_INDEX_FILE: '/tmp/legit-private.idx' }),
+      "UNKNOWN SHAPE — not one of the run's pinned calls",
+      'the two-token redirect must be rejected: it satisfies arity and every '
+        + 'disposition clause, so only the RUN_VALUE slot stands between it and '
+        + "the user's index"
     );
     assert.equal(
       watch.classify(['rev-parse', 'HEAD'], {}), null,
