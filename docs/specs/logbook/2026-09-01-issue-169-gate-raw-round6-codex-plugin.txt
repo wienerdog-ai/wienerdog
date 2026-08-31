@@ -1,0 +1,18 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship: scheduler authority incorrectly bypasses the only evidence that uninstall will not orphan a live job.
+
+Findings:
+- [high] Authority grants deletion clearance even when the manifest cannot unload a live registration (docs/specs/WP-scheduler-mutation-home-authority.md:364-366)
+  Step 1 skips the live-domain probe whenever authority is present. That is unsafe because authority only permits scheduler mutation; it does not prove the accepted manifest contains a scheduler entry capable of triggering that mutation. In the explicitly documented stripped, older-format, or partially lost manifest case, a normal default-home uninstall has authority, skips the probe, replays no unload for the missing entry, and then deletes the manifest/core while the OS job remains live. This recreates the orphaning failure that lines 340-349 claim to close and is distinct from the accepted failed-unload residual: no unload is attempted at all.
+  Recommendation: Do not treat authority alone as deletion clearance. Always inspect the live domain. If identifiers are live, require authority and either unload those code-recognized identifiers independently of manifest completeness and re-probe CLEAN before deleting recovery metadata, or abort unless every live identifier is safely accounted for. Add an authority-present test where the manifest lacks a scheduler entry but the probe reports that identifier live.
+
+Next steps:
+- Revise ADR-0041’s deletion-clearance definition to match the corrected invariant.
+- Add the authority-present/missing-manifest-entry case to Table U and its acceptance tests.
+
+Codex session ID: 01a05a0e-0d03-7983-996f-d99695b06dad
+Resume in Codex: codex resume 01a05a0e-0d03-7983-996f-d99695b06dad
