@@ -319,16 +319,111 @@ this closes where the others did not:
 > default-deny, unknown shape = violation.
 
 Nine shapes, measured as forty-five invocations across all three vault layouts.
-**Both exploits above fail against it as UNKNOWN SHAPES**, measured RED at
-`578d17b`, each for that reason and no other — nothing had to understand either
-one. **The set itself is Table W row W1(c)'s and this entry does not spell it**,
-on the same one-contract-one-place rule the projection paragraph above is an
-instance of.
+**Both exploits above fail against it — but NOT for the same reason, and the
+sentence that once said they did is corrected here rather than dropped.**
+Refutation 1, and refutation 2 in the three-token form measured at `578d17b`,
+fail on argument count and literals: no pinned shape has their shape, and
+nothing had to understand either one. **Refutation 2's TWO-token form did not
+fail at all until the object-name slots were pinned later the same day** — see
+"The slot that was not a slot" below, which is the whole of what that correction
+is about. **The set itself is Table W row W1(c)'s and this entry does not spell
+it**, on the same one-contract-one-place rule the projection paragraph above is
+an instance of.
 
 **Matching is strict shape-equality, never re-classification.** A fuzzy matcher —
 prefix matching, option-order tolerance — would smuggle the retired direction
 back in under a new name, because every such tolerance is a small
 re-classification.
+
+### The slot that was not a slot — the gap in the pinned set, and the ruling that closed it
+
+**Same day, two rounds after the set landed.** A review gate and the owner
+independently measured that `ANY` — a placeholder accepting one token without
+inspecting it — was too wide for the slots that hold OBJECT NAMES.
+
+`read-tree` accepts `--index-output=<path>` **as its sole argument**. So
+
+```
+['read-tree', '--index-output=<user index>']     # two tokens
+```
+
+matched the pinned `['read-tree', ANY]` **on argument count**, and the command is
+not inert: exit 0, **the user's index EMPTIED**, staged content destroyed — with
+a legitimate private `GIT_INDEX_FILE` set and every disposition clause of row
+W1(c) satisfied. **A data slot that cannot tell data from an option is not
+pinned at all.**
+
+**THE RULING (owner, 2026-08-31, shipped at `5c5d082`): pin the object-name
+slots to the run's OWN computed values.** A second placeholder, `RUN_VALUE`,
+sits beside `ANY`. **It does not inspect the token** — inspecting tokens is the
+direction this entry retires. It compares the token to values THIS RUN PRODUCED
+and the seam watched it produce: the head from `rev-parse HEAD`, blobs from
+`hash-object`, the tree from `write-tree`, the commit from `commit-tree`. Every
+object name the run passes is one it computed through an earlier pinned read, so
+identity to an observed value is available **without any grammar**.
+
+> Same structural ground the pinned set stands on: our own values are ours to
+> enumerate; git's grammar is not.
+
+**Applied to every slot the rule reaches, not only the exploited one** —
+`ls-tree`'s tree-ish, `update-index --cacheinfo`'s sha, `read-tree`'s tree-ish,
+`commit-tree`'s tree and parent, `update-ref`'s two shas. Slots holding data the
+run did not compute — modes, paths, messages — stay `ANY`. **The set itself, and
+each slot's kind, is Table W row W1(c)'s and this entry does not spell it.**
+
+**Measured both directions**, through the real `classify` in the live fixture and
+again in isolation:
+
+| slot kind | the two-token redirect | the legitimate call |
+|---|---|---|
+| `ANY` | **ACCEPTED** — the gap | accepted |
+| `RUN_VALUE` | **REJECTED** | **still accepted** |
+
+Regression held on the same tree: `--attr-source` and the three-token
+`--index-output` still rejected as unknown shapes, the in-tree private index
+still rejected by the working-tree clause, and the two-sided vacuity guard still
+0 pass / 3 fail against a dead decision in both directions.
+
+**`read-tree` was the only shape carrying the defect** — three independent
+sweeps agree (six directed vectors, the gate's own probes, then ten exotic ones:
+`--split-index`, `@`, `--`-position abuse, crafted paths, `--stdin` in a sha
+slot, an option as the message). It is singular because `--index-output` is the
+one **subcommand** flag among the nine that retargets a write off the pinned
+private index. **That is a measurement over enumerated vectors and not a proof
+over git's grammar** — the pin is applied by the rule, not by the exploit, so
+the other slots are pinned whether or not anyone has found their vector.
+
+#### The lesson that outlives the fix: a canary that differs from the exploit by ARITY proves nothing about it
+
+The non-vacuity guard's reject-side canary asserted rejection of the **three**-token
+`read-tree --index-output=<path> HEAD`. No pinned shape can match that on
+argument count, so the canary was green **against a set that accepted the
+two-token form of the same exploit**. It certified a rejection the set never
+made. Both forms are asserted now.
+
+Argument count is the first thing shape-equality decides, so a canary that
+differs from its exploit in arity dies before it reaches the slot under test.
+This is the `+0`-delta shape one level in: the assertion ran, and it ran past the
+thing it was believed to be checking.
+
+#### One residual, stated rather than closed
+
+**The shipped own-value set is wider than the four sources the ruling names.**
+The seam admits the single-line output of any pinned call it observed succeed —
+so besides the head, blob, tree and commit names it also admits `ls-tree`'s
+output line (harmless: it begins with a mode, so it equals no argument the run
+passes) and **the committed content of the quarantine-warnings file** read by
+`show HEAD:<warnings>`, whenever that content is one line after trimming. That
+content is in the user's vault history and is therefore user-controllable, so a
+run **mutated** to issue the two-token redirect would be admitted again in a
+vault whose committed warnings file consists of exactly that argument.
+
+The exploit needs BOTH the mutation and the crafted vault, so this narrows the
+pin rather than opening a live data-loss path. It is recorded in Table W row
+W1(c) as owner-visible work with the shape of its remedy, **and it was not
+narrowed away in prose**: the row and `KNOWN_CALLS` are a registered pair, and a
+row claiming four sources while the code admits six is the exact drift Table W
+was extracted to end.
 
 ### What was measured SOUND and is kept rather than dropped
 
