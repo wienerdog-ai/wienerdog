@@ -119,11 +119,14 @@ and the verification commands.
 
 ### Table A — `scripts/live-scheduler-probe.sh` contract
 
-**Three outcomes, three exit codes.** The probe never reports "clean" on the
-strength of a question it could not ask: *clean* means the scheduler client
-answered and returned nothing matching. A client that is absent, that failed, or
-that does not exist on this platform is its own outcome, and the caller — not the
-probe — decides what to do about it.
+**Three outcomes, three exit codes — and the caller must handle a fourth case
+this script cannot emit.** The probe never reports "clean" on the strength of a
+question it could not ask: *clean* means the scheduler client answered and
+returned nothing matching. A client that is absent, that failed, or that does not
+exist on this platform is its own outcome, and the caller — not the probe —
+decides what to do about it. The script itself returns only `0`, `1` or `2`; a
+caller that observes anything else is observing a probe that never ran, which
+Table B's closing row classifies.
 
 | Fact / rule | Value |
 |-------------|-------|
@@ -135,30 +138,34 @@ probe — decides what to do about it.
 | Linux source of truth | `systemctl --user list-units --all --no-legend`, matched with `grep -F "$prefix"`. The default prefix `ai.wienerdog.` does not match systemd's `wienerdog-<job>.timer` names, so a Linux caller passes its own prefix (Table B). A runner with no user D-Bus session makes this command fail → exit 2, not exit 0 |
 | Other platforms (incl. Windows) | no supported query → **exit 2**. Windows is named and fails safe, not silently passed |
 | Scheduler client path | **absolute** on macOS (`/bin/launchctl`), never a bare-name `PATH` lookup — a shimmed `PATH` must not be able to make the probe report a false clean (the `tests/scenarios/scheduler-guard.js:42` rule) |
-| `set -e` handling | the absent-client and failed-client branches must reach the exit-2 return rather than killing the script under `set -euo pipefail`; likewise `grep`'s exit 1 on no-match is a CLEAN result, not a failure |
+| Emitted statuses | **exactly `0`, `1` or `2` — no other value is ever returned by this script.** What a *caller* sees outside that set means the script could not be asked at all (deleted → `127`, non-executable → `126`, killed by a signal → `128+n`); that is the caller's problem to classify, and Table B does |
+| `grep`'s exit codes, split by meaning | `grep` exit **1 = no match = the CLEAN input** — a result, not a failure. `grep` exit **≥ 2 = grep itself failed** (unreadable input, bad usage) → **exit 2, NOT-PROBEABLE**. The two must not be collapsed into "non-zero": one is the answer "nothing is live", the other is "the question did not complete" |
+| `set -e` handling | the absent-client and failed-client branches must reach the exit-2 return rather than killing the script under `set -euo pipefail`; and `grep`'s exit 1 must not kill it either, per the row above |
 | Side effects | none. No file is created or removed, no Wienerdog CLI is invoked, no scheduler entry is loaded, unloaded or modified |
-| Prefix handling | matched as a fixed string (`grep -F`); never interpolated into a path or an `eval` |
+| Prefix handling | matched as a fixed string, **passed after a `--` terminator** (`grep -F -- "$prefix"`); never interpolated into a path or an `eval`. The terminator is not hygiene, it is correctness: measured, `grep -F "-v" file` exits **0** because `-v` is consumed as the invert-match *option*, silently inverting the test rather than failing it, while `grep -F -- "-v" file` correctly exits 1. Without `--`, an option-shaped prefix changes what the probe means instead of erroring |
 
 ### Table B — the smoke-install preflight
 
 | Fact / rule | Value |
 |-------------|-------|
-| Placement | **after `set -euo pipefail` (`:18`) and before the `SB="$(mktemp -d …)"` line currently at `:23`.** This is the single window both this row and the "On live" row below refer to: at abort time no sandbox root exists, no `EXIT` trap is installed (`:24`), and the real `HOME` is still in effect (`:28` has not run). Inserting it anywhere at or after `:23` fails this row even though the `HOME` exports are still ahead |
+| Placement | **the block must COMPLETE before the `SB="$(mktemp -d …)"` line executes**, and after `set -euo pipefail` (`:18`). The row is about execution order, not line arithmetic: an insertion placed before `mktemp` necessarily *begins* at what is today line `:23`, so "before `:23`" was self-contradictory as a literal instruction. What must hold at abort time is the state, and it is checkable: **no `$SB` directory exists, no `EXIT` trap is armed (`:24`), and the real `HOME` is still in effect (`:28` has not run).** The failing placement is at or after the `mktemp -d` **line** — i.e. anywhere the sandbox root or its trap already exist when the preflight decides |
 | **`$CI` is not read** | the preflight consults **no** CI-detection variable. `CI` describes an execution context, not scheduler isolation: `CI=false` is non-empty, and a self-hosted runner sharing a developer's user account has a live domain like any workstation. A clean CI runner needs no exemption — its probe returns CLEAN on its own merits |
 | Probe calls | the macOS prefix `ai.wienerdog.` and the Linux prefix `wienerdog-`, both delegated to `scripts/live-scheduler-probe.sh` (Table A). A single call per platform is enough; a caller may pass both prefixes as separate calls |
-| Outcome × override (the complete matrix) | **each override applies to its own outcome and to no other.** An implementation that tests "either override is set" passes half these cells and fails the other half, so all six are stated: |
+| Outcome × override (the complete matrix) | **each override applies to its own outcome and to no other**, and the taxonomy is **closed** — every possible status has a row, including the ones Table A never emits. An implementation that tests "either override is set" passes half these cells and fails the other half; one that switches on `0`/`1`/`2` and lets anything else fall through reaches the CLEAN branch on a status that means the probe never ran. All eight cells are stated: |
 
-| Probe outcome | neither set | `WIENERDOG_SMOKE_I_KNOW=1` only | `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` only | both set |
+| Probe status | neither set | `WIENERDOG_SMOKE_I_KNOW=1` only | `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` only | both set |
 |---|---|---|---|---|
 | **CLEAN** (0) | proceed | proceed | proceed | proceed |
 | **LIVE** (1) | **abort** | proceed | **abort** — this override does not apply to LIVE | proceed |
 | **NOT-PROBEABLE** (2) | **abort** | **abort** — this override does not apply to NOT-PROBEABLE | proceed | proceed |
+| **anything else** — any status outside `{0,1,2}` | **abort** | **abort** | proceed | proceed |
 
 | Fact / rule | Value |
 |-------------|-------|
 | On CLEAN (exit 0) | proceed unchanged. Every existing step, check and `ok`/`die` message in the script is untouched |
 | On LIVE (exit 1) | abort with exit 1 inside the window this table's Placement row fixes — i.e. before `mktemp -d` runs, so no `$SB` and no `EXIT` trap exist — printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` |
 | On NOT-PROBEABLE (exit 2) | abort in the same window, with a message saying the live domain could not be queried and naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` |
+| **On any other status — the closing row** | any status outside `{0,1,2}` is treated as **NOT-PROBEABLE**: same abort, same message, same single override. Table A emits only `0`/`1`/`2`, so a caller seeing anything else is seeing a probe that **could not be asked** — `127` (script deleted or not on the path), `126` (not executable), `128+n` (killed by a signal), or any future status a rewritten probe might invent. Table A's preamble already forbids reporting clean on a question that was not asked; this row is that rule applied to the one case the caller, not the probe, must classify. **The dispatch must be closed** — a `case`/`if` chain whose unmatched arm falls through to the CLEAN path turns "the probe is missing" into "the domain is safe", which is the fail-open PR #181's gates found |
 | Override values | both are **exact-value**: the string `1` and nothing else. `=0`, `=false`, `=no` and `''` bypass nothing. Both are documented in comment lines **inside this same block**, not in the script's header — the header at `:1-17` is not edited, which keeps the file's diff to one contiguous insertion (Deliverables) |
 | Who sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`, and how | `.github/workflows/install-smoke.yml`, as an `env:` block on the **shared** "Install lifecycle smoke" step (`:41-42`), whose **value** is conditional: `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: ${{ runner.os == 'Linux' && '1' \|\| '' }}`. On macOS it evaluates to the empty string, which Table B's exact-value rule treats as unset. The runner's inability to answer becomes an explicit statement a human wrote in a reviewable file, not an ambient variable the script sniffs |
 | Why a conditional VALUE and not `if:` | GitHub Actions cannot attach `if:` to a single `env:` entry, and putting `if:` on the step would **skip the whole smoke step on macOS** — deleting the very leg whose CLEAN probe is the guarantee below. The conditional value is the only shape that varies the variable while keeping one step that runs on both legs |
@@ -183,7 +190,9 @@ probe — decides what to do about it.
 - [ ] **`WP-scheduler-mutation-home-authority`'s Table C**, which grants
       real-scheduler authority only on this probe's CLEAN result — a change to
       this table's exit-code meanings changes that table too, and the two move
-      in the same pass
+      in the same pass. Registered specifically: Table C's Trigger row mirrors
+      "CLEAN is a positive result", and its "Never on any other status" row
+      mirrors this table's closing row (any status outside `{0,1,2}`)
 
 ## Implementation notes & constraints
 
@@ -237,11 +246,23 @@ probe — decides what to do about it.
       `WIENERDOG_SMOKE_I_KNOW=1`.
 - [ ] The same script aborts identically on a NOT-PROBEABLE result with neither
       override set, naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` instead.
-- [ ] All six cells of Table B's outcome × override matrix hold. In particular
-      both wrong-variable cells: `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` does
-      **not** proceed past LIVE, and `WIENERDOG_SMOKE_I_KNOW=1` does **not**
+- [ ] All **eight** cells of Table B's status × override matrix hold. In
+      particular both wrong-variable cells: `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1`
+      does **not** proceed past LIVE, and `WIENERDOG_SMOKE_I_KNOW=1` does **not**
       proceed past NOT-PROBEABLE. With both set, each still applies only to its
       own outcome.
+- [ ] The closing row is real, not implied: a probe status **outside `{0,1,2}`**
+      aborts exactly like NOT-PROBEABLE, and is cleared only by
+      `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1`. Exercised on all three reachable
+      shapes — probe **deleted** (`127`), probe **not executable** (`126`), and a
+      probe returning an **out-of-taxonomy** status such as `3`. None of the
+      three may reach the CLEAN path.
+- [ ] Table A's `grep` split: a no-match (`grep` exit 1) yields **CLEAN**, while
+      a `grep` failure (exit ≥ 2) yields **NOT-PROBEABLE** — the two are not
+      collapsed into "non-zero".
+- [ ] Table A's prefix terminator: the prefix is passed after `--`, so an
+      option-shaped prefix (e.g. `-v`) is matched as a literal and does not
+      silently invert the match.
 - [ ] Both overrides are **exact-value**: with either set to `0`, `false`, `no`
       or the empty string, the corresponding abort still happens.
 - [ ] `.github/workflows/install-smoke.yml` sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`
@@ -326,9 +347,18 @@ test -f scripts/smoke-install.sh && ! grep -qE '\$\{?CI[:}]' scripts/smoke-insta
   still abort, `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` must proceed, both-set must
   proceed — are reached the same way as Table A's exit-2 arm: with the probe's
   client constant temporarily pointed at a path that does not exist. Paste the
-  outcome of each of the six cells, naming how it was reached; a matrix asserted
-  in only one direction is exactly the half-passing implementation this table
-  exists to exclude.
+  outcome of each of the eight cells, naming how it was reached; a matrix
+  asserted in only one direction is exactly the half-passing implementation this
+  table exists to exclude.
+- **The closing row's cells need no forcing at all — they are the cheapest arms
+  here, and they are assertable.** All three shapes act on the *probe script*,
+  not on its internals: `mv` it aside and run the preflight (status `127`);
+  `chmod -x` it and run the preflight (`126`); replace it with a two-line stub
+  that `exit 3`s (out-of-taxonomy). Each must abort with the NOT-PROBEABLE
+  message, and each must proceed under `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` and
+  **not** under `WIENERDOG_SMOKE_I_KNOW=1`. Restore the probe afterwards. These
+  are the three states PR #181's reviewers exercised, so they are known-reachable
+  rather than hypothetical — paste all three.
 - The two `smoke-install.sh` commands must exit non-zero with the issue-#169
   message and **must not** print the `== 1. init …` banner. Paste both outputs.
 - **Those two commands are destructive on the pre-implementation tree.** With no

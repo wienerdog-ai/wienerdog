@@ -294,8 +294,8 @@ domain, and `CI=false` is non-empty.
 
 | Fact / rule | Value |
 |-------------|-------|
-| Trigger | `scripts/smoke-install.sh` exports `WIENERDOG_ALLOW_REAL_SCHEDULER=1` **if and only if its own preflight returned CLEAN** — `WP-smoke-live-scheduler-preflight`'s Table A exit 0, meaning the scheduler client was invoked, exited successfully, and reported no `ai.wienerdog.*` / `wienerdog-*` identifier |
-| Never on the other two arms | a LIVE (exit 1) or NOT-PROBEABLE (exit 2) result grants nothing — including when the run continues past that result because `WIENERDOG_SMOKE_I_KNOW=1` or `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` was set. **Overriding the preflight lets the lifecycle run; it does not hand it scheduler authority.** Such a run still hits Table A row 4 at every mutation and refuses |
+| Trigger | `scripts/smoke-install.sh` exports `WIENERDOG_ALLOW_REAL_SCHEDULER=1` **if and only if its own preflight returned CLEAN** — `WP-smoke-live-scheduler-preflight`'s Table A exit 0, meaning the scheduler client was invoked, exited successfully, and reported no `ai.wienerdog.*` / `wienerdog-*` identifier. CLEAN is a **positive** result, never a default |
+| Never on any other status | **every** non-CLEAN status grants nothing: LIVE (exit 1), NOT-PROBEABLE (exit 2), **and any status outside `{0,1,2}`** — a deleted or non-executable probe (`127`/`126`), one killed by a signal, or one returning an out-of-taxonomy code. That last class is why this row is phrased as a closed rule rather than a list of two: an export gated by "not LIVE" or by a fall-through arm would hand real authority to a run whose probe never answered. The rule holds even when the lifecycle continues past the result because `WIENERDOG_SMOKE_I_KNOW=1` or `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` was set. **Overriding the preflight lets the lifecycle run; it does not hand it scheduler authority.** Such a run still hits Table A row 4 at every mutation and refuses |
 | Value | the exact string `1`, matching Table B's exact-value rule |
 | Where | anchored to the **post-dependency** tree: immediately after the preflight block's CLEAN outcome is known, and before the sandbox `export HOME=…` block (at `:28-32` on HEAD `a6e0803`, shifted down by whatever the dependency inserted). Anchor by the surrounding preflight/`export` lines, not by a line number |
 | Local runs | stopped twice, independently: by the dependency's preflight, and — if that is deliberately overridden — by row 4 of Table A, because an overridden preflight grants no authority |
@@ -494,8 +494,11 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
       mistake-guard-not-security-control scoping, the same-pathname namespace
       residual, and the ADR-0028 amendment §3 rule-not-engaged statement (the
       Context section carries the last one too)
-- [ ] **`WP-smoke-live-scheduler-preflight`'s Table A** — Table C consumes its
-      CLEAN/LIVE/NOT-PROBEABLE exit codes, so a change to either moves both
+- [ ] **`WP-smoke-live-scheduler-preflight`'s Tables A and B** — Table C consumes
+      that probe's status taxonomy, so a change to either moves both. The
+      taxonomy is **closed**: CLEAN / LIVE / NOT-PROBEABLE / anything-else, and
+      Table C's "Never on any other status" row is the mirror of that closing
+      arm — neither may be narrowed back to a two-item list
 - [ ] **ADR-0041's Decision items and its Consequences bullets** — they state
       Table B's predicate, Table A's refusal shape, Table U's uninstall rule and
       the same scoping and residual as the Security checklist. Editable only while
