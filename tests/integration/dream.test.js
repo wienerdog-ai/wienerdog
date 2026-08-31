@@ -306,7 +306,8 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   const msg = git(ctx.vault, ['log', '-1', '--pretty=%s']).trim();
   assert.match(msg, /^dream: \d{4}-\d{2}-\d{2} — \d+ notes, \d+ skills$/);
 
-  // ASKED OF HEAD, NOT THE INDEX. The run does not touch the user's index
+  // ASKED OF HEAD, NOT THE INDEX. The run does not touch the user's index —
+  // the claim ranges over the run's own acts (row W1(a) defines the scope)
   // (owner ruling, 2026-08-31 — the refresh that used to keep them in step
   // produced four data-loss defects and was dropped), so `git ls-files` answers
   // a question about the user's staging area, not about what this run committed.

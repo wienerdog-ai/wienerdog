@@ -263,7 +263,12 @@ function commitNamedSet(o) {
     g(['update-ref', '-m', 'wienerdog dream', 'HEAD', commit, head]);
 
     // THE USER'S INDEX IS NOT THIS RUN'S PROPERTY, and this run does not touch
-    // it. That is a decision with a cost, taken deliberately (owner ruling,
+    // it. THE CLAIM RANGES OVER THIS RUN'S OWN ACTS — its own git invocations
+    // and its own file writes (row W1(a), which defines the scope). A hook the
+    // user has configured to fire on ref updates is the user's code running on
+    // the user's standing instruction; triggering the contracted `update-ref`
+    // does not make that hook's write this run's act. That is a decision with a
+    // cost, taken deliberately (owner ruling,
     // 2026-08-31) after a refresh mechanism here produced FOUR data-loss defects
     // in four review rounds: it destroyed staged content, then staged deletions
     // and staged modes, then disabled itself through a parser bug, then flattened

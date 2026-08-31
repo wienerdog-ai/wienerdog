@@ -20,7 +20,9 @@ The safety guarantee that makes auto-written memory acceptable at all (THREAT-MO
 T1) rests on git: "one commit per dream", so `git reset` then `git revert <sha>`
 undoes an entire night — plus the orchestrator's post-commit diff validation.
 **Two commands rather than one, since ADR-0012's workspace/promotion amendment:**
-the run never touches the user's git index, so that index still describes the
+the run never touches the user's git index — a statement about the run's own
+actions; a hook the user has set to fire on ref updates is their own code, not
+the run's — so that index still describes the
 pre-run HEAD and the reset re-syncs it. Skipping the reset costs nothing but a
 retry — the revert refuses outright (exit 128) rather than applying in part. The
 guarantee this ADR leans on is that a night is **deterministically and loudly

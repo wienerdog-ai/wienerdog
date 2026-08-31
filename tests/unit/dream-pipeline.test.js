@@ -163,7 +163,11 @@ function gitVerb(args) {
  * ROW W1'S ENFORCEMENT IS THE SEAM, NOT THE ARTIFACT.
  *
  * W1(a) is a total over ACTS — no dream run writes, refreshes, resets or
- * otherwise touches the user's index, in any run state. An ARTIFACT compared at
+ * otherwise touches the user's index, in any run state. THE TOTAL RANGES OVER
+ * THE RUN'S OWN ACTS: its own git invocations and its own file writes (row
+ * W1(a) defines the scope). A user hook fired by a ref update runs BELOW any
+ * seam — git spawns it, we do not — and its write is the user's act, not this
+ * run's; that residual is stated in the row, neither suppressed nor detected. An ARTIFACT compared at
  * two endpoints cannot enforce a total over acts: a write followed by a restore
  * lands between the endpoints and reads green. Measured 2026-08-31 — an
  * `update-index --assume-unchanged` that saved and rewrote the original bytes
@@ -1497,7 +1501,8 @@ test('dream-pipeline: the FALLBACK report arm — the body was refused, the reco
 //     times.
 //
 // What replaces all four is ONE assertion of the contract that is actually in
-// force — the run does not touch the user's index at all — which DOES have a RED.
+// force — the run does not touch the user's index at all, a total ranging over
+// the run's OWN acts (row W1(a) defines the scope) — which DOES have a RED.
 
 // THE THREE LAYOUTS ARE THE POINT, not thoroughness for its own sake. This
 // assertion is the only thing standing between the package and a reintroduced
@@ -1512,6 +1517,11 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
   test(`dream-pipeline: the run does not touch the user's git index — at all, ${layout} vault (row G8)`, async () => {
     const ctx = setup({ layout });
     const rel = '03-Resources/valid-note.md';
+    // THE NAME ABOVE STATES THE TOTAL, so the scope travels with it: the claim
+    // ranges over the run's OWN acts — its own git invocations and its own file
+    // writes (row W1(a)). A user hook fired by a ref update is the user's code,
+    // not this run's act, and is a stated residual rather than a gap.
+    //
     // Every shape of user state the retired refresh managed to destroy, in one
     // fixture: ordinary staged content, a staged deletion, a staged mode change,
     // and an unresolved merge. Under the ruling none of them is this run's

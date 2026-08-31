@@ -205,8 +205,10 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     assert.equal(commitCount(adopted), before + 1, 'exactly one dream commit');
 
     // ASKED OF HEAD, NOT THE INDEX (Table W row W1). The run does not touch the
-    // user's index, so `git ls-files` answers a question about their staging
-    // area rather than about what this run committed.
+    // user's index — a total ranging over the run's OWN acts, its own git
+    // invocations and its own file writes (row W1(a) defines the scope) — so
+    // `git ls-files` answers a question about their staging area rather than
+    // about what this run committed.
     const committed = git(adopted, ['ls-tree', '-r', '--name-only', 'HEAD']);
     assert.ok(committed.includes('06-Identity/adopted-fact.md'), 'mapped Tier-3 identity note committed');
     assert.ok(committed.includes('05-Daily/2026/07/2026-07-03.md'), 'mapped Tier-1 nested daily committed');
