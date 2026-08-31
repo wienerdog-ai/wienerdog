@@ -86,7 +86,7 @@ safe — is `WP-scheduler-mutation-home-authority` and is **out of scope here**.
 |--------|------|-------|
 | create | scripts/live-scheduler-probe.sh | the read-only probe; the three exit codes and the prefix argument per Table A |
 | modify | scripts/smoke-install.sh | **one** contiguous block per Table B — the preflight plus the comment lines documenting its two override variables — inserted at the placement Table B fixes. Nothing else in the file changes; in particular the existing header comment (`:1-17`) is **not** edited |
-| modify | .github/workflows/install-smoke.yml | one `env:` declaration on the existing "Install lifecycle smoke" step (`:41-42`) setting `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: '1'` **on the Linux leg only** (Table B). Nothing else in the workflow changes — no new job, no new step, no matrix change, no `CI` reference |
+| modify | .github/workflows/install-smoke.yml | one `env:` block on the existing "Install lifecycle smoke" step (`:41-42`) whose **value** is Linux-conditional, per Table B. The step gains no `if:` and keeps running on both matrix legs. Nothing else in the workflow changes — no new job, no new step, no matrix change, no `CI` reference |
 
 ### Exact contracts
 
@@ -160,8 +160,10 @@ probe — decides what to do about it.
 | On LIVE (exit 1) | abort with exit 1 inside the window this table's Placement row fixes — i.e. before `mktemp -d` runs, so no `$SB` and no `EXIT` trap exist — printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` |
 | On NOT-PROBEABLE (exit 2) | abort in the same window, with a message saying the live domain could not be queried and naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` |
 | Override values | both are **exact-value**: the string `1` and nothing else. `=0`, `=false`, `=no` and `''` bypass nothing. Both are documented in comment lines **inside this same block**, not in the script's header — the header at `:1-17` is not edited, which keeps the file's diff to one contiguous insertion (Deliverables) |
-| Who sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`, and where | `.github/workflows/install-smoke.yml`, on the smoke step, **only on the Linux leg** (`if: runner.os == 'Linux'`, the same conditional shape the existing macOS-only brew step at `:36-40` uses). The runner's inability to answer becomes an explicit statement a human wrote in a reviewable file, not an ambient variable the script sniffs |
-| Why Linux-only, and what it guarantees | `macos-latest` gets **no** override, so if its launchd domain ever stops being queryable its preflight aborts and the job goes **red**. That makes "at least one matrix leg actually probed CLEAN" a hard CI failure rather than a silent gap — implemented by where the override is placed, with no cross-job machinery. Registration itself stays best-effort and unasserted (`.github/workflows/install-smoke.yml:11`) |
+| Who sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`, and how | `.github/workflows/install-smoke.yml`, as an `env:` block on the **shared** "Install lifecycle smoke" step (`:41-42`), whose **value** is conditional: `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: ${{ runner.os == 'Linux' && '1' \|\| '' }}`. On macOS it evaluates to the empty string, which Table B's exact-value rule treats as unset. The runner's inability to answer becomes an explicit statement a human wrote in a reviewable file, not an ambient variable the script sniffs |
+| Why a conditional VALUE and not `if:` | GitHub Actions cannot attach `if:` to a single `env:` entry, and putting `if:` on the step would **skip the whole smoke step on macOS** — deleting the very leg whose CLEAN probe is the guarantee below. The conditional value is the only shape that varies the variable while keeping one step that runs on both legs |
+| What it guarantees | `macos-latest` gets an empty value, i.e. **no** override, so if its launchd domain ever stops being queryable its preflight aborts and the job goes **red**. That makes "at least one matrix leg actually probed CLEAN" a hard CI failure rather than a silent gap — implemented by the value, with no cross-job machinery. Registration itself stays best-effort and unasserted (`.github/workflows/install-smoke.yml:11`) |
+| Both legs must still RUN | the smoke step carries no `if:` of its own and the matrix keeps both entries, so the step executes on `ubuntu-latest` **and** `macos-latest`. A change that skips it on either leg defeats the guarantee above and is a regression, not an optimization |
 | Point-in-time contract (named residual **R-probe-race**, owner-accepted) | the probe answers for the instant it ran. A process that registers this user's real Wienerdog jobs *after* a CLEAN result — during the lifecycle that follows — is not seen, and that run may then unload them. Serializing every mutator behind a per-user lock would close it; the machinery is not worth it for a maintainer-run smoke script, and no lock is introduced. What the preflight promises is "the domain was clean when this run started", and nothing more |
 | Check count | the preflight does **not** call `ok()`; the script's final `SMOKE PASS — $pass checks.` count is unchanged from today |
 
@@ -243,9 +245,12 @@ probe — decides what to do about it.
 - [ ] Both overrides are **exact-value**: with either set to `0`, `false`, `no`
       or the empty string, the corresponding abort still happens.
 - [ ] `.github/workflows/install-smoke.yml` sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`
-      to the exact string `'1'` on the **Linux leg only**, so a `macos-latest`
-      runner whose probe is not CLEAN fails the job. It adds nothing else — no
-      new job, no new step, no matrix change.
+      by a **conditional value** that yields `1` on Linux and the empty string on
+      macOS, so a `macos-latest` runner whose probe is not CLEAN fails the job.
+- [ ] The smoke step still **runs on both matrix legs** — it carries no `if:`,
+      and the matrix still lists `ubuntu-latest` and `macos-latest`. (An `if:` on
+      the step would skip macOS entirely and silently delete the CLEAN leg.)
+      Nothing else is added — no new job, no new step, no matrix change.
 - [ ] The script reads no `CI` variable — no `$CI` / `${CI…}` expansion anywhere
       in it, asserted by the guarded grep in the verification steps.
 - [ ] The inserted block sits after `set -euo pipefail` and before the `mktemp -d`

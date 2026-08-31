@@ -72,17 +72,26 @@ shape. The two test variables keep their current precedence ahead of it, and kee
 their loose comparisons — they only ever suppress a mutation, so a loose test
 there can only fail safe.
 
-**2. A command that DELETES a scheduler registration's recovery metadata must
-hold that authority before it deletes anything, and must establish the need from
-LIVE EVIDENCE rather than from the manifest.** A soft refusal is right for
-`init` / `sync` / `schedule`, where the schedule file is still written and the
-next authorized `sync` repairs it. It is wrong for `uninstall`: refusing the
-unload while completing the deletion leaves an orphaned job still firing with the
-manifest records that could have stopped it already gone. So a non-dry-run
-`wienerdog uninstall` that lacks authority performs a **read-only probe of this
-user's live domain for Wienerdog's own identifiers**; any live one — or a domain
-that cannot be queried — **aborts loudly having deleted nothing**, and only an
-answered, empty domain proceeds.
+**2. A command that DELETES a scheduler registration's recovery metadata needs
+DELETION CLEARANCE first, and must establish it from LIVE EVIDENCE rather than
+from the manifest.** Two predicates, deliberately distinct — conflating them is
+what an earlier draft did, and it made the rule self-contradictory:
+
+- **scheduler authority** = permission to *mutate* the scheduler (Decision 1).
+- **deletion clearance** = permission for `uninstall` to *delete* = scheduler
+  authority **OR** a read-only probe that positively answered *no live Wienerdog
+  identifier*. Clearance is the weaker predicate, and it is the one `uninstall`
+  gates on: an install with nothing live to orphan is not asked for permission it
+  does not need.
+
+A soft refusal is right for `init` / `sync` / `schedule`, where the schedule file
+is still written and the next authorized `sync` repairs it. It is wrong for
+`uninstall`: refusing the unload while completing the deletion leaves an orphaned
+job still firing with the manifest records that could have stopped it already
+gone. So a non-dry-run `wienerdog uninstall` without scheduler authority probes
+this user's live domain for Wienerdog's **own** identifiers; any live one — or a
+domain that cannot be queried — **aborts loudly having deleted nothing**, and
+only an answered, empty domain clears the deletion.
 
 The manifest is deliberately not the trigger. It is untrusted, and a record can
 be absent while its registration is live — stripped, hand-edited, older-format,
@@ -103,6 +112,18 @@ That is **residual R-failed-unload**, pre-existing and unchanged by this decisio
 in either direction; `wienerdog doctor` probes live registrations and is what
 surfaces it. Closing it means propagating the unload result and reordering
 `reverse()` — a separate work package, not authorized here.
+
+**2b. A product-side safety gate is neutralized for tests by SUPPLYING EVIDENCE
+or SUPPLYING AUTHORITY — never by a switch that asserts safety.** An in-process
+caller injects the probe, so the gate still decides but inspects a domain the
+test controls. A subprocess has only the environment, so it sets the authority
+marker and the gate is never armed — which is sound because authority is the real
+product predicate, not a lie about the world. A caller that does neither, under
+the suite's test guard, gets a dedicated error before any real query, so a
+forgotten seam fails on every machine rather than on some. The invariant that
+holds all three together: **the test guard is monotone in the safe direction — it
+can move a gate from *would query* to *refuse*, never from *abort* to *proceed*,
+and is never read as evidence that a domain is clean.**
 
 **3. Authority is granted by evidence about the domain, never by an execution
 context.** No mechanism in this decision reads `CI` or any other
@@ -184,6 +205,8 @@ review:
 | **Make the coherence and opt-in arms independent, with any lookup failure meaning no authority** | Drafted for round 1, refuted by both channels in round 2: `WIENERDOG_ALLOW_REAL_SCHEDULER=1` plus a throwing `os.userInfo()` had two opposite outcomes, and the reading that refuses disabled the escape hatch precisely in the degraded environments where this ADR names it the correct authority. Decision 1 is therefore **ordered**: the exact opt-in short-circuits without evaluating coherence, and a lookup failure disables only the coherence arm |
 | **Transactional uninstall** (propagate the unload result, order scheduler entries first, abort mid-reversal retaining recovery metadata) | Not rejected on the merits — it is the real fix for residual R-failed-unload. Rejected *here*: it rewrites `reverseSchedulerEntry` and `reverse()`'s ordering, and must define what a partially-reversed install looks like. Its own work package |
 | **A per-user scheduler lock, or re-verifying ownership before each destructive step** | Rejected for residual R-probe-race (a concurrent process registering real jobs after a CLEAN probe). Serializing every mutator behind a lock is machinery a maintainer-run smoke script does not justify; the probe's contract is stated as point-in-time instead |
+| **A separate test-only wrapper instead of an `opts.probe` parameter on the production `run()`** | Weighed at round 3 and not adopted. It trades one risk for another: a second entry point is a second thing that can drift from the real one, and the tests would then exercise the wrapper rather than the gate. The parameter matches the codebase's existing seam pattern (`status.probeAll`), and what actually makes it safe is the **call-site gate** — `src/cli/uninstall` is required from exactly one production place, the `bin/wienerdog.js` dispatch table, which is invoked with exactly one argument. Both facts are asserted, not asserted-about |
+| **A blanket "no production `.run(` passes a second argument" assertion** | Refuted by measurement on `a6e0803`: six `.run(` sites exist under `bin/` and `src/`, and three of them (`src/gws/index.js:117`, `:148`, `src/cli/init.js:182`) legitimately pass options today. A gate written that way would have been false on arrival. Replaced by the uninstall-scoped pair above — the enumerate-your-own-good form |
 
 ## Reconciliation with the two ADRs this sits between
 
