@@ -1189,35 +1189,51 @@ test('dream-pipeline: teardown never destroys the last copy — the only-copy re
 
 test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed from that arm\'s bytes, and the record is delivered (rows G8, G11)', async () => {
   const ctx = setup();
-  const reportRel = `reports/dreams/${DATE}.md`;
-  const { writeIntoVault } = require('../../src/core/dream/vault-write');
-  // The hostile bytes ride the PATH the primitive's reason quotes, which is how
-  // Table N classifies that channel attacker-influenceable BY DERIVATION.
+  // THE HOSTILE BYTES MUST RIDE THE REL, because that is what the accounting
+  // reason quotes. An earlier form planted a hostile-named NEIGHBOUR file and
+  // asserted the raw bytes were absent — measured, the reason is
+  // "<rel> no longer holds the bytes this write was decided against", so the
+  // neighbour never entered any channel and the clause could not fail. Its
+  // non-vacuity guard was vacuous too: it matched `REDACTED` from the unrelated
+  // out-of-vault EVIL.json line this fixture emits on every run.
   const HOSTILE = 'token=abcdefghijkl client_secret: abcdefghijkl';
+  writeFile(ctx.core, 'config.yaml',
+    `vault: ${ctx.vault}\ndream_timeout_minutes: 5\nvault_layout:\n  reports_dir: ${HOSTILE}\n`);
+  const reportRel = `${HOSTILE}/${DATE}.md`;
+
+  const { writeIntoVault } = require('../../src/core/dream/vault-write');
   let reportWrites = 0;
   let conflicted = false;
-  // THE BODY PUBLISHES, THE SECOND WRITE IS REFUSED. That is the only way to
-  // reach `report.outcome === 'promoted'` with `accounting.published === false`:
-  // the two writes target the same path inside one synchronous call.
-  //
-  // AND THE REFUSAL IS A REAL ONE, raised by the real primitive on one of the two
-  // causes the criterion names. An earlier form returned a synthetic
-  // `{written:false, reason}`, which reached the arm but asserted nothing about
-  // whether the primitive would ever produce it. Here the vault file is changed
-  // between the second write's read and its publish, so the primitive's own
-  // `expect` guard refuses — and the reason it composes is the one rendered.
-  const writeFile = (o) => {
+  // THE BODY PUBLISHES, THE SECOND WRITE IS REFUSED — the only way to reach
+  // `report.outcome === 'promoted'` with `accounting.published === false`, since
+  // both writes target the same path inside one synchronous call. The refusal is
+  // a REAL one: the vault file is changed between the second write's read and its
+  // publish, so the primitive's own `expect` guard refuses and composes the
+  // reason that gets rendered.
+  const writeFileSeam = (o) => {
     if (o.rel === reportRel) {
       reportWrites += 1;
       if (reportWrites === 2 && !conflicted) {
-        fs.writeFileSync(path.join(ctx.vault, `${HOSTILE}.md`), 'x\n'); // the hostile-named staging neighbour
         fs.writeFileSync(path.join(ctx.vault, reportRel), 'the user saved between the two writes\n');
         conflicted = true;
       }
     }
     return writeIntoVault(o);
   };
-  const r = await runDream(ctx, ['--yes'], { opts: { writeFile } });
+  // The fixture brain hardcodes `reports/dreams/<date>.md`, so with a custom
+  // `reports_dir` there is no body at the layout's report path and promotion
+  // takes the one-write fallback instead. The body is therefore written at the
+  // hostile rel through the workspace seam — which is what the brain would have
+  // done under this layout.
+  const r = await runDream(ctx, ['--yes'], {
+    opts: {
+      platform: 'linux',
+      writeFile: writeFileSeam,
+      reapGroup: brainWrites(ctx, {
+        [reportRel]: `# Dream report — ${DATE}\n\nConsolidated recent sessions.\n`,
+      }),
+    },
+  });
   assert.equal(r.thrown, null, r.thrown && r.thrown.message);
   assert.equal(reportWrites, 2, 'both report writes were attempted — a vacuous pass would prove nothing');
   assert.ok(conflicted, 'and the conflict was really injected, not stubbed');
@@ -1232,14 +1248,25 @@ test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed f
   assert.ok(committed.includes('Consolidated recent sessions.'), 'the committed bytes are the body the first write published');
   assert.ok(!committed.includes('Refused by policy'), 'and NOT a manufactured enforcement section');
 
-  // ROW G11 (i-b): the COMPLETE record is delivered, and the accounting names
-  // the reason — NEUTRALISED, because this package renders it and the primitive
-  // derives it from a brain-chosen path.
+  // ROW G11 (i-b): the COMPLETE record is delivered, and the accounting names the
+  // reason — NEUTRALISED, because this package renders it and the primitive
+  // derives it from the brain-influenced path.
   assert.match(r.output, /the report body was published, but its enforcement section was NOT/);
   assert.match(r.output, /Refused by policy/, 'the complete record follows');
   assert.ok(!r.output.includes('token=abcdefghijkl'), `raw assignment-shaped secret leaked: ${r.output}`);
   assert.ok(!r.output.includes('client_secret: abcdefghijkl'), 'raw prefix-shaped secret leaked');
-  assert.match(r.output, /token_abcdefghijkl|REDACTED/, 'and the neutralised form is present — non-vacuity');
+  // NON-VACUITY, ON THE SPECIFIC NEUTRALISED FORM THIS CHANNEL PRODUCES. A
+  // generic /REDACTED/ alternative is satisfied by unrelated lines this fixture
+  // emits on every run, which is exactly how the previous guard certified
+  // nothing. The form below also pins TABLE N's ORDER: `redactOnly` runs FIRST,
+  // so the assignment-shaped secret becomes `[REDACTED:generic-secret]` and only
+  // then does `sanitizeProjectName` turn its brackets and colon into `_`. A
+  // sanitise-first implementation would have produced `token_abcdefghijkl` —
+  // the detector never firing — which is the measured reason the order is fixed.
+  assert.match(
+    r.output, /token__REDACTED_generic-secret_/,
+    `the accounting reason carried the hostile path, redacted THEN sanitised: ${r.output}`
+  );
 });
 
 test('dream-pipeline: a staged DELETION and a staged MODE change both survive the index refresh (row G8)', async () => {
