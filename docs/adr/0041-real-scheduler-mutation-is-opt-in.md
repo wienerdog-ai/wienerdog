@@ -73,13 +73,36 @@ their loose comparisons — they only ever suppress a mutation, so a loose test
 there can only fail safe.
 
 **2. A command that DELETES a scheduler registration's recovery metadata must
-hold that authority before it deletes anything.** A soft refusal is right for
+hold that authority before it deletes anything, and must establish the need from
+LIVE EVIDENCE rather than from the manifest.** A soft refusal is right for
 `init` / `sync` / `schedule`, where the schedule file is still written and the
 next authorized `sync` repairs it. It is wrong for `uninstall`: refusing the
 unload while completing the deletion leaves an orphaned job still firing with the
-manifest records that could have stopped it already gone. `wienerdog uninstall`
-therefore checks authority up front, when its manifest carries any
-`scheduler-entry`, and **aborts loudly having deleted nothing**.
+manifest records that could have stopped it already gone. So a non-dry-run
+`wienerdog uninstall` that lacks authority performs a **read-only probe of this
+user's live domain for Wienerdog's own identifiers**; any live one — or a domain
+that cannot be queried — **aborts loudly having deleted nothing**, and only an
+answered, empty domain proceeds.
+
+The manifest is deliberately not the trigger. It is untrusted, and a record can
+be absent while its registration is live — stripped, hand-edited, older-format,
+or lost to a partial earlier run. Absence of an untrusted record is not evidence
+that no registration exists, and using it as such *widens* destructive behavior,
+which ADR-0038 forbids. The probe fails **closed**: unanswerable counts as
+possibly-live, because reading "I could not ask" as "there is nothing there" is
+the same mistake as Decision 3's, one level down. A wrong abort costs one command
+— the message names the exact variable — while a wrong proceed silently orphans a
+job that keeps firing.
+
+**What Decision 2 does not claim.** It does not make uninstall transactional. A
+deletion that proceeds is *not* guaranteed to have been preceded by a successful
+unload: `reverseSchedulerEntry` ignores its unload's result
+(`src/core/manifest.js:529-536`) and removes the file regardless, so a failing
+`launchctl`/`systemctl`, or a suppressing neutralizer, still leaves an orphan.
+That is **residual R-failed-unload**, pre-existing and unchanged by this decision
+in either direction; `wienerdog doctor` probes live registrations and is what
+surfaces it. Closing it means propagating the unload result and reordering
+`reverse()` — a separate work package, not authorized here.
 
 **3. Authority is granted by evidence about the domain, never by an execution
 context.** No mechanism in this decision reads `CI` or any other
@@ -126,6 +149,14 @@ operation. That is the enumerate-the-bad shape ADR-0035 records as producing
 findings two through six rather than closing one. The residual is closed by
 scoping the claim — which these paragraphs are — not by a seventh guard.
 
+Two more residuals are named and accepted, so the full set lives in one place:
+
+| Residual | What stays open | Why it is not closed here |
+|---|---|---|
+| **R-namespace-bridge** | a sandbox presenting its own filesystem at the passwd home's pathname, or a platform whose `os.userInfo().homedir` follows the environment, satisfies the coherence arm | scoping, not detection (above) |
+| **R-failed-unload** | a *failed* or *suppressed* unload during `uninstall` still proceeds to delete, leaving an orphan. Pre-existing on `main`, unchanged by this ADR | transactional uninstall is its own work package; `wienerdog doctor` surfaces the orphan |
+| **R-probe-race** | Decision 3's probe answers for the instant it ran; a process that registers real jobs afterwards is not seen by the run that already earned authority | a per-user lock across all mutators is machinery a maintainer-run smoke script does not justify. The promise is "the domain was clean when this run started", and no more |
+
 ### The owner's rulings this Decision carries
 
 Recorded here so a later reader sees which parts were the owner's call rather
@@ -135,7 +166,7 @@ review:
 | # | Question | Ruling |
 |---|---|---|
 | D1 | Sign the coherence rule, or narrow to opt-in-only? | **Coherence + exact-value opt-in as drafted** (Decision 1) |
-| D2 | Soft refusal, or hard abort? | **Both, by command class**: soft for `init` / `sync` / `schedule`; `uninstall` checks authority before deleting and aborts loudly (Decision 2) |
+| D2 | Soft refusal, or hard abort? | **Both, by command class**: soft for `init` / `sync` / `schedule`; `uninstall` checks authority before deleting and aborts loudly (Decision 2). **Round-2 refinement to the same ruling:** what arms that check is a live-domain probe, not a manifest record — the ruling stood, the trigger was wrong |
 | D3 | Special-case a `WIENERDOG_HOME`-relocated install? | **No — a named residual.** Such an install sets the opt-in for *every* scheduler-touching command (`init`, `sync`, `update`, `schedule add/remove`, `uninstall`), and documenting that is a follow-up work package, not a code branch |
 
 ### Why not the alternatives
@@ -148,7 +179,11 @@ review:
 | **Refuse on a dev checkout** (`isDevCheckout(packageRoot())`) | Measured fail-broken: the maintainer's own install is dev-stance (`~/.wienerdog/app/current` → the git checkout), so this refuses his `wienerdog sync` — the very command issue #169 names as the repair. He would set the variable permanently and re-open the hole for exactly the person it bit |
 | **`installStance(paths) === 'prod'`** | Wrong polarity. `installStance` fails **closed to `'prod'`** by design (`src/core/vendor.js:281-292`), because `'prod'` is the more-enforced verification arm. Read as an allow-list it fails **open**: a sandbox with no `app/current` yet reads `'prod'` and is allowed |
 | **Grant authority (or skip the preflight) when `$CI` is set** | Drafted, then rejected at the round-1 gate. `CI` identifies automation, not scheduler isolation: `CI=false` and `CI=0` are both non-empty, and a self-hosted runner shares a real user's domain. Worse, keying *both* layers on it made them one layer — a single ambient variable reopened the exact incident path. Replaced by Decision 3: authority is earned from a successful, empty probe of the domain itself |
-| **Make the refusal throw everywhere, so `uninstall` cannot miss it** | Rejected twice over. It would abort `init` and `sync` on a merely-relocated install, and it would not even work: `reverseSchedulerEntry` wraps its chokepoint call in `try/catch` and discards the result (`src/core/manifest.js:530-539`), so the throw is swallowed and the deletion proceeds anyway. Decision 2's precondition at the command entry is what actually closes it |
+| **Make the refusal throw everywhere, so `uninstall` cannot miss it** | Rejected twice over. It would abort `init` and `sync` on a merely-relocated install, and it would not even work: `reverseSchedulerEntry` wraps its chokepoint call in `try/catch` and discards the result (`src/core/manifest.js:529-536`), so the throw is swallowed and the deletion proceeds anyway. Decision 2's precondition at the command entry is what actually closes it |
+| **Arm the uninstall gate on a `scheduler-entry` in the manifest** | Drafted for round 1, refuted by both channels in round 2. The manifest is untrusted and its records go missing for ordinary reasons — stripping, hand-editing, an older format, a partial earlier run — so a live registration with no record left the gate unarmed and orphanable, which is the original failure with one more step. Calling that "the safe failure direction" confused ADR-0038's *deletion-narrowing* rule with a safety guarantee: absence of an untrusted record is not a positive fact. Replaced by Decision 2's live-domain probe |
+| **Make the coherence and opt-in arms independent, with any lookup failure meaning no authority** | Drafted for round 1, refuted by both channels in round 2: `WIENERDOG_ALLOW_REAL_SCHEDULER=1` plus a throwing `os.userInfo()` had two opposite outcomes, and the reading that refuses disabled the escape hatch precisely in the degraded environments where this ADR names it the correct authority. Decision 1 is therefore **ordered**: the exact opt-in short-circuits without evaluating coherence, and a lookup failure disables only the coherence arm |
+| **Transactional uninstall** (propagate the unload result, order scheduler entries first, abort mid-reversal retaining recovery metadata) | Not rejected on the merits — it is the real fix for residual R-failed-unload. Rejected *here*: it rewrites `reverseSchedulerEntry` and `reverse()`'s ordering, and must define what a partially-reversed install looks like. Its own work package |
+| **A per-user scheduler lock, or re-verifying ownership before each destructive step** | Rejected for residual R-probe-race (a concurrent process registering real jobs after a CLEAN probe). Serializing every mutator behind a lock is machinery a maintainer-run smoke script does not justify; the probe's contract is stated as point-in-time instead |
 
 ## Reconciliation with the two ADRs this sits between
 
@@ -198,7 +233,9 @@ review:
   which matches how the codebase already treats a non-zero loader result. For
   `uninstall` that shape would be actively harmful — the unload is refused and
   ignored while the schedule files and manifest state go away, leaving an orphan
-  job with its recovery metadata deleted — so Decision 2 aborts it instead.
+  job with its recovery metadata deleted — so Decision 2 probes the live domain
+  and aborts instead. The cost is one read-only query per unauthorized uninstall,
+  and one command for a user who genuinely means it.
 - **The relocated-core cost is stated in full, not understated.** It is not just
   a first `init` needing a second command: **every** scheduler-touching command on
   such an install needs the marker — `init`, `sync`, `update`, `schedule
@@ -228,15 +265,18 @@ review:
 - **ADR-0019** (uninstall disposes the core's machine-generated mechanics) is
   **not weakened by Decision 2 — it is what Decision 2 protects.** A refused
   unload that still deleted the schedule files would leave a live registration
-  ADR-0019's disposal cannot reach. Aborting instead keeps uninstall an
-  all-or-nothing act: the user re-runs it with authority and gets a complete
-  disposal, rather than a partial one that looks finished.
+  ADR-0019's disposal cannot reach. Aborting instead means the user re-runs with
+  authority and gets a complete disposal, rather than a partial one that looks
+  finished. Stated exactly: what Decision 2 guarantees is *no deletion while
+  authority is absent and the domain holds — or may hold — a live Wienerdog
+  identifier*. It does **not** guarantee that every deletion which proceeds was
+  preceded by a successful unload; that is residual R-failed-unload.
 - **ADR-0038** (an untrusted manifest field may only narrow a deletion, never
-  widen one) governs Decision 2's trigger. It reads only `entry.kind` from the
-  untrusted manifest, and only to **refuse** a deletion — the permitted
-  direction. A manifest stripped of its `scheduler-entry` records evades the
-  check and lands on today's behavior; that is the safe failure direction and is
-  not further guarded.
+  widen one) is why Decision 2's trigger is a live probe rather than a manifest
+  record: absence of an untrusted record is not a positive fact, and arming a
+  safety gate on it *widens* deletion. The manifest keeps its ADR-0038 role of
+  narrowing which files a reversal touches, and is never read as evidence that
+  deleting is safe.
 - **ADR-0027** (re-derive unload, never execute stored argv) is unaffected — the
   argv still arrives at the chokepoint already re-derived; this only decides
   whether it is spawned.

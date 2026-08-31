@@ -86,7 +86,7 @@ safe — is `WP-scheduler-mutation-home-authority` and is **out of scope here**.
 |--------|------|-------|
 | create | scripts/live-scheduler-probe.sh | the read-only probe; the three exit codes and the prefix argument per Table A |
 | modify | scripts/smoke-install.sh | **one** contiguous block per Table B — the preflight plus the comment lines documenting its two override variables — inserted at the placement Table B fixes. Nothing else in the file changes; in particular the existing header comment (`:1-17`) is **not** edited |
-| modify | .github/workflows/install-smoke.yml | one `env:` declaration on the existing "Install lifecycle smoke" step (`:41-42`) setting `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: '1'` (Table B). Nothing else in the workflow changes — no new step, no matrix change, no `CI` reference |
+| modify | .github/workflows/install-smoke.yml | one `env:` declaration on the existing "Install lifecycle smoke" step (`:41-42`) setting `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: '1'` **on the Linux leg only** (Table B). Nothing else in the workflow changes — no new job, no new step, no matrix change, no `CI` reference |
 
 ### Exact contracts
 
@@ -146,11 +146,23 @@ probe — decides what to do about it.
 | Placement | **after `set -euo pipefail` (`:18`) and before the `SB="$(mktemp -d …)"` line currently at `:23`.** This is the single window both this row and the "On live" row below refer to: at abort time no sandbox root exists, no `EXIT` trap is installed (`:24`), and the real `HOME` is still in effect (`:28` has not run). Inserting it anywhere at or after `:23` fails this row even though the `HOME` exports are still ahead |
 | **`$CI` is not read** | the preflight consults **no** CI-detection variable. `CI` describes an execution context, not scheduler isolation: `CI=false` is non-empty, and a self-hosted runner sharing a developer's user account has a live domain like any workstation. A clean CI runner needs no exemption — its probe returns CLEAN on its own merits |
 | Probe calls | the macOS prefix `ai.wienerdog.` and the Linux prefix `wienerdog-`, both delegated to `scripts/live-scheduler-probe.sh` (Table A). A single call per platform is enough; a caller may pass both prefixes as separate calls |
+| Outcome × override (the complete matrix) | **each override applies to its own outcome and to no other.** An implementation that tests "either override is set" passes half these cells and fails the other half, so all six are stated: |
+
+| Probe outcome | neither set | `WIENERDOG_SMOKE_I_KNOW=1` only | `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` only | both set |
+|---|---|---|---|---|
+| **CLEAN** (0) | proceed | proceed | proceed | proceed |
+| **LIVE** (1) | **abort** | proceed | **abort** — this override does not apply to LIVE | proceed |
+| **NOT-PROBEABLE** (2) | **abort** | **abort** — this override does not apply to NOT-PROBEABLE | proceed | proceed |
+
+| Fact / rule | Value |
+|-------------|-------|
 | On CLEAN (exit 0) | proceed unchanged. Every existing step, check and `ok`/`die` message in the script is untouched |
-| On LIVE (exit 1) | abort with exit 1 inside the window this table's Placement row fixes — i.e. before `mktemp -d` runs, so no `$SB` and no `EXIT` trap exist — printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` as the deliberate override. **Only** that variable, at that exact value, proceeds past a LIVE domain |
-| On NOT-PROBEABLE (exit 2) | **abort by default**, in the same window, with a message saying the live domain could not be queried and naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1`. That is a *different, narrower* override than the LIVE one, and it does not bypass the LIVE arm: a runner whose probe answers LIVE still aborts even with it set |
-| Override values | both are **exact-value**: the string `1` and nothing else. `WIENERDOG_SMOKE_I_KNOW=0`, `=false` or `=no` do **not** bypass anything. Both are documented in comment lines **inside this same block**, not in the script's header — the header at `:1-17` is not edited, which keeps the file's diff to one contiguous insertion (Deliverables) |
-| Who sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE` | `.github/workflows/install-smoke.yml`, on the smoke step, as one declared line — the CI runner's inability to answer becomes an explicit statement written by a human in a reviewable file, not an ambient variable the script sniffs |
+| On LIVE (exit 1) | abort with exit 1 inside the window this table's Placement row fixes — i.e. before `mktemp -d` runs, so no `$SB` and no `EXIT` trap exist — printing the probe's matched lines plus a message that names **issue #169**, says this run would remove those live services, and names `WIENERDOG_SMOKE_I_KNOW=1` |
+| On NOT-PROBEABLE (exit 2) | abort in the same window, with a message saying the live domain could not be queried and naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` |
+| Override values | both are **exact-value**: the string `1` and nothing else. `=0`, `=false`, `=no` and `''` bypass nothing. Both are documented in comment lines **inside this same block**, not in the script's header — the header at `:1-17` is not edited, which keeps the file's diff to one contiguous insertion (Deliverables) |
+| Who sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`, and where | `.github/workflows/install-smoke.yml`, on the smoke step, **only on the Linux leg** (`if: runner.os == 'Linux'`, the same conditional shape the existing macOS-only brew step at `:36-40` uses). The runner's inability to answer becomes an explicit statement a human wrote in a reviewable file, not an ambient variable the script sniffs |
+| Why Linux-only, and what it guarantees | `macos-latest` gets **no** override, so if its launchd domain ever stops being queryable its preflight aborts and the job goes **red**. That makes "at least one matrix leg actually probed CLEAN" a hard CI failure rather than a silent gap — implemented by where the override is placed, with no cross-job machinery. Registration itself stays best-effort and unasserted (`.github/workflows/install-smoke.yml:11`) |
+| Point-in-time contract (named residual **R-probe-race**, owner-accepted) | the probe answers for the instant it ran. A process that registers this user's real Wienerdog jobs *after* a CLEAN result — during the lifecycle that follows — is not seen, and that run may then unload them. Serializing every mutator behind a per-user lock would close it; the machinery is not worth it for a maintainer-run smoke script, and no lock is introduced. What the preflight promises is "the domain was clean when this run started", and nothing more |
 | Check count | the preflight does **not** call `ok()`; the script's final `SMOKE PASS — $pass checks.` count is unchanged from today |
 
 ### Mirrored Surface Checklist
@@ -223,17 +235,22 @@ probe — decides what to do about it.
       `WIENERDOG_SMOKE_I_KNOW=1`.
 - [ ] The same script aborts identically on a NOT-PROBEABLE result with neither
       override set, naming `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` instead.
-- [ ] `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` proceeds past NOT-PROBEABLE but does
-      **not** proceed past LIVE; `WIENERDOG_SMOKE_I_KNOW=1` proceeds past LIVE.
+- [ ] All six cells of Table B's outcome × override matrix hold. In particular
+      both wrong-variable cells: `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` does
+      **not** proceed past LIVE, and `WIENERDOG_SMOKE_I_KNOW=1` does **not**
+      proceed past NOT-PROBEABLE. With both set, each still applies only to its
+      own outcome.
 - [ ] Both overrides are **exact-value**: with either set to `0`, `false`, `no`
       or the empty string, the corresponding abort still happens.
+- [ ] `.github/workflows/install-smoke.yml` sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`
+      to the exact string `'1'` on the **Linux leg only**, so a `macos-latest`
+      runner whose probe is not CLEAN fails the job. It adds nothing else — no
+      new job, no new step, no matrix change.
 - [ ] The script reads no `CI` variable — no `$CI` / `${CI…}` expansion anywhere
       in it, asserted by the guarded grep in the verification steps.
 - [ ] The inserted block sits after `set -euo pipefail` and before the `mktemp -d`
       line (Table B, Placement), and both override variables are named in comment
       lines inside that same block; the script's header comment is unmodified.
-- [ ] `.github/workflows/install-smoke.yml` sets `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE`
-      to `'1'` on the smoke step and adds nothing else.
 - [ ] The preflight adds no `ok()` call: the script's `SMOKE PASS — N checks.`
       total is unchanged.
 - [ ] `npm run lint` passes (markdownlint + shellcheck + shfmt).
@@ -283,6 +300,11 @@ test -z "$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'wd-smoke.*' -print -quit)"
 WIENERDOG_SMOKE_I_KNOW=0 bash scripts/smoke-install.sh
 rc=$?; test "$rc" -ne 0
 
+# Table B, wrong-variable cell (LIVE row): the NOT-PROBEABLE override must not
+# bypass a LIVE domain. On a machine with live registrations this must still abort.
+WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1 bash scripts/smoke-install.sh
+rc=$?; test "$rc" -ne 0
+
 # Table B, no generic CI: neither the preflight nor its overrides consult $CI.
 # Guarded on the file existing — a bare negated grep passes hardest when the
 # file is missing (grep exits 2, the negation turns that into success).
@@ -293,6 +315,15 @@ test -f scripts/smoke-install.sh && ! grep -qE '\$\{?CI[:}]' scripts/smoke-insta
   immediately after the command, and asserts it before anything else runs.** A
   trailing `echo "exit=$?"` consumes the status and makes the sequence succeed
   whatever the command did; do not reintroduce one.
+- **The matrix cells a live machine cannot reach must still be observed.** A
+  machine with live registrations can run the whole LIVE row directly (the three
+  arms above). The NOT-PROBEABLE row's cells — `WIENERDOG_SMOKE_I_KNOW=1` must
+  still abort, `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` must proceed, both-set must
+  proceed — are reached the same way as Table A's exit-2 arm: with the probe's
+  client constant temporarily pointed at a path that does not exist. Paste the
+  outcome of each of the six cells, naming how it was reached; a matrix asserted
+  in only one direction is exactly the half-passing implementation this table
+  exists to exclude.
 - The two `smoke-install.sh` commands must exit non-zero with the issue-#169
   message and **must not** print the `== 1. init …` banner. Paste both outputs.
 - **Those two commands are destructive on the pre-implementation tree.** With no
