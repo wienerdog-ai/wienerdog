@@ -1,15 +1,25 @@
 ---
 id: WP-refusal-banner-delivery
 title: Display the refusal banner — SessionStart hook prepend plus a renderDigest prefix fold
-status: Draft
+status: Superseded
 model: sonnet
 size: S
 depends_on: [WP-launcher-refusal-banner]
-adrs: [ADR-0004, ADR-0032, ADR-0039]
+adrs: [ADR-0004, ADR-0032, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-refusal-banner-delivery: make the refusal banner visible
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 
@@ -187,7 +197,7 @@ local fact stated once, in Exact contracts.
 
 - **Keep the hook dumb.** The whole value of the hook path is that it works when the
   app tree does not. Do not parse the banner, do not read `alerts.jsonl`, do not
-  branch on content. Read a second file, concatenate, encode. ADR-0039 §6 records
+  branch on content. Read a second file, concatenate, encode. ADR-0040 §6 records
   hook-side rendering from `alerts.jsonl` as a deliberately **unbuilt** fallback — do
   not build it here.
 - **The gating line must change carefully.** Today `[ -f "$DIGEST" ] || exit 0` guards
@@ -270,7 +280,7 @@ grep -n "refusalBanner" src/core/digest.js src/cli/sync.js src/cli/dream.js
 ## Out of scope (do NOT do these)
 
 - Writing or clearing the banner — that is `WP-launcher-refusal-banner`.
-- Hook-side rendering from `alerts.jsonl` (option E1) — ADR-0039 §6 keeps it unbuilt.
+- Hook-side rendering from `alerts.jsonl` (option E1) — ADR-0040 §6 keeps it unbuilt.
 - Bounding `appendRefuseAlert` — that is `WP-launcher-alert-bound`.
 - Any change to the managed block, the adapters, or the digest's body sections — those
   are `WP-managed-block-by-reference` and `WP-digest-stable-volatile-split`.

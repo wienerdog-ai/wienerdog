@@ -1,15 +1,25 @@
 ---
 id: WP-launcher-alert-bound
 title: Bound the launcher's alert writer without understating a real failure streak — collapse consecutive identical refusals into a count field
-status: Draft
+status: Superseded
 model: opus
 size: M
 depends_on: []
-adrs: [ADR-0004, ADR-0024, ADR-0028, ADR-0031, ADR-0039]
+adrs: [ADR-0004, ADR-0024, ADR-0028, ADR-0031, ADR-0040]
 epic: digest-delivery
 ---
 
 # WP-launcher-alert-bound: give the launcher the bound the app-side writer has
+
+> **SUPERSEDED 2026-08-31 — never implemented; kept as the record of the design.**
+> This package belonged to the digest-delivery chain implementing ADR-0040
+> ("the managed block is a reference, not a copy"), which the owner withdrew on
+> 2026-08-31 in favor of the fork's ADR-0039 (session-start dedup) — implemented,
+> tested and adopted with the fork's tree as the mainline base (PR #177 and the
+> follow-up integration). See the logbook entry
+> `2026-08-31-two-adr-0039s-and-the-chain-stands-down.md` and ADR-0040's
+> withdrawal header (which names what remains live: the write rule and the
+> launcher refusal-banner problem).
 
 ## Context (read this, nothing else)
 

@@ -1,7 +1,34 @@
-# ADR-0039: The managed block is a reference, not a copy
+# ADR-0040: The managed block is a reference, not a copy
 
-Status: Accepted — OWNER-SIGNED 2026-08-30
+Status: Withdrawn 2026-08-31 (was Accepted — OWNER-SIGNED 2026-08-30, as ADR-0039)
 Date: 2026-08-30
+
+> **Withdrawn by owner ruling, 2026-08-31.** This ADR was signed on the
+> pre-fork-adoption upstream tree as ADR-0039. The same day, on the fork that
+> PR #177 then adopted as the mainline base, the owner signed a *different*
+> ADR-0039 — [session-start dedup](0039-session-start-injects-only-what-the-block-lacks.md)
+> — solving the same double-delivery problem the opposite way: the block keeps
+> the full digest copy and the SessionStart hook injects nothing when the block
+> already carries the same bytes. That direction is implemented, tested, and
+> running; this one was spec-only (the eight-WP digest-delivery chain, now
+> archived Superseded in `specs/done/`). On 2026-08-31 the owner ruled the
+> fork's ADR-0039 stands and instructed the agent, in that session, to
+> renumber this document to ADR-0040 and record this withdrawal — noted here
+> so the provenance of the status line is exact, per the ADR-0035 discipline.
+>
+> **What remains live out of this document (the salvage note):**
+>
+> - **§1, the write rule** — *no unattended job performs a read-modify-write on
+>   a file Wienerdog does not own* — is not in dispute; the surviving ADR-0039
+>   assumes it (attended `sync` stays the block's only writer) without stating
+>   it. If it is to be durable ADR text, re-propose it standalone.
+> - **§5, the launcher refusal banner** — a launcher-stage refusal still has no
+>   delivery channel that works without the app tree; that problem is real and
+>   unsolved. PRs #174/#175 built toward it and were closed with this ruling;
+>   re-propose against the current tree if picked up.
+> - The instruction-channel and secret-durability analyses (the withdrawn
+>   Amendment 1 texts of ADR-0024 and ADR-0032, in git history at upstream
+>   commit f139bce) remain valid arguments for any future by-reference design.
 
 ## Context
 

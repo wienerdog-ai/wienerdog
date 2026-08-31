@@ -1,11 +1,11 @@
 ---
 id: WP-shim-recovery-message
 title: Make the CLI shim fail with a human recovery message when app/current is unresolvable, not a raw MODULE_NOT_FOUND
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
-adrs: [ADR-0004, ADR-0013, ADR-0028, ADR-0039]
+adrs: [ADR-0004, ADR-0013, ADR-0028, ADR-0040]
 epic: digest-delivery
 ---
 
@@ -34,7 +34,7 @@ correctly and recorded durable alerts, and the owner could not run
 `wienerdog alerts` to read them, because that command went through the same broken
 shim. The recovery command was named in the alert text he could not display. See
 `docs/specs/logbook/2026-08-30-the-banner-channel-inverted-and-nobody-noticed.md` and
-ADR-0039's Context.
+ADR-0040's Context.
 
 The shim is the **last** surface that can speak when everything else is gone. A stack
 trace there wastes the only remaining channel.
