@@ -182,16 +182,34 @@ function watchIndexWrites(vault) {
   const { getPaths } = require('../../src/core/paths');
   const userIndex = realish(gitIndexPath(vault));
   const vaultReal = realish(vault);
+  const vaultGitDir = realish(git(vault, ['rev-parse', '--absolute-git-dir']).trim());
   const under = (p, dir) => p === dir || p.startsWith(dir + path.sep);
+  /** A git global flag's value, in either the `--flag value` or `--flag=value` form. */
+  const flagValue = (args, name) => {
+    const i = args.indexOf(name);
+    if (i >= 0 && args[i + 1] !== undefined) return args[i + 1];
+    const eq = args.find((a) => a.startsWith(name + '='));
+    return eq ? eq.slice(name.length + 1) : null;
+  };
   /** @type {string[]} */
   const violations = [];
   /** @type {string[]} */
   const seen = [];
   const spawnGit = (o) => {
     const args = o.args || [];
-    const dashC = args.indexOf('-C');
-    const targets = [o.cwd, dashC >= 0 ? args[dashC + 1] : null].filter(Boolean);
-    if (targets.some((t) => under(realish(t), vaultReal))) {
+    // A CALL REACHES THE USER'S REPO BY MORE THAN ITS CWD. `-C`, `--work-tree`
+    // and `--git-dir` each redirect git at a repository the cwd does not name.
+    // Measured 2026-08-31, git 2.50.1: from cwd `/`, with no `-C`,
+    // `git --git-dir=<vault>/.git --work-tree=<vault> update-index
+    // --assume-unchanged <path>` writes the vault's index and `ls-files -v`
+    // then prints `h`. Leaving redirects unparsed would INVERT this watcher's
+    // own direction — an unclassified COMMAND defaults to violating, so an
+    // unparsed REDIRECT must not default to invisible.
+    const treeTargets = [o.cwd, flagValue(args, '-C'), flagValue(args, '--work-tree')].filter(Boolean);
+    const gitDirTarget = flagValue(args, '--git-dir');
+    const reachesVault = treeTargets.some((t) => under(realish(t), vaultReal))
+      || (gitDirTarget !== null && under(realish(gitDirTarget), vaultGitDir));
+    if (reachesVault) {
       const verb = gitVerb(args);
       seen.push(verb);
       if (!INDEX_SAFE_GIT.has(verb)) {
@@ -1520,7 +1538,7 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
     const projF = () => git(ctx.vault, ['ls-files', '-f']);
     const before = rawIndex();
     // THE FIXTURE DECLARES WHICH KIND OF VAULT IT IS. The comparison below stays
-    // total over a vault with an index and one without (row W1(c)); this says
+    // total over a vault with an index and one without (row W1(d1)); this says
     // that THIS vault has one, so an ABSENT reading is a broken fixture rather
     // than a silent pass. Absent-compares-equal-to-absent is what turned a
     // mislocated read into a green.
