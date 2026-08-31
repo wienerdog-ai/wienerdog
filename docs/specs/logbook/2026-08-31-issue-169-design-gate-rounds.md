@@ -50,7 +50,5 @@ of round outcomes.
 
 ## Rounds
 
-## Rounds
-
 | Round | Backend | Raw output file | Raw committed in | Verdict / findings | Dispositions |
 |-------|---------|-----------------|------------------|--------------------|--------------|

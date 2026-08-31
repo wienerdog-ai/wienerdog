@@ -59,27 +59,84 @@ Three facts bound the fix, all verified on this tree:
 
 ## Decision
 
-**A real OS-scheduler mutation is performed only when the Wienerdog core it is
+**1. A real OS-scheduler mutation is performed only when the Wienerdog core it is
 being performed for is the core that this user's scheduler namespace belongs
 to.** Concretely, `schedulerSpawn` refuses unless the resolved core
 (`getPaths().core`) is the same directory as `<os.userInfo().homedir>/.wienerdog`
-— or the explicit opt-in `WIENERDOG_ALLOW_REAL_SCHEDULER=1` is set. A refusal
-spawns nothing, writes one line naming the skipped argv and the opt-in to stderr,
-and returns a non-zero `status` through the existing return shape. The two test
-variables keep their current precedence ahead of it.
+— or the explicit opt-in is present as the **exact string** `1`
+(`process.env.WIENERDOG_ALLOW_REAL_SCHEDULER === '1'`; a truthiness test would let
+`=0` and `=false`, the values people set to *disable* things, enable the dangerous
+path). A refusal spawns nothing, writes one line naming the skipped argv and the
+opt-in to stderr, and returns a non-zero `status` through the existing return
+shape. The two test variables keep their current precedence ahead of it, and keep
+their loose comparisons — they only ever suppress a mutation, so a loose test
+there can only fail safe.
+
+**2. A command that DELETES a scheduler registration's recovery metadata must
+hold that authority before it deletes anything.** A soft refusal is right for
+`init` / `sync` / `schedule`, where the schedule file is still written and the
+next authorized `sync` repairs it. It is wrong for `uninstall`: refusing the
+unload while completing the deletion leaves an orphaned job still firing with the
+manifest records that could have stopped it already gone. `wienerdog uninstall`
+therefore checks authority up front, when its manifest carries any
+`scheduler-entry`, and **aborts loudly having deleted nothing**.
+
+**3. Authority is granted by evidence about the domain, never by an execution
+context.** No mechanism in this decision reads `CI` or any other
+automation-detection variable. `CI` says a process is automated; it says nothing
+about whether that process shares a live scheduler domain, `CI=false` is
+non-empty, and a self-hosted runner sharing a developer's account has live jobs
+like any workstation. Where a script needs authority, it earns it from a
+successful, empty query of the domain it is about to touch — and an *unanswerable*
+query is never counted as an empty one.
 
 The rule this establishes, in one sentence:
 
 > **The file namespace and the scheduler namespace must belong to the same user
 > before anything mutates the scheduler. A redirected `HOME` sandboxes the files,
 > so it must also stop the mutation — the default is refuse, and reaching the
-> real scheduler from anywhere else is an explicit, single-variable opt-in.**
+> real scheduler from anywhere else is an explicit, exact-value opt-in.**
 
-This is a **coherence** check, not a trust check. It is not a security control
-and must never be described as one: the same user can set the variable, and any
-code that could plant a fake home could set it too. Its threat model is the
-developer accident — the sandbox that isolates every file and forgets that
-`gui/501` is not a file.
+### What this rule is, and the boundary it does not cross
+
+This is a **mistake-guard**, not a trust check and not a proof of namespace
+identity. It is not a security control and must never be described as one: the
+same user can set the variable, and any code that could plant a fake home could
+set it too. Its threat model is the developer accident — the sandbox that
+isolates every file and forgets that `gui/501` is not a file.
+
+Home-path equality is **evidence** of coherence, not proof of it, and the ADR
+says so rather than letting a reader infer otherwise:
+
+- A container, chroot or filesystem sandbox that presents *its own*
+  `/home/<user>/.wienerdog` at the passwd home's pathname, while still reaching
+  the host user bus or launchd domain, satisfies the predicate and is granted
+  authority. The files and the scheduler are then in different namespaces and the
+  guard does not notice.
+- A platform whose `os.userInfo().homedir` follows an environment-controlled
+  profile directory degrades the predicate to today's unconditional behavior.
+  That is a **limit of the guard**, not a safety property, and calling such
+  degradation "safe" would reverse the goal.
+
+**Both are named residuals, deliberately unclosed.** The correct authority for
+such an environment is the explicit opt-in, and this ADR forbids adding detection
+for either: no probing of mount namespaces, bus addresses, container markers or
+filesystem identity, and no contract test for same-path/different-namespace
+operation. That is the enumerate-the-bad shape ADR-0035 records as producing
+findings two through six rather than closing one. The residual is closed by
+scoping the claim — which these paragraphs are — not by a seventh guard.
+
+### The owner's rulings this Decision carries
+
+Recorded here so a later reader sees which parts were the owner's call rather
+than the architect's, all taken on 2026-08-31 after the round-1 adversarial
+review:
+
+| # | Question | Ruling |
+|---|---|---|
+| D1 | Sign the coherence rule, or narrow to opt-in-only? | **Coherence + exact-value opt-in as drafted** (Decision 1) |
+| D2 | Soft refusal, or hard abort? | **Both, by command class**: soft for `init` / `sync` / `schedule`; `uninstall` checks authority before deleting and aborts loudly (Decision 2) |
+| D3 | Special-case a `WIENERDOG_HOME`-relocated install? | **No — a named residual.** Such an install sets the opt-in for *every* scheduler-touching command (`init`, `sync`, `update`, `schedule add/remove`, `uninstall`), and documenting that is a follow-up work package, not a code branch |
 
 ### Why not the alternatives
 
@@ -90,6 +147,8 @@ developer accident — the sandbox that isolates every file and forgets that
 | **Marker set only by interactive/TTY runs** | The incident ran `WD init --yes --fresh-vault </dev/null`; TTY state is an accident of redirection, not of intent, and it makes CI and `--yes` legitimacy indistinguishable |
 | **Refuse on a dev checkout** (`isDevCheckout(packageRoot())`) | Measured fail-broken: the maintainer's own install is dev-stance (`~/.wienerdog/app/current` → the git checkout), so this refuses his `wienerdog sync` — the very command issue #169 names as the repair. He would set the variable permanently and re-open the hole for exactly the person it bit |
 | **`installStance(paths) === 'prod'`** | Wrong polarity. `installStance` fails **closed to `'prod'`** by design (`src/core/vendor.js:281-292`), because `'prod'` is the more-enforced verification arm. Read as an allow-list it fails **open**: a sandbox with no `app/current` yet reads `'prod'` and is allowed |
+| **Grant authority (or skip the preflight) when `$CI` is set** | Drafted, then rejected at the round-1 gate. `CI` identifies automation, not scheduler isolation: `CI=false` and `CI=0` are both non-empty, and a self-hosted runner shares a real user's domain. Worse, keying *both* layers on it made them one layer — a single ambient variable reopened the exact incident path. Replaced by Decision 3: authority is earned from a successful, empty probe of the domain itself |
+| **Make the refusal throw everywhere, so `uninstall` cannot miss it** | Rejected twice over. It would abort `init` and `sync` on a merely-relocated install, and it would not even work: `reverseSchedulerEntry` wraps its chokepoint call in `try/catch` and discards the result (`src/core/manifest.js:530-539`), so the throw is swallowed and the deletion proceeds anyway. Decision 2's precondition at the command entry is what actually closes it |
 
 ## Reconciliation with the two ADRs this sits between
 
@@ -127,26 +186,38 @@ developer accident — the sandbox that isolates every file and forgets that
   that reached the chokepoint at all.
 - **Two legitimate flows must now opt in, and both are attended.** A
   `WIENERDOG_HOME`-relocated install (core outside the passwd home) and
-  `scripts/smoke-install.sh` on a clean CI runner. Neither exists on the tree
-  today: `WP-scheduler-mutation-home-authority` will have the smoke script set
-  the variable only when `$CI` is non-empty, so a local run of it still refuses
-  even past the preflight `WP-smoke-live-scheduler-preflight` will have added —
-  two independent stops for the same accident, both of them work not yet done.
-- **A refusal is a silent-until-read stderr line, not an abort.** Wienerdog
-  writes the schedule *file* either way; only the OS registration is skipped.
-  That keeps `uninstall` reversible and `init` completable, and it matches how
-  the codebase already treats a non-zero loader result. The cost is honest: on a
-  `WIENERDOG_HOME` install that ignores the line, jobs never fire until
-  `wienerdog sync` runs with the variable set. `wienerdog doctor` already probes
-  live registrations and reports this.
-- **Windows is weaker and is not claimed otherwise.** `os.userInfo().homedir` is
-  measured here on darwin only. If some platform derives it from the
-  environment, the predicate degrades to today's behavior — allow — never to a
-  new refusal, so the failure direction is the safe one.
-- **What is given up:** one more variable in the vocabulary, and a
-  `WIENERDOG_HOME` user's first `init` needing a second command. Weighed against
-  a nightly dream that stops firing with no error anywhere, that is the cheaper
-  side.
+  `scripts/smoke-install.sh`. Neither mechanism exists on the tree today; both
+  arrive with the two work packages. The smoke script earns its opt-in from
+  Decision 3 — it exports the marker **only after its own read-only probe reports
+  the domain clean**, so a run that proceeded past a live or unanswerable domain
+  through a deliberate override gets *no* authority and refuses at every
+  mutation. A local run is therefore stopped twice, independently.
+- **A refusal is a silent-until-read stderr line for `init` / `sync` /
+  `schedule`, and a loud abort for `uninstall`.** For the first three Wienerdog
+  writes the schedule *file* either way and only the OS registration is skipped,
+  which matches how the codebase already treats a non-zero loader result. For
+  `uninstall` that shape would be actively harmful — the unload is refused and
+  ignored while the schedule files and manifest state go away, leaving an orphan
+  job with its recovery metadata deleted — so Decision 2 aborts it instead.
+- **The relocated-core cost is stated in full, not understated.** It is not just
+  a first `init` needing a second command: **every** scheduler-touching command on
+  such an install needs the marker — `init`, `sync`, `update`, `schedule
+  add/remove` and `uninstall`. Without it, `init`/`sync` complete with files
+  written and jobs inactive (the stderr line is the only signal, and `wienerdog
+  doctor` reports the missing registrations), and `uninstall` refuses outright.
+  Owner ruling D3 accepts this as a named residual with a documentation
+  follow-up, not a code branch.
+- **Windows and container-shaped environments are weaker, and that is a limit
+  rather than a property.** `os.userInfo().homedir` is measured here on darwin
+  only; a platform that derives it from the environment, or a sandbox presenting
+  its own filesystem at the passwd home's pathname, degrades the predicate to
+  today's unconditional behavior. Those environments should use the explicit
+  opt-in, and this ADR adds no detection for them (see the boundary section).
+- **What is given up:** one more variable in the vocabulary, a relocated-core
+  install that must carry it on every scheduler-touching command, and a CI runner
+  that cannot query its own scheduler domain quietly ceasing to exercise real
+  registration. Weighed against a nightly dream that stops firing with no error
+  anywhere, and an uninstall that can orphan it, that is the cheaper side.
 
 ## Relations to prior ADRs
 
@@ -154,6 +225,18 @@ developer accident — the sandbox that isolates every file and forgets that
   This ADR **inverts that guard's default** and does not otherwise amend
   ADR-0018: the identity check, the heal ordering and the catch-up design are
   untouched.
+- **ADR-0019** (uninstall disposes the core's machine-generated mechanics) is
+  **not weakened by Decision 2 — it is what Decision 2 protects.** A refused
+  unload that still deleted the schedule files would leave a live registration
+  ADR-0019's disposal cannot reach. Aborting instead keeps uninstall an
+  all-or-nothing act: the user re-runs it with authority and gets a complete
+  disposal, rather than a partial one that looks finished.
+- **ADR-0038** (an untrusted manifest field may only narrow a deletion, never
+  widen one) governs Decision 2's trigger. It reads only `entry.kind` from the
+  untrusted manifest, and only to **refuse** a deletion — the permitted
+  direction. A manifest stripped of its `scheduler-entry` records evades the
+  check and lands on today's behavior; that is the safe failure direction and is
+  not further guarded.
 - **ADR-0027** (re-derive unload, never execute stored argv) is unaffected — the
   argv still arrives at the chokepoint already re-derived; this only decides
   whether it is spawned.

@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-smoke-live-scheduler-preflight]
-adrs: [ADR-0004, ADR-0018, ADR-0027, ADR-0028, ADR-0031, ADR-0035, ADR-0041]
+adrs: [ADR-0004, ADR-0018, ADR-0019, ADR-0027, ADR-0028, ADR-0031, ADR-0035, ADR-0038, ADR-0041]
 epic: scheduler-domain-safety
 ---
 
@@ -50,10 +50,14 @@ the same user before anything mutates the scheduler; the default is refuse, and
 reaching the real scheduler from anywhere else is an explicit, single-variable
 opt-in.* Two constraints ADR-0041 carries and this WP inherits verbatim:
 
-- **This is a coherence check, not a security control.** It defends against the
+- **This is a mistake-guard, not a security control, and home-path equality is
+  evidence of coherence rather than proof of it.** It defends against the
   developer accident — a sandbox that isolates every file and forgets that
   `gui/501` is not a file. It makes no claim in `docs/THREAT-MODEL.md`, defends
-  against no adversary, and must not be described as doing either. (ADR-0035
+  against no adversary, and must not be described as doing either. An environment
+  that deliberately presents its own filesystem at the passwd home's pathname
+  while bridging the host scheduler is **outside** what it defends; the Security
+  checklist names that residual and forbids adding detection for it. (ADR-0035
   found that additive "guards" in this codebase relocate rather than close;
   removing a default is the subtractive shape that held.)
 - **ADR-0028 amendment §3's durable rule is narrower than "no env var may gate
@@ -142,15 +146,17 @@ the real agent"* — as a note for tests only.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/spawn.js | the four-branch precedence of Table A and the authority of Table B; refresh the JSDoc so it describes the new default |
+| modify | src/scheduler/spawn.js | the four-branch precedence of Table A and the authority of Table B; refresh the JSDoc so it describes the new default. Export the authority predicate so `uninstall` uses the same one (Table U) rather than a second copy |
 | modify | src/core/sandbox-guard.js | add `sameDir` to `module.exports` (`:115`). **Export only — no behavior change, no new function, no edit to `sameDir`, `physicalPath` or `sandboxMismatchWarning`** |
+| modify | src/cli/uninstall.js | the authority precondition of Table U, placed before any deletion |
 | modify | tests/unit/scheduler-guard.test.js | cover the acceptance criteria below (the implementer designs the cases) |
-| modify | scripts/smoke-install.sh | the CI-only opt-in of Table C; no other change |
+| modify | tests/unit/uninstall.test.js | cover Table U's acceptance criteria (the implementer designs the cases) |
+| modify | scripts/smoke-install.sh | the probe-gated opt-in of Table C; no other change |
 
 ### Exact contracts
 
 `schedulerSpawn`'s signature and return shape are **unchanged** — no new field,
-no new parameter, no new export:
+no new parameter:
 
 ```js
 /** @param {string[]} argv  e.g. ['launchctl','bootout','gui/501/ai.wienerdog.dream']
@@ -158,8 +164,23 @@ no new parameter, no new export:
 function schedulerSpawn(argv)
 ```
 
-What changes is which branch it takes: Table A. Whether the mutating branch is
-reachable at all: Table B. What the smoke script does about it: Table C.
+One export is added, because `uninstall` must ask the same question the
+chokepoint asks and a second copy of the predicate would be free to drift from
+it (ADR-0035's reuse-don't-duplicate lesson). Its shape carries what Table R's
+second line needs, so the caller never re-runs a lookup that already threw:
+
+```js
+/** Table B, evaluated against `process.env` at call time. Never throws.
+ *  @returns {{ok:boolean, core:string|null, home:string|null, error:string|null}}
+ *    `ok` is the authority. `core`/`home` are the resolved absolute paths, or
+ *    `null` when that lookup threw; `error` is the failing lookup's message. */
+function realSchedulerAuthority()
+```
+
+What changes is which branch `schedulerSpawn` takes: Table A. Whether the
+mutating branch is reachable: Table B. What it prints when it refuses: Table R.
+What `uninstall` does with the same answer: Table U. What the smoke script does
+about it: Table C.
 
 ## Contract reference
 
@@ -191,7 +212,7 @@ failure to evaluate one is not a failure of the other.
 
 | Authority | Rule |
 |-----------|------|
-| **Explicit opt-in** | `process.env.WIENERDOG_ALLOW_REAL_SCHEDULER` is truthy |
+| **Explicit opt-in** | `process.env.WIENERDOG_ALLOW_REAL_SCHEDULER === '1'` — **exact value, string comparison.** Not truthiness: `'0'`, `'false'`, `'no'` and `''` all mean *no authority*, because a variable people set to disable things must never enable the dangerous path |
 | **Home coherence** | `sameDir(getPaths().core, path.join(os.userInfo().homedir, '.wienerdog'))` is true — the core this run operates on IS the default core of the OS user whose per-user-global scheduler domain the argv would land in |
 
 | Fact / rule | Value |
@@ -199,49 +220,103 @@ failure to evaluate one is not a failure of the other.
 | Home source | `os.userInfo().homedir` — **never** `os.homedir()` and never `process.env.HOME`. Measured: `os.userInfo().homedir` ignores a redirected `HOME` on POSIX, which is the entire point; `os.homedir()` follows it and would make the check vacuous |
 | Core source | `getPaths()` with no argument, so it reads `process.env` at call time (`src/core/paths.js:54-55`) |
 | Comparison | `sameDir` from `src/core/sandbox-guard.js` — physical-identity comparison that tolerates a symlinked/case-aliased home and a core that does not exist yet (a first `init`) |
-| Evaluation failure | any throw while evaluating either authority (`getPaths` rejects an unsafe `WIENERDOG_HOME`; `os.userInfo()` can throw when the uid has no passwd entry) is caught and treated as **authority absent** → row 4. Fail safe, never crash the chokepoint |
+| Evaluation failure | any throw while evaluating either authority (`getPaths` rejects an unsafe `WIENERDOG_HOME`; `os.userInfo()` can throw when the uid has no passwd entry) is caught and treated as **authority absent** → row 4, which then writes Table R's *second* line — the one whose placeholders exist precisely because the failed lookup has no value to interpolate. Fail safe, never crash the chokepoint, and never re-run the failing lookup to fill a blank |
 | Not consulted | the install stance, `.git`, `packageRoot()`, TTY state, argv contents, the manifest, and anything under `<core>/app`. ADR-0041 records why each was rejected; do not add one |
-| Platform note | if some platform derives `os.userInfo().homedir` from the environment, the predicate degrades to today's behavior (allow) and never to a new refusal. Verified on darwin only; the failure direction is the safe one |
-| CI and containers | no special case. A runner or container whose `HOME` **is** the passwd home (GitHub Actions' `/home/runner`, a Docker image running as root with `HOME=/root`) satisfies the coherence arm exactly like a workstation. A runner that *redirects* `HOME` — which is what `scripts/smoke-install.sh` does — does not, and must set the opt-in; Table C is that setting. No CI-detection variable is read by `schedulerSpawn` |
+| Platform note | if some platform derives `os.userInfo().homedir` from the environment, the predicate degrades to today's behavior (allow) — the mistake-guard simply stops guarding there. Verified on darwin only. This is a **limit of the guard, not a safety property**: see the Security checklist's named residual, and use the explicit opt-in in any environment where the account home is not independent of the sandbox |
+| CI and containers | **no special case, and no CI-detection variable is read by `schedulerSpawn`.** A runner or container whose `HOME` **is** the passwd home (GitHub Actions' `/home/runner`, a Docker image running as root with `HOME=/root`) satisfies the coherence arm exactly like a workstation. A runner that *redirects* `HOME` — which is what `scripts/smoke-install.sh` does — does not, and reaches the mutating branch only through the opt-in that Table C grants on a probed-clean domain |
+| Exact-value rule, and what it does NOT cover | the exact-`'1'` rule applies to variables that **grant** the dangerous capability. `WIENERDOG_LOADER_NOOP` and `WIENERDOG_TEST_NO_REAL_SCHEDULER` (Table A rows 1–2) keep their existing truthiness checks unchanged: they only ever *suppress* a real mutation, so a loose comparison there can only fail safe. Do not "harmonize" them |
 
-### Table C — the smoke-install opt-in
+### Table C — the smoke-install opt-in, granted by a probed-clean domain
+
+The authority to touch the real scheduler is earned by **evidence**, not by an
+execution context. `$CI` is not read here, in the script or anywhere else: it
+identifies where a process runs, not whether that process shares a live scheduler
+domain, and `CI=false` is non-empty.
 
 | Fact / rule | Value |
 |-------------|-------|
-| What | `scripts/smoke-install.sh` exports `WIENERDOG_ALLOW_REAL_SCHEDULER=1` **only when `${CI:-}` is non-empty**, so a clean CI runner keeps exercising real registration exactly as today |
-| Where | anchored to the **post-dependency** tree, not to this one: adjacent to the sandbox `export HOME=…` block (at `:28-32` on HEAD `a6e0803`, shifted down by whatever `WP-smoke-live-scheduler-preflight` inserted above it). Anchor by the surrounding `export`/`unset` lines, not by a line number |
-| Local runs | a local run sets nothing, so it is stopped twice and independently: by that dependency's preflight, and — if the preflight is overridden — by row 4 of Table A |
-| `set -e` trap | a bare `[ -n "${CI:-}" ] && export …` returns 1 when `CI` is unset and kills the script under `set -euo pipefail`. Use a form that cannot |
+| Trigger | `scripts/smoke-install.sh` exports `WIENERDOG_ALLOW_REAL_SCHEDULER=1` **if and only if its own preflight returned CLEAN** — `WP-smoke-live-scheduler-preflight`'s Table A exit 0, meaning the scheduler client was invoked, exited successfully, and reported no `ai.wienerdog.*` / `wienerdog-*` identifier |
+| Never on the other two arms | a LIVE (exit 1) or NOT-PROBEABLE (exit 2) result grants nothing — including when the run continues past that result because `WIENERDOG_SMOKE_I_KNOW=1` or `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` was set. **Overriding the preflight lets the lifecycle run; it does not hand it scheduler authority.** Such a run still hits Table A row 4 at every mutation and refuses |
+| Value | the exact string `1`, matching Table B's exact-value rule |
+| Where | anchored to the **post-dependency** tree: immediately after the preflight block's CLEAN outcome is known, and before the sandbox `export HOME=…` block (at `:28-32` on HEAD `a6e0803`, shifted down by whatever the dependency inserted). Anchor by the surrounding preflight/`export` lines, not by a line number |
+| Consequence for CI | a runner whose domain probes CLEAN exercises real registration exactly as today. A runner that cannot answer (Linux with no user D-Bus session) proceeds under `WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1` **without** authority, so its scheduler mutations are refused and reported. That is a correct fail-safe, not a regression: registration is best-effort and never asserted (`.github/workflows/install-smoke.yml:11`) |
+| Local runs | stopped twice, independently: by the dependency's preflight, and — if that is deliberately overridden — by row 4 of Table A, because an overridden preflight grants no authority |
+| `set -e` trap | the export must be written so that a non-CLEAN branch cannot kill the script under `set -euo pipefail` (a bare `cond && export …` returns 1 when `cond` is false) |
 | Everything else | unchanged: no step, assertion, helper, message or check count is touched |
+
+### Table U — `wienerdog uninstall` requires authority before it deletes
+
+A soft refusal (Table A row 4) is right for `init` / `sync` / `schedule`: the
+schedule **file** is still written, nothing is destroyed, and the next authorized
+`sync` registers it. It is **wrong for `uninstall`**, which deletes the schedule
+files and the manifest records that are the only remaining handle on a live
+registration. Refusing the unload while completing the deletion would leave an
+orphaned job still firing with its recovery metadata gone — strictly worse than
+either doing the whole thing or none of it. Owner ruling (2026-08-31): `uninstall`
+checks authority up front and aborts loudly rather than deleting.
+
+| Fact / rule | Value |
+|-------------|-------|
+| Where | in `src/cli/uninstall.js`'s `run()`, **after** the manifest is loaded (`:49-54`) and **before** any deletion — i.e. before the `manifestLib.reverse(…, { dryRun: false })` call at `:114`, which is the first thing that removes anything |
+| Precondition that arms it | the loaded manifest contains at least one entry whose `kind` is `'scheduler-entry'`. An install that never registered anything has nothing to orphan and uninstalls normally — the gate must not brick it |
+| Condition | authority (Table B) is absent |
+| Effect | throw a `WienerdogError`. **Nothing is deleted, and the manifest is left untouched** — the abort happens before `reverse()`, so this is a whole-command refusal, not a partial uninstall |
+| Message | must name what would have been orphaned (that scheduler entries exist and cannot be unloaded from here), the resolved core, and `WIENERDOG_ALLOW_REAL_SCHEDULER=1` as the way to proceed deliberately |
+| `--dry-run` | unaffected: it deletes nothing, so it still prints its plan. It prints the same warning alongside the plan rather than aborting |
+| Manifest trust (ADR-0038) | the manifest is untrusted, and this gate reads only `entry.kind`. The direction is the permitted one — an untrusted field may **narrow** a deletion, never widen one: a manifest that claims a `scheduler-entry` can only cause a refusal to delete. A manifest stripped of its `scheduler-entry` records evades the gate and lands on today's behavior, which is the safe failure direction and is not further guarded |
+| What is NOT changed | `reverseSchedulerEntry` (`src/core/manifest.js:501-545`), `manifestLib.reverse`, the three `schedulerSpawn` call sites, and Table A row 4's soft, non-throwing shape. The whole fix is one precondition at the command's entry |
 
 ### Table R — the refusal line (row 4's only output)
 
 One line, written to stderr, terminated by `\n`. `<core>`, `<home>` and `<argv>`
 are interpolated; `<argv>` is `argv.join(' ')`.
 
+**Refusal because the namespaces differ** — both lookups succeeded:
+
 ```text
 wienerdog: skipping a real OS-scheduler command — this run's core is <core>, not <home>/.wienerdog, and launchd/systemd/Task Scheduler names are per-user-global, so this would hit the live user's jobs. Not run: <argv>. Set WIENERDOG_ALLOW_REAL_SCHEDULER=1 to allow it.
+```
+
+**Refusal because an authority lookup failed** — Table B's evaluation-failure row.
+This is a *separate* line, because the first one cannot be written: there is no
+resolved `<core>` when `getPaths()` rejects `WIENERDOG_HOME`, and no `<home>`
+when `os.userInfo()` throws. Re-running the failing lookup to fill the blank
+would be the same throw again, so the contract names a stable placeholder
+instead:
+
+```text
+wienerdog: skipping a real OS-scheduler command — could not establish which user's scheduler this run belongs to (core: <core-or-unavailable>, home: <home-or-unavailable>; <error>). Not run: <argv>. Set WIENERDOG_ALLOW_REAL_SCHEDULER=1 to allow it.
 ```
 
 | Fact / rule | Value |
 |-------------|-------|
 | Stream | `process.stderr.write` — never stdout, which `schedulerSpawn`'s callers read as scheduler-client output |
-| Frequency | once per refused call. No de-duplication, no module-level state: each refused argv is named |
-| Required substrings (what tests assert) | `WIENERDOG_ALLOW_REAL_SCHEDULER`, the resolved core path, and `argv.join(' ')` |
+| Frequency | exactly one line per refused call, whichever form. No de-duplication, no module-level state: each refused argv is named |
+| Which form | the second form is used **iff** at least one authority lookup threw. Exactly one of the two is written; they are never combined |
+| Placeholder | a value that could not be resolved renders as the literal string `<unavailable>` — not an empty string, not `undefined`, not a partially-built path. Each of `<core-or-unavailable>` and `<home-or-unavailable>` is independently either the resolved absolute path or `<unavailable>` |
+| `<error>` | the failing lookup's `message`, or the first one's when both threw. A message, never a stack |
+| Never throws | producing either line, including the placeholder path, cannot itself throw. Table B's evaluation-failure row and this row are one contract: an unresolvable environment yields a refusal *with a diagnostic*, never a propagated error |
+| Required substrings (what tests assert) | in **both** forms: `WIENERDOG_ALLOW_REAL_SCHEDULER` and `argv.join(' ')`. In the first form additionally the resolved core path; in the second, the literal `<unavailable>` for each value that failed to resolve |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (each row names the table it implements)
-- [ ] Acceptance criteria that assert Tables A, B, C and R
-- [ ] Verification commands (they exercise rows 3 and 4 and Table C)
+- [ ] Acceptance criteria that assert Tables A, B, C, U and R
+- [ ] Verification commands (rows 3 and 4, the exact-value arm, the Table R
+      evaluation-error arm, and Table C's structural gates)
 - [ ] Current-state description (today's three branches and the measured row-3 leak)
 - [ ] "Exact contracts" — the unchanged signature and return shape
-- [ ] Implementation notes (the require-cycle note and the `set -e` trap)
-- [ ] Security checklist (the coherence-not-security sentence and the ADR-0028
-      amendment §3 rule-not-engaged statement, which the Context section also
-      carries — the two move together)
-- [ ] **ADR-0041's Decision paragraph and its Consequences bullets** — they state
-      Table B's predicate and Table A's refusal shape. Editable only while
+- [ ] Implementation notes (the require-cycle note, the `set -e` trap, and the
+      `reverseSchedulerEntry`-is-why-Table-U-exists bullet)
+- [ ] Security checklist — three things that move together with the tables: the
+      mistake-guard-not-security-control scoping, the same-pathname namespace
+      residual, and the ADR-0028 amendment §3 rule-not-engaged statement (the
+      Context section carries the last one too)
+- [ ] **`WP-smoke-live-scheduler-preflight`'s Table A** — Table C consumes its
+      CLEAN/LIVE/NOT-PROBEABLE exit codes, so a change to either moves both
+- [ ] **ADR-0041's Decision items and its Consequences bullets** — they state
+      Table B's predicate, Table A's refusal shape, Table U's uninstall rule and
+      the same scoping and residual as the Security checklist. Editable only while
       ADR-0041 is unsigned; once the owner signs it, a divergence is fixed by a
       new dated amendment, never by rewriting the Decision
 
@@ -261,9 +336,17 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
 - The existing `WIENERDOG_TEST_NO_REAL_SCHEDULER` stays exactly as it is. After
   this change it is no longer load-bearing — it becomes what it should always
   have been: a loud failure for a test that reached the chokepoint at all.
-- `reverseSchedulerEntry` (`src/core/manifest.js:533`) already wraps its call in
-  `try/catch` and ignores the result, and row 4 throws nothing, so `uninstall`
-  keeps removing the schedule **files** and stays reversible. Do not change it.
+- **`reverseSchedulerEntry` is not changed — and that is exactly why `uninstall`
+  needs Table U.** It wraps its `schedulerSpawn` call in `try/catch` and ignores
+  the result (`src/core/manifest.js:530-539`), and row 4 throws nothing, so a
+  refused unload would be invisible to it and the file deletion would proceed
+  anyway. Left alone, that turns a refusal into an **orphaned live job whose
+  recovery metadata has just been deleted** — the round-1 gate's second finding.
+  The fix is *not* to make row 4 throw (that would abort `init` and `sync` too,
+  and `reverseSchedulerEntry` would swallow it regardless); it is Table U's
+  precondition at the command entry, so `reverseSchedulerEntry` is only ever
+  reached when the unload can actually happen. Do not modify it, and do not add a
+  return-value check to it.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -276,10 +359,27 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
       basename identity), and this WP neither constructs nor rewrites it — it only
       decides whether to spawn it. The paths compared in Table B never become path
       segments of anything written.
-- [ ] **This is a coherence check, not a security control** (ADR-0041). It defends
-      against the developer accident, not an adversary: the same user can set
-      `WIENERDOG_ALLOW_REAL_SCHEDULER`. Nothing in `docs/THREAT-MODEL.md` changes
-      and no claim of protection may be written into code comments or the PR.
+- [ ] **This is a mistake-guard, not a security control, and not a namespace
+      prover** (ADR-0041). What it defends against is the developer accident: a
+      run that redirected `HOME` into a temp directory and forgot that `gui/$UID`
+      is not a file. It does not defend against an adversary — the same user can
+      set `WIENERDOG_ALLOW_REAL_SCHEDULER`. Nothing in `docs/THREAT-MODEL.md`
+      changes, and no claim of protection may be written into code comments, the
+      refusal line, or the PR.
+- [ ] **Named residual — same-pathname namespace bridging.** Home-path equality
+      is evidence of coherence, not proof of it. An environment that presents its
+      own filesystem at the passwd home's pathname (a container or chroot with
+      `/home/<user>/.wienerdog` of its own) while still reaching the host user bus
+      or launchd domain satisfies `sameDir` and is granted authority. Likewise a
+      platform whose `os.userInfo().homedir` follows an environment-controlled
+      profile directory. **Both are outside what this rule defends**, and the
+      correct authority for such an environment is the explicit opt-in.
+- [ ] **Do not add detection for that residual.** No probe of mount namespaces,
+      bus addresses, container markers or filesystem identity, and **no contract
+      test for same-path/different-namespace operation**. That is the
+      enumerate-the-bad shape ADR-0035 records as producing findings two through
+      six rather than closing one; the residual is closed by scoping the claim,
+      which the two items above do.
 - [ ] ADR-0028 amendment §3's rule (`0028:865-870`) is **not engaged**: nothing
       here chooses between the enforced (prod) and reduced (dev) verification
       paths, or between any two verification arms. The opt-in marker is an
@@ -305,11 +405,19 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
 - [ ] Table B: the decision is made from `os.userInfo().homedir`, so setting
       `HOME` to a temp dir whose `.wienerdog` child would satisfy a naive
       `os.homedir()`-based check still refuses.
+- [ ] Table B's exact-value rule: `WIENERDOG_ALLOW_REAL_SCHEDULER` set to `0`,
+      `false`, `no` or the empty string does **not** grant authority; only the
+      exact string `1` does.
 - [ ] Table B's evaluation-failure row: an environment that makes an authority
-      lookup throw produces a refusal, not an exception out of `schedulerSpawn`.
-- [ ] Table R: a refusal writes exactly one line to stderr containing
-      `WIENERDOG_ALLOW_REAL_SCHEDULER`, the resolved core path and the joined
-      argv — and writes nothing to stdout.
+      lookup throw (an unsafe `WIENERDOG_HOME`; a uid with no passwd entry)
+      produces a refusal, not an exception out of `schedulerSpawn`.
+- [ ] Table R: a refusal writes exactly one line to stderr — never two, never
+      none — containing `WIENERDOG_ALLOW_REAL_SCHEDULER` and the joined argv, and
+      writes nothing to stdout.
+- [ ] Table R's two forms are distinguishable and correctly selected: with both
+      lookups succeeding, the line carries the resolved core path; with a lookup
+      failing, it carries the literal `<unavailable>` in that value's place plus
+      the lookup's error message, and no partially-built path.
 - [ ] Both default loaders inherit the behavior unchanged:
       `src/cli/schedule.js`'s `defaultLoader` and `src/scheduler/generators.js`'s
       `defaultCatchupLoader` refuse and throw under the same conditions as the
@@ -319,15 +427,31 @@ wienerdog: skipping a real OS-scheduler command — this run's core is <core>, n
       `sameDir`), asserted by the numstat gate in the verification steps.
       `sandboxMismatchWarning`, `sameDir` and `physicalPath` are behaviorally
       untouched.
-- [ ] Table C: `scripts/smoke-install.sh` exports the opt-in when `CI` is
-      non-empty and does not when it is unset, and the script still parses and
-      passes `shellcheck`.
+- [ ] Table U: with a manifest carrying at least one `scheduler-entry` and
+      authority absent, `wienerdog uninstall --yes` exits non-zero naming
+      `WIENERDOG_ALLOW_REAL_SCHEDULER`, and **nothing is deleted** — every file
+      the manifest records still exists and the manifest itself is byte-identical
+      afterwards.
+- [ ] Table U's precondition: the same install with **no** `scheduler-entry` in
+      its manifest uninstalls normally without the marker; and with the marker
+      set, an install that does carry one uninstalls normally too.
+- [ ] Table U's `--dry-run`: it still prints its plan under the same refusing
+      conditions, deletes nothing, and surfaces the warning.
+- [ ] Table C: `scripts/smoke-install.sh` contains the opt-in export exactly once,
+      it is not an unconditional top-level `export`, and the script reads no `CI`
+      variable; the script still parses and passes `shellcheck`.
 - [ ] `npm test` and `npm run lint` pass, with no test disabled, skipped or
       granted a new environment variable to keep it passing.
 - [ ] Idempotence: **N/A — this WP changes one in-process decision; it ships no
       command and writes nothing outside the repo.**
 
 ## Verification steps (run these; paste output in the PR)
+
+**Every arm captures its exit code as its own statement (`rc=$?`) immediately
+after the command that produced it, and asserts it before anything else runs.**
+A trailing `echo "exit=$?"` or `rm -rf …` consumes the status and makes the whole
+sequence succeed regardless of what the command did — the failure mode the
+round-1 shadow review found in the previous draft of this block.
 
 ```bash
 npm test
@@ -337,46 +461,82 @@ bash -n scripts/smoke-install.sh && shellcheck --severity=warning scripts/smoke-
 # The chokepoint is still ONE chokepoint: exactly three call sites under src/.
 test "$(grep -rn 'schedulerSpawn(' src/ | grep -vc 'function schedulerSpawn')" = 3
 
-# Table A row 4 (the fix). A harmless argv — `true` — so this is safe to run on a
-# machine with a live install: nothing scheduler-related is ever spawned.
+# --- Table A rows 3 and 4 -------------------------------------------------
+# A harmless argv — `true` — so every arm below is safe to run on a machine with
+# a live install: nothing scheduler-related is ever spawned. Do NOT substitute a
+# real scheduler command.
+SPAWN='const {schedulerSpawn}=require("./src/scheduler/spawn");process.exit(schedulerSpawn(["true"]).status===0?0:1)'
+
+# Row 4 (the fix): temp HOME, no marker → refuses, so node exits non-zero.
 # BEFORE this change this exits 0 (measured on a6e0803: it really spawned).
-# AFTER, it must exit non-zero.
-TMPH="$(mktemp -d)"; env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
-  -u WIENERDOG_ALLOW_REAL_SCHEDULER HOME="$TMPH" node -e \
-  'const {schedulerSpawn}=require("./src/scheduler/spawn");const r=schedulerSpawn(["true"]);console.log("status="+r.status);process.exit(r.status===0?0:1)'; \
-  echo "exit=$? (must be non-zero)"; rm -rf "$TMPH"
-
-# Table A row 3, opt-in arm: the same call with the marker really spawns.
-TMPH="$(mktemp -d)"; env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
-  WIENERDOG_ALLOW_REAL_SCHEDULER=1 HOME="$TMPH" node -e \
-  'const {schedulerSpawn}=require("./src/scheduler/spawn");process.exit(schedulerSpawn(["true"]).status)'; \
-  echo "exit=$? (must be 0)"; rm -rf "$TMPH"
-
-# Table A row 3, coherence arm: real HOME, no variable set — still spawns.
+TMPH="$(mktemp -d)"
 env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
-  -u WIENERDOG_ALLOW_REAL_SCHEDULER node -e \
-  'const {schedulerSpawn}=require("./src/scheduler/spawn");process.exit(schedulerSpawn(["true"]).status)'; \
-  echo "exit=$? (must be 0)"
+  -u WIENERDOG_ALLOW_REAL_SCHEDULER HOME="$TMPH" node -e "$SPAWN"
+rc=$?; rm -rf "$TMPH"; test "$rc" -ne 0
 
-# Table C: the opt-in is present and CI-gated.
-grep -q 'WIENERDOG_ALLOW_REAL_SCHEDULER' scripts/smoke-install.sh
+# Row 3, opt-in arm: the same call with the exact marker really spawns.
+TMPH="$(mktemp -d)"
+env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
+  WIENERDOG_ALLOW_REAL_SCHEDULER=1 HOME="$TMPH" node -e "$SPAWN"
+rc=$?; rm -rf "$TMPH"; test "$rc" -eq 0
 
-# sandbox-guard.js is EXPORT-ONLY: exactly one line added and one removed.
+# Table B exact-value rule: '0' is NOT authority — this must still refuse.
+TMPH="$(mktemp -d)"
+env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
+  WIENERDOG_ALLOW_REAL_SCHEDULER=0 HOME="$TMPH" node -e "$SPAWN"
+rc=$?; rm -rf "$TMPH"; test "$rc" -ne 0
+
+# Row 3, coherence arm: real HOME, no marker — a legitimate install still spawns.
+env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
+  -u WIENERDOG_ALLOW_REAL_SCHEDULER node -e "$SPAWN"
+rc=$?; test "$rc" -eq 0
+
+# Table R, evaluation-error arm: an unsafe WIENERDOG_HOME makes getPaths() throw.
+# schedulerSpawn must still REFUSE rather than propagate — non-zero, no throw.
+TMPH="$(mktemp -d)"
+env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_LOADER_NOOP \
+  -u WIENERDOG_ALLOW_REAL_SCHEDULER HOME="$TMPH" WIENERDOG_HOME='relative/not/absolute' \
+  node -e "$SPAWN"
+rc=$?; rm -rf "$TMPH"; test "$rc" -ne 0
+
+# --- Table C (structural; the behavioral half runs in CI, see below) -------
+# The export exists exactly once and is NOT unconditional: no top-level
+# `export WIENERDOG_ALLOW_REAL_SCHEDULER` line. Guarded on the file existing so
+# an absent deliverable reads red, not green.
+test -f scripts/smoke-install.sh
+test "$(grep -c 'WIENERDOG_ALLOW_REAL_SCHEDULER' scripts/smoke-install.sh)" = 1
+test -f scripts/smoke-install.sh && ! grep -qE '^export WIENERDOG_ALLOW_REAL_SCHEDULER' scripts/smoke-install.sh
+# …and no CI sniff was introduced anywhere in the script.
+test -f scripts/smoke-install.sh && ! grep -qE '\$\{?CI[:}]' scripts/smoke-install.sh
+
+# --- sandbox-guard.js is EXPORT-ONLY: one line added, one removed ----------
 test "$(git diff --numstat main -- src/core/sandbox-guard.js | cut -f1)" = 1
 test "$(git diff --numstat main -- src/core/sandbox-guard.js | cut -f2)" = 1
 ```
 
-- The three `node -e` steps, the chokepoint-count test, the Table C grep and the
-  two numstat gates are NEW, and each is an ASSERTION that exits non-zero on
-  failure rather than printing a value to judge. Paste a real green on the
-  finished state AND a real red from a deliberately broken state for each: for
-  row 4, the pre-change tree already provides it (it exits 0 today, measured);
-  for the coherence arm, temporarily swap `os.userInfo().homedir` for
-  `os.homedir()` and watch it refuse; for Table C, remove the export line; for
-  the numstat gates, add one throwaway line to `sandbox-guard.js`.
-- **Do not** substitute a real scheduler command for `true` in any of these.
-  `true` is chosen precisely so the row-3 arms can be observed on a machine with
-  a live install without touching it.
+- Every command above is an ASSERTION: it exits non-zero on failure rather than
+  printing a value someone has to judge. Paste a real green on the finished state
+  AND a real red from a deliberately broken state for each. Ready-made red
+  states: row 4 — the pre-change tree already provides it (it exits 0 today,
+  measured); the coherence arm — temporarily swap `os.userInfo().homedir` for
+  `os.homedir()`; the exact-value arm — loosen the comparison to truthiness; the
+  Table R arm — let the `getPaths()` throw propagate; Table C — remove the
+  export, or make it unconditional; the numstat gates — add one throwaway line to
+  `sandbox-guard.js`.
+- **Table U (uninstall) is verified by `npm test`, not by a shell command here.**
+  Its observable contract is in the acceptance criteria; the implementer writes
+  the cases. A *manual* reproduction — pointing a real `wienerdog uninstall` at a
+  manifest carrying a `scheduler-entry` — is **safe only after this WP is
+  implemented** (before it, the unload argv reaches the live domain), so it is
+  not a "before" measurement and is not required.
+- **Table C's behavioral half is proven by CI on this PR, not locally.** The
+  local checks above are structural, because the only way to exercise the export
+  end to end is to run the full smoke lifecycle, which is the run that caused
+  issue #169. The `install-smoke` workflow runs it on a clean runner: paste the
+  step's log showing either real registration attempts (a CLEAN-probing runner,
+  which granted authority) or Table R refusal lines (a NOT-PROBEABLE runner,
+  which did not). Either outcome confirms the gating; a run showing real
+  registration on a runner whose probe was *not* CLEAN is a failure.
 
 ## Out of scope (do NOT do these)
 
@@ -393,12 +553,24 @@ test "$(git diff --numstat main -- src/core/sandbox-guard.js | cut -f2)" = 1
 - Adding a stance, `.git`, `packageRoot()`, TTY or manifest signal to Table B.
   ADR-0041 weighed and rejected each; adding one is a violation of it.
 - Any change to `docs/THREAT-MODEL.md`, `docs/runbooks/scheduler-and-executable-integrity.md`,
-  `docs/GLOSSARY.md`, or `README.md`. Documenting the `WIENERDOG_HOME`-relocated
-  install's new second command is a follow-up, not this WP.
+  `docs/GLOSSARY.md`, or `README.md`. **Owner ruling D3 (2026-08-31):** the
+  `WIENERDOG_HOME`-relocated install is a **named residual**, not a code special
+  case. Such an install sets `WIENERDOG_ALLOW_REAL_SCHEDULER=1` for *every*
+  scheduler-touching command — `init`, `sync`, `update`, `schedule add/remove`
+  and `uninstall`, not only the first `init` — and documenting that is a follow-up
+  work package, not this one. Do not add a branch for it.
 - Teaching `wienerdog doctor` to report a refusal. It already probes live
   registrations and reports missing ones.
-- Any change to the three call sites, to `repointSchedules`, to
-  `reverseSchedulerEntry`, or to the catch-up teardown.
+- Any change to the three `schedulerSpawn` call sites, to `repointSchedules`, to
+  `reverseSchedulerEntry`, or to the catch-up teardown. `uninstall` is fixed at
+  its own entry (Table U), not inside them.
+- Making Table A row 4 throw, or adding a return-value check to
+  `reverseSchedulerEntry`. Owner ruling D2 (2026-08-31): the soft refusal stays
+  for `init` / `sync` / `schedule`, and `uninstall` is fixed by a precondition.
+- Detecting mount namespaces, container markers, bus addresses or filesystem
+  identity, and writing a contract test for same-path/different-namespace
+  operation. The Security checklist records why (the residual is closed by
+  scoping the claim, not by enumerating the bad).
 
 ## Definition of done
 
