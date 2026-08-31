@@ -1,0 +1,27 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship these contracts yet: generic CI state can disable both protections, refusal can leave orphaned scheduled jobs, and probe failures are treated as proof of safety.
+
+Findings:
+- [high] Any non-empty CI value reopens the exact destructive path (docs/specs/WP-scheduler-mutation-home-authority.md:207-214)
+  Table C exports real-scheduler authority whenever CI is non-empty, while WP-A skips its live-domain preflight under the same condition. A local shell with CI=false or a self-hosted CI runner sharing a user's scheduler domain therefore bypasses both layers and runs the temp-HOME smoke lifecycle against live jobs. CI identifies execution context, not scheduler isolation.
+  Recommendation: Do not derive scheduler authority or preflight bypass from generic CI. Always probe the domain and grant authority only after a successful clean result; reserve an exact-value explicit override for deliberate bypasses.
+- [high] Soft refusal makes uninstall non-reversible (docs/specs/WP-scheduler-mutation-home-authority.md:261-266)
+  The spec explicitly keeps reverseSchedulerEntry's ignored return value while a refusal returns status 1 without throwing. For an existing relocated or otherwise misclassified install, uninstall can delete schedule files and manifest state without unloading the live OS registration. This contradicts the claim that uninstall remains reversible and can leave an orphan job continuing to execute with its recovery metadata removed.
+  Recommendation: Propagate scheduler refusal to uninstall and abort before deleting schedule files or manifest state, or require authority at command entry. Add a test covering uninstall of an already-registered relocated installation without the opt-in.
+- [medium] An unanswerable scheduler is treated as clean (docs/specs/WP-smoke-live-scheduler-preflight.md:112-124)
+  Exit 0 conflates a successful query finding no registrations with a missing or failed scheduler client. The smoke preflight consequently proceeds when it has no evidence that the live domain is clean. A transient query failure, unsupported platform, or unavailable user bus can therefore pass the gate and later reach mutations if the scheduler becomes answerable or another client path works.
+  Recommendation: Give not-probeable a distinct exit code and make the smoke script abort on it by default. Only a successful scheduler query with no matching identifiers should be classified as clean.
+- [medium] The implementation contract weakens the ADR's exact opt-in (docs/specs/WP-scheduler-mutation-home-authority.md:187-195)
+  ADR-0041 permits the override when WIENERDOG_ALLOW_REAL_SCHEDULER=1, but Table B specifies any truthy value. Values commonly used to disable flags, such as 0 or false, would authorize real scheduler mutation. That is not an explicit affirmative opt-in and can turn a defensive environment setting into the dangerous behavior it was intended to suppress.
+  Recommendation: Require process.env.WIENERDOG_ALLOW_REAL_SCHEDULER === '1' and apply the same exact-value rule to WIENERDOG_SMOKE_I_KNOW.
+
+Next steps:
+- Revise the contracts before ADR-0041 is ratified or either work package is dispatched.
+- Repeat the design review after the CI authority, probe taxonomy, and uninstall failure semantics are corrected.
+
+Codex session ID: 01a059cc-774f-7f00-8eb9-c1086fd81e03
+Resume in Codex: codex resume 01a059cc-774f-7f00-8eb9-c1086fd81e03
