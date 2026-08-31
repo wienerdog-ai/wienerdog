@@ -39,4 +39,12 @@ jobs:
           brew unlink git || true
           command -v git && git --version
       - name: Install lifecycle smoke
+        env:
+          # Linux CI runners have no user D-Bus session, so the live-scheduler
+          # preflight's systemctl probe cannot answer (NOT-PROBEABLE) and it
+          # would otherwise abort every run on this leg. macOS gets no
+          # override (empty string, which the preflight's exact-value rule
+          # treats as unset): if its launchd probe ever stops answering
+          # CLEAN, this job goes red rather than silently skipping the check.
+          WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: ${{ runner.os == 'Linux' && '1' || '' }}
         run: bash scripts/smoke-install.sh
