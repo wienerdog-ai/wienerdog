@@ -63,6 +63,153 @@ function headBytes(vault, rel) {
   return r.status === 0 ? r.stdout : null;
 }
 
+/** The vault's seed content — identical in every layout. */
+function seedVaultContent(dir) {
+  writeFile(dir, 'README.md', '# vault\n');
+  writeFile(dir, '06-Identity/profile.md', '---\nderived_from_untrusted: false\n---\n\n# Who\n\nAda.\n');
+}
+
+/**
+ * Build the vault repo in one of git's THREE working-tree layouts.
+ *
+ * ALL THREE ARE PRODUCIBLE USER CONFIGURATIONS rather than exotica: `wienerdog
+ * adopt` requires only that the vault BE a git repository, and a linked
+ * worktree is one (owner ruling, 2026-08-31, rejecting the "no producing
+ * workflow" reading of this shape). They differ in the ONE respect Table W row
+ * W1 turns on — WHERE GIT KEEPS THE INDEX. Only 'plain' keeps it at
+ * `<vault>/.git/index`; in the other two `<vault>/.git` is a FILE and the live
+ * index sits outside the working tree entirely.
+ */
+function buildVaultRepo(root, vault, layout) {
+  const conf = (dir) => {
+    git(dir, ['config', 'user.name', 'test']);
+    git(dir, ['config', 'user.email', 'test@test']);
+  };
+  if (layout === 'linked-worktree') {
+    const main = path.join(root, 'vault-main');
+    fs.mkdirSync(main, { recursive: true });
+    seedVaultContent(main);
+    git(main, ['init', '-q']);
+    conf(main);
+    git(main, ['add', '-A']);
+    git(main, ['commit', '-q', '-m', 'seed']);
+    fs.rmSync(vault, { recursive: true, force: true });
+    git(main, ['worktree', 'add', '-q', vault, '-b', 'dream']);
+    return;
+  }
+  fs.mkdirSync(vault, { recursive: true });
+  seedVaultContent(vault);
+  if (layout === 'separate-git-dir') {
+    execFileSync('git', ['init', '-q', `--separate-git-dir=${path.join(root, 'vault-gitdir')}`, vault]);
+  } else {
+    git(vault, ['init', '-q']);
+  }
+  conf(vault);
+  git(vault, ['add', '-A']);
+  git(vault, ['commit', '-q', '-m', 'seed']);
+}
+
+/**
+ * WHERE GIT KEEPS THIS REPO'S INDEX — asked of git, never constructed.
+ *
+ * `<vault>/.git/index` is correct ONLY in a plain repo. Under
+ * `--separate-git-dir` and in a linked worktree that path does not exist and
+ * the live index is elsewhere, so the constructed form read ABSENT before and
+ * after a run and scored the miss as "there is no index" — passing a run that
+ * HAD written one (retired 2026-08-31, row W1). `--git-path` answers relative
+ * in a plain repo and absolute in the other two, so it is resolved against the
+ * vault.
+ */
+function gitIndexPath(vault) {
+  return path.resolve(vault, git(vault, ['rev-parse', '--git-path', 'index']).trim());
+}
+
+/** realpath if the path exists, else realpath its parent — for comparing paths. */
+function realish(p) {
+  try { return fs.realpathSync(p); } catch { /* may not exist yet */ }
+  try { return path.join(fs.realpathSync(path.dirname(p)), path.basename(p)); } catch { return path.resolve(p); }
+}
+
+/**
+ * COMMANDS PROVEN TO TOUCH NO INDEX. An ALLOWLIST, on purpose.
+ *
+ * A denylist of index-WRITING commands would be an ENUMERATION, and enumerating
+ * the ways an index can be written is the pattern row W5 retired: it cost four
+ * data-loss defects and then three consecutive rounds of adding the column the
+ * last gate found missing. An allowlist is total by construction — a command
+ * nobody has classified yet defaults to VIOLATING.
+ *
+ * `status` and `diff` are deliberately absent. Both refresh the index's cached
+ * stat data in the user's repo, which row W1(e) rules a violation of this row
+ * whether or not a staged entry changed.
+ */
+const INDEX_SAFE_GIT = new Set([
+  'rev-parse', 'rev-list', 'ls-tree', 'cat-file', 'show', 'log',
+  'hash-object', 'commit-tree', 'update-ref', 'symbolic-ref', 'merge-file', 'config',
+]);
+
+/** The subcommand, skipping global flags and the arguments they consume. */
+function gitVerb(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree') { i++; continue; }
+    if (a.startsWith('-')) continue;
+    return a;
+  }
+  return '';
+}
+
+/**
+ * ROW W1'S ENFORCEMENT IS THE SEAM, NOT THE ARTIFACT.
+ *
+ * W1(a) is a total over ACTS — no dream run writes, refreshes, resets or
+ * otherwise touches the user's index, in any run state. An ARTIFACT compared at
+ * two endpoints cannot enforce a total over acts: a write followed by a restore
+ * lands between the endpoints and reads green. Measured 2026-08-31 — an
+ * `update-index --assume-unchanged` that saved and rewrote the original bytes
+ * passed the endpoint form. No further REPRESENTATION of the artifact closes
+ * that gap; observing the acts is a different KIND of assertion, which is why
+ * this is not a fourth column (owner ruling, 2026-08-31).
+ *
+ * THE INVARIANT: every git invocation in the USER'S repository either is on
+ * INDEX_SAFE_GIT, or carries `GIT_INDEX_FILE` naming an index that is neither
+ * the user's nor inside their working tree. Naming the user's index by its
+ * RESOLVED path rather than by "outside the vault" matters: in a linked
+ * worktree the user's own index already lives outside the vault.
+ */
+function watchIndexWrites(vault) {
+  const { spawnPinnedSync } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  const userIndex = realish(gitIndexPath(vault));
+  const vaultReal = realish(vault);
+  const under = (p, dir) => p === dir || p.startsWith(dir + path.sep);
+  /** @type {string[]} */
+  const violations = [];
+  /** @type {string[]} */
+  const seen = [];
+  const spawnGit = (o) => {
+    const args = o.args || [];
+    const dashC = args.indexOf('-C');
+    const targets = [o.cwd, dashC >= 0 ? args[dashC + 1] : null].filter(Boolean);
+    if (targets.some((t) => under(realish(t), vaultReal))) {
+      const verb = gitVerb(args);
+      seen.push(verb);
+      if (!INDEX_SAFE_GIT.has(verb)) {
+        const gif = o.env && o.env.GIT_INDEX_FILE;
+        const priv = gif ? realish(gif) : null;
+        if (!priv || priv === userIndex || under(priv, vaultReal)) {
+          violations.push(`git ${args.join(' ')}  [cwd=${o.cwd}, GIT_INDEX_FILE=${gif || '<unset>'}]`);
+        }
+      }
+    }
+    return spawnPinnedSync('git', getPaths(), {
+      args: ['-C', o.cwd, ...args], env: o.env, platform: process.platform,
+      encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
+    });
+  };
+  return { spawnGit, violations, seen };
+}
+
 /** A temp home + core + clean vault git repo + config.yaml, with a transcript. */
 function setup(opts = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-pipe-'));
@@ -71,15 +218,8 @@ function setup(opts = {}) {
   const vault = path.join(root, 'vault');
   const claude = path.join(root, 'claude');
   const codex = path.join(root, 'codex-absent');
-  for (const d of [home, core, vault]) fs.mkdirSync(d, { recursive: true });
-
-  writeFile(vault, 'README.md', '# vault\n');
-  writeFile(vault, '06-Identity/profile.md', '---\nderived_from_untrusted: false\n---\n\n# Who\n\nAda.\n');
-  git(vault, ['init', '-q']);
-  git(vault, ['config', 'user.name', 'test']);
-  git(vault, ['config', 'user.email', 'test@test']);
-  git(vault, ['add', '-A']);
-  git(vault, ['commit', '-q', '-m', 'seed']);
+  for (const d of [home, core]) fs.mkdirSync(d, { recursive: true });
+  buildVaultRepo(root, vault, opts.layout || 'plain');
 
   writeFile(core, 'config.yaml', `vault: ${vault}\ndream_timeout_minutes: ${opts.timeoutMinutes ?? 5}\n`);
   if (opts.withTranscript !== false) {
@@ -1316,90 +1456,119 @@ test('dream-pipeline: the FALLBACK report arm — the body was refused, the reco
 // What replaces all four is ONE assertion of the contract that is actually in
 // force — the run does not touch the user's index at all — which DOES have a RED.
 
-test('dream-pipeline: the run does not touch the user\'s git index — at all (row G8)', async () => {
-  const ctx = setup();
-  const rel = '03-Resources/valid-note.md';
-  // Every shape of user state the retired refresh managed to destroy, in one
-  // fixture: ordinary staged content, a staged deletion, a staged mode change,
-  // and an unresolved merge. Under the ruling none of them is this run's
-  // business, so the assertion is the simple one — the index is byte-identical
-  // afterwards — and it covers shapes nobody has thought of yet.
-  writeFile(ctx.vault, rel, 'the user staged this\n');
-  writeFile(ctx.vault, 'MODE.md', 'mode\n');
-  writeFile(ctx.vault, 'GONE.md', 'gone\n');
-  writeFile(ctx.vault, 'CONFLICT.md', 'base\n');
-  git(ctx.vault, ['add', '-A']);
-  git(ctx.vault, ['commit', '-q', '-m', 'seed for the index fixture']);
-  writeFile(ctx.vault, rel, 'the user staged THIS instead\n');
-  git(ctx.vault, ['add', rel]);
-  git(ctx.vault, ['update-index', '--chmod=+x', 'MODE.md']);
-  git(ctx.vault, ['rm', '-q', '--cached', 'GONE.md']);
-  // AN ACTUAL UNRESOLVED MERGE — three stages for one path. Table W row W5 has
-  // always said this fixture seeds one; until now it did not, and a mutation
-  // flattening ONLY merge stages — defect 4's exact class, the one that ended
-  // the mechanism — left this test green.
-  {
-    const blob = (t) => execFileSync('git', ['-C', ctx.vault, 'hash-object', '-w', '--stdin'],
-      { input: t, encoding: 'utf8' }).trim();
-    const info = ['1', '2', '3'].map((st, n) => `100644 ${blob(`side${n}\n`)} ${st}\tCONFLICT.md`).join('\n') + '\n';
-    execFileSync('git', ['-C', ctx.vault, 'update-index', '--index-info'], { input: info });
-  }
-  assert.match(git(ctx.vault, ['ls-files', '--unmerged']), /CONFLICT\.md/, 'precondition: a real unresolved merge is staged');
+// THE THREE LAYOUTS ARE THE POINT, not thoroughness for its own sake. This
+// assertion is the only thing standing between the package and a reintroduced
+// index write, and until 2026-08-31 it CONSTRUCTED the index path as
+// `<vault>/.git/index`. Under `--separate-git-dir` and in a linked worktree
+// that file does not exist and the live index is elsewhere, so the constructed
+// read returned ABSENT before AND after and a run that really did write the
+// index passed. Both are producible user vaults — `adopt` requires only that
+// the vault be a git repository — so both are fixtures here, and the location
+// is asked of git rather than built (owner ruling, 2026-08-31).
+for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
+  test(`dream-pipeline: the run does not touch the user's git index — at all, ${layout} vault (row G8)`, async () => {
+    const ctx = setup({ layout });
+    const rel = '03-Resources/valid-note.md';
+    // Every shape of user state the retired refresh managed to destroy, in one
+    // fixture: ordinary staged content, a staged deletion, a staged mode change,
+    // and an unresolved merge. Under the ruling none of them is this run's
+    // business, so the assertion is the simple one — the index is byte-identical
+    // afterwards — and it covers shapes nobody has thought of yet.
+    writeFile(ctx.vault, rel, 'the user staged this\n');
+    writeFile(ctx.vault, 'MODE.md', 'mode\n');
+    writeFile(ctx.vault, 'GONE.md', 'gone\n');
+    writeFile(ctx.vault, 'CONFLICT.md', 'base\n');
+    git(ctx.vault, ['add', '-A']);
+    git(ctx.vault, ['commit', '-q', '-m', 'seed for the index fixture']);
+    writeFile(ctx.vault, rel, 'the user staged THIS instead\n');
+    git(ctx.vault, ['add', rel]);
+    git(ctx.vault, ['update-index', '--chmod=+x', 'MODE.md']);
+    git(ctx.vault, ['rm', '-q', '--cached', 'GONE.md']);
+    // AN ACTUAL UNRESOLVED MERGE — three stages for one path. Table W row W5 has
+    // always said this fixture seeds one; until now it did not, and a mutation
+    // flattening ONLY merge stages — defect 4's exact class, the one that ended
+    // the mechanism — left this test green.
+    {
+      const blob = (t) => execFileSync('git', ['-C', ctx.vault, 'hash-object', '-w', '--stdin'],
+        { input: t, encoding: 'utf8' }).trim();
+      const info = ['1', '2', '3'].map((st, n) => `100644 ${blob(`side${n}\n`)} ${st}\tCONFLICT.md`).join('\n') + '\n';
+      execFileSync('git', ['-C', ctx.vault, 'update-index', '--index-info'], { input: info });
+    }
+    assert.match(git(ctx.vault, ['ls-files', '--unmerged']), /CONFLICT\.md/, 'precondition: a real unresolved merge is staged');
 
-  // THE RAW INDEX IS THE ASSERTION; THE PROJECTIONS ARE THE MESSAGE (Table W row
-  // W1). No projection can enforce W1's total: `--stage` had no flag column,
-  // `-v` adds one letter and still misses BOTH an identical-mode-and-sha
-  // re-stage and the `fsmonitor-valid` bit. The enumeration has no last column,
-  // so the comparison is the file's own bytes.
-  //
-  // CONTENT, NEVER STAT METADATA. A read-only `git status` replaces `.git/index`
-  // with a NEW INODE while the content stays byte-identical — comparing stat
-  // data would be a false red.
-  //
-  // `-v` AND `-f` ARE READ SEPARATELY, never combined: their flag letters share
-  // one column, so `-v -f` prints `h` for a path carrying only `fsmonitor-valid`
-  // — indistinguishable from `-v`'s spelling of assume-unchanged.
-  const rawIndex = () => {
-    const f = path.join(ctx.vault, '.git', 'index');
-    return fs.existsSync(f) ? fs.readFileSync(f) : null; // ABSENT is a value
-  };
-  const projV = () => git(ctx.vault, ['ls-files', '-v', '--stage']);
-  const projF = () => git(ctx.vault, ['ls-files', '-f']);
-  const before = rawIndex();
-  const vBefore = projV();
-  const fBefore = projF();
+    // ── THE ENFORCEMENT: the ACTS, observed at the git seam ─────────────────
+    const watch = watchIndexWrites(ctx.vault);
 
-  const r = await runDream(ctx);
-  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
-  // NON-VACUITY: the RUN's own bytes are at HEAD for this path. Asserting mere
-  // presence could not fail — the fixture commits `rel` itself in the
-  // `seed for the index fixture` commit, so `HEAD:<rel>` exists before the run
-  // starts. Measured: with the run stubbed to a no-op, a presence check still
-  // passed. (A comment citing a RELATIVE DISTANCE rots the moment anything is
-  // inserted between it and its referent: this one carried such a distance and
-  // was off by nineteen once the unresolved-merge fixture landed in the gap.
-  // Cite the NAME of what you mean — names do not move.)
-  assert.match(
-    headBytes(ctx.vault, rel).toString('utf8'), /A legitimately-learned resource note\./,
-    'non-vacuity: HEAD carries the RUN\'s bytes, not the fixture\'s seed'
-  );
+    // ── THE DIAGNOSTIC: the ARTIFACT, compared at the endpoints ─────────────
+    // RETAINED AND WEIGHED BY NAME (owner ruling, 2026-08-31). It names WHAT
+    // differs once something is caught, and it would catch a write arriving by
+    // a route the seam cannot see. It is NOT the enforcement: it is blind to
+    // write-then-restore — the exact class the enforcement exists to catch,
+    // since a carefully reintroduced refresh that restores the bytes before
+    // returning reads green here.
+    //
+    // CONTENT, NEVER STAT METADATA. A read-only `git status` replaces the index
+    // with a NEW INODE while the content stays byte-identical, so an assertion
+    // keyed on stat data carries a false red.
+    //
+    // `-v` AND `-f` ARE READ SEPARATELY, never combined: their flag letters
+    // share one column, so `-v -f` prints `h` for a path carrying only
+    // `fsmonitor-valid` — indistinguishable from `-v`'s assume-unchanged.
+    const indexFile = gitIndexPath(ctx.vault);
+    const rawIndex = () => (fs.existsSync(indexFile) ? fs.readFileSync(indexFile) : null);
+    const projV = () => git(ctx.vault, ['ls-files', '-v', '--stage']);
+    const projF = () => git(ctx.vault, ['ls-files', '-f']);
+    const before = rawIndex();
+    // THE FIXTURE DECLARES WHICH KIND OF VAULT IT IS. The comparison below stays
+    // total over a vault with an index and one without (row W1(c)); this says
+    // that THIS vault has one, so an ABSENT reading is a broken fixture rather
+    // than a silent pass. Absent-compares-equal-to-absent is what turned a
+    // mislocated read into a green.
+    assert.notEqual(before, null,
+      `precondition: git reports this vault's index at ${indexFile} and it exists`);
+    const vBefore = projV();
+    const fBefore = projF();
 
-  // THE WHOLE INDEX, BYTE-IDENTICAL. Not "the user's entry survived" — that is
-  // what the retired mechanism kept claiming while losing a different shape each
-  // round. Nothing this run does is allowed to write the index.
-  const after = rawIndex();
-  const same = before === null ? after === null : after !== null && after.equals(before);
-  if (!same) {
-    const v = projV();
-    const f = projF();
-    assert.fail(
-      "the run wrote the user's git index (Table W row W1)\n" +
-        `ls-files -v --stage:\n${v}\nls-files -f:\n${f}\n` +
-        (v === vBefore && f === fBefore
-          ? 'BOTH PROJECTIONS COMPARE EQUAL — the change is in index bytes no projection '
-            + 'surfaces (an identical-mode-and-sha re-stage, or an entry flag git does not '
-            + 'print here). Diff the raw file.'
-          : '')
+    const r = await runDream(ctx, ['--yes'], { opts: { spawnGit: watch.spawnGit } });
+    assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+    // NON-VACUITY OF THE SEAM: a run that invoked no git in the vault at all
+    // would satisfy the enforcement trivially.
+    assert.ok(watch.seen.length > 0,
+      'the git seam was exercised inside the vault — a silent pass would prove nothing');
+    assert.deepEqual(watch.violations, [],
+      "a git command touched the user's index (Table W row W1)\n" + watch.violations.join('\n'));
+
+    // NON-VACUITY: the RUN's own bytes are at HEAD for this path. Asserting mere
+    // presence could not fail — the fixture commits `rel` itself in the
+    // `seed for the index fixture` commit, so `HEAD:<rel>` exists before the run
+    // starts. Measured: with the run stubbed to a no-op, a presence check still
+    // passed. (A comment citing a RELATIVE DISTANCE rots the moment anything is
+    // inserted between it and its referent: this one carried such a distance and
+    // was off by nineteen once the unresolved-merge fixture landed in the gap.
+    // Cite the NAME of what you mean — names do not move.)
+    assert.match(
+      headBytes(ctx.vault, rel).toString('utf8'), /A legitimately-learned resource note\./,
+      'non-vacuity: HEAD carries the RUN\'s bytes, not the fixture\'s seed'
     );
-  }
-});
+
+    // THE WHOLE INDEX, BYTE-IDENTICAL. Not "the user's entry survived" — that is
+    // what the retired mechanism kept claiming while losing a different shape
+    // each round.
+    const after = rawIndex();
+    const same = before === null ? after === null : after !== null && after.equals(before);
+    if (!same) {
+      const v = projV();
+      const f = projF();
+      assert.fail(
+        "the run wrote the user's git index (Table W row W1)\n" +
+          `ls-files -v --stage:\n${v}\nls-files -f:\n${f}\n` +
+          (v === vBefore && f === fBefore
+            ? 'BOTH PROJECTIONS COMPARE EQUAL — the change is in index bytes no projection '
+              + 'surfaces (an identical-mode-and-sha re-stage, or an entry flag git does not '
+              + 'print here). Diff the raw file.'
+            : '')
+      );
+    }
+  });
+}
