@@ -1,7 +1,7 @@
 ---
 id: WP-ep2-unscannable-preserve
 title: Move the unscannable classification into the EP2 gate so the bytes are preserved before they are refused
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-dream-promote-module, WP-dream-promote-in-workspace]
