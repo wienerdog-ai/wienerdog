@@ -32,10 +32,10 @@ contracted in Table W), but "likely mooted" is not a disposition.
 
 ## What done means
 
-For each original C2/C3 finding (source: the audit's group C ruling — the
-original findings are M7, M9, M10; their measured basis is recorded in the
-group C section of the audit ruling and partially in
-`docs/specs/done/` fence-family Superseded specs):
+For each original C2/C3 finding (the original findings are M7, M9, M10;
+their measured basis is preserved verbatim in
+`docs/specs/logbook/2026-08-31-audit-group-c-ruling-harvest.md`, and
+partially in the `docs/specs/done/` fence-family Superseded specs):
 
 1. Measure on the current tree whether the finding's mechanism still exists.
 2. Record the disposition in a logbook entry: **mooted** (with the retiring

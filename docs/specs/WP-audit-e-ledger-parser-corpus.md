@@ -78,5 +78,6 @@ Measured corrections that shaped the ruling (each defeated a naive fix):
 
 - E and anything touching `validate.js` are sequential, never concurrent.
 - The archive spec and its twelve round logs are the best evidence input —
-  the corpus design is already paid for; find them via the fence-family
-  Superseded specs in `docs/specs/done/`.
+  the corpus design is already paid for. They live on the preserved branch
+  `wp/audit-b3b1-ledger-parser-hardening` (pushed to origin at handover,
+  head `b07d4bc`; read-only evidence — do not build on it).
