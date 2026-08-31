@@ -184,12 +184,24 @@ function watchIndexWrites(vault) {
   const vaultReal = realish(vault);
   const vaultGitDir = realish(git(vault, ['rev-parse', '--absolute-git-dir']).trim());
   const under = (p, dir) => p === dir || p.startsWith(dir + path.sep);
-  /** A git global flag's value, in either the `--flag value` or `--flag=value` form. */
-  const flagValue = (args, name) => {
-    const i = args.indexOf(name);
-    if (i >= 0 && args[i + 1] !== undefined) return args[i + 1];
-    const eq = args.find((a) => a.startsWith(name + '='));
-    return eq ? eq.slice(name.length + 1) : null;
+  /**
+   * Git's own GLOBAL options — everything before the subcommand. Collected so
+   * the probe below can replay them; NOT interpreted here, because interpreting
+   * them is the thing that kept being incomplete.
+   */
+  const globalOpts = (args) => {
+    const out = [];
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-C' || a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace') {
+        out.push(a, args[i + 1]);
+        i += 1;
+        continue;
+      }
+      if (a.startsWith('-')) { out.push(a); continue; }
+      break; // the subcommand — global options end here
+    }
+    return out;
   };
   /** @type {string[]} */
   const violations = [];
@@ -197,18 +209,31 @@ function watchIndexWrites(vault) {
   const seen = [];
   const spawnGit = (o) => {
     const args = o.args || [];
-    // A CALL REACHES THE USER'S REPO BY MORE THAN ITS CWD. `-C`, `--work-tree`
-    // and `--git-dir` each redirect git at a repository the cwd does not name.
-    // Measured 2026-08-31, git 2.50.1: from cwd `/`, with no `-C`,
-    // `git --git-dir=<vault>/.git --work-tree=<vault> update-index
-    // --assume-unchanged <path>` writes the vault's index and `ls-files -v`
-    // then prints `h`. Leaving redirects unparsed would INVERT this watcher's
-    // own direction — an unclassified COMMAND defaults to violating, so an
-    // unparsed REDIRECT must not default to invisible.
-    const treeTargets = [o.cwd, flagValue(args, '-C'), flagValue(args, '--work-tree')].filter(Boolean);
-    const gitDirTarget = flagValue(args, '--git-dir');
-    const reachesVault = treeTargets.some((t) => under(realish(t), vaultReal))
-      || (gitDirTarget !== null && under(realish(gitDirTarget), vaultGitDir));
+    // WHICH REPOSITORY DOES THIS CALL REACH? ASK GIT — DO NOT ENUMERATE.
+    //
+    // Enumerating the redirects was wrong twice, and the second time proved the
+    // shape of the mistake rather than the mistake. Round 7 found `--git-dir`
+    // missing from a set that read only `cwd` and `-C`; round 8 then found an
+    // env-borne `GIT_DIR`/`GIT_WORK_TREE` redirect — the very shape this seam
+    // itself composes — and a REPEATED `-C`, which git composes and a
+    // first-hit reader misses. A list of flags can always be one entry short,
+    // and being one entry short here INVERTS the watcher's own direction: an
+    // unclassified COMMAND defaults to violating, so an unparsed REDIRECT must
+    // not default to invisible.
+    //
+    // So the target is a RESOLVED QUESTION, not a parsed list. Replay this
+    // invocation's own global options and env through `rev-parse
+    // --absolute-git-dir` — an allowlisted, index-safe read — and let git
+    // report where it lands. Whatever route git supports to find a repository,
+    // git itself accounts for it. A non-zero probe means git found no
+    // repository at all, which is a definitive answer rather than a gap: with
+    // no repository there is no index to write.
+    const probe = spawnPinnedSync('git', getPaths(), {
+      args: ['-C', o.cwd, ...globalOpts(args), 'rev-parse', '--absolute-git-dir'],
+      env: o.env, platform: process.platform, encoding: 'utf8',
+    });
+    const landedIn = probe.status === 0 ? realish(String(probe.stdout).trim()) : null;
+    const reachesVault = landedIn !== null && under(landedIn, vaultGitDir);
     if (reachesVault) {
       const verb = gitVerb(args);
       seen.push(verb);
