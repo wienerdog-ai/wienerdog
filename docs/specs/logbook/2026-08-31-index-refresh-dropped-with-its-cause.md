@@ -134,19 +134,35 @@ nothing touching the index they were trivially true and had no possible RED.
 **One assertion replaces all four** —
 `tests/unit/dream-pipeline.test.js`, *"the run does not touch the user's git
 index — at all"*: ordinary staged content, a staged deletion, a staged mode
-change and a real unresolved merge in one fixture, asserting the contract is
-**byte-identical** across the run. It has a real RED against any reintroduced
-write, and it covers shapes nobody has enumerated. **A total is what the
-per-shape tests could not be:** each of them named a shape, and the mechanism
+change and a real unresolved merge in one fixture. It has a real RED against any
+reintroduced write, and it covers shapes nobody has enumerated. **A total is what
+the per-shape tests could not be:** each of them named a shape, and the mechanism
 lost a different one every round.
 
-**The REPRESENTATION that assertion compares is Table W row W1's, and this
-entry deliberately does not name the command.** An earlier form of this
-paragraph spelled it — `git ls-files --stage` — and that second copy is how the
-contract came to say two different things: the spec's row was patched to
-`-v --stage` while this sentence was not, so the record and the contract
-disagreed about what enforces the total. **One contract, one place that spells
-its command.** Row W1 is that place; this entry cites it.
+**WHAT THAT ASSERTION ENFORCES WITH IS NO LONGER A COMPARISON OF THE INDEX —
+amended 2026-08-31, and the amendment is the point of this section rather than a
+correction to it.** The first form of this paragraph said the run is
+**byte-identical** across the run, which was true and was not enough. **An
+artifact compared at two ENDPOINTS cannot enforce a total over ACTS:** a write
+followed by a restore lands between the endpoints and reads green. The
+enforcement is now the git execution seam — every invocation in the user's
+repository is on a measured index-safe allowlist or carries a private
+`GIT_INDEX_FILE` — and the byte comparison is retained as a DIAGNOSTIC, kept on
+stated grounds. **That is a change of KIND, not a fourth representation**, which
+matters because the three preceding rounds each answered a finding with a wider
+representation and the fourth found the next gap. There is no fifth
+representation worth reaching for.
+
+**The MECHANISM that assertion uses is Table W row W1's, and this entry
+deliberately does not spell it.** An earlier form of this paragraph did — `git
+ls-files --stage` — and that second copy is how the contract came to say two
+different things: the spec's row was patched to `-v --stage` while this sentence
+was not, so the record and the contract disagreed about what enforces the total.
+**One contract, one place that spells its mechanism.** Row W1 is that place;
+this entry cites it. **The rule reaches PROSE like this paragraph — not the test,
+which IS the mechanism, and not a SHA-pinned measurement, which reports what ran
+on a tree rather than what must run now.** The tables below keep their pinned
+`ls-files` spellings on exactly that ground.
 
 ## The projection representation, retired with ITS cause
 
@@ -173,11 +189,56 @@ Neither is exotic. Shape 1 is what any "refresh" that decides an entry is
 already correct still does to the file, which is defect 3's neighbourhood; and
 no projection catches both, because they are blind in different places.
 
+**READ THE TABLE'S LAST COLUMN, because a later form of the spec's own row W1(b)
+did not.** Shape 2 is caught by `ls-files -f`; only shape 1 is blind to every
+projection. The spec's row opened by claiming both shapes leave *every*
+projection equal, contradicted itself three lines later, and propagated the error
+into its blindness rule — while this table, and the shipped code, had it right
+all along. **Corrected in the spec on 2026-08-31 against the shipped behaviour.**
+The argument the table supports is untouched by the correction: it was never that
+`-f` is blind to everything, it was that the projection cannot be COMPLETED by
+enumeration.
+
 **The RED was measured too, not assumed.** With `commitNamedSet` mutated to
 perform shape 1 against the user's index, the raw comparison went red on every
 run state that reaches the publish — normal, bare-marker-after-writes,
 secret-note, near-marker — while `ls-files -v --stage` stayed green on all four.
 The run states that abort before the publish stayed green in both, correctly.
+
+## The constructed index path, retired with ITS cause
+
+**The third thing this work retired, recorded to the same standard as the other
+two — and the only one of the three that was silently WRONG rather than merely
+insufficient.**
+
+The endpoint diagnostic located the index by construction, at
+`<vault>/.git/index`. **That is the wrong file in two producible layouts**, both
+reproduced on git 2.50.1:
+
+| layout | `<vault>/.git` | where the live index actually is |
+|---|---|---|
+| plain repo | a directory | `<vault>/.git/index` — the constructed path is right |
+| **linked worktree** (`git worktree add`) | a **file** holding `gitdir: …` | `<main>/.git/worktrees/<name>/index` |
+| **`--separate-git-dir`** | an **87-byte file** | `<separate dir>/index` |
+
+**In the worktree layout the failure is silent, which is what makes it worse than
+a crash.** A real `git update-index --assume-unchanged` writes the live index and
+`ls-files -v` prints `h`, while `<vault>/.git/index` does not exist **before or
+after** — so the absent-compares-equal-to-absent rule compares `null` with `null`
+and PASSES a run that wrote the user's index. **A rule that is correct in
+isolation became the silencer**, because the path it was applied to was wrong.
+
+**Measured in place rather than argued:** with the constructed locator restored
+and the index genuinely written, the check was **GREEN on `separate-git-dir` and
+on `linked-worktree`**, red only on `plain`. With `git rev-parse --git-path index`
+— git's own answer, resolved against the vault — it is RED on all three. The test
+is now parameterised over the three layouts for exactly this reason; a
+single-layout fixture could not have told them apart.
+
+**This was NOT classified as a residual, and the ruling is recorded because the
+classification was contested** (owner, 2026-08-31): a vault living in a linked
+worktree is a **producible user configuration** — adopt requires a git repo, and
+a linked worktree is one. *"No producing workflow"* was the wrong reading.
 
 **And the raw representation was measured to be STABLE**, which is the condition
 that makes it usable at all: across those eight run states, plus a racily-clean
