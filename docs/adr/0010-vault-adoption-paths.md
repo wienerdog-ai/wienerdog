@@ -17,10 +17,16 @@ long-term memory store"): a knowledge worker with a mature vault should not be a
 to keep two.
 
 The safety guarantee that makes auto-written memory acceptable at all (THREAT-MODEL
-T1) rests on git: "one commit per dream" so `git revert <sha>` undoes an entire
-night, plus the orchestrator's post-commit diff validation. Using a user's real
-vault in place is only as safe as that guarantee — which requires the vault be a git
-repository.
+T1) rests on git: "one commit per dream", so `git reset` then `git revert <sha>`
+undoes an entire night — plus the orchestrator's post-commit diff validation.
+**Two commands rather than one, since ADR-0012's workspace/promotion amendment:**
+the run never touches the user's git index, so that index still describes the
+pre-run HEAD and the reset re-syncs it. Skipping the reset costs nothing but a
+retry — the revert refuses outright (exit 128) rather than applying in part. The
+guarantee this ADR leans on is that a night is **deterministically and loudly
+undoable**, and that is unchanged; what stopped being accurate is only the
+"one command" phrasing. Using a user's real vault in place is only as safe as
+that guarantee — which requires the vault be a git repository.
 
 ## Decision
 
