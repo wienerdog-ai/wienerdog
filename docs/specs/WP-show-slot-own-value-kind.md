@@ -165,8 +165,11 @@ token the run BUILDS from a constant is pinnable as a LITERAL, the set's third
 and oldest token kind. **The RULE sentence is the load-bearing one and C1
 amends it**, because its partition is exhaustive over two kinds ("COMPUTED →
 `own`; merely carried — a mode, a path, a message — → FREE") and shape (4)'s
-token is a carried PATH, which the partition sends to FREE. C1 splits the
-carried half by POSITION (Change table row C1). **Nothing but the RULE sentence
+token is a carried PATH, which the partition sends to FREE. C1 replaces it with
+three clauses that partition every slot once — an own-value-set member (C2's
+predicate) is `own`; of the rest, a token in a position git parses for options
+must be a fixed literal; every other remaining slot stays FREE (Change table row
+C1, which adjudicates all nine shapes' slots). **Nothing but the RULE sentence
 and the "stays free" sentence changes:** the "five shapes the rule reaches"
 sentence stays TRUE, since the own-value rule still reaches exactly those five.
 The same row separately enumerates shape (4) as
@@ -268,7 +271,7 @@ pre-fix state* — is confirmed, for two mirrors rather than one.
 |--------|------|-------|
 | modify | tests/unit/dream-pipeline.test.js | Change table rows C1 and C2, plus the arity-matched canary. Four sites and no others: `KNOWN_CALLS` shape (4) (`:194`); the `RUN_VALUE` JSDoc (`:168-186`); the `produces` comment (`:277-283`); the non-vacuity canary block inside the index test (`:1632-1658`). **C3 needs NO code change** — the code already admits four; its `:277` sentence is only re-read whole after the C2 rewrite. **No other shape, slot kind, literal or disposition changes** — `shapeMatches` (`:208-213`) and the nine-shape count stand |
 | modify | docs/specs/done/WP-dream-promote-in-workspace.md | **Row W1(c) ONLY** (all of Table W is on `:541`). The clauses that move are the ones the Mirrored Surface Checklist marks as moving under C1 and C3 — the FREE-slot RULE sentence, the "stays free" ruling, the pinned-set enumeration of shape (4), and the residual clause, which becomes a CLOSURE record naming `b19121bb`. **The checklist owns that list; this cell does not restate it as a count** (a number beside a list is what C3 retires). The C2 entry on this file is a registered NON-move. **No other row, no other table, no frontmatter, no status field** |
-| modify | docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md | **TWO passages, both listed in the Mirrored Surface Checklist and nothing else in the file.** (a) the *"Applied to every slot the rule reaches"* passage (`:368-372`, C1): SHA-scoped past tense with the slot-kind spelling dropped, so its own deference sentence becomes true. (b) the `#### One residual, stated rather than closed` heading and paragraph (`:409-426`, C3): a SHA-pinned past-tense record plus a pointer to W1(c). Listed here for exactness although `docs/specs/logbook/` is always allowed |
+| modify | docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md | **THREE edits, all listed in the Mirrored Surface Checklist and nothing else in the file.** (a) the *"Applied to every slot the rule reaches"* passage (`:368-372`, C1): SHA-scoped past tense with the slot-kind spelling dropped, so its own deference sentence becomes true. (b) the `#### One residual, stated rather than closed` heading and paragraph (`:409-426`, C3): a SHA-pinned past-tense record plus a pointer to W1(c). (c) **the dead SHA at `:356` only** — a bare token substitution `5c5d082` → `c853245b` in *"THE RULING … shipped at"*, which names the same commit as (a); **the rest of that paragraph does not move** and stays the registered non-move the C2 checklist records. Listed here for exactness although `docs/specs/logbook/` is always allowed |
 
 ### Exact contracts
 
@@ -276,10 +279,10 @@ After this WP, shape (4) of the pinned call set is a fully literal shape with
 no placeholder:
 
 ```js
-  // The run's ONE `show`, and its argument is a CONSTANT the run builds:
-  // `HEAD:${WARNINGS_REL}` at `cli/dream.js:1004`, with WARNINGS_REL fixed at
-  // `core/dream/warnings.js:72`. Spelled literally rather than imported —
-  // see Change table row C1.
+  // The run's ONE `show`, and its argument is a CONSTANT the run builds: the
+  // interpolated form of WARNINGS_REL at `cli/dream.js:1004`, with the constant
+  // fixed at `core/dream/warnings.js:72`. Spelled literally here rather than
+  // imported or interpolated — see Change table row C1.
   { env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },
 ```
 
@@ -316,7 +319,7 @@ carries these three facts and this spec becomes their history.
 
 | # | Fact / rule | Value |
 |---|-------------|-------|
-| C1 | **A FREE slot that git parses as an OPTION POSITION is not a pin — and where the run's own token is a CONSTANT, the slot becomes a LITERAL rather than a new placeholder kind** | Shape (4)'s argument stops being FREE and becomes the literal `HEAD:reports/warnings.md`. **THE RULE THAT DECIDES IT, AND IT AMENDS W1(c)'s BINARY PARTITION RATHER THAN SITTING BESIDE IT.** W1(c) today partitions slots two ways — *"a slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE"* — and shape (4)'s token is a carried PATH, so that partition sends it to FREE. **C1 splits the CARRIED half by POSITION, in three clauses:** **(1)** a slot holding a value the run COMPUTED is `own`; **(2)** a slot holding a carried token **in a position git parses for OPTIONS** must be FIXED and spelled as a LITERAL — a value that varies has no place in an option position, and a FREE slot there is not a pin at all; **(3)** every other carried slot — a token git consumes positionally, or as a named option's argument, or after `--` — stays FREE, and a fixed value there MAY be tightened to a literal as optional hardening but is **not required** to be. **THE SCOPE IS POSITION, NOT FIXEDNESS, AND THAT IS WHY THE SET STAYS CONSISTENT ON MERGE:** shape (9)'s `«msg»` is a fixed constant (`src/cli/dream.js:263`) in a slot clause (3) governs, so it stays FREE and this WP leaves it alone (Out of scope) **without contradicting the rule** — an earlier draft of C1 partitioned on fixed-versus-varying alone and did contradict it. **"OPTION POSITION" IS A DESIGN-TIME PREDICATE, NEVER A MATCH-TIME TEST.** It is applied by the human author of the row when a shape is added or changed — the same moment, and the same person, that already decides `own` versus FREE. `shapeMatches` is untouched: it still compares literals by equality and admits a placeholder without inspecting the token, so the retired classification direction does not return through this door. **What enforces it is what already enforces every slot kind: the reviewer's slot-by-slot comparison of the row against `KNOWN_CALLS`** — the Done spec's Mirrored Surface Checklist states in as many words that no grep reaches a slot-kind drift. **A future call needing a VARYING token in an option position is a design problem for that call** (re-shape it so git consumes the token positionally), not a licence for a fourth token kind. **That sentence in W1(c) must be rewritten in the same pass** — it is a registered mirror of this rule (checklist entry 1 under C1) and leaving it standing beside the new one is the intra-cell failure this WP's notes name as its likeliest way to ship broken. **No third placeholder kind is introduced and no matching rule changes** — `shapeMatches` already compares non-placeholder tokens by equality, so this is a slot-kind change inside the existing grammar. **SPELLED LITERALLY, NOT IMPORTED FROM `WARNINGS_REL`:** an interpolated constant makes the pin follow production silently, which is precisely the widening default-deny exists to prevent; spelled literally, relocating the warnings file reddens the guard and forces the owner-visible W1(c) amendment W1(c) requires. **The two forms are indistinguishable at run time, so this choice is provable only by the SOURCE-FORM check** (criterion 1) — without it the interpolation ships green and the relocation tripwire silently does not exist. **The `«own …»`/OWN-VALUE rule is untouched and still reaches only shapes (1), (3), (6), (8), (9)** — W1(c) is right that no observation pins this token; what changes is the conclusion drawn from that, not the rule |
+| C1 | **A FREE slot that git parses as an OPTION POSITION is not a pin — and where the run's own token is a CONSTANT, the slot becomes a LITERAL rather than a new placeholder kind** | Shape (4)'s argument stops being FREE and becomes the literal `HEAD:reports/warnings.md`. **THE RULE THAT DECIDES IT, AND IT AMENDS W1(c)'s BINARY PARTITION RATHER THAN SITTING BESIDE IT.** W1(c) today partitions slots two ways — *"a slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE"* — and shape (4)'s token is a carried PATH, so that partition sends it to FREE. **C1 REPLACES IT WITH THREE CLAUSES THAT PARTITION EVERY SLOT ONCE.** **(1)** a slot carrying an **own-value-set member** — *an object name git emitted as the whole stdout of one of this run's pinned PRODUCING shapes*, which is C2's predicate and nothing looser — is `own`; **(2)** of the REMAINING slots, one whose token sits **in a position git parses for OPTIONS** must be FIXED and spelled as a LITERAL — a value that varies has no place in an option position, and a FREE slot there is not a pin at all; **(3)** every other remaining slot — a token git consumes positionally, or as a named option's argument, or after `--` — stays FREE, and a fixed value there MAY be tightened to a literal as optional hardening but is **not required** to be. **CLAUSE (1) CITES C2's PREDICATE RATHER THAN SAYING "COMPUTED", AND THE REASON IS A MEASURED OVERLAP:** the run COMPUTES the commit message (`src/cli/dream.js:1041`) and DERIVES the mode from `ls-tree`'s stdout (`:238-239`), yet both slots are correctly FREE — so "computed" and "carried" overlap before position is even considered, and a partition built on the loose word classifies two existing slots two ways. C2's predicate does not overlap: neither value is an object name git emitted as a producing shape's whole stdout (`ls-tree` is not a producing shape, and its output is a composite line). **EVERY FREE SLOT IN THE SET, ADJUDICATED HERE so the rule is checkable rather than asserted:** shape (1)'s trailing `«path»` — after `--`, clause (3); shape (3)'s `«mode»` — derived from `ls-tree`, not an own-value member, clause (3), and its `«path»` — consumed positionally by `--cacheinfo`, clause (3); shape (4)'s slot — not an own-value member, and git parses `show`'s arguments for options, **clause (2), the one slot this WP moves**; shape (8)'s `«msg»` — computed by the run but never git's stdout, and consumed by `-m`, clause (3); shape (9)'s `«msg»` — a fixed constant (`:263`) consumed by `-m`, clause (3), so it stays FREE and this WP leaves it alone (Out of scope) **without contradicting the rule**. **THE SCOPE IS POSITION, NOT FIXEDNESS** — an earlier draft partitioned on fixed-versus-varying alone and shape (9) falsified it. **"OPTION POSITION" IS A DESIGN-TIME PREDICATE, NEVER A MATCH-TIME TEST.** It is applied by the human author of the row when a shape is added or changed — the same moment, and the same person, that already decides `own` versus FREE. `shapeMatches` is untouched: it still compares literals by equality and admits a placeholder without inspecting the token, so the retired classification direction does not return through this door. **What enforces it is what already enforces every slot kind: the reviewer's slot-by-slot comparison of the row against `KNOWN_CALLS`** — the Done spec's Mirrored Surface Checklist states in as many words that no grep reaches a slot-kind drift. **A future call needing a VARYING token in an option position is a design problem for that call** (re-shape it so git consumes the token positionally), not a licence for a fourth token kind. **That sentence in W1(c) must be rewritten in the same pass** — it is a registered mirror of this rule (checklist entry 1 under C1) and leaving it standing beside the new one is the intra-cell failure this WP's notes name as its likeliest way to ship broken. **No third placeholder kind is introduced and no matching rule changes** — `shapeMatches` already compares non-placeholder tokens by equality, so this is a slot-kind change inside the existing grammar. **SPELLED LITERALLY, NOT IMPORTED FROM `WARNINGS_REL`:** an interpolated constant makes the pin follow production silently, which is precisely the widening default-deny exists to prevent; spelled literally, relocating the warnings file reddens the guard and forces the owner-visible W1(c) amendment W1(c) requires. **The two forms are indistinguishable at run time, so this choice is provable only by the SOURCE-FORM check** (criterion 1) — without it the interpolation ships green and the relocation tripwire silently does not exist. **The `«own …»`/OWN-VALUE rule is untouched and still reaches only shapes (1), (3), (6), (8), (9)** — W1(c) is right that no observation pins this token; what changes is the conclusion drawn from that, not the rule |
 | C2 | **The own-value set's membership invariant, restated so every member satisfies it** | A value joins the own-value set only if it is **an object name git itself emitted as the whole stdout of one of this run's pinned PRODUCING shapes** — never bytes read back out of a file in the user's vault, and never a composite line carrying user-supplied data. **All four members satisfy this**, `head` included: `rev-parse HEAD` returns git's own name for the user's current commit, not content from a file the user authored. **The two shapes excluded keep their exclusion and now have a stated reason each:** shape (4) `show HEAD:<path>` returns FILE CONTENT out of the user's vault history (the measured reason `b19121bb` narrowed the set), and shape (1) `ls-tree` returns a composite line embedding a user-controlled path. **The word MINTED is retired** — it is the sentence `head` falsifies. **This is a restatement, not a reclassification:** dropping `rev-parse HEAD` from the producing set was weighed and rejected below, because `head` feeds three own-value slots (`read-tree` `:234`, `ls-tree` `:238`, `commit-tree -p` `:261`) and its removal would redden every legitimate run |
 | C3 | **The count of own-value sources is FOUR, and the prose surfaces stop carrying the count** | The code admits four (`produces: true` at `tests/unit/dream-pipeline.test.js:192, :195, :197, :198-199`), which is exactly the `(2), (5), (7), (8)` remedy W1(c) itself specified. **W1(c)'s residual clause becomes a CLOSURE record** — the remedy it deferred to the owner shipped at `b19121bb` — recorded WITH its cause, per Table W's own retirement discipline, never silently deleted. **The logbook paragraph becomes SHA-pinned and past-tense**, which restores it to the record exemption the Done spec's Mirrored Surface Checklist grants (`:665-666`, exemption (iii): *"a record loses the exemption the moment it drops its pin or its past tense"*), and it points at W1(c) instead of predicting it. **Neither prose surface may state a bare count again**: the count is a number beside a list, and the surface that owns it is the `produces` markers |
 
@@ -330,11 +333,12 @@ is unfinished work.
 
 **C1 — the `show` slot's kind:**
 
-- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — **W1(c)'s FREE-slot RULE sentence** (*"A slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE …"*). **This is the entry that decides the others**: C1 replaces its two-way partition with C1's three clauses, verbatim in substance — computed → `own`; carried in an option position → fixed literal; every other carried slot → FREE. No presence-grep reaches it; the sweep pattern `merely carries` exists for this sentence alone
-- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:368-372` — *"Slots holding data the run did not compute — modes, paths, messages — stay `ANY`."* **Present tense, and C1 makes it false for a fixed carried token in an option position.** It sits beside that entry's own deference sentence (*"each slot's kind is Table W row W1(c)'s and this entry does not spell it"*), which the "stay `ANY`" clause violates by spelling. **Both are fixed together:** the passage becomes SHA-scoped past tense (what the rule reached at `5c5d082`) and DROPS the slot-kind spelling, so the deference sentence becomes true and exemption (iii) is restored. The sweep pattern `` stay `ANY` `` exists for this sentence alone
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — **W1(c)'s FREE-slot RULE sentence** (*"A slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE …"*). **This is the entry that decides the others**: C1 replaces its two-way partition with C1's three clauses, in the SAME words the C1 cell uses — a slot carrying an own-value-set member (C2's predicate) → `own`; of the rest, one in a position git parses for options → fixed literal; every other remaining slot → FREE. **The shorthand "computed → own" may NOT be carried into W1(c)** — it overlaps "carried" for two existing slots (C1's adjudication), which is how this rewrite would have re-introduced the ambiguity it exists to remove. No presence-grep reaches this sentence; the sweep pattern `merely carries` exists for it alone
+- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:368-372` — *"Slots holding data the run did not compute — modes, paths, messages — stay `ANY`."* **Present tense, and C1 makes it false for a fixed carried token in an option position.** It sits beside that entry's own deference sentence (*"each slot's kind is Table W row W1(c)'s and this entry does not spell it"*), which the "stay `ANY`" clause violates by spelling. **Both are fixed together:** the passage becomes SHA-scoped past tense (what the rule reached at **`c853245b`**) and DROPS the slot-kind spelling, so the deference sentence becomes true and exemption (iii) is restored. The sweep pattern `` stay `ANY` `` exists for this sentence alone. **THE PIN IS `c853245b`, NOT THE `5c5d082` THIS SPEC CARRIED UNTIL ROUND 2:** that SHA does not resolve in this repository (`git cat-file -t 5c5d082` → `fatal: Not a valid object name`), almost certainly a fork-port history rewrite, and a pin that does not resolve cannot ground the record exemption it exists to earn. `c853245b` was verified by CONTENT, not by name alone — *"test(dream): pin the object-name slots to values the run itself computed"*, and its diff is the commit that introduces `RUN_VALUE` and the five own-value slots this passage describes
 - [ ] `tests/unit/dream-pipeline.test.js:194` — `KNOWN_CALLS` shape (4), the executable copy
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s pinned-set enumeration, item **(4)** (`` `unset` — `show «HEAD:path»` (`:1004`) ``)
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"WHICH SLOTS TAKE THE PIN"* clause: the `` **`show «HEAD:path»` stays free …** `` sentence, which this WP makes false. Its "five shapes the rule reaches" sentence stays TRUE and must not be edited
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the **MEASURED IN BOTH DIRECTIONS** sentence, which follows the one above and carries the SAME dead SHA `5c5d082`. **In scope because it is inside row W1(c)** — verified by offset: the occurrence sits between that cell's clause-(c) and clause-(d) markers. Correct it to `c853245b`, retire-with-cause — the measurement it pins is real and stays; only its name was lost to the history rewrite
 - [ ] `tests/unit/dream-pipeline.test.js:1632-1658` — the non-vacuity canary block: gains the show canary (acceptance criterion 4)
 - [ ] Verification greps in `docs/specs/done/WP-dream-promote-in-workspace.md:1469-1518` — **swept, no hit**: none spells a shape, a slot kind or a count. Recorded so a later gate does not re-derive it
 
@@ -343,7 +347,7 @@ is unfinished work.
 - [ ] `tests/unit/dream-pipeline.test.js:168-186` — the `RUN_VALUE` JSDoc (*"values THIS RUN PRODUCED … the head from `rev-parse HEAD`"*)
 - [ ] `tests/unit/dream-pipeline.test.js:277-283` — the `produces` comment; the **MINTED** sentence is the false one
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause, same PRODUCED phrasing. **Registered and deliberately NOT moved, decided rather than left open.** Two reasons, and the second is the one that settles it: (a) C2 does not falsify it — *PRODUCED* is loose, not false, and the clause even enumerates the correct four sources, so it survives the restatement; (b) the surface that would carry C2's sharpened membership rule inside W1(c) is the **slot-side counterpart to `produces`**, which the canonical row does not have today and which is `WP-index-guard-residuals` item 2's deliverable. Sharpening this clause here would do half that package's work in a cell it then re-edits. **Hand-off, stated so the obligation is not dropped:** that package lands C2's sharpened wording in W1(c) when it gives `produces` its slot-side representation
-- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same PRODUCED phrasing. **Registered and deliberately NOT moved**: it sits in a dated narrative describing that day's ruling and does not carry the false MINTED claim. Recorded so review does not read the omission as a missed mirror
+- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same PRODUCED phrasing. **The PROSE is registered and deliberately NOT moved**: it sits in a dated narrative describing that day's ruling and does not carry the false MINTED claim. **ITS DEAD SHA IS A DIFFERENT MATTER AND DOES MOVE** — `:356` pins the ruling to `5c5d082`, which does not resolve; it is corrected to `c853245b` and nothing else in the paragraph changes (Deliverables edit (c)). *Round 2 assumed this occurrence fell inside a passage this WP already rewrites; it does not — `:356` is outside both `:368-372` and `:409-426`, which is why it needed its own line here.* A dead pin in a record is not a stylistic matter: exemption (iii) is granted to a SHA-PINNED record, and a pin that resolves to nothing is not one
 - [ ] `memory/lessons/inbox.md` (`WP-dream-promote-in-workspace:` bullet, *"An own-value set must hold what the run MINTED, never what it READ BACK"*) — **registered and deliberately NOT moved**: the lessons file is a record of what a round cost, not a contract mirror, and the lesson's direction (never admit read-back user content) is sound. Do not edit it
 
 **C3 — the source count:**
@@ -356,6 +360,9 @@ is unfinished work.
 
 **Surfaces this WP does NOT move, measured rather than assumed:**
 
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:545` — **THREE more dead `5c5d082` references, in row W5 (THE RETIREMENT REGISTER), and they are NOT fixed here.** Measured contexts: *"Both forms are measured RED at"*, *"ACCEPTED by the set of that date — see the … cells below"*, *"ONE CELL WAS ADDED AT"*. **Deliverables scopes this WP to row W1(c), and W5 is a different row**, so fixing them would breach the permission boundary this spec exists to define. **They go in the PR body under "Discovered issues", naming the correct SHA (`c853245b`) and this line, so the next package can take them** — CLAUDE.md's rule for exactly this case. The sweep pattern `5c5d082` surfaces them on every future run until someone does
+- [ ] `src/core/dream/warnings.js:63-66` — **KNOWN-FALSIFIED-BY-DESIGN, and dispositioned rather than left to be re-found.** Its JSDoc says `WARNINGS_REL` is *"the ONE place it is decided"* and that anything naming the path imports it rather than retyping it. **C1 deliberately retypes it in the guard, and the retyping IS the tripwire** — an importing pin would follow a relocation silently, which is the whole reason C1 rejects it. The JSDoc's claim narrows to PRODUCTION consumers; the guard is not one. **`src/` is frozen in this WP, so nothing is edited here**; the one-line JSDoc narrowing rides the queued architect follow-up batch. Owner ruling of 2026-09-01, following the mode-pin precedent of registering a known-stale comment rather than widening a package to chase it
+
 - [ ] `docs/adr/0012-dream-run-lifecycle.md:274-281` — states W1's substance (no index write) and explicitly defers the mechanism to Table W. A slot-kind change does not reach it
 - [ ] `docs/THREAT-MODEL.md`, `docs/adr/0010-vault-adoption-paths.md`, `tests/integration/dream.test.js`, `tests/integration/adopt-e2e.test.js` — registered Table W mirrors that carry no claim from any family above (sweep: zero hits)
 - [ ] `src/` — **nothing.** The production call at `src/cli/dream.js:1004` is already the pinned literal; this WP changes no behaviour
@@ -364,6 +371,16 @@ is unfinished work.
 
 ## Implementation notes & constraints
 
+- **The source-form proof is a SCRIPT because greps were tried twice and failed
+  twice — do not turn it back into greps** (ADR-0031's two-round rule, applied
+  to a proof rather than a contract). Round 1 shipped no discriminator at all;
+  round 2's three greps had two independent defects, both measured: `grep -c`
+  **exits 1 on a zero count**, so the pasted pipeline read the COMPLIANT state
+  as failure and the violating state as success; and file-wide counts are
+  spoofable — a comment carrying the literal beside a multiline
+  `'HEAD:' + WARNINGS_REL` scored 1/0/0. A third patch was available; the
+  contract-extraction move is the script, which scopes itself to the
+  `KNOWN_CALLS` initializer, strips comments, and answers by exit code.
 - **The retired direction may not return.** Do not add a slot kind that
   inspects a token — a `NOT_OPTION` slot, a leading-dash check, a prefix rule
   or any grammar-aware tolerance. Rejected options below records why each is
@@ -420,15 +437,15 @@ is unfinished work.
 - [ ] 1. `KNOWN_CALLS` shape (4) is the fully literal
       `{ env: 'unset', args: ['show', 'HEAD:reports/warnings.md'] }`, with no
       placeholder symbol in it and no interpolation of `WARNINGS_REL`.
-      **Proved by the SOURCE-FORM check in Verification steps, whose output is
-      pasted — nothing else can prove it.** The interpolated form
-      `` ['show', `HEAD:${WARNINGS_REL}`] `` produces the SAME runtime token
-      today, so the whole RED/GREEN matrix, the index test and every sweep
-      pattern go green under it; `WARNINGS_REL` is already imported at
+      **Proved by the SOURCE-FORM SCRIPT in Verification steps — its EXIT CODE
+      is the verdict, and nothing else can prove this.** Any expression that
+      resolves to the same token (the interpolated form of `WARNINGS_REL`, or
+      `'HEAD:' + WARNINGS_REL` split across lines) produces an identical
+      runtime token, so the whole RED/GREEN matrix, the index test and every
+      sweep pattern go green under it; `WARNINGS_REL` is already imported at
       `tests/unit/dream-pipeline.test.js:30`, which puts that false green one
-      edit away. The source-form check is the only step that discriminates the
-      spelled literal from the rejected interpolation, and the relocation
-      tripwire that motivates C1's choice rests entirely on it.
+      edit away. The relocation tripwire that motivates C1's choice rests
+      entirely on this script.
 - [ ] 2. `classify(['show', '--output=<user index path>'], {})` returns
       `UNKNOWN SHAPE — not one of the run's pinned calls`, and
       `classify(['show', 'HEAD:reports/warnings.md'], {})` returns `null`.
@@ -446,19 +463,27 @@ is unfinished work.
       comments and C3 needs no code change at all, so a mutation there reddens
       nothing and any red produced for them would be synthetic. Their proof is
       criterion 6, criterion 7 and the whole-cell re-read, not a test run.
-- [ ] 5. **TWO applied mutations for C1, each with its diff shown before its
-      matrix is believed.** (a) the slot reverted to `ANY` — reddens the
+- [ ] 5. **THREE applied mutations for C1, each with its diff shown before its
+      outcome is believed.** (a) the slot reverted to `ANY` — reddens the
       runtime matrix (criterion 4); (b) the slot replaced by the interpolated
-      `` ['show', `HEAD:${WARNINGS_REL}`] `` — **the runtime suite stays GREEN
-      and the SOURCE-FORM check goes red**, which is the whole point of having
-      it. Paste both diffs beside both outcomes. A red whose reason is not the
+      form of `WARNINGS_REL`; (c) the slot replaced by the concatenation
+      `'HEAD:' + WARNINGS_REL` **split across two lines**. For (b) and (c) the
+      **runtime suite stays GREEN and the source-form script exits nonzero** —
+      that asymmetry is the whole point of having it, and (c) is required
+      because a comment carrying the literal beside a concatenated
+      implementation defeated the previous grep-based check (measured). Paste
+      all three diffs beside their outcomes. A red whose reason is not the
       cell's is not a measurement.
 - [ ] 6. The `RUN_VALUE` JSDoc and the `produces` comment state the C2
       invariant, all four members satisfy it as stated, and the word MINTED no
       longer appears in `tests/unit/dream-pipeline.test.js`.
 - [ ] 7. W1(c) and the logbook paragraph state C3, neither states a bare count
       of own-value sources, and W1(c) names `b19121bb` as the commit that
-      closed the residual.
+      closed the residual. **Every SHA this WP writes resolves** — the
+      `git cat-file -e` steps pass — and `5c5d082` no longer appears anywhere
+      this WP is permitted to edit. Its three surviving occurrences in row W5
+      are reported under "Discovered issues" in the PR body, with `c853245b`
+      named as the correct SHA, and are NOT fixed.
 - [ ] 8. The whitespace-flattened sweep of the claim families (Mirrored Surface
       Checklist) is re-run over the whole tree and every hit is either
       corrected text or one of the registered non-moves. Paste the sweep
@@ -481,13 +506,41 @@ npm test -- tests/unit/dream-pipeline.test.js
 npm test
 npm run lint
 
-# SOURCE FORM (criterion 1) — the ONLY step that tells the required spelled
-# literal from the rejected interpolation; they are identical at run time.
-# All three counts are LINE counts (`-c` without `-o` counts lines under every
-# grep, unlike the match-counting in the sweep below).
-grep -cF "args: ['show', 'HEAD:reports/warnings.md']" tests/unit/dream-pipeline.test.js  # must be 1
-grep -cF 'HEAD:${WARNINGS_REL}' tests/unit/dream-pipeline.test.js                        # must be 0
-grep -F "'show'," tests/unit/dream-pipeline.test.js | grep -cF 'WARNINGS_REL'            # must be 0
+# SOURCE FORM (criterion 1) — the ONE canonical proof that the slot is the
+# SPELLED literal and not an expression that resolves to the same token. It is
+# a script, not greps, and the reason is recorded rather than assumed: greps
+# were tried twice and failed twice (see Implementation notes).
+cat > /tmp/wd-show-slot-source-form.js <<'WDEOF'
+'use strict';
+const fs = require('node:fs');
+const FILE = process.argv[2] || 'tests/unit/dream-pipeline.test.js';
+const fail = (m) => { console.error(`SOURCE-FORM FAIL: ${m}`); process.exit(1); };
+const src = fs.readFileSync(FILE, 'utf8');
+const start = src.indexOf('const KNOWN_CALLS = [');
+if (start < 0) fail('the KNOWN_CALLS initializer was not found');
+const end = src.indexOf('\n];', start);
+if (end < 0) fail('the KNOWN_CALLS initializer is not terminated by "\\n];"');
+// Comments are stripped because a comment carrying the literal, beside a
+// concatenated implementation, satisfies any file-wide grep (measured). The
+// strip is sound HERE: this initializer holds only git argv literals, none
+// containing "//" or "/*". A future member that does needs this script
+// updated rather than trusted.
+const block = src.slice(start, end)
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/\/\/[^\n]*/g, ' ');
+const shows = block.match(/\[\s*'show'\s*,[^\]]*\]/g) || [];
+if (shows.length !== 1) fail(`expected exactly one 'show' shape in KNOWN_CALLS, found ${shows.length}`);
+const ok = /^\[\s*'show'\s*,\s*('HEAD:reports\/warnings\.md'|"HEAD:reports\/warnings\.md")\s*\]$/.test(shows[0]);
+if (!ok) fail(`the show slot is not the required string literal — found: ${shows[0].replace(/\s+/g, ' ')}`);
+console.log("SOURCE-FORM OK: exactly one show shape, slot is the literal 'HEAD:reports/warnings.md'");
+WDEOF
+node /tmp/wd-show-slot-source-form.js tests/unit/dream-pipeline.test.js
+echo "source-form exit=$?"   # must be 0, and the exit code is the verdict
+
+# The SHA pins this WP writes must resolve in this repository — a pin that does
+# not resolve cannot ground the record exemption it is there to earn.
+git cat-file -e c853245b^{commit} && echo "c853245b resolves"
+git cat-file -e b19121bb^{commit} && echo "b19121bb resolves"
 
 # The permission boundary. Run on the IMPLEMENTATION branch, whose diff is the
 # WP's own; on a spec-only branch it reports the spec-family files this WP does
@@ -511,7 +564,7 @@ node scripts/boundary-check.js docs/specs/WP-show-slot-own-value-kind.md \
 # add them to the glob to sweep them.)
 PATTERNS=('four sources' 'admits six' 'single-line output of' 'stays free' \
           'merely carries' 'stay `ANY`' "'show', ANY" 'show «HEAD' 'MINTED' \
-          'read back out of' 'values THIS RUN PRODUCED')
+          'read back out of' 'values THIS RUN PRODUCED' '5c5d082')
 for f in $(git ls-files '*.md' '*.js' | grep -v node_modules \
              | grep -v WP-show-slot-own-value-kind \
              | grep -v show-slot-design-gate-rounds); do
@@ -528,21 +581,30 @@ text or one of the registered non-moves below. Two patterns exist for one
 sentence each, because no presence-grep for a placeholder symbol reaches
 either: `merely carries` for W1(c)'s FREE-slot rule, and `` stay `ANY` `` for
 the logbook's contradicting slot-kind clause (checklist entries 1 and 2 under
-C1).
+C1). **`5c5d082` is a pattern for a DEAD SHA**: after this WP it must survive
+only in row W5, whose three occurrences are a registered Discovered issue this
+package may not touch — so that pattern is expected to keep reporting `:545`
+and nothing else. A hit anywhere else is unfinished work.
 
-**The source-form check was observed in all three states before being put here**
+**The source-form script was observed in SIX states before being put here**
 (`5d31a7dc`, on scratch copies of the test file), which is why criterion 1 can
-rest on it:
+rest on it. The verdict is the **exit code**, never a count a reader
+interprets:
 
-| state of shape (4) | count 1 | count 2 | count 3 | reads |
-|---|---|---|---|---|
-| absent — today's `['show', ANY]` | 0 | 0 | 0 | **RED** |
-| compliant — the spelled literal | **1** | 0 | 0 | **GREEN** |
-| violating — `` `HEAD:${WARNINGS_REL}` `` | 0 | **1** | **1** | **RED** |
+| state of shape (4) | exit | reads |
+|---|---|---|
+| absent — today's `['show', ANY]` | 1 | **RED** |
+| compliant — single-quoted literal | 0 | **GREEN** |
+| compliant — double-quoted literal | 0 | **GREEN** |
+| identifier interpolation — the template form | 1 | **RED** |
+| multiline concatenation — `'HEAD:' + WARNINGS_REL`, with a decoy comment carrying the literal | 1 | **RED** |
+| two `show` shapes in the initializer | 1 | **RED** |
 
-The absent state reads red rather than green because the discriminating check
-is a required POSITIVE count, not a negated grep — a `! grep` here would pass
-hardest exactly where the work was never done.
+The absent state reads red rather than green because the check is a required
+POSITIVE assertion, not a negated grep — a `! grep` here would pass hardest
+exactly where the work was never done. Both quote styles pass because the
+contract is *a string literal with that raw value*; rejecting double quotes
+would be a false red on a conforming implementation.
 
 **Do NOT verify with `--test-name-pattern`.** Measured on this tree at
 `5d31a7dc` (Node v25.9.0):
@@ -581,8 +643,10 @@ flag filters nothing here, so a green from it attributes nothing.
    one.
 2. Conventional commits; PR titled
    `test(dream): close the show option-position slot and re-sync the guard's mirrors (WP-show-slot-own-value-kind)`.
-3. PR template filled, including "Decisions made" (or "none") and
-   `Generated-by:`.
+3. PR template filled, including "Decisions made" (or "none"),
+   `Generated-by:`, and **"Discovered issues" naming row W5's three dead
+   `5c5d082` references** (criterion 7) — found by this package, out of its
+   boundary, and left for the next one.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
