@@ -1,0 +1,19 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship the spec yet: C1 creates an invariant its own scope immediately violates, and the mirror sweep misses a contradictory present-tense surface.
+
+Findings:
+- [medium] C1's three-way partition is immediately falsified by shape (9) (docs/specs/WP-show-slot-own-value-kind.md:319)
+  C1 states an exhaustive rule: every carried value fixed by the run becomes a literal. But the spec explicitly leaves shape (9)'s fixed `wienerdog dream` message as FREE because it is consumed by `-m` rather than parsed as an option (lines 520-524). Thus W1(c)'s amended canonical rule and `KNOWN_CALLS` would remain drifted on merge. This undermines the owner-visible slot taxonomy the WP claims to restore and makes future applications of the rule ambiguous.
+  Recommendation: Either narrow the amended rule explicitly to fixed carried values in option positions, or include shape (9)'s message conversion to a literal and update its mirrors/tests in this WP. Do not retain an exception that contradicts the canonical partition.
+- [medium] The fixed-literal sweep misses an already-contradictory slot-kind statement (docs/specs/WP-show-slot-own-value-kind.md:487-489)
+  The sweep has no pattern for `stay ANY` or equivalent wording. Consequently it does not identify `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:368-372`, which says modes, paths, and messages “stay ANY.” C1 makes that present-tense statement false for fixed carried values. The passage is SHA-pinned nearby, but it is not past tense; under W1(c)'s own record exemption, both pinning and past tense are required. An implementation can therefore satisfy criterion 8 while leaving a conflicting mechanism statement unregistered and unchanged.
+  Recommendation: Add a sweep pattern covering the `stay ANY` statement, register the surface under C1, expand the logbook deliverable accordingly, and either rewrite it as explicitly SHA-scoped past tense or update it to the new partition.
+
+Next steps:
+- Resolve C1's shape (9) contradiction before dispatch.
+- Extend the mirror checklist and sweep to cover the missed logbook statement.
+
