@@ -1,7 +1,7 @@
 ---
 id: WP-show-slot-own-value-kind
 title: Close the show option-position slot and re-sync the guard's drifted mirrors
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -11,54 +11,469 @@ epic: dream-promotion
 
 # WP-show-slot-own-value-kind: Close the show option-position slot and re-sync the guard's drifted mirrors
 
-> **Draft stub from the 2026-08-31 handover.** Context, traps and
-> done-definition are harvested from the closing review rounds of
-> `WP-dream-promote-in-workspace` (Done). Mature to Ready via wd-architect
-> before implementing. All figures below were measured at family close;
-> re-measure on the current tree before relying on them.
+## Dispatch precondition
+
+**ONE OWNER RULING, and it blocks dispatch.** The pinned call set is DECIDED in
+row W1(c) of `docs/specs/done/WP-dream-promote-in-workspace.md` (Done), which
+states that *"a shape added to the code copy without the row is exactly the
+silent widening default-deny exists to prevent"* and that a change to the set is
+owner-visible. This WP changes one slot's KIND — the drift form W1(c)'s own
+Mirrored Surface Checklist was registered to catch — and it does so by amending
+a table that lives in `done/`. The owner rules two things together:
+
+1. **The slot-kind change** — shape (4)'s argument moves from FREE to a
+   LITERAL (Change table, row C1; rationale and rejected alternatives below).
+2. **The home of the amendment** — W1(c) inside the Done spec is amended in
+   place, rather than Table W being re-extracted into a live spec. Precedent
+   for amending a `done/` spec to keep a registered pair in sync:
+   `d5f31149` (*"docs(specs): register the warningsPointerStatus JSDoc as a
+   mirror"*).
+
+Until both are ruled, this spec stays undispatched. Nothing else here is open.
 
 ## Context (read this, nothing else)
 
-The dream run's git invocations are guarded by default-deny shape pinning
-(Table W in `docs/specs/done/WP-dream-promote-in-workspace.md`): every call
-must match one of the run's own pinned shapes; unknown shapes are violations.
-Both final review gates independently found the same residual and classified
-it RIDES (not producible today): the `['show', ANY]` shape accepts ANY in an
-option position, and `show --output=<user index path>` matches it while
-corrupting the user's index (measured: "bad signature" — worse than the
-retired read-tree gap, which only emptied it). It is not producible because
-the run's single `show` carries the hardwired `WARNINGS_REL` constant.
+Wienerdog's nightly **dream** run reads session transcripts, has a model write
+notes into a private **workspace**, promotes the admissible ones, and publishes
+them as ONE commit in the user's vault git repository. **IRON RULE (ADR-0004):
+Wienerdog is just files** — nothing this WP touches may start a process that
+outlives its job. This WP starts nothing: it changes one test file and two
+documentation surfaces, and no `src/` file at all.
 
-Two adjacent items belong in the same pass (both gates recommended closing
-them together):
+**The contract this WP serves.** A dream run must never write the user's git
+index. The run therefore builds its commit in a PRIVATE index
+(`GIT_INDEX_FILE`, `src/cli/dream.js:230`) and publishes with `commit-tree` +
+`update-ref`, never touching the user's own staging area. That claim is
+enforced by **default-deny shape pinning**: a test substitutes the run's single
+git seam and checks every invocation against `KNOWN_CALLS`, the run's own nine
+pinned shapes. **An unknown shape is a violation.** The direction is
+deliberate and was ruled by the owner on 2026-08-31: *enumerating the BAD is
+unclosable because git's grammar is not ours; enumerating our OWN GOOD is
+closable because the run's call set is ours.* Two measured refutations retired
+the other direction (a verb allowlist that `git --attr-source log update-index
+--chmod=+x f` walked straight through, and a configuration-derived target probe
+that `read-tree --index-output=<user index>` walked straight through).
 
-- The **RUN_VALUE contradiction**: the JSDoc classes `head` (from
-  `rev-parse HEAD`) among "values THIS RUN PRODUCED", while the pinning
-  comment says the set never holds what was READ BACK from the user —
-  `rev-parse HEAD` reads the user's ref. Harmless today (40-hex cannot be an
-  option) but the stated invariant is falsified by one of its own members.
-- The **six-vs-four mirror drift**: a registered mirror still says the guard
-  admits "six sources" where the code admits four — a docs commit landed
-  after the fix it describes and recorded the pre-fix state.
+**Matching is strict shape-equality and nothing else**: same argument count,
+every literal equal in position, and a placeholder admits one token. There are
+two placeholder kinds today — a **FREE** slot (`ANY` in code) admitting one
+token *without inspecting it*, and an **OWN-VALUE** slot (`RUN_VALUE` in code)
+admitting one token only if it is a string this run was observed to produce.
+Neither inspects the token. **Token classification is the retired direction and
+may not return under a new name.**
 
-## What done means
+**The three defects this WP closes.** All three are drift between what the
+guard's canonical row decides and what the tree does, and each was found by a
+review gate at the close of `WP-dream-promote-in-workspace`:
 
-1. The `['show', ANY]` option-position gap is closed by a spec decision:
-   either a third slot kind or a pin-rule change. Note the trap: W1(c)
-   exempts this slot BY NAME because its value is a built string, not a
-   read-back — the existing RUN_VALUE pattern does not apply unmodified.
-2. The RUN_VALUE invariant is restated so all its members satisfy it (or the
-   member is reclassified), and the canonical row + JSDoc + test comments
-   agree.
-3. The six-vs-four mirror matches the code, and whichever copy moves, the
-   other moves in the same commit (registered-mirror rule).
-4. Every fix carries its own applied-and-verified mutation (RED proof); a
-   canary must match the exploit's ARITY (a three-token canary against a
-   two-token gap proves nothing — measured lesson).
+1. **The `show` slot is FREE in an OPTION POSITION.** `['show', ANY]` accepts
+   any single token, and `git show --output=<user index path>` is a single
+   token that corrupts the user's index. Not producible today — the run's only
+   `show` carries a hardwired constant — but the guard exists to catch the edit
+   that would make it producible.
+2. **The own-value set's stated invariant is falsified by one of its own
+   members.** The code says the set holds what the run *MINTED, never what it
+   READ BACK from the user* — and `rev-parse HEAD` reads back the user's ref.
+3. **A registered mirror pair drifted on the day it was registered.** Two prose
+   surfaces still say the guard admits **six** own-value sources; the code
+   admits **four**. The code fix landed first and the prose that describes it
+   landed after, recording the pre-fix state.
 
-## Watch out
+## Current state
 
-- Strict shape-equality is the ruled matching discipline; do not reintroduce
-  token classification (that direction was retired by measurement).
-- The guard's non-vacuity probe must notice its own death (a dead probe once
-  passed 3/0).
+**Everything below was re-measured on `5d31a7dc` (main, 2026-09-01) with git
+2.39.5 (Apple Git-154) and Node v25.9.0. Every stub figure was checked; where
+the stub was incomplete it is corrected here.**
+
+**The guard.** `watchIndexWrites(vault)` in
+`tests/unit/dream-pipeline.test.js:230-292` returns
+`{ spawnGit, violations, seen, classify }`. `classify(args, env)` returns
+`null` for an admitted call and a reason string otherwise; the unknown-shape
+reason is the literal `UNKNOWN SHAPE — not one of the run's pinned calls`
+(`:258`). The matcher is `shapeMatches` (`:208-213`): length equality, then
+per-position `ANY ? true : RUN_VALUE ? computed.has(token) : literal ===`.
+`ANY` is defined at `:167`, `RUN_VALUE` at `:187`, `KNOWN_CALLS` at
+`:190-201`. The guard runs inside one test, parameterized over three vault
+layouts: `dream-pipeline: the run does not touch the user's git index — at
+all, <plain|separate-git-dir|linked-worktree> vault (row G8)` (`:1551`).
+
+**Defect 1 — the `show` slot.** `tests/unit/dream-pipeline.test.js:194` reads
+exactly:
+
+```js
+  { env: 'unset',   args: ['show', ANY] },
+```
+
+The run's only `show` is `src/cli/dream.js:1004`:
+
+```js
+const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+```
+
+`WARNINGS_REL` is the module constant `'reports/warnings.md'`
+(`src/core/dream/warnings.js:72`); `src/cli/dream.js:1024` calls the file
+*"code-owned, layout-independent"*. So **the run's `show` argument is the fixed
+string `HEAD:reports/warnings.md` on every layout and every run**, and the FREE
+slot admits an infinity of tokens to pin one constant. The test already imports
+`WARNINGS_REL` (`tests/unit/dream-pipeline.test.js:30`) — for its content
+assertions, **not for the pin**, and the pin must not start using it (Change
+table row C1, and the rejected option that names it).
+
+**The exploit, re-measured today rather than inherited.** In a scratch repo:
+`git show --output=<repo>/.git/index` exits **0** and overwrites the index with
+the commit text. `git status` then fails with
+`error: bad signature 0x6d6d6f63` / `fatal: index file corrupt` — the repository
+is unusable to every index-reading command. The only recovery,
+`rm .git/index && git reset`, restores usability and **destroys the user's
+staged content**: measured, a path staged as `v2-staged` with `v3-worktree` in
+the working tree came back staged as HEAD's `v1`. This is the same data-loss
+class as the retired `read-tree --index-output` gap **plus** an unusable
+repository until the user finds the manual recovery. It is **two tokens**, so
+it matches `['show', ANY]` on arity, and it needs no `GIT_INDEX_FILE`, so it
+satisfies the `env: 'unset'` disposition. `classify(['show', '--output=…'], {})`
+returns `null` today.
+
+**Not producible today (RIDES).** No `src/` file can emit that call: the only
+`show` is `:1004` with its hardwired constant (`grep -rn "'show'" src/` finds
+`src/gws/calendar.js:161`, an unrelated CLI subcommand name, and `:1004`).
+The gap is a **pin** gap, not a live exploit: it is exactly the class the guard
+was built to catch on a *future* edit.
+
+**Defect 1's canonical prose.** W1(c) exempts the slot BY NAME, on the ground
+the stub reports (`docs/specs/done/WP-dream-promote-in-workspace.md:541`):
+
+> **`show «HEAD:path»` stays free although it reads like an object name:** that
+> token is a string this run BUILDS out of a path, never a value it read back
+> out of git, so no observation pins it. **The five shapes the rule reaches are
+> (1), (3), (6), (8) and (9)**, and their `own` slots are marked above.
+
+That sentence is **correct about the OWN-VALUE rule and wrong as a conclusion**:
+the own-value rule genuinely does not reach this slot (there is no observed
+value to compare against), but "therefore FREE" does not follow — a token the
+run BUILDS from a constant is pinnable as a LITERAL, which is the set's third
+and oldest token kind. The same row enumerates shape (4) as
+`` **(4)** `unset` — `show «HEAD:path»` (`:1004`) `` with no `«own …»` marker.
+
+**Defect 2 — the falsified invariant.** `tests/unit/dream-pipeline.test.js:179-181`
+(the `RUN_VALUE` JSDoc) classes `head` among the run's products:
+
+> It compares the token to values THIS RUN PRODUCED and the watcher watched it
+> produce — the head from `rev-parse HEAD`, blobs from `hash-object`, the tree
+> from `write-tree`, the commit from `commit-tree`.
+
+and `:282-283` states the exclusion rule:
+
+> The set must hold values the run MINTED, never values it READ BACK from the
+> user.
+
+`rev-parse HEAD` (`src/cli/dream.js:221`) reads back the user's ref, so **the
+MINTED sentence is falsified by the first member the PRODUCED sentence lists.**
+Harmless today (a 40-hex object id cannot be an option), but a stated invariant
+that one of its own members violates cannot be used to decide the next slot.
+**The drift is narrower than the stub's wording suggests, and this matters for
+the sweep:** three surfaces say *PRODUCED* (`tests/unit/dream-pipeline.test.js:179`,
+`docs/specs/done/WP-dream-promote-in-workspace.md:541`,
+`docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366`)
+and exactly one says *MINTED* (`tests/unit/dream-pipeline.test.js:282-283`). It
+is the MINTED sentence that is false; the PRODUCED sentences are merely too
+loose to decide anything.
+
+**Defect 3 — the six-vs-four drift. The stub says "a registered mirror"; there
+are TWO, and both are stale.**
+
+- `docs/specs/done/WP-dream-promote-in-workspace.md:541` (W1(c)'s residual
+  clause): *"the shipped set is WIDER than the four sources the ruling names …
+  The seam admits the single-line output of ANY pinned call it observed
+  succeed … a row that says four sources while the code admits six would put
+  this table back in the state it was extracted to end. **The remedy has a
+  shape** — admit to the own-value set only the output of the shapes whose
+  output IS an object name the run computed, which is (2), (5), (7) and (8) and
+  excludes (1) and (4) — **and it is a change to the executable copy, so it is
+  the owner's to schedule and not this recording pass's to make.**"*
+- `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:411-426`,
+  the same claim: *"a row claiming four sources while the code admits six is the
+  exact drift Table W was extracted to end."*
+
+**The code already shipped the remedy those clauses defer.**
+`tests/unit/dream-pipeline.test.js:284` learns only from shapes carrying
+`produces: true` — `hash-object` (`:192`), `rev-parse HEAD` (`:195`),
+`write-tree` (`:197`), `commit-tree` (`:198-199`): **four**, and exactly the
+`(2), (5), (7), (8)` the row names as the remedy. Provenance, measured:
+`b19121bb` (*"test(dream): the own-value set holds what the run MINTED, never
+what it read back"*) is an **ancestor** of `53b1519b` (*"docs(specs): record the
+own-value slot…"*), which wrote both stale prose surfaces. So the stub's
+diagnosis — *a docs commit landed after the fix it describes and recorded the
+pre-fix state* — is confirmed, for two mirrors rather than one.
+
+**Two things measured while writing this spec, both with a named consumer here.**
+
+- **`show` is the only FREE slot the set places in an option position** — the
+  claim that scopes this WP to one shape. Measured against the
+  `--index-output=`/`--output=` vector: shape (1)'s FREE slot sits after `--`
+  (a pathspec); shape (3)'s `«mode»` and `«path»` are consumed positionally by
+  `--cacheinfo`'s three-argument form, which rejects an option string as
+  `fatal: git update-index: --cacheinfo cannot add --index-output=…` (exit 128,
+  index untouched); shapes (8) and (9) place their FREE slot as `-m`'s value,
+  which git consumes verbatim (measured: `commit-tree … -m "--output=<index>"`
+  exits 0 and writes no index). **This is a measurement over enumerated vectors
+  and not a proof over git's grammar** — the same epistemic W1(c) already states
+  about the `read-tree` singularity. What decides is the RULE in Change table
+  row C1, not the vector list.
+- **`--test-name-pattern` does not filter this suite.** Measured:
+  `npm test -- tests/unit/dream-pipeline.test.js --test-name-pattern "zzz-nothing-matches-zzz"`
+  reports `tests 43 / pass 43 / skipped 0` in 15s — the same as the unfiltered
+  run. A green from that flag says nothing about which test ran, so it may not
+  be used as a verification step here (see Verification steps).
+
+## Deliverables (permission boundary — touch ONLY these)
+
+<!-- Always allowed without listing: this spec file itself (the status flip),
+     package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
+
+| Action | Path | Notes |
+|--------|------|-------|
+| modify | tests/unit/dream-pipeline.test.js | Change table rows C1 and C2, plus the arity-matched canary. Four sites and no others: `KNOWN_CALLS` shape (4) (`:194`); the `RUN_VALUE` JSDoc (`:168-186`); the `produces` comment (`:277-283`); the non-vacuity canary block inside the index test (`:1632-1658`). **C3 needs NO code change** — the code already admits four; its `:277` sentence is only re-read whole after the C2 rewrite. **No other shape, slot kind, literal or disposition changes** — `shapeMatches` (`:208-213`) and the nine-shape count stand |
+| modify | docs/specs/done/WP-dream-promote-in-workspace.md | **Row W1(c) ONLY** (all of Table W is on `:541`). Three clauses move, listed in the Mirrored Surface Checklist: the pinned-set enumeration of shape (4); the "stays free" ruling; the residual clause, which becomes a CLOSURE record naming `b19121bb`. **No other row, no other table, no frontmatter, no status field** |
+| modify | docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md | The `#### One residual, stated rather than closed` paragraph (`:409-426`) only: it becomes a SHA-pinned past-tense record plus a pointer to W1(c). Listed here for exactness although `docs/specs/logbook/` is always allowed |
+
+### Exact contracts
+
+After this WP, shape (4) of the pinned call set is a fully literal shape with
+no placeholder:
+
+```js
+  // The run's ONE `show`, and its argument is a CONSTANT the run builds:
+  // `HEAD:${WARNINGS_REL}` at `cli/dream.js:1004`, with WARNINGS_REL fixed at
+  // `core/dream/warnings.js:72`. Spelled literally rather than imported —
+  // see Change table row C1.
+  { env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },
+```
+
+Observable behaviour of the shipped `classify`, in the same live fixture the
+index test already builds:
+
+| call | env | required verdict |
+|---|---|---|
+| `['show', 'HEAD:reports/warnings.md']` | `{}` | `null` (admitted) |
+| `['show', '--output=<user index path>']` | `{}` | `UNKNOWN SHAPE — not one of the run's pinned calls` |
+| `['rev-parse', 'HEAD']` | `{}` | `null` (the accept side must stay alive) |
+
+## Contract reference
+
+The ADR-0031 trigger fires on (ii) a slot-kind taxonomy changes, (vi) two
+successor specs inherit the contract (`WP-index-guard-residuals`,
+`WP-dream-git-env-pinning`), and (vii) the contract is mirrored across
+surfaces — three of seven.
+
+**This table takes no family table-letter, deliberately.** W1(c) is and stays
+the canonical decision surface for the pinned call set, and it states that the
+set has **exactly two copies** — the row and `KNOWN_CALLS` — and that **no third
+copy may be written, in prose or in code**. A letter here would claim a standing
+table this package does not own and would owe an update to the LIVING letter map
+(`docs/specs/logbook/2026-08-29-promote-family-map.md`). What follows is a
+**change order**: it decides the three facts that MOVE and cites W1(c) for
+everything that does not. It never restates the nine shapes. On merge, W1(c)
+carries these three facts and this spec becomes their history.
+
+### The change table — the three facts this WP moves
+
+| # | Fact / rule | Value |
+|---|-------------|-------|
+| C1 | **A FREE slot that git parses as an OPTION POSITION is not a pin — and where the run's own token is a CONSTANT, the slot becomes a LITERAL rather than a new placeholder kind** | Shape (4)'s argument stops being FREE and becomes the literal `HEAD:reports/warnings.md`. **The rule that decides it:** a slot is FREE only when the run's value at that position genuinely varies; a position whose value the run fixes is a literal, which is the token kind the set already uses everywhere else (`-w`, `--stdin`, `HEAD`, `user.name=wienerdog`). **No third placeholder kind is introduced and no matching rule changes** — `shapeMatches` already compares non-placeholder tokens by equality, so this is a slot-kind change inside the existing grammar. **SPELLED LITERALLY, NOT IMPORTED FROM `WARNINGS_REL`:** an interpolated constant makes the pin follow production silently, which is precisely the widening default-deny exists to prevent; spelled literally, relocating the warnings file reddens the guard and forces the owner-visible W1(c) amendment W1(c) requires. **The `«own …»`/OWN-VALUE rule is untouched and still reaches only shapes (1), (3), (6), (8), (9)** — W1(c) is right that no observation pins this token; what changes is the conclusion drawn from that, not the rule |
+| C2 | **The own-value set's membership invariant, restated so every member satisfies it** | A value joins the own-value set only if it is **an object name git itself emitted as the whole stdout of one of this run's pinned PRODUCING shapes** — never bytes read back out of a file in the user's vault, and never a composite line carrying user-supplied data. **All four members satisfy this**, `head` included: `rev-parse HEAD` returns git's own name for the user's current commit, not content from a file the user authored. **The two shapes excluded keep their exclusion and now have a stated reason each:** shape (4) `show HEAD:<path>` returns FILE CONTENT out of the user's vault history (the measured reason `b19121bb` narrowed the set), and shape (1) `ls-tree` returns a composite line embedding a user-controlled path. **The word MINTED is retired** — it is the sentence `head` falsifies. **This is a restatement, not a reclassification:** dropping `rev-parse HEAD` from the producing set was weighed and rejected below, because `head` feeds three own-value slots (`read-tree` `:234`, `ls-tree` `:238`, `commit-tree -p` `:261`) and its removal would redden every legitimate run |
+| C3 | **The count of own-value sources is FOUR, and the prose surfaces stop carrying the count** | The code admits four (`produces: true` at `tests/unit/dream-pipeline.test.js:192, :195, :197, :198-199`), which is exactly the `(2), (5), (7), (8)` remedy W1(c) itself specified. **W1(c)'s residual clause becomes a CLOSURE record** — the remedy it deferred to the owner shipped at `b19121bb` — recorded WITH its cause, per Table W's own retirement discipline, never silently deleted. **The logbook paragraph becomes SHA-pinned and past-tense**, which restores it to the record exemption W1(c) grants (*"a record loses the exemption the moment it drops its pin or its past tense"*), and it points at W1(c) instead of predicting it. **Neither prose surface may state a bare count again**: the count is a number beside a list, and the surface that owns it is the `produces` markers |
+
+### Mirrored Surface Checklist
+
+Every surface below was found by the whitespace-flattened claim sweep in
+Verification steps — that command owns the pattern; this section does not
+restate it — run over `git ls-files '*.md' '*.js'` at `5d31a7dc`. Re-run it
+after editing; a hit that is neither corrected text nor a named non-move below
+is unfinished work.
+
+**C1 — the `show` slot's kind:**
+
+- [ ] `tests/unit/dream-pipeline.test.js:194` — `KNOWN_CALLS` shape (4), the executable copy
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s pinned-set enumeration, item **(4)** (`` `unset` — `show «HEAD:path»` (`:1004`) ``)
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"WHICH SLOTS TAKE THE PIN"* clause: the `` **`show «HEAD:path»` stays free …** `` sentence, which this WP makes false. Its "five shapes the rule reaches" sentence stays TRUE and must not be edited
+- [ ] `tests/unit/dream-pipeline.test.js:1632-1658` — the non-vacuity canary block: gains the show canary (acceptance criterion 4)
+- [ ] Verification greps in `docs/specs/done/WP-dream-promote-in-workspace.md:1469-1518` — **swept, no hit**: none spells a shape, a slot kind or a count. Recorded so a later gate does not re-derive it
+
+**C2 — the own-value membership invariant:**
+
+- [ ] `tests/unit/dream-pipeline.test.js:168-186` — the `RUN_VALUE` JSDoc (*"values THIS RUN PRODUCED … the head from `rev-parse HEAD`"*)
+- [ ] `tests/unit/dream-pipeline.test.js:277-283` — the `produces` comment; the **MINTED** sentence is the false one
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause, same PRODUCED phrasing
+- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same PRODUCED phrasing. **Registered and deliberately NOT moved**: it sits in a dated narrative describing that day's ruling and does not carry the false MINTED claim. Recorded so review does not read the omission as a missed mirror
+- [ ] `memory/lessons/inbox.md` (`WP-dream-promote-in-workspace:` bullet, *"An own-value set must hold what the run MINTED, never what it READ BACK"*) — **registered and deliberately NOT moved**: the lessons file is a record of what a round cost, not a contract mirror, and the lesson's direction (never admit read-back user content) is sound. Do not edit it
+
+**C3 — the source count:**
+
+- [ ] `tests/unit/dream-pipeline.test.js:190-201` — the four `produces: true` markers, which own this fact
+- [ ] `tests/unit/dream-pipeline.test.js:277` — *"from the four shapes that produce an object name, and no others"*: **correct today**, re-read it whole after the C2 rewrite
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s residual clause. **STALE**
+- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:409-426` — **STALE**
+- [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:432-437` — the *"six `unset`-disposition shapes"* sentence. **Registered as a NON-hit**: it counts dispositions, not own-value sources, and is TRUE. Do not touch it; it is the near-miss a count-shaped sweep will surface
+
+**Surfaces this WP does NOT move, measured rather than assumed:**
+
+- [ ] `docs/adr/0012-dream-run-lifecycle.md:274-281` — states W1's substance (no index write) and explicitly defers the mechanism to Table W. A slot-kind change does not reach it
+- [ ] `docs/THREAT-MODEL.md`, `docs/adr/0010-vault-adoption-paths.md`, `tests/integration/dream.test.js`, `tests/integration/adopt-e2e.test.js` — registered Table W mirrors that carry no claim from any family above (sweep: zero hits)
+- [ ] `src/` — **nothing.** The production call at `src/cli/dream.js:1004` is already the pinned literal; this WP changes no behaviour
+- [ ] **This spec file** — it quotes the pre-change text on purpose, as a change order must, and those quotations stay true as history. Excluded from its own sweep for that reason and no other
+
+## Implementation notes & constraints
+
+- **The retired direction may not return.** Do not add a slot kind that
+  inspects a token — a `NOT_OPTION` slot, a leading-dash check, a prefix rule
+  or any grammar-aware tolerance. Rejected options below records why each is
+  refused; re-proposing one is a spec violation, not a design discussion.
+- **Nine shapes stay nine.** This WP changes one slot's kind. Any sentence
+  counting the shapes (W1's residual on hook-firing, W1(c)'s set preamble)
+  stays true and must not be edited.
+- **The guard must notice its own death.** The canary block asserts both
+  directions — a shape that must be REJECTED and a shape that must be ACCEPTED
+  — because a decision that rejects everything passes a reject-only probe. An
+  earlier form of this guard sat at 3 pass / 0 fail while enforcing nothing.
+- **After rewriting any canonical cell, re-read that cell WHOLE.** W1(c) is one
+  markdown table cell of roughly 41 KB on a single line (`:541`); no mirror
+  checklist can see inside it, and the failure mode is the new sentence landing
+  while the old one stays. This is the single most likely way this WP ships
+  broken.
+- **`docs/specs/done/` is not always-allowed** — `scripts/boundary-check.js`
+  admits only `package-lock.json`, `memory/lessons/inbox.md`,
+  `docs/specs/logbook/` and the spec itself without listing. The Done spec is
+  listed in Deliverables for that reason.
+- **No new logbook entry is required for this WP** (architect ruling): the
+  closure belongs in W1(c), where the residual was recorded, and the drift
+  lesson belongs in `memory/lessons/inbox.md` as a PR-body bullet per CLAUDE.md.
+  A new dated entry would create a fourth surface for a fact that now has one.
+- **Ambiguity → the simpler option, recorded under "Decisions made".** Do not
+  expand scope to resolve it.
+
+### Rejected options, recorded so they are not re-proposed
+
+| Option | Why rejected |
+|---|---|
+| **A third placeholder kind that rejects option-looking tokens** (`NOT_OPTION`, a leading-`-` check) | It classifies the token by lexical form, which is the direction two measured refutations retired. It is also unclosable in the same way: git's option grammar is not ours (`--output=<f>`, attached short forms, future spellings), so the check can always be one form short — and one form short HERE grants by omission at the exact layer that refuses to grant by omission |
+| **A pin-rule change making every FREE slot reject option-looking tokens** | Same classification defect, applied to four more slots that measurement shows do not need it (shape (1)'s slot is a pathspec after `--`; shape (3)'s are consumed positionally by `--cacheinfo`; shapes (8) and (9)'s are `-m`'s consumed value). It buys nothing and puts a fuzzy matcher in the one place the contract forbids one |
+| **Extending OWN-VALUE to the `show` slot** | W1(c) is right that the rule does not reach it: the token is BUILT by the run, never observed coming back from git, so there is no observation to compare against. Implementing it would mean seeding the `computed` set with strings the guard constructs — which is a literal pin wearing a placeholder's name, with an indirection added |
+| **Interpolating `WARNINGS_REL` into the pin** (`` `HEAD:${WARNINGS_REL}` ``) | The guard would follow production silently: relocating the warnings file would change the run's call set with no red and no W1(c) amendment — exactly the silent widening W1(c) names. The literal makes that change loud and owner-visible, which is the intended cost |
+| **Splitting shape (4) into two shapes** (one per legitimate argument) | There is only one legitimate argument. A second shape would be a shape the run cannot make, which default-deny exists to forbid |
+| **Reclassifying `head` out of the own-value set** (drop `produces` from `rev-parse HEAD`) — the alternative to C2's restatement | `head` feeds three own-value slots — `read-tree` (`src/cli/dream.js:234`), `ls-tree` (`:238`) and `commit-tree -p` (`:261`). With it absent from `computed`, every legitimate run fails those slots and the guard reddens on correct behaviour. The invariant is what was wrong, not the membership |
+| **Deleting the stale residual clause and the stale logbook paragraph** | Table W records every retirement WITH its cause so that none reads as a silent weakening. A closed residual becomes a closure record naming the commit that closed it; a stale narrative becomes a pinned past-tense one. Deletion loses the paid-for finding twice |
+| **Re-extracting Table W into a live spec instead of amending the Done one** | It would move a canonical table mid-stream, obsolete every registered citation of `WP-dream-promote-in-workspace`'s W-rows across ADR-0012, two integration tests and the logbook, and owe an update to the LIVING letter map — a far larger change than the three sentences at issue. Parked as the owner's second dispatch-precondition question rather than decided here |
+
+## Security checklist
+
+- [ ] N/A — this WP introduces no untrusted identifier flowing into a filesystem
+      path or a shell command; it changes a test-side guard and two prose
+      surfaces, and no `src/` file.
+- [ ] **The one security-relevant property**: the change may only NARROW what
+      the guard admits. After the change, every call the unmodified run makes
+      is still admitted (the accept side of criterion 4), and one call class
+      that was admitted is now rejected. No shape, disposition or slot may be
+      widened.
+
+## Acceptance criteria
+
+- [ ] 1. `KNOWN_CALLS` shape (4) is the fully literal
+      `{ env: 'unset', args: ['show', 'HEAD:reports/warnings.md'] }`, with no
+      placeholder symbol in it and no interpolation of `WARNINGS_REL`.
+- [ ] 2. `classify(['show', '--output=<user index path>'], {})` returns
+      `UNKNOWN SHAPE — not one of the run's pinned calls`, and
+      `classify(['show', 'HEAD:reports/warnings.md'], {})` returns `null`.
+- [ ] 3. The whole index test — all three vault layouts — is green, i.e. the
+      unmodified run's every call is still admitted and `violations` is empty.
+- [ ] 4. **Each of the three fixes carries its own observed RED against a
+      deliberately broken state, and the show proof's vector is TWO tokens.**
+      A canary that differs from its exploit in ARITY dies on length equality
+      before reaching the slot under test and certifies a rejection the set
+      never made — the measured lesson of the `read-tree` gap. Paste the RED
+      output for each of the three, not only the greens.
+- [ ] 5. **Prove the mutation was applied before believing its matrix** —
+      show the injected marker in the tree (e.g. `git diff` of the broken
+      state) beside the red it produced. A red whose reason is not the cell's
+      is not a measurement.
+- [ ] 6. The `RUN_VALUE` JSDoc and the `produces` comment state the C2
+      invariant, all four members satisfy it as stated, and the word MINTED no
+      longer appears in `tests/unit/dream-pipeline.test.js`.
+- [ ] 7. W1(c) and the logbook paragraph state C3, neither states a bare count
+      of own-value sources, and W1(c) names `b19121bb` as the commit that
+      closed the residual.
+- [ ] 8. The whitespace-flattened sweep of the claim families (Mirrored Surface
+      Checklist) is re-run over the whole tree and every hit is either
+      corrected text or one of the registered non-moves. Paste the sweep
+      output. This spec is excluded from its own sweep — it quotes the
+      pre-change text by construction (see the command's comment).
+- [ ] 9. `npm test` and `npm run lint` pass; `boundary-check` is clean.
+- [ ] 10. Idempotency: `N/A — this WP ships no command and writes nothing
+      outside the repository.`
+
+## Verification steps (run these; paste output in the PR)
+
+```bash
+# The guard's own file — 43 tests, ~15s. This is the discriminating run.
+npm test -- tests/unit/dream-pipeline.test.js
+
+# The whole suite and the lint pipeline.
+npm test
+npm run lint
+
+# The permission boundary.
+node scripts/boundary-check.js docs/specs/WP-show-slot-own-value-kind.md \
+  $(git diff --name-only main...HEAD)
+
+# The claim sweep (criterion 8) — whitespace-flattened, so a hard wrap
+# cannot hide a hit. Every hit must be corrected text or a registered non-move.
+# THIS SPEC IS EXCLUDED FROM ITS OWN SWEEP, deliberately: it is a change order,
+# so it QUOTES the pre-change text on purpose (`['show', ANY]`, MINTED, "four
+# sources"). Those quotations stay after the fix and would otherwise read as
+# twenty un-swept hits. Nothing else is excluded.
+for f in $(git ls-files '*.md' '*.js' | grep -v node_modules \
+             | grep -v WP-show-slot-own-value-kind); do
+  tr '\n' ' ' < "$f" | tr -s ' ' \
+    | grep -oE ".{80}(four sources|admits six|single-line output of (ANY|any)|stays free|'show', ANY|show «HEAD|MINTED|read back out of|values THIS RUN PRODUCED).{110}" \
+    | sed "s|^|$f :: |"
+done
+```
+
+**Do NOT verify with `--test-name-pattern`.** Measured on this tree at
+`5d31a7dc` (Node v25.9.0):
+`npm test -- tests/unit/dream-pipeline.test.js --test-name-pattern "zzz-nothing-matches-zzz"`
+reports `tests 43 / pass 43 / skipped 0` — identical to the unfiltered run. The
+flag filters nothing here, so a green from it attributes nothing.
+
+## Out of scope (do NOT do these)
+
+- **The three other index-guard residuals** — the relative `GIT_INDEX_FILE`
+  frame mismatch, the `produces` attribute having no slot-side counterpart in
+  the canonical row, and `src/cli/dream.js:156`'s over-claiming seam comment.
+  They are `WP-index-guard-residuals`, which **must land after this WP**: its
+  item 2 edits the same W1(c) cell this WP rewrites, and it rebases on the
+  corrected text. Its `depends_on` names this package.
+- **Tightening shape (9)'s `«msg»` slot to the literal `wienerdog dream`.**
+  Production passes a constant there (`src/cli/dream.js:263`), so a literal is
+  available — but the slot is `-m`'s consumed value, not an option position, so
+  it is optional hardening rather than a gap. Named here so review does not
+  file it as a missed mirror. If wanted, it is a separate S package.
+- **Any change to `src/`.** The production call is already the pinned literal.
+- **Any change to `shapeMatches`, the disposition clauses, the endpoint
+  diagnostic, the projection message, or the number of pinned shapes.**
+- **`WP-dream-git-env-pinning`** (the git-env product-hardening candidate) and
+  **`WP-criterion-red-harness`** (the general vacuity harness). This WP proves
+  its own three fixes by hand; it does not build a harness.
+
+## Definition of done
+
+1. All verification steps pass locally; output pasted into the PR body,
+   including the three REDs of criterion 4 and the sweep of criterion 8.
+2. Conventional commits; PR titled
+   `test(dream): close the show option-position slot and re-sync the guard's mirrors (WP-show-slot-own-value-kind)`.
+3. PR template filled, including "Decisions made" (or "none") and
+   `Generated-by:`.
+4. This spec's `status:` flipped to `In-Review` in the same PR.
+5. Both PR review gates have run on the diff and are clean or fully
+   dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
+   restated here. `In-Review` marks the START of review: this list is complete
+   only when review is.
