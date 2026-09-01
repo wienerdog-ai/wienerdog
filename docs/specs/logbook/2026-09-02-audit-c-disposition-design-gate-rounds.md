@@ -32,9 +32,21 @@ texts) — it blocks dispatch, not the loop.
 round's tip, fresh thread per round). Raw outputs committed BEFORE
 adjudication (`2026-09-02-audit-c-gate-raw-round<N>-<channel>.txt`).
 
-## Round zero (`39e52659`)
+## Round zero (`39e52659` → fixes in `5bdaf755`)
 
-Pending — template conformance by a clean-context executor; coherence pass re-running every executable claim.
+Template conformance (clean-context executor, sonnet): **CONFORMANT**.
+Coherence (second executor, sonnet): every citation, quoted fragment and count
+reproduced; V1–V5 green as stated and every RED variant observed; V6 red on the
+absent state; one stale range. **10 findings (4 B, 6 C), all FIX, applied in
+`5bdaf755`:** V6 had no RED variant (now six, observed) and no E1/E2 distinction
+(now a `RULING` switch); AC4's Table W row W1 and AC5's harness-refusal
+patterns were unchecked (added — AC5's check is asymmetric, since the logbook
+MUST carry the honesty paragraph); `isSafeRelativePath` is `:65-71`; AC6
+aligned with V6; a judgment sentence moved out of the report-only Current
+state into Table D; the "only tracking doc" universal gated by an exit-coded
+uniqueness grep; the C3 stub's ADR-0004 tag earned in its body; the N/A
+checkbox form restored. The architect's re-read caught a Deliverables cell
+that presumed ruling E1.
 
 ## Rounds
 
