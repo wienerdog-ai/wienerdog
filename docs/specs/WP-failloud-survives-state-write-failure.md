@@ -243,7 +243,10 @@ values, and `failLoud` derives everything from it internally.
 | Fact / rule | Value |
 |-------------|-------|
 | Closed set | those three values and nothing else. The caller passes only the discriminant |
-| Derived inside `failLoud` | the canonical reason wording, the email subject, and the append policy. Callers may pass the job-specific detail the reason interpolates, but **never** a subject and **never** a skip boolean — there is no caller-supplied way to suppress an append |
+| Derived inside `failLoud` | the email subject and the append policy. Callers may pass the job-specific detail the reason interpolates, but **never** a subject and **never** a skip boolean — there is no caller-supplied way to suppress an append |
+| **One source for each canonical string** (amended 2026-09-01) | Table B `:173` requires `runJob` to **throw** a `WienerdogError` carrying the site's distinct reason, and this table requires `failLoud` to persist and email that same wording. A reason derived *only* inside `failLoud` cannot reach the caller's throw, so the earlier "derived inside `failLoud`" phrasing made the two rows unsatisfiable together. The resolution: each outcome's reason and subject come from **one shared module-level template**, called by `runJob` for the throw and by `failLoud` for what it records. The template is the string's single source; neither caller nor callee may compose its own variant, and the verbatim-string assertions test the template's output on both paths |
+| **`failLoud` self-derives the reason for the non-default outcomes** | for `success-marker-refused` and `alert-cleanup-refused`, `failLoud` derives the reason it persists and emails **from the outcome**, via that template — it does **not** trust the `reason` argument it was handed. A stale or wrong caller string would otherwise misreport replay: measured on this branch, `failLoud(paths, name, 'x', { outcome: 'alert-cleanup-refused' })` skips the append and emails body `x`, so the operator is told nothing true about which state operation was refused. **The outcome decides the reason, the subject and the append policy — all three.** The `reason` parameter is honored **only** for `job-failure`, which keeps HEAD semantics for the three failure sites and the catch-up refusals |
+| **The outcome channel is separate from the forwarded `opts`** | the discriminant must **not** be inheritable from the generic `opts` object `runJob` forwards to its ordinary `failLoud` calls. Those sites pass their caller's `opts` straight through, so an `outcome` riding that object reaches them too — and `alert-cleanup-refused` sets the append-skip, which is precisely the "suppression capability any caller could aim at the primary reporting channel" this table's preamble exists to deny. Contract: the three failure sites (`:797`, `:872`, `:1096`) and the catch-up refusals pass **no** outcome, or explicitly force `job-failure`; **only** `:1060` and `:1061` carry one, and it cannot arrive from caller-supplied `opts`. **The observable is the contract, the mechanism is the implementer's:** an outcome injected into `runJob`'s `opts` leaves every ordinary failure path's reporting — append attempted, subject, reason, return value — unchanged |
 | Unknown value | **refuse the call loudly** — throw rather than fall back to any behavior. Silently degrading an unrecognized discriminant to `job-failure` would append through a refused artifact; silently degrading it to a skip would suppress the record. Neither is acceptable, so an unknown value is a programming error surfaced at once. Note this is the ONE place `failLoud` may throw; it is unreachable from the five sites, which pass literals |
 | Absent input | byte-identical to HEAD on every observable: the append is attempted, the subject is `` `job ${name} failed` ``, and the return is the existing `persisted` boolean |
 | Canonical strings | each of the three values has exactly one reason template and exactly one subject template, asserted verbatim by the tests. "Must say" prose is not a contract; the strings are |
@@ -281,6 +284,12 @@ values, and `failLoud` derives everything from it internally.
 - [ ] **Table E's enum** — its three values appear in the Deliverables row, the
       Exact contracts paragraph, the acceptance criteria and the Security
       checklist; adding or renaming a value moves all four
+- [ ] **The outcome→reason derivation (amended 2026-09-01)** — Table E's three
+      amended rows (one shared template; `failLoud` self-derives for the
+      non-default outcomes; the outcome channel is separate from the forwarded
+      `opts`) are mirrored by Table B `:173`'s throw requirement and by the
+      poison-reason / poison-outcome / one-template acceptance criteria. A change
+      to which side owns the string moves all of them together
 - [ ] **Reachability of every acceptance precondition** — B1 both-unwritable is
       reachable, B2 both-unwritable is not and is explicitly excluded; any new
       criterion must be walked against the call graph before it is added
@@ -393,6 +402,22 @@ values, and `failLoud` derives everything from it internally.
       their **exact canonical** reason and subject strings, asserted verbatim.
       `alert-cleanup-refused` skips the append and returns **`false`**. An
       unknown discriminant throws rather than degrading to either behavior.
+- [ ] **Poison reason:** calling `failLoud` with a wrong or stale `reason`
+      argument and a `success-marker-refused` or `alert-cleanup-refused` outcome
+      persists and emails the **canonical** string for that outcome — the
+      caller's string appears nowhere in the record or the email. For
+      `job-failure` the caller's `reason` is still used verbatim, as on HEAD.
+- [ ] **Poison outcome:** a `success-marker-refused` or `alert-cleanup-refused`
+      value injected into `runJob`'s caller-supplied `opts` leaves the ordinary
+      failure paths (`:797`, `:872`, `:1096`, and the catch-up refusals)
+      reporting exactly as they do without it — the append is still attempted,
+      the subject is still `` `job <name> failed` ``, the reason is still the
+      caller's original, and the return value is unchanged. In particular the
+      injected `alert-cleanup-refused` must **not** skip the append.
+- [ ] **One template, both paths:** for each success-path outcome, the reason
+      string `runJob` throws and the reason string `failLoud` persists are
+      produced by the same shared template and are byte-identical to each other
+      and to the canonical string the enum tests assert.
 - [ ] **`persisted` honors an explicit `false`:** when `appendAlert` returns
       exactly `false`, `failLoud` returns `false` and `:1106-1107` **retains**
       the reap token pidfiles. When `appendAlert` returns `undefined` — every
