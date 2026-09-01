@@ -1,0 +1,32 @@
+PLUGIN GATE ROUND 1 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a5 worktree), tip 8b0296d9, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No-ship: the design still permits false success before confinement and false PROVEN verdicts without behavioral mutation. EXECUTED: TAP dream suite command exited 1 in 0.25 s because the read-only environment denied temp-directory creation; it enumerated 44 top-level tests, so valid timing was unavailable. An unmatched test pattern exited 0 with an inner `1..0` and outer file-level pass. Both guarded greps produced absent/compliant/violating exits 1/0/1.
+
+Findings:
+- [high] Executable declarations can bypass vacuity and confinement (docs/specs/WP-criterion-red-harness.md:132-140)
+  Materiality A — declarations are executable CommonJS, while LOAD precedes SANDBOX. A `.proofs.js` containing `process.exit(0)` can terminate an in-process loader successfully before any declaration, proof, or mutation is counted; `fs.writeFileSync` can modify the checkout before confinement. “No dependencies” is not mechanically enforceable and does not prevent built-ins or top-level side effects. Thus a compliant implementation can violate V1–V4 and the no-working-tree-write promise.
+  Recommendation: Use an inert data format such as JSON and validate it without execution. If CommonJS remains, specify an isolated loader whose parent rejects premature exit, output, dynamic values, or side effects—but note that process isolation alone cannot enforce the filesystem boundary.
+- [high] A proof can mutate its own assertion and still report PROVEN (docs/specs/WP-criterion-red-harness.md:170-176)
+  Materiality A — `file` may be the suite itself, and `signal` is not required to be non-empty. A valid declaration can replace an assertion’s expected literal with a marker-bearing value, use `signal: ''`, observe the same named test fail, restore it, and satisfy every phase while production behavior never changes. A scoped syntax error can similarly qualify as a production-file proof without exercising intended behavior. This contradicts criterion 9’s claimed non-vacuity demonstration and Table C’s “ENFORCED once declared” reach claim.
+  Recommendation: Require every string, especially `signal`, to be non-empty; forbid a proof from altering its target test/assertion or manufacturing its signal; and require RED to reach the baseline-passed test body and fail at the intended behavioral assertion—not during parse, module load, setup, or hooks. Add the semantic-relevance limitation to the REACH footer.
+- [medium] TAP test identity is ambiguous for duplicates, skips, and hooks (docs/specs/WP-criterion-red-harness.md:175-190)
+  Materiality B — identity is only a full-name string and RED compares a set, with no uniqueness, cardinality, or terminal-status contract. With duplicate names, one instance may pass while another is skipped at baseline; one can then fail at RED and the name sets still match. Nested subtests and hook/file failures also introduce parent or file-level TAP nodes whose treatment is unspecified. The executed unmatched-pattern probe demonstrated this layering: inner `1..0`, but an outer file-level `ok` and exit 0.
+  Recommendation: Define stable hierarchical test identity and require exactly one baseline terminal PASS for every declared identity, with zero matching SKIP/TODO/CANCEL instances. Define nested-parent propagation and make any file-, parse-, load-, or hook-level failure an ERROR unless the contract explicitly supports it.
+- [medium] The sandbox write boundary is impossible for the adopted suite (docs/specs/WP-criterion-red-harness.md:183-190)
+  Materiality B — Table B promises that no path outside the copied repository sandbox is written, but the adopted suite creates scratch trees via `os.tmpdir()`; the wrapper redirects those writes to its outer run-scoped temp root, not into the repository copy. The suggested `node_modules` symlink also points outside the copy. Criterion 7’s `git status` comparison proves only that the checkout is unchanged, not the stated global write boundary. An implementation must therefore violate the literal contract or silently enforce a narrower one.
+  Recommendation: Define two explicit boundaries: runner-controlled mutation/restore writes are confined to the copied repository, while suite scratch writes are confined to the wrapper-owned temp root. Narrow criterion 7 and the security checklist accordingly, and state that external dependency links are resolution-only rather than covered by a universal no-write guarantee.
+- [medium] ADR-0042 derives causal attribution from import hygiene alone (docs/adr/0042-machine-run-red-proofs.md:67-76)
+  Materiality B — Decision 4 says that importing no production seam means any reported red “can only be the cell’s.” That removes one measured contamination source but does not exclude self-mutated assertions, syntax/load failures, TAP misattribution, or sandbox/infrastructure faults. This overstates the proposed durable decision and conflicts with Decision 5’s otherwise narrow reach posture.
+  Recommendation: Before signature, say that import hygiene removes the measured production-seam contamination class; causal attribution additionally depends on baseline/apply/RED/restore checks and reviewed mutation relevance, subject to the explicitly expanded standing limit.
+
+Next steps:
+- Revise Table A/B/C around inert declarations, meaningful behavioral failures, and unambiguous TAP identities.
+- Reframe SANDBOX as the copied-repository mutation boundary plus the wrapper-owned scratch boundary, then align criteria 7 and 8.
+- Add adversarial acceptance cases for `process.exit(0)`, top-level writes, empty signals, assertion-self-mutation, syntax errors, duplicate names, skips, TODOs, nested tests, and hook failures.
+- Revise the Proposed ADR before owner signature, then rerun the design gate.
+- SCOPE OBJECTIONS: none. CI enforcement and spec-template doctrine were treated as unsigned successor work and did not affect this verdict.
