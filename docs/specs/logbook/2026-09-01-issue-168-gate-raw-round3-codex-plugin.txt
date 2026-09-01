@@ -1,0 +1,25 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship the specifications yet: the new success-refusal contract can corrupt an external symlink target, cannot guarantee its promised durable record, and still labels completed work as failed by email.
+
+Findings:
+- [high] The clearAlerts refusal handler writes through the symlink it just refused (docs/specs/WP-failloud-survives-state-write-failure.md:153-158)
+  Table B requires a clearAlerts failure at :1061 to call failLoud. After the mode-pin WP, clearAlerts will refuse a symlinked alerts.jsonl via writeFilePrivate, but failLoud immediately calls the unchanged appendAlert, whose appendFileSync and chmodSync follow that same symlink. A leaf symlink passes mechanicsRootUntrusted. If its writable target contains valid surviving alert JSON, clearAlerts reaches the refusal and the recovery path then appends to and chmods a file outside the mechanics root. The routed residual discusses the absent-create window and compaction temp, but not this present-destination symlink write-through introduced by the five-site contract.
+  Recommendation: Do not route :1061 refusals through the current failLoud/appendAlert path. Make symlink-safe append persistence a prerequisite—including the non-throwing :840 guard—or specify a safe fallback channel that cannot follow alerts.jsonl.
+- [high] The success-path exact-one-record guarantee is impossible under shared storage failure (docs/specs/WP-failloud-survives-state-write-failure.md:149-157)
+  Table B applies whenever either success-path state call throws and unconditionally promises exactly one durable failLoud record. failLoud is explicitly best-effort and suppresses append failures. ENOSPC, EROFS, EDQUOT, or an unwritable state directory can therefore make :1060 or :1061 throw and also prevent alerts.jsonl from being written, yielding zero records. The spec contracts this case only for the three failure sites, leaving the success path with an unimplementable acceptance condition and potentially silent repeated non-idempotent work.
+  Recommendation: Add a both-writes-fail contract and tests for both success sites: exactly one failLoud attempt, zero records permitted, one non-alert diagnostic, and the distinct thrown reason preserved. If one durable record is mandatory, provide an independent persistence channel.
+- [medium] The distinct success-refusal taxonomy is contradicted by failLoud's fixed email subject (docs/specs/WP-failloud-survives-state-write-failure.md:154-156)
+  The contract requires the completed-work condition never to read as a job failure, yet mandates failLoud and forbids changing it. failLoud always sends the subject "job <name> failed". Thus a successful routine whose state persistence was refused will generate an explicitly false failure notification even if the alert reason is distinct.
+  Recommendation: Permit an outcome-specific notification subject, either through a failLoud option or a separate internal helper, and test both the durable reason and email subject for success-path refusals.
+
+Next steps:
+- Resolve the unsafe :1061-to-appendAlert interaction before dispatching either WP.
+- Mirror success-path both-write failures across Table B, acceptance criteria, security notes, and tests.
+- Make completed-work notification wording consistent on every user-visible channel.
+
+Codex session ID: 01a05a48-f546-7781-a673-fe44eaf3c3ec
+Resume in Codex: codex resume 01a05a48-f546-7781-a673-fe44eaf3c3ec
