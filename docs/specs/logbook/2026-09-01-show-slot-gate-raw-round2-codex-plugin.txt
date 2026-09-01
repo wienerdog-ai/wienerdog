@@ -1,0 +1,18 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP: R1-A is genuinely reconciled, but R1-B uses a nonexistent SHA and R1-C's source-form gate reports inverted shell status.
+
+Findings:
+- [high] The proposed historical pin does not resolve in the repository (docs/specs/WP-show-slot-own-value-kind.md:334)
+  R1-B prescribes rewriting the logbook as a past-tense record pinned to `5c5d082`, but this is not a commit in the complete, non-shallow repository (`git cat-file -t 5c5d082` exits 128). The actual own-value-slot implementation appears at `c853245b`. A nonexistent SHA cannot ground the record exemption, and the sweep does not search for it; four additional occurrences remain inside W1(c)'s single-line cell.
+  Recommendation: Verify the intended historical commit—apparently `c853245b`—and require a resolvable SHA in the logbook rewrite. Register and correct every invalid `5c5d082` reference in W1(c), and add a verification command such as `git cat-file -e <sha>^{commit}`.
+- [medium] The source-form commands do not implement their claimed RED/GREEN gate (docs/specs/WP-show-slot-own-value-kind.md:484-490)
+  The counts distinguish the three states only when manually interpreted. `grep -c` exits 1 for an expected zero: the compliant literal yields `1/0/0` but the final pipeline exits 1, while the forbidden interpolation yields `0/1/1` and the final pipeline exits 0. Therefore an automated or exit-status-based verification sees the required form as failure and the rejected form as success, contradicting criteria 1 and 5.
+  Recommendation: Convert all three counts into explicit assertions, handling zero-match grep status safely, or use one Node assertion script. Re-run both required applied mutations and demonstrate literal success and interpolation failure by exit code, not comments beside raw counts.
+
+Next steps:
+- Repair the SHA pin and source-form assertions, then rerun round 2 against the amended spec.
+
