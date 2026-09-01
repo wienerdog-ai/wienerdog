@@ -27,9 +27,11 @@ exploit needs a value only the user's own `config.yaml` can supply, and which
 
 **Declining is a flag flip, not a redesign — and only because Table E pre-writes
 both cell texts.** It changes one deliverable cell (`docs/HANDOVER.md`'s group C
-row: E2 instead of E1) and the criterion that greps it. Table D is unaffected —
-the three findings are mooted either way; only the closure waits on
-`WP-layout-dot-prefix-rejection`. **The dispatch message records the ruling.**
+row: E2 instead of E1) and the one variable that checks it — V6's `RULING`,
+which selects E1's or E2's fixed string and fails on the other. Table D is
+unaffected: the three findings are mooted either way, and only the closure waits
+on `WP-layout-dot-prefix-rejection`. **The dispatch message records the ruling,
+and V6's `RULING` must be set to it.**
 
 ## Context (read this, nothing else)
 
@@ -72,8 +74,12 @@ bug — say so in the PR and stop; do not adjust the table to match.
 **One honesty rule, inherited from the ruling and binding here.** The archive's
 harness-refusal measurement for `.git` writes was explicitly ruled
 **non-load-bearing** — it rests on unverified third-party behaviour this project
-neither owns nor tests. **No disposition in Table D cites it, and none may.**
-Every cell rests on a command in Verification steps, run on this tree.
+neither owns nor tests. **No disposition rests on it, and none may** — every
+Table D cell rests on a command in Verification steps, run on this tree.
+**Naming it as excluded is required, not forbidden**, and only in that form: the
+logbook must state this rule (V6 (b) fails if it does not), on lines that also
+carry the words `non-load-bearing`; the stub and `docs/HANDOVER.md` must not
+mention it at all.
 
 ## Current state
 
@@ -87,9 +93,8 @@ printed, and defers every judgment to that table.
   `06-Identity/agents.override.md`, `.claude/settings.json`, `.codex/x.md`,
   `.mcp.json`, `.gitignore`, `.git/config`, `.git/hooks/note.md`, and admits
   `06-Identity/notes.md` and `reports/dreams/2026-09-02.md`.
-  `src/core/dream/vault-write.js` owns **no policy** — it throws when `admit` is
-  absent (`:210-211`) and calls it on the **resolved** path (`:333`) — so `admit`
-  is the only gate on what reaches the vault.
+  `src/core/dream/vault-write.js` owns **no policy**: it throws when `admit` is
+  absent (`:210-211`) and calls it on the **resolved** path (`:333`).
 - `src/core/dream/validate.js` has **no `git add` and no `git commit`**; its
   remaining `git(vaultDir, …)` sites are `rev-parse --git-dir`, `status
   --porcelain -uall`, `reset --hard HEAD` and `clean -fd`. Of those,
@@ -106,17 +111,18 @@ printed, and defers every judgment to that table.
 - `src/core/dream/delta.js` — the classifier — requires only `node:fs`,
   `node:path` and `../errors`. **No route to a process spawner**, so
   classification never consults git.
-- `src/core/layout.js`'s `isSafeRelativePath` (`:63-69`) rejects empty, absolute,
+- `src/core/layout.js`'s `isSafeRelativePath` (`:65-71`) rejects empty, absolute,
   backslashed and `..` values. **It does not reject a dot-prefixed value.**
   Probed: a `config.yaml` carrying `projects_dir: .git` is returned unchanged by
   `readVaultLayout`, and `makeAdmit` on that layout **admits
   `.git/hooks/note.md`**. `promote.js` states the deferral in place:
   *"Deliberately NOT a dot-rule: audit finding C3 owns the layout dot-rule and
   its notice."*
-- `docs/HANDOVER.md` is the **only** file under `docs/` carrying the audit status
-  table; no successor tracking doc exists. Its group C row today reads
-  *"Structurally closed by the promote-in family … Remaining: formal C2/C3
-  disposition — see `WP-audit-c-close-disposition`"*.
+- `grep -rl '^| C | Dream write fence' docs --include='*.md'` returns **exactly
+  one** file, `docs/HANDOVER.md` — the check V6 re-runs, and the only sense in
+  which "no successor tracking doc exists" is asserted anywhere here. Its group C
+  row today reads *"Structurally closed by the promote-in family … Remaining:
+  formal C2/C3 disposition — see `WP-audit-c-close-disposition`"*.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -124,7 +130,7 @@ printed, and defers every judgment to that table.
 |--------|------|-------|
 | create | docs/specs/logbook/2026-09-02-audit-group-c-disposition.md | the disposition record; frontmatter `date:`, `title:`, `related_wps: [WP-audit-c-close-disposition, WP-layout-dot-prefix-rejection]`. If the implementation day differs, use that day's date in the filename — `docs/specs/logbook/` is boundary-free either way, and the verification resolves the file by glob |
 | create | docs/specs/WP-layout-dot-prefix-rejection.md | the Draft stub for C3, the one **open** finding (Table D row D5) |
-| modify | docs/HANDOVER.md | **the group C row's Status cell only** — Table E's ratified text. No other cell, no other line |
+| modify | docs/HANDOVER.md | **the group C row's Status cell only** — Table E's text for the ruling the dispatch recorded (E1 ratified, E2 declined). No other cell, no other line |
 
 ### Exact contracts
 
@@ -157,7 +163,7 @@ epic: audit-close
 
 Its body states, each with the fact inlined rather than referenced:
 
-1. **The mechanism, measured.** `isSafeRelativePath` (`src/core/layout.js:63-69`)
+1. **The mechanism, measured.** `isSafeRelativePath` (`src/core/layout.js:65-71`)
    rejects empty, absolute, backslashed and `..` values but not a dot-prefixed
    one; `readVaultLayout` therefore returns `projects_dir: .git` unchanged, and
    `makeAdmit` on that layout admits `.git/hooks/note.md`. Reproduce with V5, not
@@ -168,9 +174,13 @@ Its body states, each with the fact inlined rather than referenced:
    built-in default is **silent** by the existing contract; a dot rejection
    inherits that silence. Whether to notify is that WP's decision to take
    deliberately, not to absorb by accident.
-4. **The threat model, at its real size.** `config.yaml` lives in the Wienerdog
-   core directory (`src/core/paths.js:67`), outside the vault, and is not
-   promotable (no `.md`, no tier directory). The value is the user's own, so this
+4. **The threat model, at its real size — and ADR-0004 is what bounds it, which
+   is why the stub carries that tag.** `config.yaml` lives in the Wienerdog core
+   directory (`src/core/paths.js:67`), outside the vault, and is not promotable
+   (no `.md`, no tier directory). The value is the user's own. **Wienerdog is
+   just files**: nothing resident re-reads that config, so a bad value is read
+   by one CLI run that then exits — the exposure is a run, not a residency, and
+   the fix is a validation condition rather than anything that watches. So this
    is defence in depth against a misconfigured or tampered config, not a live
    brain-reachable path. **Sizing it honestly is why C3 did not hold group C
    open.**
@@ -197,7 +207,7 @@ in its last column, and of nothing else.
 
 | # | Finding | Mechanism, as ruled 2026-08-05 | Measured on `49d3d467` | Disposition | Where protection lives now / who owns the residual | Step |
 |---|---------|--------------------------------|------------------------|-------------|---------------------------------------------------|------|
-| D1 | **M7** — harness-instruction persistence | the brain writes a vault-root `CLAUDE.md`/`AGENTS.md`; `isTier3` misses it; it is kept and committed | the brain never writes the vault. `makeAdmit` refuses `CLAUDE.md`, `AGENTS.md`, `06-Identity/CLAUDE.md`, `06-Identity/agents.override.md`, `.claude/settings.json`, `.codex/x.md` and `.mcp.json`; `vault-write.js` throws without an `admit` and applies it to the **resolved** path | **MOOTED** | **Retired by the promote-in inversion.** Protection is `src/core/dream/promote.js`'s row C9 positive allowlist (`makeAdmit`): admission needs a writable tier directory **and** an `.md` extension, so a vault-root instruction file is outside it without anyone enumerating it. **Named residual, accepted at ruling time and carried in the code** — the `promote.js` comment beginning *"This is a deny-list, and it is stated as one that will NOT cover the next convention"*, cited by literal because line ranges rot: the instruction-basename deny-list will not cover a future tool's convention *inside* a tier directory | V1 |
+| D1 | **M7** — harness-instruction persistence | the brain writes a vault-root `CLAUDE.md`/`AGENTS.md`; `isTier3` misses it; it is kept and committed | the brain never writes the vault. `makeAdmit` refuses `CLAUDE.md`, `AGENTS.md`, `06-Identity/CLAUDE.md`, `06-Identity/agents.override.md`, `.claude/settings.json`, `.codex/x.md` and `.mcp.json`; `vault-write.js` throws without an `admit` and applies it to the **resolved** path | **MOOTED** | **Retired by the promote-in inversion.** Protection is `src/core/dream/promote.js`'s row C9 positive allowlist (`makeAdmit`): admission needs a writable tier directory **and** an `.md` extension, so a vault-root instruction file is outside it without anyone enumerating it. **`admit` is the only gate on what reaches the vault** — the primitive owns no policy of its own (measured cell), so nothing bypasses row C9. **Named residual, accepted at ruling time and carried in the code** — the `promote.js` comment beginning *"This is a deny-list, and it is stated as one that will NOT cover the next convention"*, cited by literal because line ranges rot: the instruction-basename deny-list will not cover a future tool's convention *inside* a tier directory | V1 |
 | D2 | **M9** — git control state inside the write fence | the validator runs `git add`/`git commit` in the vault repo, parent privileges, unfiltered env, no `--no-verify`, no neutral hooks path | `validate.js` has no `add` and no `commit`; the run never invokes `git commit` at all. The pinned set is nine shapes, default-deny, carrying none of `add commit clean reset status stash` | **MOOTED** | **Retired by `commitNamedSet`** (`src/cli/dream.js`): private index + `commit-tree` + `update-ref`. `--no-verify` has nothing to suppress — with no `git commit`, the pre-commit and commit-msg hook path is **structurally absent**, not disabled. **Two residuals, both already owned, neither reopened here:** (a) **hooks** — exactly one pinned shape (`update-ref`) can fire one (`reference-transaction`); ruled **out of scope by the owner, 2026-08-31**, recorded in `WP-dream-promote-in-workspace` Table W row W1, which also rejects `core.hooksPath` suppression by name on ADR-0004 grounds; (b) **env** — the run spawns git with `{...process.env, GIT_INDEX_FILE}`, so an exported `GIT_DIR`/`GIT_WORK_TREE` still propagates. Owned by **`WP-dream-git-env-pinning`** (Draft, a registered product-hardening candidate awaiting an owner product decision). **Not a residual:** `assertGitRepo` (`cli/dream.js:587`) is a live `rev-parse --git-dir` into the user's vault, off the pinned seam and named as such in row W1(c)(i) — it is read-only and writes no control state, so M9's mechanism does not reach it | V2 |
 | D3 | **M10** — the gitignored/invisible region | `git status … -uall` without `--ignored` classifies; `git clean -fd` (not `-x`) cleans; a dream-written `.gitignore` blinds both | `delta.js` requires only `node:fs`, `node:path`, `../errors` — no route to a process spawner. `assertCleanTree` and `restoreVaultToHead` have no `src/` consumer. `makeAdmit` refuses `.gitignore` and `.git/config` | **MOOTED** | **Retired by the git-free classifier.** Classification is `computeDelta`, a filesystem walk that never consults git, so an ignore file has nothing to blind — the mechanism is **absent, not defeated**. `.gitignore` is additionally unpromotable (no `.md`). **Standing-discipline note:** `restoreVaultToHead`'s `clean -fd` still exists and is exported for fixtures; it is unreachable from `src/`. **A future WP that re-wires it re-opens M10's `-fd`-not-`-x` question** and must re-run V3 and V4 | V3, V4 |
 | D4 | **C2** — the git seam | ruling item 4: give the seam its own third-party-independent defense — commit with `--no-verify` and a neutralized hooks path | subsumed by D2: there is no `git commit` to harden, and the two remaining halves are the hook residual (owner-ruled) and the env residual (`WP-dream-git-env-pinning`) | **MOOTED** | Nothing new is owed. C2's own-defense half is void by construction; its two residuals are D2's, with their owners named there. **This row states no fact of its own — it exists so C2 is not silently absent from the disposition** | V2 |
@@ -228,22 +238,33 @@ registered here on the spot.
       content contract), the stub row (mirrors D5's "open" verdict and successor
       id), the HANDOVER row (mirrors Table E's Status-cell-only rule).
 - [ ] **Acceptance criteria** — AC1 (mirrors D1–D3's verdicts), AC2 (mirrors D5),
-      AC3 (mirrors Table E), AC4 (mirrors D2's two residual owners).
+      AC3 (mirrors Table E's Status cells), AC4 (mirrors D2's two residual
+      owners), AC5 (mirrors the Context's honesty rule).
 - [ ] **Verification commands** — V1 mirrors D1's measured cell, V2 mirrors D2/D4,
-      V3 and V4 mirror D3, V5 mirrors D5, V6 mirrors the Deliverables.
+      V3 and V4 mirror D3, V5 mirrors D5. **V6 mirrors the most and is checked
+      first on any finding**: the Deliverables, Table E's two Status cells (via
+      its `RULING` switch), AC3–AC6, and the Implementation notes'
+      tracking-doc-uniqueness grep.
 - [ ] **Current state** — mirrors every "Measured on `49d3d467`" cell; it reports
-      what the commands printed and states no verdict of its own.
+      what the commands printed and states no verdict of its own. Its
+      tracking-doc bullet also mirrors V6 (e) and the Implementation notes'
+      ADR-0029 bullet — the three state one grep and must move together
+      (registered round zero).
 - [ ] **Operative prose** — the Dispatch precondition (mirrors D1–D3's verdicts,
-      D5's carry-out and Table E's two branches) and the Exact-contracts stub body
-      items 1 and 5 (mirror D5's measured cell and its `promote.js` pointer).
+      D5's carry-out, Table E's two branches and V6's `RULING`), and the
+      Exact-contracts stub body items 1 and 5 (mirror D5's measured cell and its
+      `promote.js` pointer).
 
 ## Implementation notes & constraints
 
 - **Docs-only. Nothing in `src/` or `tests/` may change**, and no fix for D5 may
   be attempted here. Found something else broken? "Discovered issues" in the PR.
 - **`docs/HANDOVER.md` is the right tracking doc, and this was measured, not
-  assumed**: it is the only file under `docs/` carrying the audit status table,
-  and there is no successor. **It is not an ADR-0029 derived view.** ADR-0029
+  assumed**: `grep -rl '^| C | Dream write fence' docs --include='*.md'` returns
+  exactly one file (V6 re-runs it), so no successor tracking doc carries the
+  table. That grep is the whole basis of the claim — it establishes uniqueness of
+  *this table*, not that no other tracking document could ever exist.
+  **It is not an ADR-0029 derived view.** ADR-0029
   forbids committed status tables *whose facts live in spec frontmatter*; an
   audit group has no frontmatter field, so its status is derivable from nothing
   and generable by no view. The row is hand-written narrative, the same category
@@ -258,7 +279,8 @@ registered here on the spot.
 
 ## Security checklist
 
-N/A — this WP writes three documentation files and consumes no untrusted input.
+- [ ] N/A — this WP writes three documentation files and consumes no untrusted
+      input.
 
 ## Acceptance criteria
 
@@ -270,14 +292,19 @@ N/A — this WP writes three documentation files and consumes no untrusted input
 - [ ] **AC3** — `docs/HANDOVER.md`'s group C row carries Table E's ratified
       Status cell (E1) — or E2 if the owner declined — with `<LOGBOOK>` resolved
       to the created entry's path, its other two cells byte-identical, and **no
-      other line of that file differs**.
+      other line of that file differs**. Checked by V6 (d) with `RULING` set to
+      the dispatch's ruling, and by the `git diff --stat` it prints.
 - [ ] **AC4** — the logbook entry names both of D2's residual owners: the owner
       ruling of 2026-08-31 in `WP-dream-promote-in-workspace` Table W row W1
       (hooks), and `WP-dream-git-env-pinning` (env). Neither is reopened.
-- [ ] **AC5** — no deliverable cites the archive's harness-refusal measurement;
-      every disposition rests on V1–V5, run on this tree.
-- [ ] **AC6** — V6 passes: `node scripts/check-frontmatter.js` and
-      `node scripts/boundary-check.js` are green with the new stub present.
+      Checked by V6 (a).
+- [ ] **AC5** — **no disposition rests on the archive's harness-refusal
+      measurement.** The logbook names it only on lines that also mark it
+      non-load-bearing; the stub and `docs/HANDOVER.md` never mention it.
+      Checked by V6 (b).
+- [ ] **AC6** — V6 passes end to end, including `node scripts/check-frontmatter.js`,
+      `node scripts/boundary-check.js` and `npm run lint`, with the new stub
+      present.
 - [ ] Idempotence — `N/A`: this WP ships no command and writes only inside the
       repo.
 
@@ -352,23 +379,63 @@ process.exit(admitted&&l.projects_dir===".git"?0:1);'
 #      admitted=false, exit 1. This step is green only while C3 is genuinely open.
 
 # V6 — the deliverables exist, agree with Table D/E, and pass the repo gates.
+# Set RULING to what the dispatch message recorded. There is no default: unset fails.
+RULING=E1   # or E2, if the owner declined the Dispatch precondition
+
 n=$(ls docs/specs/logbook/*-audit-group-c-disposition.md 2>/dev/null | wc -l | tr -d ' ')
 [ "$n" = 1 ] || { echo "FAIL: expected exactly 1 disposition logbook entry, found $n"; exit 1; }
 LOG=$(ls docs/specs/logbook/*-audit-group-c-disposition.md)
+
+# (a) The logbook carries every fact AC1 and AC4 require.
 for pat in 'M7' 'M9' 'M10' 'MOOTED' 'OPEN' 'WP-layout-dot-prefix-rejection' \
-           'WP-dream-git-env-pinning' '2026-08-31'; do
+           'WP-dream-git-env-pinning' 'WP-dream-promote-in-workspace' \
+           'Table W row W1' '2026-08-31'; do
   grep -q "$pat" "$LOG" || { echo "FAIL: logbook entry is missing $pat"; exit 1; }
 done
+
+# (b) AC5 — the archive's harness-refusal measurement is EXCLUDED, never relied on:
+#     the logbook names it, and only on lines that also mark it non-load-bearing;
+#     the other two deliverables never mention it at all.
+grep -qiE 'harness[- ]refusal' "$LOG" || { echo "FAIL: $LOG never states the honesty rule"; exit 1; }
+grep -niE 'harness[- ]refusal' "$LOG" | grep -viq 'non-load-bearing' \
+  && { echo "FAIL: $LOG leans on the harness-refusal measurement"; exit 1; }
+for f in docs/specs/WP-layout-dot-prefix-rejection.md docs/HANDOVER.md; do
+  test -f "$f" || { echo "FAIL: missing deliverable $f"; exit 1; }
+  grep -niE 'harness[- ]refusal' "$f" && { echo "FAIL: $f cites it"; exit 1; }
+done
+
+# (c) The C3 stub exists and is Draft.
 test -f docs/specs/WP-layout-dot-prefix-rejection.md \
   && grep -q '^status: Draft' docs/specs/WP-layout-dot-prefix-rejection.md \
   || { echo "FAIL: the C3 stub is absent or not Draft"; exit 1; }
+
+# (d) AC3 — the group C row carries the RULING's Status cell, first two cells intact,
+#     and cites the logbook. The fixed string is Table E's, byte for byte.
+case "$RULING" in
+  E1) WANT='| C | Dream write fence (machinery-controlling files) | **Closed** —' ;;
+  E2) WANT='| C | Dream write fence (machinery-controlling files) | **Open — one residual** —' ;;
+  *)  echo "FAIL: set RULING to E1 or E2, the ruling the dispatch recorded"; exit 1 ;;
+esac
+grep -qF "$WANT" docs/HANDOVER.md \
+  || { echo "FAIL: the group C Status cell is not Table E row $RULING"; exit 1; }
 grep -q "$LOG" docs/HANDOVER.md || { echo "FAIL: the group C row does not cite $LOG"; exit 1; }
+
+# (e) The tracking-doc uniqueness the Implementation notes rest on.
+m=$(grep -rl '^| C | Dream write fence' docs --include='*.md' | wc -l | tr -d ' ')
+[ "$m" = 1 ] || { echo "FAIL: expected 1 file carrying the audit status table, found $m"; exit 1; }
+
 git diff --stat main -- docs/HANDOVER.md   # must be 1 file, 1 insertion, 1 deletion
 node scripts/check-frontmatter.js
 node scripts/boundary-check.js
 npm run lint
-# ABSENT (run it now, before the deliverables exist): the `[ "$n" = 1 ]` guard fires
-# with found 0, exit 1 — so this step cannot read green on undone work.
+# ABSENT (run it before the deliverables exist): the `[ "$n" = 1 ]` guard fires with
+# found 0, exit 1 — so this step cannot read green on undone work.
+# RED (violating but present), each observed on a compliant fixture then broken:
+#   drop the logbook citation from the HANDOVER row -> (d)'s second grep, "does not cite";
+#   leave RULING=E1 with E2's cell in place    -> (d)'s first grep, "not Table E row E1";
+#   drop `Table W row W1` from the logbook     -> (a), "missing Table W row W1";
+#   cite the harness-refusal measurement in the stub -> (b), "$f cites it";
+#   flip the stub to `status: Ready`           -> (c), "absent or not Draft".
 ```
 
 ## Out of scope (do NOT do these)
