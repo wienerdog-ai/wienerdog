@@ -1,0 +1,27 @@
+PLUGIN GATE ROUND 4 (closing confirmation) — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a3 worktree), tip 4ee0a7c0, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No ship. The round-3 split addresses cleanup ownership and isolates durability, but the parent still overstates Q4 compliance, D4’s acceptance criterion can encompass unrelated artifacts, and the successor misclassifies a shipped-contract repair as merely new work. No scope objection to fail-loud or sequencing.
+
+Findings:
+- [medium] B3b amendment still leaves its durable-artifact condition false (docs/specs/WP-preservation-abort-widening.md:466)
+  Materiality B. B3b’s existing whole cell requires a durable, byte-identical copy. This WP explicitly makes a read-backed but non-durable artifact sufficient to continue (P0b/P3), yet the prescribed amendment says the condition is unchanged and only supersedes its redact-fall-through scope. The amended canonical cell would therefore remain false until the successor lands. The same overclaim appears where the parent says P0–P5 make the implementation agree with Q4. An implementer can satisfy this Ready spec while still violating the canonical durable-artifact condition.
+  Recommendation: Rewrite the B3b clause to state that this WP enforces only Q4’s verified-byte-identity subset and that durability remains unsatisfied pending WP-quarantine-preserve-durability. Narrow the full-Q4 claims at lines 40–44 and 119–124 accordingly, without amending Q4 itself.
+- [medium] D4 acceptance criterion wrongly quantifies over the entire quarantine tree (docs/specs/WP-preservation-abort-widening.md:582-584)
+  Materiality B. Table D correctly defines failure in terms of this invocation’s owned path, but the acceptance criterion broadens that to no file in the quarantine tree being absent from the current preservation record. Prior artifacts intentionally persist and the collision protocol explicitly protects them. On any non-empty quarantine, a failed preservation therefore violates this literal criterion; an implementation following it could delete earlier artifacts or the collision candidate, while an empty-fixture test would falsely pass.
+  Recommendation: Scope D4 evidence to files created or owned by the current invocation. Require all pre-existing files—including the collision candidate—to remain byte-identical after every failure path.
+- [low] Successor falsely says durability is not a repair (docs/specs/WP-quarantine-preserve-durability.md:33-39)
+  Materiality C. The stub first establishes that shipped Q4 requires durability, the parent does not provide it, and the product has no durability primitive; it then calls the successor a new concern “rather than a repair.” The mechanism is newly cross-cutting, but its purpose is necessarily to repair pre-existing noncompliance with Q4. Leaving this contradiction in the stub can produce a future Ready contract that treats the obligation as optional or newly introduced.
+  Recommendation: Describe it as a repair of a pre-existing Q4 durability gap that requires a new cross-cutting mechanism.
+
+Next steps:
+- EXECUTED: specified diff, source, tests, canonical rows, runbook, CLAUDE.md, round record, and raw-round inspections — exit 0.
+- EXECUTED: npm run lint — exit 0, 0 errors.
+- EXECUTED: npm test — exit 1 because the read-only sandbox denied mkdtemp before tests ran.
+- EXECUTED: preservation definition/call-site checks and zero-fsync check — exits 0/0/0.
+- EXECUTED: untouched V2 — exits 1/1; V3 — exits 1/0/1; V4 delimiter and ten-line checks — exits 0/0; expected-versus-current comment diff — exit 1, all matching the preimplementation predictions.
+- EXECUTED: git diff --check main...HEAD — exit 2 from preserved trailing whitespace in the round-3 shadow raw; final git status — exit 0 and clean.
