@@ -1,0 +1,28 @@
+PLUGIN GATE ROUND 3 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main), tip 5de0a63c, focus text as recorded in the round record. NOTE: the first round-3 job (review-mtj6w8z5-hs5gv6) died at 21:39Z when its companion process was killed with the orchestrator background task; it was cancelled and this is the fresh re-run. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP. Design (B)'s ratified premise is not re-argued, but four design defects remain. EXECUTED: requested reads and whole-cell reread exit 0; lint 0; boundary-check 0; known-calls identity 0; pinned-name search 0; hard-coded-checker counterexample 0; untouched loose-wording gate 1 as expected; targeted and full tests 1 before execution because the read-only sandbox denied mkdtemp; diff-check 2 from preserved trailing whitespace in verbatim raw records.
+
+Findings:
+- [medium] [B] The three required REDs can still certify the wrong PRODUCING mapping (docs/specs/WP-index-guard-residuals.md:206-323)
+  Criterion 4 does not require the expected producer identities to be independently derived from the untouched module. I reproduced a checker hard-coding the wrong mapping [1,5,7,8]: its wrong baseline was green while the mandated same-count swap, label swap, and decoy mutations were all red. The actual module mapping is [2,5,7,8]. Thus all prescribed evidence can pass while W1(c) disagrees with the executable source. The exact three-mutation catalog is also the remaining consequential test-design prescription.
+  Recommendation: Require evidence that independently derives full shape identities and PRODUCING state from both the module and the physical W1(c) entries, then compares them shape-by-shape. Add a module-side producer-property mutation RED or an equivalent condition proving the verifier actually reads the module; do not prescribe the implementation.
+- [medium] [B] The refusal cannot satisfy W1(c)'s existing RED diagnostic contract (docs/specs/WP-index-guard-residuals.md:158-307)
+  The package freezes classify(args, env), its call sites, and the existing failure diagnostics, while requiring the relative-path error to originate in classify's private arm. W1(c) requires every RED to carry full args, cwd, and GIT_INDEX_FILE disposition/resolution. classify has no cwd, and design (B) intentionally refuses to resolve the relative path. Criterion 1 merely requires an error naming the invocation, so implementation can pass while making the canonical whole-cell diagnostic universal false.
+  Recommendation: Either narrow W1(c)'s diagnostic universal explicitly to verdict/violation REDs and define the refusal error's available diagnostics, or permit the wrapper/signature changes needed to attach cwd and raw override data. Keep the four verdict strings unchanged.
+- [medium] [B] The owner's “no” branch is not an executable alternative (docs/specs/WP-index-guard-residuals.md:281)
+  Alternative (A) specifies only rev-parse --git-path index and one W1(c) re-scope. It would also contradict W1(c)'s live statements that there is no question which index an invocation would write and that target classification is retired. It does not specify how cwd reaches the locator with classify and its calls currently frozen, how locator failure behaves, or what replacement RED/GREEN evidence establishes environment replay. A “no” answer therefore starts another design cycle instead of selecting the claimed pre-written branch.
+  Recommendation: Write explicit Branch A/Branch B consequences. For alternative (A), enumerate every W1(c) sentence requiring re-scope, the permitted signature/call-site changes, locator error behavior, and acceptance evidence before presenting it as dispatch-ready.
+- [low] [C] R2-F still leaves a live producer mapping in prose (docs/specs/WP-index-guard-residuals.md:169-206)
+  The spec says the mapping is never predicted here, but its worked example assigns PRODUCING to real shape (2). This is an undated live mapping, not exempt SHA-pinned provenance, and criterion 4a checks counts rather than mappings. It creates another prose copy capable of drifting from the module.
+  Recommendation: Make the placement example shape-neutral or explicitly derive it from the module in implementation evidence; do not name a real producer in the controlling spec.
+
+Next steps:
+- Close the diagnostic-contract conflict before dispatching design (B).
+- Replace the PRODUCING evidence contract so a checker must independently read both surfaces.
+- Complete the owner's alternative branch and remove the live shape-(2) mapping.
+- Rerun targeted and full tests in an environment permitting temporary-directory creation.
