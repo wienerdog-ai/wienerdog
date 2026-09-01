@@ -1,11 +1,14 @@
 # ADR-0041: A real OS-scheduler mutation is permitted only from the home it belongs to; the default is refuse
 
-Status: Proposed
-Date: 2026-08-31
+Status: Accepted
+OWNER-SIGNED 2026-08-31
 
-> **Unsigned.** No agent may write, move or reformat an owner signature line
-> (ADR-0035's discipline). Ratifying this ADR is the owner's act; until then
-> `WP-scheduler-mutation-home-authority` is not dispatched.
+> **Signed by the owner himself.** The owner edited the Status and
+> OWNER-SIGNED lines above in his own working checkout on 2026-09-01 and told
+> the session "I have signed ADR-0041"; the session committed his edit on his
+> behalf, byte-identical, touching neither line (ADR-0035's discipline: no
+> agent may write, move or reformat an owner signature line — none did).
+> With this signature `WP-scheduler-mutation-home-authority` is dispatchable.
 
 ## Context
 

@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-mutation-home-authority
 title: Invert the scheduler chokepoint's default — mutate the real OS scheduler only from the home it belongs to
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-smoke-live-scheduler-preflight]
@@ -44,7 +44,8 @@ the **class**: it inverts the chokepoint's default so a real mutation happens
 only under a positive authority, and every dev checkout, test wrapper, scenario
 harness and CI script fails safe without having to remember a variable.
 
-**ADR-0041 is the ratified decision this implements** and is binding. Its
+**ADR-0041 is the ratified decision this implements** — `Accepted`,
+**OWNER-SIGNED 2026-08-31**, in force — and is binding. Its
 one-sentence rule: *the file namespace and the scheduler namespace must belong to
 the same user before anything mutates the scheduler; the default is refuse, and
 reaching the real scheduler from anywhere else is an explicit, single-variable
@@ -517,9 +518,11 @@ wienerdog: skipping a real OS-scheduler command — could not establish which us
       arm — neither may be narrowed back to a two-item list
 - [ ] **ADR-0041's Decision items and its Consequences bullets** — they state
       Table B's predicate, Table A's refusal shape, Table U's uninstall rule and
-      the same scoping and residual as the Security checklist. Editable only while
-      ADR-0041 is unsigned; once the owner signs it, a divergence is fixed by a
-      new dated amendment, never by rewriting the Decision
+      the same scoping and residual as the Security checklist. **ADR-0041 is
+      signed and in force as of 2026-08-31, so that window has closed**: a
+      divergence between this spec and the ADR is now fixed by a NEW dated
+      amendment to the ADR, never by rewriting its Decision — and no agent may
+      write, move or reformat the signature line (ADR-0035's discipline)
 
 ## Implementation notes & constraints
 
@@ -956,14 +959,18 @@ grep -qE '^[[:space:]]*await loader\(\)\.run\(rest\);[[:space:]]*$' bin/wienerdo
 
 ## Definition of done
 
-0. **DISPATCH PRECONDITION.** This WP is not dispatched and not implemented until
-   `docs/adr/0041-real-scheduler-mutation-is-opt-in.md` carries the owner's
-   hand-written signature in place of its `Status: Proposed` line. It inverts a
-   product default that ADR-0018 Decision 2 set, and the two rejected-option
+0. **DISPATCH PRECONDITION — SATISFIED 2026-09-01.**
+   `docs/adr/0041-real-scheduler-mutation-is-opt-in.md` now reads
+   `Status: Accepted` / `OWNER-SIGNED 2026-08-31`, written by the owner in his
+   own checkout and landed byte-identical. That was this WP's last gate: it
+   inverts a product default ADR-0018 Decision 2 set, and the two rejected-option
    findings it rests on (the dev-checkout predicate is fail-broken for the
-   maintainer's own install; `installStance` is the wrong polarity) are the
-   owner's to accept. The dispatch message records that the signature was
-   observed.
+   maintainer's own install; `installStance` is the wrong polarity) were the
+   owner's to accept, as was round 6's ruling A. **The ADR is in force and
+   binding on this WP**; the dispatch message records that the signature was
+   observed. Nothing else gates dispatch — but `Ready` is still not the same as
+   "still true": the orchestrator re-runs this spec's executable claims against
+   the tree the implementer will find (`docs/specs/README.md`).
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled
    `fix(scheduler): mutate the real OS scheduler only from the home it belongs to (WP-scheduler-mutation-home-authority)`.
