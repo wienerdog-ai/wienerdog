@@ -80,9 +80,24 @@ esac
 # skips every real registration instead.
 # Written as `if`, not `cond && export …`: a bare `&&` returns 1 when the
 # condition is false, which would kill the script under `set -euo pipefail`.
-if [ "$PREFLIGHT_STATE" = "clean" ]; then
-  export WIENERDOG_ALLOW_REAL_SCHEDULER=1
-fi
+#
+# The else-branch `unset` is load-bearing, not tidiness: without it a marker
+# ALREADY EXPORTED BY THE PARENT SHELL would survive a non-CLEAN preflight that
+# was bypassed with one of the overrides above, and every WD call below would
+# keep real-scheduler authority despite the redirected HOME — issue #169,
+# recreated by inheritance. Authority must exist only when THIS script's own
+# CLEAN branch grants it, so the non-CLEAN branch clears whatever it inherited.
+# Both halves sit on one line deliberately: the marker may appear on exactly one
+# line of this file (the structural gate counts lines), and this is that line.
+# It cannot instead live with the sandbox unsets below — those run AFTER this
+# point and would wipe the grant they are meant to leave alone.
+#
+# The two SUPPRESSORS (WIENERDOG_LOADER_NOOP, WIENERDOG_TEST_NO_REAL_SCHEDULER)
+# are deliberately left inherited. They can only ever PREVENT a real mutation,
+# never cause one, so a stray inherited value fails safe — and the forced-branch
+# verification for this block works by exporting the NOOP into this script on
+# purpose, which clearing it here would break.
+if [ "$PREFLIGHT_STATE" = "clean" ]; then export WIENERDOG_ALLOW_REAL_SCHEDULER=1; else unset WIENERDOG_ALLOW_REAL_SCHEDULER; fi
 
 SB="$(mktemp -d "${TMPDIR:-/tmp}/wd-smoke.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
