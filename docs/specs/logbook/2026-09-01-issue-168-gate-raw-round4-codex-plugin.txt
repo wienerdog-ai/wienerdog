@@ -1,0 +1,25 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship: Table D contains impossible security guarantees, permits unbounded log growth, and the B2 shared-storage acceptance case is unreachable as written.
+
+Findings:
+- [high] Table D cannot leave a symlink target unchanged after the required append (docs/specs/WP-private-state-writers-mode-pin.md:312-318)
+  The spec leaves appendAlert's append and chmod at lines 89-90 untouched, but both follow a symlinked alerts.jsonl before compaction runs. Therefore the outside target has already gained the new record and may have been chmodded before writeFilePrivate refuses. It cannot simultaneously be byte-identical and contain the just-appended record through the link. The broader keep-the-uncompacted-file guarantee also fails for writeFilePrivate's post-rename inode-mismatch refusal, which throws only after replacing the destination. This makes the acceptance test impossible and leaves direct appendAlert paths capable of modifying an out-of-core target.
+  Recommendation: Either limit Table D to the predictable-temp-symlink hazard and remove the impossible destination-symlink guarantees, or bring a never-follow append primitive into scope so the destination is validated before append/chmod. Explicitly contract post-rename refusal behavior separately.
+- [high] Permanent compaction refusal defeats the hard size bound (docs/specs/WP-private-state-writers-mode-pin.md:313-314)
+  The local catch retains the oversized file and returns normally, with no bound on how long refusal may persist. A realistic persistent case is an existing writable alerts.jsonl inside a directory that permits file appends but denies creation of the private temp: every alert append succeeds, every compaction fails, and the file grows indefinitely. This contradicts alerts.js's MAX_FILE_BYTES hard-bound contract and can eventually exhaust storage while readAlerts only exposes its bounded tail.
+  Recommendation: Define and test a bounded degraded-state policy for repeated compaction failures, or explicitly route and accept the unbounded-growth residual with durable operator visibility. Do not claim the existing hard byte bound remains intact.
+- [medium] The B2 both-writes-fail acceptance scenario is unreachable (docs/specs/WP-failloud-survives-state-write-failure.md:324-328)
+  The criterion says each success site must be tested while both schedule.json and alerts.jsonl are unwritable. But B2 at :1061 is reached only after :1060 successfully writes schedule.json; if schedule.json is unwritable, B1 throws first and clearAlerts never executes. A mocked test could appear green while proving no realizable B2 field path.
+  Recommendation: Split the criterion: test B1 with schedule and alert persistence both failing, and test B2 with the success marker persisted followed by clearAlerts/reporting failure on alerts.jsonl. State the distinct preconditions explicitly.
+
+Next steps:
+- Correct Table D's append-order and post-rename contracts.
+- Resolve or explicitly accept permanent compaction-growth behavior.
+- Rewrite the B2 failure matrix so every acceptance case is reachable.
+
+Codex session ID: 01a05a51-141d-7f60-838a-5a44d2abc0dc
+Resume in Codex: codex resume 01a05a51-141d-7f60-838a-5a44d2abc0dc

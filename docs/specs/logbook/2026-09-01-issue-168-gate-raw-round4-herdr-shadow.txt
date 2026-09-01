@@ -1,0 +1,71 @@
+• needs-attention
+
+  The round-3 changes are genuinely present, but the new mechanisms introduce material gaps.
+
+  1. The outcome seam is an untyped suppression capability
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:124
+
+  Scenario: The optional input is only described as carrying a subject and skipping the append. Its shape, allowed values, validation, and
+  return semantics are undefined. A failure-path or B1 caller can accidentally request the B2 skip behavior, suppressing the durable record;
+  arbitrary subjects can also contradict the reason. It is unspecified whether a policy-skipped append returns false.
+
+  Impact: The seam introduced to prevent exfiltration can silently disable the primary reporting channel elsewhere. Semantic “must say”
+  tests do not provide stable reason or subject contracts.
+
+  Recommendation: Define a closed discriminated outcome enum, such as job-failure, success-marker-refused, and alert-cleanup-refused. Derive
+  canonical reason, subject, and append policy inside failLoud; never accept caller-provided free-form subjects or skip booleans. Unknown
+  values must fail closed, and a skipped append must return false. Assert exact HEAD behavior for undefined and exact canonical strings for
+  B1/B2.
+
+  2. B2 can leave no durable notification when GWS is unconfigured
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:196
+
+  Scenario: Table C correctly forbids writing through the refused alerts.jsonl. If wienerdog gws _alert is unconfigured or fails, the best-
+  effort email also disappears. What remains is only a thrown error and an unspecified “stderr/log” diagnostic.
+
+  Impact: No alert reaches doctor or the digest, and the specification does not guarantee that stderr is captured durably. This contradicts
+  the security claim that the refusal can no longer suppress the record.
+
+  Recommendation: Contract the diagnostic to an existing trusted durable job log and test B2 with GWS explicitly unavailable. Otherwise
+  state honestly that this case has no durable notification and identify the doctor/manual recovery path.
+
+  3. Table D’s symlink acceptance case is impossible
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:308, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:445
+
+  Scenario: When alerts.jsonl itself is a symlink, the append at :89 runs before compaction and follows that symlink. Therefore the outside
+  target cannot remain byte-identical while also containing the just-appended record; chmodAlerts may change its mode too.
+
+  Impact: The required test cannot pass as written. More importantly, the specification claims the compaction exfiltration is closed while
+  normal append still writes through a present destination symlink—an unlisted residual distinct from the absent-file mode window.
+
+  Recommendation: Test the actual compaction hazard by placing the symlink at the old predictable temp path while keeping alerts.jsonl
+  regular; the random private writer should ignore it and compact successfully. Separately name or close destination-symlink append
+  behavior, without claiming its target remains unchanged.
+
+  4. Permanently refused compaction allows unbounded file growth
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:312
+
+  Scenario: A persistent destination or ancestry refusal makes every compaction fail. Each subsequent append succeeds, the exception is
+  caught, and the over-budget file is retained indefinitely.
+
+  Impact: MAX_ALERTS and MAX_FILE_BYTES cease to bound the file. Repeated warnings can grow alerts.jsonl until storage exhaustion, creating
+  the write failures this spec family is trying to survive.
+
+  Recommendation: Name unbounded growth as a routed residual with operator guidance and a rate-limited diagnostic, or define a safe bounded
+  fallback that preserves the newest record without writing through the refused artifact.
+
+─ Worked for 1m 54s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…
