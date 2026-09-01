@@ -259,16 +259,41 @@ wrong and is withdrawn.** `appendAlert` has already appended the new record
 atomically (`:89`) *before* it reaches compaction, so compaction is pure
 housekeeping over an already-durable record and its failure need not propagate
 at all. Wrapping the migrated call in a local `try`/`catch` that retains the
-uncompacted file and returns normally means nothing new throws — so `:840`'s
+record's durability and returns normally means nothing new throws — so `:840`'s
 documented "WARN loudly + durably and PROCEED — no throw" contract
 (`:827-831`) is preserved unchanged, and `failLoud`'s caller at `:615` keeps its
 existing best-effort behavior. The hazard closes inside the frozen surface, with
 no `appendFilePrivate` primitive and no new guard at `:840`. Table D is the
 contract.
 
-What remains a residual is only the **create** window on an *absent*
-`alerts.jsonl` (Table A row 2), which is the append itself and does need a
-primitive `private-fs.js` does not expose.
+**Three residuals remain on `alerts.jsonl`, all owned by the same follow-up**
+(*move `appendAlert`'s own append onto a never-follow private append
+primitive*), because all three live in the append at `:89-90`, not in
+compaction:
+
+1. **The create window** (Table A row 2): an absent `alerts.jsonl` is created by
+   `appendFileSync` at the umask default and pinned only on the next line —
+   measured `0666` at the create under `umask 000`.
+2. **The destination-symlink append** (new, round-4): when `alerts.jsonl` is
+   itself a symlink, `appendFileSync` writes the record through it and
+   `chmodAlerts` chmods the outside target — both measured on HEAD. This is
+   **pre-existing** behavior that neither this WP nor Table D changes, and no
+   claim is made that it is contained. A leaf symlink is not caught by
+   `mechanicsRootUntrusted` (directories only), so nothing upstream stops it.
+3. **Unbounded growth under persistent compaction refusal** (new, round-4):
+   `alerts.js`'s `MAX_ALERTS` / `MAX_FILE_BYTES` are a hard bound **only while
+   compaction can run**. A directory that permits appending to an existing
+   `alerts.jsonl` but denies creating the private temp — or any persistent
+   ancestry/destination refusal — makes every append succeed and every
+   compaction fail, so the file grows without bound. Operator visibility is the
+   repeated per-failure diagnostic and nothing else: **measured, `wienerdog
+   doctor` never inspects `alerts.jsonl` at all** (zero references in
+   `src/cli/doctor.js`; its only size check is the `MAX_INSPECT_BYTES` ceiling
+   on `<claudeDir>/CLAUDE.md` and `<codexDir>/AGENTS.md` at `:300-328`), and
+   `readAlerts` byte-bounds its read to a tail window, so the digest shows no
+   growth either. Recovery is manual: repair whatever refuses the temp
+   creation, or truncate/remove `state/alerts.jsonl`. Bounding this is the
+   follow-up's job, not this WP's.
 
 ### Table B — the private write primitive
 
@@ -310,11 +335,13 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 | Fact / rule | Value |
 |-------------|-------|
 | Change | `src/core/alerts.js:117-120` — replace the predictable-temp `writeFileSync`/`renameSync`/`chmodAlerts` sequence with `writeFilePrivate(file, text)`, wrapped in a **local `try`/`catch`** |
-| Must not throw | compaction failure never propagates out of `appendAlert`. On catch: keep the uncompacted file exactly as the atomic append at `:89` left it, emit one non-alert diagnostic, and return normally |
-| Why that is safe | the new record is already durably appended at `:89` before compaction runs; compaction only trims. Retaining an uncompacted file is strictly better than losing the record, and the file stays over-budget until the next successful compaction |
+| Must not throw | compaction failure never propagates out of `appendAlert`. On catch: emit one non-alert diagnostic and return normally. The **invariant** is that the record appended at `:89` remains durable — not that the file is left uncompacted, which is false for the post-rename case below |
+| Why that is safe | the new record is already durably appended at `:89` before compaction runs; compaction only trims. Whether the file ends up compacted or not, the record survives, and losing the trim is strictly better than losing the record |
+| Size-bound consequence | while compaction keeps failing the file stays over budget and **keeps growing** — see the unbounded-growth residual below. This WP does not add a degraded-state policy |
 | Caller contracts preserved | `:840`'s "WARN loudly + durably and PROCEED — no throw" (`:827-831`) is unchanged, and `failLoud`'s `:615` call keeps its existing best-effort behavior. This WP adds **no** guard at `:840` and needs none |
-| Observable on a symlinked `alerts.jsonl` | compaction refuses; the outside target is byte-identical and its mode unchanged; the just-appended record is still present through the link; the caller proceeds normally; exactly one non-alert diagnostic |
-| Observable on a stale predictable temp | a file left at `${file}.${process.pid}.tmp` has no effect on the result — the primitive's temp name is crypto-random |
+| **The hazard this closes (and its exact scope)** | the **predictable-TEMP-path** symlink. Observable: with a symlink planted at the old `${file}.${process.pid}.tmp` path and `alerts.jsonl` a **regular file**, compaction succeeds, the symlink's target is byte-identical and its mode unchanged, and `alerts.jsonl` holds the compacted content at `0600`. The primitive's temp name is crypto-random and `O_EXCL\|O_NOFOLLOW`, so the planted name is never opened |
+| **What it does NOT close** | a **destination**-symlinked `alerts.jsonl`. The append at `:89` and `chmodAlerts` at `:90` run *before* compaction and both follow that symlink, so by the time compaction is reached the outside target has already received the record and may already have been chmodded. No claim is made that a destination symlink's target is unchanged — that would be unpassable. This is a pre-existing, distinct hazard: see the destination-symlink residual below |
+| Post-rename inode-mismatch refusal (F10, `private-fs.js:358-366`) | contracted separately because it is **not** a "nothing happened" refusal: the `renameSync` at `:354` has already completed when the check throws, so `alerts.jsonl` holds the compacted content and the pre-compaction file is gone. The catch must therefore not assume the file is uncompacted — its only guarantees are that the new record from `:89` is still durable (it is inside the compacted content) and that nothing propagates to the caller. Emit the diagnostic and return normally, exactly as for a pre-rename refusal |
 | Not changed | the compaction trigger conditions (`:106`), the `MAX_ALERTS`/`MAX_FILE_BYTES` budgets, the serialization at `:109`, the empty-read guard at `:105`, the append at `:89-90`, and `chmodAlerts` itself (still used by the append path) |
 
 ### Mirrored Surface Checklist
@@ -398,15 +425,20 @@ every surface below in one pass:
       `fchmod`. Migrating the compaction branch (Table D) closes a measured
       **exfiltration** path specifically: a symlink planted at the predictable
       temp name received the alert bodies outside the mechanics root. The claim
-      reaches those four writers only — **not** `alerts.jsonl` at large, whose
-      append-create path is residual (1).
-- [ ] Three residuals, all named and none silently fixed: (1) `appendAlert`'s
-      absent-destination **create** window (Table A row 2), which needs an
-      `appendFilePrivate` this tree does not have — note that the compaction
-      hazard formerly listed beside it is now FIXED by Table D, not routed;
-      (2) deletion-recreation
+      reaches those four writers only — **not** `alerts.jsonl` at large. Its
+      append at `:89-90` still follows a *destination* symlink and still creates
+      an absent file at the umask default; both are named residuals, and this WP
+      makes no containment claim about either.
+- [ ] Five residuals, all named and none silently fixed. Three sit in
+      `appendAlert`'s append at `:89-90` and share one follow-up owner — the
+      **create** window (Table A row 2), the **destination-symlink append**
+      (measured: the record and the chmod land on the outside target), and
+      **unbounded growth** under persistent compaction refusal (with the
+      measured finding that doctor never inspects `alerts.jsonl`, so the only
+      visibility is the repeated diagnostic). Then:
+      (4) deletion-recreation
       of the in-place-written files and of `state/` itself (Table A rows 13-14),
-      which doctor reports and sync repairs durably; (3) the parent directory —
+      which doctor reports and sync repairs durably; (5) the parent directory —
       `state/` is created `0700` by `src/cli/init.js:135` before any job runs,
       and `writeFilePrivate`'s `mkdirPrivate` now creates it `0700` rather than
       at the umask default, which narrows but does not own the directory claim.
@@ -433,7 +465,12 @@ every surface below in one pass:
       (`${file}.${process.pid}.tmp`) does not affect the result, and no private
       body is ever written through a symlink at a temp path.
 - [ ] A pre-existing symlink at one of the three destinations is refused rather
-      than written through, and the symlink's target is left untouched.
+      than written through: **the refused call itself makes no modification** to
+      the symlink's target — neither content nor mode — and the destination is
+      still a symlink afterwards. For `alerts.jsonl` the assertion is bounded to
+      the `clearAlerts` call under test; it must NOT assert the target is
+      pristine overall, since any `appendAlert` used to seed records writes
+      through the symlink first (`alerts.js:89-90`, the named residual).
 - [ ] Each of the three holds on the **second** consecutive call: same `0600`,
       same contents for the same input (Table C repeat-runs row).
 - [ ] `insecureEntries(paths)` reports none of these three files after its
@@ -442,11 +479,18 @@ every surface below in one pass:
 - [ ] Behavior preserved: each writer's file contents and return value are
       unchanged; `appendAlert`'s atomic append at `:89-90` is untouched (Table A
       row 2); `clearAlerts` still deletes the file when no records remain.
-- [ ] **Table D:** compaction never throws. With `alerts.jsonl` a symlink, an
-      `appendAlert` call that triggers compaction leaves the outside target
-      byte-identical and its mode unchanged, keeps the just-appended record,
-      returns normally to its caller, and emits exactly one non-alert
-      diagnostic. A stale file at `${file}.${process.pid}.tmp` changes nothing.
+- [ ] **Table D, the hazard closed:** with a **symlink at the old predictable
+      temp path** `${file}.${process.pid}.tmp` and `alerts.jsonl` a regular
+      file, an `appendAlert` call that triggers compaction succeeds — the
+      symlink's target is byte-identical and its mode unchanged, and
+      `alerts.jsonl` holds the compacted content at `0600`. (This is the
+      reachable form of the test; a *destination*-symlink case must NOT assert
+      an unchanged target — the append at `:89` already wrote through it.)
+- [ ] **Table D, no propagation:** on any compaction refusal the caller proceeds
+      normally, exactly one non-alert diagnostic is emitted, and the record
+      appended at `:89` is still readable afterwards — whether the refusal
+      happened before the rename (file uncompacted) or after it (file
+      compacted, F10 detection).
 - [ ] The `:840` managed-policy warning path still proceeds — a job whose
       `appendAlert` warning hits a refusing compaction is not aborted, and
       `src/cli/run-job.js` is not edited by this WP at all.
@@ -558,12 +602,15 @@ node /tmp/wd-private-writer-modes.js
   (justified under Table A). A WP that pins modes on every *creation* path —
   those two files, `state/` itself, and the mode-less `mkdirSync` calls — is
   separate work; note it under "Discovered issues".
-- **`appendAlert`'s absent-destination create window** (Table A row 2) — the
-  `appendFileSync` at `:89` that creates a missing `alerts.jsonl` at the umask
-  default before `chmodAlerts` pins it. Closing it needs an `appendFilePrivate`
-  primitive `private-fs.js` does not expose; note the follow-up under
-  "Discovered issues". The compaction branch is NOT part of this residual any
-  more — Table D fixes it here.
+- **`appendAlert`'s own append at `:89-90`** — all three of its residuals: the
+  absent-destination create window, the destination-symlink write-through, and
+  the unbounded growth a persistent compaction refusal allows. One follow-up
+  owns them (*a never-follow private append primitive, plus a bound for the
+  degraded state*); note it under "Discovered issues". The **compaction** branch
+  is not part of this — Table D fixes that here.
+- **A degraded-state policy for repeated compaction failure.** This WP names the
+  unbounded-growth residual; it does not add rate-limiting, a fallback sink, or
+  a size circuit-breaker.
 - **Adding any guard at the `:840` caller.** Table D's local try/catch means
   compaction cannot throw, so `:840` needs no change and must not get one.
 - **The failure-path alert sequencing** — that is

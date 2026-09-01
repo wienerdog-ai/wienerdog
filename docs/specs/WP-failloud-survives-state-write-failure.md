@@ -123,16 +123,16 @@ RETAINED as the sole recovery breadcrumb. This WP must not change that.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains an **outcome** input — enough to carry a non-default email subject and to skip the durable append per Table C. Its default behavior with no such input must be byte-identical to HEAD. Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
+| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains the **closed outcome enum** of Table E — three values, canonical reason/subject/append-policy derived inside, unknown value refused, absent input byte-identical to HEAD. Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
 | modify | tests/unit/scheduler-runjob.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
 ### Exact contracts
 
-No new exported function. `failLoud` gains one optional input (Deliverables row
-(b)); called as it is on HEAD it behaves as on HEAD, including the
-`` `job ${name} failed` `` subject. `runJob`'s observable behavior is unchanged
-whenever the state writes succeed; Tables A, B1, B2 and C define what it must do
-when they do not.
+No new exported function. `failLoud` gains one optional **closed-enum** input
+(Table E); called as it is on HEAD it behaves as on HEAD, including the
+`` `job ${name} failed` `` subject and the existing return. `runJob`'s
+observable behavior is unchanged whenever the state writes succeed; Tables A,
+B1, B2, C and E define what it must do when they do not.
 
 ## Contract reference
 
@@ -220,11 +220,35 @@ into an attacker-chosen file and chmods it `0600`.
 | Fact / rule | Value |
 |-------------|-------|
 | Rule | a refusal whose refused artifact is `alerts.jsonl` MUST NOT attempt the durable append. The recovery path never writes through the artifact it just refused |
-| Observable | after a `:1061` refusal on a symlinked `alerts.jsonl`: the symlink's target is **byte-identical** and its mode **unchanged**; `state/alerts.jsonl` is still a symlink; no alert record is created anywhere |
-| Still required | the non-alert persistence diagnostic **and** the best-effort email. `defaultSendAlert` (`:576-584`) spawns `wienerdog gws _alert` and never touches `alerts.jsonl` (verified), so email remains a valid fallback channel when the durable one is unsafe |
+| Observable | after a `:1061` refusal on a symlinked `alerts.jsonl`: **the refusal handling itself adds no write** — the symlink's target gains no record and no mode change *from this path*; `state/alerts.jsonl` is still a symlink; no alert record is created anywhere. The assertion is bounded to the refusal handling, NOT to the target being pristine overall: `appendAlert`'s own append at `alerts.js:89-90` follows a destination symlink and may already have written through it earlier in the same run (the named residual of `WP-private-state-writers-mode-pin`). Claiming a pristine target would be unpassable |
+| Still required | the non-alert persistence diagnostic **and** the best-effort email attempt. `defaultSendAlert` (`:576-584`) spawns `wienerdog gws _alert` and never touches `alerts.jsonl` (verified), so email is a channel that survives the refusal — but only when GWS is configured; see the honesty row |
+| **Honest reach when GWS is unconfigured (measured)** | then a B2 refusal leaves **no durable Wienerdog-side notification at all**, and this spec claims none. Measured: the per-run job log cannot carry it — the stream is opened at `:904` and closed at `:1004`, so it is **not open at any of the five sites** (`:797`/`:872` precede the open; `:1060`/`:1061`/`:1096` follow the close), and it only ever captured the child's stdout/stderr (`:934`, `:939`). Measured too: `wienerdog doctor` never inspects `alerts.jsonl` (zero references in `src/cli/doctor.js`). What remains is the process's stderr — captured only by whatever the OS scheduler redirects — and the non-zero exit. Recovery is manual: inspect `state/alerts.jsonl`, which is a symlink where a regular file belongs, and replace it. Routing this to a durable non-alert sink is a follow-up, not this WP |
 | Record count | zero durable records for this case — consistent with Table B's attempt-not-record rule, not an exception to it |
 | Smallest shape (implementer's choice, both acceptable) | (i) pass the already-known refusal fact into `failLoud` so it skips the append and does the diagnostic + email only — no new predicate, no TOCTOU window; or (ii) have the refusal handler apply the same `lstat`-based predicate `writeFilePrivate` uses (`dest` exists and is not a regular file → do not append). Shape (i) is preferred: the caller already caught the throw and therefore already knows |
 | Not in scope here | the `appendAlert` **create** window on an absent `alerts.jsonl` — that still needs an `appendFilePrivate` and stays a residual of the mode-pin WP. This rule covers the present-destination refusal case only |
+
+### Table E — `failLoud`'s outcome input is a CLOSED enum
+
+The seam Tables B and C rely on must not be a free-form subject plus a skip
+flag: that would be a suppression capability any caller could aim at the primary
+reporting channel. It is a **closed discriminated enum** with exactly three
+values, and `failLoud` derives everything from it internally.
+
+| Value | Used at | Append policy | Returns |
+|-------|---------|---------------|---------|
+| `job-failure` (the default when the input is absent) | `:797`, `:872`, `:1096` | append attempted, exactly as on HEAD | `true` iff the append persisted |
+| `success-marker-refused` (B1) | `:1060` | append attempted — `alerts.jsonl` is not the refused artifact | `true` iff the append persisted |
+| `alert-cleanup-refused` (B2) | `:1061` | append **policy-skipped** (Table C: never write through the refused artifact) | **`false`** always — a skipped append never reports as persisted |
+
+| Fact / rule | Value |
+|-------------|-------|
+| Closed set | those three values and nothing else. The caller passes only the discriminant |
+| Derived inside `failLoud` | the canonical reason wording, the email subject, and the append policy. Callers may pass the job-specific detail the reason interpolates, but **never** a subject and **never** a skip boolean — there is no caller-supplied way to suppress an append |
+| Unknown value | **refuse the call loudly** — throw rather than fall back to any behavior. Silently degrading an unrecognized discriminant to `job-failure` would append through a refused artifact; silently degrading it to a skip would suppress the record. Neither is acceptable, so an unknown value is a programming error surfaced at once. Note this is the ONE place `failLoud` may throw; it is unreachable from the five sites, which pass literals |
+| Absent input | byte-identical to HEAD on every observable: the append is attempted, the subject is `` `job ${name} failed` ``, and the return is the existing `persisted` boolean |
+| Canonical strings | each of the three values has exactly one reason template and exactly one subject template, asserted verbatim by the tests. "Must say" prose is not a contract; the strings are |
+| `alertPersisted` consumers | `:1106-1108` already treats `false` as "not recorded" and retains the reap pidfiles. A policy-skipped B2 append returning `false` therefore composes with existing behavior and needs no change there |
+| Not in scope | any fourth outcome, any per-call subject override, and any caller-side skip control |
 
 ### Mirrored Surface Checklist
 
@@ -244,7 +268,13 @@ into an attacker-chosen file and chmods it `0600`.
       on any of the five sites
 - [ ] The **reason taxonomy** — B1 (marker not saved, replay) and B2 (marker
       saved, no replay) are distinct on every surface: tables, acceptance
-      criteria, and the email subject/body rule
+      criteria, the email subject/body rule, and Table E's enum values
+- [ ] **Table E's enum** — its three values appear in the Deliverables row, the
+      Exact contracts paragraph, the acceptance criteria and the Security
+      checklist; adding or renaming a value moves all four
+- [ ] **Reachability of every acceptance precondition** — B1 both-unwritable is
+      reachable, B2 both-unwritable is not and is explicitly excluded; any new
+      criterion must be walked against the call graph before it is added
 - [ ] `WP-private-state-writers-mode-pin`'s Context, `depends_on`, Table B
       added-refusals row and Definition-of-done precondition (a) — this WP is
       its stated precondition and now covers five sites, not three
@@ -290,12 +320,23 @@ into an attacker-chosen file and chmods it `0600`.
       repaired — unbounded repetition of its side effects, not one duplicate.
       This WP makes it diagnosable and tells the operator how to stop it;
       closing it is routed under Out of scope.
-- [ ] Measured exfiltration closed (Table C): before this WP, routing a
+- [ ] Measured exfiltration NOT WIDENED (Table C): before this WP, routing a
       `:1061` refusal through `failLoud` would append the job's reason and log
       hint into an attacker-chosen file outside the mechanics root and chmod it
       `0600` — both `appendFileSync` and `chmodSync` follow a symlinked
-      `alerts.jsonl`, and a leaf symlink passes `mechanicsRootUntrusted`. The
-      recovery path may never write through the artifact it refused.
+      `alerts.jsonl`, and a leaf symlink passes `mechanicsRootUntrusted`. This
+      WP forbids the **recovery path** from adding such a write. It does **not**
+      close the pre-existing one: `appendAlert`'s normal append at
+      `alerts.js:89-90` still follows a destination symlink, which is a named
+      residual of `WP-private-state-writers-mode-pin`, not a claim made here.
+- [ ] The outcome seam is a closed enum with no caller-supplied suppression
+      (Table E): no call site can request a skipped append, an unknown
+      discriminant is refused rather than silently degraded, and a skipped
+      append returns `false` so `:1106-1108` still treats it as unrecorded.
+- [ ] Residual, named and measured: with GWS unconfigured, a B2 refusal has no
+      durable Wienerdog-side notification — the job log is not open at any of
+      the five sites and doctor does not inspect `alerts.jsonl` (Table C's
+      honesty row). This WP claims only the diagnostic and the non-zero exit.
 
 ## Acceptance criteria
 
@@ -317,24 +358,38 @@ into an attacker-chosen file and chmods it `0600`.
       the work completed, that `last_success` could not be recorded, that the
       job will be re-run until the fault is repaired, and what the operator
       should do (Table B1) — and `runJob` reports the run as not-clean.
-- [ ] With `clearAlerts` at `:1061` throwing instead, the reason states the work
-      completed **and was recorded** and only stale-alert cleanup failed, and it
-      makes **no** replay claim (Table B2). A `:1060` failure does not
-      additionally produce an attempt from `:1061`.
-- [ ] **Success-path both-writes-fail:** with one condition making both
-      `schedule.json` and `alerts.jsonl` unwritable, each success site performs
-      one state-write attempt and one `failLoud` attempt, produces **zero** alert
-      records, emits exactly one non-alert persistence diagnostic, and still
-      throws its distinct reason (Table B attempt-not-record row).
-- [ ] **Table C:** after a `:1061` refusal on a symlinked `alerts.jsonl`, the
-      symlink's target is byte-identical and its mode unchanged, `alerts.jsonl`
-      is still a symlink, no alert record exists anywhere, and the non-alert
-      diagnostic and the best-effort email still happen.
+- [ ] With `clearAlerts` at `:1061` throwing — precondition: `:1060`
+      **succeeded**, which is the only way `:1061` is reached — the reason
+      states the work completed **and was recorded** and only stale-alert
+      cleanup failed, and it makes **no** replay claim (Table B2). A `:1060`
+      failure does not additionally produce an attempt from `:1061`.
+- [ ] **B1 both-writes-fail** — precondition: `schedule.json` **and**
+      `alerts.jsonl` both unwritable (reachable: `:1060` throws first, so
+      `:1061` is never entered). One state-write attempt, one `failLoud`
+      attempt, **zero** alert records, one non-alert persistence diagnostic, and
+      the B1 reason still thrown.
+- [ ] **B2** — precondition: the success marker **persisted** at `:1060`, and
+      only then `clearAlerts` fails at `:1061`. A both-unwritable B2 case is
+      **unreachable by construction** (`:1061` is reached only after `:1060`
+      succeeded) and must not appear in the tests: a mocked version of it would
+      go green while proving nothing about any real path.
+- [ ] **Table C:** after a `:1061` refusal on a symlinked `alerts.jsonl`, no new
+      alert record is created, `alerts.jsonl` is still a symlink, and the
+      non-alert diagnostic and the email attempt still happen. No assertion is
+      made that the symlink's target is byte-identical — the append at
+      `alerts.js:89` may already have written through it earlier in the run.
+- [ ] **Table E, the enum:** `failLoud` with no outcome input is byte-identical
+      to HEAD (append attempted, subject `` `job <name> failed` ``, existing
+      return). `success-marker-refused` and `alert-cleanup-refused` each produce
+      their **exact canonical** reason and subject strings, asserted verbatim.
+      `alert-cleanup-refused` skips the append and returns **`false`**. An
+      unknown discriminant throws rather than degrading to either behavior.
 - [ ] For both success-path outcomes the **email** subject and body say the work
       completed and name the refused state operation — neither sends
       `` `job <name> failed` ``.
-- [ ] `failLoud` called without the new outcome input behaves exactly as on
-      HEAD, subject included, on all three failure paths.
+- [ ] With GWS unconfigured, a B2 refusal still emits the non-alert diagnostic
+      and still creates no alert record — and the spec asserts nothing further,
+      per Table C's honesty row.
 - [ ] When every state write succeeds, behavior is byte-identical to HEAD on all
       five sites: same watermark, same alert-clearing, same throw or same
       normal return.
