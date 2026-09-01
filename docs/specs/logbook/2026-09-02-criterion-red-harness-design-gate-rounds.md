@@ -33,9 +33,24 @@ this WP's dispatch.
 round's tip, fresh thread per round). Raw outputs committed BEFORE
 adjudication (`2026-09-02-red-harness-gate-raw-round<N>-<channel>.txt`).
 
-## Round zero (`56c5a99e`)
+## Round zero (`56c5a99e` → fixes in `cc3128c3`)
 
-Pending — template conformance by a clean-context executor; coherence pass re-running every executable claim.
+Template conformance (clean-context executor, sonnet): **CONFORMANT** — all
+sections, all five checklist categories plus the ADR as a sixth, no ungated
+universal, no glossary synonym (the spec's own prose obeys its `harness` rule).
+Coherence (second executor, sonnet): every citation, count and measured claim
+reproduced — `tests/run.js`/`with-temp-root.js` shapes, the boundary-check
+admit list, the 20 MB tree, `mirror-walk --scope criterion-red` = 6 entries,
+the three `row G8` tests and their canaries, the adopted suite at 44 tests
+(14.35 s this run vs the pinned 14.6 s — within variance; the pinned figure
+stays as taken), the ADR index row. **4 findings, all C, all FIX (3 by the
+architect in `cc3128c3`, 1 by the orchestrator in `c69c33c9`):** the three
+successor ids marked "proposed id; not yet filed"; the fixtures Deliverables
+row restated as Tables A/D's structural requirements on any `--root` (mirror
+updated in the same pass); the ADR README status cell made to mirror the
+file's full string; the ADR status string's second copy registered as a
+mirror the owner's signature moves. `size: M` gut-checked and kept: the
+runner plus its one real-code adoption are the honest unit.
 
 ## Rounds
 
