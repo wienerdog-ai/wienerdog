@@ -112,4 +112,4 @@ function looksTemporary(p, env) {
   return roots.some((r) => rp === r || rp.startsWith(r + path.sep));
 }
 
-module.exports = { sandboxMismatchWarning };
+module.exports = { sandboxMismatchWarning, sameDir };

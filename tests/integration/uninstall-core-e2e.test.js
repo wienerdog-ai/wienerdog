@@ -31,6 +31,12 @@ function tempEnv() {
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
       CODEX_HOME: path.join(root, 'absent-codex'),
       WIENERDOG_LOADER_NOOP: '1',
+      // Table T's subprocess channel (ADR-0041): a subprocess has only the
+      // environment, so the one non-dry-run uninstall below is granted the real
+      // product authority predicate rather than being told a falsehood about the
+      // domain. The mutation it permits is still neutralized by the NOOP above —
+      // Table A row 1 sits ahead of the authorized-spawn row.
+      WIENERDOG_ALLOW_REAL_SCHEDULER: '1',
     },
   };
 }
