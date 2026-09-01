@@ -1,0 +1,29 @@
+PLUGIN GATE ROUND 1 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a3 worktree), tip 798f8617, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet. Table P does not actually enforce its claimed byte-identical preservation class, and the verification can pass with a required deliverable missing. No scope objection: fail-loud was not re-argued. The recoverable escape, P4 placement, pairwise message values, and dated-amendment precedent otherwise checked out.
+
+Findings:
+- [high] Materiality A — P0 mistakes a non-empty record for byte-identical preservation (docs/specs/WP-preservation-abort-widening.md:243-250)
+  P0 defines the class as any preservation leaving no durable artifact holding the judged bytes, but its required rule and P4 only reject an empty record. `quarantinePreserve` returns the input buffer after write/rename without verifying the resulting artifact (`validate.js:667-670`). I fault-injected a successful write that stored different bytes: the gate returned `refuse=true`, `preservedRecordLen=1`, while `artifactByteEqual=false`. Both P0 and P4 would accept this record, after which teardown can destroy the sole correct copy. A fabricated/stale non-empty record from the explicitly untrusted injected gate has the same gap. Thus the class enumeration is incomplete under Q4's byte-identity requirement.
+  Recommendation: Add false-success/wrong-bytes preservation to Table P and acceptance criteria. Require the gate to verify the final artifact by reading and byte-comparing it after rename, treating mismatch or disappearance as preservation failure. Clarify what P4 can and cannot establish about injected records; otherwise narrow P0's claim to `quarantinePreserve` returning `null` and stop claiming full Q4 enforcement.
+- [medium] Materiality B — V2–V5 can pass without establishing their stated contracts (docs/specs/WP-preservation-abort-widening.md:369-409)
+  V4's positive anchor is not tied to the catch comment: after deleting lines 954–960 entirely, the remaining `ROW G5` at teardown satisfies the anchor and the full V4 sequence exits 0. Its exact stale-phrase check also misses paraphrases. V2/V3 use `grep -Fc`, which counts matching lines, not occurrences; two literals on one line produced count 1. Their test-file greps also cannot distinguish assertions from comments/constants. Finally, V5's pattern does not select a legitimate test named `P4 refusal verdict with an empty preservation record throws`, so mutation (b) can be skipped unless the implementer happens to use `dream-promote` in the test name.
+  Recommendation: Bound V4 to the promote catch and positively require its Table P/class statement; sweep the claim rather than one phrase. Count literal occurrences with `grep -Fo ... | wc -l`. Run the full suite for V5 mutations, or add a non-vacuity check proving the intended new test executed without constraining its name.
+- [medium] Materiality B — the Ready spec prescribes implementation and test design forbidden by the house rule (docs/specs/WP-preservation-abort-widening.md:290-399)
+  The spec mandates an exact hostile-path fixture, concrete branch structure (`one added branch`), the `ABORT` helper as a registered mirror, exact mutation edits, and a name-sensitive selected test sweep. `docs/runbooks/spec-authoring.md:7-14` explicitly says specs state observable behavior and what to verify, never fixture shapes, mutation lists, or code structure. This is already causing coupling: V5's correctness depends on an unmandated test name. Shipping this as Ready doubles the surface that can rot and prevents a Sonnet implementer from choosing an equivalent, better-isolated test design.
+  Recommendation: Reduce these sections to observable contracts and verification obligations. Remove the prescribed helper, fixture construction, branch count, exact mutation edits, and name-dependent selection; leave the implementer responsible for test design and mutation mechanics.
+
+Next steps:
+- Executed source/spec inspections (`sed`, `nl`, `rg`, `awk`, `git rev-parse/status`): exit 0; git emitted sandbox temp-cache warnings.
+- Executed preservation-site counts: 3 definition/call lines and 1 source file, exit 0. No additional quarantine writer was found in `src/`.
+- Attempted the requested writable regular-file fixture: exit 1 (`EPERM` creating a temporary directory). Equivalent degraded-path drive with `stateDir=/dev/null`: exit 0 and reproduced A/B as empty refusals and C as `WienerdogError`.
+- Executed wrong-bytes successful-preserve fault injection: exit 0 (`refuse=true`, record length 1, byte equality false).
+- Executed pairwise substring check for all three message values: exit 0; all six directions were false.
+- Executed untouched V2/V3/V4: V2 source/test exits 1/1; V3 withhold/redact/test exits 1/0/1; V4 file/anchor/stale-negation exits 0/0/1, matching the spec's preimplementation predictions.
+- Executed V4 missing-comment mutation in-memory: overall V4 exit 0, demonstrating the false green. Executed `grep -Fc` duplicate-on-one-line probe: exit 0 with count 1.
+- Executed `npm test`: exit 1 because the read-only sandbox denied `mkdtemp`. Executed `npm run lint`: exit 0. Executed the V5 selected suite: exit 1 for the same sandbox restriction.
