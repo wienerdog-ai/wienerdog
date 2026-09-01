@@ -371,16 +371,28 @@ is unfinished work.
 
 ## Implementation notes & constraints
 
-- **The source-form proof is a SCRIPT because greps were tried twice and failed
-  twice — do not turn it back into greps** (ADR-0031's two-round rule, applied
-  to a proof rather than a contract). Round 1 shipped no discriminator at all;
-  round 2's three greps had two independent defects, both measured: `grep -c`
-  **exits 1 on a zero count**, so the pasted pipeline read the COMPLIANT state
-  as failure and the violating state as success; and file-wide counts are
-  spoofable — a comment carrying the literal beside a multiline
-  `'HEAD:' + WARNINGS_REL` scored 1/0/0. A third patch was available; the
-  contract-extraction move is the script, which scopes itself to the
-  `KNOWN_CALLS` initializer, strips comments, and answers by exit code.
+- **The source-form proof asserts OUR OWN CANONICAL BYTES and enumerates no bad
+  form. Do not turn it back into a shape check.** Three rounds, each a patch to
+  a matcher, each one spelling short — which is this repo's central measured
+  result arriving one level up: *enumerating the BAD is unclosable when the
+  grammar is not ours; enumerating our OWN GOOD is closable*. Round 1 shipped
+  no discriminator; round 2's greps inverted their exit status (`grep -c` exits
+  1 on a zero count, so the pipeline read COMPLIANT as failure) and scored a
+  comment-decoy-plus-concatenation 1/0/0; round 3's regex checker exited 0 on
+  three measured evasions — a compliant decoy initializer in a block comment,
+  a duplicate `show` shape with a double-quoted verb, and a `proof:` decoy
+  property beside an interpolated `args`. Each fix would have been one more
+  clause in **JavaScript's expression grammar, which is not ours**. The
+  digest ends that: any deviation is a mismatch, with nothing to enumerate.
+- **The uniqueness assertion (0) is not optional and is not redundant with the
+  digest.** A verbatim COMPLIANT decoy — the round-3 comment evasion — produces
+  a MATCHING digest if the locator lands on it, so the digest alone does not
+  close that class; assertion (0) does, and it holds without the lexer being
+  perfect. It costs one real constraint: `const KNOWN_CALLS` may appear exactly
+  once in that file, in any context, so no comment may quote the declaration.
+- **Any future WP that edits `KNOWN_CALLS` must re-pin the digest in the same
+  commit that changes the row.** That coupling is the feature — it is the
+  owner-visibility W1(c) wants and previously had no mechanism for.
 - **The retired direction may not return.** Do not add a slot kind that
   inspects a token — a `NOT_OPTION` slot, a leading-dash check, a prefix rule
   or any grammar-aware tolerance. Rejected options below records why each is
@@ -445,7 +457,9 @@ is unfinished work.
       sweep pattern go green under it; `WARNINGS_REL` is already imported at
       `tests/unit/dream-pipeline.test.js:30`, which puts that false green one
       edit away. The relocation tripwire that motivates C1's choice rests
-      entirely on this script.
+      entirely on this script. **The initializer must match the pinned digest
+      exactly**, so the shipped form is the canonical one down to quote style;
+      a red prints the extracted span, and conforming to it is the fix.
 - [ ] 2. `classify(['show', '--output=<user index path>'], {})` returns
       `UNKNOWN SHAPE — not one of the run's pinned calls`, and
       `classify(['show', 'HEAD:reports/warnings.md'], {})` returns `null`.
@@ -469,11 +483,11 @@ is unfinished work.
       form of `WARNINGS_REL`; (c) the slot replaced by the concatenation
       `'HEAD:' + WARNINGS_REL` **split across two lines**. For (b) and (c) the
       **runtime suite stays GREEN and the source-form script exits nonzero** —
-      that asymmetry is the whole point of having it, and (c) is required
-      because a comment carrying the literal beside a concatenated
-      implementation defeated the previous grep-based check (measured). Paste
-      all three diffs beside their outcomes. A red whose reason is not the
-      cell's is not a measurement.
+      that asymmetry is the whole point of having it. **The digest arm reds on
+      EVERY non-canonical form, so these two are required as evidence of the
+      asymmetry, not as an enumeration of what the checker catches** — the
+      twelve-state matrix beside the script is that record, and it must be
+      re-run, not merely cited.
 - [ ] 6. The `RUN_VALUE` JSDoc and the `produces` comment state the C2
       invariant, all four members satisfy it as stated, and the word MINTED no
       longer appears in `tests/unit/dream-pipeline.test.js`.
@@ -512,30 +526,84 @@ npm run lint
 # were tried twice and failed twice (see Implementation notes).
 cat > /tmp/wd-show-slot-source-form.js <<'WDEOF'
 'use strict';
+// SOURCE-FORM PROOF for the KNOWN_CALLS initializer. It asserts OUR OWN
+// CANONICAL BYTES by digest and enumerates no bad form, so there is no evasion
+// grammar to keep patching. Exit 0 only on the canonical source.
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const FILE = process.argv[2] || 'tests/unit/dream-pipeline.test.js';
-const fail = (m) => { console.error(`SOURCE-FORM FAIL: ${m}`); process.exit(1); };
+const PINNED = '932b54256c3192572f294c5c1ac9aef25bc1e0daf3d5f149e9039074e8f27324';
+const fail = (m, x) => { console.error(`SOURCE-FORM FAIL: ${m}`); if (x) console.error(x); process.exit(1); };
 const src = fs.readFileSync(FILE, 'utf8');
-const start = src.indexOf('const KNOWN_CALLS = [');
-if (start < 0) fail('the KNOWN_CALLS initializer was not found');
-const end = src.indexOf('\n];', start);
-if (end < 0) fail('the KNOWN_CALLS initializer is not terminated by "\\n];"');
-// Comments are stripped because a comment carrying the literal, beside a
-// concatenated implementation, satisfies any file-wide grep (measured). The
-// strip is sound HERE: this initializer holds only git argv literals, none
-// containing "//" or "/*". A future member that does needs this script
-// updated rather than trusted.
-const block = src.slice(start, end)
-  .replace(/\/\*[\s\S]*?\*\//g, ' ')
-  .replace(/\/\/[^\n]*/g, ' ');
-const shows = block.match(/\[\s*'show'\s*,[^\]]*\]/g) || [];
-if (shows.length !== 1) fail(`expected exactly one 'show' shape in KNOWN_CALLS, found ${shows.length}`);
-const ok = /^\[\s*'show'\s*,\s*('HEAD:reports\/warnings\.md'|"HEAD:reports\/warnings\.md")\s*\]$/.test(shows[0]);
-if (!ok) fail(`the show slot is not the required string literal — found: ${shows[0].replace(/\s+/g, ' ')}`);
-console.log("SOURCE-FORM OK: exactly one show shape, slot is the literal 'HEAD:reports/warnings.md'");
+// (0) OUR OWN GOOD, asserted before any parsing and INDEPENDENT OF THE LEXER:
+//     this file declares KNOWN_CALLS exactly once, in any context whatsoever.
+//     A decoy in a comment or a string is a RED here rather than a locator
+//     puzzle — and a verbatim COMPLIANT decoy would otherwise match the digest.
+const N = 'const KNOWN_CALLS';
+let n = 0;
+for (let i = src.indexOf(N); i !== -1; i = src.indexOf(N, i + 1)) n += 1;
+if (n !== 1) fail(`"${N}" must occur exactly once in ${FILE}; found ${n}`);
+// (1) LEXER over JS's LEXICAL grammar only — small, stable, and ours to close,
+//     unlike its expression grammar. Two equal-length projections, so offsets
+//     need no mapping back:
+//       code — comments AND string content blanked: locating and bracket depth
+//       hash — comments blanked, string content KEPT: this is what is digested
+const code = src.split(''); const hash = src.split('');
+let st = 0; const stack = []; let esc = false;   // 0 code 1 line 2 block 3 sq 4 dq 5 tpl
+const blankBoth = (i) => { if (src[i] !== '\n') { code[i] = ' '; hash[i] = ' '; } };
+const blankCode = (i) => { if (src[i] !== '\n') code[i] = ' '; };
+for (let i = 0; i < src.length; i++) {
+  const c = src[i], d = src[i + 1];
+  if (st === 0) {
+    if (c === '/' && d === '/') { st = 1; blankBoth(i); blankBoth(i + 1); i += 1; continue; }
+    if (c === '/' && d === '*') { st = 2; blankBoth(i); blankBoth(i + 1); i += 1; continue; }
+    if (c === "'") { st = 3; blankCode(i); continue; }
+    if (c === '"') { st = 4; blankCode(i); continue; }
+    if (c === '`') { st = 5; blankCode(i); continue; }
+    if (stack.length) { const f = stack[stack.length - 1];
+      if (c === '{') f.braces += 1;
+      else if (c === '}') { if (f.braces > 0) f.braces -= 1; else { stack.pop(); st = 5; blankCode(i); } } }
+    continue;
+  }
+  if (st === 1) { if (c === '\n') { st = 0; continue; } blankBoth(i); continue; }
+  if (st === 2) { blankBoth(i); if (c === '*' && d === '/') { blankBoth(i + 1); i += 1; st = 0; } continue; }
+  blankCode(i);                                   // 3, 4, 5: content is not code
+  if (esc) { esc = false; continue; }
+  if (c === '\\') { esc = true; continue; }
+  if (st === 3 && c === "'") { st = 0; continue; }
+  if (st === 4 && c === '"') { st = 0; continue; }
+  if (st === 5) {
+    if (c === '`') { st = 0; continue; }
+    if (c === '$' && d === '{') { blankCode(i + 1); stack.push({ braces: 0 }); st = 0; i += 1; }
+  }
+}
+const CODE = code.join('');
+// (2) LOCATE the one declaration in CODE — if the single raw occurrence is not
+//     also code, it was inside a comment or a string, and that reds.
+const at = CODE.indexOf(N);
+if (at < 0) fail(`"${N}" does not occur in code (it is inside a comment or a string)`);
+const open = CODE.indexOf('[', at);
+if (open < 0) fail('no "[" opens the KNOWN_CALLS initializer');
+let depth = 0, close = -1;
+for (let i = open; i < CODE.length; i++) {
+  const c = CODE[i];
+  if (c === '[') depth += 1;
+  else if (c === ']') { depth -= 1; if (depth === 0) { close = i; break; } }
+}
+if (close < 0) fail('the KNOWN_CALLS initializer is not closed by a matching "]"');
+let j = close + 1; while (j < CODE.length && /\s/.test(CODE[j])) j += 1;
+if (CODE[j] !== ';') fail('the KNOWN_CALLS initializer is not terminated by ";"');
+// (3) DIGEST the canonical span: comments gone, string literals intact,
+//     whitespace runs collapsed so re-indentation is not a false red.
+const span = hash.slice(open, close + 1).join('');
+const norm = span.replace(/\s+/g, ' ').trim();
+const got = crypto.createHash('sha256').update(norm, 'utf8').digest('hex');
+if (got !== PINNED) fail(`the KNOWN_CALLS initializer is not the canonical form.\n  pinned:    ${PINNED}\n  extracted: ${got}`, `  span:      ${norm}`);
+console.log(`SOURCE-FORM OK: KNOWN_CALLS matches the pinned canonical digest ${PINNED}`);
 WDEOF
 node /tmp/wd-show-slot-source-form.js tests/unit/dream-pipeline.test.js
-echo "source-form exit=$?"   # must be 0, and the exit code is the verdict
+echo "source-form exit=$?"   # THE VERDICT. Capture it as its own statement —
+                             # never behind a pipe, which reports the pipe's end
 
 # The SHA pins this WP writes must resolve in this repository — a pin that does
 # not resolve cannot ground the record exemption it is there to earn.
@@ -586,25 +654,82 @@ only in row W5, whose three occurrences are a registered Discovered issue this
 package may not touch — so that pattern is expected to keep reporting `:545`
 and nothing else. A hit anywhere else is unfinished work.
 
-**The source-form script was observed in SIX states before being put here**
-(`5d31a7dc`, on scratch copies of the test file), which is why criterion 1 can
-rest on it. The verdict is the **exit code**, never a count a reader
-interprets:
+**THE PIN, and its derivation.** The digest covers the WHOLE normalized
+initializer, not the one slot:
 
-| state of shape (4) | exit | reads |
+`932b54256c3192572f294c5c1ac9aef25bc1e0daf3d5f149e9039074e8f27324`
+
+Derived at `5d31a7dc` from the post-change initializer — the tree's
+`tests/unit/dream-pipeline.test.js` with `:194` replaced by the Exact-contracts
+line and **no other difference** (`diff` reports exactly `194c194`) — then
+comment-stripped, whitespace-collapsed and trimmed. The normalized span it
+hashes is auditable by eye and begins:
+
+```text
+[ { env: 'unset', args: ['ls-tree', RUN_VALUE, '--', ANY] }, { env: 'unset', args:
+['hash-object', '-w', '--stdin'], produces: true }, … { env: 'unset', args: ['show',
+'HEAD:reports/warnings.md'] }, … ]
+```
+
+The digest was re-derived independently of the script (`shasum -a 256` over the
+printed span) and agrees. **No string literal in the set contains a whitespace
+run**, visible in that span, so collapsing runs is lossless here; a future
+member whose literal held two adjacent spaces would need this stated again.
+
+**Observed in TWELVE states** (`5d31a7dc`, on scratch copies), each exit
+captured as its own statement rather than behind a pipe:
+
+| state of the initializer | exit | reads |
 |---|---|---|
 | absent — today's `['show', ANY]` | 1 | **RED** |
-| compliant — single-quoted literal | 0 | **GREEN** |
-| compliant — double-quoted literal | 0 | **GREEN** |
+| **canonical — the pinned form** | **0** | **GREEN** |
+| **pure re-indentation of the canonical form** | **0** | **GREEN** |
+| double-quoted literal in the slot | 1 | **RED** |
 | identifier interpolation — the template form | 1 | **RED** |
-| multiline concatenation — `'HEAD:' + WARNINGS_REL`, with a decoy comment carrying the literal | 1 | **RED** |
-| two `show` shapes in the initializer | 1 | **RED** |
+| multiline `'HEAD:' + WARNINGS_REL` with a decoy comment carrying the literal | 1 | **RED** |
+| a duplicate `show` shape, single-quoted verb | 1 | **RED** |
+| round 3: a compliant decoy initializer inside a block comment before the real one | 1 | **RED** |
+| round 3: a duplicate `show` shape with a **double-quoted verb** | 1 | **RED** |
+| round 3: a `proof:` decoy property carrying the literal while `args` interpolates | 1 | **RED** |
+| a compliant decoy initializer inside a **string literal** | 1 | **RED** |
+| the nine shapes **reordered** | 1 | **RED** |
+
+Three of these are the round-3 evasions, each reproduced against the previous
+checker (all exited 0) before being fixed. **Two behaviours changed
+deliberately and are stated because an earlier round of this spec said the
+opposite:** the double-quoted literal now REDS — the contract is no longer "a
+string literal with that raw value" but "the canonical byte sequence", and an
+implementer who writes double quotes gets a red naming the extracted span and
+conforms; and re-indentation PASSES, which is the whitespace collapse earning
+its place.
 
 The absent state reads red rather than green because the check is a required
 POSITIVE assertion, not a negated grep — a `! grep` here would pass hardest
-exactly where the work was never done. Both quote styles pass because the
-contract is *a string literal with that raw value*; rejecting double quotes
-would be a false red on a conforming implementation.
+exactly where the work was never done.
+
+**WHY A DIGEST IS NOT A THIRD COPY OF THE SET** — answered here so review does
+not re-derive it. The Done spec's Mirrored Surface Checklist says the pinned
+set has exactly two copies, the row and `KNOWN_CALLS`, and that no third may be
+written in prose or in code. **A digest is not a copy: the set cannot be read
+out of it.** What it adds is byte-lockstep — every future edit to the set must
+arrive with a new digest beside the row change, which is precisely the
+owner-visibility W1(c) asks for and could not previously get, since no grep
+reaches a slot-kind drift. House precedent for a content hash as a
+verification root of trust is `WP-157`'s app-tree digest
+(`memory/lessons/inbox.md`, the `WP-157 impl` bullet; the mechanism is live in
+`src/scheduler/descriptor.js` and `src/core/manifest.js`). That lesson's own
+warning — *two copies of the digest computation would drift* — does not apply
+here: there is one computation, in one script, in one place.
+
+**WHAT THIS CHECKER DOES NOT DEFEND AGAINST, stated so it is not asked for
+again.** It guards the pin's source form against drift and against
+DRY-minded rewrites that would make the guard follow production. An editor
+deliberately restructuring the file to defeat verification is the PR review
+gates' threat, not this script's. **Lexer imprecision cannot produce a false
+green:** any mislocation yields a different span and therefore a mismatch, and
+the one mislocation that WOULD match — landing on a verbatim compliant decoy —
+is refused by assertion (0), which is lexer-independent. That is why (0) exists
+and why it runs first.
 
 **Do NOT verify with `--test-name-pattern`.** Measured on this tree at
 `5d31a7dc` (Node v25.9.0):
