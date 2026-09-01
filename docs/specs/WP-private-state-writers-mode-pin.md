@@ -168,7 +168,7 @@ Definition of done item 0. `alerts.jsonl` was never covered by it.
 | modify | src/scheduler/jobs.js | `writeScheduleState` only — replace the hand-rolled temp+rename at lines 236-239 per Table B; thread `{ core: paths.core }` |
 | modify | src/core/dream/watermarks.js | `writeWatermarks` only — replace lines 37-40 per Table B; no core to thread (Table B's no-override row) |
 | modify | src/core/alerts.js | two functions: (a) `clearAlerts` — replace lines 206-208 per Table B, thread `{ core: paths.core }`; (b) `appendAlert`'s **compaction branch** — replace lines 117-120 per Table D (migrate + local try/catch, must not throw). Do NOT touch the atomic append at `:89-90`, the empty-read guard at `:105`, the compaction trigger at `:106`, or `chmodAlerts` itself |
-| modify | src/core/private-fs.js | **comment text only, zero code change** — correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited (config.yaml / install-manifest.json writers really are unchanged here) |
+| modify | src/core/private-fs.js | **comment text PLUS one tagged throw** (this row was "comment-only" in earlier rounds; it is not any more). (a) Correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited. (b) Add `code = 'WD_F10_POST_RENAME'` to the single throw at lines 361-365, per Table D2 — the ONLY code change permitted in this file |
 | create | tests/unit/private-writer-modes.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
 ### Exact contracts
@@ -348,9 +348,25 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 | Caller contracts preserved | `:840`'s "WARN loudly + durably and PROCEED — no throw" (`:827-831`) is unchanged, and `failLoud`'s `:615` call keeps its existing best-effort behavior. This WP adds **no** guard at `:840` and needs none |
 | **The hazard this closes (and its exact scope)** | the **predictable-TEMP-path** symlink. Observable: with a symlink planted at the old `${file}.${process.pid}.tmp` path and `alerts.jsonl` a **regular file**, compaction succeeds, the symlink's target is byte-identical and its mode unchanged, and `alerts.jsonl` holds the compacted content at `0600`. The primitive's temp name is crypto-random and `O_EXCL\|O_NOFOLLOW`, so the planted name is never opened |
 | **What it does NOT close** | a **destination**-symlinked `alerts.jsonl`. The append at `:89` and `chmodAlerts` at `:90` run *before* compaction and both follow that symlink, so by the time compaction is reached the outside target has already received the record and may already have been chmodded. No claim is made that a destination symlink's target is unchanged — that would be unpassable. This is a pre-existing, distinct hazard: see the destination-symlink residual below |
+| **How the two cases are told apart** | by a **stable machine-readable code on the F10 throw**, never by message text. On HEAD both cases throw an untagged `WienerdogError` whose only distinguishing feature is mutable prose, which is not a contract: matching on it would silently start misclassifying the day someone rewords the message. So this WP tags the one throw (Table D2) and the catch discriminates as `err && err.code === 'WD_F10_POST_RENAME'` |
+| Discrimination rule | that code → **Case 2**. **Any** other refusal — tagged with nothing, or carrying a Node errno such as `EXDEV`/`ENOSPC` from `renameSync` itself — is **Case 1**. Fail-safe direction: an unrecognized refusal is treated as "nothing was installed", which is true for every other throw site in `writeFilePrivate` (temp-create `:321-323`, write/`fchmod` `:347`, F16 dest `:299-302`, `mkdirPrivate` ancestry) and for a failed `renameSync`, none of which replaces `dest` |
 | **The not-persisted signal (a NEW wire — see Implementation notes)** | on Case 2 only, `appendAlert` returns `false`. On success and on Case 1 it returns what it returns today (`undefined`). It still **never throws**, so `run-job.js:840` — a bare expression statement that ignores the return value (verified `:840-849`) — keeps its "WARN and PROCEED" contract untouched. `failLoud` consuming that `false` is contracted by `WP-failloud-survives-state-write-failure`, this WP's `depends_on` |
 | Why the signal is required | without it, Case 2 is indistinguishable from success: `failLoud` would set `persisted = true` (it infers persistence from the absence of a throw, `run-job.js:621`) and `run-job.js:1106-1107` would **delete the reap token pidfiles** — discarding the last recovery breadcrumb for an un-reapable process group at the exact moment the durable alert was lost too |
 | Not changed | the compaction trigger conditions (`:106`), the `MAX_ALERTS`/`MAX_FILE_BYTES` budgets, the serialization at `:109`, the empty-read guard at `:105`, the append at `:89-90`, and `chmodAlerts` itself (still used by the append path) |
+
+### Table D2 — tagging the F10 throw (`src/core/private-fs.js`)
+
+The discriminator Table D depends on does not exist on HEAD, so this WP adds it.
+It is the **only** code change this WP makes to `private-fs.js`.
+
+| Fact / rule | Value |
+|-------------|-------|
+| Change | the `WienerdogError` thrown by the post-rename detection block (`src/core/private-fs.js:361-365`) carries `code = 'WD_F10_POST_RENAME'`. Nothing else about it changes — same class, same message, same throw site, same control flow |
+| Why a property and not a subclass | measured: `WienerdogError` (`src/core/errors.js`) sets only `name` and no error in the tree carries a `code`; but `err && err.code === '...'` is the tree's **universal** discrimination idiom — `reap.js:544`, `private-fs.js:320`/`:492`/`:493`/`:726`, `manifest.js:959`, `policy-hooks.js:89`, `doctor.js:254` and ~10 more. Setting `.code` matches that convention exactly and needs no new class, no new constructor signature, and no change to `errors.js` |
+| Value shape | `WD_F10_POST_RENAME` — deliberately not an errno string, so it can never collide with a Node code arriving on the same property, and it carries the `F10` label `private-fs.js` already uses throughout its own comments |
+| Purely additive | adding a property does not change what any existing `catch` sees: every current handler either rethrows, matches `instanceof WienerdogError`, or ignores it. No caller behavior changes |
+| Scope discipline | **only** the post-rename block is tagged. The other throw sites stay untagged on purpose — that is what makes "no code ⇒ Case 1" correct rather than merely convenient |
+| Not changed | `src/core/errors.js`, the `WienerdogError` class, every other throw in `private-fs.js`, and all of that module's logic |
 
 ### Mirrored Surface Checklist
 
@@ -378,6 +394,10 @@ every surface below in one pass:
       `WP-failloud-survives-state-write-failure`, and the backward-compatibility
       rule (`undefined` keeps HEAD semantics, only explicit `false` signals) is
       stated in both. All three surfaces move together
+- [ ] **The `WD_F10_POST_RENAME` code** — it appears in Table D's discrimination
+      rows, Table D2, the `private-fs.js` Deliverables cell, and the acceptance
+      criteria; renaming it moves all four. The Deliverables row must stay
+      "comment + one tagged throw", never revert to "comment-only"
 - [ ] **The two Table D refusal cases** — Case 1 (record durable) and Case 2
       (record may be LOST, no claim on destination contents) are distinct in the
       table, the acceptance criteria and the withdrawal paragraph; no surface may
@@ -523,12 +543,24 @@ every surface below in one pass:
       substituted entry is whatever was installed, and the `:89` record may be
       gone. Asserting the record survives here would be asserting something
       false.
+- [ ] **The discrimination is on the code, not on prose (Tables D and D2):** a
+      refusal carrying `code === 'WD_F10_POST_RENAME'` yields `false`; **every**
+      other refusal yields `undefined`. Both directions are asserted, because
+      each failure mode is its own bug: a missed F10 recreates the lost-alert /
+      deleted-pidfile defect, and a `false` on an ordinary Case 1 refusal
+      misreports a durable alert as lost and needlessly retains pidfiles.
+- [ ] Nothing in the delivered code matches on the F10 **message text** — the
+      message is not a contract and may be reworded without breaking anything.
 - [ ] The `:840` managed-policy warning path still proceeds — a job whose
       `appendAlert` warning hits a refusing compaction is not aborted, and
       `src/cli/run-job.js` is not edited by this WP at all.
-- [ ] `src/core/private-fs.js` has **no code change** — only the two comment
-      mirrors at `:20-22` and `:129-134` are edited, and both `:135-141` (the
-      array literal) and `:143-148` are untouched.
+- [ ] `src/core/private-fs.js` carries **exactly one** code change — the
+      `code = 'WD_F10_POST_RENAME'` tag on the throw at `:361-365` (Table D2) —
+      plus the two comment mirrors at `:20-22` and `:129-134`. Both `:135-141`
+      (the array literal) and `:143-148` are untouched, `src/core/errors.js` is
+      not edited, and no other throw in the module is tagged.
+- [ ] The tag is purely additive: every existing test and caller that catches a
+      `WienerdogError` from `writeFilePrivate` behaves exactly as before.
 - [ ] Idempotence: this WP ships no new command. The surface it writes outside
       the repo is the three state files, and the repeat-run criterion covers it.
 - [ ] `npm test` and `npm run lint` pass.
@@ -673,8 +705,14 @@ node /tmp/wd-private-writer-modes.js
    writers this WP does not touch. No ADR is required: the decision lives in a
    `done` spec and a logbook entry, not in an ADR, so its narrowing is recorded
    the same way — in this spec and in the PR's logbook entry. `alerts.jsonl`
-   (Table A row 4) was never covered by that decision and needs no waiver. The
-   dispatch message records that both preconditions were observed.
+   (Table A row 4) was never covered by that decision and needs no waiver.
+   **Table D2's error tag is also outside that waiver, verified:** the decision's
+   subject is the four metadata files' *writers*
+   (`src/core/private-fs.js:19-21`; `docs/specs/done/WP-a9-private-modes-repair.md:149-156`),
+   and tagging a throw inside `writeFilePrivate` neither writes those files nor
+   changes any writer's behavior — it adds a property to an error object. No
+   extension of the waiver is requested for it. The dispatch message records
+   that both preconditions were observed.
 1. All verification steps pass locally, including the Table C gate's green run,
    a red run on the unfixed state, and a red run on a mode-argument-only fix;
    output pasted into the PR body.
