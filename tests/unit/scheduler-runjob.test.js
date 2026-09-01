@@ -2663,15 +2663,20 @@ test('scheduler-runjob: Table B2 :1061 — clearAlerts throws AFTER :1060 succee
   jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
   // A pre-existing alert for a DIFFERENT job so clearAlerts's rewrite branch is
-  // reached (remaining.length > 0) rather than its rmSync branch.
+  // reached (remaining.length > 0) rather than its rmSync branch. alertsFile is
+  // a SYMLINK to that record (not a regular file): writeFilePrivate's F16
+  // destination check refuses a pre-existing symlink, forcing the rewrite to
+  // throw. (The old fixture — a directory pre-created at clearAlerts'
+  // deterministic temp path — is retired by this WP's own fix: writeFilePrivate's
+  // crypto-random temp never opens it, so the rewrite would just succeed. See
+  // the :2739 sibling below and "A test that this WP's fix retired" in the spec.)
   const alertsFile = path.join(paths.state, ALERTS_FILE);
+  const outside = path.join(root, 'OUTSIDE');
   fs.writeFileSync(
-    alertsFile,
+    outside,
     `${JSON.stringify({ job: 'other', at: new Date().toISOString(), reason: 'x', log_hint: 'y' })}\n`
   );
-  // clearAlerts runs IN THIS PROCESS (no subprocess), so its own temp filename
-  // (alerts.jsonl.<pid>.tmp) is deterministic — block just that write.
-  fs.mkdirSync(`${alertsFile}.${process.pid}.tmp`);
+  fs.symlinkSync(outside, alertsFile);
   /** @type {any[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
