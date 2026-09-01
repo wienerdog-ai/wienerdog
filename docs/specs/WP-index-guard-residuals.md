@@ -79,10 +79,11 @@ the vault is the worktree top in all three fixture layouts. Table A carries the
 consequence.
 
 **Not producible by the shipped run — with the exception named rather than
-rounded off.** `tmpIndex = path.join(o.stateDir, …)` (`src/cli/dream.js:226`),
-`stateDir = paths.state` (`:1039`), and `paths.state` sits under
+rounded off.** `tmpIndex = path.join(o.stateDir, …)` (`src/cli/dream.js:226`);
+`o.stateDir` is the property `stateDir: paths.state,` passed to
+`commitNamedSet({…})` at `:1039`; and `paths.state` sits under
 `core = assertSafeOverride('WIENERDOG_HOME', …) || path.join(home, '.wienerdog')`
-(`src/core/paths.js:55`), where `assertSafeOverride` (`:21-33`) rejects a
+(`src/core/paths.js:55`), where `assertSafeOverride` (`:21-31`) rejects a
 non-absolute `WIENERDOG_HOME`. **`HOME` is deliberately NOT validated**
 (`src/core/paths.js:7-10`) and is the one way in: measured,
 `getPaths({ HOME: 'relhome' }).state === 'relhome/.wienerdog/state'`. A relative
@@ -126,8 +127,8 @@ never implied as a total"* clause: the seam is total over `src/cli/dream.js`, an
 `assertGitRepo`, `src/cli/dream.js:587`) and `src/core/dream/promote.js`'s
 `spawnGitForMerge` (`:311`; the pipeline's `promote({…})` at
 `src/cli/dream.js:941` passes no `spawnGit`). That clause also **forecloses** the
-stub's alternative in as many words: *"Do NOT 'fix' this by forwarding the
-pipeline's seam into `promote()`"*.
+stub's alternative in as many words, quoted byte-exactly because a reviewer greps
+for it: *Do NOT "fix" this by forwarding the pipeline's seam into `promote()`*.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -137,8 +138,8 @@ pipeline's seam into `promote()`"*.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/dream.js | **COMMENT TEXT ONLY, two sites:** the `gitIn` JSDoc at `:156-157` and the inline comment at `:560`, per **Table C** rows 1–2. The diff must contain no change to an executable line |
-| modify | tests/unit/dream-pipeline.test.js | **FOUR sites.** (a) `classify`'s private-index resolution, the violation line's resolved path and the `classify` call sites, per **Table A**; (b) the canary the acceptance criteria need, inside the index test's existing non-vacuity canary block; (c) the `watchIndexWrites` JSDoc at `:167-168` and (d) the `claim-2b-pipeline` comment at `:443-445`, per **Table C** rows 3–4. **`shapeMatches`, the require, `KNOWN_CALLS_SOURCE_DIGEST`, the disposition clauses and every test title are unchanged** |
+| modify | src/cli/dream.js | **COMMENT TEXT ONLY, two sites:** the `gitIn` JSDoc at `:156-157` and the inline comment at `:560`, per **Table C** rows 1–2. **THIS CELL OWNS WHAT STAYS UNCHANGED in this file, and the acceptance criteria cite it: the diff contains no change to an executable line** |
+| modify | tests/unit/dream-pipeline.test.js | **FOUR sites.** (a) `classify`'s private-index resolution, the violation line's resolved path and the `classify` call sites, per **Table A**; (b) the canary the acceptance criteria need, inside the index test's existing non-vacuity canary block; (c) the `watchIndexWrites` JSDoc at `:167-168` and (d) the `claim-2b-pipeline` comment at `:443-445`, per **Table C** rows 3–4. **THIS CELL OWNS WHAT STAYS UNCHANGED, and the acceptance criteria cite it rather than re-listing it: `shapeMatches`, the require, `KNOWN_CALLS_SOURCE_DIGEST`, the two disposition clauses, the four verdict strings (and no fifth is added) and every test title are unchanged** |
 | modify | docs/specs/done/WP-dream-promote-in-workspace.md | **ROW W1(c) ONLY** — all of Table W is on line 541. Four edits, and the Mirrored Surface Checklist below owns the list: the pinned-set enumeration gains the markers and the preamble gains their definition; the *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause stops stating a membership rule of its own; the residual-closure clause's owning-surface sentence moves (all three **Table B**); the *"ONE MECHANICAL TRAP SURVIVES"* clause gains the frame sentence (**Table A**). **No other row, no other table, no frontmatter, and NOT that spec's own Mirrored Surface Checklist (`:548-1017`)** |
 
 **NOT a deliverable, stated because it is the trap:**
@@ -214,9 +215,15 @@ their history.
 
 ### Mirrored Surface Checklist
 
-Every surface below was found by the sweep in Verification steps — that command
-owns the patterns; this section does not restate them. Re-run it after editing: a
-hit that is neither corrected text nor a named non-move here is unfinished work.
+**The tree surfaces below** — the prose and code each table's facts appear in —
+were found by the sweep in Verification steps; that command owns the patterns and
+this section does not restate them. Re-run it after editing: a hit that is neither
+corrected text nor a named non-move here is unfinished work.
+**The in-spec surfaces** — the acceptance criteria that assert each table's facts
+and the verification commands that check them — are registered beside them, so a
+review finding moves the table and all its mirrors in one pass. They are located
+by criterion number and by each verification block's own comment header, which are
+stable where line ranges are not; the sweep does not and cannot find them.
 
 **Table A:**
 
@@ -225,6 +232,8 @@ hit that is neither corrected text nor a named non-move here is unfinished work.
 - [ ] `tests/unit/dream-pipeline.test.js:1589`, `:1602`, `:1617`, `:1624`, `:1629` — the five `classify` call sites, each of which must supply the frame
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the *"ONE MECHANICAL TRAP SURVIVES"* clause, which gains the frame sentence
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the two-clause private-index rule (*"must RESOLVE (symlinks and `..` included)"*): **registered NON-move**. The clauses do not change; only the frame they are applied in is stated
+- [ ] **Acceptance criteria 1, 2, 3 and 4** — they assert this table's frame, its accept side, the no-hidden-default rule, and (through the Deliverables cell they cite) the unchanged verdict set
+- [ ] **Verification steps: the guard-file suite run and criterion 1's applied mutation.** Registered with what it reaches: **no grep can check a resolution frame**, so this table's only check is the RED/GREEN pair criterion 1 requires. If Table A's frame changes, that pair is what changes with it
 
 **Table B:**
 
@@ -235,6 +244,8 @@ hit that is neither corrected text nor a named non-move here is unfinished work.
 - [ ] `tests/unit/dream-pipeline.test.js:226-238` — the `produces` recorder comment. **Registered NON-move:** `WP-show-slot-own-value-kind` rewrote it to the sharpened predicate one day earlier and it is already correct. Re-read it; do not edit it
 - [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same *PRODUCED* phrasing. **Registered NON-move**, already ruled so by `WP-show-slot-own-value-kind`'s C2 checklist: a dated narrative of that day's ruling, not a mirror of the live contract
 - [ ] `docs/specs/done/WP-show-slot-own-value-kind.md` and **this spec** — both quote the pre-change wording on purpose, as a record and a change order must, and those quotations stay true as history. Excluded from the sweep for that reason and no other
+- [ ] **Acceptance criterion 5** — it asserts every fact in this table, including the two this table's rows call non-negotiable: the no-count rule and the unreworded historical sentence
+- [ ] **Verification steps: the `Criterion 5 — the row/module PRODUCING pair AGREES` block**, the `Criterion 5 — the loose wording is gone from Table W` guarded negated grep, and the `Criterion 4 — the module is untouched` diff gate, which is what holds the pair's executable half still while the row moves. The pair block asserts a count equality and states no number itself, which is this table's no-count row applied to its own check
 
 **Table C:**
 
@@ -243,6 +254,8 @@ hit that is neither corrected text nor a named non-move here is unfinished work.
 - [ ] `tests/unit/dream-pipeline.test.js:436` — the title, **registered NON-move** (Table C row 5)
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:1114` and `:1454` — CLAIM 2b's acceptance criterion and the command pinning the test name. **Registered NON-moves**, and the reason row 5 gives for not renaming
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the COVERAGE clause. **Registered NON-move:** it is what the three comments cite, and it is already correct
+- [ ] **Acceptance criterion 7** — it asserts that none of the three false universals survives, that each replacement cites rather than restates, and that both Deliverables cells' unchanged lists hold (it cites those cells rather than re-listing the title and the executable lines)
+- [ ] **Verification steps: the claim-sweep block and its measured baseline paragraph.** The baseline names the expected hit for every pattern, so this table's registered non-moves (the two `product code invokes git` hits) are checked as UNCHANGED rather than merely tolerated
 
 ## Implementation notes & constraints
 
@@ -305,10 +318,11 @@ hit that is neither corrected text nor a named non-move here is unfinished work.
       rejected everything would satisfy criterion 1 alone.
 - [ ] 3. No `classify` call site relies on a default frame, and the violation line
       prints the same resolved path the verdict used (Table A).
-- [ ] 4. **The four failure modes are still four**, with the same verdict strings;
-      no shape, slot kind, literal or disposition changed;
-      `tests/unit/dream-pipeline.known-calls.js` is byte-identical to `main` and
-      `KNOWN_CALLS_SOURCE_DIGEST` is unchanged.
+- [ ] 4. **Nothing outside the edited sites moved.** Everything the Deliverables
+      cell for `tests/unit/dream-pipeline.test.js` names as unchanged is
+      unchanged — that cell owns the list and this criterion does not re-state it
+      — and `tests/unit/dream-pipeline.known-calls.js` is byte-identical to
+      `main`, so no shape, slot kind or literal moved and no re-pin is owed.
 - [ ] 5. **Table B has landed in W1(c):** every shape whose module entry carries
       `produces: true` carries the marker and no other shape does; the preamble
       defines it; the REPAIR clause states no membership rule of its own and the
@@ -320,8 +334,9 @@ hit that is neither corrected text nor a named non-move here is unfinished work.
       the rewrite falsified. Say in the PR body that the re-read happened and what
       it found — including "nothing".
 - [ ] 7. **Table C has landed:** none of the three false universals survives, each
-      replacement cites W1(c) rather than restating it, and neither the test title
-      nor any executable line in `src/cli/dream.js` changed.
+      replacement cites W1(c) rather than restating it, and both Deliverables
+      cells' unchanged lists hold — those cells own them, and this criterion does
+      not re-state them.
 - [ ] 8. The sweep is re-run over the whole tree and every hit is corrected text or
       a registered non-move. Paste its output.
 - [ ] 9. `npm test` and `npm run lint` pass; `boundary-check` is clean.
