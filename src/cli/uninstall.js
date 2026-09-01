@@ -18,9 +18,69 @@ function fileExists(p) {
   }
 }
 
-/** The identifier prefixes Wienerdog registers under, in every scheduler domain
- *  it uses. The clearance probe enumerates OUR OWN good and nothing else. */
-const OWN_IDENTIFIER_PREFIXES = ['ai.wienerdog.', 'wienerdog-'];
+/**
+ * @typedef {{status:'clean'|'live', identifiers:string[]}} SchedulerProbeResult
+ *   'clean' — the client was invoked, exited successfully, and reported no
+ *             Wienerdog identifier; `identifiers` is empty.
+ *   'live'  — it reported at least one; `identifiers` lists them.
+ *   There is no third success value: NOT-PROBEABLE is signalled by THROWING.
+ * @typedef {() => SchedulerProbeResult} SchedulerProbe
+ *   The live-domain probe (Table U step 2). SYNCHRONOUS by contract — a returned
+ *   promise is malformed, not awaited.
+ */
+
+/** How Wienerdog names its own registrations in each scheduler domain. The
+ *  clearance probe enumerates OUR OWN good and nothing else, and the shapes are
+ *  NOT interchangeable across platforms — hence one per domain rather than one
+ *  list matched everywhere. */
+const LAUNCHD_LABEL_PREFIX = 'ai.wienerdog.'; // generators.launchdLabel
+const SYSTEMD_UNIT_PREFIX = 'wienerdog-'; //     generators.systemdUnitBase
+
+/** The Task Scheduler FOLDER namespace Wienerdog registers under, DERIVED from
+ *  the generator that writes those registrations rather than restated here:
+ *  `windowsTaskName('dream')` is `\Wienerdog\dream`, so a task's identifier does
+ *  NOT carry either POSIX prefix above and a probe matching only those would
+ *  report a live Windows install as CLEAN. Deriving it means the probe cannot
+ *  drift from what registration actually produces. Required lazily and only on
+ *  win32: `src/scheduler/generators.js` requires nothing under `src/cli/`, so
+ *  there is no cycle (measured), but there is also no reason to load it
+ *  elsewhere. @returns {string} e.g. '\\Wienerdog\\' */
+function windowsTaskNamespace() {
+  const { windowsTaskName } = require('../scheduler/generators');
+  return windowsTaskName('probe').slice(0, -'probe'.length);
+}
+
+/**
+ * The live Wienerdog identifiers in a scheduler client's raw stdout, for
+ * `platform`. PURE — no I/O — so each domain's output format is testable on any
+ * host. Whitespace tokenization is what the three formats have in common: an
+ * identifier is never split by it (launchd `print` prints the label as its own
+ * column, systemd `list-units` the unit name, and `schtasks /query /fo LIST` the
+ * task path after `TaskName:`), and our own names cannot contain whitespace
+ * (`windowsTaskName` and the job-name charset are both `[a-z0-9-]`).
+ *
+ * Matching is FIXED-STRING and per-domain: launchd labels and systemd unit names
+ * are case-sensitive and matched exactly, while Windows task paths are
+ * case-INSENSITIVE, so the win32 arm folds case. A folder header line (`Folder:
+ * \Wienerdog`) deliberately does NOT match — the namespace includes its trailing
+ * separator, so an empty folder is not read as a live registration.
+ * @param {string} out @param {NodeJS.Platform} platform @returns {string[]}
+ */
+function ownIdentifiersIn(out, platform) {
+  const ns = platform === 'win32' ? windowsTaskNamespace().toLowerCase() : null;
+  const hit = (t) => {
+    if (platform === 'darwin') return t.includes(LAUNCHD_LABEL_PREFIX);
+    if (platform === 'linux') return t.includes(SYSTEMD_UNIT_PREFIX);
+    if (platform === 'win32') return t.toLowerCase().includes(ns);
+    return false;
+  };
+  /** @type {string[]} */ const identifiers = [];
+  for (const token of String(out).split(/\s+/)) {
+    if (token === '' || !hit(token)) continue;
+    if (!identifiers.includes(token)) identifiers.push(token);
+  }
+  return identifiers;
+}
 
 /** @param {string} p @returns {boolean} */
 function isExecutable(p) {
@@ -70,7 +130,8 @@ function probeCommand() {
  * configuration that needs it.
  * Throws on an unanswerable domain — the caller reads that as NOT-PROBEABLE and
  * fails closed.
- * @returns {{status:'clean'|'live', identifiers:string[]}}
+ * @type {SchedulerProbe}
+ * @returns {SchedulerProbeResult}
  */
 function defaultSchedulerProbe() {
   const { client, argv } = probeCommand();
@@ -79,12 +140,10 @@ function defaultSchedulerProbe() {
   if (r.status !== 0) {
     throw new Error(`${client} exited ${r.status === null ? 'on a signal' : r.status}`);
   }
-  const out = typeof r.stdout === 'string' ? r.stdout : '';
-  /** @type {string[]} */ const identifiers = [];
-  for (const token of out.split(/\s+/)) {
-    if (!OWN_IDENTIFIER_PREFIXES.some((p) => token.includes(p))) continue;
-    if (!identifiers.includes(token)) identifiers.push(token);
-  }
+  const identifiers = ownIdentifiersIn(
+    typeof r.stdout === 'string' ? r.stdout : '',
+    process.platform
+  );
   return identifiers.length > 0
     ? { status: 'live', identifiers }
     : { status: 'clean', identifiers: [] };
@@ -126,7 +185,7 @@ function isLive(v) {
  * command while a wrong proceed silently orphans a job that keeps firing with the
  * records that could have stopped it already deleted.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{probe?: () => {status:'clean'|'live', identifiers:string[]}}} opts
+ * @param {{probe?: SchedulerProbe}} opts
  * @returns {void}
  */
 function requireDeletionClearance(paths, opts) {
@@ -190,9 +249,8 @@ function readVaultPath(configPath) {
  * plan and stops; --yes skips confirmation. Exits 0 even if some entries were
  * already gone (reported as skipped).
  * @param {string[]} argv
- * @param {{probe?: () => {status:'clean'|'live', identifiers:string[]}}} [opts]
- *   `opts.probe` is the live-domain probe seam (Table U step 2), SYNCHRONOUS by
- *   contract — a returned promise is malformed, not awaited. TEST-ONLY: no
+ * @param {{probe?: SchedulerProbe}} [opts]
+ *   `opts.probe` is the live-domain probe seam (Table U step 2). TEST-ONLY: no
  *   production caller passes it (bin/wienerdog.js calls `run(rest)`).
  */
 async function run(argv, opts = {}) {
@@ -419,4 +477,8 @@ async function run(argv, opts = {}) {
   }
 }
 
-module.exports = { run };
+// `ownIdentifiersIn` is exported for its own unit tests only: it is pure, and the
+// three scheduler output formats it parses cannot otherwise be exercised off
+// their native platform. It is not a seam into the gate — `run` remains the only
+// entry point, still reached from exactly one production require.
+module.exports = { run, ownIdentifiersIn };
