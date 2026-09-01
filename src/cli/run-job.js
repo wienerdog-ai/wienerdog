@@ -621,6 +621,22 @@ function alertCleanupRefusedSubject(name) {
 }
 
 /**
+ * WP-failloud-survives-state-write-failure, Table E ("the outcome channel is
+ * separate from the forwarded opts"): every ORDINARY `failLoud` call site
+ * (the three failure sites `:797`/`:872`/`:1096` and the catch-up refusals)
+ * forwards its caller's `opts` verbatim. Without this, an `outcome` riding
+ * that object — e.g. `alert-cleanup-refused`, which sets the append-skip —
+ * would reach them too: exactly the "suppression capability any caller could
+ * aim at the primary reporting channel" Table E's preamble exists to deny.
+ * This FORCES `job-failure`, overriding anything `opts.outcome` carries, so
+ * only `:1060`/`:1061` (which build their own outcome-bearing opts object,
+ * never derived from this function) can select a different outcome.
+ * @param {object} opts @returns {object} */
+function ordinaryFailLoudOpts(opts) {
+  return { ...opts, outcome: 'job-failure' };
+}
+
+/**
  * Fail loud: append a DURABLE alert to state/alerts.jsonl (re-rendered into the
  * digest until the job next succeeds — ADR-0012 part 3), then attempt the
  * best-effort email. The durable record is independent of email delivery.
@@ -652,13 +668,23 @@ function alertCleanupRefusedSubject(name) {
  * An unrecognized discriminant throws (the one place failLoud may throw; it is
  * unreachable from the five call sites, which all pass literals) rather than
  * silently degrading to either behavior.
+ * Amended 2026-09-01: for the two success-path outcomes `failLoud` ALSO
+ * self-derives the `reason` it persists and emails from the SAME shared
+ * template `runJob` uses for its throw (`successMarkerRefusedReason` /
+ * `alertCleanupRefusedReason`) — the `reason` argument is honored only for
+ * `job-failure`. This keeps a stale/wrong caller string from ever reaching
+ * the durable record: the template is the string's single source, called by
+ * both `runJob` (for the throw) and `failLoud` (for what it records), so the
+ * two are always byte-identical.
  * `persisted` now also honors an explicit `false` return from the append
  * (`opts.appendAlert`, a test-only seam mirroring `opts.sendAlert` — production
  * always uses the real `appendAlert`, which returns `undefined` on every path
  * today, so this is a no-op there); `undefined` keeps today's
  * absence-of-throw meaning.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {string} name @param {string} reason
+ * @param {string} name @param {string} reason honored ONLY for the default
+ *   `job-failure` outcome — ignored (and self-derived instead) for the two
+ *   success-path outcomes
  * @param {{sendAlert?: typeof defaultSendAlert, appendAlert?: typeof appendAlert,
  *          outcome?: 'job-failure'|'success-marker-refused'|'alert-cleanup-refused'}} [opts]
  * @returns {Promise<boolean>} true iff the durable alert append persisted
@@ -667,12 +693,15 @@ async function failLoud(paths, name, reason, opts = {}) {
   const outcome = opts.outcome === undefined ? 'job-failure' : opts.outcome;
   let subject;
   let appendSkipped = false;
+  let effectiveReason = reason;
   if (outcome === 'job-failure') {
     subject = `job ${name} failed`;
   } else if (outcome === 'success-marker-refused') {
     subject = successMarkerRefusedSubject(name);
+    effectiveReason = successMarkerRefusedReason(name); // self-derived — never the caller's reason
   } else if (outcome === 'alert-cleanup-refused') {
     subject = alertCleanupRefusedSubject(name);
+    effectiveReason = alertCleanupRefusedReason(name); // self-derived — never the caller's reason
     appendSkipped = true; // Table C: never write through the artifact just refused
   } else {
     throw new WienerdogError(`failLoud: unrecognized outcome "${outcome}"`);
@@ -686,7 +715,7 @@ async function failLoud(paths, name, reason, opts = {}) {
       const appendResult = appendFn(paths, {
         job: name,
         at: nowIso(),
-        reason,
+        reason: effectiveReason,
         log_hint: logHint,
       });
       // Explicit `false` (WP-private-state-writers-mode-pin's F10 case) means
@@ -695,7 +724,7 @@ async function failLoud(paths, name, reason, opts = {}) {
       persisted = appendResult !== false;
     }
     const send = opts.sendAlert || defaultSendAlert;
-    const body = `${reason}\n\nDetails: ${logHint}`.trim();
+    const body = `${effectiveReason}\n\nDetails: ${logHint}`.trim();
     try {
       send(paths, name, subject, body);
     } catch {
@@ -879,7 +908,7 @@ async function runJob(paths, job, opts = {}) {
         `wienerdog: job "${name}" error watermark could not be saved: ${(werr && werr.message) || werr}\n`
       );
     }
-    await failLoud(paths, name, reason, opts);
+    await failLoud(paths, name, reason, ordinaryFailLoudOpts(opts));
     throw new WienerdogError(`job "${name}" ${reason}`);
   }
 
@@ -962,7 +991,7 @@ async function runJob(paths, job, opts = {}) {
           `wienerdog: job "${name}" error watermark could not be saved: ${(werr && werr.message) || werr}\n`
         );
       }
-      await failLoud(paths, name, reason, opts);
+      await failLoud(paths, name, reason, ordinaryFailLoudOpts(opts));
       throw new WienerdogError(reason);
     }
   }
@@ -1225,7 +1254,7 @@ async function runJob(paths, job, opts = {}) {
       `wienerdog: job "${name}" error watermark could not be saved: ${(werr && werr.message) || werr}\n`
     );
   }
-  const alertPersisted = await failLoud(paths, name, reason, opts);
+  const alertPersisted = await failLoud(paths, name, reason, ordinaryFailLoudOpts(opts));
   // F3 + G2 (WP-a10-reap fix-pass): the durable alert IS the record of the
   // un-reapable group, so release the still-retained token pidfile(s) — but
   // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
@@ -1325,7 +1354,7 @@ async function catchUp(paths, opts = {}) {
         paths,
         'catchup',
         `wienerdog: catch-up refused — the bound job-authorization map is unreadable (${decoded.reason}); no jobs were run. Run 'wienerdog sync' to re-bind it.`,
-        opts
+        ordinaryFailLoudOpts(opts)
       );
       process.stdout.write('wienerdog: catch-up refused — unreadable authorization map; nothing run.\n');
       return;
@@ -1352,11 +1381,11 @@ async function catchUp(paths, opts = {}) {
         live = undefined;
       }
       if (bound === undefined) {
-        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is not in the authorized job map (added since the last 'wienerdog sync'); it was NOT run.`, opts);
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is not in the authorized job map (added since the last 'wienerdog sync'); it was NOT run.`, ordinaryFailLoudOpts(opts));
       } else if (live === undefined) {
-        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is authorized but no longer in your config (removed since the last 'wienerdog sync'); it was NOT run.`, opts);
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is authorized but no longer in your config (removed since the last 'wienerdog sync'); it was NOT run.`, ordinaryFailLoudOpts(opts));
       } else if (live !== bound) {
-        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — its descriptor changed since it was scheduled (run/model/at/… drift); run 'wienerdog sync' to re-authorize it. It was NOT run.`, opts);
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — its descriptor changed since it was scheduled (run/model/at/… drift); run 'wienerdog sync' to re-authorize it. It was NOT run.`, ordinaryFailLoudOpts(opts));
       } else {
         authorized.push({ name, job });
       }

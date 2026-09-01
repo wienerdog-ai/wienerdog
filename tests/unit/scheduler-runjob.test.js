@@ -12,7 +12,7 @@ const { getPaths } = require('../../src/core/paths');
 const manifestLib = require('../../src/core/manifest');
 const jobsLib = require('../../src/scheduler/jobs');
 const runjob = require('../../src/cli/run-job');
-const { readAlerts, ALERTS_FILE } = require('../../src/core/alerts');
+const { readAlerts, ALERTS_FILE, appendAlert } = require('../../src/core/alerts');
 const { allowAll } = require('../../src/core/safety-profile');
 
 // A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
@@ -2390,6 +2390,38 @@ async function captureStderr(fn) {
   return out;
 }
 
+/** Shadow finding F2: a both-writes-fail test that only checks the final
+ *  record count is vacuous about whether `failLoud`'s append was ever
+ *  ATTEMPTED — removing the production `failLoud` call entirely would still
+ *  pass it. Wrap the REAL `appendAlert` with a call counter that still
+ *  DELEGATES to it (so a directory-fixture throw still happens exactly as it
+ *  would in production); `.calls` proves the attempt count directly.
+ *  @returns {((paths:object, record:object)=>*) & {calls: object[]}} */
+function countingAppendAlert() {
+  const calls = [];
+  const fn = (paths, record) => {
+    calls.push(record);
+    return appendAlert(paths, record);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+// The canonical B1/B2 reason templates — the single source `runJob` (for its
+// throw) and `failLoud` (for what it persists/emails) both derive from
+// (Table E, amended 2026-09-01). Defined once here and reused by both the
+// Table B and the Table E "one template, both paths" / "poison reason" tests
+// so a drift between two hand-typed copies can't hide a real bug.
+const CANONICAL_B1_REASON =
+  'job "dream" finished its work, but the record of that success ("last_success" in ' +
+  'state/schedule.json) could not be saved. Because that record is what tells Wienerdog the ' +
+  'job already ran, the job will be re-run at every future catch-up until this is fixed. To ' +
+  'stop the repeats: repair or remove state/schedule.json, or disable the job.';
+const CANONICAL_B2_REASON =
+  'job "dream" finished its work and its success was recorded, but Wienerdog could not clear ' +
+  'its previous alert(s) in state/alerts.jsonl. The job is up to date; the earlier alert(s) will ' +
+  'keep showing until this is fixed.';
+
 // ---- Table A: the three failure-path sites (:797, :872, :1096) ----------
 
 test('scheduler-runjob: Table A :797 — a watermark write throw does not suppress the TCC-refusal alert', async () => {
@@ -2420,17 +2452,19 @@ test('scheduler-runjob: Table A :797 both-writes-fail — zero alert records, on
   jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
   fs.mkdirSync(path.join(paths.state, 'schedule.json'));
   fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
+  const counted = countingAppendAlert();
   /** @type {any[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
   const stderr = await captureStderr(() =>
     assert.rejects(
-      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, appendAlert: counted, loader: noopLoader }),
       /macOS protected folder \(Documents\)/
     )
   );
 
   assert.match(stderr, /error watermark could not be saved/, 'exactly one non-alert persistence diagnostic');
+  assert.equal(counted.calls.length, 1, 'failLoud actually ATTEMPTED the append exactly once (F2)');
   // failLoud's append and email send share one try (unchanged, out of scope
   // here): when appendAlert itself throws (the same fault also breaks
   // alerts.jsonl), the throw skips the email send too — this is HEAD's
@@ -2470,6 +2504,7 @@ test('scheduler-runjob: Table A :872 both-writes-fail — zero alert records, on
   const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', 'exit 0']);
   fs.mkdirSync(path.join(paths.state, 'schedule.json'));
   fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
+  const counted = countingAppendAlert();
   /** @type {any[]} */ const alerts = [];
 
   const stderr = await captureStderr(() =>
@@ -2478,12 +2513,14 @@ test('scheduler-runjob: Table A :872 both-writes-fail — zero alert records, on
         resolveCommand: fakeResolve(brain),
         probeCmd: writeProbeFake(root, 'fail'),
         sendAlert: (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 }),
+        appendAlert: counted,
       })),
       /pre-routine containment self-check fail/
     )
   );
 
   assert.match(stderr, /error watermark could not be saved/);
+  assert.equal(counted.calls.length, 1, 'failLoud actually ATTEMPTED the append exactly once (F2)');
   assert.equal(alerts.length, 0, 'the append throw also skipped the email attempt (pre-existing failLoud behavior)');
   assert.equal(readAlerts(paths).length, 0, 'zero alert records');
 });
@@ -2513,26 +2550,53 @@ test('scheduler-runjob: Table A :1096 — a watermark write throw does not suppr
   assert.equal(jobsLib.readScheduleState(paths).dream, undefined, 'the watermark write never landed');
 });
 
-test('scheduler-runjob: Table A :1096 both-writes-fail — zero alert records, one diagnostic, retained pidfile n/a, original reason still thrown', async () => {
-  const { root, env, paths } = setup();
-  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
-  const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
-  fs.mkdirSync(path.join(paths.state, 'schedule.json'));
-  fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
-  /** @type {any[]} */ const alerts = [];
-  const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
+test(
+  'scheduler-runjob: Table A :1096 both-writes-fail — zero alert records, one diagnostic, retained pidfile, original reason still thrown',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    // F4: a builtin:dream run that mints a per-token brain pidfile AND hits an
+    // un-reapable settle-path group, so the :1106-1108 pidfile-retention logic
+    // is actually exercised (not merely "n/a" for this site).
+    const fake = writeScript(root, 'mid.sh', [
+      '#!/bin/sh',
+      'printf \'{"pid": 55555, "pgid": 55555}\' > "$WIENERDOG_HOME/state/dream-brain.$WIENERDOG_DREAM_RUN_TOKEN.pid"',
+      'exit 0',
+    ]);
+    fs.mkdirSync(path.join(paths.state, 'schedule.json'));
+    fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
+    const seams = reapSeams([{ reaped: false }, { reaped: false }, { reaped: false }, { reaped: false }]);
+    const counted = countingAppendAlert();
+    /** @type {any[]} */ const alerts = [];
+    const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
-  const stderr = await captureStderr(() =>
-    assert.rejects(
-      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-      /exited 3/
-    )
-  );
+    const stderr = await captureStderr(() =>
+      assert.rejects(
+        withRun(env, {}, ['dream'], {
+          resolveCommand: fakeResolve(fake),
+          sendAlert,
+          appendAlert: counted,
+          loader: noopLoader,
+          reapTree: seams.reapTree,
+          reapGroup: seams.reapGroup,
+        }),
+        /could not be reaped/
+      )
+    );
 
-  assert.match(stderr, /error watermark could not be saved/);
-  assert.equal(alerts.length, 0, 'the append throw also skipped the email attempt (pre-existing failLoud behavior)');
-  assert.equal(readAlerts(paths).length, 0);
-});
+    assert.match(stderr, /error watermark could not be saved/, 'exactly one non-alert persistence diagnostic');
+    assert.equal(counted.calls.length, 1, 'failLoud actually ATTEMPTED the append exactly once (F2)');
+    assert.equal(alerts.length, 0, 'the append throw also skipped the email attempt (pre-existing failLoud behavior)');
+    assert.equal(readAlerts(paths).length, 0, 'zero alert records');
+    const leftover = fs.readdirSync(paths.state).filter((f) => f.startsWith('dream-brain.') && f.endsWith('.pid'));
+    assert.equal(
+      leftover.length,
+      1,
+      'the survivor pidfile is RETAINED (F4) — alertPersisted is false since alerts.jsonl itself could not be written either'
+    );
+  }
+);
 
 // ---- Table B: the two success-path sites (:1060, :1061) -----------------
 
@@ -2544,24 +2608,30 @@ test('scheduler-runjob: Table B1 :1060 — the success-marker write throws: one 
   /** @type {any[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
-  await assert.rejects(
-    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-    (e) => {
-      assert.match(e.message, /last_success/);
-      assert.match(e.message, /could not be saved/);
-      assert.match(e.message, /re-run/);
-      assert.match(e.message, /repair or remove state\/schedule\.json/);
-      return true;
-    }
+  const stderr = await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      (e) => {
+        // One template, both paths: the THROWN reason is byte-identical to the
+        // canonical template (asserted again below on the PERSISTED reason).
+        assert.equal(e.message, CANONICAL_B1_REASON);
+        return true;
+      }
+    )
   );
 
+  assert.equal(
+    (stderr.match(/success record could not be saved/g) || []).length,
+    1,
+    'exactly one non-alert persistence diagnostic (F5)'
+  );
   assert.equal(alerts.length, 1, 'exactly one failLoud attempt for the run');
   assert.notEqual(alerts[0].subject, 'job dream failed', 'the work completed — not the generic failure subject');
-  assert.match(alerts[0].subject, /succeeded/);
-  assert.match(alerts[0].body, /schedule\.json/, 'names the refused state operation');
+  assert.equal(alerts[0].subject, 'job dream succeeded, but its record could not be saved');
+  assert.ok(alerts[0].body.startsWith(CANONICAL_B1_REASON), 'the EMAILED reason is the same canonical template');
   const durable = readAlerts(paths);
   assert.equal(durable.length, 1, 'the append is attempted — alerts.jsonl is not the refused artifact here (B1)');
-  assert.match(durable[0].reason, /re-run/);
+  assert.equal(durable[0].reason, CANONICAL_B1_REASON, 'the PERSISTED reason is byte-identical to the THROWN one');
   assert.equal(jobsLib.readScheduleState(paths).dream, undefined, 'last_success never landed — the next run treats this as overdue');
 });
 
@@ -2571,17 +2641,19 @@ test('scheduler-runjob: Table B1 both-writes-fail — zero alert records, one di
   const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
   fs.mkdirSync(path.join(paths.state, 'schedule.json'));
   fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
+  const counted = countingAppendAlert();
   /** @type {any[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
   const stderr = await captureStderr(() =>
     assert.rejects(
-      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-      /last_success|re-run/
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, appendAlert: counted, loader: noopLoader }),
+      (e) => e.message === CANONICAL_B1_REASON
     )
   );
 
   assert.match(stderr, /success record could not be saved/, 'one non-alert persistence diagnostic');
+  assert.equal(counted.calls.length, 1, 'failLoud actually ATTEMPTED the append exactly once (F2)');
   assert.equal(alerts.length, 0, 'the append throw also skipped the email attempt (pre-existing failLoud behavior)');
   assert.equal(readAlerts(paths).length, 0, 'zero alert records — alerts.jsonl itself could not be written either');
 });
@@ -2603,25 +2675,63 @@ test('scheduler-runjob: Table B2 :1061 — clearAlerts throws AFTER :1060 succee
   /** @type {any[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
 
-  await assert.rejects(
-    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-    (e) => {
-      assert.match(e.message, /recorded/);
-      assert.match(e.message, /could not/);
-      assert.doesNotMatch(e.message, /re-run|replay/i, 'B2 must NOT make a replay claim');
-      return true;
-    }
+  const stderr = await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      (e) => {
+        assert.doesNotMatch(e.message, /re-run|replay/i, 'B2 must NOT make a replay claim');
+        // One template, both paths: byte-identical to the canonical template.
+        assert.equal(e.message, CANONICAL_B2_REASON);
+        return true;
+      }
+    )
   );
 
+  assert.equal(
+    (stderr.match(/clearing its previous alerts failed/g) || []).length,
+    1,
+    'exactly one non-alert persistence diagnostic (F5)'
+  );
   const state = jobsLib.readScheduleState(paths).dream;
   assert.equal(state.last_status, 'ok', 'the success marker WAS saved at :1060 — no replay');
   assert.ok(state.last_success, 'last_success recorded');
   assert.equal(alerts.length, 1, 'exactly one failLoud attempt — the :1060 site did not ALSO fire');
-  assert.notEqual(alerts[0].subject, 'job dream failed');
-  assert.match(alerts[0].subject, /succeeded/);
-  assert.match(alerts[0].body, /alerts\.jsonl/, 'names the refused state operation');
+  assert.equal(alerts[0].subject, 'job dream succeeded, but its alert cleanup failed');
+  assert.ok(alerts[0].body.startsWith(CANONICAL_B2_REASON), 'the EMAILED reason is the same canonical template');
   const rawOutside = fs.readFileSync(alertsFile, 'utf8');
   assert.ok(!rawOutside.includes('"job":"dream"'), 'the recovery path never wrote through the refused artifact (Table C)');
+});
+
+test('scheduler-runjob: Table C — GWS unconfigured (sendAlert throws): B2 still emits the diagnostic, no alert record, and rejects with the B2 reason', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  // A pre-existing EMPTY DIRECTORY at alerts.jsonl: readAlerts()'s read fails
+  // EISDIR and its own catch resiliently returns [], so clearAlerts's
+  // `remaining` is [] and it takes the rmSync branch — rmSync on a directory
+  // without recursive:true also throws (verified: ERR_FS_EISDIR).
+  fs.mkdirSync(path.join(paths.state, ALERTS_FILE));
+  // Simulates GWS not being configured: the real defaultSendAlert's subprocess
+  // would fail; a throwing stub is the hermetic equivalent (failLoud's email
+  // try/catch swallows it either way).
+  const sendAlert = () => {
+    throw new Error('wienerdog gws _alert: GWS is not configured');
+  };
+
+  const stderr = await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      (e) => {
+        assert.equal(e.message, CANONICAL_B2_REASON);
+        return true;
+      }
+    )
+  );
+
+  assert.match(stderr, /clearing its previous alerts failed/, 'the non-alert diagnostic still appears even though the email itself failed');
+  assert.deepEqual(readAlerts(paths), [], 'readAlerts is empty — GWS being unconfigured creates no alert record either');
+  const state = jobsLib.readScheduleState(paths).dream;
+  assert.equal(state.last_status, 'ok', 'the success marker WAS saved — no replay');
 });
 
 // ---- Table C: the :1061 recovery path never writes through alerts.jsonl -
@@ -2674,12 +2784,7 @@ test('scheduler-runjob: Table E — failLoud with no outcome is byte-identical t
 test('scheduler-runjob: Table E — success-marker-refused: append attempted, canonical subject/reason, true iff persisted', async () => {
   const { paths } = setup();
   /** @type {any[]} */ const calls = [];
-  const reason =
-    'job "dream" finished its work, but the record of that success ("last_success" in ' +
-    'state/schedule.json) could not be saved. Because that record is what tells Wienerdog the ' +
-    'job already ran, the job will be re-run at every future catch-up until this is fixed. To ' +
-    'stop the repeats: repair or remove state/schedule.json, or disable the job.';
-  const persisted = await runjob.failLoud(paths, 'dream', reason, {
+  const persisted = await runjob.failLoud(paths, 'dream', CANONICAL_B1_REASON, {
     outcome: 'success-marker-refused',
     sendAlert: (_p, _n, subject, body) => (calls.push({ subject, body }), { status: 0 }),
   });
@@ -2689,17 +2794,13 @@ test('scheduler-runjob: Table E — success-marker-refused: append attempted, ca
   assert.match(calls[0].body, /^job "dream" finished its work, but the record of that success/);
   const alerts = readAlerts(paths);
   assert.equal(alerts.length, 1);
-  assert.equal(alerts[0].reason, reason);
+  assert.equal(alerts[0].reason, CANONICAL_B1_REASON);
 });
 
 test('scheduler-runjob: Table E — alert-cleanup-refused: append POLICY-SKIPPED, returns false always, canonical subject/reason', async () => {
   const { paths } = setup();
   /** @type {any[]} */ const calls = [];
-  const reason =
-    'job "dream" finished its work and its success was recorded, but Wienerdog could not clear ' +
-    'its previous alert(s) in state/alerts.jsonl. The job is up to date; the earlier alert(s) will ' +
-    'keep showing until this is fixed.';
-  const persisted = await runjob.failLoud(paths, 'dream', reason, {
+  const persisted = await runjob.failLoud(paths, 'dream', CANONICAL_B2_REASON, {
     outcome: 'alert-cleanup-refused',
     sendAlert: (_p, _n, subject, body) => (calls.push({ subject, body }), { status: 0 }),
   });
@@ -2717,6 +2818,142 @@ test('scheduler-runjob: Table E — alert-cleanup-refused returns false even whe
     sendAlert: () => ({ status: 0 }),
   });
   assert.equal(persisted, false);
+});
+
+// ---- Table E (amended 2026-09-01): the outcome decides the reason, and is
+// not inheritable from runJob's forwarded opts. Poison-reason, poison-outcome
+// and one-template-both-paths acceptance criteria. ------------------------
+
+test('scheduler-runjob: Table E — poison reason: success-marker-refused ignores a wrong/stale caller reason and self-derives the canonical string', async () => {
+  const { paths } = setup();
+  /** @type {any[]} */ const calls = [];
+  const persisted = await runjob.failLoud(paths, 'dream', 'WRONG STALE TEXT', {
+    outcome: 'success-marker-refused',
+    sendAlert: (_p, _n, subject, body) => (calls.push({ subject, body }), { status: 0 }),
+  });
+  assert.equal(persisted, true);
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1);
+  assert.equal(durable[0].reason, CANONICAL_B1_REASON, 'the canonical string is persisted, not the caller reason');
+  assert.ok(!durable[0].reason.includes('WRONG STALE TEXT'));
+  assert.ok(calls[0].body.startsWith(CANONICAL_B1_REASON), 'the canonical string is emailed too');
+  assert.ok(!calls[0].body.includes('WRONG STALE TEXT'));
+});
+
+test('scheduler-runjob: Table E — poison reason: alert-cleanup-refused ignores a wrong/stale caller reason and self-derives the canonical string', async () => {
+  const { paths } = setup();
+  /** @type {any[]} */ const calls = [];
+  const persisted = await runjob.failLoud(paths, 'dream', 'WRONG STALE TEXT', {
+    outcome: 'alert-cleanup-refused',
+    sendAlert: (_p, _n, subject, body) => (calls.push({ subject, body }), { status: 0 }),
+  });
+  assert.equal(persisted, false);
+  assert.deepEqual(readAlerts(paths), [], 'the append is skipped for this outcome regardless');
+  assert.ok(calls[0].body.startsWith(CANONICAL_B2_REASON), 'the canonical string is emailed, not the caller reason');
+  assert.ok(!calls[0].body.includes('WRONG STALE TEXT'));
+});
+
+test('scheduler-runjob: Table E — job-failure still honors the caller reason verbatim (HEAD semantics preserved)', async () => {
+  const { paths } = setup();
+  const persisted = await runjob.failLoud(paths, 'dream', 'the callers exact text', {
+    outcome: 'job-failure',
+    sendAlert: () => ({ status: 0 }),
+  });
+  assert.equal(persisted, true);
+  assert.equal(readAlerts(paths)[0].reason, 'the callers exact text');
+});
+
+test('scheduler-runjob: Table E — poison outcome via runJob opts does not affect :797 (TCC refusal reports normally)', async () => {
+  const { env, paths } = setup(path.join('Documents', 'vault'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  /** @type {any[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], {
+      platform: 'darwin',
+      sendAlert,
+      loader: noopLoader,
+      outcome: 'alert-cleanup-refused', // POISON: injected via opts, must not reach failLoud
+    }),
+    /macOS protected folder \(Documents\)/
+  );
+
+  assert.equal(alerts.length, 1, 'the append is still attempted — NOT skipped by the poisoned outcome');
+  assert.equal(alerts[0].subject, 'job digest failed', 'subject unaffected by the poisoned outcome');
+  assert.match(alerts[0].body, /macOS protected folder \(Documents\)/, 'reason unaffected — still the caller original');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'the append was NOT skipped despite the poisoned alert-cleanup-refused outcome');
+  assert.match(durable[0].reason, /macOS protected folder \(Documents\)/);
+});
+
+test('scheduler-runjob: Table E — poison outcome via runJob opts does not affect :872 (containment-halt reports normally)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', 'exit 0']);
+  /** @type {any[]} */ const alerts = [];
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], routineOpts({
+      resolveCommand: fakeResolve(brain),
+      probeCmd: writeProbeFake(root, 'fail'),
+      sendAlert: (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 }),
+      outcome: 'alert-cleanup-refused', // POISON
+    })),
+    /pre-routine containment self-check fail/
+  );
+
+  assert.equal(alerts.length, 1, 'the append is still attempted — NOT skipped by the poisoned outcome');
+  assert.equal(alerts[0].subject, 'job digest failed');
+  assert.match(alerts[0].body, /pre-routine containment self-check fail/);
+  assert.equal(readAlerts(paths).length, 1, 'the append was NOT skipped');
+});
+
+test('scheduler-runjob: Table E — poison outcome via runJob opts does not affect :1096 (general failure reports normally)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+  /** @type {any[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert,
+      loader: noopLoader,
+      outcome: 'alert-cleanup-refused', // POISON
+    }),
+    /exited 3/
+  );
+
+  assert.equal(alerts.length, 1, 'the append is still attempted — NOT skipped by the poisoned outcome');
+  assert.equal(alerts[0].subject, 'job dream failed');
+  assert.match(alerts[0].body, /exited 3/);
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'the append was NOT skipped');
+  assert.equal(durable[0].reason, 'job "dream" exited 3');
+});
+
+test('scheduler-runjob: Table E — poison outcome via runJob opts does not affect a catch-up refusal', async () => {
+  const gen = require('../../src/scheduler/generators');
+  const { env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  /** @type {any[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject, body) => (alerts.push({ subject, body }), { status: 0 });
+
+  await withRun(env, {}, ['--catch-up'], {
+    sendAlert,
+    loader: noopLoader,
+    jobDigests: gen.encodeJobDigests({}), // 'dream' is NOT in the bound map → "added since last sync" refusal
+    outcome: 'alert-cleanup-refused', // POISON: must not reach the catch-up refusal's failLoud call
+  });
+
+  assert.equal(alerts.length, 1, 'the append is still attempted — NOT skipped by the poisoned outcome');
+  assert.equal(alerts[0].subject, 'job dream failed', 'subject unaffected by the poisoned outcome');
+  assert.match(alerts[0].body, /not in the authorized job map/);
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'the append was NOT skipped despite the poisoned outcome');
+  assert.match(durable[0].reason, /not in the authorized job map/);
 });
 
 test('scheduler-runjob: Table E — an unknown outcome discriminant throws rather than degrading to either behavior', async () => {
