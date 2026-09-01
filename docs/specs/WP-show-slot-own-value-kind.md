@@ -186,8 +186,21 @@ in `done/`. The owner rules three things together:
    was written, and the walk is what found the entries above that a summary
    would have missed.**
 
-Until all three are ruled, this spec stays undispatched. Nothing else here is
-open.
+**DATED OWNER DECISION 2026-09-01 — ALL THREE RATIFIED; this spec is
+dispatchable.** In the working session of 2026-09-01, after PR #192 merged
+(`c00d220b`), the owner ruled *"Okay, I ratify all 3 as you recommended"*
+against the orchestrator's written recommendations: **(1)** the slot-kind
+change stands — shape (4) moves FREE → the spelled literal, amending W1(c)'s
+partition as row C1 states; **(2)** W1(c) is amended **in place** inside the
+Done spec (precedent `d5f31149`), Table W is not re-extracted; **(3)** the
+**durable design — Branch A — governs**: the module extraction, the committed
+whole-file digest check, the pinned constant and the same-commit re-pin
+obligation ship as specced. **Branch B was NOT taken**; its enumerated rewrite
+above stays as the pre-ruling record and is not to be applied. Per ADR-0035
+provenance discipline this record is an agent-written transcription of a
+verbal ruling and is **not** an owner signature; none is claimed. The
+sentence that previously blocked dispatch here is superseded by this record.
+Nothing else here is open.
 
 ## Context (read this, nothing else)
 
