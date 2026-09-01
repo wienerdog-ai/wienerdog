@@ -34,7 +34,7 @@ adjudication (`2026-09-02-audit-c-gate-raw-round<N>-<channel>.txt`).
 
 ## Round zero (`39e52659`)
 
-_(pending)_
+Pending — template conformance by a clean-context executor; coherence pass re-running every executable claim.
 
 ## Rounds
 
