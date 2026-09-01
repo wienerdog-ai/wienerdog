@@ -1134,3 +1134,48 @@ test('probe parser: a foreign identifier that merely EMBEDS our name is not ours
   assert.deepEqual(ownIdentifiersIn('not-wienerdog-related.timer', 'linux'), []);
   assert.deepEqual(ownIdentifiersIn('\\Vendor\\Wienerdog\\task', 'win32'), []);
 });
+
+test('the probe type contract, LIVE payloads: absent/empty stays LIVE, malformed is NOT-PROBEABLE — and neither ever throws a raw TypeError', async () => {
+  const { core, env, before } = installedFixture();
+  const { WienerdogError } = require('../../src/core/errors');
+
+  // ABSENT or EMPTY is the contract's specified LIVE shape: the abort still
+  // happens and the message says the identifiers were not reported.
+  for (const [label, value] of [
+    ['identifiers absent', { status: 'live' }],
+    ['identifiers empty', { status: 'live', identifiers: [] }],
+  ]) {
+    const err = await gateError(env, ['--yes'], { probe: () => value });
+    assert.ok(err instanceof WienerdogError, `${label}: coherent refusal`);
+    assert.match(err.message, /still holds a live Wienerdog registration/, `${label} aborts as LIVE`);
+    assert.match(err.message, /the identifiers were not reported/, label);
+    assert.deepEqual(snapshot(core), before, `${label} deleted something`);
+  }
+
+  // A MALFORMED payload is the contract's malformed row → NOT-PROBEABLE. That is
+  // still an abort, so `status` never un-aborts; only the message changes. The
+  // Symbol case is the one that used to reach `join` and raise a raw TypeError
+  // out of the gate instead of a refusal.
+  for (const [label, value] of [
+    ['a Symbol element', { status: 'live', identifiers: [Symbol('ai.wienerdog.dream')] }],
+    ['number elements', { status: 'live', identifiers: [1, 2] }],
+    ['a mixed array', { status: 'live', identifiers: ['ai.wienerdog.dream', 7] }],
+    ['a truthy non-array (number)', { status: 'live', identifiers: 42 }],
+    ['a truthy non-array (string)', { status: 'live', identifiers: 'ai.wienerdog.dream' }],
+    ['a truthy non-array (object)', { status: 'live', identifiers: { 0: 'ai.wienerdog.dream' } }],
+    ['null', { status: 'live', identifiers: null }],
+  ]) {
+    const err = await gateError(env, ['--yes'], { probe: () => value });
+    assert.ok(err instanceof WienerdogError, `${label}: a coherent refusal, never a raw TypeError`);
+    assert.doesNotMatch(String(err), /TypeError|Cannot convert/, `${label}: no formatting crash`);
+    assert.match(err.message, /unusable answer/, `${label} is NOT-PROBEABLE`);
+    assert.deepEqual(snapshot(core), before, `${label} deleted something`);
+  }
+
+  // Non-regression: a well-formed live payload is still named in full.
+  const named = await gateError(env, ['--yes'], {
+    probe: () => ({ status: 'live', identifiers: ['ai.wienerdog.dream', 'ai.wienerdog.catchup'] }),
+  });
+  assert.match(named.message, /ai\.wienerdog\.dream, ai\.wienerdog\.catchup/);
+  assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+});

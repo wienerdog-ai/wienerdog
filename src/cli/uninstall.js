@@ -158,6 +158,13 @@ function defaultSchedulerProbe() {
     : { status: 'clean', identifiers: [] };
 }
 
+/** The `identifiers` payload's contract shape: an array of strings. Both arms of
+ *  the verdict read it from here, so neither can drift into accepting a payload
+ *  the other rejects. @param {any} v @returns {boolean} */
+function isIdentifierList(v) {
+  return Array.isArray(v) && v.every((s) => typeof s === 'string');
+}
+
 /** True only for the ONE shape that grants clearance: a coherent CLEAN result.
  *  `status` alone can never grant it — a result that says "nothing is live" while
  *  listing something live is internally contradictory, and the reading that must
@@ -168,7 +175,7 @@ function isCoherentClean(v) {
     typeof v === 'object' &&
     typeof v.then !== 'function' &&
     v.status === 'clean' &&
-    Array.isArray(v.identifiers) &&
+    isIdentifierList(v.identifiers) &&
     v.identifiers.length === 0
   );
 }
@@ -222,9 +229,17 @@ function requireDeletionClearance(paths, opts) {
     );
   }
   if (isCoherentClean(result)) return; // step 3 — clearance granted
-  if (isLive(result)) {
+  // A `live` status aborts, and its payload cannot soften that — but the payload
+  // still has to be one the contract recognizes. ABSENT or EMPTY is the specified
+  // LIVE shape (the message then says so); anything else is the contract's
+  // malformed row and lands on NOT-PROBEABLE below, which aborts too. So the
+  // verdict never flips to permissive, only the message changes — and `join` is
+  // reached only over values proven to be strings, so formatting the refusal
+  // cannot itself throw (a `Symbol` element would otherwise raise a raw
+  // TypeError out of the gate instead of a coherent refusal).
+  if (isLive(result) && (result.identifiers === undefined || isIdentifierList(result.identifiers))) {
     const named =
-      Array.isArray(result.identifiers) && result.identifiers.length > 0
+      isIdentifierList(result.identifiers) && result.identifiers.length > 0
         ? result.identifiers.join(', ')
         : 'the identifiers were not reported';
     throw new WienerdogError(
