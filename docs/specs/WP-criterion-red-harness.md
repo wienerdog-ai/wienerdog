@@ -114,7 +114,7 @@ Every claim below is runnable at `49d3d467`.
 | create | scripts/red-proofs.js | the runner. CLI, declaration schema and phase order per Tables A, B and D; its report ends with a REACH footer stating Table C's limits |
 | create | tests/red-proofs/dream-pipeline.proofs.js | the adopted declaration set for `tests/unit/dream-pipeline.test.js`; coverage property in acceptance criterion 9 |
 | create | tests/unit/red-proofs.test.js | the runner's own suite, run by `npm test`; exercises the runner against the fixture repo below, never against a real suite |
-| create | tests/fixtures/red-proofs/ | one or more minimal repository trees the runner's own tests point `--root` at. Each carries a `src/` file, a suite asserting on it, its own `tests/run.js`, and a `tests/red-proofs/` declaration directory. **How many trees is the implementer's**: a schema ERROR aborts a whole run, so the deliberately broken declarations the criteria require cannot all share one root |
+| create | tests/fixtures/red-proofs/ | the repository tree(s) the runner's own tests point `--root` at. What Tables A and D require of **any** root, and therefore of these: a `tests/red-proofs/` declaration directory, a `tests/run.js` the runner spawns to start the suite, a `suite` path resolving inside the tree, and a `file` the declarations can mutate. **The trees' number and contents are the implementer's** — with one structural consequence to plan around, not a prescription: a LOAD-phase ERROR aborts a whole run, so the deliberately invalid declarations criterion 1 requires cannot all be reachable from one root |
 | modify | package.json | add exactly one script entry, per Table D |
 | modify | docs/GLOSSARY.md | add the two new terms, **RED proof** and **RED-proof runner**, and nothing else |
 
@@ -233,8 +233,9 @@ on the spot.
       D, and Table C's standing-limit row for the report's REACH footer), the
       `tests/red-proofs/dream-pipeline.proofs.js` row (cites criterion 9's
       coverage property), the
-      `tests/fixtures/red-proofs/` row (the broken declarations the criteria
-      require), the `package.json` row (cites Table D), the
+      `tests/fixtures/red-proofs/` row (states what Tables A and D require of any
+      `--root`, and cites criterion 1 for the invalid declarations — it
+      prescribes no fixture contents), the `package.json` row (cites Table D), the
       `docs/GLOSSARY.md` row — whose two entries are the byte-exact block under
       "Exact contracts", copied rather than reworded, so the definition is
       decided in one place
@@ -264,7 +265,10 @@ on the spot.
       It is **unsigned**: while it stays Proposed it moves with these tables. Once
       the owner signs it, a divergence is fixed by a new dated amendment, never by
       rewriting it (ADR-0035's discipline: no agent writes, moves or reformats an
-      owner signature line)
+      owner signature line). **Its STATUS string has a second copy**, in
+      `docs/adr/README.md`'s index row, which mirrors it in full by family
+      convention — so the owner's signature moves two surfaces, not one. Both are
+      outside this WP's Deliverables and neither is the implementer's to touch
 
 ## Implementation notes & constraints
 
@@ -442,15 +446,18 @@ one:
   a Deliverable.
 - **The CI job.** ADR-0042 decision 2 records that the lane gets one; adding a
   blocking PR gate before the ADR is signed would put the doctrine in force ahead
-  of the ruling. Successor: `WP-red-proofs-ci-lane`.
+  of the ruling. Successor: `WP-red-proofs-ci-lane` **(proposed id; not yet
+  filed — no such spec exists under `docs/specs/`)**.
 - **Making any spec *require* machine-run REDs** — the runbook and template
   changes (the stub's fourth "done means" item) are the doctrine, and they wait
-  on the same signature. Successor: `WP-red-proofs-doctrine`, which owns
-  `docs/runbooks/spec-authoring.md` and `docs/specs/_TEMPLATE.md`.
+  on the same signature. Successor: `WP-red-proofs-doctrine` **(proposed id; not
+  yet filed)**, which would own `docs/runbooks/spec-authoring.md` and
+  `docs/specs/_TEMPLATE.md`.
 - **Widening the adopted declaration set** beyond criterion 9's minimum,
   including the four REDs `WP-index-guard-residuals` criterion 4 requires. That
   WP is **not** a dependency of this one and need not land first: this WP adopts
-  what is merged at its base. Successor: `WP-red-proofs-adopt-index-guard`.
+  what is merged at its base. Successor: `WP-red-proofs-adopt-index-guard`
+  **(proposed id; not yet filed)**.
 - **Any change to `tests/unit/dream-pipeline.test.js`,
   `tests/unit/dream-pipeline.known-calls.js` or `src/`.** The adopted proofs
   mutate copies inside the sandbox; the tracked files are read, never edited.
