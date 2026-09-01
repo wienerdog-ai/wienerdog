@@ -1,7 +1,7 @@
 ---
 id: WP-show-slot-own-value-kind
 title: Close the show option-position slot and re-sync the guard's drifted mirrors
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
