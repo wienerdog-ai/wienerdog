@@ -1,0 +1,36 @@
+• needs-attention
+
+  Both round-5 fixes are genuine:
+
+  - The uninstall contract now preserves consent through confirm → byte-exact compare → probe → reverse(accepted snapshot), including
+    vaultPath and every deletion input (docs/specs/WP-scheduler-mutation-home-authority.md:353).
+
+  - Both forced smoke branches now require WIENERDOG_LOADER_NOOP=1, the four-command logging shim, and an empty log. Row-1 precedence
+    genuinely neutralizes mutation; the absolute-path preflight is correctly outside shim coverage (docs/specs/WP-scheduler-mutation-home-
+    authority.md:854).
+
+  1. Stable manifest absence is treated as a concurrent disappearance, permanently blocking recovery uninstall
+
+  File: docs/specs/WP-scheduler-mutation-home-authority.md:357, docs/adr/0041-real-scheduler-mutation-is-opt-in.md:106
+
+  Scenario: The manifest is already absent before uninstall starts. The initial manifestLib.load converts ENOENT to an empty manifest, so
+  disclosure and confirmation can occur. The post-confirm read then must abort on any missing manifest. Rerunning produces the identical
+  sequence; even WIENERDOG_ALLOW_REAL_SCHEDULER=1 cannot help because comparison precedes clearance.
+
+  Impact: An older, damaged, or partially removed installation can never be uninstalled through the CLI. The prescribed “rerun” message is
+  false recovery guidance. This is distinct from the intended present→missing race.
+
+  Recommendation: Capture manifest existence with the disclosed snapshot and distinguish transitions. Present→missing must abort. For
+  absent→absent, either:
+
+  - require an answered-CLEAN own-identifier probe before allowing empty-snapshot mechanics cleanup, bypassing the authority shortcut; or
+  - refuse before confirmation with durable manual-recovery instructions.
+
+  Add acceptance cases for absent→absent, present→absent, and absent→present.
+
+─ Worked for 2m 15s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…

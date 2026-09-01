@@ -1,0 +1,25 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship yet. The seven Round 1 defects are materially addressed, but Table U can still orphan live jobs, CI may pass without exercising any real registration, and authority-failure precedence remains contradictory.
+
+Findings:
+- [high] A stripped or stale manifest bypasses the uninstall safety gate (docs/specs/WP-scheduler-mutation-home-authority.md:260-267)
+  Table U trusts the presence of a `scheduler-entry` to decide whether authority is required. If that record is missing while its OS registration remains live, the gate is not armed, no unregister operation is derived, and uninstall can delete the remaining files and manifest without authority. This recreates the orphaned-live-job failure described immediately above. The claim that this is a “safe failure direction” is incorrect: absence of an untrusted record widens destructive behavior.
+  Recommendation: Require authority for every non-dry-run uninstall from an incoherent home, independent of manifest contents, or establish absence through a fail-closed live-domain probe. Add a test where a live registration exists but its manifest entry was stripped.
+- [medium] The smoke workflow can pass without testing real scheduler registration anywhere (docs/specs/WP-scheduler-mutation-home-authority.md:238-242)
+  On NOT-PROBEABLE runners, the workflow proceeds without scheduler authority and every mutation is refused. Because registration remains best-effort and unasserted, the lifecycle can still pass. The verification guidance accepts either CLEAN or NOT-PROBEABLE logs, so even all matrix legs becoming NOT-PROBEABLE—because of a probe regression or runner change—would remain green while the only advertised real-scheduler integration path goes untested.
+  Recommendation: Require at least one CI leg to probe CLEAN and assert a real register/query/unregister cycle. Scope the NOT-PROBEABLE override to explicitly expected legs and fail the overall gate if no leg exercised real registration.
+- [medium] Evaluation failure has contradictory precedence over explicit authority (docs/specs/WP-scheduler-mutation-home-authority.md:208-223)
+  Table B first says either authority is sufficient and failures are independent, but then says any lookup throw makes authority absent. Thus `WIENERDOG_ALLOW_REAL_SCHEDULER=1` combined with an `os.userInfo()` failure has two incompatible outcomes: the explicit opt-in permits mutation, or the evaluation-failure rule refuses it. The latter can brick scheduler operations and uninstall in exactly the degraded environments that need the escape hatch.
+  Recommendation: Define explicit precedence: exact opt-in should return authority immediately without evaluating home coherence, or explicitly state another intended rule. Update the result shape for “not evaluated” if necessary and test `WIENERDOG_ALLOW_REAL_SCHEDULER=1` with `os.userInfo()` throwing.
+
+Next steps:
+- Remove the manifest-dependent uninstall bypass.
+- Guarantee one CI leg exercises real scheduler registration.
+- Resolve and test explicit-opt-in versus lookup-failure precedence.
+
+Codex session ID: 01a059dd-a07e-7470-b9fb-cb7fd73f816a
+Resume in Codex: codex resume 01a059dd-a07e-7470-b9fb-cb7fd73f816a

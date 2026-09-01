@@ -1,0 +1,37 @@
+• needs-attention
+
+  Round-3 audit: fixes 2, 4, and 5 are genuinely applied, including the interactive-decline subprocess at uninstall.test.js:613. Fix 1 is
+  not propagated through all ADR statements, and fix 3’s probe result remains internally under-specified. The smoke edit is authorized
+  correctly, but its non-CLEAN behavior lacks deterministic verification.
+
+  1. The ADR still says relocated uninstall requires authority and refuses without it.
+     File: docs/adr/0041-real-scheduler-mutation-is-opt-in.md:187 (lines 187–191), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:262
+     (lines 262–269), docs/specs/WP-scheduler-mutation-home-authority.md:314 (lines 314–369)
+     Scenario: a relocated-core uninstall lacks scheduler authority, but its own-identifier probe answers CLEAN. Table U grants deletion
+     clearance and proceeds. The ADR’s D2/D3 rulings still say uninstall checks authority, every relocated scheduler-touching command—
+     including uninstall—requires the marker, and uninstall otherwise “refuses outright.”
+     Impact: the follow-up documentation and implementation can adopt opposite user contracts.
+     Recommendation: update D2, D3, and the relocated-core consequence: uninstall requires the marker only when the probe is live or
+     unanswerable; an answered-CLEAN probe grants deletion clearance without scheduler authority.
+
+  2. SchedulerProbe does not define clean with a non-empty identifier payload.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:198 (lines 198–227)
+     Scenario: a refactored probe returns {status:'clean', identifiers:['ai.wienerdog.dream']}. The clean row requires an empty array, but
+     the malformed rule accepts any array of strings, while “status decides, never payload” suggests granting clearance.
+     Impact: an internally contradictory but structurally valid result can delete despite its payload reporting a live identifier. This also
+     disproves the claim that every malformed or hostile input fails closed.
+     Recommendation: make the cross-field invariant explicit: clean is valid only with identifiers.length === 0; clean plus any identifier
+     is malformed/NOT-PROBEABLE. Keep all live statuses aborting regardless of payload, and add both contradictory-payload cases to
+     acceptance tests.
+
+  3. The non-CLEAN smoke branch and N−3 arithmetic are not deterministically verified.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:162 (lines 162–170), docs/specs/WP-scheduler-mutation-home-authority.md:284
+     (lines 284–312), docs/specs/WP-scheduler-mutation-home-authority.md:642 (lines 642–646, 713–721)
+     Scenario: the step-7 conditional is omitted, skips the wrong number of ok calls, or still invokes uninstall. If both hosted runners
+     happen to probe CLEAN, the CI behavioral check never exercises this branch; current acceptance and shell verification assert only the
+     authority export.
+     Impact: the branch specifically added to keep an unprobeable Linux leg green can ship broken and fail later when a runner actually
+     lacks a user bus. The reported check count can also falsely imply assertions ran.
+     Recommendation: add a deterministic forced-NOT-PROBEABLE smoke verification asserting exactly one notice, no step-7 uninstall/
+     assertions, and a pass-count delta of exactly three. Also assert the CLEAN branch retains all three ok calls and today’s total.
+

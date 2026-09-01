@@ -1,0 +1,72 @@
+• needs-attention
+
+  Round-1 audit: findings 1, 2, 3, 5, 6, and 7 are genuinely dispositioned. Finding 4 is only partially fixed: the intact-manifest refusal
+  is addressed, but uninstall can still orphan registrations through failed unloads or stripped/stale manifests. The dry-run branch itself
+  is coherently non-destructive.
+
+  1. Table U proves authority, not that unloading succeeded.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:247 (lines 247–267, 339–349), docs/adr/0041-real-scheduler-mutation-is-opt-
+     in.md:75 (lines 75–82, 195–201)
+     Scenario: authority is present, but launchctl/systemctl fails, WIENERDOG_LOADER_NOOP suppresses the spawn, or
+     WIENERDOG_TEST_NO_REAL_SCHEDULER throws. Table U passes; reverseSchedulerEntry then ignores the failed/suppressed result and deletion
+     continues.
+     Impact: the live job remains while its files and recovery metadata disappear—the exact orphan Table U claims to prevent. The “all-or-
+     nothing” guarantee is false.
+     Recommendation: require a positively successful unload before deleting its schedule file or manifest entry. Propagate the unload result
+     out of reverseSchedulerEntry, process scheduler entries before destructive file reversal, and abort while retaining recovery metadata
+     on non-zero, NOOP, or test-guard outcomes.
+
+  2. A stripped or stale manifest still bypasses the uninstall protection.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:258 (lines 258–267), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:228
+     (lines 228–239)
+     Scenario: a real scheduler registration exists, but its scheduler-entry was lost through manifest damage, an older format, manual
+     editing, or partial prior work. The gate does not arm and uninstall removes the remaining core state without attempting or confirming
+     unload.
+     Impact: the former round-1 orphaning failure remains reachable. Calling this the “safe failure direction” only describes the untrusted-
+     manifest deletion rule; operationally it leaves an unrecoverable live registration.
+     Recommendation: do not make absence of an untrusted record evidence that no registration exists. For non-dry-run uninstall, require
+     authority whenever it is absent unless a reliable positive fact proves no scheduler could exist; the simpler fail-safe contract is to
+     gate every real uninstall when authority is absent.
+
+  3. NOT-PROBEABLE smoke behavior is unresolved against Table U.
+     File: docs/specs/WP-smoke-live-scheduler-preflight.md:142 (lines 142–154), docs/specs/WP-scheduler-mutation-home-authority.md:236
+     (lines 236–265)
+     Scenario: Linux CI is NOT-PROBEABLE, so the workflow override lets smoke continue but Table C grants no scheduler authority. Init/sync
+     soft-refuse while still writing schedule files. The contract never states whether those refusals produce scheduler-entry manifest
+     records. If they do, the final smoke uninstall triggers Table U and aborts; if they do not, Table U proceeds.
+     Impact: the required CI outcome depends on unspecified manifest behavior, and the full lifecycle may deterministically fail on the
+     runner the new workflow override targets.
+     Recommendation: specify the manifest result of a soft-refused registration and add an end-to-end NOT-PROBEABLE acceptance case through
+     final uninstall. Define an explicit cleanup path that neither gains real authority nor conflicts with Table U.
+
+  4. A CLEAN probe grants a long-lived capability vulnerable to a race.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:229 (lines 229–245), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:84
+     (lines 84–91)
+     Scenario: the probe reports CLEAN and the script exports authority for its entire lifecycle. Before catch-up teardown or uninstall,
+     another local process registers the user’s real Wienerdog jobs under the same global identifiers. The smoke run retains authority and
+     removes them.
+     Impact: a point-in-time empty query is treated as continuing ownership of a mutable global namespace; the original incident remains
+     possible under ordinary concurrent use.
+     Recommendation: do not export blanket authority for the whole run. Serialize scheduler mutation with a per-user lock honored by all
+     mutators, or verify ownership immediately before destructive operations and refuse if the identifiers no longer belong to this smoke
+     run.
+
+  5. The two-override matrix is incomplete in both contract and verification.
+     File: docs/specs/WP-smoke-live-scheduler-preflight.md:142 (lines 142–153, 219–229, 273–290)
+     Scenario: the text and acceptance criteria establish that ALLOW_UNPROBEABLE=1 must not bypass LIVE, but never explicitly establish the
+     reverse: I_KNOW=1 must not bypass NOT-PROBEABLE. Behavior when both are set is also unstated. An implementation using a shared “either
+     override” condition can therefore pass the documented checks in one direction.
+     Impact: during the interval when WP-A ships without WP-B, the wrong override can let an unprobeable run reach today’s unconditional
+     real scheduler mutation.
+     Recommendation: add a complete outcome/override truth table. For LIVE, only I_KNOW=1 applies; for NOT-PROBEABLE, only
+     ALLOW_UNPROBEABLE=1 applies; when both are set, each applies only to its own outcome. Verify all wrong-variable and both-set
+     combinations.
+
+  6. Evaluation failure has contradictory precedence with explicit authority.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:167 (lines 167–178, 208–227, 280–299)
+     Scenario: WIENERDOG_ALLOW_REAL_SCHEDULER=1, but getPaths() or os.userInfo() throws. Table B says either authority is sufficient and the
+     arms are evaluated independently, while its evaluation-failure row says any such throw yields authority absent and row 4.
+     Impact: implementations can legitimately disagree between spawning and refusing; the explicit opt-in may fail precisely in namespace-
+     bridging environments where the ADR says it is the correct authority. Existing tests cover lookup failure only with the opt-in unset.
+     Recommendation: define the precedence explicitly. Prefer: a failed lookup disables only the coherence arm, while exact explicit opt-in
+     still yields ok: true; then test opt-in combined with each lookup failure and both failures.

@@ -1,0 +1,21 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship the specs yet: the new probe seam does not cover most uninstall tests, and the prescribed non-CLEAN smoke lifecycle is internally impossible under its own edit constraints.
+
+Findings:
+- [high] The probe seam cannot reach the existing CLI subprocess uninstall tests (docs/specs/WP-scheduler-mutation-home-authority.md:322-338)
+  Table T accounts only for six direct `run()` calls, but `tests/unit/uninstall.test.js` has roughly fifteen additional non-dry-run uninstalls executed through `bin/wienerdog.js`, and `tests/integration/uninstall-core-e2e.test.js` has another. Those subprocesses use redirected homes, while the bin intentionally calls `run(rest)` without `opts`; therefore they invoke the real probe. The suite-wide mutation guard and these tests' `WIENERDOG_LOADER_NOOP` cannot suppress that probe by contract. On Linux without a user bus the probe fail-closes, and on a maintainer Mac with live registrations it reports LIVE, so the subprocess uninstalls abort and `npm test` becomes machine-dependent. The integration test is not even in the deliverables boundary.
+  Recommendation: Inventory every direct and subprocess uninstall call, add all affected test files to Deliverables, and specify a test mechanism that reaches subprocesses without weakening the production gate. Include acceptance coverage proving the full suite performs no real probe while exercising CLEAN/LIVE/NOT-PROBEABLE decisions explicitly.
+- [high] The required green NOT-PROBEABLE smoke leg contradicts the permitted script changes (docs/specs/WP-scheduler-mutation-home-authority.md:265-266)
+  Table C says a non-CLEAN leg has no scheduler authority, so uninstall fail-closes; it then requires the smoke script to report this and skip step 7 plus its assertions so the leg remains green. The immediately following row says no other step, assertion, helper, message, or check count may change, while the Deliverables row permits only the probe-gated opt-in. With the current `set -e` script, leaving step 7 unchanged makes the unauthorized uninstall terminate the Linux leg non-zero; wrapping/skipping it and adding the required notice violates the stated boundary. No implementation can satisfy both contracts.
+  Recommendation: Explicitly authorize and specify the step-7 conditional block, notice, and resulting check-count behavior in Deliverables and acceptance criteria, or change the lifecycle contract so a non-CLEAN leg is expected to fail. Remove the conflicting “everything else unchanged” requirement.
+
+Next steps:
+- Revise Table T and the test deliverables to cover subprocess callers.
+- Resolve the Table C step-7 edit contradiction, then rerun the adversarial design gate.
+
+Codex session ID: 01a059f0-896b-7b61-8003-b418ef925a16
+Resume in Codex: codex resume 01a059f0-896b-7b61-8003-b418ef925a16

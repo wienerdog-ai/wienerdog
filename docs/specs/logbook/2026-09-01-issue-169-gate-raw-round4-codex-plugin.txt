@@ -1,0 +1,22 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship the design yet. The round-3 test channels conflict in practice, and the uninstall clearance is retained across an unbounded confirmation window that can recreate the orphaning failure.
+
+Findings:
+- [high] CLEAN clearance becomes stale across the interactive prompt (docs/specs/WP-scheduler-mutation-home-authority.md:349-357)
+  The probe runs before plan disclosure and confirmation, so an interactive user can retain CLEAN clearance indefinitely. A concurrent authorized sync for the same relocated core can then register a job and update the manifest before confirmation. Uninstall proceeds with its previously loaded manifest; because it still lacks scheduler authority, unloads are refused while recovery metadata may be deleted, leaving a live orphan. The ADR's R-probe-race describes Decision 3's smoke preflight, not this newly enlarged, prompt-length Decision 2 window.
+  Recommendation: Re-establish clearance after confirmation, immediately before deletion, and reload the manifest. Explicitly disposition the remaining probe-to-delete race; use serialization if the design intends a real no-orphan guarantee.
+- [medium] The shared authority marker bypasses the claimed in-process evidence path (docs/specs/WP-scheduler-mutation-home-authority.md:164-170)
+  The deliverable adds WIENERDOG_ALLOW_REAL_SCHEDULER=1 to tempEnv(), but the six in-process tests copy that same env into process.env. Table B therefore grants authority before opts.probe is consulted: the gate never arms and the injected probes are dead seams, contradicting Table T's claim that in-process callers supply evidence and exercise the verdict. These tests can remain green if the in-process probe path is broken. This also directly conflicts with lines 645-646, which prohibit granting a test a new environment variable to keep it passing. The spawnSync interactive-decline test at line 613 is correctly covered by the marker; the problem is sharing it with in-process callers.
+  Recommendation: Separate subprocess and in-process environments. Set authority only for subprocess invocations; explicitly unset it for in-process calls, inject SchedulerProbe, and assert that the probe ran. Reconcile the contradictory no-new-environment-variable acceptance criterion.
+
+Next steps:
+- Revise Table U's ordering and race disposition.
+- Split the test environment channels and make the in-process probe invocation observable.
+- Re-run the round-4 adversarial review after those contracts agree.
+
+Codex session ID: 01a059fd-c848-7ba0-9a0f-4c64c92d5d81
+Resume in Codex: codex resume 01a059fd-c848-7ba0-9a0f-4c64c92d5d81

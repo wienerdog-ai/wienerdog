@@ -1,0 +1,54 @@
+• needs-attention
+
+  Round-2 audit: all six dispositions are substantive. The overclaim and race are scoped as residuals, manifest evidence is removed, NOT-
+  PROBEABLE lifecycle and override matrix are defined, and authority ordering is unambiguous. Fail-closed uninstall on an unanswerable
+  domain is explicitly stated, with the exact opt-in as the escape; no finding on that policy itself.
+
+  1. Table U contradicts its own definition of required authority.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:279 (lines 279–311), docs/adr/0041-real-scheduler-mutation-is-opt-in.md:75
+     (lines 75–95)
+     Scenario: the title and ADR say uninstall “must hold authority before it deletes anything,” but Table U explicitly permits deletion
+     with authority absent when the probe answers empty.
+     Impact: an implementer following the headline aborts every relocated-core uninstall; one following Step 3 violates the ADR’s stated
+     invariant.
+     Recommendation: define a separate deletion-clearance predicate: scheduler authority OR answered-clean own-identifier probe. Reserve
+     “scheduler authority” for permission to mutate the scheduler, and update the Table U title and ADR Decision 2 accordingly.
+
+  2. The required NOT-PROBEABLE cleanup violates the smoke deliverable boundary.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:155 (lines 155–167), docs/specs/WP-scheduler-mutation-home-authority.md:250
+     (lines 250–277)
+     Scenario: Table C requires step 7 to print a new notice, skip its assertions, omit die/ok, and alter which checks contribute to the
+     final count. The deliverable nevertheless says the script receives only the probe-gated export with “no other change,” and Table C says
+     no other step, assertion, helper, message, or check count is touched.
+     Impact: the implementer must either violate the permission contract or leave the Linux NOT-PROBEABLE leg failing at uninstall.
+     Recommendation: enumerate the step-7 edits in the Deliverables row, remove the contradictory “everything else unchanged” language, and
+     add acceptance coverage for the resulting pass count and cleanup behavior on both legs.
+
+  3. opts.probe is an untyped public bypass of the uninstall gate.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:322 (lines 322–339, 533–536)
+     Scenario: any in-process caller can invoke run(argv, {probe: fakeClean}). The contract specifies neither the probe signature nor its
+     result taxonomy, validation, arguments, synchronous behavior, or treatment of throws/malformed results. It only asserts that the
+     current binary omits the option.
+     Impact: production callers or future refactors can accidentally bypass Table U, while tests merely encode whichever interpretation the
+     implementer chose.
+     Recommendation: specify the exact probe interface and require throws, rejected promises, and malformed results to become NOT-PROBEABLE.
+     State that no production caller may provide it and add a call-site assertion covering bin/ and src/; preferably expose a clearly test-
+     only wrapper rather than extending the production run() contract.
+
+  4. Ignoring the test guard makes forgotten seams non-hermetic—and not reliably loud.
+     File: docs/specs/WP-scheduler-mutation-home-authority.md:324 (lines 324–339)
+     Scenario: the suite-wide WIENERDOG_TEST_NO_REAL_SCHEDULER is set, but a test forgets opts.probe. On a clean CI machine the real query
+     answers empty, uninstall proceeds, and the test silently passes; on a maintainer machine it aborts. The stated “loud, machine-
+     dependent” behavior is therefore only conditionally loud.
+     Impact: unit results depend on host scheduler state, and missing injection can remain undetected until run on a machine with live
+     registrations.
+     Recommendation: when the test guard is set and no seam was injected, throw a dedicated “test must inject probe” error before querying.
+     This does not silence the safety gate or convert the domain to CLEAN; it makes forgotten injection deterministically fail.
+
+  5. The Linux-only workflow placement is not validly specified.
+     File: docs/specs/WP-smoke-live-scheduler-preflight.md:85 (lines 85–89, 163–164, 245–248)
+     Scenario: the spec requests one env: declaration “only on the Linux leg” using if: runner.os == 'Linux'. GitHub Actions cannot attach
+     if to one environment entry; putting it on the existing smoke step skips that entire step on macOS.
+     Impact: a literal implementation removes the macOS CLEAN leg and defeats the claimed hard CI guarantee.
+     Recommendation: prescribe a conditional value on the shared step, for example WIENERDOG_SMOKE_ALLOW_UNPROBEABLE: ${{ runner.os ==
+     'Linux' && '1' || '' }}, and assert that the smoke step itself still runs on both matrix legs.
