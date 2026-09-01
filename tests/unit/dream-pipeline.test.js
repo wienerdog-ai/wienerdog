@@ -130,75 +130,24 @@ function realish(p) {
   try { return path.join(fs.realpathSync(path.dirname(p)), path.basename(p)); } catch { return path.resolve(p); }
 }
 
-/**
- * THE RUN'S OWN CALL SET — PINNED, and everything else is a violation.
- *
- * WHY THE DIRECTION IS THIS WAY ROUND (owner ruling, 2026-08-31). Enumerating
- * the BAD is unclosable, because git's grammar is not ours and it grows.
- * Enumerating our OWN GOOD is closable, because the run's call set is ours.
- * Two independent refutations two rounds apart retired the other direction:
- *
- *   1. THE GRAMMAR GROWS. `git --attr-source log update-index --chmod=+x f`
- *      writes the user's index (measured: mode 100644 -> 100755). The verb
- *      resolver did not know `--attr-source` consumes a value — it arrived in
- *      git 2.40 — so it read the verb as `log`, which was ALLOWLISTED, and the
- *      write went unflagged. The round before had patched `--namespace` for the
- *      identical shape.
- *   2. THE TARGET IS NOT A PROPERTY OF THE CONFIGURATION.
- *      `GIT_INDEX_FILE=<private> git read-tree --index-output=<user> HEAD`
- *      DESTROYED the user's staged content (measured: a staged entry reverted
- *      to its committed blob) while an index-identity probe reported the
- *      private index. `--index-output` is a SUBCOMMAND flag, so no replay of
- *      global options can reach it.
- *
- * MATCHING IS STRICT SHAPE-EQUALITY, NEVER RE-CLASSIFICATION: same argument
- * count, every literal equal, and `ANY` accepts one token WITHOUT INSPECTING
- * IT. Nothing here parses git's grammar or judges what a call means — a fuzzy
- * matcher would smuggle the retired direction back in. Both exploits above fail
- * against this set rather than by being understood — refutation 1 as an unknown
- * shape, refutation 2 by the RUN_VALUE slot below, which is the narrower claim
- * and the true one.
- *
- * OWNER-VISIBILITY RESTS ON W1(c)'s CANONICITY, not on row W6. W6's standing
- * clause is keyed on index-derived INPUTS and independently reaches only that
- * subset; the two are NOT co-extensive, and a new shape that feeds nothing
- * index-derived is still an owner-visible change to the canonical table.
- */
-const ANY = Symbol('any single token, never inspected');
-/**
- * A slot holding A VALUE THIS RUN ITSELF COMPUTED, observed at the seam.
- *
- * `ANY` was too wide for the object-name slots, and measurably so: `read-tree`
- * accepts `--index-output=<path>` as its sole argument, so
- * `['read-tree', '--index-output=<user index>']` matched `['read-tree', ANY]`
- * on arity and EMPTIED the user's index — with a legitimate private
- * `GIT_INDEX_FILE` set and every disposition clause satisfied. A data slot that
- * cannot tell data from an option is not pinned at all.
- *
- * The repair does NOT inspect the token, because inspecting tokens is the
- * retired direction. It compares the token to values THIS RUN PRODUCED and the
- * watcher watched it produce — the head from `rev-parse HEAD`, blobs from
- * `hash-object`, the tree from `write-tree`, the commit from `commit-tree`.
- * Every object name the run passes is one it computed through a pinned read
- * first, so identity to an observed value is available without any grammar.
- * That is the same structural ground the pinned set stands on: our own values
- * are ours to enumerate; git's grammar is not.
- */
-const RUN_VALUE = Symbol('a value this run computed, observed at the seam');
+/** The pinned call set lives in its own module so the WHOLE FILE is the span.
+ *  This digest covers every byte of it; re-pin in the SAME commit as the
+ *  Table W row W1(c) change. */
+const KNOWN_CALLS_SOURCE_DIGEST =
+  'b770de2e1030590e14ba92da63790d71824445cb45d2fc3e64e14a96c5157f5c';
+/** ONE constant for BOTH the require and the read — they cannot drift apart. */
+const KNOWN_CALLS_MODULE = './dream-pipeline.known-calls.js';
+const { ANY, RUN_VALUE, KNOWN_CALLS } = require(KNOWN_CALLS_MODULE);
 
-/** @type {{env:'unset'|'private', args:(string|symbol)[]}[]} */
-const KNOWN_CALLS = [
-  { env: 'unset',   args: ['ls-tree', RUN_VALUE, '--', ANY] },
-  { env: 'unset',   args: ['hash-object', '-w', '--stdin'], produces: true },
-  { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, RUN_VALUE, ANY] },
-  { env: 'unset',   args: ['show', ANY] },
-  { env: 'unset',   args: ['rev-parse', 'HEAD'], produces: true },
-  { env: 'private', args: ['read-tree', RUN_VALUE] },
-  { env: 'private', args: ['write-tree'], produces: true },
-  { env: 'unset',   args: ['-c', 'user.name=wienerdog', '-c', 'user.email=wienerdog@localhost',
-    'commit-tree', RUN_VALUE, '-p', RUN_VALUE, '-m', ANY], produces: true },
-  { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', RUN_VALUE, RUN_VALUE] },
-];
+test('dream-pipeline: the pinned call set module is its canonical SOURCE FORM (Table W row W1(c))', () => {
+  const norm = fs.readFileSync(path.join(__dirname, KNOWN_CALLS_MODULE), 'utf8')
+    .replace(/\s+/g, ' ').trim();
+  const got = require('node:crypto').createHash('sha256').update(norm, 'utf8').digest('hex');
+  assert.equal(got, KNOWN_CALLS_SOURCE_DIGEST,
+    'the pinned call set module is not its canonical source form. Any edit to '
+      + 'it re-pins KNOWN_CALLS_SOURCE_DIGEST in the SAME commit as the Table W '
+      + 'row W1(c) change.');
+});
 
 /**
  * Strict shape-equality: positions and literals only, never token inspection.
@@ -279,8 +228,13 @@ function watchIndexWrites(vault) {
     // measurably so: shape (4) reads the committed warnings file out of the
     // USER'S VAULT (`show HEAD:<path>`, `cli/dream.js:1004`), so vault content
     // that happens to be one line would have entered the own-value set and
-    // could then satisfy an own-value slot. The set must hold values the run
-    // MINTED, never values it READ BACK from the user.
+    // could then satisfy an own-value slot. A value joins the set only if it is
+    // an OBJECT NAME GIT ITSELF EMITTED as the whole stdout of one of this run's
+    // pinned PRODUCING shapes — never bytes read back out of a file in the
+    // user's vault, and never a composite line carrying user-supplied data. All
+    // four members satisfy that as stated, `rev-parse HEAD` included: it returns
+    // git's own name for the user's current commit, not content from a file the
+    // user authored.
     const produces = KNOWN_CALLS.some((k) => k.produces && shapeMatches(k.args, args, computed));
     if (produces && res && res.status === 0 && res.stdout !== undefined && res.stdout !== null) {
       const out = String(res.stdout).trim();
@@ -1650,6 +1604,26 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
       'the two-token redirect must be rejected: it satisfies arity and every '
         + 'disposition clause, so only the RUN_VALUE slot stands between it and '
         + "the user's index"
+    );
+    // SHAPE (4) IS A LITERAL, AND THE VECTOR IS TWO TOKENS — the same arity the
+    // pinned shape has, so this canary reaches the slot under test instead of
+    // dying on length equality. `git show --output=<user index>` exits 0 and
+    // overwrites the index with the commit text, leaving a repository every
+    // index-reading command refuses (`fatal: index file corrupt`); the only
+    // recovery destroys the user's staged content. It carries no
+    // `GIT_INDEX_FILE`, so it satisfies the `unset` disposition too, and until
+    // the slot became the literal `HEAD:reports/warnings.md` it was ADMITTED.
+    assert.equal(
+      watch.classify(['show', `--output=${indexFile}`], {}),
+      "UNKNOWN SHAPE — not one of the run's pinned calls",
+      'the two-token show redirect must be rejected: it satisfies arity and the '
+        + "unset disposition, so only the literal slot stands between it and the "
+        + "user's index"
+    );
+    assert.equal(
+      watch.classify(['show', 'HEAD:reports/warnings.md'], {}), null,
+      "the run's OWN show must still be admitted, or the canary above would pass "
+        + 'by rejecting the shape entirely'
     );
     assert.equal(
       watch.classify(['rev-parse', 'HEAD'], {}), null,
