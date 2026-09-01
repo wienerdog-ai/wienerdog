@@ -123,7 +123,7 @@ RETAINED as the sole recovery breadcrumb. This WP must not change that.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains the **closed outcome enum** of Table E — three values, canonical reason/subject/append-policy derived inside, unknown value refused, absent input byte-identical to HEAD. Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
+| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains the **closed outcome enum** of Table E — three values, canonical reason/subject/append-policy derived inside, unknown value refused, absent input byte-identical to HEAD; (c) `failLoud`'s `persisted` honors an explicit `false` from `appendAlert` (Table E, and see Implementation notes — `undefined` keeps today's meaning). Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
 | modify | tests/unit/scheduler-runjob.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
 ### Exact contracts
@@ -248,6 +248,8 @@ values, and `failLoud` derives everything from it internally.
 | Absent input | byte-identical to HEAD on every observable: the append is attempted, the subject is `` `job ${name} failed` ``, and the return is the existing `persisted` boolean |
 | Canonical strings | each of the three values has exactly one reason template and exactly one subject template, asserted verbatim by the tests. "Must say" prose is not a contract; the strings are |
 | `alertPersisted` consumers | `:1106-1108` already treats `false` as "not recorded" and retains the reap pidfiles. A policy-skipped B2 append returning `false` therefore composes with existing behavior and needs no change there |
+| **`persisted` must honor an explicit `false` from `appendAlert`** | today `failLoud` sets `persisted = true` from the **absence of a throw** (`:621`), never from a return value — measured: `appendAlert` has no value-returning `return` (its only one is the bare guard at `alerts.js:105`). That inference becomes wrong once `WP-private-state-writers-mode-pin` lands: its Table D Case 2 (post-rename F10 temp substitution) loses the record **without throwing**, and `failLoud` would then report `persisted = true` and `:1106-1107` would delete the reap pidfiles with neither the alert nor the breadcrumb surviving. So `persisted` must be `false` whenever `appendAlert` returns **exactly `false`**, and otherwise keep today's absence-of-throw semantics |
+| Backward compatibility of that wire | `appendAlert` returns `undefined` on HEAD and continues to on every success and pre-rename-refusal path, so with only this WP landed the observable behavior is unchanged. Only an explicit `false` is a signal; `undefined` is not |
 | Not in scope | any fourth outcome, any per-call subject override, and any caller-side skip control |
 
 ### Mirrored Surface Checklist
@@ -269,6 +271,12 @@ values, and `failLoud` derives everything from it internally.
 - [ ] The **reason taxonomy** — B1 (marker not saved, replay) and B2 (marker
       saved, no replay) are distinct on every surface: tables, acceptance
       criteria, the email subject/body rule, and Table E's enum values
+- [ ] **The `appendAlert` → `failLoud` not-persisted wire** — this spec owns the
+      CONSUMER (Table E's `persisted` rows, the Deliverables row (c), the
+      acceptance criterion); `WP-private-state-writers-mode-pin`'s Table D
+      Case 2 owns the producer. The backward-compatibility rule (`undefined`
+      keeps HEAD semantics, only explicit `false` signals) is stated in both and
+      the surfaces move together
 - [ ] **Table E's enum** — its three values appear in the Deliverables row, the
       Exact contracts paragraph, the acceptance criteria and the Security
       checklist; adding or renaming a value moves all four
@@ -384,6 +392,13 @@ values, and `failLoud` derives everything from it internally.
       their **exact canonical** reason and subject strings, asserted verbatim.
       `alert-cleanup-refused` skips the append and returns **`false`**. An
       unknown discriminant throws rather than degrading to either behavior.
+- [ ] **`persisted` honors an explicit `false`:** when `appendAlert` returns
+      exactly `false`, `failLoud` returns `false` and `:1106-1107` **retains**
+      the reap token pidfiles. When `appendAlert` returns `undefined` — every
+      path on HEAD — behavior is exactly as on HEAD. (No `appendAlert` seam
+      exists in `failLoud` today; adding a test-only one is consistent with the
+      existing `opts.sendAlert` / `opts.createLogStream` pattern, but how this is
+      exercised is the implementer's choice.)
 - [ ] For both success-path outcomes the **email** subject and body say the work
       completed and name the refused state operation — neither sends
       `` `job <name> failed` ``.

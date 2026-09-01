@@ -256,15 +256,21 @@ here.
 **A previous round of this spec routed it to a follow-up on the ground that
 migrating would add a throw at the unguarded `:840` caller. That reasoning was
 wrong and is withdrawn.** `appendAlert` has already appended the new record
-atomically (`:89`) *before* it reaches compaction, so compaction is pure
-housekeeping over an already-durable record and its failure need not propagate
-at all. Wrapping the migrated call in a local `try`/`catch` that retains the
-record's durability and returns normally means nothing new throws — so `:840`'s
-documented "WARN loudly + durably and PROCEED — no throw" contract
-(`:827-831`) is preserved unchanged, and `failLoud`'s caller at `:615` keeps its
-existing best-effort behavior. The hazard closes inside the frozen surface, with
-no `appendFilePrivate` primitive and no new guard at `:840`. Table D is the
-contract.
+atomically (`:89`) *before* it reaches compaction, so compaction is housekeeping
+that runs after the durable write and its failure need not propagate at all.
+Wrapping the migrated call in a local `try`/`catch` that returns rather than
+throws means nothing new propagates — so `:840`'s documented "WARN loudly +
+durably and PROCEED — no throw" contract (`:827-831`) is preserved unchanged,
+and `failLoud`'s caller at `:615` keeps its existing best-effort behavior. The
+hazard closes inside the frozen surface, with no `appendFilePrivate` primitive
+and no new guard at `:840`.
+
+**Not propagating is not the same as nothing being lost.** Most refusals happen
+before the rename and leave the appended record untouched, but the post-rename
+F10 case installs a substituted entry over `alerts.jsonl` and destroys it. A
+catch that swallowed both identically would let `failLoud` report the alert as
+persisted and let `run-job.js:1106-1107` delete the reap breadcrumb. Table D
+therefore splits the two cases and gives the second one a return-value signal.
 
 **Three residuals remain on `alerts.jsonl`, all owned by the same follow-up**
 (*move `appendAlert`'s own append onto a never-follow private append
@@ -335,13 +341,15 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 | Fact / rule | Value |
 |-------------|-------|
 | Change | `src/core/alerts.js:117-120` — replace the predictable-temp `writeFileSync`/`renameSync`/`chmodAlerts` sequence with `writeFilePrivate(file, text)`, wrapped in a **local `try`/`catch`** |
-| Must not throw | compaction failure never propagates out of `appendAlert`. On catch: emit one non-alert diagnostic and return normally. The **invariant** is that the record appended at `:89` remains durable — not that the file is left uncompacted, which is false for the post-rename case below |
-| Why that is safe | the new record is already durably appended at `:89` before compaction runs; compaction only trims. Whether the file ends up compacted or not, the record survives, and losing the trim is strictly better than losing the record |
+| Must not throw | compaction failure never propagates out of `appendAlert` — in **either** case below. On catch: emit one non-alert diagnostic and return. Refusals split into two cases with **different durability outcomes**, and the return value distinguishes them |
+| **Case 1 — PRE-rename refusal** (temp creation/write/`fchmod`, symlinked ancestor, symlinked dest) | nothing was installed. `alerts.jsonl` is untouched and still holds the record appended at `:89`. The record **is** durable; `appendAlert` returns as it does on success |
+| **Case 2 — POST-rename F10 integrity failure** (`private-fs.js:358-366`) | the `renameSync` at `:354` **already completed**, and what it installed is the entry a concurrent process substituted — not the file we wrote. So the compacted content is NOT at `dest` (its inode was unlinked), **and** the rename replaced the pre-compaction `alerts.jsonl` that held the `:89` record. **The record is LOST.** Make no claim about `dest`'s contents: they are whatever was installed. `appendAlert` must therefore signal **not-persisted** (next row) so no downstream consumer treats the alert as recorded |
 | Size-bound consequence | while compaction keeps failing the file stays over budget and **keeps growing** — see the unbounded-growth residual below. This WP does not add a degraded-state policy |
 | Caller contracts preserved | `:840`'s "WARN loudly + durably and PROCEED — no throw" (`:827-831`) is unchanged, and `failLoud`'s `:615` call keeps its existing best-effort behavior. This WP adds **no** guard at `:840` and needs none |
 | **The hazard this closes (and its exact scope)** | the **predictable-TEMP-path** symlink. Observable: with a symlink planted at the old `${file}.${process.pid}.tmp` path and `alerts.jsonl` a **regular file**, compaction succeeds, the symlink's target is byte-identical and its mode unchanged, and `alerts.jsonl` holds the compacted content at `0600`. The primitive's temp name is crypto-random and `O_EXCL\|O_NOFOLLOW`, so the planted name is never opened |
 | **What it does NOT close** | a **destination**-symlinked `alerts.jsonl`. The append at `:89` and `chmodAlerts` at `:90` run *before* compaction and both follow that symlink, so by the time compaction is reached the outside target has already received the record and may already have been chmodded. No claim is made that a destination symlink's target is unchanged — that would be unpassable. This is a pre-existing, distinct hazard: see the destination-symlink residual below |
-| Post-rename inode-mismatch refusal (F10, `private-fs.js:358-366`) | contracted separately because it is **not** a "nothing happened" refusal: the `renameSync` at `:354` has already completed when the check throws, so `alerts.jsonl` holds the compacted content and the pre-compaction file is gone. The catch must therefore not assume the file is uncompacted — its only guarantees are that the new record from `:89` is still durable (it is inside the compacted content) and that nothing propagates to the caller. Emit the diagnostic and return normally, exactly as for a pre-rename refusal |
+| **The not-persisted signal (a NEW wire — see Implementation notes)** | on Case 2 only, `appendAlert` returns `false`. On success and on Case 1 it returns what it returns today (`undefined`). It still **never throws**, so `run-job.js:840` — a bare expression statement that ignores the return value (verified `:840-849`) — keeps its "WARN and PROCEED" contract untouched. `failLoud` consuming that `false` is contracted by `WP-failloud-survives-state-write-failure`, this WP's `depends_on` |
+| Why the signal is required | without it, Case 2 is indistinguishable from success: `failLoud` would set `persisted = true` (it infers persistence from the absence of a throw, `run-job.js:621`) and `run-job.js:1106-1107` would **delete the reap token pidfiles** — discarding the last recovery breadcrumb for an un-reapable process group at the exact moment the durable alert was lost too |
 | Not changed | the compaction trigger conditions (`:106`), the `MAX_ALERTS`/`MAX_FILE_BYTES` budgets, the serialization at `:109`, the empty-read guard at `:105`, the append at `:89-90`, and `chmodAlerts` itself (still used by the append path) |
 
 ### Mirrored Surface Checklist
@@ -365,6 +373,15 @@ every surface below in one pass:
       assertion and its success message; all five must agree. The count covers
       the three mode-dropping writers only; Table D's compaction observables are
       not mode cells and must not inflate it
+- [ ] **The `appendAlert` → `failLoud` not-persisted wire** — it spans both
+      specs: the producer is Table D Case 2 here, the consumer is Table E in
+      `WP-failloud-survives-state-write-failure`, and the backward-compatibility
+      rule (`undefined` keeps HEAD semantics, only explicit `false` signals) is
+      stated in both. All three surfaces move together
+- [ ] **The two Table D refusal cases** — Case 1 (record durable) and Case 2
+      (record may be LOST, no claim on destination contents) are distinct in the
+      table, the acceptance criteria and the withdrawal paragraph; no surface may
+      state a blanket "the record survives any compaction refusal"
 - [ ] The **writer count** — "four writers changed" (Context, Security
       containment) versus "three mode-dropping writers" (Table C, the gate,
       the mode acceptance criterion). Both appear deliberately; a change to
@@ -398,6 +415,16 @@ every surface below in one pass:
   fixture locks the test out of its own tree with `EACCES` before the writer is
   ever called. Create every fixture directory **before** lowering the umask, and
   restore the umask in a `finally`.
+- **`appendAlert`'s `false` return is a NEW wire, not an existing one.** Measured
+  on HEAD: `appendAlert` has no value-returning `return` at all (its only
+  `return` is the bare guard at `alerts.js:105`), so it always yields
+  `undefined`; and `failLoud` sets `persisted = true` from the **absence of a
+  throw** (`run-job.js:621`), never from a return value. Table D's signal
+  therefore adds a return value here, and
+  `WP-failloud-survives-state-write-failure` adds the consumer. The pairing is
+  deliberately backward-compatible: while only the consumer has landed,
+  `appendAlert` still returns `undefined`, which must keep exactly today's
+  semantics — only an explicit `false` means not-persisted.
 - `writeFilePrivate` is imported as
   `const { writeFilePrivate } = require('../core/private-fs')` — mind the
   relative depth from each of the three files.
@@ -486,11 +513,16 @@ every surface below in one pass:
       `alerts.jsonl` holds the compacted content at `0600`. (This is the
       reachable form of the test; a *destination*-symlink case must NOT assert
       an unchanged target — the append at `:89` already wrote through it.)
-- [ ] **Table D, no propagation:** on any compaction refusal the caller proceeds
-      normally, exactly one non-alert diagnostic is emitted, and the record
-      appended at `:89` is still readable afterwards — whether the refusal
-      happened before the rename (file uncompacted) or after it (file
-      compacted, F10 detection).
+- [ ] **Table D Case 1, pre-rename refusal:** the caller proceeds normally,
+      exactly one non-alert diagnostic is emitted, `alerts.jsonl` is untouched,
+      and the record appended at `:89` is still readable afterwards.
+- [ ] **Table D Case 2, post-rename F10 temp substitution:** `appendAlert`
+      returns `false` and does **not** throw; the caller at `run-job.js:840`
+      still proceeds (no abort); exactly one non-alert diagnostic is emitted;
+      and **no assertion is made about `alerts.jsonl`'s contents** — the
+      substituted entry is whatever was installed, and the `:89` record may be
+      gone. Asserting the record survives here would be asserting something
+      false.
 - [ ] The `:840` managed-policy warning path still proceeds — a job whose
       `appendAlert` warning hits a refusing compaction is not aborted, and
       `src/cli/run-job.js` is not edited by this WP at all.
