@@ -60,6 +60,12 @@ in `done/`. The owner rules three things together:
    is the one outcome not available.** Every durable reference in this spec is
    listed here, and each is either DELETED or REWRITTEN:
 
+   - **This dispatch item itself (question 3).** REWRITE to record the ruling
+     rather than to keep proposing the design: *"the owner ruled one-time
+     evidence; the module extraction and the committed check are NOT taken."*
+     Left as written it asserts that the spec embodies an enforced design that
+     Branch B has just deleted. (Found by the branch re-walk, which is the third
+     time the walk has caught something a summary would have missed.)
    - **NO MODULE EXTRACTION.** Branch B keeps today's structure: the set, the
      sentinels and their JSDoc stay in `tests/unit/dream-pipeline.test.js`.
      DELETE the `create` row for `tests/unit/dream-pipeline.known-calls.js` from
@@ -96,7 +102,7 @@ in `done/`. The owner rules three things together:
      text-locating checker is precisely what six rounds broke: say that it
      proves the shipped bytes at implementation time and does not withstand
      deliberate restructuring, and make no closure claim.
-   - **Sweep patterns.** DELETE `KNOWN_CALLS_SOURCE_DIGEST`, `035ea394d0eb` and
+   - **Sweep patterns.** DELETE `KNOWN_CALLS_SOURCE_DIGEST`, `b770de2e1030` and
      `known-calls.js`, and the expected-hits paragraph that adjudicates them.
    - **Mirrored Surface Checklist.** DELETE the `KNOWN_CALLS_SOURCE_DIGEST`
      entry and the W1(c)-gains-three-sentences entry **in full**, and restore
@@ -111,6 +117,10 @@ in `done/`. The owner rules three things together:
      the pin paragraph becomes *"a digest was derived at spec time for the
      design the owner did not take"*, and the table keeps its measurements while
      losing any claim to describe shipped machinery.
+   - **The Current-state tense marker** — the paragraph saying that where this
+     WP moves something into a module, Exact contracts and Deliverables describe
+     the target. Branch B moves nothing, so the paragraph goes: Current state,
+     Exact contracts and Deliverables all describe the same file.
    - **The threat-model paragraph** (*"WHAT THIS CHECK DOES NOT DEFEND
      AGAINST …"*). REWRITE: under Branch B the boundary is far wider — a
      one-time text-locating check falls to any of the six rounds' evasions — so
@@ -376,19 +386,11 @@ pre-fix state* — is confirmed, for two mirrors rather than one.
 
 ### Exact contracts
 
-After this WP, shape (4) of the pinned call set is a fully literal shape with
-no placeholder:
-
-```js
-  // The run's ONE `show`, and its argument is a CONSTANT the run builds: the
-  // interpolated form of WARNINGS_REL at `cli/dream.js:1004`, with the constant
-  // fixed at `core/dream/warnings.js:72`. SPELLED LITERALLY ON PURPOSE — do not
-  // import WARNINGS_REL and do not interpolate it: the retyping is the tripwire
-  // that makes a relocation loud. KNOWN_CALLS_SOURCE_DIGEST below pins this
-  // whole initializer; changing any of it means re-pinning in the SAME commit
-  // as the W1(c) row change. See Table W row W1(c).
-  { env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },
-```
+After this WP the run's `show` is pinned as a fully literal shape. **It is not
+quoted separately here:** the one place it is spelled is the canonical module
+block below, which is the sole contract for the set's bytes. A second copy of
+the shape would be a second thing to reconcile, and reconciling two copies is
+exactly what produced the wrong digest a round ago.
 
 ### The pinned set moves into its own module — and that is what closes this
 
@@ -420,35 +422,37 @@ under `tests/unit/` is NOT picked up by `node --test` default discovery, so it
 adds no test file.
 
 **Its content is specified byte-for-byte here, because the digest covers every
-byte** — this is the architect stubbing a checked-in interface file, and the
+byte.** This is the architect stubbing a checked-in interface file, and the
 price is that the module's wording is fixed by this spec rather than chosen by
-the implementer. It is:
+the implementer. **THE BLOCK BELOW IS THE WHOLE CONTRACT — copy it verbatim.**
+There is no recipe to apply and no other block to reconcile it against: a
+transformational recipe ("move these lines, then make these edits") was tried
+and **two independent reconstructions of it disagreed with the derivation by
+exactly 125 characters**, because "replaces the rest of the paragraph" and the
+span the derivation actually replaced were not the same thing. A single block
+cannot be misread.
 
-1. the header comment given below, verbatim;
-2. then `tests/unit/dream-pipeline.test.js:133-201` **moved verbatim** (measured
-   at `5d31a7dc`: the block from the `/**` of *"THE RUN'S OWN CALL SET"* through
-   the `];` that closes `KNOWN_CALLS` — 69 lines carrying the call-set JSDoc,
-   `ANY`, the `RUN_VALUE` JSDoc and `KNOWN_CALLS`), with the two byte-exact
-   edits below and no others;
-3. then a blank line and `module.exports = { ANY, RUN_VALUE, KNOWN_CALLS };`.
-
-**The sentinels move with the set because they must** — `KNOWN_CALLS`
+**The sentinels are in the block because they must be** — `KNOWN_CALLS`
 references them, so leaving them behind would make the module import from its
 own consumer. Their semantics are unchanged: `ANY` still admits one token
 without inspecting it, `RUN_VALUE` still admits membership of the own-value set,
 and `shapeMatches`, `watchIndexWrites` and the `produces` recorder stay in the
-test file.
+test file. **The module names no constant from its consumer**, so the sweep's
+expected hits stay as the sweep states them — and because every byte is hashed,
+a change to one word of this header is a re-pin.
+
+<!-- BEGIN CANONICAL MODULE -->
 
 ```js
 'use strict';
 /**
  * THE PINNED CALL SET, IN A FILE OF ITS OWN — and that is the whole design.
  *
- * Its source form is pinned by a SHA-256 over THIS ENTIRE FILE, held in
- * KNOWN_CALLS_SOURCE_DIGEST beside the require in dream-pipeline.test.js. When
- * the whole artifact is the span there is nothing to locate, so the class of
- * evasions that live in JavaScript's grammar — decoys in comments or strings,
- * block scoping, destructuring, look-alike identifiers — cannot arise: a decoy
+ * Its source form is pinned by a SHA-256 over THIS ENTIRE FILE, held by the
+ * digest constant in its consumer, `dream-pipeline.test.js`. When the whole
+ * artifact is the span there is nothing to locate, so the class of evasions
+ * that live in JavaScript's grammar — decoys in comments or strings, block
+ * scoping, destructuring, look-alike identifiers — cannot arise: a decoy
  * placed anywhere in this file is inside the hashed bytes.
  *
  * EVERY BYTE COUNTS, COMMENTS INCLUDED (whitespace runs are collapsed first, so
@@ -456,13 +460,52 @@ test file.
  * sentence of this comment — means re-pinning the digest in the SAME commit as
  * the Table W row W1(c) change. That two-file adjacency is deliberate.
  */
-```
 
-**EDIT 1 (C2) — inside the `RUN_VALUE` JSDoc**, the paragraph beginning *"The
-repair does NOT inspect the token"* keeps its first sentence and replaces the
-rest, so the stated invariant is one all four members satisfy:
-
-```js
+/**
+ * THE RUN'S OWN CALL SET — PINNED, and everything else is a violation.
+ *
+ * WHY THE DIRECTION IS THIS WAY ROUND (owner ruling, 2026-08-31). Enumerating
+ * the BAD is unclosable, because git's grammar is not ours and it grows.
+ * Enumerating our OWN GOOD is closable, because the run's call set is ours.
+ * Two independent refutations two rounds apart retired the other direction:
+ *
+ *   1. THE GRAMMAR GROWS. `git --attr-source log update-index --chmod=+x f`
+ *      writes the user's index (measured: mode 100644 -> 100755). The verb
+ *      resolver did not know `--attr-source` consumes a value — it arrived in
+ *      git 2.40 — so it read the verb as `log`, which was ALLOWLISTED, and the
+ *      write went unflagged. The round before had patched `--namespace` for the
+ *      identical shape.
+ *   2. THE TARGET IS NOT A PROPERTY OF THE CONFIGURATION.
+ *      `GIT_INDEX_FILE=<private> git read-tree --index-output=<user> HEAD`
+ *      DESTROYED the user's staged content (measured: a staged entry reverted
+ *      to its committed blob) while an index-identity probe reported the
+ *      private index. `--index-output` is a SUBCOMMAND flag, so no replay of
+ *      global options can reach it.
+ *
+ * MATCHING IS STRICT SHAPE-EQUALITY, NEVER RE-CLASSIFICATION: same argument
+ * count, every literal equal, and `ANY` accepts one token WITHOUT INSPECTING
+ * IT. Nothing here parses git's grammar or judges what a call means — a fuzzy
+ * matcher would smuggle the retired direction back in. Both exploits above fail
+ * against this set rather than by being understood — refutation 1 as an unknown
+ * shape, refutation 2 by the RUN_VALUE slot below, which is the narrower claim
+ * and the true one.
+ *
+ * OWNER-VISIBILITY RESTS ON W1(c)'s CANONICITY, not on row W6. W6's standing
+ * clause is keyed on index-derived INPUTS and independently reaches only that
+ * subset; the two are NOT co-extensive, and a new shape that feeds nothing
+ * index-derived is still an owner-visible change to the canonical table.
+ */
+const ANY = Symbol('any single token, never inspected');
+/**
+ * A slot holding A VALUE THIS RUN ITSELF COMPUTED, observed at the seam.
+ *
+ * `ANY` was too wide for the object-name slots, and measurably so: `read-tree`
+ * accepts `--index-output=<path>` as its sole argument, so
+ * `['read-tree', '--index-output=<user index>']` matched `['read-tree', ANY]`
+ * on arity and EMPTIED the user's index — with a legitimate private
+ * `GIT_INDEX_FILE` set and every disposition clause satisfied. A data slot that
+ * cannot tell data from an option is not pinned at all.
+ *
  * The repair does NOT inspect the token, because inspecting tokens is the
  * retired direction. It compares the token to the run's OWN-VALUE SET, whose
  * membership rule is exactly this: a value joins only if it is an OBJECT NAME
@@ -475,20 +518,37 @@ rest, so the stated invariant is one all four members satisfy:
  * content from a file the user authored. Two shapes are excluded and each has
  * its reason — `show HEAD:<path>` returns FILE CONTENT out of the user's vault
  * history, and `ls-tree` returns a composite line embedding a user-controlled
- * path. (An earlier form said the set holds what the run MINTED: false for the
- * head, which is read back from the user's ref, and retired for saying so.)
- * Identity to an emitted value is available without any grammar.
-```
+ * path. (An earlier form of this rule was stated with a word that claimed the
+ * run had made these values itself; that was false for the head, which is read
+ * back from the user's ref, and the wording was retired at `b19121bb`.)
+ * Identity to an emitted value is available without any grammar. That is the
+ * same structural ground the pinned set stands on: our own values are ours to
+ * enumerate; git's grammar is not.
+ */
+const RUN_VALUE = Symbol('a value this run computed, observed at the seam');
 
-**EDIT 2 (C1) — shape (4)**, replacing `{ env: 'unset',   args: ['show', ANY] },`:
-
-```js
+/** @type {{env:'unset'|'private', args:(string|symbol)[]}[]} */
+const KNOWN_CALLS = [
+  { env: 'unset',   args: ['ls-tree', RUN_VALUE, '--', ANY] },
+  { env: 'unset',   args: ['hash-object', '-w', '--stdin'], produces: true },
+  { env: 'private', args: ['update-index', '--add', '--cacheinfo', ANY, RUN_VALUE, ANY] },
   // SPELLED LITERALLY ON PURPOSE — do not import WARNINGS_REL and do not
   // interpolate it. The run's own argument is a constant built at
   // `cli/dream.js:1004` from `core/dream/warnings.js:72`; retyping it here is
   // the tripwire that makes a relocation LOUD instead of silent.
   { env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },
+  { env: 'unset',   args: ['rev-parse', 'HEAD'], produces: true },
+  { env: 'private', args: ['read-tree', RUN_VALUE] },
+  { env: 'private', args: ['write-tree'], produces: true },
+  { env: 'unset',   args: ['-c', 'user.name=wienerdog', '-c', 'user.email=wienerdog@localhost',
+    'commit-tree', RUN_VALUE, '-p', RUN_VALUE, '-m', ANY], produces: true },
+  { env: 'unset',   args: ['update-ref', '-m', ANY, 'HEAD', RUN_VALUE, RUN_VALUE] },
+];
+
+module.exports = { ANY, RUN_VALUE, KNOWN_CALLS };
 ```
+
+<!-- END CANONICAL MODULE -->
 
 **The check, in the test file**, beside the require:
 
@@ -497,7 +557,7 @@ rest, so the stated invariant is one all four members satisfy:
  *  This digest covers every byte of it; re-pin in the SAME commit as the
  *  Table W row W1(c) change. */
 const KNOWN_CALLS_SOURCE_DIGEST =
-  '035ea394d0eb9cccb633ad3f2523ee82efcec2192184ace75037d5abb838c0c8';
+  'b770de2e1030590e14ba92da63790d71824445cb45d2fc3e64e14a96c5157f5c';
 /** ONE constant for BOTH the require and the read — they cannot drift apart. */
 const KNOWN_CALLS_MODULE = './dream-pipeline.known-calls.js';
 const { ANY, RUN_VALUE, KNOWN_CALLS } = require(KNOWN_CALLS_MODULE);
@@ -522,9 +582,10 @@ files, so a re-pin is a two-file diff.** The module cannot hold its own digest,
 and this is the one adjacency this design gives up. It buys the removal of an
 entire evasion class, and the two files are adjacent in every diff listing.
 
-**This exact code was run before being specced** (`5d31a7dc`, see the state table):
-the module was assembled, the check placed in a sibling test, and `node --test`
-reports the canonical case green and every mutation red.
+**This exact code was run before being specced** (`5d31a7dc`, see the state
+table): the module and this check were extracted from this spec by the
+derivation command, and `node --test` reports the canonical case green and every
+mutation red.
 
 **ADR-0004 re-checked: this runs inside `npm test`, reads one file, hashes a
 string, and starts nothing.**
@@ -773,7 +834,7 @@ is unfinished work.
       test, the `KNOWN_CALLS_MODULE` constant and the
       `KNOWN_CALLS_SOURCE_DIGEST` constant are in
       `tests/unit/dream-pipeline.test.js`, the digest holds
-      `035ea394d0eb9cccb633ad3f2523ee82efcec2192184ace75037d5abb838c0c8`, the
+      `b770de2e1030590e14ba92da63790d71824445cb45d2fc3e64e14a96c5157f5c`, the
       set lives in `tests/unit/dream-pipeline.known-calls.js`, and the
       guard-file suite is green with both. No `/tmp` script is created by this
       WP; there is one home for this proof. **One constant serves the require
@@ -830,7 +891,7 @@ node scripts/boundary-check.js docs/specs/WP-show-slot-own-value-kind.md \
 PATTERNS=('four sources' 'admits six' 'single-line output of' 'stays free' \
           'merely carries' 'stay `ANY`' "'show', ANY" 'show «HEAD' 'MINTED' \
           'read back out of' 'values THIS RUN PRODUCED' '5c5d082' \
-          'KNOWN_CALLS_SOURCE_DIGEST' '035ea394d0eb' 'known-calls.js')
+          'KNOWN_CALLS_SOURCE_DIGEST' 'b770de2e1030' 'known-calls.js')
 for f in $(git ls-files '*.md' '*.js' | grep -v node_modules \
              | grep -v WP-show-slot-own-value-kind \
              | grep -v show-slot-design-gate-rounds); do
@@ -847,12 +908,12 @@ text or one of the registered non-moves below. Two patterns exist for one
 sentence each, because no presence-grep for a placeholder symbol reaches
 either: `merely carries` for W1(c)'s FREE-slot rule, and `` stay `ANY` `` for
 the logbook's contradicting slot-kind clause (checklist entries 1 and 2 under
-C1). **`KNOWN_CALLS_SOURCE_DIGEST`, the digest prefix `035ea394d0eb` and the
+C1). **`KNOWN_CALLS_SOURCE_DIGEST`, the digest prefix `b770de2e1030` and the
 module filename `known-calls.js` are
 patterns for the new registered surface, and their expected hits DIFFER:**
 `KNOWN_CALLS_SOURCE_DIGEST` must report **the guard file AND W1(c)** — W1(c)
 naming the constant is mandatory (Mirrored Surface Checklist), so it is an
-expected hit and not a third surface; the digest **prefix** `035ea394d0eb` must
+expected hit and not a third surface; the digest **prefix** `b770de2e1030` must
 report **the guard file only**, because W1(c) registers the constant BY NAME and
 does not quote its value — one place holds the bytes; `known-calls.js` must
 report **the guard file** (the require) **and W1(c)** (which names where the
@@ -861,41 +922,50 @@ only in row W5, whose three occurrences are a registered Discovered issue this
 package may not touch — so that pattern is expected to keep reporting `:545`
 and nothing else. A hit anywhere else is unfinished work.
 
-**THE PIN, and its derivation.** The digest covers the whitespace-collapsed
-content of the WHOLE module file:
+**THE PIN, AND ITS DERIVATION — reproducible by anyone, from the committed
+spec.** The digest covers the whitespace-collapsed content of the WHOLE module:
 
-`035ea394d0eb9cccb633ad3f2523ee82efcec2192184ace75037d5abb838c0c8`
+`b770de2e1030590e14ba92da63790d71824445cb45d2fc3e64e14a96c5157f5c`
 
-Derived at `5d31a7dc` by constructing the module exactly as Exact contracts
-specifies it — the header, then `tests/unit/dream-pipeline.test.js:133-201`
-verbatim with the two byte-exact edits, then the export line — collapsing
-whitespace runs and trimming, then SHA-256. Re-derived independently of the
-checker (`shasum -a 256` over the normalized bytes) and agreeing. The
-normalized content is 5822 characters and runs from
+It is derived **by extracting the canonical block from this file**, not by
+applying a recipe. Run this against the committed spec and compare:
 
-```text
-'use strict'; /** * THE PINNED CALL SET, IN A FILE OF ITS OWN — and that is the whole de…
+```bash
+git show HEAD:docs/specs/WP-show-slot-own-value-kind.md \
+  | awk '/^<!-- BEGIN CANONICAL MODULE -->/{m=1;next}
+         /^<!-- END CANONICAL MODULE -->/{m=0}
+         m&&/^```js$/{f=1;next} m&&/^```$/{f=0} f' > /tmp/wd-module.js
+node -e "const fs=require('node:fs'),c=require('node:crypto');
+  const n=fs.readFileSync('/tmp/wd-module.js','utf8').replace(/\s+/g,' ').trim();
+  console.log(n.length, c.createHash('sha256').update(n,'utf8').digest('hex'));"
+# expected: 5887 b770de2e1030590e14ba92da63790d71824445cb45d2fc3e64e14a96c5157f5c
 ```
 
-to
+**The module the implementer creates is that extraction, byte for byte** — the
+same command produces the file to commit. Normalized length 5887.
 
-```text
-…Y, 'HEAD', RUN_VALUE, RUN_VALUE] }, ]; module.exports = { ANY, RUN_VALUE, KNOWN_CALLS };
-```
+**WHY THIS REPLACED A RECIPE, recorded because it cost a round.** The previous
+pin was derived from "header + `test.js:133-201` + two edits". Two independent
+reconstructions of those words produced a file **125 characters shorter** than
+the derivation did, and identical to each other: the recipe said the C2 edit
+"replaces the rest" of a JSDoc paragraph, while the derivation replaced only up
+to *"…without any grammar."* and kept the paragraph's closing two lines — *"That
+is the same structural ground the pinned set stands on: our own values are ours
+to enumerate; git's grammar is not."*, which normalize to exactly 125
+characters. The recipe was not wrong and the derivation was not wrong; **they
+were two readings of one instruction, and a digest cannot survive two
+readings.** The block is now the only artifact, and the derivation reads it
+rather than rebuilding it.
 
-**THE OLD DIGEST `932b542…` IS DEAD AND IS NOT AN ALTERNATIVE.** It hashed a
-located span inside the test file; that span no longer exists, and the design
-that needed to locate it is what this round retired.
+**Both earlier digests are dead and neither is an alternative:** `932b542…`
+hashed a located span inside the test file, and `035ea39…` hashed the
+recipe-built module.
 
-**A dependency worth naming: the digest is derived from a block that lives in
-the tree today.** If `:133-201` changes before dispatch, the derivation must be
-re-run — which is what dispatch-time re-verification exists for. The mismatch is
-loud rather than silent: the check prints nothing helpful about *why*, so the
-recovery is to re-derive from the spec's recipe and compare against the head and
-tail quoted above.
-
-**Observed in every state of the table below at spec time** (`5d31a7dc`), the
-module assembled and the check run as a real `node --test` sibling. The table is
+**Observed in every state of the table below at spec time** (`5d31a7dc`), with
+the module and the check **EXTRACTED FROM THIS SPEC BY THE COMMAND ABOVE** — not
+rebuilt by hand — and run as a real `node --test` pair. The canonical row is the
+extraction itself, so a green there is evidence about the artifact an
+implementer will actually create. The table is
 the record and this sentence states no count — C3's own ruling, applied here
 after the number went stale twice:
 
