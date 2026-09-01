@@ -13,10 +13,11 @@ it. Drafted by wd-architect on `docs/issue-168-spec` (base `a6e0803`).
 **STOP CRITERION (pinned):** the loop closes when an external round returns no
 material product finding on either channel; machinery/wording findings at that
 point are fixed within the frozen surface or accepted as named residuals.
-Owner ratifications outstanding (they block `Ready`, not the loop): the lift of
-the DATED OWNER DECISION 2026-07-19 (repair-only waiver for
-`schedule.json`/`watermarks.json` writers — issue #168 is its field
-falsification), and the residual set named through the rounds.
+Owner ratifications were outstanding at the close of the loop (they blocked
+`Ready`, not the loop): the lift of the DATED OWNER DECISION 2026-07-19
+(repair-only waiver for `schedule.json`/`watermarks.json` writers — issue #168
+is its field falsification), and the residual set named through the rounds.
+**Both were given on 2026-09-01 — see Outcome.**
 
 ## Round zero (`5ffba43` → fixes in `ad559ad`)
 
@@ -42,13 +43,24 @@ arithmetic — the last verified by reproducing the field 0644 under umask 022).
 
 ## Outcome
 
-- Both specs remain **Draft**. `Ready` is blocked on two owner acts: (1) the
-  2026-07-19 waiver lift for the two state-file writers (the dispatch
-  precondition recorded in the mode-pin spec), and (2) ratification of the
-  named residual set (destination-symlink append, unbounded compaction growth
-  under permanent refusal, unbounded replay until repaired, no-GWS B2
-  notification gap, deletion-recreation of in-place-written files — each with
-  its routed follow-up or manual-recovery note).
+- **Both blockers resolved 2026-09-01; both specs are `Ready`.** In the working
+  session of that date the owner ruled "#168's waiver is hereby lifted" and
+  instructed the agent to record it, which resolves blocker (1) — the
+  2026-07-19 repair-only waiver is lifted for the `schedule.json` /
+  `watermarks.json` writers **only**, and stays in force for `config.yaml` and
+  `install-manifest.json`. The named residual set was presented to him in the
+  same session's summary and merge-authorized with it, resolving blocker (2).
+  The residuals stand as accepted: destination-symlink append, unbounded
+  compaction growth under permanent refusal, unbounded replay until repaired,
+  the no-GWS B2 notification gap, and deletion-recreation of in-place-written
+  files — each with its routed follow-up or manual-recovery note. The ruling is
+  recorded as a DATED OWNER DECISION 2026-09-01 under the mode-pin spec's
+  Current state; per ADR-0035 provenance discipline that record is an
+  agent-written transcription of a verbal ruling and is **not** an owner
+  signature, and none is claimed.
+- What still gates dispatch is not an owner act but the dependency itself:
+  `WP-private-state-writers-mode-pin`'s Definition-of-done item 0(a) — the
+  failloud WP must be `Done` first.
 - Dependency order: `WP-failloud-survives-state-write-failure` lands first
   (consumer of the F10 wire; byte-identical to HEAD until the producer lands),
   then `WP-private-state-writers-mode-pin`.

@@ -1,7 +1,7 @@
 ---
 id: WP-failloud-survives-state-write-failure
 title: A failed state write must never suppress a job's durable record, on any path
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []

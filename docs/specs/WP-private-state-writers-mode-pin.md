@@ -1,7 +1,7 @@
 ---
 id: WP-private-state-writers-mode-pin
 title: Write every private-listed state file through the private writer, so no rewrite can loosen it
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-failloud-survives-state-write-failure]
@@ -144,8 +144,9 @@ callers of `writeWatermarks` are `tests/unit/dream-collect.test.js` and
 writer of a private-listed file and the fix is a one-line swap, not because it is
 reachable in production today. Do not delete it; that is a separate question.
 
-**A dated owner decision stands against two of the three fixes.** `WP-a9-private-modes-repair`
-recorded a Codex round-1 owner decision of 2026-07-19
+**A dated owner decision stood against two of the three fixes, and has been
+lifted.** `WP-a9-private-modes-repair` recorded a Codex round-1 owner decision
+of 2026-07-19
 (`docs/specs/done/WP-a9-private-modes-repair.md:149-156` and `:885-887`;
 `docs/specs/logbook/2026-07-19-codex-round-1-a9-a10-spec-review.md:49-53`): the
 four metadata files `config.yaml` / `install-manifest.json` / `schedule.json` /
@@ -153,9 +154,24 @@ four metadata files `config.yaml` / `install-manifest.json` / `schedule.json` /
 unchanged**, on the stated basis that "fresh-write privacy relies on the 0700
 parent dirs + sync-time repair (dated accepted residual)". Issue #168 is the
 field falsification of that residual's premise for `schedule.json`: sync-time
-repair cannot hold a file that a scheduled job rewrites nightly. This WP
-reverses that decision **for `schedule.json` and `watermarks.json` only**; see
-Definition of done item 0. `alerts.jsonl` was never covered by it.
+repair cannot hold a file that a scheduled job rewrites nightly.
+
+> **DATED OWNER DECISION 2026-09-01 — the 2026-07-19 waiver is lifted for this
+> WP family.** In the working session of 2026-09-01 the owner ruled, in his own
+> words, "#168's waiver is hereby lifted", and instructed the agent to record
+> the ruling here. It lifts the repair-only constraint for the
+> **`state/schedule.json` and `state/watermarks.json` writers only**, which is
+> exactly what this WP changes. The 2026-07-19 decision **stays in force** for
+> `config.yaml` and `install-manifest.json` (Table A rows 13-14), whose writers
+> this WP does not touch. The residual set named through the design-gate rounds
+> was presented to the owner in the same session and merge-authorized with it.
+>
+> *Provenance (ADR-0035 discipline):* this paragraph is an **agent-written
+> record of a verbal in-session ruling**, not an owner signature. No agent wrote
+> or may write a signature line; where this repo requires a hand-written owner
+> signature, that remains the owner's own act and none is claimed here.
+
+`alerts.jsonl` was never covered by that decision and needed no waiver.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -394,6 +410,11 @@ every surface below in one pass:
       `WP-failloud-survives-state-write-failure`, and the backward-compatibility
       rule (`undefined` keeps HEAD semantics, only explicit `false` signals) is
       stated in both. All three surfaces move together
+- [ ] **The 2026-07-19 waiver's status** — its lift (DATED OWNER DECISION
+      2026-09-01) is recorded under Current state and mirrored in
+      Definition-of-done item 0(b) and the design-gate round record's Outcome;
+      the three move together, and none may re-describe the waiver as
+      outstanding
 - [ ] **The `WD_F10_POST_RENAME` code** — it appears in Table D's discrimination
       rows, Table D2, the `private-fs.js` Deliverables cell, and the acceptance
       criteria; renaming it moves all four. The Deliverables row must stay
@@ -695,24 +716,25 @@ node /tmp/wd-private-writer-modes.js
 
 0. **DISPATCH PRECONDITIONS.** (a) `WP-failloud-survives-state-write-failure` is
    `Done` — until then, `writeFilePrivate`'s added refusals (Table B) can throw
-   at an unguarded failure-path call site and suppress a durable alert. (b) The
-   owner confirms that the dated 2026-07-19 decision — "the four metadata files
-   enter the predicate/repair set while their writers stay unchanged" — is
-   **lifted for `state/schedule.json` and `state/watermarks.json`**, on the
-   ground that issue #168 measured its premise ("sync-time repair suffices") to
-   be false for a file rewritten at every job run. The decision stays in force
-   for `config.yaml` and `install-manifest.json` (Table A rows 13-14), whose
-   writers this WP does not touch. No ADR is required: the decision lives in a
-   `done` spec and a logbook entry, not in an ADR, so its narrowing is recorded
-   the same way — in this spec and in the PR's logbook entry. `alerts.jsonl`
-   (Table A row 4) was never covered by that decision and needs no waiver.
-   **Table D2's error tag is also outside that waiver, verified:** the decision's
-   subject is the four metadata files' *writers*
+   at an unguarded failure-path call site and suppress a durable alert. **Still
+   open; this is now the only thing gating dispatch.** (b) The 2026-07-19
+   repair-only waiver must be lifted for `state/schedule.json` and
+   `state/watermarks.json` — **SATISFIED by the DATED OWNER DECISION 2026-09-01
+   recorded under Current state**, on the ground that issue #168 measured its
+   premise ("sync-time repair suffices") to be false for a file rewritten at
+   every job run. The decision stays in force for `config.yaml` and
+   `install-manifest.json` (Table A rows 13-14), whose writers this WP does not
+   touch. No ADR is required: the decision lives in a `done` spec and a logbook
+   entry, not in an ADR, so its narrowing is recorded the same way — in this
+   spec and in the design-gate round record. `alerts.jsonl` (Table A row 4) was
+   never covered by that decision and needed no waiver. **Table D2's error tag
+   is also outside that waiver, verified:** the decision's subject is the four
+   metadata files' *writers*
    (`src/core/private-fs.js:19-21`; `docs/specs/done/WP-a9-private-modes-repair.md:149-156`),
    and tagging a throw inside `writeFilePrivate` neither writes those files nor
    changes any writer's behavior — it adds a property to an error object. No
-   extension of the waiver is requested for it. The dispatch message records
-   that both preconditions were observed.
+   extension of the waiver was requested for it. The dispatch message records
+   that precondition (a) was observed.
 1. All verification steps pass locally, including the Table C gate's green run,
    a red run on the unfixed state, and a red run on a mode-argument-only fix;
    output pasted into the PR body.
