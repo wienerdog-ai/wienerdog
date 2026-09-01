@@ -73,15 +73,64 @@ in `done/`. The owner rules three things together:
      (`:194`), the `RUN_VALUE` JSDoc (`:168-186`), the `produces` comment
      (`:277-283`), the canary block (`:1632-1658`). C1's and C2's edits land
      there rather than in a module.
-   - **Exact contracts — the shape-(4) comment.** REWRITE: drop the
-     `KNOWN_CALLS_SOURCE_DIGEST` and same-commit sentences; the comment keeps
-     only *"spelled literally on purpose — do not import or interpolate
-     `WARNINGS_REL`; see Table W row W1(c)"*.
+   - **Exact contracts — the shape-(4) paragraph** (*"After this WP the run's
+     `show` is pinned as a fully literal shape. It is not quoted separately
+     here…"*). REWRITE: its whole point is that the canonical block is the sole
+     place the shape is spelled, and Branch B deletes that block — so the
+     paragraph must instead point at this branch's C1 text below, which becomes
+     the one place it is spelled. **(This entry's referent CHANGED when the
+     canonical block replaced the standalone snippet; the re-walk is what caught
+     it, which is the fourth time.)**
    - **Exact contracts — "The pinned set moves into its own module"**: DELETE
-     the section, its header/check code blocks, the two-file-cost paragraph,
-     the run-before-specced paragraph and the ADR-0004 sentence about it.
-     **KEEP the text of EDIT 1 and EDIT 2** — that is C2's and C1's wording, and
-     under Branch B it is applied in place instead of in a module.
+     the section, its header block, the canonical module block, the check block,
+     the two-file-cost paragraph, the run-before-specced paragraph and the
+     ADR-0004 sentence about it.
+     **C1's and C2's wording survives the deletion, and it is carried HERE
+     rather than by a pointer into deleted text** — the two blocks below are
+     self-contained and are applied IN PLACE, in
+     `tests/unit/dream-pipeline.test.js`. **Quoting them here raises no
+     third-copy tension in this branch**, because Branch B deletes the canonical
+     block: after the rewrite these are the only copies, which is what the
+     two-copies rule asks for. (Under Branch A they would be a second copy, and
+     that is exactly why Branch A keeps them nowhere but the module.)
+
+     **C2 — replaces the `RUN_VALUE` JSDoc paragraph beginning *"The repair does
+     NOT inspect the token"*, in full, through the end of that paragraph:**
+
+     ```js
+      * The repair does NOT inspect the token, because inspecting tokens is the
+      * retired direction. It compares the token to the run's OWN-VALUE SET, whose
+      * membership rule is exactly this: a value joins only if it is an OBJECT NAME
+      * GIT ITSELF EMITTED as the whole stdout of one of this run's pinned PRODUCING
+      * shapes — never bytes read back out of a file in the user's vault, and never
+      * a composite line carrying user-supplied data. Its four members are the head
+      * from `rev-parse HEAD`, blobs from `hash-object`, the tree from `write-tree`
+      * and the commit from `commit-tree`, and ALL FOUR satisfy the rule as stated:
+      * `rev-parse HEAD` returns git's own name for the user's current commit, not
+      * content from a file the user authored. Two shapes are excluded and each has
+      * its reason — `show HEAD:<path>` returns FILE CONTENT out of the user's vault
+      * history, and `ls-tree` returns a composite line embedding a user-controlled
+      * path. (An earlier form of this rule was stated with a word that claimed the
+      * run had made these values itself; that was false for the head, which is read
+      * back from the user's ref, and the wording was retired at `b19121bb`.)
+      * Identity to an emitted value is available without any grammar. That is the
+      * same structural ground the pinned set stands on: our own values are ours to
+      * enumerate; git's grammar is not.
+     ```
+
+     **C1 — replaces `{ env: 'unset',   args: ['show', ANY] },` in
+     `KNOWN_CALLS`:**
+
+     ```js
+       // SPELLED LITERALLY ON PURPOSE — do not import WARNINGS_REL and do not
+       // interpolate it. The run's own argument is a constant built at
+       // `cli/dream.js:1004` from `core/dream/warnings.js:72`; retyping it here is
+       // the tripwire that makes a relocation LOUD instead of silent.
+       { env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },
+     ```
+
+     Neither text may name `KNOWN_CALLS_SOURCE_DIGEST` or a re-pin rule: under
+     Branch B no digest ships.
    - **Acceptance criterion 1.** REWRITE: replace "the committed SOURCE-FORM
      TEST over the module file" and the pinned-digest sentence with *"proved
      ONCE at implementation time by the one-time procedure in Verification
@@ -379,7 +428,7 @@ pre-fix state* — is confirmed, for two mirrors rather than one.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | tests/unit/dream-pipeline.known-calls.js | **The pinned call set, in a file of its own** — content specified byte-for-byte in Exact contracts (header, the block moved verbatim from the test file with two edits, exports). **Its whole content is the hashed span**, so nothing else may be added to it |
+| create | tests/unit/dream-pipeline.known-calls.js | **The pinned call set, in a file of its own.** Its content is **the canonical module block in Exact contracts, byte for byte** — created by running the derivation command's `awk` extraction over this spec and committing what it emits. There is no recipe to apply and no second block to reconcile. **Its whole content is the hashed span**, so nothing else may be added to it |
 | modify | tests/unit/dream-pipeline.test.js | Change table row C1's canary, C2's recorder comment, and the durable check. **FIVE sites and no others:** the `RUN_VALUE`/`ANY`/`KNOWN_CALLS` block at `:133-201` **is REMOVED — it moves to the module**; the `produces` comment (`:277-283`); the non-vacuity canary block inside the index test (`:1632-1658`); **NEW — the require + `KNOWN_CALLS_MODULE` + `KNOWN_CALLS_SOURCE_DIGEST` constants; NEW — the source-form test**, both spelled in Exact contracts. **C1's and C2's own edits land in the MODULE, not here.** **C3 needs NO code change** — the four `produces` markers move unchanged with the set; the `:277` sentence is only re-read whole after the C2 rewrite. **No other shape, slot kind, literal or disposition changes** — `shapeMatches` (`:208-213`) and the nine-shape count stand |
 | modify | docs/specs/done/WP-dream-promote-in-workspace.md | **Row W1(c) ONLY** (all of Table W is on `:541`). The clauses that move are the ones the Mirrored Surface Checklist marks as moving under C1 and C3 — the FREE-slot RULE sentence, the "stays free" ruling, the pinned-set enumeration of shape (4), and the residual clause, which becomes a CLOSURE record naming `b19121bb`. **The checklist owns that list; this cell does not restate it as a count** (a number beside a list is what C3 retires). The C2 entry on this file is a registered NON-move. **No other row, no other table, no frontmatter, no status field** |
 | modify | docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md | **THREE edits, all listed in the Mirrored Surface Checklist and nothing else in the file.** (a) the *"Applied to every slot the rule reaches"* passage (`:368-372`, C1): SHA-scoped past tense with the slot-kind spelling dropped, so its own deference sentence becomes true. (b) the `#### One residual, stated rather than closed` heading and paragraph (`:409-426`, C3): a SHA-pinned past-tense record plus a pointer to W1(c). (c) **the dead SHA at `:356` only** — a bare token substitution `5c5d082` → `c853245b` in *"THE RULING … shipped at"*, which names the same commit as (a); **the rest of that paragraph does not move** and stays the registered non-move the C2 checklist records. Listed here for exactness although `docs/specs/logbook/` is always allowed |
@@ -650,7 +699,7 @@ is unfinished work.
 
 **C2 — the own-value membership invariant:**
 
-- [ ] `tests/unit/dream-pipeline.known-calls.js` — the `RUN_VALUE` JSDoc, **which moves to the module with the sentinels** (today `tests/unit/dream-pipeline.test.js:168-186`); C2's rewrite is EDIT 1 in Exact contracts and is inside the hashed bytes
+- [ ] `tests/unit/dream-pipeline.known-calls.js` — the `RUN_VALUE` JSDoc, **which moves to the module with the sentinels** (today `tests/unit/dream-pipeline.test.js:168-186`); C2's rewrite is the `RUN_VALUE` JSDoc paragraph inside the canonical module block in Exact contracts, and is inside the hashed bytes
 - [ ] `tests/unit/dream-pipeline.test.js:277-283` — the `produces` comment; the **MINTED** sentence is the false one
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause, same PRODUCED phrasing. **Registered and deliberately NOT moved, decided rather than left open.** Two reasons, and the second is the one that settles it: (a) C2 does not falsify it — *PRODUCED* is loose, not false, and the clause even enumerates the correct four sources, so it survives the restatement; (b) the surface that would carry C2's sharpened membership rule inside W1(c) is the **slot-side counterpart to `produces`**, which the canonical row does not have today and which is `WP-index-guard-residuals` item 2's deliverable. Sharpening this clause here would do half that package's work in a cell it then re-edits. **Hand-off, stated so the obligation is not dropped:** that package lands C2's sharpened wording in W1(c) when it gives `produces` its slot-side representation
 - [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same PRODUCED phrasing. **The PROSE is registered and deliberately NOT moved**: it sits in a dated narrative describing that day's ruling and does not carry the false MINTED claim. **ITS DEAD SHA IS A DIFFERENT MATTER AND DOES MOVE** — `:356` pins the ruling to `5c5d082`, which does not resolve; it is corrected to `c853245b` and nothing else in the paragraph changes (Deliverables edit (c)). *Round 2 assumed this occurrence fell inside a passage this WP already rewrites; it does not — `:356` is outside both `:368-372` and `:409-426`, which is why it needed its own line here.* A dead pin in a record is not a stylistic matter: exemption (iii) is granted to a SHA-PINNED record, and a pin that resolves to nothing is not one
