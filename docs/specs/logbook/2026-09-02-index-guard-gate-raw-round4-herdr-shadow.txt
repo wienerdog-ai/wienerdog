@@ -1,0 +1,32 @@
+SHADOW ROUND 4 (closing confirmation; herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ dee2d1fd, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: the guard-file suite outside the sandbox (44 pass). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: one stale verification count reopens R3-1’s wrong-green evidence risk.
+
+FINDING 1
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 354-358, 442-446  
+Confidence: 1.0  
+Materiality: B  
+Body: Criterion 4 correctly requires four REDs, including the new module-side `produces` flip that proves the verifier reads the module. The later exhaustive broken-state summary still says “criterion 4’s three mutations.” An implementer following that summary can omit the only new RED that defeats the hard-coded-mapping checker, leaving contradictory completion evidence for R3-1.  
+Recommendation: Change lines 445-446 to “criterion 4’s four mutations,” or explicitly name “three row-side mutations plus the module-side `produces` mutation.”
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Target diff/status/HEAD/main inspection and all requested document/code reads — exit 0.
+- Whole W1(c) read via `sed -n '541p' … | fold -s -w 180`, chunked — exit 0.
+- `npm test -- tests/unit/dream-pipeline.test.js` — sandbox exit 1 (`EPERM`); approved rerun exit 0, 44 passed.
+- `npm test` — exit 0.
+- Known-calls byte-identity gate — exit 0.
+- Guarded pre-implementation wording gate — exit 1 as expected on the untouched tree.
+- Boundary check — exit 0.
+- Relative-`HOME` probe — exit 0; produced `relhome/.wienerdog/state`.
+- `git diff --check main...HEAD` — exit 2 solely on preserved trailing whitespace in verbatim review raws.
+- `npm run lint` — NOT RUN as a review result per instruction; an initial restricted attempt stopped at markdownlint with `ENOTFOUND`. No network rerun.
+- Final `git status --short --branch` — exit 0; detached worktree clean.
+
+DONE_ROUND_4
