@@ -14,20 +14,34 @@ epic: dream-promotion
 ## Dispatch precondition
 
 **ONE OWNER RATIFICATION, and it blocks dispatch.** Item 1 is closed by
-**refusing to judge** a non-absolute `private` `GIT_INDEX_FILE`: the guard raises
-a harness ERROR naming the invocation instead of returning a verdict (Table A).
-The owner ratifies one thing — **that a refusal is not a fifth failure mode**.
-The four verdict strings are W1(c)'s contract and *"gain no fifth member"*; this
-design adds none, declining to decide rather than deciding a new way, which is
-the category an assertion failure is already in. If the owner rules that any new
-outcome at this seam is a contract change, the alternative is **pre-written**:
-Rejected options carries design (A), the out-of-band effective-path locator, with
-its measurements and the W1(c) re-scoping it needs.
+**refusing to judge** a non-absolute `private` `GIT_INDEX_FILE`: the decision
+returns an UNJUDGED state and the seam wrapper raises a harness ERROR carrying
+the invocation, instead of returning a verdict (Table A). The owner ratifies one
+thing — **that a refusal is not a fifth failure mode**. The four verdict strings
+are W1(c)'s contract and *"gain no fifth member"*; this design adds none,
+declining to decide rather than deciding a new way, which is the category an
+assertion failure is already in.
 
 **Why a refusal rather than a third attempt at the frame:** two rounds produced
 two answers and measurement falsified both (Current state). Modeling the frame is
 unclosable; refusing to model it is closed by construction, and costs nothing the
 run uses (Table A).
+
+**If the owner rules the other way, this WP RETURNS TO DESIGN — there is no
+branch to switch to, and saying otherwise would be the false comfort this family
+has paid for before.** Rejected options records design **(A)**, the out-of-band
+effective-path locator, as the STARTING POINT for that redesign, with the
+measurements already taken. What (A) would then have to cover, none of which is
+written: the W1(c) sentences a locator contradicts — *"there is no question here
+about which repository a call reaches or which index it would write"* and the
+retirement of *"asking git which repository an invocation reaches"* — and how
+each is re-scoped to separate a retired argv classifier from a permitted path
+locator; where the locator runs, given the decision has no `cwd` and `classify`'s
+signature is frozen (the seam wrapper is the only site holding cwd, args and env
+together); what a locator FAILURE means (harness error, on the same ground as the
+refusal); how the invocation's whole environment is replayed, without which the
+locator answers a different question than the invocation asks; and the RED/GREEN
+evidence replacing criterion 1's. **That is a spec revision, not a flag flip.**
 
 ## Context (read this, nothing else)
 
@@ -155,8 +169,8 @@ forwarding the pipeline's seam into `promote()`*.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/cli/dream.js | **COMMENT TEXT ONLY, two sites:** the `gitIn` JSDoc at `:156-157` and the inline comment at `:560`, per **Table C** rows 1–2. **This cell owns what stays unchanged in this file: the diff contains no change to an executable line** |
-| modify | tests/unit/dream-pipeline.test.js | **FIVE sites.** (a) the `private` arm of `classify` (`:196-208`), per **Table A**; (b) the canaries the acceptance criteria need, inside the index test's existing non-vacuity canary block; (c) the `watchIndexWrites` JSDoc at `:167-168`; (d) the `claim-2b-pipeline` comment at `:443-445`; (e) that test's TITLE at `:436` — (c)–(e) per **Table C** rows 3–5. **THIS CELL OWNS WHAT STAYS UNCHANGED, and the acceptance criteria cite it rather than re-listing it: `shapeMatches`, `realish`, the `classify` signature and its five call sites, the require, `KNOWN_CALLS_SOURCE_DIGEST`, the two disposition clauses, the four verdict strings (and no fifth is added) and every test title EXCEPT `:436`'s are unchanged — and that one keeps its `claim-2b-pipeline` token, which is what the pinned `--test-name-pattern` command selects on** |
-| modify | docs/specs/done/WP-dream-promote-in-workspace.md | **ROW W1(c) ONLY** — all of Table W is on line 541. **SIX edits, and the Mirrored Surface Checklist owns the list:** the pinned-set enumeration gains the **PRODUCING** markers and the preamble gains their definition; the *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause and the ORDERING paragraph each stop stating a rule of their own; the residual-closure clause's owning-surface sentence moves (all four **Table B**); the *"ONE MECHANICAL TRAP SURVIVES"* clause gains the absoluteness sentence (**Table A**); and clause (a) SCOPE's seam parenthetical is narrowed (**Table C** row 0). **No other row, no other table, no frontmatter, and NOT that spec's own Mirrored Surface Checklist (`:548-1017`)** |
+| modify | tests/unit/dream-pipeline.test.js | **SIX sites.** (a) the `private` arm of `classify` (`:196-208`), which returns the UNJUDGED state, and (b) the seam wrapper (`:209-231`), which raises on it with the full invocation — both per **Table A**; (c) the canaries the acceptance criteria need, inside the index test's existing non-vacuity canary block; (d) the `watchIndexWrites` JSDoc at `:167-168`; (e) the `claim-2b-pipeline` comment at `:443-445`; (f) that test's TITLE at `:436` — (d)–(f) per **Table C** rows 3–5. **THIS CELL OWNS WHAT STAYS UNCHANGED, and the acceptance criteria cite it rather than re-listing it: `shapeMatches`, `realish`, `classify`'s SIGNATURE and its five call sites, the require, `KNOWN_CALLS_SOURCE_DIGEST`, the two disposition clauses, the four verdict strings (and no fifth is added) and every test title EXCEPT `:436`'s are unchanged — and that one keeps its `claim-2b-pipeline` token, which is what the pinned `--test-name-pattern` command selects on** |
+| modify | docs/specs/done/WP-dream-promote-in-workspace.md | **ROW W1(c) ONLY** — all of Table W is on line 541. **SEVEN edits, and the Mirrored Surface Checklist owns the list:** the pinned-set enumeration gains the **PRODUCING** markers and the preamble gains their definition; the *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause and the ORDERING paragraph each stop stating a rule of their own; the residual-closure clause's owning-surface sentence moves (all four **Table B**); the *"ONE MECHANICAL TRAP SURVIVES"* clause gains the absoluteness sentence and the *"EVERY RED CARRIES ITS INVOCATION"* sentence is scoped to verdict reds with the refusal's diagnostic defined beside it (both **Table A**); and clause (a) SCOPE's seam parenthetical is narrowed (**Table C** row 0). **No other row, no other table, no frontmatter, and NOT that spec's own Mirrored Surface Checklist (`:548-1017`)** |
 
 **NOT a deliverable, stated because it is the trap:**
 `tests/unit/dream-pipeline.known-calls.js` is **not touched**. Its `produces`
@@ -168,13 +182,15 @@ WP has none, and its verification asserts the file is byte-identical to `main`.
 
 The row-side producing marker is this literal — the single place these bytes are
 decided. It is appended to a shape's entry in W1(c)'s pinned-set enumeration,
-after that entry's call-site citation and before its terminating period:
+after that entry's call-site citation and before its terminating period. The
+example is deliberately SCHEMATIC: which real shapes carry it is derived from the
+module (Table B), never fixed by an example here.
 
 ```text
 marker: — **PRODUCING**
-worked example, shape (2) before and after:
-**(2)** `unset` — `hash-object -w --stdin` (`:253`).
-**(2)** `unset` — `hash-object -w --stdin` (`:253`) — **PRODUCING**.
+shape entry, before and after:
+**(n)** `<disposition>` — `<verb …>` (`:<line>`).
+**(n)** `<disposition>` — `<verb …>` (`:<line>`) — **PRODUCING**.
 ```
 
 ## Contract reference
@@ -192,11 +208,14 @@ W1(c) for the rest.
 | Fact / rule | Value |
 |---|---|
 | What is judged | a `private` shape's `GIT_INDEX_FILE` **only when it is an absolute path**. The two clauses then apply to its resolved (realpath) form exactly as today — they are unchanged, and so is `realish` |
-| A non-absolute value | is **REFUSED, not judged**: the guard raises a harness ERROR naming the invocation. **Not a verdict, not a fifth failure mode** — it declines to decide rather than deciding a new way, which is the Dispatch precondition's single ratification |
-| Why refusal rather than resolution | **no frame is modeled, so none can be wrong.** Two rounds produced two frames and measurement falsified both; the third measurement showed the answer also depends on the invocation's environment (Current state). This is the same closable direction the pinned set itself takes: enumerate our own good — absolute paths — rather than model git's grammar |
-| What W1(c) keeps as a result | its sentence that **under C nothing asks git which repository an invocation reaches stays TRUE**: this design adds no locator, no out-of-band call, and no environment replay |
+| A non-absolute value | is **REFUSED, not judged.** The decision returns a distinguishable **UNJUDGED** state instead of applying either clause, and **the seam wrapper raises on it** — a harness ERROR, **not a verdict and not a fifth failure mode** (the Dispatch precondition's single ratification) |
+| Where each half lives, and why it is split | the DECISION stays in `classify`, which already matches the shape and already holds `env` — **so no second matching site is created**, which is the drift class this family fights. The RAISE is in the seam wrapper (`tests/unit/dream-pipeline.test.js:209-231`), which is the only place holding `args`, `cwd` and `env` together. **`classify`'s signature and its five call sites are unchanged**: the return domain gains one state, and every existing call site passes an absolute or absent value |
+| The refusal's diagnostic | the raise carries **the full `args`, the `cwd`, the RAW `GIT_INDEX_FILE` value, and the UNJUDGED state** — and it reports **no resolved path, because none is computed**. W1(c)'s *"AND EVERY RED CARRIES ITS INVOCATION … and where it resolved"* is a universal over VERDICT reds; this WP scopes it to those and defines the refusal's diagnostic beside it, so the sentence stays true rather than being quietly falsified by an outcome that resolves nothing |
+| Scope of the refusal — `private` only | an `unset` shape arriving with a non-absolute `GIT_INDEX_FILE` keeps its existing verdict (*known shape carrying an unexpected `GIT_INDEX_FILE`*). **Refusing every non-absolute value before `classify` was weighed and rejected**: it is simpler, but it converts an existing verdict into an error for a case this WP is not about, and makes that verdict unreachable for a subclass |
+| Why refusal rather than resolution | **no frame is modeled, so none can be wrong.** Two rounds produced two frames and measurement falsified both; a third measurement showed the answer also depends on the invocation's environment (Current state). Same closable direction the pinned set itself takes: enumerate our own good — absolute paths — rather than model git's grammar |
+| What W1(c) keeps as a result | its sentences that **nothing asks git which repository an invocation reaches, and no question arises about which index a call would write, stay TRUE**: this design adds no locator, no out-of-band call, no environment replay |
 | What is lost | **nothing the run uses.** Its own value is absolute under every supported configuration, and every existing canary passes an absolute value. The relative-`HOME` hole (Current state) is the one producible exception, is unsupported, and is a Discovered issue rather than a case this guard silently accepts |
-| The row sentence this adds | the *"ONE MECHANICAL TRAP SURVIVES"* clause — already the canonical home of *"`GIT_INDEX_FILE` must be RESOLVED, not merely present"* — gains: the value must be ABSOLUTE, a non-absolute one is refused unjudged, and **the run's own value is absolute under every supported configuration, a relative `HOME` being the one producible exception**. **It may not claim "absolute by construction"** |
+| The row sentences this adds | the *"ONE MECHANICAL TRAP SURVIVES"* clause gains: the value must be ABSOLUTE, a non-absolute one is refused unjudged, and **the run's own value is absolute under every supported configuration, a relative `HOME` being the one producible exception** (it may not claim *"absolute by construction"*). The *"EVERY RED CARRIES ITS INVOCATION"* sentence is scoped to verdict reds and gains the refusal's diagnostic beside it |
 
 ### Table B — the PRODUCING attribute and the membership predicate (item 2)
 
@@ -206,7 +225,7 @@ W1(c) for the rest.
 | Which shapes carry it | **exactly the shapes whose entry in `tests/unit/dream-pipeline.known-calls.js` carries `produces: true`, and no others.** The mapping is **derived from the module by the work, never predicted in this spec** — the module is not edited, so it is the source |
 | Executable mirror | that module's `produces` property. The pair moves together, as `«own …»` ↔ `RUN_VALUE` already does |
 | What the row's enumeration must satisfy, so the pair is checkable at all | exactly nine entries, labelled **(1)**–**(9)**, in the module's physical order, each label unique and no decoy entry; and a marker counts **only when it sits in its own entry, between that entry's call-site citation and its terminating period**. A label swap, a decoy ordinal, and a same-count swap are each a FAILURE of this row — see the acceptance criteria, which require each as an observed RED |
-| How identity is established | **by shape-by-shape comparison, and NOT by a count or by a textual-ordinal script.** A count passes a same-count swap; an ordinal parser passes a label swap and a decoy — both measured against earlier drafts of this spec. **No grep reaches this**, which W1(c)'s own registration already states for slot kinds; the evidence is the reviewer's comparison, pasted |
+| How identity is established | **by shape-by-shape comparison of two INDEPENDENTLY DERIVED sides**, never by a count or a script carrying the answer. Measured against earlier drafts: a count passes a same-count swap; an ordinal parser passes a label swap and a decoy; a verifier with the mapping hard-coded passes a wrong baseline while reddening every mutation. **No grep reaches this**, which W1(c)'s own registration already states for slot kinds; the evidence is the comparison, pasted |
 | Preamble sentence | the set's preamble — which defines the guillemet kinds and ends *"The disposition is part of the shape, not a side condition."* — gains the marker's definition in the same place and form: a marked shape is one whose whole stdout the own-value set learns from, its executable spelling is `produces: true`, and the two copies must agree shape by shape |
 | Membership predicate's home | **unchanged — clause (1) of "WHICH SLOTS TAKE THE PIN"**, which spells it and whose own sentence already declares itself a citation of it |
 | The REPAIR clause | stops stating a membership rule of its own: the token is compared to the own-value set, whose membership is clause (1)'s predicate and whose sources are the shapes the set marks |
@@ -235,9 +254,9 @@ and by each verification block's comment header, which the sweep cannot reach.
 
 **Table A:**
 
-- [ ] `tests/unit/dream-pipeline.test.js:196-208` — the `private` arm
-- [ ] **NON-moves:** `realish` (`:128-131`), the `classify` signature and its five call sites (`:1589`, `:1602`, `:1617`, `:1624`, `:1629`) — no frame is introduced, so none changes; and W1(c)'s two-clause private-index rule, whose clauses are untouched
-- [ ] W1(c) — the *"ONE MECHANICAL TRAP SURVIVES"* clause, which gains the absoluteness sentence
+- [ ] `tests/unit/dream-pipeline.test.js:196-208` — the `private` arm, which returns UNJUDGED; and `:209-231`, the seam wrapper, which raises on it. **The pair moves together**: the state is meaningless unless something raises on it, and the raise is meaningless unless the state is distinguishable
+- [ ] **NON-moves:** `realish` (`:128-131`), `classify`'s SIGNATURE and its five call sites (`:1589`, `:1602`, `:1617`, `:1624`, `:1629`) — no frame is introduced and every call site passes an absolute or absent value; and W1(c)'s two-clause private-index rule, whose clauses are untouched
+- [ ] W1(c) — the *"ONE MECHANICAL TRAP SURVIVES"* clause (the absoluteness sentence) and the *"AND EVERY RED CARRIES ITS INVOCATION"* sentence (scoped to verdict reds, with the refusal's diagnostic beside it). **Registered as a pair with the wrapper's raise**: the diagnostic the code emits and the sentence that governs it move in one pass
 - [ ] **Criteria 1–3** and **the guard-file suite run**, registered with what they reach: **no grep can establish a refusal**, so this table rests on criterion 1's pasted pair
 
 **Table B:**
@@ -245,7 +264,7 @@ and by each verification block's comment header, which the sweep cannot reach.
 - [ ] W1(c) — the enumeration (markers) and its preamble (their definition); the REPAIR clause; the ORDERING paragraph; the closure clause's owning-surface sentence
 - [ ] `tests/unit/dream-pipeline.known-calls.js` — the `produces` properties, the executable half of the pair. **NOT edited**, and asserted byte-untouched
 - [ ] **NON-moves, re-read but not edited:** `tests/unit/dream-pipeline.test.js:226-238` (the recorder comment the predecessor rewrote a day earlier); `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` (its C2 checklist already ruled it); `docs/specs/done/WP-show-slot-own-value-kind.md` and **this spec**, which quote pre-change wording on purpose and are excluded from the sweep for that reason and no other
-- [ ] **Criteria 4 and 4a**, the **module byte-identity gate** and the **guarded negated grep** — the gate holds the pair's executable half still, the grep is a FLOOR on wording only. Identity and the semantic wording test are criteria with pasted evidence, because both mechanisms tried here (a count, then an ordinal parser) were measured to pass a wrong state
+- [ ] **Criteria 4 and 4a**, the **module byte-identity gate** and the **guarded negated grep** — the gate holds the pair's executable half still, the grep is a FLOOR on wording only. Identity and the semantic wording test are criteria with pasted evidence, because every scripted mechanism tried here — a count, an ordinal parser, one with the mapping hard-coded — was measured to pass a wrong state
 
 **Table C:**
 
@@ -262,9 +281,9 @@ and by each verification block's comment header, which the sweep cannot reach.
 - **After rewriting the cell, RE-READ IT WHOLE** — `sed -n '541p' <that file> |
   fold -s -w 180` — and likewise each comment block you edit. No mirror checklist
   sees inside one cell, and the failure mode is the new sentence landing while the
-  old one stays. **This re-read carries the semantic claims**: three scripted
-  mechanisms tried in review — a count, an ordinal parser, a concept regex — each
-  passed a state a reader catches at once.
+  old one stays. **This re-read carries the semantic claims**: every scripted
+  mechanism tried in review — a count, an ordinal parser, one with the mapping
+  hard-coded, a concept regex — passed a state a reader catches at once.
 - **The set does not change:** no shape added, removed or reordered; no slot
   changes kind; `shapeMatches` and the module untouched.
 - **`docs/specs/done/` is NOT always-allowed** — `scripts/boundary-check.js`
@@ -278,7 +297,7 @@ and by each verification block's comment header, which the sweep cannot reach.
 
 | Option | Why rejected |
 |---|---|
-| **(A) Ask git for the EFFECTIVE index path out of band** — run `rev-parse --git-path index` with the invocation's `GIT_INDEX_FILE`, environment and cwd, and resolve its answer against the cwd | **It works** — measured on git 2.39.5 against every vector that defeated the two frames (plain relative, symlink, `GIT_DIR`/`GIT_WORK_TREE`), agreeing with where `read-tree` actually wrote, and index-safe on a stale-stat index. It is **pre-written as the alternative** if the owner declines the Dispatch precondition's ratification. Not taken because it costs an out-of-band git call per private invocation, must replay the invocation's whole environment to be correct at all, and requires re-scoping W1(c)'s *"nothing asks git which repository an invocation reaches"* to distinguish a retired argv classifier from a permitted path locator. **The deciding reason is the loop**: two rounds produced two frames, and modeling one more is the direction this family has retired twice |
+| **(A) Ask git for the EFFECTIVE index path out of band** — run `rev-parse --git-path index` with the invocation's `GIT_INDEX_FILE`, environment and cwd, and resolve its answer against the cwd | **It works** — measured on git 2.39.5 against every vector that defeated the two frames (plain relative, symlink, `GIT_DIR`/`GIT_WORK_TREE`), agreeing with where `read-tree` actually wrote, and index-safe on a stale-stat index. It is the **STARTING POINT for a redesign** if the owner declines the Dispatch precondition's ratification — not a branch to switch to; that section lists what it would still have to cover. Not taken because it costs an out-of-band git call per private invocation, must replay the invocation's whole environment to be correct at all, and requires re-scoping W1(c)'s *"nothing asks git which repository an invocation reaches"* to distinguish a retired argv classifier from a permitted path locator. **The deciding reason is the loop**: two rounds produced two frames, and modeling one more is the direction this family has retired twice |
 | **Resolving in a frame the guard computes** — the `-C` directory, or the worktree top | Both **measured FALSE** (Current state). Recorded because each was this spec's own answer in a previous round and each is the obvious cheap fix |
 | **Rejecting a relative value as a fifth VERDICT** rather than refusing to judge | A verdict is a contract change to W1(c)'s four failure modes. The refusal is an error — the harness declining to decide — which is why the Dispatch precondition asks the owner to ratify exactly that distinction and nothing else |
 | **Closing either un-seamed spawn point** — routing `promote()`'s `merge-file` through the pipeline's seam, or threading it into `assertGitRepo` | Foreclosed by W1(c)'s COVERAGE clause in as many words: incompatible cwd conventions, and under default-deny either close surfaces an unpinned TENTH shape, whose admission is a change to the canonical table |
@@ -293,34 +312,50 @@ and by each verification block's comment header, which the sweep cannot reach.
       cannot ground.** The `unset` arm is untouched. An ABSOLUTE override — every
       one the shipped run makes and every one the existing canaries carry — is
       judged exactly as today, so nothing about the admitted set moves. A
-      non-absolute override, today silently judged in an unrelated frame, now
-      stops the suite. **No shape, disposition or slot is widened, the four
-      verdict strings are unchanged, and no frame is modeled**, so this WP adds no
-      surface that drifts as git's path resolution changes.
+      non-absolute override on a `private` shape, today silently judged in an
+      unrelated frame, now stops the suite instead — carrying the invocation that
+      caused it. An `unset` shape's non-absolute override keeps its existing
+      verdict, so no verdict becomes unreachable. **No shape, disposition or slot
+      is widened, the four verdict strings are unchanged, and no frame is
+      modeled**, so this WP adds no surface that drifts as git's path resolution
+      changes.
 
 ## Acceptance criteria
 
-- [ ] 1. **The refusal is observed in both directions.** A `private` shape
-      carrying a non-absolute `GIT_INDEX_FILE` makes the guard ERROR naming the
-      invocation — not return a verdict, not fall through to either clause. One
-      carrying an absolute value is still judged, reaching both existing
-      private-index verdicts as today. Paste both.
+- [ ] 1. **The refusal is observed in both directions, and its diagnostic is
+      pasted in full.** A `private` shape carrying a non-absolute
+      `GIT_INDEX_FILE` makes the guard ERROR — not return a verdict, not fall
+      through to either clause — and the error text carries **the full `args`,
+      the `cwd`, the raw value, and the UNJUDGED state, and reports no resolved
+      path** (Table A). One carrying an absolute value is still judged, reaching
+      both existing private-index verdicts as today. An `unset` shape carrying a
+      non-absolute value still gets its existing verdict rather than the refusal.
+      Paste all three.
 - [ ] 2. **The accept side stays alive:** the index test is green on all three
       vault layouts with `violations` empty, and the run's own absolute private
       index is admitted. A guard that refused everything would satisfy criterion 1
       alone.
 - [ ] 3. **Nothing outside the edited sites moved.** Everything the Deliverables
       cell for `tests/unit/dream-pipeline.test.js` names as unchanged is unchanged
-      — that cell owns the list — and `tests/unit/dream-pipeline.known-calls.js`
-      is byte-identical to `main`, so no re-pin is owed.
-- [ ] 4. **Table B has landed, and the row's markers match the module's
-      SHAPE BY SHAPE.** The enumeration satisfies Table B's structural row (nine
-      entries; labels unique, in the module's order; no decoy; each marker inside
-      its own entry between the call-site citation and the terminating period).
-      **Evidence is the shape-by-shape comparison, pasted — no grep reaches it**,
-      which W1(c)'s own registration already states for slot kinds. **Three REDs
-      are required and pasted, one per mechanism that failed in review:** a
-      same-count swap, a label swap, and a decoy ordinal.
+      — that cell owns the list, `classify`'s signature and its five call sites
+      included — and `tests/unit/dream-pipeline.known-calls.js` is byte-identical
+      to `main`, so no re-pin is owed.
+- [ ] 4. **Table B has landed, and the row's markers match the module's SHAPE BY
+      SHAPE.** The enumeration satisfies Table B's structural row (nine entries;
+      labels unique, in the module's order; no decoy; each marker inside its own
+      entry between the call-site citation and the terminating period).
+      **THE EVIDENCE MUST DERIVE BOTH SIDES INDEPENDENTLY, and this is the
+      requirement, not the parser:** the module's shape identities and `produces`
+      state are read FROM THE MODULE, the row's from the committed line's physical
+      entries, and the two are compared position by position. **A verifier
+      carrying an expected mapping as a constant does not satisfy this** — one was
+      executed against an earlier draft with a wrong baseline hard-coded, and it
+      went green while every mutation below went red.
+      **Four REDs are required and pasted, one per way this has failed:** a
+      same-count swap, a label swap, a decoy ordinal, and — **the one that proves
+      the module is actually read** — a `produces` property flipped in a scratch
+      copy of the module, which must turn the comparison RED without the row
+      changing at all.
 - [ ] 4a. **No count of own-value sources is stated in any SPEC OR DOCS PROSE
       surface** — the scope of W1(c)'s own rule (*"NEITHER THIS ROW NOR ANY PROSE
       SURFACE"*). **Explicitly out of scope: code and its comments** (exemption
@@ -348,8 +383,8 @@ and by each verification block's comment header, which the sweep cannot reach.
 ## Verification steps (run these; paste output in the PR)
 
 These are the checks a command CAN establish; criteria 1, 4, 5 and 6 rest on
-pasted evidence instead, three scripted mechanisms having been tried in review
-and each having passed a wrong state.
+pasted evidence instead, every scripted mechanism tried in review having passed a
+wrong state.
 
 ```bash
 # The guard's own file, then the whole suite and the lint pipeline. Capture the
@@ -434,9 +469,10 @@ mutations.
 
 0. **DISPATCH PRECONDITION.** Not dispatched until the owner has ratified that
    refusing to judge a non-absolute private `GIT_INDEX_FILE` is a harness error
-   and not a fifth failure mode. If the owner rules otherwise, design (A) in
-   Rejected options is the pre-written alternative and this spec is revised to it
-   first. The dispatch message records the ruling.
+   and not a fifth failure mode. **If the owner rules otherwise this WP returns to
+   design**, with (A) in Rejected options as the starting point and the open
+   questions the Dispatch precondition lists; it is not a flag flip. The dispatch
+   message records the ruling.
 1. All verification steps pass locally; output in the PR body, with the pasted
    evidence criteria 1, 4, 5 and 6 require.
 2. Conventional commits; PR titled
