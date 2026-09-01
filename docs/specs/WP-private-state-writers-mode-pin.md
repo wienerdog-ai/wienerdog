@@ -52,16 +52,22 @@ mode is fixed before the rename, the bytes are never observable at a loose mode.
 This WP moves the three outliers onto it, so the private set has one writer
 shape instead of four.
 
-Scope is one claim: **every private-listed file written by a temp+rename writer
-is `0600` under any umask, in both the destination-absent and destination-present
-states, with no loose-mode window.** Table A is the measured audit that defines
-which writers that claim touches.
+Scope is one claim, over the three writers this WP changes: **each is `0600`
+under any umask, in every destination state that writer can actually produce,
+with no loose-mode window.** Table A is the measured audit that defines which
+writers the claim touches, and Table C its applicable states — two of the three
+have both an absent and a present state; `clearAlerts` has only a present one.
+The claim is deliberately about *those writers*, not about their files at large:
+`alerts.jsonl` has two other paths, and both are named residuals below.
 
-**Dependency.** `writeFilePrivate` refuses more anomalies than the current
-writers do, so it can throw where they did not. On three of `runJob`'s failure
-paths the watermark write is followed immediately by the durable failure alert,
-and a throw there escapes before the alert is written — a **pre-existing** defect
-measured on HEAD, fixed by `WP-failloud-survives-state-write-failure`, which is
+**Dependency.** `writeFilePrivate` refuses anomalies the current writers wrote
+through silently, so it can throw where they did not — and every one of
+`runJob`'s state writes sits at an unguarded call site. On three failure paths a
+throw escapes before the durable alert is written (a **pre-existing** defect); on
+the success path at `:1060-1061` a refusal would abort *after* the job's work
+ran, leaving no record and — because `last_success` is the catch-up replay guard
+(`:1244-1245`, measured) — letting the job be replayed. Both are fixed by
+`WP-failloud-survives-state-write-failure`, which covers all five sites and is
 this WP's `depends_on`. Do not start this WP until that one is `Done`.
 
 ## Current state
@@ -185,8 +191,8 @@ because a writer can be correct in one and wrong in the other.
 |---|---------------------|--------------------|-------|-----------------|----------------|---------|
 | 1 | `state/digest.md` | `src/cli/sync.js:293`, `src/cli/dream.js:646` | `writeFilePrivate` | absent + present | 0600 | unchanged |
 | 2 | `state/alerts.jsonl` | `src/core/alerts.js:89-90` (`appendAlert` append) | append, then `chmodAlerts` | absent + present | 0600 **final**; on **absent** the create is `0666` until `:90` runs — see the named residual below | unchanged |
-| 3 | `state/alerts.jsonl` | `src/core/alerts.js:117-120` (`appendAlert` compaction) | temp `{mode:0600}` + rename + `chmodAlerts` | present (compaction implies the file exists) | 0600 | unchanged |
-| 4 | `state/alerts.jsonl` | `src/core/alerts.js:206-208` (`clearAlerts`) | temp+rename, **no mode, no chmod** | present (it rewrites; an empty result deletes instead) | **0666** | **FIX (Table B)** |
+| 3 | `state/alerts.jsonl` | `src/core/alerts.js:117-120` (`appendAlert` compaction) | **predictable** temp `${file}.${pid}.tmp`, `{mode:0600}` + rename + `chmodAlerts` | present (compaction implies the file exists) | 0600 **final**, but it carries the SAME stale-temp and symlink write-through hazards this spec establishes below — see the routed residual | unchanged here; **routed residual** |
+| 4 | `state/alerts.jsonl` | `src/core/alerts.js:206-208` (`clearAlerts`) | temp+rename, **no mode, no chmod** | **present only** — the rewrite branch needs surviving records, and an empty result deletes the file (`:202-205`) instead of writing one, so this writer has no mode-producing absent state | **0666** | **FIX (Table B)** |
 | 5 | `state/alerts-ack.json` | `src/core/alert-ack.js:88,113` | `writeFilePrivate` | absent + present | 0600 | unchanged |
 | 6 | `state/transcript-ledger.json` | `src/core/dream/ledger.js:131-134` | temp `{mode:0600}` + chmod + rename + chmod | absent + present | 0600 | unchanged |
 | 7 | `state/identity-approvals.json` | `src/core/identity-approvals.js:98-102` | temp `{mode:0600}` + chmod + rename + chmod | absent + present | 0600 | unchanged |
@@ -220,15 +226,37 @@ make every private-listed path creation-safe.** Deletion-recreation is a
 nothing rewrites these at job end. Closing it belongs to the creation-path WP
 named under Out of scope.
 
-**Named residual, Table A row 2.** `appendAlert` creates an absent
-`alerts.jsonl` with `fs.appendFileSync` (`:89`) at the umask default and pins it
-with `chmodAlerts` only on the next line (`:90`) — measured `0666` at the create
-under `umask 000`. Its *final* mode is correct, so it is not a mode-dropping
-writer and is not fixed here, but the first alert's bytes are briefly on disk at
-a loose mode. This is a real, narrow window on a create-once path. It is
-recorded here rather than silently fixed, because folding the append path onto a
-private append primitive is a different change (`private-fs.js` exposes no
-`appendFilePrivate`) and would widen this WP past its claim.
+**Named residual, Table A row 2 — the append create window.** `appendAlert`
+creates an absent `alerts.jsonl` with `fs.appendFileSync` (`:89`) at the umask
+default and pins it with `chmodAlerts` only on the next line (`:90`) — measured
+`0666` at the create under `umask 000`. Its *final* mode is correct, so it is
+not a mode-dropping writer and is not fixed here, but the first alert's bytes
+are briefly on disk at a loose mode. Closing it needs an `appendFilePrivate`
+primitive that `private-fs.js` does not expose.
+
+**Named residual, Table A row 3 — the compaction rewrite, and why it is routed
+rather than migrated.** `appendAlert`'s compaction branch (`:117-120`) is a
+whole-file temp+rename rewrite using the **predictable** name
+`${file}.${process.pid}.tmp`, so it carries exactly the two hazards this spec
+measures under "Why a mode argument alone is not the fix": a stale temp keeps
+its loose mode while the alert bodies are written into it, and a symlink planted
+at that name receives those bodies outside the core. Its *final* mode is 0600,
+which is why the round-1 audit classified it correct — that classification was
+final-mode-only and is corrected here.
+
+Migrating it to `writeFilePrivate` is the natural three-line fix, and it was
+measured before being rejected. **It does not compose the way `clearAlerts`
+does.** `clearAlerts` has one caller (`src/cli/run-job.js:1061`), which
+`WP-failloud-survives-state-write-failure` now guards. `appendAlert` has two:
+`:615`, inside `failLoud`'s total try/catch — safe; and **`:840`, unguarded**,
+on the managed-policy warning path, whose whole documented intent is "WARN
+loudly + durably and PROCEED — no throw" (`:827-831`). Adding
+`writeFilePrivate`'s refusals under `:840` would let a *warning* abort a job
+that was about to run correctly, and guarding that site is a third
+claim — neither the mode claim nor the durable-record claim. So the compaction
+row is a **routed residual**: it is recorded here, its owner is the follow-up
+named under Out of scope, and this WP's no-loose-window claim is scoped to the
+three writers it changes (Table C) rather than to `alerts.jsonl` at large.
 
 ### Table B — the private write primitive
 
@@ -247,7 +275,7 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 | How it avoids all three | crypto-random temp name + `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, so a pre-existing file or symlink at the temp name cannot be written through; `fchmod(fd, 0o600)` on the descriptor, so the mode is umask-independent and fixed **before** the rename |
 | Core threading | pass `{ core: paths.core }` where the writer has `paths` (`writeScheduleState`, `clearAlerts`) so the ancestry check uses the caller's verified core |
 | No-override case | `writeWatermarks(stateDir, …)` has no `paths`; call it without `opts` and `assertInCoreAncestry` resolves the core via `getPaths()` (`:193-196`). Verified: writing to a state dir outside the resolved core is out of that guard's scope and proceeds, so the existing `stateDir`-based callers keep working |
-| Added refusals (the behavior change) | a pre-existing symlink or non-regular file at `dest` (F16, `:297-303`); a symlinked in-core ancestor or a symlink/non-dir at the parent (`mkdirPrivate`); a post-rename inode mismatch (F10, `:358-366`). Each throws `WienerdogError` instead of silently writing through — fail-closed, and the reason this WP depends on `WP-failloud-survives-state-write-failure` |
+| Added refusals (the behavior change) | a pre-existing symlink or non-regular file at `dest` (F16, `:297-303`); a symlinked in-core ancestor or a symlink/non-dir at the parent (`mkdirPrivate`); a post-rename inode mismatch (F10, `:358-366`). Each throws `WienerdogError` instead of silently writing through — fail-closed, and the reason this WP depends on `WP-failloud-survives-state-write-failure`. A symlinked **leaf** is not caught by the `mechanicsRootUntrusted` entry gate, which classifies directories only (`:1001-1007`, measured), so these refusals are reachable on the success path as well as the failure paths — which is why that dependency covers all five sites |
 | Directory creation | `writeFilePrivate` calls `mkdirPrivate` itself, so the writers' own `fs.mkdirSync` calls are removed rather than kept alongside |
 | What must NOT change | the JSON/JSONL body bytes, the trailing newline, the return values, the read paths, and the `remaining.length === 0` delete branch in `clearAlerts` (`:202-205`) |
 | win32 | `writeFilePrivate` keeps a plain `{mode:0o600}` temp+rename there (`:283-288`), matching `private-fs.js`'s stated POSIX-only posture (`:23-25`); no platform branch is added at the call sites |
@@ -258,8 +286,9 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 |-------------|-------|
 | Mode | exactly `0600` — `(mode & 0o777) === 0o600`, not "at most 0600" |
 | Umasks | verified under **both** `umask 000` (catches a mode-less create → `0666`) **and** `umask 0777` (catches a create-mode-only fix → `0000`). One umask alone cannot distinguish the required fix from an incomplete one |
-| Destination states | verified **absent** (the writer creates) and **present** (the writer replaces) |
-| Loose-mode window | none: the mode is set on the descriptor before the rename publishes the inode, so the destination is never observable at a mode other than `0600` |
+| Destination states | **applicable** states only: `writeScheduleState` and `writeWatermarks` are verified **absent** (the writer creates) and **present** (it replaces); `clearAlerts` is **present-only** (Table A row 4 — its rewrite branch needs surviving records, and an empty result deletes the file instead of writing one) |
+| Applicable-cell count | **10**: (2 writers × 2 umasks × 2 states) + (1 writer × 2 umasks × 1 state). Plus 2 predicate checks, one per umask. There is no 12th and 11th cell to run — an absent-destination `clearAlerts` cell does not exist, and the gate must not claim one |
+| Loose-mode window | none **for the three writers this WP changes**: the mode is set on the descriptor before the rename publishes the inode, so those destinations are never observable at a mode other than `0600`. This claim is scoped to Table A rows 4, 11 and 12 — it does NOT extend to `alerts.jsonl` at large, whose append-create and compaction paths carry the two named residuals above |
 | Repeat runs | a second consecutive call leaves the same `0600` and the same contents for the same input |
 | Predicate agreement | `insecureEntries(paths)` reports none of the three files after its writer has run under either umask |
 | umask discipline | any check that changes the process umask restores it in a `finally` — it is process-global and leaks into later tests |
@@ -275,8 +304,16 @@ every surface below in one pass:
 - [ ] The Table C verification gate under Verification steps
 - [ ] Current-state (the measured probe output, the mode-argument measurements,
       the three mechanism citations, and the `writeWatermarks` caveat)
-- [ ] The out-of-scope justification for Table A rows 13-14, and the two named
-      residuals (row 2's create window; deletion-recreation)
+- [ ] The out-of-scope justification for Table A rows 13-14, and the **four**
+      named residuals (row 2's create window; row 3's compaction hazard;
+      deletion-recreation; the parent directory) — the count appears in the
+      Security checklist and the residual prose, and the two move together
+- [ ] The **applicable-cell count (10)** — it appears in Table C's two rows, the
+      acceptance criteria, the gate script's comment header, its `cells !== 10`
+      assertion and its success message; all five must agree
+- [ ] The **scoped** no-loose-window claim — Table C, the Security checklist and
+      the Context claim sentence each bound it to the three changed writers, NOT
+      to `alerts.jsonl` at large
 - [ ] Implementation notes: the umask/fixture trap and the core-threading rule
 - [ ] The `depends_on` on `WP-failloud-survives-state-write-failure`, its
       Context paragraph, and Table B's added-refusals row — the dependency
@@ -327,11 +364,15 @@ every surface below in one pass:
       private bytes can no longer be written into a stale or symlinked temp —
       both hazards measured on the current shape and both closed by
       `writeFilePrivate`'s `O_EXCL|O_NOFOLLOW` random temp and pre-rename
-      `fchmod`.
-- [ ] Three residuals, all named and none silently fixed: (1) `appendAlert`'s
-      absent-destination create window (Table A row 2); (2) deletion-recreation
+      `fchmod`. The claim reaches those three writers only — **not**
+      `alerts.jsonl` at large, whose other two paths are residuals (1) and (2).
+- [ ] Four residuals, all named and none silently fixed: (1) `appendAlert`'s
+      absent-destination create window (Table A row 2); (2) `appendAlert`'s
+      compaction rewrite, which keeps the predictable-temp and symlink
+      write-through hazards (Table A row 3) and is routed rather than migrated
+      because its `:840` caller is unguarded; (3) deletion-recreation
       of the in-place-written files and of `state/` itself (Table A rows 13-14),
-      which doctor reports and sync repairs durably; (3) the parent directory —
+      which doctor reports and sync repairs durably; (4) the parent directory —
       `state/` is created `0700` by `src/cli/init.js:135` before any job runs,
       and `writeFilePrivate`'s `mkdirPrivate` now creates it `0700` rather than
       at the umask default, which narrows but does not own the directory claim.
@@ -339,10 +380,14 @@ every surface below in one pass:
 ## Acceptance criteria
 
 - [ ] Each of the three writers leaves its file at exactly `0600` under **both**
-      `umask 000` and `umask 0777`, in **both** the destination-absent and
-      destination-present states (Table C). A change that only passes
-      `{ mode: 0o600 }` at create fails the `0777` case, and this must be true
-      of the delivered tests too.
+      `umask 000` and `umask 0777`, across all **10 applicable** destination-state
+      cells (Table C: absent + present for `writeScheduleState` and
+      `writeWatermarks`; present-only for `clearAlerts`). A change that only
+      passes `{ mode: 0o600 }` at create fails the `0777` case, and this must be
+      true of the delivered tests too.
+- [ ] `clearAlerts` on a destination that ends up absent still takes its delete
+      branch (`:202-205`) and writes no file — the behavior that makes its
+      absent cell inapplicable rather than untested.
 - [ ] `state/schedule.json`, `state/watermarks.json` and `state/alerts.jsonl`
       each satisfy the above via `writeScheduleState`, `writeWatermarks` and a
       `clearAlerts` call that rewrites the file — i.e. one leaving at least one
@@ -385,8 +430,14 @@ Run it from the repo root:
 ```bash
 cat > /tmp/wd-private-writer-modes.js <<'LITERAL'
 // Table C gate: run each private-listed file's REAL writer under umask 000 AND
-// umask 0777, in the destination-absent and destination-present states, and
-// assert exactly 0600. Exits non-zero naming every violation.
+// umask 0777, across the 10 APPLICABLE destination-state cells, and assert
+// exactly 0600. Exits non-zero naming every violation.
+//   schedule.json  : 2 umasks x {absent, present} = 4
+//   watermarks.json: 2 umasks x {absent, present} = 4
+//   alerts.jsonl   : 2 umasks x {present}         = 2   <- clearAlerts has no
+//     mode-producing absent state: its rewrite branch needs surviving records,
+//     and an empty result deletes the file (alerts.js:202-205). The delete
+//     branch is asserted separately rather than counted as a mode cell.
 // Fixtures are created BEFORE the umask is lowered: mkdtempSync uses mode 0700,
 // which under umask 0777 would be 0000 and lock the probe out with EACCES.
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
@@ -395,6 +446,7 @@ const { getPaths } = require(R + '/src/core/paths');
 const { insecureEntries } = require(R + '/src/core/private-fs');
 const prevUmask = process.umask();
 const bad = [];
+let cells = 0; // applicable mode cells actually asserted
 try {
   for (const um of [0o000, 0o777]) {
     process.umask(0o022);
@@ -408,6 +460,7 @@ try {
     process.umask(um);
     const tag = um.toString(8).padStart(4, '0');
     const check = (f, state) => {
+      cells += 1;
       const p = path.join(paths.state, f);
       const m = fs.statSync(p).mode & 0o777;
       if (m !== 0o600) bad.push(`umask ${tag} ${state}: ${f} is ${m.toString(8).padStart(4, '0')}, expected 0600`);
@@ -422,15 +475,23 @@ try {
     check('watermarks.json', 'present');
     A.appendAlert(paths, rec('a'));
     A.appendAlert(paths, rec('b'));
-    A.clearAlerts(paths, 'a'); // leaves b's record -> rewrites the file
+    A.clearAlerts(paths, 'a'); // leaves b's record -> rewrites the file (present)
     check('alerts.jsonl', 'present');
     const flagged = insecureEntries(paths).filter((p) =>
       ['schedule.json', 'watermarks.json', 'alerts.jsonl'].includes(path.basename(p)));
     if (flagged.length) bad.push(`umask ${tag}: insecureEntries still flags ${flagged.join(', ')}`);
+    // clearAlerts' inapplicable absent cell, asserted as the delete branch it
+    // actually takes (alerts.js:202-205) rather than counted as a mode cell.
+    A.clearAlerts(paths, 'b');
+    if (fs.existsSync(path.join(paths.state, 'alerts.jsonl')))
+      bad.push(`umask ${tag}: clearAlerts left alerts.jsonl in place when no records remained`);
   }
 } finally { process.umask(prevUmask); }
+if (cells !== 10) bad.push(`asserted ${cells} mode cells, expected the 10 applicable ones`);
 if (bad.length) { console.error('FAIL:\n  ' + bad.join('\n  ')); process.exit(1); }
-console.log('OK: all three writers exactly 0600 under umask 000 and 0777, absent and present');
+console.log('OK: 10/10 applicable mode cells exactly 0600 (umask 000 + 0777; absent+present for');
+console.log('    schedule.json and watermarks.json, present-only for alerts.jsonl), predicate clean,');
+console.log('    and clearAlerts deletes the file when no records remain.');
 LITERAL
 node /tmp/wd-private-writer-modes.js
 ```
@@ -453,8 +514,13 @@ node /tmp/wd-private-writer-modes.js
   (justified under Table A). A WP that pins modes on every *creation* path —
   those two files, `state/` itself, and the mode-less `mkdirSync` calls — is
   separate work; note it under "Discovered issues".
-- **`appendAlert`'s absent-destination create window** (Table A row 2). Closing
-  it needs an `appendFilePrivate` primitive that `private-fs.js` does not have.
+- **`appendAlert`'s two paths** — the absent-destination create window (Table A
+  row 2) and the compaction rewrite's predictable-temp / symlink write-through
+  hazard (Table A row 3). Both are named residuals above and both belong to one
+  owning follow-up: *move `appendAlert` onto private write primitives*, which
+  needs an `appendFilePrivate` that `private-fs.js` does not expose **and** a
+  guard at the unguarded `:840` caller before compaction may refuse. Neither is
+  in this WP's claim; note the follow-up under "Discovered issues".
 - **The failure-path alert sequencing** — that is
   `WP-failloud-survives-state-write-failure`, this WP's `depends_on`, and its
   call sites are not touched here.
