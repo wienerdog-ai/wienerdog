@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { writeFilePrivate } = require('../private-fs');
 
 /** @param {string} stateDir @returns {string} */
 function watermarksPath(stateDir) {
@@ -32,12 +33,9 @@ function readWatermarks(stateDir) {
  * @param {{claude:number|null, codex:number|null}} watermarks
  */
 function writeWatermarks(stateDir, { claude, codex }) {
-  fs.mkdirSync(stateDir, { recursive: true });
   const file = watermarksPath(stateDir);
-  const tmp = `${file}.tmp-${process.pid}`;
   const body = JSON.stringify({ version: 1, claude: claude ?? null, codex: codex ?? null }, null, 2);
-  fs.writeFileSync(tmp, body);
-  fs.renameSync(tmp, file);
+  writeFilePrivate(file, body);
 }
 
 module.exports = { readWatermarks, writeWatermarks };

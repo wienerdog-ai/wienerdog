@@ -16,9 +16,12 @@ const { WienerdogError } = require('./errors');
  * dirs, digest/alerts/ledger/approvals files, per-run logs, dream scratch,
  * quarantine) UNION the A9 set (`secrets/` and every file directly inside it —
  * GWS tokens + client JSON — the grants/pins/run-evidence state files, every
- * `logs/<job>` subdirectory, and the four repair-only metadata files
- * config.yaml / install-manifest.json / schedule.json / watermarks.json,
- * whose WRITERS stay unchanged per the DATED OWNER DECISION 2026-07-19).
+ * `logs/<job>` subdirectory, and two remaining repair-only metadata files
+ * config.yaml / install-manifest.json, whose WRITERS stay unchanged per the
+ * DATED OWNER DECISION 2026-07-19. schedule.json / watermarks.json were
+ * covered by that decision too until DATED OWNER DECISION 2026-09-01
+ * (WP-private-state-writers-mode-pin) lifted it for those two: their writers
+ * now go through `writeFilePrivate` like the rest of the A9 state files).
  *
  * win32 posture (OWNER-APPROVED 2026-07-17): POSIX modes do not exist there —
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
@@ -127,11 +130,14 @@ const A5_PRIVATE_FILE_BASENAMES = [
 const A9_PRIVATE_DIRS = (paths) => [paths.secrets];
 
 /** A9-scoped private FILES directly under state/ (0600): grants, exec pins, run
- *  evidence, plus the two metadata files schedule.json/watermarks.json
- *  (repair-only, DATED OWNER DECISION 2026-07-19 — their writers are NOT
- *  changed). (Tokens/client JSON are matched by walking secrets/ for every
- *  regular file — no fixed basename list, so a new google-token-*.json is
- *  covered automatically.) */
+ *  evidence, plus schedule.json/watermarks.json. The latter two were
+ *  repair-only under the DATED OWNER DECISION 2026-07-19; that waiver was
+ *  lifted for them by DATED OWNER DECISION 2026-09-01
+ *  (WP-private-state-writers-mode-pin), and their writers
+ *  (`writeScheduleState`, `writeWatermarks`) now write through
+ *  `writeFilePrivate` like every other file in this list. (Tokens/client
+ *  JSON are matched by walking secrets/ for every regular file — no fixed
+ *  basename list, so a new google-token-*.json is covered automatically.) */
 const A9_PRIVATE_STATE_FILES = [
   'broker-grants.json',
   'exec-pins.json',
@@ -358,11 +364,13 @@ function writeFilePrivate(dest, data, opts = {}) {
   try {
     const after = fs.lstatSync(dest);
     if (after.isSymbolicLink() || after.dev !== fdDev || after.ino !== fdIno) {
-      throw new WienerdogError(
+      const err = new WienerdogError(
         `refusing to complete write ${dest}: its temp was substituted between the private open and the ` +
           'rename (a concurrent same-owner swap — the destination is not the file we wrote); investigate ' +
           'for a same-user attacker inside your Wienerdog core.'
       );
+      err.code = 'WD_F10_POST_RENAME';
+      throw err;
     }
   } catch (e) {
     if (e instanceof WienerdogError) throw e;

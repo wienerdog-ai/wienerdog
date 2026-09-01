@@ -1,7 +1,7 @@
 ---
 id: WP-private-state-writers-mode-pin
 title: Write every private-listed state file through the private writer, so no rewrite can loosen it
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-failloud-survives-state-write-failure]
@@ -186,6 +186,7 @@ repair cannot hold a file that a scheduled job rewrites nightly.
 | modify | src/core/alerts.js | two functions: (a) `clearAlerts` — replace lines 206-208 per Table B, thread `{ core: paths.core }`; (b) `appendAlert`'s **compaction branch** — replace lines 117-120 per Table D (migrate + local try/catch, must not throw). Do NOT touch the atomic append at `:89-90`, the empty-read guard at `:105`, the compaction trigger at `:106`, or `chmodAlerts` itself |
 | modify | src/core/private-fs.js | **comment text PLUS one tagged throw** (this row was "comment-only" in earlier rounds; it is not any more). (a) Correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited. (b) Add `code = 'WD_F10_POST_RENAME'` to the single throw at lines 361-365, per Table D2 — the ONLY code change permitted in this file |
 | create | tests/unit/private-writer-modes.test.js | cover the acceptance criteria below; the implementer designs the cases |
+| modify | tests/unit/scheduler-runjob.test.js | **ONLY the `:2661` fixture**, whose failure-injection technique — a directory pre-created at the predictable temp path `${alertsFile}.${process.pid}.tmp` (`:2674`) — this WP's own fix retires, so it no longer intercepts anything and `clearAlerts` succeeds. Replace it with a post-mode-pin refusal trigger (e.g. symlink `alertsFile` itself, per the `:2739` sibling). **No other change to the file** — see "A test that the fix retired" below |
 
 ### Exact contracts
 
@@ -332,7 +333,7 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 | Call | `writeFilePrivate(dest, data, opts)` — `src/core/private-fs.js:280` |
 | Why not `{mode:0o600}` + `chmod` | the create mode is umask-masked (measured `0000` under `umask 0777`) and is **ignored on an existing path**, so a stale temp keeps its loose mode while private bytes are written into it; and a symlink at the predictable temp name is followed out of the core (both measured, Current state) |
 | How it avoids all three | crypto-random temp name + `O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW`, so a pre-existing file or symlink at the temp name cannot be written through; `fchmod(fd, 0o600)` on the descriptor, so the mode is umask-independent and fixed **before** the rename |
-| Core threading | pass `{ core: paths.core }` where the writer has `paths` (`writeScheduleState`, `clearAlerts`) so the ancestry check uses the caller's verified core |
+| Core threading | pass `{ core: paths.core }` where the writer has `paths` (`writeScheduleState`, `clearAlerts`, and `appendAlert`'s compaction branch — Table D) so the ancestry check uses the caller's verified core. This row governs **every** `writeFilePrivate` call this WP adds; Table D's Change cell shows the same argument rather than a different instruction |
 | No-override case | `writeWatermarks(stateDir, …)` has no `paths`; call it without `opts` and `assertInCoreAncestry` resolves the core via `getPaths()` (`:193-196`). Verified: writing to a state dir outside the resolved core is out of that guard's scope and proceeds, so the existing `stateDir`-based callers keep working |
 | Added refusals (the behavior change) | a pre-existing symlink or non-regular file at `dest` (F16, `:297-303`); a symlinked in-core ancestor or a symlink/non-dir at the parent (`mkdirPrivate`); a post-rename inode mismatch (F10, `:358-366`). Each throws `WienerdogError` instead of silently writing through — fail-closed, and the reason this WP depends on `WP-failloud-survives-state-write-failure`. A symlinked **leaf** is not caught by the `mechanicsRootUntrusted` entry gate, which classifies directories only (`:1001-1007`, measured), so these refusals are reachable on the success path as well as the failure paths — which is why that dependency covers all five sites |
 | Directory creation | `writeFilePrivate` calls `mkdirPrivate` itself, so the writers' own `fs.mkdirSync` calls are removed rather than kept alongside |
@@ -356,7 +357,7 @@ and `:113`, `core/dream/scratch.js:215`, `core/exec-identity.js:410`,
 
 | Fact / rule | Value |
 |-------------|-------|
-| Change | `src/core/alerts.js:117-120` — replace the predictable-temp `writeFileSync`/`renameSync`/`chmodAlerts` sequence with `writeFilePrivate(file, text)`, wrapped in a **local `try`/`catch`** |
+| Change | `src/core/alerts.js:117-120` — replace the predictable-temp `writeFileSync`/`renameSync`/`chmodAlerts` sequence with `writeFilePrivate(file, text, { core: paths.core })`, wrapped in a **local `try`/`catch`**. The `core` is threaded per Table B's core-threading row: `appendAlert` has `paths`, so it passes it like the other two `paths`-carrying writers |
 | Must not throw | compaction failure never propagates out of `appendAlert` — in **either** case below. On catch: emit one non-alert diagnostic and return. Refusals split into two cases with **different durability outcomes**, and the return value distinguishes them |
 | **Case 1 — PRE-rename refusal** (temp creation/write/`fchmod`, symlinked ancestor, symlinked dest) | nothing was installed. `alerts.jsonl` is untouched and still holds the record appended at `:89`. The record **is** durable; `appendAlert` returns as it does on success |
 | **Case 2 — POST-rename F10 integrity failure** (`private-fs.js:358-366`) | the `renameSync` at `:354` **already completed**, and what it installed is the entry a concurrent process substituted — not the file we wrote. So the compacted content is NOT at `dest` (its inode was unlinked), **and** the rename replaced the pre-compaction `alerts.jsonl` that held the `:89` record. **The record is LOST.** Make no claim about `dest`'s contents: they are whatever was installed. `appendAlert` must therefore signal **not-persisted** (next row) so no downstream consumer treats the alert as recorded |
@@ -395,11 +396,16 @@ every surface below in one pass:
 - [ ] The Table C verification gate under Verification steps
 - [ ] Current-state (the measured probe output, the mode-argument measurements,
       the three mechanism citations, and the `writeWatermarks` caveat)
-- [ ] The out-of-scope justification for Table A rows 13-14, and the **three**
-      named residuals (row 2's create window; deletion-recreation; the parent
-      directory) — the count appears in the Security checklist, the residual
-      prose and Out of scope, and the three move together. Row 3 is a FIX
-      (Table D), not a residual, on every surface
+- [ ] The out-of-scope justification for Table A rows 13-14, and the **five**
+      named residuals — (1) row 2's create window, (2) the destination-symlink
+      append, (3) unbounded growth under persistent compaction refusal,
+      (4) deletion-recreation of the in-place-written files and `state/` itself,
+      (5) the parent directory. The **total of five** appears in the Security
+      checklist and must agree with this bullet. A **subset count of three** also
+      appears deliberately — the three that sit on `alerts.jsonl` (residuals 1-3),
+      in the residual prose and Out of scope; that is a subset, not a stale
+      total, and must not be "corrected" to five. Row 3's compaction rewrite is a
+      FIX (Table D), not a residual, on every surface
 - [ ] The **applicable-cell count (10)** — it appears in Table C's two rows, the
       acceptance criteria, the gate script's comment header, its `cells !== 10`
       assertion and its success message; all five must agree. The count covers
@@ -410,6 +416,20 @@ every surface below in one pass:
       `WP-failloud-survives-state-write-failure`, and the backward-compatibility
       rule (`undefined` keeps HEAD semantics, only explicit `false` signals) is
       stated in both. All three surfaces move together
+- [ ] **KNOWN-STALE (registered, not fixed here): `src/cli/run-job.js`'s
+      `failLoud` JSDoc, `:655-658` and `:681-683`.** Both restate this wire from
+      the consumer side and both went stale the moment the producer landed in
+      this WP. `:655-658` says "a throw from the post-append compaction rewrite
+      also yields `false`" — compaction no longer throws (Table D wraps it in a
+      local `try`/`catch`), so the stated mechanism is gone even though a `false`
+      still arrives, by a different route and only for Case 2. `:681-683` says
+      the real `appendAlert` "returns `undefined` on every path today, so this is
+      a no-op" in production — no longer true: it returns `false` on Case 2
+      (`src/core/alerts.js:140`). **Disposition:** outside this WP's Deliverables
+      boundary, so it is NOT corrected here; fix it via a comment-only follow-up
+      or in the next WP that legitimately touches `run-job.js`. Registered so the
+      drift is on the books rather than silent, and so the next editor of that
+      JSDoc knows what it must end up saying
 - [ ] **The 2026-07-19 waiver's status** — its lift (DATED OWNER DECISION
       2026-09-01) is recorded under Current state and mirrored in
       Definition-of-done item 0(b) and the design-gate round record's Outcome;
@@ -442,6 +462,39 @@ every surface below in one pass:
       fact; both stay
 
 ## Implementation notes & constraints
+
+### A test that this WP's fix retired (why `scheduler-runjob.test.js` is a Deliverable)
+
+`tests/unit/scheduler-runjob.test.js` is not a file this WP set out to touch. It
+is in the Deliverables because an **intervening dependency's test used the very
+hazard this WP closes as its failure-injection fixture**, and closing the hazard
+disarmed the fixture.
+
+`WP-failloud-survives-state-write-failure` landed first (this WP's `depends_on`).
+Its Table B2 test at `:2661` needed `clearAlerts` to throw, and at the time the
+cheapest way to force that was to pre-create a **directory** at `clearAlerts`'
+deterministic temp path — `` fs.mkdirSync(`${alertsFile}.${process.pid}.tmp`) ``
+(`:2674`), with a comment noting the filename is predictable because
+`clearAlerts` runs in-process. That predictability **is** the hazard Table B
+retires: `writeFilePrivate` uses a crypto-random `O_EXCL|O_NOFOLLOW` temp, so the
+planted directory is never opened, the rewrite succeeds, and the test's premise
+evaporates. Measured on this branch: `:2661` is the **only** failing test in the
+suite (2405 tests, 2392 pass, 1 fail).
+
+The fix is to re-arm the test against the post-mode-pin refusal shape rather than
+to weaken it. Its sibling at `:2739` already shows the shape and still passes —
+note **why**: `:2739` symlinks `alertsFile` itself, so its refusal comes from
+`writeFilePrivate`'s destination check (F16), not from the temp fixture. Its own
+`` fs.mkdirSync(`${alertsFile}.${process.pid}.tmp`) `` at `:2750` is now
+vestigial but harmless, and is **out of scope** — do not tidy it up; this row
+permits the `:2661` fixture and nothing else.
+
+**The class was predicted.** `WP-failloud-survives-state-write-failure`'s own
+lessons flagged that a test injecting failure through a mechanism a *later* WP is
+chartered to remove will go green-then-stale exactly when that WP lands. This is
+that prediction arriving. The general rule it argues for — inject failure through
+a seam the roadmap is not about to close, or expect to re-arm the test — belongs
+in the dogfood lessons, not in this spec; report it in the PR body.
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
 - Each of the three edits is a **replacement, not an addition**: delete the

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { redactOnly } = require('./secret-scan');
-const { mkdirPrivate } = require('./private-fs');
+const { mkdirPrivate, writeFilePrivate } = require('./private-fs');
 const { pruneAcksForJob } = require('./alert-ack');
 
 /** Best-effort 0600 on the alerts file (audit A5, WP-126): a first append
@@ -114,10 +114,32 @@ function appendAlert(paths, record) {
       kept = kept.slice(1); // drop oldest
       text = serialize(kept);
     }
-    const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, text, { mode: 0o600 });
-    fs.renameSync(tmp, file); // atomic replace (mirrors clearAlerts)
-    chmodAlerts(file);
+    // Table D (WP-private-state-writers-mode-pin): migrated onto the audited
+    // private-write primitive (crypto-random O_EXCL|O_NOFOLLOW temp + fchmod
+    // before rename) so this rewrite can no longer be hijacked through a
+    // stale or symlinked predictable temp name. Wrapped in a local try/catch —
+    // this is housekeeping running AFTER the durable append at :89, so its
+    // failure must never propagate (the :840 caller's "WARN + PROCEED, no
+    // throw" contract stays untouched).
+    try {
+      writeFilePrivate(file, text, { core: paths.core });
+    } catch (e) {
+      try {
+        process.stderr.write(
+          `wienerdog: alerts.jsonl compaction refused (${(e && e.message) || e}); leaving the log over budget until this is fixed\n`
+        );
+      } catch {
+        /* best-effort diagnostic — never mask the append result */
+      }
+      // Case 2 (F10 post-rename substitution): the rename already completed and
+      // replaced the pre-compaction file that held the :89 record — the record
+      // may be lost, so signal not-persisted rather than let the caller infer
+      // success from the absence of a throw. Every other refusal (Case 1) is
+      // pre-rename: alerts.jsonl is untouched and the :89 record is still
+      // durable, so this falls through to the same `undefined` return as success.
+      if (e && e.code === 'WD_F10_POST_RENAME') return false;
+      return;
+    }
   }
 }
 
@@ -203,9 +225,7 @@ function clearAlerts(paths, job) {
     fs.rmSync(file, { force: true });
     return;
   }
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, remaining.map((a) => JSON.stringify(a)).join('\n') + '\n');
-  fs.renameSync(tmp, file);
+  writeFilePrivate(file, remaining.map((a) => JSON.stringify(a)).join('\n') + '\n', { core: paths.core });
 }
 
 module.exports = {
