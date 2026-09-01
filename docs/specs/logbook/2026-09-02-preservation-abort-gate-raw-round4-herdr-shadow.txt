@@ -1,0 +1,41 @@
+SHADOW ROUND 4 (closing confirmation; herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 4ee0a7c0, fresh thread via /new). Captured via an approved scratch-file write (tee). No approvals granted during the review itself (its npm test and lint attempts failed inside the sandbox, disclosed under EXECUTED). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — Do not ship: Table D is internally unsatisfiable, and the Done-spec amendment still conflicts with Q4’s durability requirement.
+
+FINDING 1
+
+Affected file: docs/specs/WP-preservation-abort-widening.md  
+Lines: 571-584  
+Confidence: 1.0  
+Materiality: B  
+Body: D1 requires a pre-existing `dest` collision candidate to survive byte-unchanged. The same failed preservation produces no record entry, but D4 requires the quarantine tree to contain no file absent from that record. Existing legitimate artifacts create the same contradiction. An implementation cannot satisfy both without deleting files D1 expressly forbids touching; literal verification is therefore impossible and could encourage destructive cleanup.  
+Recommendation: Narrow D4 to paths owned by this invocation: after `null`, its owned `tmp` or `dest` is absent. Explicitly exclude pre-existing quarantine contents and require evidence that no unrelated path changes.
+
+FINDING 2
+
+Affected file: docs/specs/WP-preservation-abort-widening.md  
+Lines: 40-77, 346-412, 465-467  
+Confidence: 0.98  
+Materiality: B  
+Body: The parent simultaneously says P0–P5 make the implementation agree with Q4 and says this WP does not provide crash durability. Table P defines success using read-back verification and explicitly says “NOT durability,” while Q4 requires a durable artifact. Worse, the prescribed B3b amendment says its byte-identity condition remains unchanged, leaving B3b’s existing “durable copy” condition active. Following Table P permits teardown with only a cache-verifiable artifact; following the whole amended B3b cell still requires durability. The successor correctly admits the durability half is missing, although calling it “not a repair” contradicts the shipped Q4 obligation.  
+Recommendation: State consistently that this WP implements only the verified-artifact subset and leaves Q4/B3b durability unmet pending the successor. Make the B3b amendment preserve and explicitly defer that durability conjunct, replace claims that this WP makes the implementation “agree with” Q4, and describe the successor as repairing a pre-existing contract violation.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Repository revision/status, `main...HEAD` diff/stat/name/log, full requested document/code/test/canonical-row reads, and round/raw inspections — exit 0.
+- `git diff --check main...HEAD` — exit 2; trailing spaces are in the committed round-3 raw transcript.
+- Preservation-site counts and zero-`fsync` search — exit 0.
+- Exact claimed CLAUDE.md split-rule search — exit 1; the quoted rule is absent.
+- V2 checks — exits 1/1, expected on the untouched preimplementation tree.
+- V3 checks — exits 1/0/1, expected on the untouched tree.
+- Read-only V4 equivalent — exit 0: ten expected lines, unique delimiters, no durability wording, and expected mismatch against the current seven-line comment.
+- Active-value non-substring check — exit 0.
+- `npm test` — exit 1: sandbox denied the test harness’s `mkdtemp`; no assertion ran.
+- `npm run lint` — no exit observed after 30 seconds at markdownlint. Offline retry exited 1 because `markdownlint-cli2` was not cached; standalone frontmatter check exited 0.
+- Final `git status --short --branch` — exit 0; detached checkout remained clean.
+
+DONE_ROUND_4
