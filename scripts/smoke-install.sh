@@ -20,6 +20,55 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WD() { node "$REPO/bin/wienerdog.js" "$@"; }
 
+# Live-scheduler preflight (issue #169, WP-smoke-live-scheduler-preflight).
+# The lifecycle below (catch-up teardown + `uninstall`) removes every
+# Wienerdog scheduler entry it finds, and those OS identifiers are
+# per-user-global, not $HOME-scoped — a throwaway HOME does not protect them
+# (docs/adr/0018-windows-scheduled-dreaming.md Decision 2). Refuse to proceed
+# while this user has a live registration.
+#
+# Two overrides, both exact-value (only the literal string "1" counts), each
+# applying to its own outcome only:
+#   WIENERDOG_SMOKE_I_KNOW=1            — proceed past a LIVE result.
+#   WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1 — proceed past a NOT-PROBEABLE result.
+PROBE="$REPO/scripts/live-scheduler-probe.sh"
+PREFLIGHT_STATE="clean"
+PREFLIGHT_MATCHES=""
+for PREFLIGHT_PREFIX in "ai.wienerdog." "wienerdog-"; do
+  if PREFLIGHT_OUT="$("$PROBE" "$PREFLIGHT_PREFIX")"; then
+    PREFLIGHT_RC=0
+  else
+    PREFLIGHT_RC=$?
+  fi
+  if [ "$PREFLIGHT_RC" -eq 1 ]; then
+    PREFLIGHT_STATE="live"
+    PREFLIGHT_MATCHES="$PREFLIGHT_MATCHES$PREFLIGHT_OUT
+"
+  elif [ "$PREFLIGHT_RC" -ne 0 ] && [ "$PREFLIGHT_STATE" != "live" ]; then
+    # Any non-0, non-1 probe status (2, or an unexpected 127/126/3/...) is
+    # NOT-PROBEABLE, not CLEAN: a deleted, non-executable, or crashing probe
+    # must never be read as "the domain is safe".
+    PREFLIGHT_STATE="not-probeable"
+  fi
+done
+case "$PREFLIGHT_STATE" in
+live)
+  if [ "${WIENERDOG_SMOKE_I_KNOW:-}" != "1" ]; then
+    printf 'ABORT (issue #169): a live Wienerdog scheduler registration exists.\n' >&2
+    printf 'This run would remove it:\n%s' "$PREFLIGHT_MATCHES" >&2
+    printf 'Set WIENERDOG_SMOKE_I_KNOW=1 to proceed anyway.\n' >&2
+    exit 1
+  fi
+  ;;
+not-probeable)
+  if [ "${WIENERDOG_SMOKE_ALLOW_UNPROBEABLE:-}" != "1" ]; then
+    printf 'ABORT (issue #169): this machine'"'"'s live scheduler domain could not be queried.\n' >&2
+    printf 'Set WIENERDOG_SMOKE_ALLOW_UNPROBEABLE=1 to proceed anyway.\n' >&2
+    exit 1
+  fi
+  ;;
+esac
+
 SB="$(mktemp -d "${TMPDIR:-/tmp}/wd-smoke.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
 
