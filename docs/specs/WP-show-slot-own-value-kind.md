@@ -23,7 +23,7 @@ prevent"* (`:676-677`). It also registers, in as many words, that **the slot
 kinds are part of the set and move with it** — *"the form the pair actually
 drifted in"* — and that **no grep reaches a slot-kind drift** (`:678-690`). This
 WP is exactly that drift form, and it closes it by amending a table that lives
-in `done/`. The owner rules two things together:
+in `done/`. The owner rules three things together:
 
 1. **The slot-kind change** — shape (4)'s argument moves from FREE to a
    LITERAL (Change table, row C1; rationale and rejected alternatives below).
@@ -47,18 +47,68 @@ in `done/`. The owner rules two things together:
    **What the owner ratifies is the permanent surface**: ~55 lines of checker
    in the guard file, one pinned constant, and a standing obligation on every
    future `KNOWN_CALLS` edit.
-   **If the owner rules the other way — one-time evidence, no durable
-   machinery — the strip-down is cheap and is pre-written here so the ruling
-   needs no second pass:** delete "The durable source-form check" and its two
-   code blocks, drop the checker and digest rows from Deliverables (the test
-   file returns to four sites), delete acceptance criteria 11 and 12, remove
-   the digest and re-pin entries from the Mirrored Surface Checklist and from
-   the W1(c) instruction, and **narrow the claim in the same pass** — C1's
-   "spelled literally" rationale then reads *"proved for this implementation
-   only; the tripwire is not enforced against future edits"*, and the
-   Implementation note's same-commit re-pin rule is deleted rather than left
-   standing as a rule nothing carries. **A claim of future enforcement with no
-   mechanism is the one outcome not available.**
+   **IF THE OWNER RULES THE OTHER WAY — one-time evidence, no durable
+   machinery — BRANCH B BELOW IS THE COMPLETE REWRITE.** It is enumerated
+   rather than summarized because a partial strip-down leaves an
+   unsatisfiable contract: obligations that only the durable design can meet,
+   with the design deleted. **A claim of future enforcement with no mechanism
+   is the one outcome not available.** Every durable reference in this spec is
+   listed here, and each is either DELETED or REWRITTEN:
+
+   - **Exact contracts — the shape-(4) comment.** REWRITE: drop the
+     `KNOWN_CALLS_SOURCE_DIGEST` and same-commit sentences; the comment keeps
+     only *"spelled literally on purpose — do not import or interpolate
+     `WARNINGS_REL`; see Table W row W1(c)"*.
+   - **Exact contracts — "The durable source-form check"**, its prose, its two
+     code blocks, the run-as-a-real-test paragraph and the ADR-0004 sentence
+     about it. DELETE the section.
+   - **Deliverables — the test-file row.** REWRITE: **six sites become four**
+     (it is one row with a site list, not separate checker/digest rows); drop
+     the digest-constant and source-form-test sites and the span-boundary
+     sentence they carry.
+   - **Acceptance criterion 1.** REWRITE: replace "SOURCE-FORM SCRIPT … its
+     EXIT CODE is the verdict" and the pinned-digest sentence with *"proved
+     ONCE at implementation time by the one-time procedure in Verification
+     steps; not enforced against future edits."*
+   - **Acceptance criterion 5.** REWRITE: keep the three mutations, delete the
+     two-arm split (there is no committed source-form test to red), and
+     restore the plain asymmetry — the runtime suite stays GREEN on (b) and
+     (c) while the one-time checker exits nonzero. Delete the state-table
+     re-run obligation; the table becomes a spec-time record only.
+   - **Acceptance criteria 11 and 12.** DELETE both. Numbering then ends at 10
+     and no surviving text cites 11 or 12 (checked).
+   - **Verification steps.** REWRITE: the guard-file run loses "the home of the
+     SOURCE-FORM check", and **the one-time procedure returns in the form it
+     had before round 4** — a `cat > /tmp/wd-show-slot-source-form.js <<'WDEOF'`
+     heredoc carrying the same checker body with `PINNED` as a literal instead
+     of a constant read from the file, run once against
+     `tests/unit/dream-pipeline.test.js`, its exit code captured as its own
+     statement and its output pasted into the PR. Nothing is committed.
+   - **Sweep patterns.** DELETE `KNOWN_CALLS_SOURCE_DIGEST` and
+     `932b54256c31`, and the expected-hits paragraph that adjudicates them.
+   - **Mirrored Surface Checklist.** DELETE the `KNOWN_CALLS_SOURCE_DIGEST`
+     entry and the W1(c)-gains-three-sentences entry **in full — including
+     the once-only declaration constraint (iii)**, which exists only to
+     underwrite the committed check.
+   - **Implementation notes.** DELETE the same-commit re-pin note, the
+     needle-anchoring note and the two-traps note. KEEP the
+     enumerate-our-own-good note, rewritten to end at the one-time proof.
+   - **The digest itself** stays in the spec ONLY inside "THE PIN, and its
+     derivation" and the state table, both of which are past-tense spec-time
+     records and are labelled as such. TWO SENTENCES INSIDE THEM STILL MOVE,
+     and they are named because walking this branch is what found them:
+     the state-table preamble's *"the implementer re-proves the same property
+     through the COMMITTED test (criteria 11 and 12)"* → REWRITE to cite the
+     one-time procedure instead; and the *"last four are the durable arm"*
+     sentence → REWRITE, since those four rows describe a sibling constant
+     that Branch B never ships (keep the rows as spec-time measurements, drop
+     the claim that they are an arm of the shipped design).
+
+   Under Branch B the sweep reports no digest surfaces and the checklist names
+   none; under Branch A both report the guard file, and
+   `KNOWN_CALLS_SOURCE_DIGEST` additionally reports W1(c). **Both branches were
+   walked end to end for surviving references and for criterion numbering
+   before this list was written.**
 
 Until all three are ruled, this spec stays undispatched. Nothing else here is
 open.
@@ -344,14 +394,20 @@ test('dream-pipeline: KNOWN_CALLS is the pinned canonical SOURCE FORM (Table W r
   //     OF THE LEXER: this file declares KNOWN_CALLS exactly once. A verbatim
   //     COMPLIANT decoy would otherwise match the digest, so this is what
   //     closes the decoy class — not the digest.
-  //     The needle is SPLIT because this check lives in the file it checks, and
-  //     the boundary lookahead is why KNOWN_CALLS_SOURCE_DIGEST is not a second
-  //     declaration. Both were measured: without them this test reds on its own
-  //     deliverable.
-  const N = 'const ' + 'KNOWN_CALLS';
-  const DECL = new RegExp(N + '(?![A-Za-z0-9_$])', 'g');
-  assert.equal((src.match(DECL) || []).length, 1,
-    `"${N}" must occur exactly once as a whole identifier in this file`);
+  //     THE NEEDLE IS OUR DECLARATION'S OWN SYNTAX, not an identifier boundary.
+  //     An ASCII boundary class is an enumeration in a grammar that is not ours
+  //     and it leaks: `const KNOWN_CALLSé = [canonical decoy]` passed it while
+  //     `const { KNOWN_CALLS } = { KNOWN_CALLS: [interpolated] }` bound the real
+  //     set (measured GREEN end-to-end). Unicode ID_Continue, ZWNJ/ZWJ and
+  //     escapes are unclosable that way, so this asserts the one spelling WE
+  //     ship instead: identifier, plain whitespace, `=`, plain whitespace, `[`.
+  //     A comment between those tokens is a RED — acceptable and loud.
+  //     The needle is SPLIT because this check lives in the file it checks;
+  //     measured, the unsplit form reds on its own deliverable.
+  const NAME = 'const ' + 'KNOWN_CALLS';
+  const DECL = () => new RegExp(NAME + '\\s*=\\s*\\[', 'g');
+  assert.equal((src.match(DECL()) || []).length, 1,
+    `the declaration "${NAME} = [" must occur exactly once in this file`);
   // (1) LEXER over JS's LEXICAL grammar only — small, stable, ours to close,
   //     unlike its expression grammar. Two equal-length projections, so offsets
   //     need no mapping back:
@@ -387,14 +443,14 @@ test('dream-pipeline: KNOWN_CALLS is the pinned canonical SOURCE FORM (Table W r
     }
   }
   const CODE = code.join('');
-  // (2) LOCATE the one declaration in CODE — boundary-aware for the same reason
-  //     as (0). If the single raw occurrence is not also code, it was inside a
-  //     comment or a string, and that reds.
-  DECL.lastIndex = 0;
-  const m = DECL.exec(CODE);
-  assert.ok(m, `"${N}" does not occur in code (it is inside a comment or a string)`);
-  const open = CODE.indexOf('[', m.index);
-  assert.ok(open > 0, 'no "[" opens the KNOWN_CALLS initializer');
+  // (2) LOCATE the one declaration in CODE — the IDENTICAL pattern as (0), which
+  //     is why a fresh RegExp is built each time rather than shared with a
+  //     `lastIndex` to reset. If the single raw occurrence is not also code, it
+  //     was inside a comment or a string, and that reds. The match ends ON the
+  //     opening bracket, so the span start needs no second search.
+  const m = DECL().exec(CODE);
+  assert.ok(m, `the declaration "${NAME} = [" does not occur in code (it is inside a comment or a string)`);
+  const open = m.index + m[0].length - 1;
   let depth = 0, close = -1;
   for (let i = open; i < CODE.length; i++) {
     const c = CODE[i];
@@ -420,9 +476,10 @@ assembled into a guard file carrying the canonical initializer plus the sibling
 constant, `node --test` reports `pass 1`. Mutated, it reports `fail 1` — the
 interpolation swap with the digest constant left unchanged fails with the
 re-pin message above, and so does a tampered constant. **The self-reference
-traps were confirmed the same way:** restoring the un-split needle fails with
-*"must occur exactly once as a whole identifier"*, i.e. the check reds on its
-own deliverable if the two notes below are ignored.
+trap was confirmed the same way:** restoring the un-split needle makes the
+check red on its own deliverable. **And the round-5 needle was re-proved in the
+same harness** — the syntax-anchored form passes with the checker living inside
+the file it checks, and still reds on the interpolation swap.
 
 **The digest is not a copy of the set** (see the third-copy analysis below), so
 it does not breach W1(c)'s two-copies rule — but it IS a registered surface that
@@ -485,7 +542,7 @@ is unfinished work.
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the **MEASURED IN BOTH DIRECTIONS** sentence, which follows the one above and carries the SAME dead SHA `5c5d082`. **In scope because it is inside row W1(c)** — verified by offset: the occurrence sits between that cell's clause-(c) and clause-(d) markers. Correct it to `c853245b`, retire-with-cause — the measurement it pins is real and stays; only its name was lost to the history rewrite
 - [ ] `tests/unit/dream-pipeline.test.js:1632-1658` — the non-vacuity canary block: gains the show canary (acceptance criterion 4)
 - [ ] `tests/unit/dream-pipeline.test.js` — **the `KNOWN_CALLS_SOURCE_DIGEST` constant. REGISTERED, and the registration is the point.** It is not a copy of the set — the set cannot be read out of a hash — but it moves in byte-lockstep with it, so it belongs in this checklist exactly like the row/`KNOWN_CALLS` pair: **any edit to the initializer re-pins the constant in the same commit as the W1(c) row change.** Recorded here so the next editor meets the obligation in the registry as well as in the row
-- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — **W1(c) gains three sentences it does not have today**, because it is the surface where the set is decided and therefore the one a future editor consults: (i) the set's source form is pinned by `KNOWN_CALLS_SOURCE_DIGEST` in the guard file; (ii) any edit to the set re-pins that digest in the SAME commit as the row change; (iii) `const KNOWN_CALLS` may appear exactly once in that file, which is the constraint the check's decoy defence rests on. Without (i)–(iii) the rule exists only in a spec that a later WP never reads
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — **W1(c) gains three sentences it does not have today**, because it is the surface where the set is decided and therefore the one a future editor consults: (i) the set's source form is pinned by `KNOWN_CALLS_SOURCE_DIGEST` in the guard file — **name the constant, do NOT quote its value**, so the bytes live in exactly one place and the sweep's prefix pattern stays single-homed; (ii) any edit to the set re-pins that digest in the SAME commit as the row change; (iii) the declaration `const KNOWN_CALLS = [` may appear exactly once in that file, which is the constraint the check's decoy defence rests on. Without (i)–(iii) the rule exists only in a spec that a later WP never reads
 - [ ] Verification greps in `docs/specs/done/WP-dream-promote-in-workspace.md:1469-1518` — **swept, no hit**: none spells a shape, a slot kind or a count. Recorded so a later gate does not re-derive it
 
 **C2 — the own-value membership invariant:**
@@ -543,15 +600,26 @@ is unfinished work.
   its own spec and never this one: the committed test (which reds), the
   constant sitting in the same diff hunk as the set, and W1(c)'s own sentences.
   A rule that lives only here is the finding round 4 raised.
+- **THE NEEDLE ANCHORS ON OUR DECLARATION'S SYNTAX. Do not "improve" it into a
+  character class.** An identifier-boundary class is an enumeration in
+  JavaScript's grammar — the same unclosable direction, three levels down — and
+  it was measured leaking: an ASCII lookahead accepted
+  `const KNOWN_CALLSé = [canonical decoy]` while the real set was bound by
+  `const { KNOWN_CALLS } = { KNOWN_CALLS: [interpolated] }`, GREEN end to end.
+  Widening to ID_Continue, ZWNJ/ZWJ and Unicode escapes would be one spelling
+  short again. Asserting the one declaration spelling WE ship is closable, and
+  it makes a decoy reproduce `const KNOWN_CALLS = [` verbatim — which
+  assertion (0)'s once-only rule then refuses. Counter and locator MUST carry
+  the identical pattern.
 - **TWO MEASURED TRAPS in putting the check inside the file it checks, both of
-  which red on the WP's own deliverable if missed.** (i) `const
-  KNOWN_CALLS_SOURCE_DIGEST` CONTAINS the substring `const KNOWN_CALLS`, so a
-  naive count sees two declarations — hence the identifier-boundary lookahead
-  in assertion (0) **and in the locator**, which must agree or the locator
-  lands on the constant when it is declared first. (ii) The checker's own
-  needle would be a third occurrence, so it is built as `'const ' +
-  'KNOWN_CALLS'`. Do not "clean up" either: both were measured failing, and
-  the natural adjacent name is worth the two lines it costs.
+  which red on the WP's own deliverable if missed.** (i) The checker's own
+  needle would be a further occurrence, so it is built as `'const ' +
+  'KNOWN_CALLS'`; keep assertion messages free of the declaration's spelling
+  for the same reason. (ii) `const KNOWN_CALLS_SOURCE_DIGEST` contains the
+  substring `const KNOWN_CALLS` — harmless under the syntax anchor, since `_`
+  is neither whitespace nor `=`, but fatal under the naive substring count that
+  preceded it. Do not restore that count; the natural adjacent name is what
+  makes the re-pin land in the editor's diff.
 - **The retired direction may not return.** Do not add a slot kind that
   inspects a token — a `NOT_OPTION` slot, a leading-dash check, a prefix rule
   or any grammar-aware tolerance. Rejected options below records why each is
@@ -640,13 +708,28 @@ is unfinished work.
       outcome is believed.** (a) the slot reverted to `ANY` — reddens the
       runtime matrix (criterion 4); (b) the slot replaced by the interpolated
       form of `WARNINGS_REL`; (c) the slot replaced by the concatenation
-      `'HEAD:' + WARNINGS_REL` **split across two lines**. For (b) and (c) the
-      **runtime suite stays GREEN and the source-form script exits nonzero** —
-      that asymmetry is the whole point of having it. **The digest arm reds on
-      EVERY non-canonical form, so these two are required as evidence of the
-      asymmetry, not as an enumeration of what the checker catches** — the
-      twelve-state matrix beside the script is that record, and it must be
-      re-run, not merely cited.
+      `'HEAD:' + WARNINGS_REL` **split across two lines**.
+      **THE TWO ARMS ARE CAPTURED SEPARATELY, and conflating them is why an
+      earlier form of this criterion was unsatisfiable — it asked the same
+      `npm test` to be both green and red once the checker moved into the
+      suite (round 4).** For (b) and (c):
+      **RUNTIME arm — evidence is the guard's own decision, named test by
+      test.** The index test
+      (`dream-pipeline: the run does not touch the user's git index — at all,
+      <layout> vault (row G8)`, all three layouts) still PASSES: `violations`
+      is empty and the canaries still classify as criterion 2 requires. Report
+      those three test names' outcomes, not a suite-wide verdict.
+      **SOURCE arm — evidence is the committed source-form test
+      (`dream-pipeline: KNOWN_CALLS is the pinned canonical SOURCE FORM …`)
+      FAILING with the re-pin message.**
+      **So the full `npm test` REDS on (b) and (c) — because of the source-form
+      test, and that is the tripwire working, not a contradiction.** Say so
+      when pasting: a green suite on (b) or (c) would mean the tripwire is
+      dead.
+      **The digest arm reds on EVERY non-canonical form, so these two are
+      required as evidence of the asymmetry, not as an enumeration of what the
+      checker catches** — the state table beside the checker is that record,
+      and it must be re-run, not merely cited.
 - [ ] 6. The `RUN_VALUE` JSDoc and the `produces` comment state the C2
       invariant, all four members satisfy it as stated, and the word MINTED no
       longer appears in `tests/unit/dream-pipeline.test.js`.
@@ -743,9 +826,13 @@ sentence each, because no presence-grep for a placeholder symbol reaches
 either: `merely carries` for W1(c)'s FREE-slot rule, and `` stay `ANY` `` for
 the logbook's contradicting slot-kind clause (checklist entries 1 and 2 under
 C1). **`KNOWN_CALLS_SOURCE_DIGEST` and the digest prefix `932b54256c31` are
-patterns for the new registered surface**: after this WP each should report the
-guard file (constant + assertion message) and nothing else, so a hit anywhere
-a third surface has appeared. **`5c5d082` is a pattern for a DEAD SHA**: after this WP it must survive
+patterns for the new registered surface, and their expected hits DIFFER:**
+`KNOWN_CALLS_SOURCE_DIGEST` must report **the guard file AND W1(c)** — W1(c)
+naming the constant is mandatory (Mirrored Surface Checklist), so it is an
+expected hit and not a third surface; the digest **prefix** must report **the
+guard file only**, because W1(c) registers the constant BY NAME and does not
+quote its value — one place holds the bytes. Any other hit for either pattern
+is a third surface. **`5c5d082` is a pattern for a DEAD SHA**: after this WP it must survive
 only in row W5, whose three occurrences are a registered Discovered issue this
 package may not touch — so that pattern is expected to keep reporting `:545`
 and nothing else. A hit anywhere else is unfinished work.
@@ -772,7 +859,11 @@ printed span) and agrees. **No string literal in the set contains a whitespace
 run**, visible in that span, so collapsing runs is lossless here; a future
 member whose literal held two adjacent spaces would need this stated again.
 
-**Observed in TWELVE states at spec time** (`5d31a7dc`, running the Exact-contracts
+**Observed in every state of the table below at spec time — the table is the
+record and this sentence states no count**, which is C3's own ruling applied to
+this spec: the number was written as "twelve", went stale at sixteen when the
+durable arm landed, and would go stale again at nineteen. A number beside a
+list is a number waiting to be falsified (`5d31a7dc`, running the Exact-contracts
 checker standalone over scratch copies of the guard file, before it had a home
 in the tree), each exit captured as its own statement rather than behind a
 pipe. **This table is a spec-time measurement record, not a verification step:**
@@ -797,6 +888,9 @@ the implementer re-proves the same property through the COMMITTED test
 | the digest constant declared **after** the set, canonical initializer | 0 | **GREEN** |
 | the digest constant present and **tampered** | 1 | **RED** |
 | the digest constant unchanged, slot **swapped to interpolation** — the future-editor case | 1 | **RED** |
+| **round 5:** `const KNOWN_CALLSé = [canonical decoy]` with the real set bound by `const { KNOWN_CALLS } = { … }` and interpolated | 1 | **RED** |
+| **round 5:** the same with an **escaped** Unicode suffix (`KNOWN_CALLSé`) | 1 | **RED** |
+| **round 5:** a destructured binding only, interpolated, no decoy | 1 | **RED** |
 
 Three of these are the round-3 evasions, each reproduced against the previous
 checker (all exited 0) before being fixed. **The last four are the durable
@@ -837,6 +931,20 @@ green:** any mislocation yields a different span and therefore a mismatch, and
 the one mislocation that WOULD match — landing on a verbatim compliant decoy —
 is refused by assertion (0), which is lexer-independent. That is why (0) exists
 and why it runs first.
+
+**THAT CLAIM WAS TOO STRONG UNTIL ROUND 5, AND WHAT REPAIRED IT IS THE NEEDLE,
+not the lexer.** The claim rests entirely on assertion (0) refusing decoys, and
+(0)'s earlier form asked whether the identifier ended at an ASCII boundary —
+which is a fact about JavaScript's identifier grammar, not about our file.
+Measured: `const KNOWN_CALLSé = [canonical decoy]` satisfied it, the locator
+hashed the decoy, and `const { KNOWN_CALLS } = { KNOWN_CALLS: [interpolated] }`
+bound the real set — green end to end, with the tripwire gone. **The closable
+form asserts the exact spelling WE ship** — `const KNOWN_CALLS` then plain
+whitespace, `=`, plain whitespace, `[` — so a decoy must reproduce our
+declaration verbatim, and reproducing it makes the count two. The property is
+therefore *the declaration we ship occurs exactly once and is the thing
+hashed*, which is ours to enforce, rather than *no other identifier could
+resemble ours*, which is not.
 
 **Do NOT verify with `--test-name-pattern`.** Measured on this tree at
 `5d31a7dc` (Node v25.9.0):
