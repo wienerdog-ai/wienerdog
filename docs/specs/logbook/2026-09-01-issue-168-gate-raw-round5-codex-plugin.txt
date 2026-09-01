@@ -1,0 +1,18 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship: the post-rename F10 contract can silently lose the durable alert and then report persistence success.
+
+Findings:
+- [high] F10 temp substitution can replace the alert log and delete the just-appended record (docs/specs/WP-private-state-writers-mode-pin.md:337-344)
+  Table D assumes that because renameSync completed before F10 throws, alerts.jsonl contains the compacted content and the record appended at :89 remains durable. The implementation explicitly says F10 detects when a concurrent process replaces the opened temp with a symlink or different inode (private-fs.js:270-277, 354-366). In that case renameSync installs the substituted entry over alerts.jsonl, unlinking the original file containing the new record; the destination does not contain the compacted content. Swallowing this error makes appendAlert return normally, so failLoud sets persisted=true and may delete reap pidfiles at run-job.js:1106-1107 even though neither the alert nor the fallback recovery identity survives.
+  Recommendation: Distinguish post-rename integrity failures from ordinary pre-rename compaction failures. Communicate an explicit not-persisted result to failLoud so reap pidfiles remain retained, while allowing the :840 warning caller to continue. Remove the claim that F10 leaves compacted content readable, and add a real temp-substitution test covering destination contents, failLoud persistence status, and pidfile retention.
+
+Next steps:
+- Revise Table D and its mirrored acceptance criterion at lines 489-493.
+- Define and test caller behavior for post-rename integrity failure separately from recoverable compaction refusal.
+
+Codex session ID: 01a05a5a-09ba-77f1-a8d5-a9bb18499332
+Resume in Codex: codex resume 01a05a5a-09ba-77f1-a8d5-a9bb18499332

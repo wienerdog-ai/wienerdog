@@ -1,0 +1,25 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship these specs yet: one private-write hazard remains misclassified, and the newly surfaced refusal can cause successful jobs to be replayed without a durable alert.
+
+Findings:
+- [high] A refused success-watermark write can repeatedly re-run a successful job (docs/specs/WP-private-state-writers-mode-pin.md:243-253)
+  Table B adopts refusal semantics for schedule.json, but the dependency WP deliberately guards only the three failure-watermark sites and explicitly leaves the success write at run-job.js:1060 unchanged. A leaf symlink/non-regular schedule.json is not caught by mechanicsRootUntrusted, which checks directories only. After the job completes successfully, writeScheduleState will therefore throw before recording last_success or clearing alerts. Catch-up can continue treating the job as overdue and execute its side effects again, while no failLoud record explains the persistence refusal. This unsafe outcome remains after both WPs land.
+  Recommendation: Specify and test the success-path refusal outcome. Add the success watermark call site to an appropriate WP so persistence refusal produces a durable diagnostic and cannot cause catch-up to replay a job whose work already succeeded.
+- [medium] appendAlert compaction retains the same stale-temp and symlink write-through hazard (docs/specs/WP-private-state-writers-mode-pin.md:184-189)
+  Table A labels appendAlert's compaction branch as an unchanged 0600 writer, but alerts.js:117-120 uses the predictable `${file}.${process.pid}.tmp` with writeFileSync({mode:0600}), rename, and only post-rename chmod. As this spec itself establishes, mode is ignored for a pre-existing temp and writeFileSync follows a symlink. During compaction, a stale loose temp can expose alert contents before chmod, and a planted symlink can receive those private contents outside the core. This contradicts the broad no-loose-window claim and is absent from the named residual set.
+  Recommendation: Either migrate the compaction rewrite to writeFilePrivate, or explicitly narrow the security claim and name the compaction stale-temp/symlink exposure as a routed residual with an owning follow-up.
+- [medium] The claimed 12-cell mode gate tests only 10 applicable cells (docs/specs/WP-private-state-writers-mode-pin.md:339-350)
+  The acceptance criterion requires all three writers under both umasks and both destination states. However, the gate checks schedule and watermarks absent/present, while alerts.jsonl is checked only after appendAlert creates it and clearAlerts rewrites an already-present destination. clearAlerts cannot produce a mode in the absent branch—it deletes or leaves the file absent—so the advertised 12-cell matrix is neither executed nor coherent. The round-1 gate disposition is therefore not genuinely satisfied.
+  Recommendation: Define the matrix by applicable states: test 10 mode-producing cells plus clearAlerts' absent/delete behavior, or provide a meaningful distinct absent-destination contract and gate. Make the prose, Table A, acceptance criteria, and script agree.
+
+Next steps:
+- Resolve the successful-job watermark-refusal behavior before dispatching either implementation.
+- Correct the appendAlert compaction residual classification.
+- Reconcile the mode-test matrix and rerun the adversarial design review.
+
+Codex session ID: 01a05a3f-3967-7071-8ce0-65a5dc89970c
+Resume in Codex: codex resume 01a05a3f-3967-7071-8ce0-65a5dc89970c

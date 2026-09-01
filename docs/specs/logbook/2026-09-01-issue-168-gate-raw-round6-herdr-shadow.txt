@@ -1,0 +1,13 @@
+• needs-attention
+
+  - /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-
+    specs/docs/specs/WP-private-state-writers-mode-pin.md:343: appendAlert cannot reliably distinguish Case 2 from Case 1. writeFilePrivate
+    throws the same untagged WienerdogError for both, while this WP forbids code changes to private-fs.js; only mutable message text
+    identifies F10. Returning undefined for a missed F10 recreates the lost-alert/pidfile-deletion bug, while returning false for every
+    refusal incorrectly reports durable Case 1 alerts as lost. Add a stable machine-readable F10 error code/phase to writeFilePrivate,
+    permit that minimal code change, and test that only this code produces false. The consumer-first ordering and exact-false handling are
+    otherwise coherent.
+
+─ Worked for 1m 33s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+

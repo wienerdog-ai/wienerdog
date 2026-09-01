@@ -1,0 +1,60 @@
+• needs-attention
+
+  Round-1 dispositions 1–3 are genuinely implemented. Disposition 4 is incomplete, as described below.
+
+  1. The dependency protects failure paths but not new refusals on the success path
+
+  Files: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:60, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:86
+
+  Scenario: An otherwise successful job reaches writeScheduleState at :1060 with a symlinked schedule.json, or clearAlerts at :1061 with a
+  symlinked destination. After the mode-pin WP, writeFilePrivate refuses and throws. The dependency WP explicitly leaves this success-path
+  pair untouched because it says there is “no alert to lose.”
+
+  Impact: The routine completed, but runJob now fails due to the hardened state operation without calling failLoud. With no pre-existing
+  alert, the new refusal has no durable user-visible record. Thus even after both WPs land, the dependency does not fully contain the new
+  refusal semantics.
+
+  Recommendation: Define reporting for success-path state refusals before dispatching the mode-pin WP. Either extend the dependency to call
+  failLoud once with a distinct “work completed but state persistence was refused” reason, or specify another durable reporting channel and
+  test both schedule and alert-clear refusals.
+
+  2. The real both-writes-fail condition is not contracted or tested
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:115, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:169
+
+  Scenario: Real ENOSPC, EROFS, EDQUOT, or an unwritable state/ prevents both schedule.json and alerts.jsonl writes. The acceptance test
+  instead requires the alert to be appended, so it can only exercise an isolated/mock watermark failure.
+
+  Impact: The principal field failure leaves failLoud returning false. Nothing verifies that it is attempted exactly once, that
+  alertPersisted === false still drives cleanup correctly, that the watermark error is reported once, and that the original job reason
+  remains the thrown error. Record-count assertions cannot detect duplicate attempts when both attempts fail.
+
+  Recommendation: Add an explicit both-fail case at all three sites. Assert one watermark attempt, exactly one failLoud attempt, zero alert
+  records, original-reason rejection, one non-alert persistence diagnostic, and the existing false-persistence cleanup behavior.
+
+  3. The advertised 12-cell writer gate contains only 10 applicable cells
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:255, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:379
+
+  Scenario: Schedule and watermarks each exercise two umasks × absent/present, producing eight cells. clearAlerts exercises only present
+  destinations under the two umasks, producing two more. It cannot naturally enter its rewrite branch from an absent file because there are
+  no records to retain.
+
+  Impact: The gate and acceptance criteria claim all three writers cover absent and present destinations, but the implementation evidence
+  omits clearAlerts-to-absent behavior and prints a false all-states success message.
+
+  Recommendation: Either define Table A row 4 as present-only and accurately call this a 10-cell applicable-state gate, or add a controlled
+  test that removes alerts.jsonl after records are read but before writeFilePrivate runs, exercising the race-created absent destination.
+
+─ Worked for 2m 47s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…

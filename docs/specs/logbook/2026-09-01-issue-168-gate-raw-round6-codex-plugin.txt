@@ -1,0 +1,1 @@
+PLUGIN ROUND 6: approve — 'The F10 finding is closed. Post-rename loss returns exactly false; failLoud preserves current undefined semantics while consuming false as not persisted; the consumer lands first; and the existing truthiness guard retains reap pidfiles. No material product finding remains in the reviewed wire. No material findings.'

@@ -1,0 +1,21 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet: the contract introduces a new failure that can suppress job alerts, while its tests do not prove the promised umask-independent mode.
+
+Findings:
+- [high] The chosen fix recreates the silent-failure behavior used to reject writeFilePrivate (docs/specs/WP-private-state-writers-mode-pin.md:214-229)
+  The spec rejects writeFilePrivate because a new exception from writeScheduleState immediately before failLoud can suppress the durable job-failure alert. Table B nevertheless inserts chmodSync at the same point while the exact contract claims unchanged error behavior. On a filesystem where creation succeeds but chmod is unsupported or denied, chmodSync throws before rename and before failLoud; the original job failure is therefore unreported for precisely the reason cited against the stronger primitive.
+  Recommendation: Resolve the contradiction before dispatch: either expand the design so failLoud still executes and records both failures when state persistence throws, or explicitly accept and justify the new failure semantics. Add a test that forces chmodSync to fail at a failure-path writeScheduleState call and verifies the durable alert is not lost.
+- [medium] The contracted umask test cannot detect omission of the required chmod (docs/specs/WP-private-state-writers-mode-pin.md:265-279)
+  Every acceptance assertion runs under umask 000. An implementation using only writeFileSync(tmp, body, {mode: 0o600}) would therefore pass, even though it violates Table B and leaves modes such as 0000 under umask 0777. This leaves the central claim—exactly 0600 under any umask—unguarded against an incomplete implementation or later regression.
+  Recommendation: Test every writer under both umask 000 (detects mode-less creation producing 0666) and a mask that removes owner bits, such as 0777 (proves chmod restores exactly 0600). Restore the process umask in a finally block.
+
+Next steps:
+- Amend the failure-semantics contract and its caller-level verification.
+- Extend the acceptance test and Table A gate with a restrictive-umask case.
+
+Codex session ID: 01a05a32-76e3-7e51-bc56-557f02558be0
+Resume in Codex: codex resume 01a05a32-76e3-7e51-bc56-557f02558be0

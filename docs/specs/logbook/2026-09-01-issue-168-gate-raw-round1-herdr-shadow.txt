@@ -1,0 +1,74 @@
+• needs-attention
+
+  1. The required chmodSync introduces the same silent-failure risk used to reject writeFilePrivate
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:133, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:224
+
+  Scenario: writeFileSync succeeds but the newly added chmodSync fails because of filesystem semantics, permissions, or an injected test
+  failure. writeScheduleState now throws before the three cited failLoud calls, exactly like the rejected primitive would.
+
+  Impact: The contract simultaneously requires unchanged error behavior and adds a new throwing syscall. A job failure can lose its durable
+  alert—the precise regression cited to justify the weaker implementation.
+
+  Recommendation: Specify failure sequencing at the four callers so failLoud still executes when state persistence or hardening fails,
+  preserving both errors where possible. Then reassess writeFilePrivate; otherwise explicitly accept the new throw behavior and test a
+  forced chmodSync failure.
+
+  2. “No loose-mode window” is false for an existing temp file—and for first-time alert append
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:184, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:257
+
+  Scenario: A deterministic temp file remains at 0644/0666 after a pre-upgrade crash. writeFileSync(tmp, body, {mode: 0o600}) ignores mode
+  when the file already exists, truncates and writes the private body while it remains loose, and only then calls chmodSync. A pre-existing
+  temp symlink is followed as well. Separately, appendAlert can create an absent alerts.jsonl with its default mode, append the private
+  record, and chmod afterward.
+
+  Impact: Sensitive bytes are observable before chmod, contradicting the security checklist’s claim that the file is never observable loose.
+  The audit classifies writers by final mode but misses create-capable append and stale-temp behavior.
+
+  Recommendation: Secure an fd before writing bytes: create a unique temp with O_EXCL|O_NOFOLLOW, fchmod it, write through that fd, then
+  rename. Audit append/stream/copy writers in both destination-present and destination-absent states. This is substantially the protection
+  already offered by writeFilePrivate.
+
+  3. The scope cut assumes files and directories can only be created during init
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:147, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:270
+
+  Scenario: After a valid install, state/, config.yaml, or install-manifest.json is removed by partial recovery, corruption, or manual
+  cleanup. The next mode-less mkdirSync({recursive:true}) or “in-place” writeFileSync creates a new inode under the current umask. In-place
+  writing preserves mode only when the destination already exists.
+
+  Impact: Production writers can recreate private-listed files or directories loose, contradicting both “every private-listed file” and the
+  claim that loose creation is possible only when init never ran. Subsequent doctor warnings and confidentiality exposure remain possible.
+
+  Recommendation: Audit each writer with both present and absent destinations. Either pin modes on these creation paths too, or narrow the
+  top-level claim and record deletion/recreation as an explicit accepted residual rather than calling it production-unreachable.
+
+  4. The tests cannot distinguish the required fix from an incomplete mode-only patch
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:278, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-private-state-writers-mode-pin.md:315
+
+  Scenario: An implementation adds only {mode: 0o600} and omits chmodSync. All contracted tests under umask 000 pass, including consecutive
+  calls and insecureEntries, but under umask 0777 the result is 0000, not 0600. Conversely, final-mode assertions cannot detect bytes
+  written to a pre-existing loose temp before chmod.
+
+  Impact: The verification gate can approve an implementation that violates the stated “exactly 0600 under any umask” and no-loose-window
+  contracts.
+
+  Recommendation: Run every writer under at least umask 000 and umask 0777, restoring the process umask in finally. Add a stale-loose-temp/
+  order test or redesign around an fd whose mode can be asserted before any body write.
+
+─ Worked for 2m 46s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…

@@ -1,0 +1,8 @@
+
+• Ran 3 commands · ctrl + t to view transcript
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• The producer/consumer semantics line up, but I’m checking whether appendAlert can actually identify “post-rename F10” without conflating
+  it with ordinary pre-rename failures; that distinction is what makes the boolean sound.
+

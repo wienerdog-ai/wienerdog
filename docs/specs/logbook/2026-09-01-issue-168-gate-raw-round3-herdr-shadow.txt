@@ -1,0 +1,64 @@
+• needs-attention
+
+  The three round-2 fixes are genuinely present: five sites are covered, the three failure paths include both-writes-fail behavior, and the
+  mode gate now consistently asserts 10 applicable cells.
+
+  1. The success-path contract conflates two different failures and overpromises a durable record
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:149
+
+  Scenario: At :1060, the success watermark fails, so last_success is absent and replay is possible. At :1061, the watermark already
+  succeeded; only alert cleanup failed, so replay is not expected. Nevertheless both receive the same “state could not be persisted” reason
+  and replay-oriented outcome. Moreover, if clearAlerts refused because alerts.jsonl or its ancestor is unsafe, failLoud attempts to report
+  through that same file; it may fail or follow the still-unhardened append path. An unwritable state/ likewise defeats both the success
+  watermark and the alert.
+
+  Impact: The :1061 record misstates what failed, while “exactly one durable record” is impossible for several enumerated triggers. The
+  best-effort residual contradicts Table B’s unconditional guarantee.
+
+  Recommendation: Split the taxonomy:
+
+  - :1060: work completed, success marker not saved, replay possible.
+  - :1061: work and success marker saved, prior alerts could not be cleared, no replay consequence.
+
+  Require exactly one failLoud attempt, not an unconditional persisted record, and add success-path both-writes-fail cases covering zero
+  records and the non-alert diagnostic.
+
+  2. The replay residual is potentially unbounded, not a one-time duplicate
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:92, /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-
+  wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-168-specs/docs/specs/WP-failloud-survives-state-write-failure.md:208
+
+  Scenario: A persistent symlink or other refusal at schedule.json prevents every run from recording last_success. Every subsequent catch-up
+  still sees the job as overdue.
+
+  Impact: Emails, vault writes, and git commits can repeat on every catch-up indefinitely—not merely execute “a second time.” A durable
+  alert diagnoses the loop but does not bound its side effects.
+
+  Recommendation: State the residual as unbounded replay until the state fault is repaired. The alert should give immediate operator
+  guidance to disable the job or repair schedule.json; route prevention to the named marker WP as already proposed.
+
+  3. The compaction hazard can be closed without making the :840 warning abort the job
+
+  File: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scratchpad/wt-
+  168-specs/docs/specs/WP-private-state-writers-mode-pin.md:237
+
+  Scenario: appendAlert has already appended the new record before entering compaction. Its compaction can therefore call writeFilePrivate
+  inside a local try/catch; on refusal, it can retain the uncompacted file, emit a diagnostic, and return normally. The :840 caller
+  continues as required, while failLoud also retains its existing best-effort behavior.
+
+  Impact: The current routing leaves a measured predictable-temp symlink exfiltration hazard even though the existing primitive and a non-
+  throwing failure shape can close it without an appendFilePrivate primitive or a throwing :840 caller.
+
+  Recommendation: Move only the compaction rewrite to writeFilePrivate and catch compaction failure after the append. Assert that the
+  warning caller proceeds, the newly appended record remains, the outside symlink target is untouched, and one non-alert diagnostic is
+  emitted. Keep the absent-file append window as the separate residual requiring appendFilePrivate.
+
+─ Worked for 1m 58s ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/8a7e40b4-8d54-4a00-a898-0e23e7ac182f/scr…
