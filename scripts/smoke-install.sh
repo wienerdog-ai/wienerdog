@@ -69,6 +69,21 @@ not-probeable)
   ;;
 esac
 
+# Authority to touch the REAL OS scheduler is earned by EVIDENCE about the
+# domain, never by an execution context — no CI variable is read here, or
+# anywhere else in this script (ADR-0041). Only a CLEAN preflight grants it: the
+# probe was invoked, answered, and reported no Wienerdog identifier. Every other
+# outcome grants nothing — LIVE, NOT-PROBEABLE, and any status outside that
+# taxonomy alike — INCLUDING a run that continued past the result through one of
+# the overrides above. Overriding the preflight lets the lifecycle run; it does
+# not hand it scheduler authority, so such a run writes its schedule files and
+# skips every real registration instead.
+# Written as `if`, not `cond && export …`: a bare `&&` returns 1 when the
+# condition is false, which would kill the script under `set -euo pipefail`.
+if [ "$PREFLIGHT_STATE" = "clean" ]; then
+  export WIENERDOG_ALLOW_REAL_SCHEDULER=1
+fi
+
 SB="$(mktemp -d "${TMPDIR:-/tmp}/wd-smoke.XXXXXX")"
 trap 'rm -rf "$SB"' EXIT
 
@@ -174,19 +189,29 @@ fi
 ok "no catch-up scheduler-entry after removing all jobs"
 
 echo "== 7. uninstall (reverses the install; managed blocks removed) =="
-WD uninstall --yes </dev/null
-# The security-relevant reversibility: no injected managed block is left behind
-# in either harness file (a file Wienerdog created is removed outright; a
-# pre-existing file keeps its own content minus the block). A customized
-# config.yaml is deliberately preserved, so the core shell may remain — that is
-# correct behavior, not a leak, so we assert the block and the app state, not a
-# vanished core dir.
-[ "$(occ "$CLAUDE_MD" "$BEGIN")" = "0" ] || die "uninstall left a managed block in CLAUDE.md"
-ok "CLAUDE.md managed block removed"
-[ "$(occ "$AGENTS_MD" "$BEGIN")" = "0" ] || die "uninstall left a managed block in AGENTS.md"
-ok "AGENTS.md managed block removed"
-[ ! -d "$CORE/state" ] && [ ! -d "$CORE/app" ] || die "uninstall left app/state behind under the core"
-ok "app + state removed under the core (config.yaml preservation is expected)"
+# Without a CLEAN preflight this run has no scheduler authority, so `uninstall`
+# establishes deletion clearance from the live domain instead — and on the same
+# machine that could not be probed, that check refuses before deleting anything
+# (ADR-0041). Report it and skip the step's assertions rather than asserting an
+# outcome this run cannot reach: the same "best-effort and reported, never
+# asserted" discipline the script already applies to registration.
+if [ "$PREFLIGHT_STATE" = "clean" ]; then
+  WD uninstall --yes </dev/null
+  # The security-relevant reversibility: no injected managed block is left behind
+  # in either harness file (a file Wienerdog created is removed outright; a
+  # pre-existing file keeps its own content minus the block). A customized
+  # config.yaml is deliberately preserved, so the core shell may remain — that is
+  # correct behavior, not a leak, so we assert the block and the app state, not a
+  # vanished core dir.
+  [ "$(occ "$CLAUDE_MD" "$BEGIN")" = "0" ] || die "uninstall left a managed block in CLAUDE.md"
+  ok "CLAUDE.md managed block removed"
+  [ "$(occ "$AGENTS_MD" "$BEGIN")" = "0" ] || die "uninstall left a managed block in AGENTS.md"
+  ok "AGENTS.md managed block removed"
+  [ ! -d "$CORE/state" ] && [ ! -d "$CORE/app" ] || die "uninstall left app/state behind under the core"
+  ok "app + state removed under the core (config.yaml preservation is expected)"
+else
+  printf '  [skip] uninstall not exercised: the preflight was %s, so this run has no scheduler authority and uninstall would refuse before deleting anything.\n' "$PREFLIGHT_STATE"
+fi
 
 echo
 echo "SMOKE PASS — $pass checks."

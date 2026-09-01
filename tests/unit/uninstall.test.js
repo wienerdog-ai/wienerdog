@@ -56,6 +56,42 @@ function run(args, env) {
   }
 }
 
+/**
+ * A SUBPROCESS uninstall (Table T's environment channel, ADR-0041). The
+ * authority marker travels on the env handed to THIS invocation only — never in
+ * `tempEnv()`'s `env` object, which the in-process tests below splat into
+ * `process.env` (`Object.assign(process.env, env)`). Putting it there would grant
+ * authority to those calls too, the deletion-clearance gate would never arm, and
+ * their injected probes would be dead seams that keep passing after the
+ * in-process path breaks.
+ *
+ * This is not a switch that suppresses a check: it is the product's real
+ * authority predicate, supplied through the only channel a subprocess has, and
+ * the mutation it permits is still neutralized by WIENERDOG_LOADER_NOOP — Table A
+ * row 1 sits ahead of the authorized-spawn row.
+ * @param {string[]} args @param {NodeJS.ProcessEnv} env
+ */
+function runUninstallCli(args, env) {
+  return run(args, { ...env, WIENERDOG_ALLOW_REAL_SCHEDULER: '1' });
+}
+
+/**
+ * An IN-PROCESS probe seam (Table T's other channel): authority is ABSENT, so
+ * the gate arms and decides — on evidence this test supplies. Counts its calls so
+ * a test can assert the seam was actually consulted; a seam that is never called
+ * cannot be told apart from a broken gate by its return value alone.
+ * @param {'clean'|'live'} [status] @param {string[]} [identifiers]
+ */
+function cleanProbe(status = 'clean', identifiers = []) {
+  /** @type {any} */
+  const p = () => {
+    p.calls += 1;
+    return { status, identifiers };
+  };
+  p.calls = 0;
+  return p;
+}
+
 /** Snapshot every file under dir as path -> "size:mtime". */
 function snapshot(dir) {
   /** @type {Record<string, string>} */
@@ -90,7 +126,7 @@ test('uninstall --dry-run lists manifest contents and changes nothing', () => {
 test('uninstall --yes removes the entire core', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /Removed/);
   assert.equal(fs.existsSync(core), false);
@@ -101,7 +137,7 @@ test('uninstall --yes removes the PATH shim (WP-042)', () => {
   run(['init', '--yes'], env);
   const shim = path.join(root, '.local', 'bin', 'wienerdog');
   assert.ok(fs.existsSync(shim), 'init wrote the ~/.local/bin/wienerdog shim');
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.equal(fs.existsSync(shim), false, 'uninstall removed the shim');
   assert.equal(fs.existsSync(core), false);
@@ -111,7 +147,7 @@ test('uninstall keeps a user-modified config.yaml', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
   fs.writeFileSync(path.join(core, 'config.yaml'), 'edited by the user\n');
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.ok(fs.existsSync(path.join(core, 'config.yaml')));
   assert.match(r.stdout, /Skipped/);
@@ -121,14 +157,14 @@ test('uninstall exits 0 when some entries were already gone', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
   fs.rmSync(path.join(core, 'logs'), { recursive: true });
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.equal(fs.existsSync(core), false);
 });
 
 test('uninstall without an install errors (exit 1)', () => {
   const { env } = tempEnv();
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /wienerdog: .*nothing to uninstall/);
 });
@@ -138,7 +174,7 @@ test('uninstall --yes prints ONE vault-preserve line, no per-file dump, keeps th
   const vaultDir = env.WIENERDOG_VAULT;
   run(['init', '--fresh-vault', '--yes'], env);
   assert.ok(fs.existsSync(vaultDir), 'fresh vault was seeded');
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   // Exactly one plain-language reassurance line, never a per-file list.
   const vaultLines = r.stdout
@@ -170,7 +206,7 @@ test('uninstall --yes sweeps untracked state/logs/secrets/schedules and leaves t
   fs.mkdirSync(path.join(core, 'secrets'), { recursive: true });
   fs.writeFileSync(path.join(core, 'secrets', 'google-token.json'), '{}\n');
 
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /fully removed/);
   assert.equal(fs.existsSync(core), false, 'core swept clean including untracked artifacts');
@@ -214,7 +250,7 @@ test('uninstall never deletes a vault nested inside state/ — survives with the
   manifest.entries.push({ kind: 'vault-file', path: precious });
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   // The vault SURVIVES — the treasure invariant holds even nested in the core.
   assert.equal(fs.readFileSync(precious, 'utf8'), '# precious\n', 'nested vault file survives');
@@ -238,7 +274,7 @@ test('a clean uninstall deletes the manifest last, then the unmodified config, a
   run(['init', '--yes'], env);
   assert.ok(fs.existsSync(path.join(core, 'install-manifest.json')), 'init wrote the manifest');
   assert.ok(fs.existsSync(path.join(core, 'config.yaml')), 'init wrote config.yaml');
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /fully removed/);
   // Manifest + the unmodified config gone WITH the emptied core (deleted last,
@@ -250,7 +286,7 @@ test('a clean uninstall deletes the manifest last, then the unmodified config, a
 test('a clean uninstall summary does not list the swept core/state under "Skipped" (consistent with "fully removed")', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /fully removed/);
   // The core and its state dir were swept — they must NOT be reported as skipped,
@@ -281,7 +317,7 @@ test('uninstall keeps the manifest when disposeCoreMechanics throws mid-sweep (r
   };
   let threw = false;
   try {
-    await runUninstall(['--yes']);
+    await runUninstall(['--yes'], { probe: cleanProbe() });
   } catch {
     threw = true;
   } finally {
@@ -345,7 +381,7 @@ test('crashed-then-retried uninstall with a NESTED vault: retry re-reads config.
     };
     let threw = false;
     try {
-      await runUninstall(['--yes']);
+      await runUninstall(['--yes'], { probe: cleanProbe() });
     } catch {
       threw = true;
     }
@@ -361,7 +397,7 @@ test('crashed-then-retried uninstall with a NESTED vault: retry re-reads config.
     const origLog = console.log;
     console.log = (...a) => logs.push(a.join(' '));
     try {
-      await runUninstall(['--yes']);
+      await runUninstall(['--yes'], { probe: cleanProbe() });
     } finally {
       console.log = origLog;
     }
@@ -408,7 +444,7 @@ test('manifest-delete FAILURE injection: run() aborts with WienerdogError, confi
     };
     let caught = null;
     try {
-      await runUninstall(['--yes']);
+      await runUninstall(['--yes'], { probe: cleanProbe() });
     } catch (e) {
       caught = e;
     }
@@ -424,7 +460,7 @@ test('manifest-delete FAILURE injection: run() aborts with WienerdogError, confi
     assert.equal(fs.readFileSync(precious, 'utf8'), '# precious\n', 'nested vault intact on the delete-failure path');
 
     // ── A subsequent REAL retry (stub lifted) completes and keeps the nested vault. ──
-    await runUninstall(['--yes']);
+    await runUninstall(['--yes'], { probe: cleanProbe() });
     assert.equal(
       fs.readFileSync(precious, 'utf8'),
       '# precious\n',
@@ -467,7 +503,7 @@ test('deferred config re-verify (TOCTOU): a config.yaml edited DURING the sweep 
     return true;
   };
   try {
-    await runUninstall(['--yes']);
+    await runUninstall(['--yes'], { probe: cleanProbe() });
   } finally {
     manifestLib.disposeCoreMechanics = origDispose;
     process.stderr.write = origErrWrite;
@@ -493,7 +529,7 @@ test('uninstall --yes with a symlinked core exits 0 and unlinks the link (target
   // Untracked state content, so reverse() leaves state/ + core to the sweep.
   fs.writeFileSync(path.join(realCore, 'state', 'digest.md'), '# digest\n');
 
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
   assert.equal(r.status, 0, `expected exit 0, stderr: ${r.stderr}`);
   assert.equal(fs.existsSync(env.WIENERDOG_HOME), false, 'core symlink unlinked');
   assert.equal(fs.lstatSync(realCore).isDirectory(), true, 'the user-made target dir remains');
@@ -520,7 +556,7 @@ test('WP-144 uninstall: a poisoned external path is preserved and a malformed se
   manifest.entries.push({ kind: 'file', path: 42 });
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
 
   assert.equal(r.status, 0, r.stderr);
   // (The test-runner `run` helper captures stderr only on failure, so the
@@ -610,7 +646,13 @@ test('WP-145 uninstall: the interactive path shows the derived plan (incl. would
   // pipe), then abort. 'Aborted.' prints only AFTER the prompt resolves, so it
   // is the reliable post-prompt marker inside stdout.
   const { spawnSync } = require('node:child_process');
-  const r = spawnSync('node', [bin, 'uninstall'], { env, encoding: 'utf8', input: 'n\n' });
+  // Declines AT the confirm, so it never reaches the gate that sits after it —
+  // it carries the authority marker anyway, so every subprocess caller is uniform.
+  const r = spawnSync('node', [bin, 'uninstall'], {
+    env: { ...env, WIENERDOG_ALLOW_REAL_SCHEDULER: '1' },
+    encoding: 'utf8',
+    input: 'n\n',
+  });
   const stdout = r.stdout || '';
   const planIdx = stdout.indexOf('Planned actions:');
   const wouldRunIdx = stdout.indexOf(`would run: ${derivedHead}`);
@@ -640,10 +682,237 @@ test('WP-145 uninstall --yes: a poisoned scheduler unload argv never spawns; the
   });
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  const r = run(['uninstall', '--yes'], env);
+  const r = runUninstallCli(['uninstall', '--yes'], env);
 
   assert.equal(r.status, 0, r.stderr);
   assert.equal(fs.existsSync(canary), false, 'the stored argv was never executed');
   assert.equal(fs.existsSync(outside), true, 'the unrecognized schedule path is preserved');
   assert.equal(fs.existsSync(core), false, 'the uninstall itself completed');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Table U (ADR-0041): `uninstall` needs DELETION CLEARANCE before it deletes, and
+// establishes it from LIVE EVIDENCE — never from the (untrusted) manifest. Table
+// T: how that gate stays unbypassable in production and hermetic here.
+//
+// Every test below runs IN-PROCESS with the authority marker ABSENT, so the gate
+// really arms and the injected probe is what decides. `snapshot()` before/after is
+// the proof that an abort deleted nothing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Splat `env` into process.env for the duration of `fn` (getPaths() reads env at
+ *  call time), then restore. @param {NodeJS.ProcessEnv} env @param {() => any} fn */
+async function withProcessEnv(env, fn) {
+  const savedEnv = { ...process.env };
+  Object.assign(process.env, env);
+  try {
+    return await fn();
+  } finally {
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, savedEnv);
+  }
+}
+
+/** A temp install plus the pieces every gate test needs. @returns {object} */
+function installedFixture() {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  return { root, core, env, manifestPath, before: snapshot(core), bytes: fs.readFileSync(manifestPath) };
+}
+
+/** Run the in-process uninstall and return the error it threw (or null).
+ *  @param {NodeJS.ProcessEnv} env @param {string[]} argv @param {object} opts */
+async function gateError(env, argv, opts) {
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  return withProcessEnv(env, async () => {
+    try {
+      await runUninstall(argv, opts);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  });
+}
+
+test('Table U abort: authority absent + a LIVE domain — nothing is deleted and the manifest is byte-identical', async () => {
+  const { core, env, manifestPath, before, bytes } = installedFixture();
+  const { WienerdogError } = require('../../src/core/errors');
+  const probe = cleanProbe('live', ['ai.wienerdog.dream']);
+  const err = await gateError(env, ['--yes'], { probe });
+  assert.ok(err instanceof WienerdogError, `expected a WienerdogError, got ${err}`);
+  assert.match(err.message, /ai\.wienerdog\.dream/, 'names the live identifier');
+  assert.match(err.message, /WIENERDOG_ALLOW_REAL_SCHEDULER/, 'names the deliberate way to proceed');
+  assert.ok(err.message.includes(core), 'names the resolved core');
+  assert.equal(probe.calls, 1, 'the injected probe was actually consulted');
+  assert.deepEqual(snapshot(core), before, 'nothing under the core was deleted');
+  assert.deepEqual(fs.readFileSync(manifestPath), bytes, 'the manifest is untouched');
+});
+
+test('Table U abort: the decision does not change when the manifest carries NO scheduler-entry (round-2 case)', async () => {
+  const { core, env, manifestPath } = installedFixture();
+  const stripped = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  stripped.entries = stripped.entries.filter((e) => e.kind !== 'scheduler-entry');
+  fs.writeFileSync(manifestPath, JSON.stringify(stripped, null, 2));
+  const before = snapshot(core);
+  const probe = cleanProbe('live', ['ai.wienerdog.catchup']);
+  const err = await gateError(env, ['--yes'], { probe });
+  assert.ok(err, 'a stripped manifest does not unarm the gate');
+  assert.match(err.message, /ai\.wienerdog\.catchup/);
+  assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+});
+
+test('Table U proceed: authority absent + a probe that answered CLEAN completes (clearance, not authority)', async () => {
+  const { core, env } = installedFixture();
+  const probe = cleanProbe();
+  const err = await gateError(env, ['--yes'], { probe });
+  assert.equal(err, null, err && err.message);
+  assert.equal(probe.calls, 1, 'the probe decided it');
+  assert.equal(fs.existsSync(core), false, 'the uninstall completed normally');
+});
+
+test('Table U fail-closed: a probe that cannot answer aborts and deletes nothing', async () => {
+  const { core, env, before } = installedFixture();
+  const probe = () => {
+    throw new Error('launchctl client absent at /bin/launchctl');
+  };
+  const err = await gateError(env, ['--yes'], { probe });
+  assert.ok(err, 'an unanswerable domain counts as possibly-live');
+  assert.match(err.message, /could not be queried/);
+  assert.match(err.message, /launchctl client absent/, "carries the probe's reason");
+  assert.match(err.message, /WIENERDOG_ALLOW_REAL_SCHEDULER/);
+  assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+});
+
+test('Table U step 1: with authority present the gate never probes at all', async () => {
+  const { core, env } = installedFixture();
+  const probe = cleanProbe('live', ['ai.wienerdog.dream']); // would abort if consulted
+  const err = await gateError(
+    { ...env, WIENERDOG_ALLOW_REAL_SCHEDULER: '1' },
+    ['--yes'],
+    { probe }
+  );
+  assert.equal(err, null, err && err.message);
+  assert.equal(probe.calls, 0, 'authority short-circuits: no probe, no domain contact');
+  assert.equal(fs.existsSync(core), false, 'uninstall completed normally');
+});
+
+test('Table U --dry-run: never probes, never aborts, never reloads — under every probe outcome', async () => {
+  const { core, env, before } = installedFixture();
+  const throwing = () => {
+    throw new Error('the domain is unanswerable');
+  };
+  const live = cleanProbe('live', ['ai.wienerdog.dream']);
+  for (const probe of [throwing, live]) {
+    const err = await gateError(env, ['--dry-run'], { probe });
+    assert.equal(err, null, err && err.message);
+    assert.deepEqual(snapshot(core), before, '--dry-run deleted nothing');
+  }
+  assert.equal(live.calls, 0, '--dry-run never consulted the probe');
+});
+
+test('the probe type contract: every uncertain, malformed or self-contradictory result aborts', async () => {
+  const { core, env, before } = installedFixture();
+  const notProbeable = [
+    ['a non-object', 42],
+    ['null', null],
+    ['a string', 'clean'],
+    ['an unknown status', { status: 'nope', identifiers: [] }],
+    ['identifiers not an array', { status: 'clean', identifiers: 'ai.wienerdog.dream' }],
+    ['identifiers not strings', { status: 'clean', identifiers: [1] }],
+    ['clean WITH identifiers (cross-field invariant)', { status: 'clean', identifiers: ['ai.wienerdog.dream'] }],
+    ['clean with identifiers ABSENT', { status: 'clean' }],
+    ['a thenable', { status: 'clean', identifiers: [], then: () => {} }],
+    ['a Promise', Promise.resolve({ status: 'clean', identifiers: [] })],
+  ];
+  for (const [label, value] of notProbeable) {
+    const err = await gateError(env, ['--yes'], { probe: () => value });
+    assert.ok(err, `${label} must abort`);
+    assert.match(err.message, /unusable answer/, `${label} is NOT-PROBEABLE`);
+    assert.deepEqual(snapshot(core), before, `${label} deleted something`);
+  }
+  // In the ABORTING direction the payload cannot soften the verdict: `status`
+  // alone is enough, and a missing/empty list only changes the wording.
+  for (const value of [{ status: 'live' }, { status: 'live', identifiers: [] }]) {
+    const err = await gateError(env, ['--yes'], { probe: () => value });
+    assert.ok(err, 'a live status aborts however malformed the payload');
+    assert.match(err.message, /the identifiers were not reported/);
+    assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+  }
+});
+
+test('Table T forgotten-seam determinism: no authority and no injected probe fails BEFORE any real query', async () => {
+  const { core, env, before } = installedFixture();
+  // tests/run.js sets WIENERDOG_TEST_NO_REAL_SCHEDULER=1 for the whole suite and
+  // tempEnv() spreads process.env, so the guard is present here.
+  assert.equal(env.WIENERDOG_TEST_NO_REAL_SCHEDULER, '1', 'the suite guard is inherited');
+  const err = await gateError(env, ['--yes'], {});
+  assert.ok(err, 'a forgotten seam fails deterministically, not on the host');
+  assert.match(err.message, /without injecting a probe or granting authority/);
+  assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+});
+
+test('Table T monotonicity: neither neutralizer can move the gate from abort to proceed', async () => {
+  const { core, env, before } = installedFixture();
+  const guarded = { ...env, WIENERDOG_TEST_NO_REAL_SCHEDULER: '1', WIENERDOG_LOADER_NOOP: '1' };
+  const err = await gateError(guarded, ['--yes'], { probe: cleanProbe('live', ['ai.wienerdog.dream']) });
+  assert.ok(err, 'neither variable is ever read as evidence that the domain is CLEAN');
+  assert.match(err.message, /ai\.wienerdog\.dream/);
+  assert.deepEqual(snapshot(core), before, 'nothing was deleted');
+});
+
+test('Table U reload+compare: a manifest that changed during the prompt aborts, deletes nothing, and never probes', async () => {
+  const { core, env, manifestPath, before } = installedFixture();
+  const manifestLib = require('../../src/core/manifest');
+  const origLoad = manifestLib.load;
+  const probe = cleanProbe();
+  let err;
+  try {
+    // A concurrent writer between the disclosure and the confirm: the plan the
+    // user saw is no longer the plan reverse() would replay.
+    manifestLib.load = (p) => {
+      const m = origLoad(p);
+      const now = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      now.entries.push({ kind: 'file', path: path.join(core, 'appeared-during-the-prompt') });
+      fs.writeFileSync(manifestPath, JSON.stringify(now, null, 2));
+      return m;
+    };
+    err = await gateError(env, ['--yes'], { probe });
+  } finally {
+    manifestLib.load = origLoad;
+  }
+  assert.ok(err, 'a changed manifest aborts');
+  assert.match(err.message, /changed while you were deciding/);
+  assert.match(err.message, /uninstall` again/, 'tells the user to rerun');
+  assert.equal(probe.calls, 0, 'the compare runs BEFORE the probe');
+  const after = snapshot(core);
+  delete after[manifestPath]; // the injected concurrent write is the test's own
+  const expected = { ...before };
+  delete expected[manifestPath];
+  assert.deepEqual(after, expected, 'neither the disclosed items nor the new entry were deleted');
+});
+
+test('Table U reload failure: a manifest MISSING at the reload point aborts — never the ENOENT-to-empty path', async () => {
+  const { core, env, manifestPath } = installedFixture();
+  const manifestLib = require('../../src/core/manifest');
+  const origLoad = manifestLib.load;
+  const probe = cleanProbe();
+  let err;
+  try {
+    manifestLib.load = (p) => {
+      const m = origLoad(p);
+      fs.rmSync(manifestPath, { force: true }); // vanished during the prompt
+      return m;
+    };
+    err = await gateError(env, ['--yes'], { probe });
+  } finally {
+    manifestLib.load = origLoad;
+  }
+  assert.ok(err, 'a vanished manifest is a CHANGE, not an empty install');
+  assert.match(err.message, /changed while you were deciding/);
+  assert.equal(probe.calls, 0, 'the reload failure precedes the probe');
+  // The proof it did not take manifestLib.load's ENOENT-to-empty path: that would
+  // have replayed nothing while disposeCoreMechanics still swept the core.
+  assert.equal(fs.existsSync(path.join(core, 'config.yaml')), true, 'the core was not swept');
+  assert.equal(fs.existsSync(core), true, 'the core still exists');
 });

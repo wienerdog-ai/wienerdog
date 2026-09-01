@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-mutation-home-authority
 title: Invert the scheduler chokepoint's default — mutate the real OS scheduler only from the home it belongs to
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-smoke-live-scheduler-preflight]
