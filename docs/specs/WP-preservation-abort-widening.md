@@ -45,8 +45,10 @@ holding it for a ruling nobody recorded would leave the measured data loss in
 place. What needs a word from the owner is only its blast radius.
 
 **The one question for the owner.** Rows P0–P3 make the *whole run* fail loud on
-two arms that today only refuse one note, and P0b adds a third occasion: an
-artifact that was written but does not hold the judged bytes. Confirm that blast
+two arms that today only refuse one note; P0b adds a third occasion — an artifact
+written but not durably holding the judged bytes — and a fourth, narrower one: a
+rejected artifact that cannot be removed, where the run fails loud rather than
+report a preservation failure that is not the whole truth. Confirm that blast
 radius, or say the added arms should refuse-and-continue instead.
 
 **Recommendation: confirm fail-loud, and it is close to free.** Q4 forbids
@@ -55,9 +57,12 @@ workspace survives while the run continues — teardown is all-or-nothing (P5).
 The trigger is a broken quarantine directory, which fails *every* preserve in the
 run, so any soft-finding note in the same run already aborts it today via P3;
 the widening changes which note reports the failure far more often than whether
-the run fails. P0b costs nothing extra in shape: a rejected artifact reports
-failure like any other, so it flows into the arms above rather than opening a new
-one. And the failure is recoverable by hand: the workspace is retained and the
+the run fails. P0b costs almost nothing extra in shape: a rejected artifact
+reports failure like any other, so it flows into the arms above rather than
+opening a new one. Its one genuinely new abort — a removal that cannot be
+completed — is a state in which the alternative is worse: telling the user
+nothing was preserved while secret-bearing bytes sit in an unbannered
+directory. And the failure is recoverable by hand: the workspace is retained and the
 transcript ledger is not advanced, so the sessions are retried next run.
 
 **Do not dispatch until this is answered.** A "refuse-and-continue" answer
@@ -177,6 +182,32 @@ independently. It is why Table P row **P0b** exists: "empty record" is only a
 sound operationalization of Q4 once a non-empty record means a VERIFIED
 artifact.
 
+**One of the three message values is already dead code, and the tests say so.**
+The abort's `redactedName` argument is `redactCopy ? redactCopy.name : null`, and
+the abort is reached only when `recoverable` is false. `recoverable` is set by
+`Buffer.compare(afterBytes, redactCopy.bytes)`, and `quarantinePreserve` returns
+`{ name, bytes: content }` where `content` **is** the `afterBytes` object it was
+handed — so that comparison is a buffer against itself and is always `0`.
+Therefore `redactCopy` non-null implies recoverable implies no abort, and every
+reachable abort passes `redactedName === null`. The value `the withheld copy
+could not be saved; the redaction copy was saved` cannot be produced. The test
+file records the same conclusion for the arms that used to produce it
+(`tests/unit/dream-validate.test.js:1970-1978`): *"Both are UNREACHABLE after the
+gate extraction … The extracted gate is HANDED the bytes it preserves, so the
+copy holds them by construction — there is no second read to race, and no read
+that can fail."* P0b does not revive it: a verified copy still recovers, and an
+unverified one is a failure.
+
+**A rejected artifact is a file that already exists.** `quarantinePreserve`
+renames `tmp` to `dest` before anything could check it, and its `catch` removes
+only `tmp` (`validate.js:648-675`). So a verification added after the rename
+finds `dest` on disk, and returning `null` means no caller ever learns its name:
+it enters neither `redactedCreated` nor the preservation record, so the
+identity-gated cleanup at `:1072-1101` cannot see it and Q18 cannot name it.
+Secret-bearing bytes would accumulate in an unbannered directory while the user
+is told preservation failed. Table P row **P0b** therefore owns the rejected
+artifact's disposal, not only its detection.
+
 **The promotion module guards one arm and not the other.**
 `src/core/dream/promote.js:1221` throws `the only-copy invariant is unsatisfied
 and nothing is promoted` when the **redact** arm reports an empty preservation
@@ -229,10 +260,10 @@ precondition**, above.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | Table P rows **P0**, **P0b**, **P1**–**P3** and the message discriminant. Both the verification of a preserved artifact and the abort trigger live in this file already (`quarantinePreserve` and `makeGates(…).secret`), so P0b adds no new surface |
+| modify | src/core/dream/validate.js | Table P rows **P0**, **P0b** (durability, verification and rejected-artifact disposal), **P1**–**P3**, the message discriminant and its pair rule. Both the preservation primitive and the abort trigger live in this file already (`quarantinePreserve` and `makeGates(…).secret`), so P0b adds no new surface |
 | modify | src/core/dream/promote.js | Table P row **P4** |
-| modify | src/cli/dream.js | Table P row **P5** — comment only, no behavior change |
-| modify | tests/unit/dream-validate.test.js | evidence for Table P rows P0, P0b, P1–P3 and P6 |
+| modify | src/cli/dream.js | Table P row **P5** — the promote-`catch` comment replaced with the byte-exact text under Implementation notes. Comment only: no statement in this file changes, and V4 verifies the text |
+| modify | tests/unit/dream-validate.test.js | evidence for Table P rows P0, P0b, P1–P3 and P6. **Also: the commentary at `:1970-1978` and `:2040-2049` that this WP falsifies** — *"there is no second read to race, and no read that can fail"*, and the claim that the wrong-bytes and read-error arms are unreachable by construction. Under P0b there IS a read that can fail (the artifact read-back) and wrong bytes ARE detectable. Correct those passages to say what stays true: the arms retired were the VAULT-re-read arms, and the read P0b adds is of an artifact this gate just wrote |
 | modify | tests/unit/dream-promote.test.js | evidence for Table P row **P4** |
 | modify | docs/specs/done/WP-dream-promote-in-workspace.md | row **G5** only: a dated clause citing Table P for the trigger class. Nothing else in the file |
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | rows **Q18** and **B3b** only, each gaining the byte-exact clause given under Implementation notes. Nothing else in the file — no other row, no assertion, no mutation entry |
@@ -256,24 +287,34 @@ precondition**, above.
 ### Exact contracts
 
 **The abort message needs a discriminant it does not have.** `P1`/`P2` and
-`P3`'s both-failed arm reach `secretGateAbortMessage` with *identical*
-observable inputs — same `rel`, no surviving `redacted/` basename, and the same
-identity disposition — yet Table P gives them different values. Selecting on
-"is there a `redacted/` basename", which is what the shipped helper does, cannot
-tell them apart. So the helper's contract gains a fourth input: a **closed
-enum** whose members are exactly Table P's three message rows, supplied by the
-call site, and it is the only selector of that field.
+`P3` reach `secretGateAbortMessage` with *identical* observable inputs — same
+`rel`, no surviving `redacted/` basename, and the same identity disposition —
+yet Table P gives them different values. Selecting on "is there a `redacted/`
+basename", which is what the shipped helper does, cannot tell them apart. So the
+helper's contract gains a fourth input: a **closed enum** whose members are
+exactly Table P's **two active** message values, supplied by the call site, and
+it is the only selector of that field.
 
 ```js
 /** src/core/dream/validate.js
  *  @param {string} rel  vault-relative path
- *  @param {string|null} redactedName  the surviving `redacted/` basename, if any
+ *  @param {null} redactedName  ALWAYS null on a reachable abort (Table P row P3);
+ *         a non-null value is a contract violation — see the pair rule below
  *  @param {string} identity  what the identity check could establish
- *  @param {'both-failed'|'only-withheld-failed'|'no-redaction-attempted'} which
+ *  @param {'both-failed'|'no-redaction-attempted'} which
  *         selects Table P's value for the "which preserves failed" field
  *  @returns {string} */
 function secretGateAbortMessage(rel, redactedName, identity, which)
 ```
+
+**THE PAIR RULE, because four independent scalars can express states Table P
+does not have.** Under P0b and P3 a surviving `redacted/` copy always recovers,
+so no reachable abort has one. A call pairing either enum member with a non-null
+`redactedName` is therefore not a message to render but a contract violation, and
+it must **fail loud** rather than compose a message describing a copy that,
+under this contract, cannot exist. `redactedName` is kept as a parameter rather
+than deleted because Q18 — not this WP — owns that field; what this WP records is
+that no arm it makes reachable supplies it.
 
 `quarantinePreserve`'s signature is unchanged; what changes is what its
 non-`null` return MEANS (Table P row **P0b**). The gate's verdict shape (`{ok}` /
@@ -298,27 +339,34 @@ this spec cites it.
 | # | Party / arm | The failure | Shipped behavior at `fc506110` (measured) | Required after this WP | Abort message's "which preserves failed" value |
 |---|---|---|---|---|---|
 | **P0** | The EP2 gate, as a whole | any preservation step leaves no durable artifact holding the bytes being judged | not a stated rule; enforced on one arm only | **THE RULE: the gate never returns a `{refuse:true}` verdict whose `preserved` record is empty. That state raises the Q18 abort instead.** An arm whose `redacted/` copy survives **and is verified per P0b** is NOT this state — that copy is on the record and the run continues, exactly as today | — |
-| **P0b** | Every preserving arm — **what a successful preservation MEANS** | the write and rename succeed but the artifact does not hold the judged bytes: wrong bytes, a short write, or the file gone by the time anyone looks | **not checked at all.** `quarantinePreserve` returns the buffer it was handed (`validate.js:667-670`); measured, a corrupted write yields a non-empty record and no abort | **a preservation SUCCEEDS only if the artifact itself is shown to hold the judged bytes** — established by reading the artifact back after the rename and byte-comparing, never by returning the input buffer. A mismatch, or an artifact that cannot be read, **is a preservation failure**: it reports failure exactly as an unwritable directory does, and P0 then carries it to the abort. The bytes a successful preservation reports are **the bytes read back from the artifact**, and every later use of them — P3's recoverable escape included — uses that verified value, never the input alias | — |
+| **P0b** | Every preserving arm — **what a successful preservation MEANS** | the artifact does not durably hold the judged bytes: wrong bytes, a short write, a file or directory entry that is not on the medium yet, or a file gone by the time anyone looks | **nothing is checked.** `quarantinePreserve` writes, renames, and returns the buffer it was HANDED (`validate.js:667-670`); no `fsync`, no read-back. Measured, a corrupted write yields a non-empty record and no abort | **a preservation SUCCEEDS only when all three hold, in this order: (1) DURABILITY — the written file is `fsync`ed before the rename, and the containing quarantine directory is `fsync`ed after it, so both the bytes and the directory entry survive a crash; (2) VERIFICATION — the artifact is then read back and byte-compared against the judged bytes; (3) DISPOSAL ON FAILURE — if (1) or (2) fails, the FINAL DESTINATION is removed and its removal confirmed (`dest` exists by then: the mismatch is detectable only after the rename), and only then is failure reported.** Q4 says *durable*, and a cached read is not durability; without (1) a crash after teardown loses both copies. Without (3) a rejected secret-bearing artifact stays on disk under a name no record, no cleanup and no abort message can reach. **If the removal in (3) cannot be completed, that is itself fail-loud** — a `WienerdogError` naming the path — because reporting "preservation failed" while the bytes sit on disk is the false statement (3) exists to prevent. A failure reported under this row reports exactly as an unwritable directory does, and P0 carries it to the abort. The bytes a SUCCESS reports are **the bytes read back from the artifact**; every later use — P3's escape included — uses that verified value, never the input alias | — |
 | **P1** | Gate, hard-secret withhold arm (`hasHardFinding` true) | `quarantinePreserve(…,'withheld')` returns `null` | **refuses with `preserved: []`, does not throw**; the run continues, commits, and teardown destroys the sole copy | abort (P0) | `the withheld copy could not be saved; no redaction copy was attempted` |
 | **P2** | Gate, unscannable withhold arm — two causes: the delta record's `binary === true`, and bytes that are not lossless UTF-8 (`WP-ep2-unscannable-preserve`, Table U) | same step, same failure | **same as P1** | abort (P0) | same value as P1 — the redact arm is not entered on either cause |
-| **P3** | Gate, redact fall-through arm (`redactFellThrough`) | the `redacted/` preserve failed, or the scrub produced nothing, AND the withheld preserve failed | **aborts, unless a `redacted/` copy survives** (`validate.js:1042`) — but its recoverable escape compares `afterBytes` against the alias `quarantinePreserve` returned (`:1054`), not against the artifact, so a corrupt artifact counts as recovery | **the abort trigger is unchanged; the ESCAPE is re-grounded on P0b's verified value.** A `redacted/` copy that P0b verified still means recoverable and still does not abort; one that P0b rejected never existed as a success, so this arm never sees it | the two shipped values, unchanged: `neither the redaction copy nor the withheld copy could be saved` / `the withheld copy could not be saved; the redaction copy was saved` |
+| **P3** | Gate, redact fall-through arm (`redactFellThrough`) | the `redacted/` preserve failed, or the scrub produced nothing, AND the withheld preserve failed | **aborts, unless a `redacted/` copy survives** (`validate.js:1042`) — but its recoverable escape compares `afterBytes` against the alias `quarantinePreserve` returned (`:1054`), not against the artifact, so a corrupt artifact counts as recovery | **the abort trigger is unchanged; the ESCAPE is re-grounded on P0b's verified value.** A `redacted/` copy that P0b verified still means recoverable and still does not abort; one that P0b rejected never existed as a success and its file is gone (P0b (3)), so this arm never sees it. **Consequence, stated because it decides P6:** a surviving `redacted/` copy ALWAYS recovers, so every reachable abort has none — `redactedName` is `null` on every abort this gate can raise | `neither the redaction copy nor the withheld copy could be saved` — **the only value this arm can produce** |
 | **P4** | `promote()` — Q4's module share, against an INJECTED gate it may not trust | the gate reports an empty preservation record on a **refusal** | the **redact** branch throws (`promote.js:1221`); the **refuse** branch at `:1195` does not check | the refuse branch throws too, with: `` promote: the secret gate's withhold arm reported no preserved copy for `<rel>` — the only-copy invariant is unsatisfied and nothing is promoted `` — naming the **withhold** arm, never reusing the redact arm's wording. **What P4 can and cannot establish, stated so nobody over-claims it:** the gate is INJECTED, so all this module can see is that the record is non-empty. It cannot verify an artifact — it never touches the state directory (Q7) — so the byte-identity guarantee is **P0b's alone**, and a fabricated or stale record from a defective gate defeats P4 by construction. P4 is the module refusing an obviously-unsatisfied invariant, not a second enforcement of it | — |
 | **P5** | The pipeline's teardown (row G5) | any of the above throws out of `promote()` | **already class-wide**: `dream.js:940-963` is one `try`/`catch` around the whole call and inspects nothing about the error, so it retains the workspace on ANY throw from `promote()`; `:1184` is the only teardown call | **no code change.** The comment at `:954-960` and row G5 state the class (this table), not the one named case | — |
-| **P6** | The three message values above | — | two values, pairwise non-substring; `tests/unit/dream-validate.test.js:1859-1862` asserts each arm's value is present and **the others absent** | **the three values stay pairwise non-substring**, so that absence assertion keeps discriminating | — |
+| **P6** | The message taxonomy — **TWO active values, one retired** | — | three values are defined and one, `the withheld copy could not be saved; the redaction copy was saved`, is **already unreachable** in the shipped tree (Current state); `tests/unit/dream-validate.test.js:1859-1862` asserts each arm's value present and the others absent | **the ACTIVE set is exactly two** — P1/P2's and P3's — and they stay **pairwise non-substring** so that absence assertion keeps discriminating. The third is **RETIRED to Q18 as history**, not deleted from that row: it belongs to the R0b arms the gate extraction already retired, this WP does not revive them, and no code path may produce it | — |
 
 Three things this table does **not** change, stated so no one infers them.
 **One:** `quarantinePreserve`'s destinations, naming and collision loop are
 untouched — P0b changes only what its non-`null` return means, and it does not
 conflict with that function's `ONE CAPTURED BUFFER` contract, which is about the
 redact arm not re-reading the TARGET; reading back the ARTIFACT it just wrote is
-a different read. **Two:** Q18's other three fields (path rendering, identity disposition, surviving
-basename) are untouched — on P1 and P2 there is no `redacted/` copy, so the
-identity disposition is the shipped `not performed, because there was no saved
-copy to compare against` and no basename is rendered. **Three:** **the abort path
-touches no user state** — it does not revert, remove, commit, or write into the
+a different read. **Two:** Q18's path and identity fields are untouched — on
+every arm this WP makes reachable there is no `redacted/` copy, so the identity
+disposition is the shipped `not performed, because there was no saved copy to
+compare against` and no basename is rendered. **Three:** **the abort path
+touches no USER state** — it does not revert, remove, commit, or write into the
 vault or the user's git index (ADR-0004; nothing under promotion was ever
-written to the vault, so there is nothing to undo). P0b adds one read of a file
-this gate itself just wrote inside `state/quarantine/`, and nothing else.
+written to the vault, so there is nothing to undo). Everything P0b adds is
+confined to `state/quarantine/` and to files this gate itself just wrote there:
+two `fsync`s, one read-back, and — only on a failed verification — the removal of
+the artifact this call had just renamed into place. **The collision loop makes
+that precise rather than dangerous:** `-1`, `-2` suffixes exist because an
+EARLIER run may already hold `<date>-<stem>.md`, and the name this call removes
+is the one it itself renamed into, never a name it merely skipped over. A run
+holds the dream lock throughout, so no second dream is writing that directory
+while this one decides.
 
 ### Mirrored Surface Checklist
 
@@ -346,7 +394,9 @@ on the spot.
       byte-exact amendment clauses under Implementation notes.
 - [ ] **Mirrors outside this document (all inside the Deliverables boundary)** —
       the gate's `@throws` JSDoc and `quarantinePreserve`'s `@returns` in
-      `validate.js`, the promote-`catch` comment in `dream.js`, row **G5**
+      `validate.js`, the promote-`catch` comment in `dream.js` (byte-exact,
+      Implementation notes), the now-false commentary at
+      `tests/unit/dream-validate.test.js:1970-1978` and `:2040-2049`, row **G5**
       (`WP-dream-promote-in-workspace.md:465`), row **Q18**
       (`WP-secret-fence-ep2-redact-arm.md:1647`) and row **B3b** (same file,
       `:1565`).
@@ -369,11 +419,11 @@ on the spot.
   each at the end of the row's first content cell:
 
   ```text
-  **Amended 2026-09-01 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. The byte-identity CONDITION this row decides is unchanged — Table P generalises it rather than replacing it — and this clause restates none of Table P's members.**
+  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. The byte-identity CONDITION this row decides is unchanged — Table P generalises it rather than replacing it, and extends what counts as a durable copy to a copy this gate has made durable and verified — and this clause restates none of Table P's members.**
   ```
 
   ```text
-  **Amended 2026-09-01 (`WP-preservation-abort-widening`): the TAXONOMY of the "which preserves failed" field — its value set, and which arm carries which value — is that spec's Table P, and the field is selected by an explicit discriminant rather than by whether a `redacted/` copy exists. This row's other three fields are unchanged. Every statement in this row and its holder list that quantifies over "all three arms" or over the R0/R0b enumeration is scoped to the arms that existed when it was written; Table P owns the current set. This clause restates no value.**
+  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TAXONOMY of the "which preserves failed" field — its value set, and which arm carries which value — is that spec's Table P, and the field is selected by an explicit discriminant rather than by whether a `redacted/` copy exists. Table P's active set has TWO members; the value this row wrote for the R0b arms is RETIRED HISTORY, unreachable since the gate extraction retired those arms, and is kept here as the record of what they said rather than as a value any code path may produce. The surviving-`redacted/`-basename field is likewise unreachable on every arm Table P makes reachable, and is retained by this row for the same reason. The path and identity fields are unchanged. Every statement in this row and its holder list that quantifies over "all three arms" or over the R0/R0b enumeration is scoped to the arms that existed when it was written; Table P owns the current set. This clause restates no value.**
   ```
 
   Then re-read each amended cell WHOLE and report, in the PR body, any sentence
@@ -389,12 +439,42 @@ on the spot.
 - The `recoverable` escape in P3 must survive, now grounded on P0b: an arm whose
   `redacted/` copy the artifact check accepted has a durable artifact, so P0 is
   satisfied and there is nothing to abort.
-- **What P0b's read-back does and does not establish, stated rather than
-  implied.** It shows the artifact held the judged bytes at the moment it was
-  written. It is not a durability guarantee against later corruption, and this
-  spec claims none. It is at the right point regardless: Q4's obligation is about
-  what this run may then DESTROY, and the run destroys the workspace within the
-  same invocation.
+- **The `src/cli/dream.js` comment is spec-owned prose, and this is its text.**
+  Everything else about test and code design is the implementer's; this one
+  string is a contract surface, because it is a registered mirror of Table P and
+  because V4 verifies it byte-exactly. Replace the current comment body inside
+  the promote-`catch` with exactly these ten lines, indentation included:
+
+  ```text
+        // ROW G5's SECOND teardown exception, and it is the only-copy invariant
+        // (`WP-dream-promote-module`, Table Q row Q4). Under promotion the
+        // destruction risk moved from the vault to the WORKSPACE rather than
+        // vanishing: whenever a preservation step leaves no verified durable
+        // artifact holding the bytes the gate judged, the workspace holds the
+        // sole surviving copy of what the brain wrote, and removing it is the
+        // data loss the abort exists to refuse. The trigger class is Table P of
+        // `WP-preservation-abort-widening`; this catch names no member of it,
+        // and inspects no error, so it holds for every member. The run fails
+        // loud with the tree intact.
+  ```
+
+- **What P0b establishes, and the one window it leaves — grounded, not waved
+  away.** `fsync` on the file and on the containing directory plus a read-back
+  establishes that a durable artifact holds the judged bytes at the moment
+  preservation reports success. It does **not** detect an artifact mutated or
+  removed between that moment and teardown. Closing that would need either a
+  re-verification at teardown — which would move `src/cli/dream.js` from
+  comment-only to code and widen this boundary — or an OS guarantee the design
+  does not have. **It is a named, already-accepted residual rather than a new
+  one:** the only actor that can reach `state/quarantine/` (0700, user-owned)
+  between those two points is arbitrary same-user native code, which
+  `docs/THREAT-MODEL.md:425` places outside the trust boundary in terms —
+  *"Any code running as the same OS user can already read the 0600 tokens and
+  rewrite the 0600 grant store; that is the same file-permission trust boundary
+  as T4, deliberately not raised above it in v1."* That is the **A12** residual
+  the threat model carries throughout, and this WP inherits it without widening
+  it. Nothing here weakens Q4: Q4 asks for a durable byte-identical artifact,
+  and after this WP one is established where before none was.
 - Test design, fixture shapes and the mechanics of each required RED are the
   implementer's (`docs/runbooks/spec-authoring.md`). This spec states the
   observable contracts and what evidence must exist; it names no test.
@@ -416,48 +496,59 @@ on the spot.
       the note. (JS `$`-anchoring is not involved; no value here reaches a shell
       or a filesystem path.)
 - [ ] No preserved byte, matched secret, or line of the note enters the message
-      — metadata only, as Q18 requires. **P0b reads the artifact back but adds
-      nothing to any surface**: the read-back's only output is a boolean, and
-      neither the artifact's bytes nor the judged bytes are rendered, logged or
-      recorded anywhere.
+      — metadata only, as Q18 requires. **P0b reads the artifact back and keeps
+      the buffer, but nothing new reaches a user surface**: the read-back buffer
+      is internal to the gate — it becomes the value a successful preservation
+      reports, and is used by the scrub and by P3's escape — and neither it nor
+      the judged bytes are rendered, logged, or recorded anywhere. The only new
+      user-visible effect is that a preservation can now fail where it used to
+      claim success.
 
 ## Acceptance criteria
 
-- [ ] **P0b**: a preservation whose write and rename succeed while the artifact
-      does not hold the judged bytes — and one whose artifact cannot be read
-      back — are both reported as preservation FAILURES, not successes. RED
-      required: against the shipped `quarantinePreserve`, which returns the
-      buffer it was handed, this evidence must fail.
-- [ ] **P0b, second half**: the bytes a successful preservation reports are the
-      artifact's, not the input alias, and P3's recoverable escape decides on
-      that value. RED required: an escape re-grounded on the alias must fail.
-- [ ] **P0** holds: the EP2 gate returns no `{refuse:true}` verdict with an
-      empty `preserved` record. Driven on P1 (hard secret) and on **both** of
-      P2's causes (`record.binary === true`; bytes that are not lossless UTF-8),
-      with preservation made to fail, the gate **throws** instead of refusing.
-- [ ] Each of those aborts carries Table P's P1/P2 value for "which preserves
-      failed", carries neither of P3's two values, renders the path in its exact
-      `JSON.stringify` form, states the identity disposition as not performed,
-      and names no `redacted/` basename.
-- [ ] The discriminant is what selects that field, shown by the only difference
-      between a P1/P2 abort and a P3 both-failed abort being the discriminant
-      itself: same path, same absent basename, same identity disposition,
-      different value.
-- [ ] **P3 is unchanged in both directions**: both-preserves-failed still aborts
-      with its shipped value; a `redacted/` copy that P0b accepted still does
-      **not** abort, still refuses the note, and still reports that copy on the
+- [ ] **P0b durability**: a preservation reports success only after the written
+      file and the containing quarantine directory have both been made durable,
+      in that order relative to the rename.
+- [ ] **P0b verification**: a preservation whose artifact does not hold the
+      judged bytes, and one whose artifact cannot be read back, are both reported
+      as FAILURES.
+- [ ] **P0b disposal**: after either failure above, **no artifact remains** at
+      the destination — evidence must show the quarantine tree holds no file the
+      preservation record does not name, on both the mismatch and the read-error
+      path. If the removal itself cannot be completed, the run fails loud with a
+      `WienerdogError` naming the path rather than reporting a plain preservation
+      failure.
+- [ ] **P0b's reported bytes**: the bytes a successful preservation reports are
+      the artifact's, not the input alias, and P3's recoverable escape decides on
+      that value.
+- [ ] **P0** holds: the EP2 gate returns no `{refuse:true}` verdict with an empty
+      `preserved` record. Driven on P1 (hard secret) and on **both** of P2's
+      causes (`record.binary === true`; bytes that are not lossless UTF-8), with
+      preservation made to fail, the gate **throws** instead of refusing.
+- [ ] Each of those aborts carries Table P's P1/P2 value, does not carry P3's,
+      renders the path in its exact `JSON.stringify` form, states the identity
+      disposition as not performed, and names no `redacted/` basename.
+- [ ] The discriminant is what selects that field: the only difference between a
+      P1/P2 abort and a P3 abort is the discriminant itself — same path, same
+      absent basename, same identity disposition, different value.
+- [ ] **The pair rule**: a call pairing either enum member with a non-null
+      `redactedName` fails loud instead of rendering a message.
+- [ ] **P3 in both directions**: both-preserves-failed still aborts with its
+      shipped value; a `redacted/` copy that P0b accepted still does **not**
+      abort, still refuses the note, and still reports that copy on the
       preservation record.
-- [ ] **P6**: the three "which preserves failed" values are pairwise
-      non-substring, and each arm's evidence still shows the other two absent.
+- [ ] **P6**: the two ACTIVE values are pairwise non-substring and each arm's
+      evidence shows the other absent. No code path produces the retired third
+      value, and no evidence asserts it.
 - [ ] **P4**: `promote()` throws on a refusal verdict carrying an empty
-      preservation record, with a message naming the **withhold** arm; the
-      redact arm's existing check and message are unchanged; nothing is
-      published and the working copy is byte-unchanged.
-- [ ] **P5**: the `src/cli/dream.js` promote-`catch` comment cites this WP and
-      Table P's class, and no longer scopes the exception to the
-      redaction-AND-preservation cross-product. That comment is the only carrier
-      of the claim in `src/`, measured at `fc506110` by V4's sweep run over every
-      `src/**/*.js`.
+      preservation record, with a message naming the **withhold** arm; the redact
+      arm's existing check and message are unchanged; nothing is published and
+      the working copy is byte-unchanged.
+- [ ] **P5**: the promote-`catch` comment in `src/cli/dream.js` is byte-identical
+      to the ten lines under Implementation notes.
+- [ ] The commentary at `tests/unit/dream-validate.test.js:1970-1978` and
+      `:2040-2049` no longer claims that no preservation read can fail or that
+      wrong-byte and read-error cases are unreachable.
 - [ ] Rows **G5**, **Q18** and **B3b** each carry their dated clause and no other
       edit; Q18's and B3b's are byte-exact per Implementation notes. `git diff`
       shows one changed line per row and no other line in either file.
@@ -466,9 +557,7 @@ on the spot.
       after the abort.
 - [ ] Idempotence: `N/A — this WP ships no command and writes nothing outside
       the repo; it changes an in-run refusal path.`
-- [ ] `npm test` and `npm run lint` pass, and `npm test` reports strictly more
-      tests than main's 2444 (measured at `fc506110`: 2444 tests, 2432 pass, 12
-      skipped, 0 fail).
+- [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -488,42 +577,43 @@ test "$(grep -oF "withhold arm reported no preserved copy" src/core/dream/promot
 test "$(grep -oF "redact arm reported no preserved copy" src/core/dream/promote.js | wc -l | tr -d ' ')" = 1
 test "$(grep -oF "withhold arm reported no preserved copy" tests/unit/dream-promote.test.js | wc -l | tr -d ' ')" -ge 1
 
-# V4 — P5, bound to the promote-`catch` BLOCK rather than to a string that also
-#      occurs elsewhere in the file. `cb` extracts exactly that block; both its
-#      delimiters are unique in the file (one `res = promote({`, one
-#      `throw err;`). Deleting the comment makes the anchor red, which the
-#      previous `ROW G5` anchor did not: that string also appears at teardown.
+# V4 — P5. NOT a phrase sweep: the comment is spec-owned text (Implementation
+#      notes), so this compares it byte-for-byte. `cb` extracts the promote-catch
+#      block; both delimiters are unique in the file (one `res = promote({`, one
+#      `throw err;`). A deleted comment, a moved file, a reworded sentence and a
+#      synonym of the old cross-product claim are all RED, which no substring
+#      check achieved.
 cb() { awk '/res = promote\(\{/{f=1} f{print} f && /throw err;/{exit}' src/cli/dream.js; }
-flat() { sed 's://::g' | tr '\n' ' ' | tr -s ' '; }
-test "$(cb | wc -l | tr -d ' ')" -ge 12          # the block was located at all
-cb | grep -q 'WP-preservation-abort-widening'    # the comment cites this WP's class
-! cb | flat | grep -Eqi 'both fail'              # no cross-product scoping survives
+cb | sed -n '/} catch (err) {/,$p' | grep '^ *//' > /tmp/wd-catch-actual.txt
+sed -n '/^        \/\/ ROW G5.s SECOND teardown exception/,/^        \/\/ loud with the tree intact\.$/p' \
+  docs/specs/WP-preservation-abort-widening.md > /tmp/wd-catch-expected.txt
+test "$(wc -l < /tmp/wd-catch-expected.txt | tr -d ' ')" = 10   # the literal was found in the spec
+diff -u /tmp/wd-catch-expected.txt /tmp/wd-catch-actual.txt
 ```
 
-- **V2, V3 and V4 are lexical guards, and that is all they are.** Each exits
-  non-zero on failure; none can establish that a comment *means* the class or
-  that a literal is *asserted* rather than merely present. Those are the
-  acceptance criteria's job and the review gates'. Observe and paste all three
-  states for each: **absent** (rename the file away → red), **compliant**
-  (→ green), **violating** (the literal reworded; the catch comment deleted;
-  the cross-product wording still inside the catch → red). Measured at
-  `fc506110`, before any edit: V2 red, V3's withhold line red, V4's anchor red
-  and V4's stale check red.
-- **V5 — the RED obligations.** For each of these, produce a tree in which that
-  rule ALONE is undone and paste a real red run of the **full** `npm test` (not a
-  name-filtered subset — a filter cannot select a test whose name this spec does
-  not prescribe, and must not):
-  1. P0b's artifact check removed → the P0b evidence goes red.
-  2. P3's escape re-grounded on the input alias → the P0b second-half evidence
-     goes red.
-  3. P0's trigger narrowed back to the redact fall-through → the P1/P2 evidence
-     goes red.
-  4. P4's refuse-branch check removed → the P4 evidence goes red.
-  5. P1/P2's message value made a substring of one of P3's → the P6 evidence
-     goes red.
-  How each tree is produced is the implementer's; what must be pasted is the
-  red. The count check in the last acceptance criterion is the non-vacuity
-  guard: it proves new tests actually ran, without constraining their names.
+- **V2 and V3 are lexical guards, and that is all they are.** Neither can
+  establish that a literal is *asserted* rather than merely present; that is the
+  acceptance criteria's job and the review gates'. V4 is different in kind: it
+  compares spec-owned text to the tree, so it establishes exactly its claim.
+  Observe and paste all three states for each: **absent** (rename the file away
+  → red), **compliant** (→ green), **violating** (the literal reworded; the catch
+  comment deleted, reworded, or replaced by a synonym of the old cross-product
+  claim → red). Measured at `fc506110`, before any edit: V2 red, V3's withhold
+  line red, V4's diff red; and on a simulated compliant tree V4's diff green.
+- **V5 — the behaviours that need counterfactual evidence.** Against a
+  full-suite baseline that is GREEN on the finished state, produce for each
+  behaviour below a tree in which that behaviour alone is undone, run the
+  **full** `npm test` (no name filter — a filter cannot select a test whose name
+  this spec must not prescribe), and paste a real red **that names a failing
+  assertion in this WP's own changed test deliverables**. That last requirement
+  is the non-vacuity proof, and it replaces any global test-count floor: a count
+  moves when main moves and proves nothing about this diff.
+  1. The trigger cannot be silently narrowed back to the redact fall-through.
+  2. P4's refuse-branch check cannot be removed unnoticed.
+  3. P6's two active values still discriminate.
+  4. P0b's durability step and its read-back are each load-bearing.
+  5. P0b's rejected-artifact disposal is load-bearing.
+  How each counterfactual tree is produced is the implementer's.
 
 ## Out of scope (do NOT do these)
 
@@ -532,9 +622,11 @@ cb | grep -q 'WP-preservation-abort-widening'    # the comment cites this WP's c
   `WP-quarantine-banner-location`, which `depends_on` this WP.
 - Any change to Q18's other three fields, to Q4 itself, or to any row of either
   `Done` spec other than G5, Q18 and B3b.
-- Any durability guarantee beyond P0b's read-back — no `fsync`, no journal, no
-  re-verification of an artifact after the run. See Implementation notes for what
-  P0b does and does not establish.
+- Re-verifying a preserved artifact at teardown. It would move
+  `src/cli/dream.js` from comment-only to code and widen this boundary, and the
+  window it would close is the A12 same-user-native residual the threat model
+  already carries — grounded, with its sentence quoted, under Implementation
+  notes.
 - A second pipeline-level fixture in `tests/unit/dream-pipeline.test.js` — see
   the Deliverables exclusions.
 - The criterion→test-name mapping harness — `WP-criterion-red-harness`.
@@ -547,7 +639,8 @@ cb | grep -q 'WP-preservation-abort-widening'    # the comment cites this WP's c
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body,
-   including V5's five red runs and the `npm test` count above main's 2444.
+   including V4's three states and V5's green baseline plus one red per
+   behaviour, each red naming a failing assertion in this WP's own tests.
 2. Conventional commits; PR titled
    `fix(dream): widen the only-copy abort trigger to its class (WP-preservation-abort-widening)`.
 3. PR template filled, including "Decisions made" (or "none") and
