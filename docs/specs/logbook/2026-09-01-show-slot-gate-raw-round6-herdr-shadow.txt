@@ -1,0 +1,40 @@
+SHADOW ROUND 6 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 9e7351e7,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention — no-ship: the durable source-form checker still has a valid-JavaScript false green, the closing evidence contains disproved assertions, and Branch B leaves live durable obligations behind.
+
+FINDING 1 — The syntax anchor can hash an unused canonical decoy while the binding consumed by the guard is interpolated.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:391-470, 590-613, 925-947
+Confidence: 0.99
+The once-only assertion counts occurrences of one declaration spelling; it does not prove that the located declaration is the KNOWN_CALLS binding later consumed by shapeMatches. I assembled the committed Exact-contract blocks and
+replaced the declaration with valid CommonJS of this form:
+
+{ const KNOWN_CALLS = [canonical initializer]; }
+const { KNOWN_CALLS } = { KNOWN_CALLS: [interpolated initializer] };
+
+The raw syntax-anchor count is exactly 1, the candidate parses, the locator hashes the block-scoped canonical decoy, the digest matches, and the checker exits GREEN. Outside the block, the destructured interpolated binding is the
+one used by the guard. This defeats the relocation tripwire and directly disproves the claims that assertion (0) closes the compliant-decoy class and that reproducing the exact declaration necessarily makes the count two.
+Recommendation: bind source verification to the actual top-level declarator with a real JavaScript parser, or redesign the pinned set into an isolated consumed module whose complete source can be checked. Add this exact block-
+scoped-decoy plus destructured-real state to the mutation matrix. If deliberate restructuring is intentionally excluded instead, narrow the decoy-closure and no-false-green claims rather than asserting this case is impossible.
+
+FINDING 2 — Two Round-6 evidence claims are false after the syntax-anchor change.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:405-406, 474-482, 614-621, 888-899
+Confidence: 1.0
+In the assembled guard-file form, canonical and pure re-indentation are GREEN; interpolation with unchanged digest, tampered digest, the three Round-5 evasions, and the earlier mutation states are RED. However, restoring an un-
+split NAME remains GREEN, not RED: the self-reference is followed by its string-literal quote, so it cannot satisfy the new NAME + whitespace + equals + opening-bracket pattern. The old self-collision disappeared when the syntax
+anchor replaced substring matching. Separately, lines 896-899 call the last four table rows the durable arm and say they prove sibling-constant-before/after plus tampered digest, but those rows are now interpolation plus the three
+Round-5 evasions; the cited sibling/tamper rows are 887-890.
+Recommendation: remove the obsolete split-needle failure claim or add an independent assertion that genuinely enforces it, then re-run and record the actual result. Replace the positional last-four wording with explicit state names
+or row descriptions so later additions cannot silently retarget the evidence.
+
+FINDING 3 — The owner-rejection branch is not the complete mutually exclusive rewrite it claims to be.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:50-109, 911-947
+Confidence: 0.97
+Branch B says every durable reference is enumerated and that only two sentences inside the pin/state-table material still need rewriting. Yet lines 911-947 would survive the listed edits and remain present-tense durable design:
+every future edit must re-pin, there is one live computation in one script, the checker guards against drift, assertion (0) closes decoys, and the shipped declaration is the thing hashed. Under Branch B the checker and digest
+constant are not committed, so those surviving obligations and guarantees are false. The branch therefore cannot be applied as enumerated without leaving the exact cross-branch residue it says is unavailable.
+Recommendation: add the three paragraphs at lines 911-947 to the Branch-B rewrite list. Delete future-enforcement language and rewrite any retained material explicitly as past-tense one-time measurement; then repeat the durable-
+keyword and criteria-reference walk after applying the rewrite mechanically.
+
+Scope objections: none.
