@@ -186,6 +186,7 @@ repair cannot hold a file that a scheduled job rewrites nightly.
 | modify | src/core/alerts.js | two functions: (a) `clearAlerts` — replace lines 206-208 per Table B, thread `{ core: paths.core }`; (b) `appendAlert`'s **compaction branch** — replace lines 117-120 per Table D (migrate + local try/catch, must not throw). Do NOT touch the atomic append at `:89-90`, the empty-read guard at `:105`, the compaction trigger at `:106`, or `chmodAlerts` itself |
 | modify | src/core/private-fs.js | **comment text PLUS one tagged throw** (this row was "comment-only" in earlier rounds; it is not any more). (a) Correct the two now-false mirrors of the 2026-07-19 decision at lines 20-22 and 129-134 (the `A9_PRIVATE_STATE_FILES` JSDoc) so they no longer claim these writers are unchanged. The array literal it documents, lines 135-141, is CODE and is NOT edited — its membership is correct and 3 of its 5 entries were never part of that decision. The `A9_PRIVATE_CORE_FILES` comment at lines 143-148 also stays TRUE and is NOT edited. (b) Add `code = 'WD_F10_POST_RENAME'` to the single throw at lines 361-365, per Table D2 — the ONLY code change permitted in this file |
 | create | tests/unit/private-writer-modes.test.js | cover the acceptance criteria below; the implementer designs the cases |
+| modify | tests/unit/scheduler-runjob.test.js | **ONLY the `:2661` fixture**, whose failure-injection technique — a directory pre-created at the predictable temp path `${alertsFile}.${process.pid}.tmp` (`:2674`) — this WP's own fix retires, so it no longer intercepts anything and `clearAlerts` succeeds. Replace it with a post-mode-pin refusal trigger (e.g. symlink `alertsFile` itself, per the `:2739` sibling). **No other change to the file** — see "A test that the fix retired" below |
 
 ### Exact contracts
 
@@ -442,6 +443,39 @@ every surface below in one pass:
       fact; both stay
 
 ## Implementation notes & constraints
+
+### A test that this WP's fix retired (why `scheduler-runjob.test.js` is a Deliverable)
+
+`tests/unit/scheduler-runjob.test.js` is not a file this WP set out to touch. It
+is in the Deliverables because an **intervening dependency's test used the very
+hazard this WP closes as its failure-injection fixture**, and closing the hazard
+disarmed the fixture.
+
+`WP-failloud-survives-state-write-failure` landed first (this WP's `depends_on`).
+Its Table B2 test at `:2661` needed `clearAlerts` to throw, and at the time the
+cheapest way to force that was to pre-create a **directory** at `clearAlerts`'
+deterministic temp path — `` fs.mkdirSync(`${alertsFile}.${process.pid}.tmp`) ``
+(`:2674`), with a comment noting the filename is predictable because
+`clearAlerts` runs in-process. That predictability **is** the hazard Table B
+retires: `writeFilePrivate` uses a crypto-random `O_EXCL|O_NOFOLLOW` temp, so the
+planted directory is never opened, the rewrite succeeds, and the test's premise
+evaporates. Measured on this branch: `:2661` is the **only** failing test in the
+suite (2405 tests, 2392 pass, 1 fail).
+
+The fix is to re-arm the test against the post-mode-pin refusal shape rather than
+to weaken it. Its sibling at `:2739` already shows the shape and still passes —
+note **why**: `:2739` symlinks `alertsFile` itself, so its refusal comes from
+`writeFilePrivate`'s destination check (F16), not from the temp fixture. Its own
+`` fs.mkdirSync(`${alertsFile}.${process.pid}.tmp`) `` at `:2750` is now
+vestigial but harmless, and is **out of scope** — do not tidy it up; this row
+permits the `:2661` fixture and nothing else.
+
+**The class was predicted.** `WP-failloud-survives-state-write-failure`'s own
+lessons flagged that a test injecting failure through a mechanism a *later* WP is
+chartered to remove will go green-then-stale exactly when that WP lands. This is
+that prediction arriving. The general rule it argues for — inject failure through
+a seam the roadmap is not about to close, or expect to re-arm the test — belongs
+in the dogfood lessons, not in this spec; report it in the PR body.
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
 - Each of the three edits is a **replacement, not an addition**: delete the
