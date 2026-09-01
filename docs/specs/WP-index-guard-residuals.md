@@ -351,11 +351,11 @@ and by each verification block's comment header, which the sweep cannot reach.
       carrying an expected mapping as a constant does not satisfy this** — one was
       executed against an earlier draft with a wrong baseline hard-coded, and it
       went green while every mutation below went red.
-      **Four REDs are required and pasted, one per way this has failed:** a
-      same-count swap, a label swap, a decoy ordinal, and — **the one that proves
-      the module is actually read** — a `produces` property flipped in a scratch
-      copy of the module, which must turn the comparison RED without the row
-      changing at all.
+      **Each of these is required as a pasted RED, one per way this has failed:**
+      a same-count swap, a label swap, a decoy ordinal, and — **the one that
+      proves the module is actually read** — a `produces` property flipped in a
+      scratch copy of the module, which must turn the comparison RED without the
+      row changing at all.
 - [ ] 4a. **No count of own-value sources is stated in any SPEC OR DOCS PROSE
       surface** — the scope of W1(c)'s own rule (*"NEITHER THIS ROW NOR ANY PROSE
       SURFACE"*). **Explicitly out of scope: code and its comments** (exemption
@@ -442,8 +442,9 @@ not done the rename. The logbook hit is a registered non-move and is UNCHANGED.
 **Both directions are required for every new assertion**, green on the finished
 state and red on a deliberately broken one: a byte added to the module; the loose
 sentence left standing, plus the negated grep's file-absent case (moved aside it
-must go RED); criterion 1's non-absolute vector; and criterion 4's three
-mutations.
+must go RED); criterion 1's non-absolute vector; and **every mutation criterion 4
+requires, the module-side `produces` flip included** — that criterion owns the
+list, and this inventory does not restate it.
 
 ## Out of scope (do NOT do these)
 
