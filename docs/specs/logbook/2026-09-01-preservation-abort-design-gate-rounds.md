@@ -32,10 +32,33 @@ round's tip, fresh thread per round via `/new`). Raw outputs are committed
 BEFORE adjudication, one file per channel per round
 (`2026-09-01-preservation-abort-gate-raw-round<N>-<channel>.txt`).
 
-## Round zero (`ade024b0`)
+## Round zero (`ade024b0` → fixes in `220de093`)
 
-_(pending — template conformance by a clean-context executor; coherence pass
-re-running every executable claim.)_
+Template conformance (clean-context executor, sonnet): **CONFORMANT**.
+Coherence pass (second clean-context executor, sonnet): every citation,
+quoted fragment and count reproduced, the three-arm A/B/C measurement
+re-driven byte-for-byte, V2/V3/V4 red on the untouched tree as predicted,
+`npm test` 2444/0, lint green, the 209-test selection green; V5's mutations
+COULD-NOT-RUN pre-implementation (they target code the WP adds). **8 findings
+(2 B, 6 C), all FIX, applied in `220de093`:**
+
+1. **B** — the "Discovered issues" claim that row V1 contradicts row G12 is
+   FALSE on the current tree (V1 `:506` already states G12 keeps half (b)
+   fail-loud and cites the fixing round; code agrees) — dropped, no
+   replacement; G12's own cell re-read: no defect.
+2. **B** — checklist shorthand `G5 → P5` (G5 cites Table P, the class, not
+   row P5) and the P5 criterion bundling the two Done-spec amendment clauses
+   — fixed and split.
+3. **C** — `dream.js:947-963` → `:940-963` (catch at `:953`). 4. **C** — a
+   backticked catch "literal" that exists nowhere → structural description
+   with real lines. 5. **C** — Dispatch precondition moved after the title
+   (four precedents). 6. **C** — `depends_on` gains the two amended Done
+   specs; ADR-0012 dropped as partly superseded. 7. **C** — logbook citation
+   `:83` → `:79-83`. 8. **C** — checklist category renamed to say every item
+   is inside the Deliverables boundary.
+   The architect's post-move re-read fixed three sentences the move
+   falsified ("three code sites" → the gate, the module, the pipeline's
+   record).
 
 ## Rounds
 
