@@ -1089,3 +1089,48 @@ test('probe parser: the three identifier shapes are NOT interchangeable across d
   assert.deepEqual(ownIdentifiersIn('', 'darwin'), [], 'empty output is CLEAN input, never a crash');
   assert.deepEqual(ownIdentifiersIn(LAUNCHCTL_PRINT, 'freebsd'), [], 'an unsupported platform matches nothing');
 });
+
+test('probe parser: a foreign identifier that merely EMBEDS our name is not ours (boundary, not containment)', () => {
+  // Containment would let somebody else's registration block an innocent
+  // uninstall: each token below carries a Wienerdog namespace somewhere inside
+  // it, but none of them is a Wienerdog registration. Erring toward LIVE is the
+  // fail-closed direction and still the wrong answer — the probe enumerates our
+  // OWN identifiers, so the namespace must match at the identifier's boundary.
+  const launchdLookalike = [
+    '\t\t       0      0 \tcom.vendor.ai.wienerdog.helper',
+    '\t\t       0      0 \tai.wienerdog.dream',
+    '',
+  ].join('\n');
+  assert.deepEqual(
+    ownIdentifiersIn(launchdLookalike, 'darwin'),
+    ['ai.wienerdog.dream'],
+    'a vendor label embedding ai.wienerdog. is not ours; the real label still is'
+  );
+
+  const systemdLookalike = [
+    '  not-wienerdog-related.timer  loaded active   waiting Someone else entirely',
+    '  wienerdog-dream.timer        loaded active   waiting Wienerdog job timer: dream',
+    '',
+  ].join('\n');
+  assert.deepEqual(
+    ownIdentifiersIn(systemdLookalike, 'linux'),
+    ['wienerdog-dream.timer'],
+    'a unit embedding wienerdog- is not ours; the real unit still is'
+  );
+
+  const taskLookalike = [
+    'TaskName:                             \\Vendor\\Wienerdog\\task',
+    'TaskName:                             \\Wienerdog\\dream',
+    '',
+  ].join('\n');
+  assert.deepEqual(
+    ownIdentifiersIn(taskLookalike, 'win32'),
+    ['\\Wienerdog\\dream'],
+    'a task under a foreign parent folder is not ours; the real task still is'
+  );
+
+  // Each lookalike ALONE reports CLEAN — no innocent uninstall is blocked.
+  assert.deepEqual(ownIdentifiersIn('com.vendor.ai.wienerdog.helper', 'darwin'), []);
+  assert.deepEqual(ownIdentifiersIn('not-wienerdog-related.timer', 'linux'), []);
+  assert.deepEqual(ownIdentifiersIn('\\Vendor\\Wienerdog\\task', 'win32'), []);
+});

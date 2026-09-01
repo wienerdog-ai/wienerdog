@@ -59,19 +59,28 @@ function windowsTaskNamespace() {
  * task path after `TaskName:`), and our own names cannot contain whitespace
  * (`windowsTaskName` and the job-name charset are both `[a-z0-9-]`).
  *
- * Matching is FIXED-STRING and per-domain: launchd labels and systemd unit names
- * are case-sensitive and matched exactly, while Windows task paths are
+ * Matching is FIXED-STRING, per-domain, and anchored at the identifier's
+ * BOUNDARY: a token must START WITH the namespace, never merely contain it.
+ * Containment would make a foreign registration that happens to embed our name
+ * — `com.vendor.ai.wienerdog.helper`, `not-wienerdog-related`,
+ * `\Vendor\Wienerdog\task` — report as ours, and an innocent uninstall would be
+ * blocked by somebody else's job. This probe enumerates Wienerdog's OWN
+ * identifiers and nothing else; erring toward LIVE is the fail-closed direction
+ * but it is still the wrong answer.
+ *
+ * Case follows each domain: launchd labels and systemd unit names are
+ * case-sensitive and compared exactly, while Windows task paths are
  * case-INSENSITIVE, so the win32 arm folds case. A folder header line (`Folder:
- * \Wienerdog`) deliberately does NOT match — the namespace includes its trailing
+ * \Wienerdog`) deliberately does NOT match — the namespace carries its trailing
  * separator, so an empty folder is not read as a live registration.
  * @param {string} out @param {NodeJS.Platform} platform @returns {string[]}
  */
 function ownIdentifiersIn(out, platform) {
   const ns = platform === 'win32' ? windowsTaskNamespace().toLowerCase() : null;
   const hit = (t) => {
-    if (platform === 'darwin') return t.includes(LAUNCHD_LABEL_PREFIX);
-    if (platform === 'linux') return t.includes(SYSTEMD_UNIT_PREFIX);
-    if (platform === 'win32') return t.toLowerCase().includes(ns);
+    if (platform === 'darwin') return t.startsWith(LAUNCHD_LABEL_PREFIX);
+    if (platform === 'linux') return t.startsWith(SYSTEMD_UNIT_PREFIX);
+    if (platform === 'win32') return t.toLowerCase().startsWith(ns);
     return false;
   };
   /** @type {string[]} */ const identifiers = [];
