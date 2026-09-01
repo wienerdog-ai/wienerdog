@@ -65,6 +65,12 @@ of round outcomes.
 
 **WP-A closure (2026-09-01):** `WP-smoke-live-scheduler-preflight` drew zero findings in rounds 5 and 6 (verified by grep over all four raw files); `depends_on: []`; verification arms self-contained. Flipped **Ready** in `6f1a950`.
 
-**Round-6 ruling applied (2026-09-01).** The parked decision is resolved as **Option A**; WP-B's design loop is closed. WP-B remains `Draft` on one gate only — the **ADR-0041 owner signature**, which no agent may write. `WP-scheduler-replay-manifest-independent` is filed as a Draft stub and has **not** been through spec review; it needs its own maturation and gate rounds before dispatch.
+**Round-6 ruling applied (2026-09-01).** The parked decision is resolved as **Option A**; WP-B's design loop is closed. Applied in `fa422e7`: residual **R-stripped-manifest-orphan** recorded beside R-failed-unload, the authority short-circuit kept as designed, and the closure claim narrowed to the no-authority case. `WP-scheduler-replay-manifest-independent` is filed as a Draft stub and has **not** been through spec review; it needs its own maturation and gate rounds before dispatch.
+
+**ADR-0041 SIGNED — WP-B's last gate closed (2026-09-01).** The owner edited `Status: Accepted` and `OWNER-SIGNED 2026-08-31` in his own working checkout, told the session he had signed, and the session committed his edit **byte-identical on his behalf** — touching neither line, per ADR-0035's discipline that no agent may write, move or reformat a signature. (The signature line carries **2026-08-31**, the date he chose; the landing happened on 2026-09-01. Both dates are correct and they are not the same event.) The decision is in force and binding on the family.
+
+With that, **`WP-scheduler-mutation-home-authority` flips `Draft → Ready`** — six design-gate rounds on both channels, one owner ruling, one signature, and no gate left. Its dispatch precondition is marked SATISFIED rather than deleted, so the record of what had to be true survives.
+
+Family status at this point: `WP-smoke-live-scheduler-preflight` is **`In-Review`** (implemented on PR #181, where its own gates found the probe-status fall-through that closed the taxonomy); `WP-scheduler-mutation-home-authority` is **`Ready`** and dispatchable; `WP-scheduler-replay-manifest-independent` stays **`Draft`** and un-reviewed by design.
 
 | 2 (shadow, comparison only) | herdr-spawned codex, same target | `2026-09-01-issue-169-gate-raw-round2-herdr-shadow.txt` | `c9a991b` | needs-attention; 6 findings — its 2/3/6 match the gate's 1/2/3; its 1/4/5 new | S1 FIX overclaim + residual R-failed-unload; S4 residual R-probe-race (owner-accepted); S5 FIX (full override matrix); applied in `24e24d2` |
