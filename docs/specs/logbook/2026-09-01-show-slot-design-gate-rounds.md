@@ -24,9 +24,43 @@ Dispatch precondition) blocks `dispatch`, not the loop.
 BEFORE adjudication, one file per channel per round
 (`2026-09-01-show-slot-gate-raw-round<N>-<channel>.txt`).
 
-## Round zero
+## Round zero (`e35c5260` → fixes in `b9bd5f66`)
 
-_Pending._
+Template conformance (clean-context executor): **CONFORMANT** (two cosmetic
+notes, both taken as offered). Coherence pass: every runnable claim
+reproduced — all ~30 file:line citations byte-exact including the four quoted
+fragments inside the 42 KB W1(c) cell, the `grep -rn "'show'" src/` pair, the
+`b19121bb`→`53b1519b` ancestry, the index-corruption exploit and its
+staged-content-destroying recovery, `classify` returning `null` on the
+two-token vector today, the `commit-tree -m` negative, the
+`--test-name-pattern` 43/43 non-filter, and the claim sweep (12 hits, all
+accounted). **9 findings (4 B, 5 C), all FIX, applied in `b9bd5f66`:**
+
+1. **B** — W1(c)'s FREE-slot RULE sentence (*"a slot holding data the run
+   merely carries … is FREE"*) is falsified by C1 and was registered nowhere;
+   now the FIRST C1 checklist entry, C1 restated as amending the partition
+   two-way → three-way (COMPUTED → own; carried-and-varying → FREE;
+   carried-and-fixed → literal), sweep pattern `merely carries` added.
+2. **B** — Deliverables "three clauses move" vs four checklist W1(c) surfaces:
+   the *"REPAIR DOES NOT INSPECT THE TOKEN"* clause decided a registered
+   NON-move (PRODUCED is loose, not false; its sharpening is
+   `WP-index-guard-residuals` item 2's deliverable — hand-off recorded in both
+   specs); Deliverables no longer states a count.
+3. **B** — criterion 4's three REDs unsatisfiable for the two prose-only
+   fixes; narrowed to C1 (RED with slot reverted to `ANY`, GREEN with the
+   literal, accept side alive both ways); C2/C3 carry the whole-cell re-read,
+   any red for them named synthetic.
+4. **B** — the shape (3) negative measurement was true only for the MODE
+   slot; the PATH slot accepts an option string as a literal filename
+   (exit 0, private index, no file written — conclusion survives, evidence
+   restated per-slot; the original vector's `Invalid path` confound named).
+5. **C** — three quotations re-attributed from "W1(c)" to the Done spec's
+   Mirrored Surface Checklist (`:665-677`). 6. **C** — `:1024`→`:1032`.
+   7. **C** — the sweep's mandatory-context window swallowed an adjacent hit
+   (5-of-6) and `{0,n}` bounds die on the ugrep shim; rebuilt as one
+   fixed-literal `grep -oF` pass per pattern (18 hits, all accounted).
+   8. **C** — logbook range unified on `:409-426`. 9. **C** — ADR-0031
+   trigger restated (ii)+(vii); (vi) does not fire.
 
 ## Rounds
 
