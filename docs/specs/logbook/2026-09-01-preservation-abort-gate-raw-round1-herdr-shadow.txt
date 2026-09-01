@@ -1,0 +1,55 @@
+SHADOW ROUND 1 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 798f8617, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted during the review: two isolated temp-dir node reproductions (the three-arm drive and the wrong-bytes fault injection) and one `npm test` run outside the sandbox (2444/2432/0); a temp-root request for V5 was not granted and lint-with-network was declined. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — Do not dispatch: the exact message contract is unimplementable, and Table P misses a reproduced non-empty-but-corrupt preservation loss path.
+
+FINDING 1
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 213-227, 245-248
+Confidence: 1.0
+Materiality: B
+Body: The frozen helper signature cannot express Table P. P1/P2 and P3-both-failed both call `secretGateAbortMessage` with the same observable inputs: the same `rel`, `redactedName === null`, and `identity === "not performed, because there was no saved copy to compare against"`; nevertheless P1/P2 require `no redaction copy was attempted` while P3 requires `neither ... could be saved`. The current helper selects only from `redactedName`, and the spec simultaneously requires its unchanged three-argument signature and says the new arms use that helper. No deterministic implementation can satisfy both message values without violating the contract or using hidden state.
+Recommendation: Add an explicit failure-class/attempted-redaction discriminant to the helper contract and call sites (preferably a closed enum selecting Table P's value), then assert P1/P2 and P3 with otherwise identical path, basename, and identity inputs.
+
+FINDING 2
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 243-248, 304-306, 329-340
+Confidence: 0.99
+Materiality: A
+Body: Table P defines the class as any preserve leaving no byte-identical durable artifact, but operationalizes it only as an empty record. Fault injection reproduced a fourth loss path: `quarantinePreserve` reported success while the temp write stored `CORRUPT`. The ordinary redact arm returned normally with a non-empty record whose file was not byte-identical. More critically, a redact fall-through plus failed withheld preserve also returned normally: the recoverable escape compared `afterBytes` with the in-memory `redactCopy.bytes` alias, not the artifact on disk, and therefore treated the corrupt artifact as recovery. Both outputs were `byteEqual:false`; downstream teardown can destroy the sole original while P0 and P4 see a non-empty record. The current suite passed, so the proposed verification does not cover this class member.
+Recommendation: Make successful preservation establish the artifact's bytes from the artifact itself (descriptor/read-back plus the required durability semantics), use that verified result in the recoverable escape, and extend P0/criteria to abort on a missing or non-byte-identical artifact rather than only an empty record.
+
+FINDING 3
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 194-195, 238-251, 290-296, 351-354
+Confidence: 0.97
+Materiality: B
+Body: The Done-spec amendment boundary leaves the canonical condition owner false. `WP-dream-promote-module` Q4 says the abort condition is decided by `WP-secret-fence-ep2-redact-arm` B3b; B3b still scopes it to a failed withheld preserve after a redact-arm fall-through. Table P adds hard-secret and unscannable entries but amends only G5 and Q18, so Q4's cited owner remains narrower than the new canonical table. Q18 also repeatedly says its holders cover “all three arms” and enumerates the legacy R0/R0b arms; an append-only third-value clause leaves those whole-cell universals false or ambiguous. Requiring Q18 both to “append” the value and not restate Table P gives the implementer no exact compliant amendment.
+Recommendation: Add B3b to the Deliverables with a dated clause delegating the widened trigger class to Table P. Specify byte-exact pointer-only amendment text for Q18 that delegates the taxonomy/holders to Table P and explicitly scopes or supersedes its legacy “all three arms” statements; do not duplicate the literal values there.
+
+FINDING 4
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 369-409
+Confidence: 0.96
+Materiality: C
+Body: V2-V4 can certify the wrong change. `grep -Fc` counts matching lines, not occurrences, so two copies on one line satisfy an “exists once” check. V2/V3 prove only that literals occur somewhere, including dead text; V4 is phrase-shaped even though the acceptance criterion is claim-shaped, so a stale cross-product comment reworded without `withheld preservation both failed` passes. The spec also prescribes fixture details and three exact mutations despite `docs/runbooks/spec-authoring.md` assigning fixture shapes and mutation lists to the implementer. Untouched-tree predictions were correct (V2 red, V3 withhold red/redact green, V4 stale check red), but that does not make the compliant-side checks sound.
+Recommendation: Keep the observable criteria, remove prescribed fixture/mutation design, and replace literal-count gates with checks tied to executable behavior or a claim-complete bounded check; demonstrate absent/compliant/semantically violating states, including a synonym of the stale cross-product claim.
+
+SCOPE OBJECTIONS
+None.
+
+EXECUTED
+- `pwd && git status --short --branch && git rev-parse HEAD && git rev-parse main && git diff --stat main...HEAD && git diff --name-only main...HEAD` — exit 0; confirmed detached `798f8617`, main `fc506110`, two documentation files changed.
+- `wc -l CLAUDE.md docs/runbooks/spec-authoring.md docs/specs/WP-preservation-abort-widening.md`; full/targeted `sed`, `nl`, `awk`, and `rg` reads of every requested spec/code/test/canonical/logbook range; `git diff --unified=80 main...HEAD -- docs/specs/WP-preservation-abort-widening.md` — all exit 0.
+- Three-arm `makeGates(...).secret` reproduction with a regular-file quarantine path — sandbox attempt exit 1 (`EPERM` creating temp dir); authorized isolated rerun exit 0: hard-secret and binary returned `refuse:true,preserved:[]`; redact fall-through threw `WienerdogError`.
+- Successful-but-wrong preservation fault injection — exit 0: ordinary redact and recoverable fall-through both returned normally with non-empty records; both named on-disk `CORRUPT` bytes and reported `byteEqual:false`.
+- V2 commands — exits 1, 1 (red as predicted).
+- V3 commands (withhold source, redact source, withhold test) — exits 1, 0, 1 (predictions correct).
+- V4 commands (`test -f`, non-vacuity anchor, stale-claim negation) — exits 0, 0, 1 (stale state red as predicted).
+- Pairwise non-substring Node check for all three values — exit 0.
+- Preservation call-site checks (`grep -c`, `grep -rl`) — exits 0, 0; one definition plus two calls, all in `validate.js`.
+- `npm test` — sandbox attempt exit 1 (`EPERM` creating temp root); authorized local-only rerun exit 0: 2444 tests, 2432 pass, 0 fail, 12 skipped.
+- V5 mutations and targeted command — not run: checkout is read-only/untouched and the requested temporary-root approval was declined. Static result: (a) and (b) require behavior tests to go red; (c) should make the P3 second-value absence assertion red, but Finding 1 prevents a compliant baseline as written.
+- `npm run lint` — not run to completion; the initial sandbox invocation exited 1 before completion because markdownlint attempted blocked registry access. Per user instruction, no network retry; lint is orchestrator-owned.
+- Final `git status --short --branch` — exit 0; checkout clean, detached HEAD.
+
+DONE_ROUND_1
