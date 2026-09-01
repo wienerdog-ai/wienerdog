@@ -3,7 +3,7 @@ id: WP-preservation-abort-widening
 title: Widen the only-copy abort trigger from the named case to its class
 status: Ready
 model: sonnet
-size: S
+size: M
 depends_on: [WP-dream-promote-in-workspace, WP-secret-fence-ep2-redact-arm]
 adrs: [ADR-0004, ADR-0031, ADR-0034]
 epic: dream-promotion
@@ -46,10 +46,11 @@ place. What needs a word from the owner is only its blast radius.
 
 **The one question for the owner.** Rows P0–P3 make the *whole run* fail loud on
 two arms that today only refuse one note; P0b adds a third occasion — an artifact
-written but not durably holding the judged bytes — and a fourth, narrower one: a
-rejected artifact that cannot be removed, where the run fails loud rather than
-report a preservation failure that is not the whole truth. Confirm that blast
-radius, or say the added arms should refuse-and-continue instead.
+written but not holding the judged bytes — and Table D row **D3** a fourth,
+narrower one: a rejected artifact that cannot be removed, where the run fails
+loud rather than report a preservation failure that is not the whole truth.
+Confirm that blast radius, or say the added arms should refuse-and-continue
+instead.
 
 **Recommendation: confirm fail-loud, and it is close to free.** Q4 forbids
 destroying the working copy, and the pipeline has no shape in which one note's
@@ -65,7 +66,17 @@ nothing was preserved while secret-bearing bytes sit in an unbannered
 directory. And the failure is recoverable by hand: the workspace is retained and the
 transcript ledger is not advanced, so the sessions are retried next run.
 
-**Do not dispatch until this is answered.** A "refuse-and-continue" answer
+**One disclosure that is not a question.** This WP does not make preservation
+crash-durable; that is `WP-quarantine-preserve-durability` (Draft), extracted
+from this spec's round-3 gate. It changes nothing the owner already ruled — the
+exposure is pre-existing and this WP reduces it (see Table D) — but the owner
+sequenced `WP-preservation-abort-widening` then `WP-quarantine-banner-location`,
+and where a third WP sits in that chain is the owner's call. **Recommendation:
+after the banner.** The banner work is small, already measured, and unblocked by
+this WP; durability is a new cross-cutting concern with an unsolved evidence
+problem and no `fsync` anywhere in the product today.
+
+**Do not dispatch until the question above is answered.** A "refuse-and-continue" answer
 changes rows P0–P2 and their criteria (P0b is unaffected either way — it decides
 what a preservation SUCCESS is, not what follows a failure); it changes no path
 in the Deliverables table.
@@ -119,7 +130,8 @@ Every claim below was measured in this tree at `fc506110` on 2026-09-01.
 **There are exactly two preservation steps on the dream path**, and both are in
 the EP2 gate. `quarantinePreserve` is defined at `src/core/dream/validate.js:642`
 and has exactly two call sites — `:1017` (`kind='redacted'`) and `:1040`
-(`kind='withheld'`); no other module writes a durable copy of judged bytes.
+(`kind='withheld'`); no other module writes a copy of judged bytes anywhere
+outside the workspace.
 Runnable proof:
 
 ```bash
@@ -173,7 +185,7 @@ D1 ordinary redact arm (scrub completes)
 ```
 
 A non-empty preservation record, a refusal or a promotion, no abort — and no
-durable artifact holds the judged bytes. The same gap makes the redact
+artifact anywhere holds the judged bytes. The same gap makes the redact
 fall-through's **recoverable escape** vacuous: `Buffer.compare(afterBytes,
 redactCopy.bytes)` (`validate.js:1054`) compares `afterBytes` against the alias
 of itself that `quarantinePreserve` returned, never against the artifact, so a
@@ -260,10 +272,10 @@ precondition**, above.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | Table P rows **P0**, **P0b** (durability, verification and rejected-artifact disposal), **P1**–**P3**, the message discriminant and its pair rule. Both the preservation primitive and the abort trigger live in this file already (`quarantinePreserve` and `makeGates(…).secret`), so P0b adds no new surface |
+| modify | src/core/dream/validate.js | Table P rows **P0**, **P0b**, **P1**–**P3**, the message discriminant and its pair rule, and **all of Table D**. Both the preservation primitive and the abort trigger live in this file already (`quarantinePreserve` and `makeGates(…).secret`), so neither table adds a new surface |
 | modify | src/core/dream/promote.js | Table P row **P4** |
 | modify | src/cli/dream.js | Table P row **P5** — the promote-`catch` comment replaced with the byte-exact text under Implementation notes. Comment only: no statement in this file changes, and V4 verifies the text |
-| modify | tests/unit/dream-validate.test.js | evidence for Table P rows P0, P0b, P1–P3 and P6. **Also: the commentary at `:1970-1978` and `:2040-2049` that this WP falsifies** — *"there is no second read to race, and no read that can fail"*, and the claim that the wrong-bytes and read-error arms are unreachable by construction. Under P0b there IS a read that can fail (the artifact read-back) and wrong bytes ARE detectable. Correct those passages to say what stays true: the arms retired were the VAULT-re-read arms, and the read P0b adds is of an artifact this gate just wrote |
+| modify | tests/unit/dream-validate.test.js | evidence for Table P rows P0, P0b, P1–P3, P6 and for all of Table D. **Also: the commentary at `:1970-1978` and `:2040-2049` that this WP falsifies** — *"there is no second read to race, and no read that can fail"*, and the claim that the wrong-bytes and read-error arms are unreachable by construction. Under P0b there IS a read that can fail (the artifact read-back) and wrong bytes ARE detectable. Correct those passages to say what stays true: the arms retired were the VAULT-re-read arms, and the read P0b adds is of an artifact this gate just wrote |
 | modify | tests/unit/dream-promote.test.js | evidence for Table P row **P4** |
 | modify | docs/specs/done/WP-dream-promote-in-workspace.md | row **G5** only: a dated clause citing Table P for the trigger class. Nothing else in the file |
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | rows **Q18** and **B3b** only, each gaining the byte-exact clause given under Implementation notes. Nothing else in the file — no other row, no assertion, no mutation entry |
@@ -338,8 +350,8 @@ this spec cites it.
 
 | # | Party / arm | The failure | Shipped behavior at `fc506110` (measured) | Required after this WP | Abort message's "which preserves failed" value |
 |---|---|---|---|---|---|
-| **P0** | The EP2 gate, as a whole | any preservation step leaves no durable artifact holding the bytes being judged | not a stated rule; enforced on one arm only | **THE RULE: the gate never returns a `{refuse:true}` verdict whose `preserved` record is empty. That state raises the Q18 abort instead.** An arm whose `redacted/` copy survives **and is verified per P0b** is NOT this state — that copy is on the record and the run continues, exactly as today | — |
-| **P0b** | Every preserving arm — **what a successful preservation MEANS** | the artifact does not durably hold the judged bytes: wrong bytes, a short write, a file or directory entry that is not on the medium yet, or a file gone by the time anyone looks | **nothing is checked.** `quarantinePreserve` writes, renames, and returns the buffer it was HANDED (`validate.js:667-670`); no `fsync`, no read-back. Measured, a corrupted write yields a non-empty record and no abort | **a preservation SUCCEEDS only when all three hold, in this order: (1) DURABILITY — the written file is `fsync`ed before the rename, and the containing quarantine directory is `fsync`ed after it, so both the bytes and the directory entry survive a crash; (2) VERIFICATION — the artifact is then read back and byte-compared against the judged bytes; (3) DISPOSAL ON FAILURE — if (1) or (2) fails, the FINAL DESTINATION is removed and its removal confirmed (`dest` exists by then: the mismatch is detectable only after the rename), and only then is failure reported.** Q4 says *durable*, and a cached read is not durability; without (1) a crash after teardown loses both copies. Without (3) a rejected secret-bearing artifact stays on disk under a name no record, no cleanup and no abort message can reach. **If the removal in (3) cannot be completed, that is itself fail-loud** — a `WienerdogError` naming the path — because reporting "preservation failed" while the bytes sit on disk is the false statement (3) exists to prevent. A failure reported under this row reports exactly as an unwritable directory does, and P0 carries it to the abort. The bytes a SUCCESS reports are **the bytes read back from the artifact**; every later use — P3's escape included — uses that verified value, never the input alias | — |
+| **P0** | The EP2 gate, as a whole | any preservation step leaves no verified artifact holding the bytes being judged | not a stated rule; enforced on one arm only | **THE RULE: the gate never returns a `{refuse:true}` verdict whose `preserved` record is empty. That state raises the Q18 abort instead.** An arm whose `redacted/` copy survives **and is verified per P0b** is NOT this state — that copy is on the record and the run continues, exactly as today | — |
+| **P0b** | Every preserving arm — **what a successful preservation MEANS** | the artifact does not hold the judged bytes: wrong bytes, a short write, or a file gone by the time anyone looks | **nothing is checked.** `quarantinePreserve` writes, renames, and returns the buffer it was HANDED (`validate.js:667-670`); no read-back. Measured, a corrupted write yields a non-empty record and no abort | **a preservation SUCCEEDS only if the artifact itself is read back and byte-compares equal to the judged bytes.** A mismatch, or an artifact that cannot be read, is a preservation FAILURE, reported exactly as an unwritable directory is, and P0 carries it to the abort. **What happens to the file that failure leaves behind is Table D's**, not this row's. The bytes a SUCCESS reports are **the bytes read back from the artifact**; every later use — P3's escape included — uses that verified value, never the input alias. **This row establishes byte-identity, NOT durability** — see "What this WP does not make durable" below Table D | — |
 | **P1** | Gate, hard-secret withhold arm (`hasHardFinding` true) | `quarantinePreserve(…,'withheld')` returns `null` | **refuses with `preserved: []`, does not throw**; the run continues, commits, and teardown destroys the sole copy | abort (P0) | `the withheld copy could not be saved; no redaction copy was attempted` |
 | **P2** | Gate, unscannable withhold arm — two causes: the delta record's `binary === true`, and bytes that are not lossless UTF-8 (`WP-ep2-unscannable-preserve`, Table U) | same step, same failure | **same as P1** | abort (P0) | same value as P1 — the redact arm is not entered on either cause |
 | **P3** | Gate, redact fall-through arm (`redactFellThrough`) | the `redacted/` preserve failed, or the scrub produced nothing, AND the withheld preserve failed | **aborts, unless a `redacted/` copy survives** (`validate.js:1042`) — but its recoverable escape compares `afterBytes` against the alias `quarantinePreserve` returned (`:1054`), not against the artifact, so a corrupt artifact counts as recovery | **the abort trigger is unchanged; the ESCAPE is re-grounded on P0b's verified value.** A `redacted/` copy that P0b verified still means recoverable and still does not abort; one that P0b rejected never existed as a success and its file is gone (P0b (3)), so this arm never sees it. **Consequence, stated because it decides P6:** a surviving `redacted/` copy ALWAYS recovers, so every reachable abort has none — `redactedName` is `null` on every abort this gate can raise | `neither the redaction copy nor the withheld copy could be saved` — **the only value this arm can produce** |
@@ -360,13 +372,44 @@ touches no USER state** — it does not revert, remove, commit, or write into th
 vault or the user's git index (ADR-0004; nothing under promotion was ever
 written to the vault, so there is nothing to undo). Everything P0b adds is
 confined to `state/quarantine/` and to files this gate itself just wrote there:
-two `fsync`s, one read-back, and — only on a failed verification — the removal of
-the artifact this call had just renamed into place. **The collision loop makes
-that precise rather than dangerous:** `-1`, `-2` suffixes exist because an
-EARLIER run may already hold `<date>-<stem>.md`, and the name this call removes
-is the one it itself renamed into, never a name it merely skipped over. A run
-holds the dream lock throughout, so no second dream is writing that directory
-while this one decides.
+one read-back, and — only on a failure — the removal of the one path this
+invocation owns (Table D). **The collision loop is why D1 forbids touching
+`dest` before the rename:** `-1`, `-2` suffixes exist because an EARLIER run may
+already hold `<date>-<stem>.md`, so a pre-rename `dest` can name a file this
+invocation never created. A run holds the dream lock throughout, so no second
+dream is writing that directory while this one decides.
+
+### Table D — canonical: artifact ownership and disposal
+
+Table P row **P0b** decides WHEN a preservation fails. This table decides **which
+file that failure leaves behind and who removes it** — a separate contract, with
+its own states, and the one the round-3 gate found scattered across P0b's prose.
+`quarantinePreserve` computes `tmp`, writes it, then renames it onto `dest`
+(`validate.js:666-670`); its `catch` removes `tmp` best-effort and swallows any
+failure to do so.
+
+| # | State — what this invocation OWNS | Reached when | Shipped behavior at `fc506110` | Required after this WP |
+|---|---|---|---|---|
+| **D0** | **nothing** | before the temp write is attempted (no `stateDir`, a non-Buffer payload, `mkdir`/`chmod` threw) | returns `null`; nothing was created | unchanged — report failure, remove nothing |
+| **D1** | **`tmp`** | the temp write was ATTEMPTED, and the rename has NOT completed — so a partial or complete secret-bearing temp file may exist | `catch` calls `rmSync(tmp, {force:true})` inside a `try {} catch {}` that **suppresses failure**, then returns `null` | remove `tmp` and **confirm it is absent**. `dest` is NOT owned in this state and **must not be touched**: the collision loop may have pointed `dest` at a candidate name, and an earlier run's artifact can sit there |
+| **D2** | **`dest`** | the rename COMPLETED — `tmp` no longer exists under that name | no disposal path exists at all: nothing after the rename can fail today | remove `dest` and **confirm it is absent**. `tmp` is gone by definition and must not be chased |
+| **D3** | — (any state) | the removal D1 or D2 requires cannot be completed | not reachable | **fail loud: a `WienerdogError` naming the path that could not be removed.** A suppressed failure is forbidden here — reporting "preservation failed" while secret-bearing bytes remain on disk under a name no preservation record, no cleanup pass and no abort message can reach is the false statement this table exists to prevent |
+| **D4** | — | a preservation reports failure (returns `null`) | `null` means only "something went wrong" | **`null` means the owned path is absent.** Every caller already treats `null` as "no artifact"; this row is what makes that true |
+
+**What this WP does not make durable, stated plainly rather than as an
+out-of-scope note.** Neither P0b's read-back nor D1/D2's removal is crash-durable:
+a read can be served from cache before the bytes and the directory entry are on
+the medium, and an unlink is not durable until the containing directory is
+flushed. That is the whole of `WP-quarantine-preserve-durability` (Draft), which
+`depends_on` this WP and owns the sync protocol, the recursively-created-directory
+entry problem, the platform's silent `F_FULLFSYNC` → `F_BARRIERFSYNC` → `fsync`
+fallback, and the honest guarantee sentence. **This WP does not weaken Q4 and
+does not widen that exposure:** the product contains no `fsync` today
+(`grep -rn 'fsync\|fdatasync' src/ tests/` returns nothing at `fc506110`), so the
+crash window is pre-existing and unchanged, while this WP strictly *reduces* it —
+more runs now abort, and an abort retains the workspace instead of destroying the
+sole copy. What is new is only that a preservation can no longer report success
+over bytes it never verified.
 
 ### Mirrored Surface Checklist
 
@@ -390,8 +433,9 @@ on the spot.
       `catch` claim.
 - [ ] **Operative prose** — the "Exact contracts" discriminant paragraph and its
       note that a `refuse` verdict can no longer carry an empty `preserved`; the
-      three "does not change" paragraphs directly under Table P; the two
-      byte-exact amendment clauses under Implementation notes.
+      three "does not change" paragraphs directly under Table P; the "what this
+      WP does not make durable" paragraph under Table D; the two byte-exact
+      amendment clauses under Implementation notes.
 - [ ] **Mirrors outside this document (all inside the Deliverables boundary)** —
       the gate's `@throws` JSDoc and `quarantinePreserve`'s `@returns` in
       `validate.js`, the promote-`catch` comment in `dream.js` (byte-exact,
@@ -419,7 +463,7 @@ on the spot.
   each at the end of the row's first content cell:
 
   ```text
-  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. The byte-identity CONDITION this row decides is unchanged — Table P generalises it rather than replacing it, and extends what counts as a durable copy to a copy this gate has made durable and verified — and this clause restates none of Table P's members.**
+  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. The byte-identity CONDITION this row decides is unchanged — Table P generalises it rather than replacing it, and row P0b tightens what counts as a copy at all: one this gate has read back and byte-compared — and this clause restates none of Table P's members.**
   ```
 
   ```text
@@ -437,7 +481,7 @@ on the spot.
   value to be present *and the other values absent*. A third value that is a
   substring of another would let that shape pass on the wrong message.
 - The `recoverable` escape in P3 must survive, now grounded on P0b: an arm whose
-  `redacted/` copy the artifact check accepted has a durable artifact, so P0 is
+  `redacted/` copy the artifact check accepted holds the judged bytes, so P0 is
   satisfied and there is nothing to abort.
 - **The `src/cli/dream.js` comment is spec-owned prose, and this is its text.**
   Everything else about test and code design is the implementer's; this one
@@ -449,32 +493,44 @@ on the spot.
         // ROW G5's SECOND teardown exception, and it is the only-copy invariant
         // (`WP-dream-promote-module`, Table Q row Q4). Under promotion the
         // destruction risk moved from the vault to the WORKSPACE rather than
-        // vanishing: whenever a preservation step leaves no verified durable
-        // artifact holding the bytes the gate judged, the workspace holds the
-        // sole surviving copy of what the brain wrote, and removing it is the
-        // data loss the abort exists to refuse. The trigger class is Table P of
+        // vanishing: whenever a preservation step leaves no verified artifact
+        // holding the bytes the gate judged, the workspace holds the sole
+        // surviving copy of what the brain wrote, and removing it is the data
+        // loss the abort exists to refuse. The trigger class is Table P of
         // `WP-preservation-abort-widening`; this catch names no member of it,
         // and inspects no error, so it holds for every member. The run fails
         // loud with the tree intact.
   ```
 
-- **What P0b establishes, and the one window it leaves — grounded, not waved
-  away.** `fsync` on the file and on the containing directory plus a read-back
-  establishes that a durable artifact holds the judged bytes at the moment
-  preservation reports success. It does **not** detect an artifact mutated or
-  removed between that moment and teardown. Closing that would need either a
-  re-verification at teardown — which would move `src/cli/dream.js` from
-  comment-only to code and widen this boundary — or an OS guarantee the design
-  does not have. **It is a named, already-accepted residual rather than a new
-  one:** the only actor that can reach `state/quarantine/` (0700, user-owned)
+- **THE CIRCUIT-BREAKER FIRED, AND THIS SPLIT IS WHAT IT BOUGHT (2026-09-02).**
+  Two consecutive design-gate rounds landed on preservation durability — round 2
+  "no durability", round 3 "durability protocol incomplete" — so the next move was
+  a design move, not a third patch: the ownership contract that IS this WP's was
+  pulled into **Table D**, and durability was extracted whole into
+  `WP-quarantine-preserve-durability` (Draft). The round records carry the rest.
+  **Why extracted rather than tabled here:** CLAUDE.md's own split rule is *"if
+  you can't write literal verification commands for it, split it"*, and crash
+  durability has none — a crash cannot be staged inside `npm test`, so the only
+  cheap evidence is a call-order assertion, which round 3 itself showed proves
+  nothing (libuv degrades `F_FULLFSYNC` → `F_BARRIERFSYNC` → `fsync` silently, so
+  even a successful call does not establish the guarantee). Every other row in
+  both tables has real black-box evidence. Two rounds each surfaced a durability
+  sub-property the previous had not enumerated, which is the signature of a
+  contract whose surface is not yet known — and an unbounded surface inside an S
+  package is what the circuit-breaker exists to stop.
+- **The one window that remains even after verification, grounded rather than
+  waved away.** P0b's read-back does not detect an artifact mutated or removed
+  between that read and teardown. Closing it would need a re-verification at
+  teardown, which would move `src/cli/dream.js` from comment-only to code and
+  widen this boundary. **It is a named, already-accepted residual rather than a
+  new one:** the only actor that can reach `state/quarantine/` (0700, user-owned)
   between those two points is arbitrary same-user native code, which
   `docs/THREAT-MODEL.md:425` places outside the trust boundary in terms —
   *"Any code running as the same OS user can already read the 0600 tokens and
   rewrite the 0600 grant store; that is the same file-permission trust boundary
   as T4, deliberately not raised above it in v1."* That is the **A12** residual
   the threat model carries throughout, and this WP inherits it without widening
-  it. Nothing here weakens Q4: Q4 asks for a durable byte-identical artifact,
-  and after this WP one is established where before none was.
+  it.
 - Test design, fixture shapes and the mechanics of each required RED are the
   implementer's (`docs/runbooks/spec-authoring.md`). This spec states the
   observable contracts and what evidence must exist; it names no test.
@@ -506,21 +562,26 @@ on the spot.
 
 ## Acceptance criteria
 
-- [ ] **P0b durability**: a preservation reports success only after the written
-      file and the containing quarantine directory have both been made durable,
-      in that order relative to the rename.
 - [ ] **P0b verification**: a preservation whose artifact does not hold the
       judged bytes, and one whose artifact cannot be read back, are both reported
       as FAILURES.
-- [ ] **P0b disposal**: after either failure above, **no artifact remains** at
-      the destination — evidence must show the quarantine tree holds no file the
-      preservation record does not name, on both the mismatch and the read-error
-      path. If the removal itself cannot be completed, the run fails loud with a
-      `WienerdogError` naming the path rather than reporting a plain preservation
-      failure.
 - [ ] **P0b's reported bytes**: the bytes a successful preservation reports are
       the artifact's, not the input alias, and P3's recoverable escape decides on
       that value.
+- [ ] **Table D, state D1** (write attempted, rename not completed — a failing
+      write, and a failing rename): `tmp` is removed and confirmed absent, and
+      `dest` is **not touched**. Evidence must include the case where a
+      collision candidate already occupies `dest`, showing that file survives
+      byte-unchanged.
+- [ ] **Table D, state D2** (rename completed, verification then failed):
+      `dest` is removed and confirmed absent, on both the mismatch and the
+      read-error path.
+- [ ] **Table D, D3**: a removal that cannot be completed raises a
+      `WienerdogError` naming the path, rather than returning a preservation
+      failure. No cleanup failure is suppressed.
+- [ ] **Table D, D4**, as the property that ties D0–D2 together: after **any**
+      preservation failure, the quarantine tree holds no file the preservation
+      record does not name — no `.tmp-*` residue and no rejected artifact.
 - [ ] **P0** holds: the EP2 gate returns no `{refuse:true}` verdict with an empty
       `preserved` record. Driven on P1 (hard secret) and on **both** of P2's
       causes (`record.binary === true`; bytes that are not lossless UTF-8), with
@@ -611,8 +672,10 @@ diff -u /tmp/wd-catch-expected.txt /tmp/wd-catch-actual.txt
   1. The trigger cannot be silently narrowed back to the redact fall-through.
   2. P4's refuse-branch check cannot be removed unnoticed.
   3. P6's two active values still discriminate.
-  4. P0b's durability step and its read-back are each load-bearing.
-  5. P0b's rejected-artifact disposal is load-bearing.
+  4. P0b's read-back is load-bearing.
+  5. Table D's disposal is load-bearing in **both** owned states — the
+     pre-rename `tmp` and the post-rename `dest` — and neither cleanup failure
+     can be suppressed.
   How each counterfactual tree is produced is the implementer's.
 
 ## Out of scope (do NOT do these)
@@ -622,6 +685,13 @@ diff -u /tmp/wd-catch-expected.txt /tmp/wd-catch-actual.txt
   `WP-quarantine-banner-location`, which `depends_on` this WP.
 - Any change to Q18's other three fields, to Q4 itself, or to any row of either
   `Done` spec other than G5, Q18 and B3b.
+- **Making preservation crash-durable** — the sync protocol, the
+  recursively-created-directory entry, the platform's silent `F_FULLFSYNC`
+  fallback, the honest guarantee sentence, and a directory sync after an unlink.
+  All of it is `WP-quarantine-preserve-durability` (Draft, `depends_on` this WP),
+  extracted under the circuit-breaker; the paragraph under Table D states what
+  this WP therefore does and does not establish, and why the exposure is
+  unchanged rather than widened.
 - Re-verifying a preserved artifact at teardown. It would move
   `src/cli/dream.js` from comment-only to code and widen this boundary, and the
   window it would close is the A12 same-user-native residual the threat model
