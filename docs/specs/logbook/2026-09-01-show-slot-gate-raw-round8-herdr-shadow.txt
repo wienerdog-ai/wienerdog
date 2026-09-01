@@ -1,0 +1,26 @@
+SHADOW ROUND 8 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ d29f84e8,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention — No ship yet: the committed canonical module extracts to 5887/b770de2e1030…, parses with nine shapes and the literal shape (4), and the canonical/interpolation/digest-tamper matrix behaves correctly, but
+the Round 7 recipe removal left Branch B with dangling mandatory edit references.
+
+FINDING 1: Branch B is no longer a complete executable rewrite after the canonical-block conversion.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md
+Lines: 80-84, 382, 653
+Confidence: 0.99
+The Branch B instructions say to delete the entire module section while keeping the text of EDIT 1 and EDIT 2, but those named edits no longer exist anywhere in the current spec; rg finds only the two stale references at lines 83
+and 653. Line 653 likewise says the C2 rewrite is EDIT 1 in Exact contracts, and the Deliverables row at line 382 still describes the retired header-plus-verbatim-block-plus-two-edits recipe even though lines 427-429 and 930-958
+declare that there is no recipe and that the canonical block is the sole artifact. If the owner chooses Branch B, an implementer following the enumerated rewrite cannot identify the exact C1/C2 text that must survive deletion of
+the module section. That can leave the in-place RUN_VALUE JSDoc or shape-(4) edit underspecified and defeats the claim that Branch B is complete, including criterion 6 under that branch.
+Recommendation: replace the EDIT 1/EDIT 2 references in Branch B with explicit, self-contained in-place replacements for the RUN_VALUE JSDoc and shape-(4) comment/row, located outside the section Branch B deletes. Update line 653
+to point to the corresponding text in the canonical module block, and update line 382 to describe byte-for-byte extraction of that block rather than the retired transformation recipe. Then repeat the Branch B keyword and criterion-
+numbering walk.
+
+SCOPE OBJECTIONS
+None.
+
+
+› Ask Codex to do anything
+
+gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/90e109ab-8b36-48e7-aaf5-291a21744139/scratchpad/wt-showslot-review

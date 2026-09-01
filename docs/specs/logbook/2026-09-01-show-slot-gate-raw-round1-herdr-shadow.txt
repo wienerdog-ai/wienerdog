@@ -1,0 +1,50 @@
+SHADOW ROUND 1 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 8652e8b9;
+one approved escape: npm test on the guard file, harness tmpdir). Captured
+verbatim from the pane after a reprint request; the review below is the
+reviewer's full text.
+
+VERDICT: needs-attention — no ship. C1's replacement rule contradicts an unchanged member of the pinned set, and the prescribed evidence cannot distinguish the required spelled literal from the explicitly rejected interpolated form.
+
+FINDING 1 — The three-way slot partition is already falsified by shape (9).
+
+Affected files and lines:
+
+- docs/specs/WP-show-slot-own-value-kind.md:317-321, 331-339, 370-381, 520-524
+- tests/unit/dream-pipeline.test.js:198-200
+- src/cli/dream.js:259-263
+
+Confidence: 0.99
+
+C1 says the canonical W1(c) partition becomes exhaustive: COMPUTED -> own, carried-and-varying -> FREE, and carried-and-fixed-by-the-run -> LITERAL. Shape (9) is a direct counterexample. Its message slot remains FREE/ANY in KNOWN_CALLS, while production always supplies the fixed literal "wienerdog dream". The spec then explicitly declares tightening that slot out of scope because it is consumed as -m's value rather than parsed as an option. Position explains why shape (9) is not an index-write exploit, but it does not make the fixed value "genuinely varying" and therefore does not satisfy the rule C1 tells W1(c) to state.
+
+Following C1 literally expands the WP beyond its permitted one-slot edit; following the Deliverables and Out-of-scope sections leaves the canonical rule and executable copy inconsistent on merge. That is the exact drift class this WP claims to close, and the Mirrored Surface Checklist does not register the shape (9) contradiction.
+
+Recommendation: either scope the new W1(c) rule to carried tokens in option positions (for example: computed values are own; a carried option-position token must be fixed and literal; other carried slots remain FREE), or bring every fixed carried slot, including shape (9)'s message, into this WP and update the deliverables, mirrors, and proofs. Do not ship the current universal fixed-versus-varying partition alongside the shape (9) exclusion.
+
+FINDING 2 — The RED/GREEN matrix cannot prove the source-level literal decision.
+
+Affected files and lines:
+
+- docs/specs/WP-show-slot-own-value-kind.md:275-284, 317-320, 393-401, 419-445, 461-499
+- tests/unit/dream-pipeline.test.js:30, 190-195
+
+Confidence: 0.97
+
+The required distinction is not merely literal matching at runtime; C1 expressly requires the source to spell "HEAD:reports/warnings.md" and rejects interpolation from WARNINGS_REL so a future relocation makes the guard red. But replacing the required entry with ['show', HEAD:${WARNINGS_REL}] produces the same runtime token today. The two-token exploit rejection, legitimate-show acceptance, rev-parse acceptance, whole index test, and ANY reversion mutation all behave identically. The claim sweep only looks for "'show', ANY" and "show «HEAD", so it also goes green for the prohibited interpolation. WARNINGS_REL is already imported in this test file, making this false-green implementation trivial.
+
+Acceptance criterion 1 states the right requirement, but none of the output-producing verification steps discriminates it. The mutation diff proves that ANY was applied; it does not prove that the restored baseline was source-independent of WARNINGS_REL. This defeats the owner-visible relocation tripwire that motivates the decision.
+
+Recommendation: add a required positive source-form check, with pasted output, that matches exactly one anchored KNOWN_CALLS line containing the quoted literal and rejects a template expression in that slot. Also include the interpolation form as an applied negative mutation: it should fail the new source-form check even though the runtime suite remains green. Keep the existing two-token ANY mutation because it correctly proves the runtime narrowing and arity discipline.
+
+OTHER FOCUS-AREA RESULTS
+
+C2: no additional finding. The actual producing set has exactly four members: hash-object -w --stdin, rev-parse HEAD, write-tree, and commit-tree. Each returns one object name as its logical stdout, and the recorder trims the line terminator before membership. show is excluded because it returns vault-file bytes; ls-tree is excluded because it returns a composite line containing a user-controlled path. On the current four-marker set, the restatement does not widen membership. The planned follow-on correctly owns the missing canonical slot-side representation.
+
+C3: no additional finding. b19121bb is an ancestor of 53b1519b and is the commit that changed the recorder from every successful pinned call to the four produces:true shapes. Requiring W1(c) to retain a cause-bearing closure record and the logbook paragraph to become SHA-pinned and past-tense honors the stated "retire with cause, never delete" discipline.
+
+Mirror sweep and proof mechanics: the per-pattern flattened sweep finds both current "show «HEAD" occurrences and the stale C1/C3 phrases inside the 42 KB W1(c) line; one-pattern-per-pass avoids the documented context-swallowing failure. The two-token show mutation is arity-matched and exercises the vulnerable slot, and the accept-side checks prevent a reject-everything false green. The --test-name-pattern warning is accurate: running the impossible pattern still executed and passed all 43 tests with 0 skipped.
+
+SCOPE OBJECTIONS
+
+- docs/specs/WP-index-guard-residuals.md:7,30-42 is changed by this checkout, but docs/specs/WP-show-slot-own-value-kind.md:262-271 does not list it as a deliverable and line 361 explicitly registers it as a non-move. The prescribed boundary command exits 1 and reports that file outside the Deliverables table. Add the dependency/handoff edit to this WP's Deliverables table or move it to an authorized separate change. Per the review prompt's boundary ruling, this objection is not counted toward the verdict.

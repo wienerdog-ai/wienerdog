@@ -1,0 +1,15 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship yet: the extraction, digest, exports, and three-state test matrix pass, but round 7 left Branch B referencing definitions it deleted.
+
+Findings:
+- [medium] Branch B depends on deleted EDIT 1/EDIT 2 definitions (docs/specs/WP-show-slot-own-value-kind.md:80-84)
+  Branch B instructs the implementer to delete the entire canonical-module section while retaining “the text of EDIT 1 and EDIT 2.” Commit 840ba1be removed both labeled edit blocks when it introduced the canonical module; only orphan references remain here and at line 653. If Branch B is selected, there is therefore no identified byte-exact text to retain, despite this branch being advertised as a complete rewrite. The implementer must reconstruct or guess the C1/C2 fragments, risking loss of the MINTED-removal wording and making criterion 6 non-mechanical.
+  Recommendation: Restore explicit, named Branch-B EDIT 1 and EDIT 2 fragments outside the section Branch B deletes, or replace both orphan references with precise canonical-block ranges and state exactly which text is copied into the test file.
+
+Next steps:
+- Repair the two orphan EDIT references, then re-run the narrow extraction and matrix confirmation.
+

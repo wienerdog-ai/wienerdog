@@ -1,0 +1,129 @@
+---
+title: Design-gate round record — WP-show-slot-own-value-kind
+date: 2026-09-01
+related_wps: [WP-show-slot-own-value-kind]
+---
+
+# 2026-09-01 — design-gate rounds, WP-show-slot-own-value-kind
+
+Doc under review: `docs/specs/WP-show-slot-own-value-kind.md`, matured from
+the 2026-08-31 handover stub by wd-architect on
+`docs/wp-show-slot-own-value-kind` (base `5d31a7dc`), tip `29b1d19b` at round
+zero. Companion touch: `docs/specs/WP-index-guard-residuals.md` gained the
+dependency on this package (`29b1d19b`).
+
+**STOP CRITERION (pinned before round 1):** the loop closes when an external
+round returns no material product finding on either channel;
+machinery/wording findings at that point are fixed within the frozen surface
+or accepted as named residuals. The owner ruling this spec parks (the C1
+slot-kind change + the home of the W1(c) amendment, both in the spec's
+Dispatch precondition) blocks `dispatch`, not the loop.
+
+**Channels:** gate = Codex plugin; shadow = herdr-spawned hermetic Codex
+(`CODEX_HOME=~/.codex-review-home`, read-only). Raw outputs are committed
+BEFORE adjudication, one file per channel per round
+(`2026-09-01-show-slot-gate-raw-round<N>-<channel>.txt`).
+
+## Round zero (`e35c5260` → fixes in `b9bd5f66`)
+
+Template conformance (clean-context executor): **CONFORMANT** (two cosmetic
+notes, both taken as offered). Coherence pass: every runnable claim
+reproduced — all ~30 file:line citations byte-exact including the four quoted
+fragments inside the 42 KB W1(c) cell, the `grep -rn "'show'" src/` pair, the
+`b19121bb`→`53b1519b` ancestry, the index-corruption exploit and its
+staged-content-destroying recovery, `classify` returning `null` on the
+two-token vector today, the `commit-tree -m` negative, the
+`--test-name-pattern` 43/43 non-filter, and the claim sweep (12 hits, all
+accounted). **9 findings (4 B, 5 C), all FIX, applied in `b9bd5f66`:**
+
+1. **B** — W1(c)'s FREE-slot RULE sentence (*"a slot holding data the run
+   merely carries … is FREE"*) is falsified by C1 and was registered nowhere;
+   now the FIRST C1 checklist entry, C1 restated as amending the partition
+   two-way → three-way (COMPUTED → own; carried-and-varying → FREE;
+   carried-and-fixed → literal), sweep pattern `merely carries` added.
+2. **B** — Deliverables "three clauses move" vs four checklist W1(c) surfaces:
+   the *"REPAIR DOES NOT INSPECT THE TOKEN"* clause decided a registered
+   NON-move (PRODUCED is loose, not false; its sharpening is
+   `WP-index-guard-residuals` item 2's deliverable — hand-off recorded in both
+   specs); Deliverables no longer states a count.
+3. **B** — criterion 4's three REDs unsatisfiable for the two prose-only
+   fixes; narrowed to C1 (RED with slot reverted to `ANY`, GREEN with the
+   literal, accept side alive both ways); C2/C3 carry the whole-cell re-read,
+   any red for them named synthetic.
+4. **B** — the shape (3) negative measurement was true only for the MODE
+   slot; the PATH slot accepts an option string as a literal filename
+   (exit 0, private index, no file written — conclusion survives, evidence
+   restated per-slot; the original vector's `Invalid path` confound named).
+5. **C** — three quotations re-attributed from "W1(c)" to the Done spec's
+   Mirrored Surface Checklist (`:665-677`). 6. **C** — `:1024`→`:1032`.
+   7. **C** — the sweep's mandatory-context window swallowed an adjacent hit
+   (5-of-6) and `{0,n}` bounds die on the ugrep shim; rebuilt as one
+   fixed-literal `grep -oF` pass per pattern (18 hits, all accounted).
+   8. **C** — logbook range unified on `:409-426`. 9. **C** — ADR-0031
+   trigger restated (ii)+(vii); (vi) does not fire.
+
+## Rounds
+
+| Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
+|-------|--------------------------|--------------------------|--------------------------|
+| 1 (`8652e8b9`) | needs-attention / needs-attention | `…round1-codex-plugin.txt` (`424ef73f`), `…round1-herdr-shadow.txt` (`69d4d375`) | Converged (plugin F1 + shadow F1, conf 0.99): C1's fixed-vs-varying partition falsified by shape (9)'s fixed-but-FREE `-m` slot — the amended rule and `KNOWN_CALLS` would drift ON MERGE, defect 3 recreated by its own fix. Resolved by scoping the partition's carried half BY POSITION (three clauses: computed → own; carried in an option position → fixed and literal; other carried slots → FREE, fixed ones literal-pinnable as optional hardening), with "option position" stated as a design-time predicate, never a match-time test, and shape (9) reconciled as clause (3) applying rather than an exception. Plugin-only: the present-tense "stay `ANY`" mechanism claim (`2026-08-31-index-refresh…:368-372`) falsified by C1 and unreachable by any sweep pattern — SHA-scoped to past tense, slot-kind spelling dropped (which also makes its own deference sentence true), registered, sweep pattern added. Shadow-only: no verification step discriminated the spelled literal from the forbidden `HEAD:${WARNINGS_REL}` interpolation (runtime-identical; the relocation tripwire unprovable) — a three-state source-form count check added (absent → RED, literal → GREEN, interpolated → runtime green but source-form RED), plus the interpolation as a second required applied mutation. Shadow scope objection (the `WP-index-guard-residuals.md` edit fails this spec's boundary command) ROUTED, not counted: spec-family docs branch; the boundary gate targets the implementation diff — a clarifying clause added beside the boundary command. All three findings FIX, applied in `6c2bcee2`. R1-A is HEAVY (canonical contract text) → full fresh round 2. |
+
+| 2 (`85d58366`) | needs-attention / needs-attention | `…round2-codex-plugin.txt` (`966b0aad`), `…round2-herdr-shadow.txt` (`6e552f6f`) | Both channels verified R1-A and R1-B genuinely fixed; every round-2 finding targets R1-C's machinery or its neighbors. **Circuit-breaker (ADR-0031): source-form proof took findings two consecutive rounds** (plugin: `grep -c` exits 1 on the compliant zero-count, inverting the gate; shadow conf 1.00: the spec was INTERNALLY IMPOSSIBLE — its own Exact-contracts comment carried the spelling grep #2 required to occur zero times — and spoofable by comment-plus-multiline-concatenation, executed 1/0/0) — extracted, not patched: one canonical exit-coded node script scoped to the `KNOWN_CALLS` initializer, verified in six states (absent/single-quoted/double-quoted/interpolated/concatenated-with-decoy/duplicate-shape), concatenation added as a third required mutation, forbidden spelling removed from the required comment. Plugin high: the R1-B pin `5c5d082` does not resolve — corrected to `c853245b` (verified by diff content, not subject); resolvability checks added; the four other dead occurrences determined by offset: one INSIDE W1(c) (in scope, retire-with-cause), three in row W5 (out of boundary → named non-move + required Discovered-issues PR entry); the logbook's own occurrence found at `:356` outside both rewritten passages → its own narrowly scoped deliverable edit (a dead pin voids exemption (iii)); `5c5d082` is now a sweep pattern (reports exactly the five). Shadow conf 0.98: clause (1)'s "COMPUTED" overlapped clause (3) (the run computes the dynamic `-m` message `:1041` and the mode `:238-239`, both correctly FREE) — clause (1) re-anchored on C2's exact membership predicate, every one of the nine shapes' slots adjudicated by name in C1, the "computed → own" shorthand banned from W1(c). Shadow scope objection ROUTED: `warnings.js:63-66` JSDoc falsified by the deliberate retyping — registered KNOWN-FALSIFIED-BY-DESIGN (the retyping IS the tripwire), src/ frozen, JSDoc narrowing queued to the follow-up batch (owner to see with the outcome). All FIX, applied in `d56be3ea`. S2-1 is HEAVY → full round 3. |
+
+| 3 (`2fcc3b7a`) | needs-attention / needs-attention | `…round3-codex-plugin.txt` (`7b75157a`), `…round3-herdr-shadow.txt` (`45a058f4`) | Both channels verified R2-2 (SHA corrections and dead-SHA accounting), R2-3 (per-slot adjudication against the real tree) and R2-4 (KNOWN-FALSIFIED-BY-DESIGN registration) genuinely fixed; both re-derived the six-state matrix. ONE converged finding, the source-form checker's third consecutive round: the text-location approach certifies the wrong thing — executed evasions: compliant decoy initializer in a block comment before the real one (plugin; `indexOf` before stripping), duplicate show shape with a double-quoted verb invisible to the single-quote regex, and a `proof:` decoy property certified while the real `args` carried the interpolation (shadow, conf 1.0). **Closed as a DESIGN change per the runbook's same-kind rule: the checker enumerated bad forms in JavaScript's expression grammar — not ours, so unclosable, the repo's central theorem one level up. Inverted to enumerating our own good**: assertion (0) `const KNOWN_CALLS` occurs exactly once in raw bytes (lexer-independent, what makes fail-closed sound — the architect's correction to the adjudicator's brief, which had wrongly claimed a decoy cannot match the digest); a ~50-line lexer over JS's LEXICAL grammar (closable, unlike the expression grammar) with two projections (locate vs hash); bracket-depth span extraction; whitespace-collapsed SHA-256 against the pinned digest `932b5425…`, derived from the tree with exactly the `194c194` substitution and quoted in the spec for eyeball audit. Twelve-state matrix observed from the committed spec's own extracted script (canonical + re-indentation pass; all three R3 evasions plus string-decoy and reorder red). Consequences recorded in-spec: double-quoted literal now REDS (byte-canonical contract; supersedes round 2's claim, reason written where the old claim was), third-copy analysis (a digest is not a copy), threat-model boundary, same-commit re-pin rule for future set edits; precedent cited as WP-157's app-tree digest (verified) after the adjudicator's PR-#124 citation could not be verified in the lessons file. All FIX, applied in `e17527bb`. Machinery-only round (no product finding on either channel) — round 4 runs as the confirmation round on the new mechanism per house practice. |
+
+| 4 (`63c45023`) | needs-attention / needs-attention | `…round4-codex-plugin.txt` (`183a9c03`), `…round4-herdr-shadow.txt` (`f9ec24c7`) | Confirmation round on the digest mechanism: both channels reproduced the twelve-state matrix, the shadow independently re-derived the pinned digest to the same value, SHA distribution and the whole spec's coherence confirmed; the shadow constructed a regex-literal lexer evasion and correctly filed it OUTSIDE the verdict under the spec's threat-model sentence (the sentence paid for itself). ONE converged finding (shadow conf 0.99): **the tripwire was one-shot** — the checker lived only as a /tmp heredoc in this WP's verification, the digest existed nowhere else, and the claimed same-commit re-pin rule had no surface a future editor would meet, so a DRY rewrite to interpolation would ship green forever. Adjudicated: the enforced design (reviewers' option a) is embodied in the spec — the checker moves INTO the guard file as a committed test reading its own source (CommonJS verified, `__filename`), the digest constant declared BESIDE `KNOWN_CALLS` so the re-pin is physically in the same diff hunk, W1(c) carries the once-only + re-pin + digest registration — and the permanent-machinery ratification is parked as the THIRD owner question in the Dispatch precondition, with the strip-down-to-one-time-evidence fallback pre-written (the one unavailable outcome: claiming future enforcement with no mechanism). Two measured collisions caught by the architect before they shipped: the digest constant's own name and the checker's needle string both trip assertion (0) — fixed with an identifier-boundary lookahead in counter AND locator, and a split-string needle, both registered as live traps in Implementation notes. Span/digest interaction verified (sibling constant sits outside the hashed span, before or after — digest unchanged). Durable arm shown alive in four observed states, including the future-editor case (interpolation with digest unchanged → suite red with the re-pin message). All FIX, applied in `42a034b3`. Round 5 runs as the fresh confirmation on both channels. |
+
+| 5 (`fb04fb7e`) | needs-attention / needs-attention | `…round5-codex-plugin.txt` (`6b7edfb1`), `…round5-herdr-shadow.txt` (`42a8e0f8`) | Both channels independently reproduced the durable matrix and the earlier states; zero scope objections; NO product finding on either channel. Five findings, four of them coherence defects from the round-4 restructuring: criteria 5 vs 11–12 demanded the same suite green AND red under the interpolation mutation (fixed by separating the arms' evidence — the three index tests named individually for the runtime arm, the source-form test's re-pin failure for the source arm, with the full-suite red stated as the tripwire WORKING); the sweep's expected hits contradicted the mandatory W1(c) digest registration (fixed per-pattern: constant name → guard file + W1(c); digest prefix → guard file only; W1(c) amended to name the constant without quoting its value, keeping the bytes single-homed); the owner-rejection fallback was not executable (shadow conf 1.00's complete enumeration + the stale "two things" preamble — rewritten as a fully enumerated Branch B with the round-3 /tmp form as its concrete one-time procedure; the architect's own walk found two further surviving references beyond the punch list); the matrix count had gone stale twice (dropped the count, named the table — C3's own ruling applied to this spec). One real checker finding (shadow conf 0.99, executed): the round-4 ASCII boundary lookahead leaked — `const KNOWN_CALLSé = [canonical decoy]` passed both counter and locator while a destructured binding carried the real interpolated set. Fixed in the closable direction: the needle anchors on OUR declaration's syntax (`'const '+'KNOWN_CALLS'` + `\s*=\s*\[`, fresh RegExp per call, identical in counter and locator, match ends on the bracket), the lookahead deleted as subsumed; three new observed evasion states (Unicode suffix, escaped suffix, destructured-only) all fail; the :835-838 claim restated onto what is ours to enforce (our shipped declaration occurs once and is the thing hashed) rather than a claim about JavaScript's identifier grammar. All FIX, applied in `0f0cadb2`. The checker is shipped deliverable content since round 4 → when-in-doubt-HEAVY → round 6 runs as the closing confirmation. |
+
+| 6 (`9e7351e7`) | needs-attention / needs-attention | `…round6-codex-plugin.txt` (`c5c982fa`), `…round6-herdr-shadow.txt` (`a146cf91`) | Plugin: one finding, Branch-B residue only (the :590-595 uniqueness bullet and :911-947 re-pin paragraphs surviving the fallback's rewrite list). Shadow: three — the decisive one executed at conf 0.99: a BLOCK-SCOPED canonical decoy (`{ const KNOWN_CALLS = [canonical]; }`) beside a destructured interpolated binding defeats the syntax anchor with an anchor count of exactly 1, GREEN end-to-end, disproving the spec's absolute claims; plus two evidence-staleness finds (the un-split-needle row had silently become GREEN — the self-collision vanished with the syntax anchor — and positional "last four rows" wording misattributed) and the fuller Branch-B enumeration. **Design ruling: rounds 3–6 each broke the checker's LOCATING logic a new way — any checker that must find the set inside a JavaScript file enumerates the ways JS can hide it, an alien grammar that never closes. Adopted the fixed point: `KNOWN_CALLS` (with its sentinels, which it references) extracts to its own module `tests/unit/dream-pipeline.known-calls.js`, and the checker hashes the ENTIRE file** — nothing to locate, the whole evasion class unconstructible (a decoy in the module is hashed; a decoy in the test file is not what is hashed), machinery shrunk from ~55 lines of lexer + assertion (0) + anchor to about a dozen (read, collapse, SHA-256, compare), one `KNOWN_CALLS_MODULE` constant serving both the require and the read so the two paths cannot drift. New pin `035ea394…` derived from the 69-line verbatim block move (+2 byte-exact edits) and independently re-derived; old pin declared dead, not an alternative. Costs stated plainly: the two-file re-pin (the module cannot hold its own digest), and the module's comments being fixed by the spec (the comment-typo FAIL row demonstrates it). Matrix rebuilt smaller, all states observed as a real node --test pair. Both branch walks ran by keyword and numbering; Branch B gained the no-module-extraction entry and carries round 6's finding as a named hole of its one-time procedure; assertion (0) and the disproved claims deleted in BOTH branches (measured false — no ruling revives them). All FIX, applied in `6e8d0074`. Structural deliverable change → round 7 is the closing confirmation. |
+
+| 7 (`68d0c014`) | needs-attention / needs-attention | `…round7-codex-plugin.txt` (`085583bf`), `…round7-herdr-shadow.txt` (`38ea8c4f`) | **The DESIGN passed its closing checks on both channels**: the require/read coupling cannot be made to diverge in-design, the block-scope decoy is structurally unconstructible under whole-module hashing, the one whitespace-equivalence quirk (moved line-comment boundary) is caught by the runtime guard tests, the dependency edit correctly ordered. What failed was ARTIFACT EXACTNESS, by measurement: **both channels independently reconstructed the module recipe to the SAME 5,697 chars / `40a9b138…` — agreeing with each other against the pinned 5,822 / `035ea394…`** (the shadow also hashed the recipe's second possible reading: 5,941 / `3f5ee889…`, also not the pin). Root cause found by the architect, not guessed: their derivation kept a JSDoc paragraph's closing two lines the recipe's prose said to replace — normalizing to exactly 125 chars, the full discrepancy. The lesson is structural: **a digest cannot survive two readings of one instruction** — the transformational recipe and both competing shape-(4) blocks are replaced by ONE canonical module block delimited in the spec, with the derivation an EXTRACTION (awk over `git show HEAD:` — committed bytes, never a working buffer) that anyone can paste; new pin `b770de2e…` at all four surfaces; both dead digests recorded with their causes. Plugin's second finding (the module header naming the digest constant, tripping the sweep's own expected-hits contract) fixed by pointing at "the digest constant in its consumer". Shadow's second (conf 1.0): Branch B could not meet criterion 6 — EDIT 1's historical sentence carried the word MINTED back into the test file — fixed by removing the word in BOTH branches (cites `b19121bb` instead); the Current-state tense marker added to Branch B's list. The Branch B re-walk then caught its third summary-invisible escape: **dispatch question 3 itself**, which kept asserting the enforced design Branch B deletes — now a Branch-B rewrite entry. Matrix re-observed from artifacts extracted out of the committed spec. All FIX, applied in `840ba1be`. Round 8 is the narrow closing confirmation — design settled, artifact only. |
+
+| 8 (`d29f84e8`) | needs-attention / needs-attention | `…round8-codex-plugin.txt` (`d13a1870`), `…round8-herdr-shadow.txt` (`5843b680`) | The narrow closing confirmation. Both channels: extraction reproduced the pin against the committed spec, the module parses and exports nine shapes with the literal shape (4), the canonical/interpolation/digest-tamper matrix behaves, sweep expected hits stand, criterion 6 satisfiable, Q3's Branch-B entry present; zero scope objections. ONE converged finding (shadow conf 0.99), wording residue of the round-7 conversion: three surfaces still referenced the deleted EDIT 1/EDIT 2 labels (Branch B's "keep the text of", the `:653` checklist pointer, the Deliverables row still describing the retired recipe). Fixed in `f8a83e4b`: Branch B now CARRIES both texts inline in the Dispatch precondition — outside everything it deletes — with the two-copies reasoning stated per branch (under Branch B the canonical block is deleted, so the inline texts become the only copies; under Branch A they exist nowhere but the module); `:653` points into the canonical block; the create row says the module IS the block, byte for byte, produced by the same extraction; the re-walk caught a fourth silent referent-loss (the shape-(4)-comment entry) and retargeted it. **LOOP CLOSED** per the pinned stop criterion: the design was confirmed by both channels in round 7, round 8 returned only this wording finding, and the fix was verified mechanically by the orchestrator on committed bytes — `EDIT 1\|EDIT 2` zero occurrences, extraction `5887 b770de2e…` reproduced, module 9 shapes / shape (4) `["show","HEAD:reports/warnings.md"]`, lint clean. |
+
+## Outcome
+
+- **Loop closed 2026-09-01 after round zero + 8 double-channel rounds** (17 gate
+  runs). The spec is `Ready` at `f8a83e4b`. **Dispatch is blocked on the THREE
+  owner questions in the spec's Dispatch precondition**, none of which blocked
+  the loop: (1) the C1 slot-kind change — shape (4)'s FREE slot becomes the
+  spelled literal, amending W1(c)'s partition (position-scoped, three clauses);
+  (2) the home of the amendment — W1(c) amended in place inside the `done/`
+  spec (precedent `d5f31149`) rather than re-extracting Table W; (3) the
+  durable source-form machinery — Branch A (embodied): the pinned set extracted
+  to `tests/unit/dream-pipeline.known-calls.js`, whole-file SHA-256 against
+  `KNOWN_CALLS_SOURCE_DIGEST` beside the require, pin `b770de2e…`; Branch B
+  (pre-written, complete): no module, no digest, one-time evidence, claims
+  narrowed. A claim of future enforcement with no mechanism is the one
+  unavailable outcome.
+- **Registered dispositions riding to the owner with the ruling**: the
+  `src/core/dream/warnings.js:63-66` JSDoc is KNOWN-FALSIFIED-BY-DESIGN (the
+  retyping IS the tripwire; a one-line narrowing rides the queued architect
+  follow-up batch); row W5's three dead `5c5d082` SHAs are out-of-boundary →
+  named Discovered-issue for the implementation PR; shape (9)'s `-m` literal
+  tightening is named optional hardening, a separate S package if wanted.
+- **Design lineage, for the record**: FREE option-position slot → spelled
+  literal (round 1) → partition scoped by position after shape (9) falsified
+  it (rounds 1–2) → clause (1) anchored on C2's membership predicate (round
+  2) → source-form proof: three greps → canonical script (circuit-breaker,
+  rounds 2–3) → lexer + digest + assertion (0) (round 3) → durable in-test
+  (round 4) → syntax anchor after the Unicode-boundary leak (round 5) →
+  **module isolation + whole-file hash, the fixed point — nothing to locate**
+  (round 6) → one canonical block, pin derived by extraction from committed
+  bytes after two independent reconstructions disproved the recipe pin (round
+  7) → branch coherence (round 8). Four consecutive rounds broke the checker's
+  LOCATING logic; the design that ended the series is the one with no locating
+  in it.
+- **Channel comparison (plugin gate vs herdr hermetic shadow), 16 head-to-head
+  runs**: converged on every major finding family within the same round
+  (shape (9), durability, the digest mismatch, the orphan references); each
+  channel contributed unique real findings (plugin: the stay-ANY mirror, the
+  dead SHA, the exit-status inversion, the comment-decoy locator order;
+  shadow: the literal-vs-interpolation false green, the internal
+  impossibility + spoof, the COMPUTED overlap, the Unicode boundary, the
+  block-scope decoy, the Branch-B enumerations). **Zero false findings on
+  either channel across the whole loop** — every finding verified real on
+  spot-check, several executed by the reviewer before filing. The shadow ran
+  fresh-context every round (`/new`); one leaked-broker check is owed at
+  session cleanup per the plugin's history.

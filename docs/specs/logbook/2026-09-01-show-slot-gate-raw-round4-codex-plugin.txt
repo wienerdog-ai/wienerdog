@@ -1,0 +1,16 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship yet: the checker rejects the recorded evasions and the digest re-derives correctly, but its promised future byte-lockstep is not durable.
+
+Findings:
+- [medium] The re-pin and once-only rules are invisible to future editors (docs/specs/WP-show-slot-own-value-kind.md:393-395)
+  The rule for every future KNOWN_CALLS edit exists only in this WP's implementation notes, while the checker itself is a temporary /tmp script used by this WP's verification. None of the deliverables installs it as a test or adds the digest, re-pin rule, or once-only constraint beside KNOWN_CALLS or in canonical W1(c). Under the repository's spec-driven reading discipline, a later WP reads its own spec and deliverables, so it need not encounter or execute this completed WP. A future editor can therefore replace the literal with WARNINGS_REL, keep the runtime suite green, and silently remove the relocation tripwire that protects against the documented index-corruption path. The claimed coupling at these lines is procedural rather than enforced or reliably discoverable.
+  Recommendation: Make the source-form check permanent and part of the normal test or lint pipeline, with its digest adjacent to KNOWN_CALLS; register the once-only and same-commit re-pin obligations in canonical W1(c) and near the declaration. Update the deliverables and acceptance criteria accordingly.
+
+Next steps:
+- Revise the spec so the checker ships and runs automatically instead of being created only in /tmp.
+- Add durable registrations for the once-only and same-commit re-pin constraints where future KNOWN_CALLS editors must read them.
+

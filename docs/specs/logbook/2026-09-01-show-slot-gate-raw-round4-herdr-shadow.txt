@@ -1,0 +1,33 @@
+SHADOW ROUND 4 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 63c45023,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention
+NO-SHIP: the one-time checker is sound for the committed implementation shape, but the spec does not make its claimed future re-pin coupling durable.
+
+FINDING 1 — The source-form tripwire is not part of any persistent verification path.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md
+Lines: 272, 393-395, 449-462, 513-604
+Confidence: 0.99
+
+The central C1 guarantee depends on rejecting a future DRY rewrite of KNOWN_CALLS from the spelled literal to WARNINGS_REL interpolation. The spec says every future WP editing KNOWN_CALLS must re-pin the digest in the same commit
+(393-395), and acceptance criterion 1 says the source-form script is the only proof of that guarantee (449-462). But the checker exists only as a heredoc created under /tmp by this WP's manual verification steps (527-604). The
+digest occurs nowhere outside this spec, and no package.json, script, test, lint path, or canonical W1(c) instruction invokes it. The deliverables also restrict the test-file edit to four sites and do not add a durable checker
+(272). Therefore this WP can pass once, while a later editor can replace the literal with HEAD:${WARNINGS_REL}, run the normal test/lint suite green, and never encounter either the digest or the same-commit re-pin rule. That
+silently removes the relocation tripwire and defeats the owner-visible lockstep that is the design's stated reason for the digest.
+
+Recommendation: revise the design so the checker is committed and runs under the normal test or lint pipeline, and register the digest/re-pin and once-only constraints at the canonical W1(c)/KNOWN_CALLS edit surfaces. If durable
+automation is intentionally out of scope, narrow the claims to one-time implementation evidence and do not claim future same-commit enforcement.
+
+CONFIRMATION NOTES
+
+The extracted checker matched the committed claims: current/absent RED; canonical GREEN; pure re-indentation GREEN; double-quoted literal, interpolation, concatenation with decoy, both duplicate-verb quote styles, block-comment
+decoy, proof-property decoy, string decoy, and reordered shapes all RED. The independently extracted canonical span hashes to 932b54256c3192572f294c5c1ac9aef25bc1e0daf3d5f149e9039074e8f27324. Both c853245b and b19121bb resolve,
+b19121bb is an ancestor of 53b1519b, and the 5c5d082 distribution matches the spec: one W1(c) occurrence, three W5 occurrences, and one logbook occurrence. C1's nine-shape slot adjudication, C2's four producing shapes, C3's
+wording, checklist, criteria numbering, and sweep are internally coherent.
+
+A syntax-valid regex-literal plus canonical-decoy construction can make the lexer accept while the real declaration is obfuscated and interpolated, because regex literals are not lexed. I did not count this as a finding:
+constructing it requires the deliberate source restructuring that the spec explicitly places outside the checker's threat model at lines 724-732. Regex omission can also cause future false reds, but that is not a material safety
+failure in the current file.
+
+SCOPE OBJECTIONS: none.

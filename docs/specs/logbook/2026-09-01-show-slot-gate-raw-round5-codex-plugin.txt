@@ -1,0 +1,23 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship yet. The extracted checker passed the canonical case and rejected all requested mutations, including interpolation, digest tampering, and the un-split needle. However, three spec contradictions make the implementation acceptance path internally unsatisfiable.
+
+Findings:
+- [high] The interpolation mutation is required to make the same suite both green and red (docs/specs/WP-show-slot-own-value-kind.md:639-649)
+  Criterion 5 requires the interpolation and concatenation mutations to leave the runtime suite green while a separate source-form script fails. Round 4 eliminated that standalone script: criteria 11–12 commit the checker into npm test and explicitly require interpolation to make the suite red. The independently assembled checker confirms the suite-side check fails on interpolation. No verification command isolates a distinct runtime-only suite, so the required evidence cannot satisfy both criteria. The nearby “twelve-state” requirement also names a table that now contains 16 states.
+  Recommendation: State that runtime classification remains green while the complete guard-file/npm suite reds because of the committed source-form test; define how the runtime-only evidence is captured, and align criteria 5, 11, 12 and the 16-state matrix terminology.
+- [medium] The sweep treats a mandatory W1(c) registration as a forbidden third surface (docs/specs/WP-show-slot-own-value-kind.md:745-748)
+  The checklist requires W1(c) to gain a sentence naming KNOWN_CALLS_SOURCE_DIGEST, but the sweep includes the Done spec and says this pattern must report only the guard file, with any other hit treated as a third surface. A conforming implementation therefore necessarily violates the sweep's stated expected result, making criterion 8 impossible to adjudicate consistently.
+  Recommendation: Declare both tests/unit/dream-pipeline.test.js and W1(c) as expected KNOWN_CALLS_SOURCE_DIGEST hits, while retaining the guard file as the only expected digest-prefix hit.
+- [medium] The no-durable-machinery fallback leaves durable-only obligations behind (docs/specs/WP-show-slot-own-value-kind.md:50-60)
+  The fallback deletes only criteria 11–12 and the checker blocks, but criteria 1 and 5 still require a source-form script, pinned digest, and re-run mutation matrix. Verification simultaneously says there is no separate script because the committed checker is the proof. The fallback also does not explicitly remove W1(c)'s once-only declaration constraint. If the owner chooses one-time evidence, the promised pre-written strip-down yields a spec with no mechanism capable of satisfying its remaining criteria.
+  Recommendation: Make the alternative exhaustive: rewrite criteria 1 and 5, provide a concrete one-time verification procedure, remove durable sweep patterns and matrix obligations as appropriate, and remove all three W1(c) machinery sentences including the uniqueness constraint.
+
+Next steps:
+- Resolve the acceptance-criteria contradiction and rename the matrix accurately.
+- Correct the sweep's expected digest-registration hits.
+- Complete the conditional strip-down instructions, then rerun the confirmation gate.
+

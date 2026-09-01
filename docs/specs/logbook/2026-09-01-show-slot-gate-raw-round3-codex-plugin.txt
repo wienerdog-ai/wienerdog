@@ -1,0 +1,16 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No-ship: R2-2 through R2-4 are substantiated, and the documented six-state matrix behaves as claimed, but R2-1 is not genuinely closed because the canonical source-form checker remains spoofable.
+
+Findings:
+- [medium] Source-form checker can validate a decoy initializer instead of KNOWN_CALLS (docs/specs/WP-show-slot-own-value-kind.md:518-534)
+  The checker locates the first raw-text occurrence of `const KNOWN_CALLS = [` before lexically identifying comments or strings. I reproduced an evasion with a compliant fake initializer inside a block comment placed before the real initializer. Because `slice()` starts after the comment opener, comment stripping does not remove the decoy; the script exits 0 while the real shape uses `HEAD:${WARNINGS_REL}`. Runtime tests also remain green because interpolation produces the expected token. A similar false green is possible with a compliant array embedded in a string while the real expression avoids the narrow `'show'` regex. This defeats criterion 1 and the relocation tripwire on which C1 relies.
+  Recommendation: Parse or lex JavaScript sufficiently to locate the actual `KNOWN_CALLS` variable declaration outside comments and strings, then assert that its sole show shape contains a string-literal AST/token with the exact value. Add fake-initializer-in-comment and string-decoy cases to the mandatory checker matrix.
+
+Next steps:
+- Replace the raw `indexOf`/regex checker with a lexical or AST-based check tied to the real variable declaration.
+- Re-run the expanded matrix, including both reproduced decoy evasions, before the next adversarial round.
+

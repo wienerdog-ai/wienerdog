@@ -4,7 +4,7 @@ title: Close the three small measured residuals of the index guard
 status: Draft
 model: sonnet
 size: S
-depends_on: []
+depends_on: [WP-show-slot-own-value-kind]
 adrs: [ADR-0004]
 epic: dream-promotion
 ---
@@ -29,7 +29,17 @@ this stub:
    at the guard) closes it.
 2. **`produces` attribute has no slot-side counterpart** in the canonical
    table, though the row's own rule says every kind stands at its slot — the
-   same error class one level up.
+   same error class one level up. **This item edits the same canonical cell
+   (`docs/specs/done/WP-dream-promote-in-workspace.md:541`, row W1(c)) that
+   `WP-show-slot-own-value-kind` rewrites, which is why that package is now a
+   `depends_on`: rebase this item on the corrected clause rather than on the
+   text quoted at handover. It also HANDS ONE OBLIGATION HERE:** that package
+   sharpens the own-value membership invariant in the code (an object name git
+   emitted as the whole stdout of a pinned producing shape — never bytes read
+   back out of a user file) and deliberately leaves W1(c)'s looser *"values
+   THIS RUN PRODUCED"* clause alone, because the surface that should carry the
+   sharpened rule is the `produces` slot-side counterpart this item creates.
+   **Land both in the same pass.**
 3. **`dream.js:156` comment over-claims**: "every git invocation this
    pipeline makes goes through here", but `promote.js` resolves its own seam
    (it invokes only `merge-file`). Narrow the comment to what holds, or route

@@ -1,0 +1,93 @@
+SHADOW ROUND 2 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 85d58366,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention — no-ship: round 1's shape-(9) and stale-logbook counterexamples are addressed, but the replacement slot partition is still non-exclusive and the only proof of the required literal source form can both
+reject the specified implementation and accept a violating one.
+
+ROUND-1 FIX VERIFICATION
+
+R1-A — fixed for the reported shape-(9) counterexample, but the replacement mechanism has a new material ambiguity reported as Finding 1. C1 now scopes the carried branch by position, calls "option position" a design-time authoring
+decision rather than a shapeMatches test, leaves shapeMatches unchanged, and expressly sends update-ref's fixed -m value through clause (3) as optional literal hardening. The Current state discussion, rejected match-time option,
+checklist, and Out of scope all reflect that positional distinction. The actual nine shapes at tests/unit/dream-pipeline.test.js:190-201 and their production calls at src/cli/dream.js:221-263 and :1004 confirm the claimed shape
+inventory.
+
+R1-B — genuinely fixed in the work order. docs/specs/WP-show-slot-own-value-kind.md:269-271 makes the dated logbook passage a named deliverable; :334 requires a SHA-scoped, past-tense rewrite which removes the slot-kind spelling;
+and :512-530 adds the exact "stay ANY" sweep pattern. The present-tense source remains at docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:368-372 because this checkout is the Ready design package, not its
+implementation.
+
+R1-C — only partially fixed. The three commands at docs/specs/WP-show-slot-own-value-kind.md:484-490 distinguish the narrowly specified absent, spelled-single-quoted, and template-interpolated shape lines, and criteria 1 and 5
+require the interpolation mutation. However, the check is not a sound proof of the promised source property; Finding 2 gives two concrete counterexamples.
+
+TREE AND SWEEP VERIFICATION
+
+The production show call is exactly ['show', HEAD:${WARNINGS_REL}] at src/cli/dream.js:1004, and WARNINGS_REL is exactly 'reports/warnings.md' at src/core/dream/warnings.js:72. The watcher currently has ['show', ANY] at tests/unit/
+dream-pipeline.test.js:194. shapeMatches at :208-213 is strict length/position equality with ANY and RUN_VALUE membership and performs no option classification. Only hash-object, rev-parse HEAD, write-tree, and commit-tree carry
+produces:true at :192, :195, and :197-199; b19121bb is an ancestor of the later stale-prose commit 53b1519b.
+
+The specified whitespace-flattened, per-pattern sweep reaches the 42 KB single-line W1(c) cell. On this pre-implementation tree it reports all expected C1/C2/C3 families in the Done spec, the 2026-08-31 logbook, the registered
+successor stub, and the registered memory non-move. I found no additional unregistered contract surface through that claim-family sweep. The warnings-path JSDoc disagreement is handled only as the ruled scope objection at the end.
+
+FINDING 1 — C1's three clauses are not an exclusive partition of the actual slots
+
+Affected files and lines: docs/specs/WP-show-slot-own-value-kind.md:315-320, 331-345; src/cli/dream.js:238-261, 1041-1043
+Confidence: 0.98
+
+What can go wrong:
+The canonical rewrite can still classify an existing slot two different ways. Clause (1) says any slot holding "a value the run COMPUTED" is own; clauses (2) and (3) then divide "carried" tokens by position. But computed and
+carried are not mutually exclusive properties in the actual pipeline. The run constructs the dynamic commit message at src/cli/dream.js:1041 and commitNamedSet carries it into commit-tree's -m slot at :259-261. The run also derives
+mode from ls-tree/default data at :238-239 and carries it into update-index at :256. Both values are literally computed by this run, yet KNOWN_CALLS correctly leaves those slots FREE and the new rule intends clause (3) to govern
+the -m argument.
+
+Why vulnerable:
+C2 supplies the narrower concept the partition needs—an object name git emitted as the whole stdout of a pinned producing shape—but C1 clause (1) does not use it. C1 instead retains the loose word "COMPUTED", while its own clause
+(3) treats named-option arguments as carried. Thus the categories overlap before position is considered. The checklist shorthand at :333 repeats "computed -> own", so the ambiguity is scheduled to be copied into W1(c), the
+canonical surface reviewers use to decide slot kinds.
+
+Likely impact:
+An implementer or later reviewer can follow clause (1), change commit-tree's message or update-index's mode to RUN_VALUE, and make legitimate dream runs fail because those values never join computed. Or they can preserve ANY and
+leave W1(c) contradicting its executable mirror. Either outcome defeats the stated goal of making slot-by-slot review determinate and risks another silent slot-kind drift.
+
+Concrete recommendation:
+Rewrite clause (1) to reference C2's exact membership predicate, for example: "a slot carrying an own-value-set member—an object name git emitted as the whole stdout of an earlier pinned producing shape—is own." Then define clauses
+(2) and (3) over every remaining argument value. Explicitly adjudicate shape (3)'s mode/path, shape (8)'s dynamic -m message, and shape (9)'s fixed -m message in C1 and mirror the same complete wording in the checklist and eventual
+W1(c).
+
+FINDING 2 — the source-form proof contradicts the Exact contract and can be spoofed
+
+Affected file and lines: docs/specs/WP-show-slot-own-value-kind.md:273-284, 418-455, 474-490, 533-545
+Confidence: 1.00
+
+What can go wrong:
+A conforming implementer copying the Exact contracts block cannot pass verification: the required comment at :279-282 contains the exact text HEAD:${WARNINGS_REL}, while the second source-form command at :489 requires that string
+to occur zero times anywhere in tests/unit/dream-pipeline.test.js. Conversely, the three file-wide greps do not prove that the live KNOWN_CALLS entry is the literal. A literal-looking comment plus a multiline concatenated
+implementation passes all three counts:
+
+// args: ['show', 'HEAD:reports/warnings.md']
+{ env: 'unset', args: ['show',
+'HEAD:' + WARNINGS_REL] },
+
+The specified commands return 1, 0, 0 for that source even though the executable pin follows WARNINGS_REL and the relocation tripwire is absent. I executed those exact pipelines and observed 1/0/0. I also applied the Exact-contract
+comment text to a stdout-only probe and the required zero-count became 1.
+
+Why vulnerable:
+The positive grep is neither anchored nor scoped to the KNOWN_CALLS initializer, so comments and unrelated code satisfy it. The third grep assumes 'show', and WARNINGS_REL share one physical line, while JavaScript permits the
+expression to span lines. The second grep recognizes only one interpolation spelling. Criteria 1 and 5 call these commands the ONLY discriminating proof, so no later test compensates for the gap.
+
+Likely impact:
+The Ready spec is internally impossible if its Exact snippet is normative, and an implementation that silently tracks the production constant can nevertheless present the required green evidence. A future WARNINGS_REL relocation
+would then widen production and the guard together without the owner-visible red C1 is designed to guarantee.
+
+Concrete recommendation:
+First remove the forbidden interpolation spelling from the required test-file comment. Replace the file-wide counts with a verification script that isolates and parses the KNOWN_CALLS initializer and asserts exactly one show shape
+whose second element is a string literal with raw value HEAD:reports/warnings.md and no identifier/expression. If the project insists on grep, scope sed/awk output to the KNOWN_CALLS block, require one fully anchored exact shape
+line, and require exactly one executable show entry; then mutation-test both template interpolation and multiline concatenation/import forms.
+
+SCOPE OBJECTIONS
+
+Not counted toward the verdict, per the review ruling:
+
+src/core/dream/warnings.js:63-66 says WARNINGS_REL is "the ONE place it is decided" and that anything naming the path outside fixed English prose imports it rather than retyping it. C1 requires tests/unit/dream-pipeline.test.js to
+retype reports/warnings.md specifically so it will not follow WARNINGS_REL. That deliberate duplication falsifies the production JSDoc, while docs/specs/WP-show-slot-own-value-kind.md:44-45, :361, and :569 prohibit any src change.
+The owner should explicitly disposition this disagreement: either narrow the warnings.js claim to production consumers, or schedule/list the JSDoc amendment. This is a boundary/scope conflict, not an additional needs-attention
+vote.

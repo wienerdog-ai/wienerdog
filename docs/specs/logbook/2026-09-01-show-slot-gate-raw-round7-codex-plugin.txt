@@ -1,0 +1,20 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship: the specified canonical module cannot satisfy its pinned digest, and the mandatory sweep rejects that same module as an unregistered third surface.
+
+Findings:
+- [high] Pinned digest does not match the byte-exact module recipe (docs/specs/WP-show-slot-own-value-kind.md:499-500)
+  I reconstructed the module from 5d31a7dc exactly as specified: header, test-file lines 133–201 with EDIT 1 and EDIT 2, blank line, and export. Node's stated whitespace normalization produces 5,697 characters and SHA-256 40a9b1383c71fe24f8f4ff3027047ceac4637f3b66777ce2ca313faa44250c2d, not the declared 5,822 characters and 035ea394…. The reconstructed module parses and exports all nine shapes, but the committed checker would reject it immediately. Consequently the canonical PASS and mutation matrix cannot be reproduced from this spec.
+  Recommendation: Check in or print the complete canonical module bytes, derive the digest directly from that artifact, update the pin and stated length, and rerun the full node --test mutation matrix.
+- [high] Exact module creates a forbidden third sweep surface (docs/specs/WP-show-slot-own-value-kind.md:850-859)
+  The required module header contains the literal KNOWN_CALLS_SOURCE_DIGEST, while the sweep explicitly requires that pattern to occur only in the guard file and W1(c), declaring any other file a third surface. Because the new module is included by git ls-files '*.js', criterion 8 necessarily reports it as that forbidden third file. Removing the reference also changes the pinned module bytes, so this cannot be dispositioned without revising the canonical module and digest.
+  Recommendation: Either remove the constant name from the module header and regenerate the canonical digest, or explicitly register the module as an intentional third hit and update the expected-hit contract consistently.
+
+Next steps:
+- Correct the canonical module/pin mismatch.
+- Resolve the sweep/header contradiction.
+- Rebuild and rerun the full matrix before another closing round.
+

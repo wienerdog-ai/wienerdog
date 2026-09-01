@@ -1,0 +1,15 @@
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not close yet: the owner-rejection branch still leaves durable-checker obligations behind after deleting the checker.
+
+Findings:
+- [medium] Branch B's claimed complete rewrite leaves durable-only prose active (docs/specs/WP-show-slot-own-value-kind.md:590-595)
+  Branch B deletes the committed checker, digest constant, and criteria 11–12, but its enumerated rewrite never deletes this separate uniqueness/assertion-(0) bullet. It also says the `THE PIN` material remains with only two sentences rewritten, leaving lines 911–947 describing same-commit re-pinning and a live checker. If the owner selects Branch B, the resulting spec would still impose constraints whose enforcement machinery no longer exists, contradicting the branch's promise that no durable references survive.
+  Recommendation: Extend the Branch B rewrite list to delete or explicitly recast this bullet and the durable-checker/re-pin paragraphs at lines 911–947 as past-tense spec-time records; then re-run the surviving-reference and criterion-numbering walk.
+
+Next steps:
+- Complete the Branch B deletion/rewrite inventory and run one final cross-reference sweep.
+

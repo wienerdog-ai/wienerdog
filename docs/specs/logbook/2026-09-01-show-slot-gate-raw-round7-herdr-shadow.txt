@@ -1,0 +1,51 @@
+SHADOW ROUND 7 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 68d0c014,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention — do not ship this design yet. The closing reconstruction disproves the pinned canonical module, and the owner-rejection fallback remains internally unsatisfiable.
+
+FINDING 1 — The byte-exact module recipe does not produce the pinned digest
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:379-390, 415-433, 483-500, 865-879
+Confidence: 1.0
+
+The numbered Exact contracts recipe says to concatenate the header, tests/unit/dream-pipeline.test.js lines 133-201 with EDIT 1 and EDIT 2, and the export line. I reconstructed exactly that stream from the checked-in files. It is
+valid CommonJS, exports nine shapes, and its fourth shape is [show, HEAD:reports/warnings.md], but whitespace collapse yields 5,697 characters and SHA-256 40a9b1383c71fe24f8f4ff3027047ceac4637f3b66777ce2ca313faa44250c2d. An
+independent shasum invocation produced the same digest. The spec instead pins 5,822 characters and 035ea394d0eb9cccb633ad3f2523ee82efcec2192184ace75037d5abb838c0c8.
+
+There is also a second, different shape-(4) block at lines 379-390. Substituting that longer block instead of EDIT 2 produces 5,941 normalized characters and SHA-256 3f5ee889f4d6ddd1aeddc661691522e48173652e82e31e4479d63fe03490ef8a,
+so neither obvious reading produces the pin. Consequently the canonical module fails the committed checker before any mutation is applied; acceptance criteria 1, 9, and 11 cannot all pass, and the claimed canonical/PASS matrix is
+false. An implementer cannot recover the intended bytes from the stated head and tail because those excerpts omit the divergent middle.
+
+Recommendation: replace the transformational recipe and the two competing shape blocks with one complete byte-exact module block, derive its normalized length and SHA-256 from that block, update KNOWN_CALLS_SOURCE_DIGEST and the
+state table, and rerun the real node --test matrix. Do not retain 035ea394 unless the full source that produces it is made the sole canonical contract.
+
+FINDING 2 — Branch B keeps text that makes its unchanged acceptance criterion impossible
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:74-82, 187-190, 470-480, 751-753
+Confidence: 1.0
+
+Branch B explicitly keeps EDIT 1 and applies it in tests/unit/dream-pipeline.test.js. EDIT 1 includes the sentence saying an earlier form held what the run MINTED, while acceptance criterion 6—omitted from Branch B's rewrite list—
+requires the word MINTED not to appear in that test file. Branch B therefore cannot meet its own acceptance criteria. Its supposedly complete rewrite also leaves the Current state tense marker saying this WP moves the set and
+sentinels into a module, even though Branch B deletes that move. If the owner rejects durable machinery, the resulting implementation spec remains contradictory rather than being the promised mutually exclusive fallback.
+
+Recommendation: add acceptance criterion 6 and the Current state target-tense paragraph to the Branch B rewrite list. Either remove the historical MINTED sentence from the in-place JSDoc and preserve the absence assertion, or
+narrow criterion 6 to the actual falsified invariant; then perform the advertised Branch B keyword and numbering walk again.
+
+CLOSING CONFIRMATION
+
+The single KNOWN_CALLS_MODULE constant does couple require and read; I found no in-design path that makes those two references diverge without deliberately editing the checker. Whole-module hashing also makes the round-6 block-
+scope decoy structurally unconstructible: a declaration added to the module changes hashed source, while a decoy in the consumer is neither loaded as the set nor hashed. Whitespace collapse allows intended formatting equivalence;
+the actual line-comment boundary can be moved to comment out a row without changing normalized bytes, but that removes the production show shape and is caught by the three runtime guard tests, so it is not a full-suite false green.
+The dependency edit in WP-index-guard-residuals correctly orders the shared W1(c) work. No additional material finding was supported.
+
+SCOPE OBJECTIONS
+
+None.
+
+1 background terminal running · /ps to view · /stop to close
+
+
+› Ask Codex to do anything
+
+gpt-5.6-sol high · /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/90e109ab-8b36-48e7-aaf5-291a21744139/scratchpad/wt-showslot-reviewSCOPE OBJECTIONS
+
+None.

@@ -1,0 +1,54 @@
+SHADOW ROUND 5 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ fb04fb7e,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention -- no ship: the committed checker design still has a source-form false green, and the owner's no-durable-machinery branch is not executable as written.
+
+Verification performed:
+
+- Extracted the three JavaScript Exact-contract blocks from docs/specs/WP-show-slot-own-value-kind.md and assembled them in memory with the current tests/unit/dream-pipeline.test.js guard.
+- The earlier twelve-state matrix matched the specification: canonical and pure re-indentation passed; old ANY, double quotes, interpolation, multiline concatenation with a comment decoy, both duplicate-verb forms, block-comment
+  and string decoys, the proof-property decoy, and reordering failed.
+
+- The durable matrix matched the specification: canonical with the digest constant before or after KNOWN_CALLS passed; interpolation with an unchanged digest, a tampered digest, and the un-split needle failed.
+- c853245b and b19121bb both resolve. The declared stale-text/dead-SHA locations in W1(c), W5, and the 2026-08-31 logbook are present where the spec says they are.
+
+FINDING 1 -- The ASCII-only identifier boundary permits a decoy initializer to pass as the real KNOWN_CALLS declaration.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md
+Lines: 351-354, 390-396, 831-839
+Confidence: 0.99
+
+The counter and locator use (?![A-Za-z0-9_$]), but JavaScript identifier continuations are not limited to that ASCII class. In the assembled exact checker, changing the declaration to "const KNOWN_CALLS\u00e9 = [canonical
+initializer]" remained GREEN; Node also confirmed that this is a valid identifier. The same issue exists for ZWNJ and for escaped Unicode identifier continuations.
+
+This is not only a false red/diagnostic edge. A valid source can put the canonical decoy in KNOWN_CALLS\u00e9, then create the runtime binding without the counted spelling, for example via "const { KNOWN_CALLS } = { KNOWN_CALLS:
+[the real interpolated initializer] }". Assertion (0) sees exactly one supposed whole-identifier occurrence, the locator hashes the canonical decoy, and the runtime guard consumes the interpolated array. Because interpolation
+produces the same runtime token today, the rest of the suite can stay green. That defeats the decoy closure and contradicts lines 835-838's claim that lexer imprecision cannot produce a false green.
+
+Recommendation: make the raw needle include the declaration syntax after the identifier, rather than attempting an incomplete identifier boundary--for example, build the name from split strings and require whitespace/comments
+policy plus "=" and the opening "[" explicitly in both the raw counter and locator. At minimum, use ECMAScript-aware IdentifierPart handling including Unicode escapes, ID_Continue, ZWNJ, and ZWJ. Add applied mutations for a
+Unicode-suffixed decoy and an escaped-Unicode suffix, and keep the counter and locator on the identical pattern.
+
+FINDING 2 -- The owner-rejection fallback leaves mandatory durable-check requirements behind, so that branch cannot satisfy the spec.
+Affected file: docs/specs/WP-show-slot-own-value-kind.md
+Lines: 26-63, 300-317, 608-621, 639-649, 685-694, 725-748
+Confidence: 1.00
+
+Lines 50-60 say that rejecting permanent machinery deletes the durable section, its two code blocks, acceptance criteria 11-12, checklist/W1(c) digest entries, and one implementation note. But mandatory references survive outside
+that list:
+
+- the Exact-contract shape comment still names KNOWN_CALLS_SOURCE_DIGEST and same-commit re-pinning at lines 314-316;
+- criterion 1 still says the SOURCE-FORM SCRIPT is the only proof and requires the pinned digest at lines 611-621;
+- criterion 5 still requires the source-form script to fail and the twelve-state digest matrix to be rerun at lines 639-649;
+- Verification still says the committed checker is the sole source-form proof at lines 688-694;
+- the sweep still requires the digest name and digest prefix at lines 725-748.
+
+The fallback also says to drop "checker and digest rows from Deliverables", but Deliverables has one test-file row with six sites, not separate checker/digest rows (line 300). The dispatch introduction says the owner rules "two
+things" at line 26, while it now presents three numbered questions and blocks on all three at line 63. An owner ruling against durable machinery therefore leaves an internally impossible implementation contract and an ambiguous
+dispatch record.
+
+Recommendation: make the rejection branch a complete, enumerated rewrite: remove or rewrite the shape comment, criteria 1 and 5, Verification prose/commands, digest sweep patterns and adjudication, Deliverables' six-site wording,
+all checklist/W1(c) registrations, and all same-commit claims; provide the actual one-time source-form evidence mechanism that replaces them. Also change "two things" to "three things" and refer to Deliverables sites rather than
+nonexistent rows. Re-run numbering and the whole-spec sweep on both mutually exclusive branches.
+
+SCOPE OBJECTIONS: none.
