@@ -24,6 +24,8 @@ const POSIX = process.platform !== 'win32';
 
 const PRIVATE_FS_ID = require.resolve('../../src/core/private-fs');
 const ALERTS_ID = require.resolve('../../src/core/alerts');
+const JOBS_ID = require.resolve('../../src/scheduler/jobs');
+const WATERMARKS_ID = require.resolve('../../src/core/dream/watermarks');
 
 /** @param {string} p @returns {number} */
 function modeOf(p) {
@@ -73,27 +75,37 @@ function rec(job) {
 }
 
 /** Replace private-fs's `writeFilePrivate` export with `stubFn`, then
- *  re-require alerts.js FRESH so its own destructured reference picks up the
- *  stub (mirrors the `stubCollaborators` idiom in dream-validate.test.js).
- *  The module-level `appendAlert`/`clearAlerts` this file already imported at
- *  the top are a SEPARATE, earlier-loaded instance and are unaffected — they
- *  keep using the real `writeFilePrivate` throughout.
+ *  re-require `moduleId` FRESH so its own destructured reference picks up the
+ *  stub (mirrors the `stubCollaborators` idiom in dream-validate.test.js). The
+ *  module-level references this file already imported at the top are a
+ *  SEPARATE, earlier-loaded instance and are unaffected — they keep using the
+ *  real `writeFilePrivate` throughout.
+ *  @param {string} moduleId a `require.resolve(...)`'d module path
  *  @param {Function} stubFn
- *  @returns {{alerts: object, restore: () => void}} */
-function stubAlertsWriteFilePrivate(stubFn) {
+ *  @returns {{mod: object, restore: () => void}} */
+function stubWriteFilePrivateFor(moduleId, stubFn) {
   const privateFsExports = require.cache[PRIVATE_FS_ID].exports;
   const orig = privateFsExports.writeFilePrivate;
   privateFsExports.writeFilePrivate = stubFn;
-  delete require.cache[ALERTS_ID];
+  delete require.cache[moduleId];
   // eslint-disable-next-line global-require
-  const alerts = require('../../src/core/alerts');
+  const mod = require(moduleId);
   return {
-    alerts,
+    mod,
     restore() {
       require.cache[PRIVATE_FS_ID].exports.writeFilePrivate = orig;
-      delete require.cache[ALERTS_ID];
+      delete require.cache[moduleId];
     },
   };
+}
+
+/** `stubWriteFilePrivateFor` specialized to alerts.js, keeping the `alerts`-
+ *  named return the existing Table D tests already destructure.
+ *  @param {Function} stubFn
+ *  @returns {{alerts: object, restore: () => void}} */
+function stubAlertsWriteFilePrivate(stubFn) {
+  const { mod, restore } = stubWriteFilePrivateFor(ALERTS_ID, stubFn);
+  return { alerts: mod, restore };
 }
 
 /** Capture `process.stderr.write` calls during `fn()`. @returns {number} call count */
@@ -150,6 +162,81 @@ test('private-writer-modes: clearAlerts on a destination that ends up absent sti
   appendAlert(paths, rec('only-job'));
   assert.equal(clearAlerts(paths, 'only-job'), undefined, 'return value unchanged');
   assert.equal(fs.existsSync(alertsFile(paths)), false, 'no records remain -> file removed, not rewritten');
+});
+
+// ---------------------------------------------------------------------------
+// Delegation — each fixed writer calls writeFilePrivate with the right shape.
+// Table C above observes only the FINAL mode: a regression that swapped
+// writeFilePrivate back out for a mode-less temp+chmod+rename would still pass
+// every mode cell if the chmod happened to land 0600. These spy on the call
+// itself instead, so the primitive's OWN tests (pre-rename fchmod, O_EXCL
+// temp, etc — private-fs.test.js) are what's relied on for the security
+// properties, not re-derived here.
+// ---------------------------------------------------------------------------
+
+test('private-writer-modes: writeScheduleState delegates to writeFilePrivate with the destination, body, and { core: paths.core }', () => {
+  const { paths } = freshFixture();
+  const calls = [];
+  const stub = (dest, data, opts) => calls.push([dest, data, opts]);
+  const { mod: stubbedJobs, restore } = stubWriteFilePrivateFor(JOBS_ID, stub);
+  try {
+    stubbedJobs.writeScheduleState(paths, 'dream', { last_status: 'ok' });
+  } finally {
+    restore();
+  }
+  assert.equal(calls.length, 1, 'writeFilePrivate called exactly once');
+  const [dest, data, opts] = calls[0];
+  assert.equal(dest, scheduleFile(paths), 'destination is schedule.json');
+  assert.equal(
+    data,
+    `${JSON.stringify({ dream: { last_status: 'ok' } }, null, 2)}\n`,
+    'body is the merged state, pretty-printed with a trailing newline'
+  );
+  assert.deepEqual(opts, { core: paths.core }, 'threaded with { core: paths.core } (Table B core-threading row)');
+});
+
+test('private-writer-modes: writeWatermarks delegates to writeFilePrivate with the destination, body, and NO override (Table B no-override row)', () => {
+  const { paths } = freshFixture();
+  const calls = [];
+  const stub = (dest, data, opts) => calls.push([dest, data, opts]);
+  const { mod: stubbedWm, restore } = stubWriteFilePrivateFor(WATERMARKS_ID, stub);
+  try {
+    stubbedWm.writeWatermarks(paths.state, { claude: 1, codex: 2 });
+  } finally {
+    restore();
+  }
+  assert.equal(calls.length, 1, 'writeFilePrivate called exactly once');
+  const [dest, data, opts] = calls[0];
+  assert.equal(dest, watermarksFile(paths), 'destination is watermarks.json');
+  assert.equal(
+    data,
+    JSON.stringify({ version: 1, claude: 1, codex: 2 }, null, 2),
+    'body is the watermarks payload'
+  );
+  assert.equal(opts, undefined, 'no opts argument — writeWatermarks has no paths.core to thread (Table B no-override row)');
+});
+
+test('private-writer-modes: clearAlerts delegates to writeFilePrivate with the destination, body, and { core: paths.core }', () => {
+  const { paths } = freshFixture();
+  appendAlert(paths, rec('a'));
+  appendAlert(paths, rec('b'));
+  const expectedBody = readAlerts(paths)
+    .filter((a) => a.job !== 'a')
+    .map((a) => JSON.stringify(a))
+    .join('\n') + '\n';
+  const calls = [];
+  const stub = (dest, data, opts) => calls.push([dest, data, opts]);
+  const { alerts: stubbedAlerts, restore } = stubAlertsWriteFilePrivate(stub);
+  try {
+    stubbedAlerts.clearAlerts(paths, 'a');
+  } finally {
+    restore();
+  }
+  assert.equal(calls.length, 1, 'writeFilePrivate called exactly once');
+  const [dest, data, opts] = calls[0];
+  assert.equal(dest, alertsFile(paths), 'destination is alerts.jsonl');
+  assert.equal(data, expectedBody, 'body is the surviving (non-cleared) records, one JSON line each');
+  assert.deepEqual(opts, { core: paths.core }, 'threaded with { core: paths.core } (Table B core-threading row)');
 });
 
 // ---------------------------------------------------------------------------
@@ -229,19 +316,23 @@ test('private-writer-modes: a pre-existing symlink at alerts.jsonl is refused by
 // Repeat runs (Table C repeat-runs row)
 // ---------------------------------------------------------------------------
 
-test('private-writer-modes: a second consecutive call to each fixed writer leaves the same 0600 and the same content', () => {
+test('private-writer-modes: a second consecutive call to each fixed writer leaves the same 0600 (POSIX) and the same content (cross-platform)', () => {
   const { paths } = freshFixture();
 
   jobsLib.writeScheduleState(paths, 'dream', { last_status: 'ok' });
   const c1 = fs.readFileSync(scheduleFile(paths), 'utf8');
   jobsLib.writeScheduleState(paths, 'dream', { last_status: 'ok' });
-  assert.equal(modeOf(scheduleFile(paths)), 0o600);
+  // Mode assertions are POSIX-only: writeFilePrivate takes the win32 branch
+  // (private-fs.js:283-288, a plain {mode:0o600} temp+rename) before the POSIX
+  // fchmod logic this WP's fix relies on — win32 has no POSIX mode bits to
+  // assert exactly 0600 against. Content/idempotence hold on every platform.
+  if (POSIX) assert.equal(modeOf(scheduleFile(paths)), 0o600);
   assert.equal(fs.readFileSync(scheduleFile(paths), 'utf8'), c1);
 
   wmLib.writeWatermarks(paths.state, { claude: 1, codex: 2 });
   const wc1 = fs.readFileSync(watermarksFile(paths), 'utf8');
   wmLib.writeWatermarks(paths.state, { claude: 1, codex: 2 });
-  assert.equal(modeOf(watermarksFile(paths)), 0o600);
+  if (POSIX) assert.equal(modeOf(watermarksFile(paths)), 0o600);
   assert.equal(fs.readFileSync(watermarksFile(paths), 'utf8'), wc1);
 
   appendAlert(paths, rec('a'));
@@ -249,7 +340,7 @@ test('private-writer-modes: a second consecutive call to each fixed writer leave
   clearAlerts(paths, 'a'); // present -> rewrite, leaves b
   const ac1 = fs.readFileSync(alertsFile(paths), 'utf8');
   clearAlerts(paths, 'no-such-job'); // still leaves b -> rewrites again with identical content
-  assert.equal(modeOf(alertsFile(paths)), 0o600);
+  if (POSIX) assert.equal(modeOf(alertsFile(paths)), 0o600);
   assert.equal(fs.readFileSync(alertsFile(paths), 'utf8'), ac1);
 });
 
@@ -383,11 +474,15 @@ test('private-writer-modes: Table D discrimination — a refusal carrying a DIFF
   };
   const { alerts: stubbed, restore } = stubAlertsWriteFilePrivate(stub);
   let result;
+  let stderrCalls;
   try {
-    result = stubbed.appendAlert(paths, rec('newjob'));
+    stderrCalls = countStderrWrites(() => {
+      result = stubbed.appendAlert(paths, rec('newjob'));
+    });
   } finally {
     restore();
   }
 
   assert.equal(result, undefined, 'only WD_F10_POST_RENAME triggers the not-persisted signal — any other code, even a real errno, is Case 1');
+  assert.equal(stderrCalls, 1, 'exactly one non-alert diagnostic emitted — no leak into the suite output');
 });
