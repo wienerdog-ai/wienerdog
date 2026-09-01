@@ -1,0 +1,70 @@
+SHADOW ROUND 3 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home,
+codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 2fcc3b7a,
+fresh thread via /new). Captured verbatim from the pane after a reprint request.
+
+VERDICT: needs-attention — no ship until the source-form verifier actually identifies KNOWN_CALLS elements and their args fields; the current regex can certify a nonliteral or duplicate show shape.
+
+ROUND-2 FIX VERIFICATION
+
+R2-1 is only partially fixed. I extracted the canonical script from the spec and reproduced all six claimed outcomes: absent=1, single-quoted literal=0, double-quoted slot literal=0, interpolation=1, multiline concatenation with a
+comment decoy=1, and duplicate single-quoted show shapes=1. The prior exit inversion, file-wide self-conflict, and comment-decoy case are fixed. The new mechanism is still structurally spoofable, as Finding 1 demonstrates.
+
+R2-2 is genuinely fixed in the design. c853245b and b19121bb both resolve; c853245b's diff introduces RUN_VALUE and the five own-value slots. 5c5d082 does not resolve. Direct inspection finds one occurrence in the 41,704-byte W1(c)
+line 541, three in W5 line 545, and one at the separate logbook passage line 356, matching the revised registrations. The sweep now includes 5c5d082.
+
+R2-3 is genuinely fixed. Against the real KNOWN_CALLS and production calls, the own-value predicate covers the object names emitted by rev-parse HEAD, hash-object, write-tree, and commit-tree. The FREE slots are correctly accounted
+for: ls-tree path follows --; update-index mode and path are cacheinfo operands; show is option-parsed; and both commit messages are consumed by -m. The dynamic message at dream.js:1041 and mode derived at dream.js:238-239 no
+longer collide with clause (1).
+
+R2-4 is genuinely registered, not hidden. WP-show-slot-own-value-kind.md:364 contains the exact KNOWN-FALSIFIED-BY-DESIGN marker, names src/core/dream/warnings.js:63-66, explains why the deliberate retyping falsifies it, and states
+the intended production-consumer narrowing.
+
+FINDING 1 — The canonical source-form verifier can pass the forbidden implementation it exists to reject.
+
+Affected file: docs/specs/WP-show-slot-own-value-kind.md:519-534
+Confidence: 1.0
+
+The checker does not parse KNOWN_CALLS. It searches the initializer text for arrays whose first token is specifically the single-quoted spelling 'show', then treats the one regex match as the shape. That is not equivalent to
+locating initializer elements and reading each element's args field.
+
+I measured two uncovered evasions.
+
+Exact evasion 1 — a second show shape whose verb uses double quotes:
+
+const KNOWN_CALLS = [
+ {args:['show', 'HEAD:reports/warnings.md']},
+ {args:["show", ANY]}
+];
+
+Observed checker result:
+
+duplicate_second_double_verb: exit=0 :: SOURCE-FORM OK: exactly one show shape, slot is the literal 'HEAD:reports/warnings.md'
+
+The second shape is invisible because line 531 recognizes only the single-quoted spelling 'show'. The measured ANY variant would be caught by the runtime exploit canary, but replacing ANY with `HEAD:${WARNINGS_REL}` preserves the
+legitimate runtime token and the exploit rejection while creating an interpolation-based duplicate that follows a later warnings-path relocation. The checker would still see only the first element.
+
+Exact evasion 2 — a nonliteral real args field plus a literal decoy in an unrelated property:
+
+const KNOWN_CALLS = [
+ {args:["show", `HEAD:${WARNINGS_REL}`], proof:['show', 'HEAD:reports/warnings.md']}
+];
+
+Observed checker result:
+
+nonliteral_actual_plus_decoy_property: exit=0 :: SOURCE-FORM OK: exactly one show shape, slot is the literal 'HEAD:reports/warnings.md'
+
+Here the regex certifies the proof property rather than the actual args field. The real call shape uses precisely the forbidden interpolation, yet the checker exits successfully.
+
+This is the same material proof failure class as round 2, not a style issue. Criterion 1 says this script is the only proof that interpolation cannot ship, and criteria 2-5 do not distinguish interpolation because it produces the
+same runtime token. A green verification can therefore be pasted for a source form that silently widens on relocation.
+
+Recommendation: replace lines 519-534 with a JavaScript-syntax-aware check. Parse the file, locate the VariableDeclarator named KNOWN_CALLS, traverse its top-level object elements, identify show shapes from each object's args array
+regardless of quote style, require exactly one, and require its second args element to be a direct string-literal AST node with value HEAD:reports/warnings.md. Extend the recorded matrix with at least: double-quoted verb, duplicate
+with mixed verb quote styles, nested-array/string decoys outside args, and a nonliteral real args field plus a decoy. Do not dispatch until each evasion exits nonzero.
+
+No other material findings. The SHA corrections, per-slot adjudication, dead-SHA accounting, explicit known-falsification registration, and current claim-sweep targets otherwise hold against the inspected tree.
+
+SCOPE OBJECTIONS
+
+src/core/dream/warnings.js:63-66 will remain textually false after the planned literal retyping. The spec makes this honest and findable at WP-show-slot-own-value-kind.md:364 and queues a narrowing. Per the supplied boundary
+ruling, this is recorded here as a scope disagreement only and is not counted toward the verdict. No other scope objections.
