@@ -1,0 +1,43 @@
+SHADOW ROUND 3 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ ea5c5d00, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: `npm test` outside the sandbox (2444/2432/0). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — Do not dispatch: first-use durability and pre-rename cleanup can still violate the only-copy or no-orphan-artifact guarantees.
+
+FINDING 1
+
+Affected file: docs/specs/WP-preservation-abort-widening.md  
+Lines: 342, 461-477, 509-511  
+Confidence: 0.99  
+Materiality: A  
+Body: P0b’s ordering is correct for an existing directory—file fsync, rename, directory fsync—but `quarantinePreserve` recursively creates `quarantine/` or `quarantine/redacted/`. Syncing only the new `qdir` does not durably persist that directory’s entry in its parent. On first use, a crash after workspace teardown can therefore lose the entire newly created directory and the only artifact. Linux explicitly requires syncing the containing directory for a directory entry; this applies recursively to newly created directories ([Linux fsync(2)](https://www.man7.org/linux/man-pages/man2/fsync.2.html)). On macOS, Node/libuv normally tries `F_FULLFSYNC`, but silently falls back through `F_BARRIERFSYNC` to `fsync`, while Node documents the guarantee as OS/device-specific ([libuv fs.c](https://github.com/libuv/libuv/blob/v1.x/src/unix/fs.c), [Node fsyncSync](https://nodejs.org/api/fs.html#fsfsyncsyncfd)). The unconditional “survive a crash/on the medium” claim is therefore broader than the prescribed steps.  
+Recommendation: Require durable creation of every newly created directory by syncing each affected parent bottom-up, or prove those directories preexist durably. Define supported filesystem semantics and treat an unavailable required flush as preservation failure that retains the workspace.
+
+FINDING 2
+
+Affected file: docs/specs/WP-preservation-abort-widening.md  
+Lines: 342, 509-520  
+Confidence: 1.0  
+Materiality: B  
+Body: P0b says every durability or verification failure removes the final destination and asserts that `dest` exists. That is false when file fsync or rename fails before rename: only secret-bearing `tmp` exists, and the current catch still treats its cleanup as best-effort and suppresses removal failure. Thus EIO/ENOSPC before rename can return `null` while leaving an unrecorded temporary artifact, especially unannounced under `redacted/`. Post-rename cleanup is also only observably absent unless the directory is fsynced after unlink; a crash can resurrect the rejected entry. The mismatch/read-error criteria never exercise either pre-rename cleanup or durable deletion.  
+Recommendation: Specify an ownership state machine: before successful rename, confirm `tmp` removal; afterward, confirm `dest` removal; any cleanup failure escapes as `WienerdogError`. After unlink, fsync the containing directory. A plain `null` is valid only once the owned path is absent and that deletion is durable.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Repository status, revisions, log, `main...HEAD` diff/name/stat, and `git diff --check` — exit 0; confirmed detached `ea5c5d00`, main `fc506110`, clean checkout.
+- Full/targeted `wc`, `nl`, `sed`, `rg`, and `awk` reads of every requested document, code, test, canonical row, and round record — exit 0.
+- Preservation-site checks — exits 0/0: one definition plus two calls, all in `validate.js`.
+- Retirement trace and occurrence sweep — exit 0: the legacy value remains only as shipped code/test history and an absence discriminator; no reachable test expects that abort.
+- Two-active-value non-substring check — exit 0.
+- A12 sentence comparison after Markdown whitespace normalization — exit 0; wording matches THREAT-MODEL line 425. Its application to same-user mutation is honest.
+- V2 — exits 1/1; V3 — exits 1/0/1, matching the untouched preimplementation state.
+- V4 expected-line count, delimiter uniqueness, and trailing-whitespace checks — exits 0/0/0/0. In-memory expected-versus-current catch diff — exit 1 as predicted; extraction is unambiguous and requires exact indentation.
+- Darwin Node v25.9.0/libuv 1.52.1 directory `fsyncSync` probe — exit 0.
+- `npm test` sandbox attempt — exit 1 (`EPERM` creating the test root); approved isolated rerun — exit 0: 2444 tests, 2432 pass, 12 skipped, 0 fail.
+- V5 counterfactuals — not run: untouched read-only preimplementation tree.
+- `npm run lint` — not run to completion or counted as review evidence; initial invocation exited 1 at the blocked registry lookup. Network retry was declined, as requested.
+- Final `git status` — exit 0; checkout clean.
+
+DONE_ROUND_3
