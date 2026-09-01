@@ -1,0 +1,21 @@
+PLUGIN GATE ROUND 3 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a3 worktree), tip ea5c5d00, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No ship: R2-A, R2-B, R2-D, and R2-E are genuinely addressed, but R2-C remains incomplete. No scope objection was found.
+
+Findings:
+- [high] Rejected-artifact cleanup omits the pre-rename temporary file and durable deletion (docs/specs/WP-preservation-abort-widening.md:342)
+  Materiality B. The first file fsync occurs before rename, so an fsync failure leaves the secret-bearing bytes in `tmp` and no owned artifact at `dest`. P0b nevertheless requires every durability failure to remove the FINAL DESTINATION and asserts that `dest` exists. The existing catch treats `tmp` removal as best-effort, and the acceptance criteria only demand destination/tree evidence for post-rename mismatch and read-error cases. An implementation can therefore report preservation failure while an undeletable, unrecorded `.tmp-*` file remains. Conversely, blindly deleting `dest` before a successful rename can target a candidate path this invocation never owned. Post-rename disposal is also not crash-durable: the spec requires unlink plus confirmation but no directory fsync after unlink, so the rejected directory entry can reappear after a crash—the same failure model P0b added fsync to address.
+  Recommendation: Specify an ownership-state cleanup protocol: before successful rename, remove and confirm `tmp`; after successful rename, remove and confirm only `dest`; never delete `dest` unless this invocation completed the rename. Failure to clean either owned path must fail loud. After removing a renamed artifact, fsync the quarantine directory before reporting disposal complete.
+
+Next steps:
+- EXECUTED: repository diff/status, specified source/spec/canonical-row inspections, preservation-site counts, static alias/unreachability derivation, and `git diff --check`; exit 0.
+- EXECUTED: `npm run lint`; exit 0 with 0 markdownlint errors and passing frontmatter checks.
+- EXECUTED: `npm test`; exit 1 because the read-only sandbox denied the test harness's `mkdtemp`, not because of a test failure.
+- EXECUTED: V4 equivalent without temporary writes; unique start/end delimiters, exactly ten expected lines, and exit 1 against the intentionally untouched comment. The literal V4 command could not overwrite its `/tmp` files in this sandbox.
+- EXECUTED: local macOS/APFS durability checks; Node/libuv's fsync path attempts `F_FULLFSYNC`, direct file and directory `F_FULLFSYNC` calls succeeded, and directory `fsyncSync` checks exited 0. The ordered file-sync/rename/directory-sync protocol is appropriate here and on Linux ext4/btrfs.
+- Verified: `only-withheld-failed` is unreachable because the returned buffer aliases `afterBytes`; no current test expects it as reachable, and Q18's amendment records it only as history. V5 remains checkable without prescribing test names.

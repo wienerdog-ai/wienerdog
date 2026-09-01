@@ -1,0 +1,62 @@
+SHADOW ROUND 2 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ f962c9ca, fresh thread via /new). Captured via an approved scratch-file write (tee). One approval granted during the review: `npm test` outside the sandbox (2444/2432/0). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — Do not dispatch: R1-B/C are fixed, but R1-A/D/E remain incomplete; preservation can still violate Q4 and strand unannounced artifacts.
+
+FINDING 1
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 301-321
+Confidence: 0.99
+Materiality: B
+Body: P0b never decides what happens to an artifact rejected after rename. `quarantinePreserve` currently renames `tmp` to `dest`, while its catch removes only `tmp` (`validate.js:648-675`). A direct implementation of P0b can read `dest`, detect mismatch/read failure, return `null`, and leave `dest` behind. On the redact arm, `redactCopy === null`, so the cleanup and record logic at `validate.js:1072-1101` cannot name or remove that file. If the subsequent withheld preserve succeeds, the gate returns only the withheld record and teardown proceeds; if it fails, the abort receives no redacted basename. This contradicts Q18’s requirement to name every surviving `redacted/` copy and can strand raw secret-bearing bytes in an unbannered directory. It also makes P0b’s claim that P0 “carries it to the abort” false for a rejected redacted artifact followed by a successful withheld preserve.
+Recommendation: Define the rejected-final-artifact disposition. Preserve `dest`/`name` through verification and either remove the rejected artifact with verified cleanup or carry its basename to the abort; add evidence that mismatch and read-error paths leave no unrecorded `redacted/` artifact.
+
+FINDING 2
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 389-397
+Confidence: 0.97
+Materiality: A
+Body: The spec acknowledges that read-back is not a durability guarantee, then claims it is sufficient because teardown occurs in the same invocation. Q4 requires a durable byte-identical artifact when the working copy is destroyed, not merely one observed earlier. A post-rename read can be satisfied from cache without `fsync`; a crash after workspace deletion but before file and directory metadata are durable can lose the only copy. It also does not detect replacement/removal between read-back and teardown. “Same invocation” narrows time but does not close either failure window.
+Recommendation: Require file and parent-directory durability before treating preservation as successful, plus verification at teardown or an equivalent invariant preventing later mutation. Otherwise park an explicit owner amendment narrowing Q4; an out-of-scope declaration cannot silently weaken the shipped invariant.
+
+FINDING 3
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 491-510
+Confidence: 1.0
+Materiality: C
+Body: V4 remains phrase-shaped. Its anchors are currently unique and correctly isolate the promote catch, but the negation rejects only `both fail`. An in-memory catch comment saying the same false thing as “redaction and its withheld preservation each failed,” with the required WP citation present, passed all three V4 checks with exit 0. Thus R1-D’s claim-shaped verification problem was relocated, not fixed.
+Recommendation: Either prescribe and verify one exact replacement comment, or state honestly that semantic correctness is review-only and remove the claimed violating-state proof. Do not represent `both fail` as a sweep for the cross-product claim.
+
+FINDING 4
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 469-526
+Confidence: 0.99
+Materiality: B
+Body: The `>2444` floor is not a non-vacuity proof. Tests added on main before dispatch make it pass even if this WP adds no evidence; tests removed upstream can make a correct implementation fail. V5’s red full-suite runs already provide the relevant execution proof. In addition, lines 512-523 remain an explicit five-item mutation list despite `spec-authoring.md` assigning mutation lists to the implementer, so R1-E was softened from exact edits to exact semantic mutations rather than removed.
+Recommendation: Drop the fixed global count and require each V5 red output to identify a failing assertion in this WP’s changed test deliverables, against a green full-suite baseline. State the behaviors requiring counterfactual evidence without prescribing a mutation list.
+
+FINDING 5
+Affected file: docs/specs/WP-preservation-abort-widening.md
+Lines: 418-422
+Confidence: 1.0
+Materiality: C
+Body: The security checklist says the read-back’s “only output is a boolean,” while P0b and its acceptance criterion require returning the artifact’s read-back buffer and using it in the scrub and recoverable escape. Existing test commentary at `tests/unit/dream-validate.test.js:1970-1978` and `:2040-2049` also says no such read can fail and wrong-byte/read-error cases are unreachable. P0b makes those statements false, but they are absent from the mirror checklist.
+Recommendation: State that the read-back buffer remains internal rather than calling its output boolean, and require the obsolete test commentary to be removed or updated in the test deliverable.
+
+SCOPE OBJECTIONS
+None.
+
+EXECUTED
+- Full/targeted `sed`, `nl`, `rg`, `git diff`, `git show`, `git log`, `git status`, and canonical-row inspections — exit 0; git emitted sandbox cache warnings.
+- Preservation-site counts — exits 0, 0.
+- V2 source/test checks — exits 1, 1, as predicted pre-implementation.
+- V3 withhold-source/redact-source/withhold-test checks — exits 1, 0, 1, as predicted.
+- V4 located/anchor/stale checks — exits 0, 1, 1, as predicted.
+- V4 in-memory stale-synonym probe with required WP citation — exit 0, demonstrating false green.
+- Promote-catch anchor uniqueness check — exit 0.
+- Pairwise non-substring check for all three message values — exit 0.
+- `npm test` sandbox attempt — exit 1 (`EPERM` creating the temporary root).
+- `npm test` authorized local rerun — exit 0: 2444 tests, 2432 pass, 12 skipped, 0 fail.
+- `npm run lint` — not run to completion as a review result; the initial sandbox attempt exited 1 when markdownlint attempted blocked registry access. No network retry was performed, per user instruction; lint is orchestrator-owned.
+- Final `git status --short --branch` — exit 0; detached checkout remained clean.
+
+DONE_ROUND_2

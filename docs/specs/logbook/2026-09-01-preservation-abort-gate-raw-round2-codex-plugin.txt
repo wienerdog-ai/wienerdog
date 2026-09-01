@@ -1,0 +1,34 @@
+PLUGIN GATE ROUND 2 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a3 worktree), tip f962c9ca, focus text as recorded in the round record. NOTE: the first round-2 job (review-mtj6u7qr-45lgc0) died at 21:39Z when its companion process was killed with the orchestrator background task; it was cancelled and this is the fresh re-run. Captured verbatim from the companion result.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch. R1-C is genuinely fixed, and the requested occurrence counting, catch-block anchoring, and full-suite mutation runs were added. However, P0b still does not satisfy Q4’s durability requirement, its failure lifecycle leaves untracked artifacts, the discriminant includes an unreachable message arm, and V4/V5 can still certify an invalid implementation. R1-E also remains incomplete. No scope objection; fail-loud was not re-argued.
+
+Findings:
+- [high] Materiality A — P0b verifies cached bytes, not a durable artifact at teardown (docs/specs/WP-preservation-abort-widening.md:392-397)
+  P0b reads the destination after rename, but the spec expressly excludes fsync and any later re-verification. A read can be served from cache before either the file or directory entry is durable; after dream.js deletes the workspace, a crash can therefore lose both copies. The same snapshot can become stale if the artifact changes between read-back and teardown. “Same invocation” does not close either window and contradicts Q4’s requirement that a durable artifact hold the bytes before destruction.
+  Recommendation: Require file and containing-directory durability before preservation succeeds—fsync the written file, rename, fsync the directory—and ensure the verified artifact remains the basis for teardown. If that guarantee is intentionally excluded, the WP cannot claim to enforce Q4 and must retain the workspace instead.
+- [high] Materiality B — the closed discriminant contains an unreachable abort value (docs/specs/WP-preservation-abort-widening.md:304-307)
+  P3 says a P0b-verified redacted copy makes the failure recoverable and therefore does not abort. Consequently `only-withheld-failed` can never reach `secretGateAbortMessage`: if `redactCopy` exists, its returned bytes equal `afterBytes` and the escape succeeds; if verification fails, `redactCopy` is null and the message is `both-failed`. Existing tests explicitly record the R0b message arms as unreachable at dream-validate.test.js:1970-1978. P6 nevertheless requires evidence for three message values, making the active taxonomy and acceptance criteria impossible to satisfy faithfully. Four independent scalar parameters also permit inconsistent pairs such as `no-redaction-attempted` with a non-null basename.
+  Recommendation: Remove the unreachable value from the active Table P taxonomy and scope it as Q18 legacy history, or define a reachable abort condition and reconcile it with P3. Represent valid message inputs as a discriminated union, or validate discriminant/basename combinations at runtime.
+- [medium] Materiality B — rejected post-rename artifacts remain unrecorded and unpruned (docs/specs/WP-preservation-abort-widening.md:301-321)
+  A mismatching read-back occurs after rename, so the final destination already exists. The current cleanup only removes `tmp`; P0b does not require deleting or recording the rejected destination and says it adds only a read. Returning null means callers never add that basename to `redactedCreated` or the preservation record. In the redact-fall-through path with a successful withheld copy, the rejected redacted artifact therefore bypasses both the identity-gated cleanup and record construction; on P1/P2 aborts, Q18 names no basename. Partial secret-bearing files can silently persist and accumulate while the user is told preservation failed as if nothing was written.
+  Recommendation: Specify the rejected-artifact lifecycle. Track the final destination and remove it when verification fails, with acceptance evidence proving no unrecorded artifact remains; also define fail-loud handling if that cleanup cannot complete.
+- [medium] Materiality B — R1-D and R1-E remain only partially fixed (docs/specs/WP-preservation-abort-widening.md:491-526)
+  V4 is bounded by unique anchors, but its semantic guard still recognizes only the substring `both fail`. Executed proof: the stale claim “retain only when each preservation attempt in the redact fall-through fails” includes the required WP citation and passes V4’s negation. The fixed `>2444` floor is also vacuous if main gains an unrelated test before dispatch, and falsely blocks valid work if tests are removed. Finally, V5 still prescribes a five-item mutation list despite spec-authoring.md:7-14 assigning mutation design to the implementer. The stale dream-validate.test.js:1972-1978 claim that no preservation read can fail is also absent from the mirror/update obligations.
+  Recommendation: Make the catch comment byte-exact and verify that exact bounded text, or use a check that recognizes the entire forbidden claim. Replace the historical test-count floor with evidence relative to the contemporaneous clean base—or rely on baseline-green plus full-suite mutation-red results. Remove the prescribed mutation list and add the now-false test comment to the required update surface.
+
+Next steps:
+- EXECUTED: repository status, main...HEAD diff inspection, requested source/spec/test/canonical reads, git diff --check, preservation-site counts, and anchor counts — exit 0; git emitted sandbox temp-cache warnings.
+- EXECUTED: npm run lint — exit 0.
+- EXECUTED: npm test — exit 1 because the read-only sandbox denied mkdtemp; no test failure was reached.
+- EXECUTED untouched V2 checks — source/test exits 1/1; V3 withhold/redact/test exits 1/0/1; V4 block/citation/stale checks exits 0/1/1, matching the preimplementation state.
+- EXECUTED: current anchor uniqueness and pairwise non-substring checks — exit 0. The V4 synonym false-green reproduction also exited 0.
+- V5 mutation runs were not runnable on the untouched, read-only, preimplementation tree.
+- SCOPE OBJECTIONS: none.
+
+Codex session ID: 01a05ef5-37b1-7ba1-ac64-bc88af92e601
+Resume in Codex: codex resume 01a05ef5-37b1-7ba1-ac64-bc88af92e601
