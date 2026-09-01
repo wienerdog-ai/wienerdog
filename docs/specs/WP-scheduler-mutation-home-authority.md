@@ -348,6 +348,21 @@ read-only probe for **Wienerdog's own identifiers** — the enumerate-your-own-g
 shape, the same discipline as `WP-smoke-live-scheduler-preflight`'s probe, in
 code.
 
+**Scope of that closure, narrowed by owner ruling (2026-09-01).** The paragraph
+above closes the stripped-manifest orphan **in the no-authority case only**.
+Step 1 below short-circuits on scheduler authority without probing, so an
+authority-present uninstall — which, through the coherence arm, is every normal
+default-home user — still replays only what the manifest holds: a live job whose
+`scheduler-entry` is missing gets no unload, and the core is removed around it.
+Round 6's gate found this, and the owner ruled it **accepted as a named
+residual** rather than closed here: **R-stripped-manifest-orphan**, recorded in
+the guarantee table below and in ADR-0041's residual table, with
+`WP-scheduler-replay-manifest-independent` filed as the follow-up that actually
+closes the class. **Do not "fix" it inside this WP** — the two designs that would
+(probe on every uninstall, or code-recognized self-unload of uncovered
+identifiers) were both measured to fail, and the measurements are in ADR-0041's
+rejected options.
+
 | Fact / rule | Value |
 |-------------|-------|
 | Where | in `src/cli/uninstall.js`'s `run()`, **after** the `confirm()` at `:95-112` and **immediately before** the first deletion — the `manifestLib.reverse(…, { dryRun: false })` call at `:114` |
@@ -361,7 +376,7 @@ code.
 | What `reverse()` acts on | the **accepted snapshot** — the same bytes that were disclosed and confirmed. Nothing between the compare and `reverse()` re-derives a value: the snapshot object and the pre-confirm `vaultPath` (`:57`) are carried forward as they are, so no input to the deletion is newer than the consent |
 | Not part of the clearance gate (keeps ADR-0038 true) | the compare is a **consent** check, not a safety check. It asks "is this still the plan the user approved", never "is it safe to delete" — that remains the live-domain probe's job alone. The manifest therefore still never serves as safety evidence, and the compare can only ever *stop* a deletion, which is ADR-0038's permitted direction |
 | Consequence for the interactive-decline path | a user who answers `n` is never reloaded, compared or probed, because all three sit after the prompt. `tests/unit/uninstall.test.js:613` therefore declines exactly as it does today; it is covered by the subprocess authority marker anyway (Table T), which costs nothing and keeps every subprocess caller uniform |
-| Step 1 — scheduler authority | evaluate Table B. Present → **clearance granted**, no probe, no change from today |
+| Step 1 — scheduler authority | evaluate Table B. Present → **clearance granted**, no probe, no change from today. **This short-circuit is deliberate and stays** (owner ruling 2026-09-01): it is what keeps subprocess test callers hermetic through Table T's environment channel, and removing it was measured to break that. Its cost is residual **R-stripped-manifest-orphan** in the guarantee table below |
 | Step 2 — probe (only when authority is absent) | call the `SchedulerProbe` (typed under "Exact contracts"): a **read-only** query of this user's live scheduler domain for Wienerdog's **own** identifiers — `ai.wienerdog.*` (launchd `gui/$UID`), `wienerdog-*` (systemd `--user`), the Wienerdog-named Task Scheduler tasks. Same rules as WP-A's probe: absolute client path, fixed-string matching, no mutation of any kind |
 | Step 3 — decide clearance | `clean` → **clearance granted, proceed** (an install with no live own identifier has nothing to orphan; the gate must not brick it). `live` → **abort**. Throw, thenable, or malformed result → NOT-PROBEABLE → **abort**, per the fail-closed row below |
 | Effect of an abort | throw a `WienerdogError` — for a failed compare, a failed reload, or a refused clearance alike. **Nothing is deleted and the manifest is untouched** — all three aborts precede `reverse()`, so no deletion has begun. A user who confirmed and is then refused has lost nothing but the prompt |
@@ -380,6 +395,7 @@ round-1 draft's "all-or-nothing" claim was false:
 | No deletion happens without **deletion clearance** — scheduler authority, or a probe that positively answered CLEAN | **Guaranteed** by the rows above |
 | A deletion that *does* proceed was preceded by a **successful** unload | **NOT guaranteed, and never was.** `reverseSchedulerEntry` ignores the unload's result (`src/core/manifest.js:529-536`) and deletes the file regardless, so a `launchctl`/`systemctl` failure, or a `WIENERDOG_LOADER_NOOP` neutralizer, still leaves an orphan. **Residual R-failed-unload, pre-existing:** this is today's behavior on `main`, unchanged by this WP in either direction. `wienerdog doctor` probes live registrations and is what surfaces such an orphan |
 | An uninstall that proceeds on a CLEAN probe had **scheduler authority** | **Not claimed — deliberately.** Clearance and authority are different predicates (the table above). A CLEAN domain needs no permission to mutate, because there is nothing there to mutate |
+| An **authority-present** uninstall unloads every live Wienerdog job before removing the core | **NOT guaranteed. Residual R-stripped-manifest-orphan, owner-accepted 2026-09-01.** Step 1 grants clearance without probing, so `reverse()` replays only the manifest: if a live job's `scheduler-entry` is missing — stripped, hand-edited, older-format, or lost to a partial earlier run — **no unload is attempted for it at all**, and `disposeCoreMechanics` then removes the core around it. Sibling to R-failed-unload and the **same end state** — a live registration outlives an uninstall because the manifest drove no effective unload — differing only in whether an unload was *attempted*. Measured mitigations: the schedule file survives (`disposeCoreMechanics` is scoped to `paths.state`, `paths.logs`, `<core>/schedules`, `paths.secrets` and the core dir — it never touches `~/Library/LaunchAgents`), so recovery is by hand; `wienerdog doctor` probes live registrations and is what surfaces it. Closing it is `WP-scheduler-replay-manifest-independent` |
 | Transactional uninstall (propagate the unload result out of `reverseSchedulerEntry`, process scheduler entries before destructive file reversal, abort retaining recovery metadata on a non-zero or suppressed unload) | **Rejected here, not rejected in general.** It rewrites `reverseSchedulerEntry` and `reverse()`'s ordering — a different, larger change to a function this WP is explicitly forbidden to touch, and it would have to decide what a partially-reversed install looks like. It closes R-failed-unload and belongs to its own work package |
 
 ### Table T — how the gate stays unbypassable in production and hermetic in tests
@@ -916,6 +932,16 @@ grep -qE '^[[:space:]]*await loader\(\)\.run\(rest\);[[:space:]]*$' bin/wienerdo
   before destructive file reversal, or aborting mid-reversal while retaining
   recovery metadata. That closes residual R-failed-unload and is its own work
   package; doing it here would rewrite a function this WP is forbidden to touch.
+- **Manifest-independent scheduler replay** — deriving the reversal set from the
+  schedule files in the known scheduler roots rather than from the manifest
+  alone. That is what closes residual **R-stripped-manifest-orphan**, and it is
+  filed as `WP-scheduler-replay-manifest-independent` (Draft). Owner ruling
+  2026-09-01 accepted the residual here rather than widening this WP into it.
+- **Probing on every uninstall, or self-unloading uncovered live identifiers.**
+  Both were proposed at round 6 and both were measured to fail — the first breaks
+  Table T's subprocess hermeticity, the second rests on coverage-by-identifier,
+  which is namespace-blind. ADR-0041's rejected options carries the measurements;
+  do not re-derive either.
 - Changing what `schedule.js` records in the manifest for a refused registration.
   Recording is unchanged (Table C), and the schedule file must stay recorded or
   `uninstall` would leave it behind.
