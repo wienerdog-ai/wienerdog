@@ -123,7 +123,7 @@ RETAINED as the sole recovery breadcrumb. This WP must not change that.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains the **closed outcome enum** of Table E — three values, canonical reason/subject/append-policy derived inside, unknown value refused, absent input byte-identical to HEAD; (c) `failLoud`'s `persisted` honors an explicit `false` from `appendAlert` (Table E, and see Implementation notes — `undefined` keeps today's meaning). Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
+| modify | src/cli/run-job.js | (a) the five state-write sites at `:797`, `:872`, `:1096`, `:1060`, `:1061`, per Tables A, B1 and B2; (b) `failLoud` (`:611-634`) gains the **closed outcome enum** of Table E — three values; one shared template per outcome as the canonical reason and subject's single source, called by both `runJob` (for its throw) and `failLoud`; `failLoud` self-derives reason, subject and append policy from the outcome for the two non-default values, honoring the `reason` argument only for `job-failure`; the outcome carried on a channel the forwarded `opts` cannot supply; unknown value refused; absent input byte-identical to HEAD; (c) `failLoud`'s `persisted` honors an explicit `false` from `appendAlert` (Table E, and see Implementation notes — `undefined` keeps today's meaning). Do NOT change the `appendAlert` call at `:840`, the reap logic at `:1106-1108`, `defaultSendAlert`, or any existing failure-path `reason` string |
 | modify | tests/unit/scheduler-runjob.test.js | cover the acceptance criteria below; the implementer designs the cases |
 
 ### Exact contracts
@@ -243,7 +243,7 @@ values, and `failLoud` derives everything from it internally.
 | Fact / rule | Value |
 |-------------|-------|
 | Closed set | those three values and nothing else. The caller passes only the discriminant |
-| Derived inside `failLoud` | the email subject and the append policy. Callers may pass the job-specific detail the reason interpolates, but **never** a subject and **never** a skip boolean — there is no caller-supplied way to suppress an append |
+| Derived inside `failLoud` | the email subject and the append policy, for every outcome. A caller **never** passes a subject and **never** passes a skip boolean — there is no caller-supplied way to suppress an append. A caller-supplied reason is honored **only** for `job-failure`; for the two non-default outcomes the reason is derived too — see the *"`failLoud` self-derives the reason"* row below — so the job-specific detail that reason interpolates comes from the template's own inputs, not from a string the caller composed |
 | **One source for each canonical string** (amended 2026-09-01) | Table B `:173` requires `runJob` to **throw** a `WienerdogError` carrying the site's distinct reason, and this table requires `failLoud` to persist and email that same wording. A reason derived *only* inside `failLoud` cannot reach the caller's throw, so the earlier "derived inside `failLoud`" phrasing made the two rows unsatisfiable together. The resolution: each outcome's reason and subject come from **one shared module-level template**, called by `runJob` for the throw and by `failLoud` for what it records. The template is the string's single source; neither caller nor callee may compose its own variant, and the verbatim-string assertions test the template's output on both paths |
 | **`failLoud` self-derives the reason for the non-default outcomes** | for `success-marker-refused` and `alert-cleanup-refused`, `failLoud` derives the reason it persists and emails **from the outcome**, via that template — it does **not** trust the `reason` argument it was handed. A stale or wrong caller string would otherwise misreport replay: measured on this branch, `failLoud(paths, name, 'x', { outcome: 'alert-cleanup-refused' })` skips the append and emails body `x`, so the operator is told nothing true about which state operation was refused. **The outcome decides the reason, the subject and the append policy — all three.** The `reason` parameter is honored **only** for `job-failure`, which keeps HEAD semantics for the three failure sites and the catch-up refusals |
 | **The outcome channel is separate from the forwarded `opts`** | the discriminant must **not** be inheritable from the generic `opts` object `runJob` forwards to its ordinary `failLoud` calls. Those sites pass their caller's `opts` straight through, so an `outcome` riding that object reaches them too — and `alert-cleanup-refused` sets the append-skip, which is precisely the "suppression capability any caller could aim at the primary reporting channel" this table's preamble exists to deny. Contract: the three failure sites (`:797`, `:872`, `:1096`) and the catch-up refusals pass **no** outcome, or explicitly force `job-failure`; **only** `:1060` and `:1061` carry one, and it cannot arrive from caller-supplied `opts`. **The observable is the contract, the mechanism is the implementer's:** an outcome injected into `runJob`'s `opts` leaves every ordinary failure path's reporting — append attempted, subject, reason, return value — unchanged |
@@ -300,8 +300,15 @@ values, and `failLoud` derives everything from it internally.
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md).
-- The change is local to five call sites. Do not introduce a wrapper helper, do
-  not re-order the paths, and do not touch the reap/token logic at `:1106-1108`.
+- The change is local to five call sites. Do not re-order the paths, and do not
+  touch the reap/token logic at `:1106-1108`. **"No wrapper helper" means no
+  helper that wraps the state-write + `failLoud` SEQUENCE** — each site keeps its
+  own visible try/attempt/report shape, so a reader sees at the site what happens
+  when the write fails, and no single helper accretes the five sites' differing
+  policies. It does **not** forbid the shared reason/subject templates Table E
+  mandates: those are pure string builders with no control flow, and they exist
+  precisely so one string cannot drift between `runJob`'s throw and `failLoud`'s
+  record.
 - Do not make the state writers themselves non-throwing in
   `src/scheduler/jobs.js` or `src/core/alerts.js`: other callers rely on their
   errors, and `WP-private-state-writers-mode-pin` changes both for an unrelated
@@ -351,6 +358,20 @@ values, and `failLoud` derives everything from it internally.
       (Table E): no call site can request a skipped append, an unknown
       discriminant is refused rather than silently degraded, and a skipped
       append returns `false` so `:1106-1108` still treats it as unrecorded.
+- [ ] **Flagged for a future architect pass, NOT this WP** (wd-reviewer, PR #185
+      round 2): `opts.appendAlert` — the test seam this spec blesses in the
+      `persisted`-honors-`false` criterion — is **inheritable at the ordinary
+      sites the way `outcome` used to be**, since those sites forward the
+      caller's `opts` verbatim. It is production-unreachable today
+      (`bin/wienerdog.js:74` invokes `run(rest)` with no `opts`), and it is a
+      test-only seam by this spec's own contract, so nothing here is a live
+      defect. But it is a strictly **larger** capability than the `opts.sendAlert`
+      precedent it was modelled on — `sendAlert` can only redirect the email,
+      whereas `appendAlert` can replace the durable-record writer itself. If the
+      seam family is ever revisited, it warrants the same channel-separation
+      treatment Table E now gives `outcome`. Recorded so the next reader inherits
+      the observation rather than re-deriving it; changing it is out of scope
+      here.
 - [ ] Residual, named and measured: with GWS unconfigured, a B2 refusal has no
       durable Wienerdog-side notification — the job log is not open at any of
       the five sites and doctor does not inspect `alerts.jsonl` (Table C's
