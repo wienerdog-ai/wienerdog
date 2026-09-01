@@ -80,6 +80,50 @@ accounted). **9 findings (4 B, 5 C), all FIX, applied in `b9bd5f66`:**
 
 | 7 (`68d0c014`) | needs-attention / needs-attention | `…round7-codex-plugin.txt` (`085583bf`), `…round7-herdr-shadow.txt` (`38ea8c4f`) | **The DESIGN passed its closing checks on both channels**: the require/read coupling cannot be made to diverge in-design, the block-scope decoy is structurally unconstructible under whole-module hashing, the one whitespace-equivalence quirk (moved line-comment boundary) is caught by the runtime guard tests, the dependency edit correctly ordered. What failed was ARTIFACT EXACTNESS, by measurement: **both channels independently reconstructed the module recipe to the SAME 5,697 chars / `40a9b138…` — agreeing with each other against the pinned 5,822 / `035ea394…`** (the shadow also hashed the recipe's second possible reading: 5,941 / `3f5ee889…`, also not the pin). Root cause found by the architect, not guessed: their derivation kept a JSDoc paragraph's closing two lines the recipe's prose said to replace — normalizing to exactly 125 chars, the full discrepancy. The lesson is structural: **a digest cannot survive two readings of one instruction** — the transformational recipe and both competing shape-(4) blocks are replaced by ONE canonical module block delimited in the spec, with the derivation an EXTRACTION (awk over `git show HEAD:` — committed bytes, never a working buffer) that anyone can paste; new pin `b770de2e…` at all four surfaces; both dead digests recorded with their causes. Plugin's second finding (the module header naming the digest constant, tripping the sweep's own expected-hits contract) fixed by pointing at "the digest constant in its consumer". Shadow's second (conf 1.0): Branch B could not meet criterion 6 — EDIT 1's historical sentence carried the word MINTED back into the test file — fixed by removing the word in BOTH branches (cites `b19121bb` instead); the Current-state tense marker added to Branch B's list. The Branch B re-walk then caught its third summary-invisible escape: **dispatch question 3 itself**, which kept asserting the enforced design Branch B deletes — now a Branch-B rewrite entry. Matrix re-observed from artifacts extracted out of the committed spec. All FIX, applied in `840ba1be`. Round 8 is the narrow closing confirmation — design settled, artifact only. |
 
+| 8 (`d29f84e8`) | needs-attention / needs-attention | `…round8-codex-plugin.txt` (`d13a1870`), `…round8-herdr-shadow.txt` (`5843b680`) | The narrow closing confirmation. Both channels: extraction reproduced the pin against the committed spec, the module parses and exports nine shapes with the literal shape (4), the canonical/interpolation/digest-tamper matrix behaves, sweep expected hits stand, criterion 6 satisfiable, Q3's Branch-B entry present; zero scope objections. ONE converged finding (shadow conf 0.99), wording residue of the round-7 conversion: three surfaces still referenced the deleted EDIT 1/EDIT 2 labels (Branch B's "keep the text of", the `:653` checklist pointer, the Deliverables row still describing the retired recipe). Fixed in `f8a83e4b`: Branch B now CARRIES both texts inline in the Dispatch precondition — outside everything it deletes — with the two-copies reasoning stated per branch (under Branch B the canonical block is deleted, so the inline texts become the only copies; under Branch A they exist nowhere but the module); `:653` points into the canonical block; the create row says the module IS the block, byte for byte, produced by the same extraction; the re-walk caught a fourth silent referent-loss (the shape-(4)-comment entry) and retargeted it. **LOOP CLOSED** per the pinned stop criterion: the design was confirmed by both channels in round 7, round 8 returned only this wording finding, and the fix was verified mechanically by the orchestrator on committed bytes — `EDIT 1\|EDIT 2` zero occurrences, extraction `5887 b770de2e…` reproduced, module 9 shapes / shape (4) `["show","HEAD:reports/warnings.md"]`, lint clean. |
+
 ## Outcome
 
-*Open.*
+- **Loop closed 2026-09-01 after round zero + 8 double-channel rounds** (17 gate
+  runs). The spec is `Ready` at `f8a83e4b`. **Dispatch is blocked on the THREE
+  owner questions in the spec's Dispatch precondition**, none of which blocked
+  the loop: (1) the C1 slot-kind change — shape (4)'s FREE slot becomes the
+  spelled literal, amending W1(c)'s partition (position-scoped, three clauses);
+  (2) the home of the amendment — W1(c) amended in place inside the `done/`
+  spec (precedent `d5f31149`) rather than re-extracting Table W; (3) the
+  durable source-form machinery — Branch A (embodied): the pinned set extracted
+  to `tests/unit/dream-pipeline.known-calls.js`, whole-file SHA-256 against
+  `KNOWN_CALLS_SOURCE_DIGEST` beside the require, pin `b770de2e…`; Branch B
+  (pre-written, complete): no module, no digest, one-time evidence, claims
+  narrowed. A claim of future enforcement with no mechanism is the one
+  unavailable outcome.
+- **Registered dispositions riding to the owner with the ruling**: the
+  `src/core/dream/warnings.js:63-66` JSDoc is KNOWN-FALSIFIED-BY-DESIGN (the
+  retyping IS the tripwire; a one-line narrowing rides the queued architect
+  follow-up batch); row W5's three dead `5c5d082` SHAs are out-of-boundary →
+  named Discovered-issue for the implementation PR; shape (9)'s `-m` literal
+  tightening is named optional hardening, a separate S package if wanted.
+- **Design lineage, for the record**: FREE option-position slot → spelled
+  literal (round 1) → partition scoped by position after shape (9) falsified
+  it (rounds 1–2) → clause (1) anchored on C2's membership predicate (round
+  2) → source-form proof: three greps → canonical script (circuit-breaker,
+  rounds 2–3) → lexer + digest + assertion (0) (round 3) → durable in-test
+  (round 4) → syntax anchor after the Unicode-boundary leak (round 5) →
+  **module isolation + whole-file hash, the fixed point — nothing to locate**
+  (round 6) → one canonical block, pin derived by extraction from committed
+  bytes after two independent reconstructions disproved the recipe pin (round
+  7) → branch coherence (round 8). Four consecutive rounds broke the checker's
+  LOCATING logic; the design that ended the series is the one with no locating
+  in it.
+- **Channel comparison (plugin gate vs herdr hermetic shadow), 16 head-to-head
+  runs**: converged on every major finding family within the same round
+  (shape (9), durability, the digest mismatch, the orphan references); each
+  channel contributed unique real findings (plugin: the stay-ANY mirror, the
+  dead SHA, the exit-status inversion, the comment-decoy locator order;
+  shadow: the literal-vs-interpolation false green, the internal
+  impossibility + spoof, the COMPUTED overlap, the Unicode boundary, the
+  block-scope decoy, the Branch-B enumerations). **Zero false findings on
+  either channel across the whole loop** — every finding verified real on
+  spot-check, several executed by the reviewer before filing. The shadow ran
+  fresh-context every round (`/new`); one leaked-broker check is owed at
+  session cleanup per the plugin's history.
