@@ -14,12 +14,16 @@ epic: dream-promotion
 ## Dispatch precondition
 
 **ONE OWNER RULING, and it blocks dispatch.** The pinned call set is DECIDED in
-row W1(c) of `docs/specs/done/WP-dream-promote-in-workspace.md` (Done), which
-states that *"a shape added to the code copy without the row is exactly the
-silent widening default-deny exists to prevent"* and that a change to the set is
-owner-visible. This WP changes one slot's KIND — the drift form W1(c)'s own
-Mirrored Surface Checklist was registered to catch — and it does so by amending
-a table that lives in `done/`. The owner rules two things together:
+row W1(c) of `docs/specs/done/WP-dream-promote-in-workspace.md` (Done). Its
+**Mirrored Surface Checklist** (`:648-690` of that spec — a different section
+from the row, and the home of every registration quoted in this spec) registers
+the row and `KNOWN_CALLS` as a pair, and states that *"a shape added to the code
+copy without the row is exactly the silent widening default-deny exists to
+prevent"* (`:676-677`). It also registers, in as many words, that **the slot
+kinds are part of the set and move with it** — *"the form the pair actually
+drifted in"* — and that **no grep reaches a slot-kind drift** (`:678-690`). This
+WP is exactly that drift form, and it closes it by amending a table that lives
+in `done/`. The owner rules two things together:
 
 1. **The slot-kind change** — shape (4)'s argument moves from FREE to a
    LITERAL (Change table, row C1; rationale and rejected alternatives below).
@@ -111,7 +115,7 @@ const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`],
 ```
 
 `WARNINGS_REL` is the module constant `'reports/warnings.md'`
-(`src/core/dream/warnings.js:72`); `src/cli/dream.js:1024` calls the file
+(`src/core/dream/warnings.js:72`); `src/cli/dream.js:1032` calls the file
 *"code-owned, layout-independent"*. So **the run's `show` argument is the fixed
 string `HEAD:reports/warnings.md` on every layout and every run**, and the FREE
 slot admits an infinity of tokens to pin one constant. The test already imports
@@ -139,19 +143,33 @@ returns `null` today.
 The gap is a **pin** gap, not a live exploit: it is exactly the class the guard
 was built to catch on a *future* edit.
 
-**Defect 1's canonical prose.** W1(c) exempts the slot BY NAME, on the ground
-the stub reports (`docs/specs/done/WP-dream-promote-in-workspace.md:541`):
+**Defect 1's canonical prose — TWO sentences, and the RULE is the one that
+matters.** W1(c)'s *"WHICH SLOTS TAKE THE PIN"* clause
+(`docs/specs/done/WP-dream-promote-in-workspace.md:541`) states a **binary
+rule** and then applies it to this slot by name:
 
-> **`show «HEAD:path»` stays free although it reads like an object name:** that
-> token is a string this run BUILDS out of a path, never a value it read back
-> out of git, so no observation pins it. **The five shapes the rule reaches are
-> (1), (3), (6), (8) and (9)**, and their `own` slots are marked above.
+> **WHICH SLOTS TAKE THE PIN — stated as the RULE and applied to every slot the
+> rule reaches, not only to the one that was exploited.** A slot holding a value
+> the run COMPUTED is `own`; a slot holding data the run merely carries — a
+> mode, a path, a message — is FREE, because there is no observed value to
+> compare it against. **`show «HEAD:path»` stays free although it reads like an
+> object name:** that token is a string this run BUILDS out of a path, never a
+> value it read back out of git, so no observation pins it. **The five shapes
+> the rule reaches are (1), (3), (6), (8) and (9)**, and their `own` slots are
+> marked above.
 
-That sentence is **correct about the OWN-VALUE rule and wrong as a conclusion**:
-the own-value rule genuinely does not reach this slot (there is no observed
-value to compare against), but "therefore FREE" does not follow — a token the
-run BUILDS from a constant is pinnable as a LITERAL, which is the set's third
-and oldest token kind. The same row enumerates shape (4) as
+Both sentences are **correct about the OWN-VALUE rule and wrong as a
+conclusion**. The own-value rule genuinely does not reach this slot — there is
+no observed value to compare against — but "therefore FREE" does not follow: a
+token the run BUILDS from a constant is pinnable as a LITERAL, the set's third
+and oldest token kind. **The RULE sentence is the load-bearing one and C1
+amends it**, because its partition is exhaustive over two kinds ("COMPUTED →
+`own`; merely carried — a mode, a path, a message — → FREE") and shape (4)'s
+token is a carried PATH, which the partition sends to FREE. C1 makes the
+partition three-way (Change table row C1). **Nothing but the RULE sentence and
+the "stays free" sentence changes:** the "five shapes the rule reaches"
+sentence stays TRUE, since the own-value rule still reaches exactly those five.
+The same row separately enumerates shape (4) as
 `` **(4)** `unset` — `show «HEAD:path»` (`:1004`) `` with no `«own …»` marker.
 
 **Defect 2 — the falsified invariant.** `tests/unit/dream-pipeline.test.js:179-181`
@@ -190,9 +208,11 @@ are TWO, and both are stale.**
   output IS an object name the run computed, which is (2), (5), (7) and (8) and
   excludes (1) and (4) — **and it is a change to the executable copy, so it is
   the owner's to schedule and not this recording pass's to make.**"*
-- `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:411-426`,
+- `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:409-426`
+  (the `#### One residual, stated rather than closed` heading and its paragraph),
   the same claim: *"a row claiming four sources while the code admits six is the
-  exact drift Table W was extracted to end."*
+  exact drift Table W was extracted to end."* The heading's tense changes with
+  the paragraph under C3.
 
 **The code already shipped the remedy those clauses defer.**
 `tests/unit/dream-pipeline.test.js:284` learns only from shapes carrying
@@ -209,16 +229,30 @@ pre-fix state* — is confirmed, for two mirrors rather than one.
 
 - **`show` is the only FREE slot the set places in an option position** — the
   claim that scopes this WP to one shape. Measured against the
-  `--index-output=`/`--output=` vector: shape (1)'s FREE slot sits after `--`
-  (a pathspec); shape (3)'s `«mode»` and `«path»` are consumed positionally by
-  `--cacheinfo`'s three-argument form, which rejects an option string as
-  `fatal: git update-index: --cacheinfo cannot add --index-output=…` (exit 128,
-  index untouched); shapes (8) and (9) place their FREE slot as `-m`'s value,
-  which git consumes verbatim (measured: `commit-tree … -m "--output=<index>"`
-  exits 0 and writes no index). **This is a measurement over enumerated vectors
-  and not a proof over git's grammar** — the same epistemic W1(c) already states
-  about the `read-tree` singularity. What decides is the RULE in Change table
-  row C1, not the vector list.
+  `--index-output=`/`--output=` vector, per slot:
+  - shape (1)'s FREE slot sits after `--`, so git reads it as a pathspec;
+  - shape (3)'s two FREE slots behave **differently, and the difference is
+    stated because the first measurement of it over-claimed**: the `«mode»`
+    slot REJECTS an option string
+    (`fatal: git update-index: --cacheinfo cannot add …`, exit 128, no index
+    written), while the `«path»` slot **ACCEPTS one** —
+    `update-index --add --cacheinfo 100644 <blob> --index-output=/tmp/x` exits
+    **0** and stores `--index-output=/tmp/x` as a literal FILENAME in the index,
+    writing no file at that path. *(An option string containing a `.git`
+    segment is rejected as `error: Invalid path`, which is what made the first
+    measurement read as a rejection: the vector aimed at `<repo>/.git/index`
+    and died on the `.git` component, not on the option.)* **Neither slot
+    redirects the index**, and shape (3) is `env: 'private'`, so the write it
+    does make lands in the run's private index;
+  - shapes (8) and (9) place their FREE slot as `-m`'s value, which git
+    consumes verbatim (measured: `commit-tree … -m "--output=<index>"` exits 0
+    and writes no index).
+
+  **This is a measurement over enumerated vectors and not a proof over git's
+  grammar** — the same epistemic W1(c) already states about the `read-tree`
+  singularity. What decides is the RULE in Change table row C1, not the vector
+  list; the corrected shape (3) evidence changes the reasoning, not the
+  conclusion.
 - **`--test-name-pattern` does not filter this suite.** Measured:
   `npm test -- tests/unit/dream-pipeline.test.js --test-name-pattern "zzz-nothing-matches-zzz"`
   reports `tests 43 / pass 43 / skipped 0` in 15s — the same as the unfiltered
@@ -233,7 +267,7 @@ pre-fix state* — is confirmed, for two mirrors rather than one.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | tests/unit/dream-pipeline.test.js | Change table rows C1 and C2, plus the arity-matched canary. Four sites and no others: `KNOWN_CALLS` shape (4) (`:194`); the `RUN_VALUE` JSDoc (`:168-186`); the `produces` comment (`:277-283`); the non-vacuity canary block inside the index test (`:1632-1658`). **C3 needs NO code change** — the code already admits four; its `:277` sentence is only re-read whole after the C2 rewrite. **No other shape, slot kind, literal or disposition changes** — `shapeMatches` (`:208-213`) and the nine-shape count stand |
-| modify | docs/specs/done/WP-dream-promote-in-workspace.md | **Row W1(c) ONLY** (all of Table W is on `:541`). Three clauses move, listed in the Mirrored Surface Checklist: the pinned-set enumeration of shape (4); the "stays free" ruling; the residual clause, which becomes a CLOSURE record naming `b19121bb`. **No other row, no other table, no frontmatter, no status field** |
+| modify | docs/specs/done/WP-dream-promote-in-workspace.md | **Row W1(c) ONLY** (all of Table W is on `:541`). The clauses that move are the ones the Mirrored Surface Checklist marks as moving under C1 and C3 — the FREE-slot RULE sentence, the "stays free" ruling, the pinned-set enumeration of shape (4), and the residual clause, which becomes a CLOSURE record naming `b19121bb`. **The checklist owns that list; this cell does not restate it as a count** (a number beside a list is what C3 retires). The C2 entry on this file is a registered NON-move. **No other row, no other table, no frontmatter, no status field** |
 | modify | docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md | The `#### One residual, stated rather than closed` paragraph (`:409-426`) only: it becomes a SHA-pinned past-tense record plus a pointer to W1(c). Listed here for exactness although `docs/specs/logbook/` is always allowed |
 
 ### Exact contracts
@@ -260,14 +294,17 @@ index test already builds:
 
 ## Contract reference
 
-The ADR-0031 trigger fires on (ii) a slot-kind taxonomy changes, (vi) two
-successor specs inherit the contract (`WP-index-guard-residuals`,
-`WP-dream-git-env-pinning`), and (vii) the contract is mirrored across
-surfaces — three of seven.
+The ADR-0031 trigger fires on (ii) a slot-kind taxonomy changes and (vii) the
+contract is mirrored across surfaces — two of seven, which is the threshold.
+**(vi) does NOT fire on a strict reading and is not counted**: exactly one
+successor inherits this contract (`WP-index-guard-residuals`, whose item 2
+edits the same clause). `WP-dream-git-env-pinning` cites the Table W row for a
+different obligation and inherits no slot kind, so it is not a second consumer.
 
 **This table takes no family table-letter, deliberately.** W1(c) is and stays
-the canonical decision surface for the pinned call set, and it states that the
-set has **exactly two copies** — the row and `KNOWN_CALLS` — and that **no third
+the canonical decision surface for the pinned call set, and the Done spec's
+Mirrored Surface Checklist (`:671-674`, not the row) states that the set has
+**exactly two copies** — the row and `KNOWN_CALLS` — and that **no third
 copy may be written, in prose or in code**. A letter here would claim a standing
 table this package does not own and would owe an update to the LIVING letter map
 (`docs/specs/logbook/2026-08-29-promote-family-map.md`). What follows is a
@@ -279,9 +316,9 @@ carries these three facts and this spec becomes their history.
 
 | # | Fact / rule | Value |
 |---|-------------|-------|
-| C1 | **A FREE slot that git parses as an OPTION POSITION is not a pin — and where the run's own token is a CONSTANT, the slot becomes a LITERAL rather than a new placeholder kind** | Shape (4)'s argument stops being FREE and becomes the literal `HEAD:reports/warnings.md`. **The rule that decides it:** a slot is FREE only when the run's value at that position genuinely varies; a position whose value the run fixes is a literal, which is the token kind the set already uses everywhere else (`-w`, `--stdin`, `HEAD`, `user.name=wienerdog`). **No third placeholder kind is introduced and no matching rule changes** — `shapeMatches` already compares non-placeholder tokens by equality, so this is a slot-kind change inside the existing grammar. **SPELLED LITERALLY, NOT IMPORTED FROM `WARNINGS_REL`:** an interpolated constant makes the pin follow production silently, which is precisely the widening default-deny exists to prevent; spelled literally, relocating the warnings file reddens the guard and forces the owner-visible W1(c) amendment W1(c) requires. **The `«own …»`/OWN-VALUE rule is untouched and still reaches only shapes (1), (3), (6), (8), (9)** — W1(c) is right that no observation pins this token; what changes is the conclusion drawn from that, not the rule |
+| C1 | **A FREE slot that git parses as an OPTION POSITION is not a pin — and where the run's own token is a CONSTANT, the slot becomes a LITERAL rather than a new placeholder kind** | Shape (4)'s argument stops being FREE and becomes the literal `HEAD:reports/warnings.md`. **THE RULE THAT DECIDES IT, AND IT AMENDS W1(c)'s BINARY PARTITION RATHER THAN SITTING BESIDE IT.** W1(c) today partitions slots two ways — *"a slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE"* — and shape (4)'s token is a carried PATH, so that partition sends it to FREE. **C1 makes the partition three-way:** COMPUTED → `own`; carried and genuinely VARYING → FREE; carried and FIXED BY THE RUN → a LITERAL, the token kind the set already uses everywhere else (`-w`, `--stdin`, `HEAD`, `user.name=wienerdog`). **That sentence in W1(c) must be rewritten in the same pass** — it is a registered mirror of this rule (checklist entry 1 under C1) and leaving it standing beside the new one is the intra-cell failure this WP's notes name as its likeliest way to ship broken. **No third placeholder kind is introduced and no matching rule changes** — `shapeMatches` already compares non-placeholder tokens by equality, so this is a slot-kind change inside the existing grammar. **SPELLED LITERALLY, NOT IMPORTED FROM `WARNINGS_REL`:** an interpolated constant makes the pin follow production silently, which is precisely the widening default-deny exists to prevent; spelled literally, relocating the warnings file reddens the guard and forces the owner-visible W1(c) amendment W1(c) requires. **The `«own …»`/OWN-VALUE rule is untouched and still reaches only shapes (1), (3), (6), (8), (9)** — W1(c) is right that no observation pins this token; what changes is the conclusion drawn from that, not the rule |
 | C2 | **The own-value set's membership invariant, restated so every member satisfies it** | A value joins the own-value set only if it is **an object name git itself emitted as the whole stdout of one of this run's pinned PRODUCING shapes** — never bytes read back out of a file in the user's vault, and never a composite line carrying user-supplied data. **All four members satisfy this**, `head` included: `rev-parse HEAD` returns git's own name for the user's current commit, not content from a file the user authored. **The two shapes excluded keep their exclusion and now have a stated reason each:** shape (4) `show HEAD:<path>` returns FILE CONTENT out of the user's vault history (the measured reason `b19121bb` narrowed the set), and shape (1) `ls-tree` returns a composite line embedding a user-controlled path. **The word MINTED is retired** — it is the sentence `head` falsifies. **This is a restatement, not a reclassification:** dropping `rev-parse HEAD` from the producing set was weighed and rejected below, because `head` feeds three own-value slots (`read-tree` `:234`, `ls-tree` `:238`, `commit-tree -p` `:261`) and its removal would redden every legitimate run |
-| C3 | **The count of own-value sources is FOUR, and the prose surfaces stop carrying the count** | The code admits four (`produces: true` at `tests/unit/dream-pipeline.test.js:192, :195, :197, :198-199`), which is exactly the `(2), (5), (7), (8)` remedy W1(c) itself specified. **W1(c)'s residual clause becomes a CLOSURE record** — the remedy it deferred to the owner shipped at `b19121bb` — recorded WITH its cause, per Table W's own retirement discipline, never silently deleted. **The logbook paragraph becomes SHA-pinned and past-tense**, which restores it to the record exemption W1(c) grants (*"a record loses the exemption the moment it drops its pin or its past tense"*), and it points at W1(c) instead of predicting it. **Neither prose surface may state a bare count again**: the count is a number beside a list, and the surface that owns it is the `produces` markers |
+| C3 | **The count of own-value sources is FOUR, and the prose surfaces stop carrying the count** | The code admits four (`produces: true` at `tests/unit/dream-pipeline.test.js:192, :195, :197, :198-199`), which is exactly the `(2), (5), (7), (8)` remedy W1(c) itself specified. **W1(c)'s residual clause becomes a CLOSURE record** — the remedy it deferred to the owner shipped at `b19121bb` — recorded WITH its cause, per Table W's own retirement discipline, never silently deleted. **The logbook paragraph becomes SHA-pinned and past-tense**, which restores it to the record exemption the Done spec's Mirrored Surface Checklist grants (`:665-666`, exemption (iii): *"a record loses the exemption the moment it drops its pin or its past tense"*), and it points at W1(c) instead of predicting it. **Neither prose surface may state a bare count again**: the count is a number beside a list, and the surface that owns it is the `produces` markers |
 
 ### Mirrored Surface Checklist
 
@@ -293,6 +330,7 @@ is unfinished work.
 
 **C1 — the `show` slot's kind:**
 
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — **W1(c)'s FREE-slot RULE sentence** (*"A slot holding a value the run COMPUTED is `own`; a slot holding data the run merely carries — a mode, a path, a message — is FREE …"*). **This is the entry that decides the others**: C1 amends the partition it states, and no presence-grep reaches it — the sweep pattern `merely carries` exists for this sentence alone
 - [ ] `tests/unit/dream-pipeline.test.js:194` — `KNOWN_CALLS` shape (4), the executable copy
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s pinned-set enumeration, item **(4)** (`` `unset` — `show «HEAD:path»` (`:1004`) ``)
 - [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"WHICH SLOTS TAKE THE PIN"* clause: the `` **`show «HEAD:path»` stays free …** `` sentence, which this WP makes false. Its "five shapes the rule reaches" sentence stays TRUE and must not be edited
@@ -303,7 +341,7 @@ is unfinished work.
 
 - [ ] `tests/unit/dream-pipeline.test.js:168-186` — the `RUN_VALUE` JSDoc (*"values THIS RUN PRODUCED … the head from `rev-parse HEAD`"*)
 - [ ] `tests/unit/dream-pipeline.test.js:277-283` — the `produces` comment; the **MINTED** sentence is the false one
-- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause, same PRODUCED phrasing
+- [ ] `docs/specs/done/WP-dream-promote-in-workspace.md:541` — W1(c)'s *"THE REPAIR DOES NOT INSPECT THE TOKEN"* clause, same PRODUCED phrasing. **Registered and deliberately NOT moved, decided rather than left open.** Two reasons, and the second is the one that settles it: (a) C2 does not falsify it — *PRODUCED* is loose, not false, and the clause even enumerates the correct four sources, so it survives the restatement; (b) the surface that would carry C2's sharpened membership rule inside W1(c) is the **slot-side counterpart to `produces`**, which the canonical row does not have today and which is `WP-index-guard-residuals` item 2's deliverable. Sharpening this clause here would do half that package's work in a cell it then re-edits. **Hand-off, stated so the obligation is not dropped:** that package lands C2's sharpened wording in W1(c) when it gives `produces` its slot-side representation
 - [ ] `docs/specs/logbook/2026-08-31-index-refresh-dropped-with-its-cause.md:356-366` — the same PRODUCED phrasing. **Registered and deliberately NOT moved**: it sits in a dated narrative describing that day's ruling and does not carry the false MINTED claim. Recorded so review does not read the omission as a missed mirror
 - [ ] `memory/lessons/inbox.md` (`WP-dream-promote-in-workspace:` bullet, *"An own-value set must hold what the run MINTED, never what it READ BACK"*) — **registered and deliberately NOT moved**: the lessons file is a record of what a round cost, not a contract mirror, and the lesson's direction (never admit read-back user content) is sound. Do not edit it
 
@@ -320,7 +358,8 @@ is unfinished work.
 - [ ] `docs/adr/0012-dream-run-lifecycle.md:274-281` — states W1's substance (no index write) and explicitly defers the mechanism to Table W. A slot-kind change does not reach it
 - [ ] `docs/THREAT-MODEL.md`, `docs/adr/0010-vault-adoption-paths.md`, `tests/integration/dream.test.js`, `tests/integration/adopt-e2e.test.js` — registered Table W mirrors that carry no claim from any family above (sweep: zero hits)
 - [ ] `src/` — **nothing.** The production call at `src/cli/dream.js:1004` is already the pinned literal; this WP changes no behaviour
-- [ ] **This spec file** — it quotes the pre-change text on purpose, as a change order must, and those quotations stay true as history. Excluded from its own sweep for that reason and no other
+- [ ] `docs/specs/WP-index-guard-residuals.md` — **registered NON-move.** It hits two patterns because its item 2 quotes C2's sharpened invariant in the hand-off this WP gives it (see the C2 checklist above). It is a Draft stub describing future work, not a mirror of the shipped contract, and its text is correct as written
+- [ ] **This spec file, and `docs/specs/logbook/2026-09-01-show-slot-design-gate-rounds.md`** — both quote the pre-change text on purpose, as a change order and a round record must, and those quotations stay true as history. Excluded from the sweep for that reason and no other. **The round record is the coordinator's file: do not edit it**
 
 ## Implementation notes & constraints
 
@@ -356,7 +395,7 @@ is unfinished work.
 | Option | Why rejected |
 |---|---|
 | **A third placeholder kind that rejects option-looking tokens** (`NOT_OPTION`, a leading-`-` check) | It classifies the token by lexical form, which is the direction two measured refutations retired. It is also unclosable in the same way: git's option grammar is not ours (`--output=<f>`, attached short forms, future spellings), so the check can always be one form short — and one form short HERE grants by omission at the exact layer that refuses to grant by omission |
-| **A pin-rule change making every FREE slot reject option-looking tokens** | Same classification defect, applied to four more slots that measurement shows do not need it (shape (1)'s slot is a pathspec after `--`; shape (3)'s are consumed positionally by `--cacheinfo`; shapes (8) and (9)'s are `-m`'s consumed value). It buys nothing and puts a fuzzy matcher in the one place the contract forbids one |
+| **A pin-rule change making every FREE slot reject option-looking tokens** | Same classification defect, applied to four more slots that measurement shows do not need it — none of them redirects the index (Current state, the per-slot measurement). It buys nothing and puts a fuzzy matcher in the one place the contract forbids one |
 | **Extending OWN-VALUE to the `show` slot** | W1(c) is right that the rule does not reach it: the token is BUILT by the run, never observed coming back from git, so there is no observation to compare against. Implementing it would mean seeding the `computed` set with strings the guard constructs — which is a literal pin wearing a placeholder's name, with an indirection added |
 | **Interpolating `WARNINGS_REL` into the pin** (`` `HEAD:${WARNINGS_REL}` ``) | The guard would follow production silently: relocating the warnings file would change the run's call set with no red and no W1(c) amendment — exactly the silent widening W1(c) names. The literal makes that change loud and owner-visible, which is the intended cost |
 | **Splitting shape (4) into two shapes** (one per legitimate argument) | There is only one legitimate argument. A second shape would be a shape the run cannot make, which default-deny exists to forbid |
@@ -385,15 +424,21 @@ is unfinished work.
       `classify(['show', 'HEAD:reports/warnings.md'], {})` returns `null`.
 - [ ] 3. The whole index test — all three vault layouts — is green, i.e. the
       unmodified run's every call is still admitted and `violations` is empty.
-- [ ] 4. **Each of the three fixes carries its own observed RED against a
-      deliberately broken state, and the show proof's vector is TWO tokens.**
-      A canary that differs from its exploit in ARITY dies on length equality
-      before reaching the slot under test and certifies a rejection the set
-      never made — the measured lesson of the `read-tree` gap. Paste the RED
-      output for each of the three, not only the greens.
-- [ ] 5. **Prove the mutation was applied before believing its matrix** —
-      show the injected marker in the tree (e.g. `git diff` of the broken
-      state) beside the red it produced. A red whose reason is not the cell's
+- [ ] 4. **C1 carries an observed RED against a deliberately broken state, and
+      its vector is TWO tokens.** A canary that differs from its exploit in
+      ARITY dies on length equality before reaching the slot under test and
+      certifies a rejection the set never made — the measured lesson of the
+      `read-tree` gap. Both sides are observed and both are pasted: RED with
+      the slot reverted to `ANY` (the two-token show vector is admitted), GREEN
+      with the literal in place, and the accept side (`['rev-parse', 'HEAD']`,
+      and the run's own `show`) still admitted in both.
+      **C2 and C3 are prose and carry NO red, deliberately** — C2 rewrites two
+      comments and C3 needs no code change at all, so a mutation there reddens
+      nothing and any red produced for them would be synthetic. Their proof is
+      criterion 6, criterion 7 and the whole-cell re-read, not a test run.
+- [ ] 5. **Prove C1's mutation was applied before believing its matrix** —
+      show the injected marker in the tree (the `git diff` of the reverted
+      slot) beside the red it produced. A red whose reason is not the cell's
       is not a measurement.
 - [ ] 6. The `RUN_VALUE` JSDoc and the `produces` comment state the C2
       invariant, all four members satisfy it as stated, and the word MINTED no
@@ -404,8 +449,11 @@ is unfinished work.
 - [ ] 8. The whitespace-flattened sweep of the claim families (Mirrored Surface
       Checklist) is re-run over the whole tree and every hit is either
       corrected text or one of the registered non-moves. Paste the sweep
-      output. This spec is excluded from its own sweep — it quotes the
-      pre-change text by construction (see the command's comment).
+      output. This spec and the round record are excluded — both quote the
+      pre-change text by construction (see the command's comment). The command
+      runs **one pattern per pass** because a single alternation with context
+      windows matches non-overlapping and swallows adjacent hits; do not
+      collapse it back into one regex.
 - [ ] 9. `npm test` and `npm run lint` pass; `boundary-check` is clean.
 - [ ] 10. Idempotency: `N/A — this WP ships no command and writes nothing
       outside the repository.`
@@ -424,19 +472,36 @@ npm run lint
 node scripts/boundary-check.js docs/specs/WP-show-slot-own-value-kind.md \
   $(git diff --name-only main...HEAD)
 
-# The claim sweep (criterion 8) — whitespace-flattened, so a hard wrap
-# cannot hide a hit. Every hit must be corrected text or a registered non-move.
-# THIS SPEC IS EXCLUDED FROM ITS OWN SWEEP, deliberately: it is a change order,
-# so it QUOTES the pre-change text on purpose (`['show', ANY]`, MINTED, "four
-# sources"). Those quotations stay after the fix and would otherwise read as
-# twenty un-swept hits. Nothing else is excluded.
+# The claim sweep (criterion 8) — whitespace-flattened, so a hard wrap cannot
+# hide a hit. ONE PATTERN PER PASS, as fixed literals: an alternation with
+# context windows matches non-overlapping, so an earlier window SWALLOWS a
+# later hit inside it (measured: the `read back out of` occurrence in the Done
+# spec was eaten by the `stays free` window and the sweep reported five hits
+# where there are six). Per-pattern passes cannot swallow, `-F` needs no
+# escaping, and `| wc -l` counts the same under every grep — `-c` does not
+# (BSD grep counts LINES, and the flattened file is one line).
+#
+# EXCLUDED, and nothing else is: this spec and the round record, both of which
+# QUOTE the pre-change text on purpose (`['show', ANY]`, MINTED, "four
+# sources") and would otherwise read as a wall of un-swept hits.
+PATTERNS=('four sources' 'admits six' 'single-line output of' 'stays free' \
+          'merely carries' "'show', ANY" 'show «HEAD' 'MINTED' \
+          'read back out of' 'values THIS RUN PRODUCED')
 for f in $(git ls-files '*.md' '*.js' | grep -v node_modules \
-             | grep -v WP-show-slot-own-value-kind); do
-  tr '\n' ' ' < "$f" | tr -s ' ' \
-    | grep -oE ".{80}(four sources|admits six|single-line output of (ANY|any)|stays free|'show', ANY|show «HEAD|MINTED|read back out of|values THIS RUN PRODUCED).{110}" \
-    | sed "s|^|$f :: |"
+             | grep -v WP-show-slot-own-value-kind \
+             | grep -v show-slot-design-gate-rounds); do
+  flat=$(tr '\n' ' ' < "$f" | tr -s ' ')
+  for p in "${PATTERNS[@]}"; do
+    n=$(printf '%s' "$flat" | grep -oF "$p" | wc -l | tr -d ' ')
+    if [ "$n" -gt 0 ]; then printf '%s :: %s :: %s\n' "$f" "$p" "$n"; fi
+  done
 done
 ```
+
+Each reported hit is adjudicated by opening the file: it must be corrected
+text or one of the registered non-moves below. `merely carries` is in the list
+for one sentence only — W1(c)'s FREE-slot rule (checklist entry 1 under C1),
+which no presence-grep for a placeholder symbol can reach.
 
 **Do NOT verify with `--test-name-pattern`.** Measured on this tree at
 `5d31a7dc` (Node v25.9.0):
@@ -467,7 +532,9 @@ flag filters nothing here, so a green from it attributes nothing.
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body,
-   including the three REDs of criterion 4 and the sweep of criterion 8.
+   including C1's RED and its applied-mutation diff (criteria 4 and 5) and the
+   sweep of criterion 8. C2 and C3 carry no red by design — do not manufacture
+   one.
 2. Conventional commits; PR titled
    `test(dream): close the show option-position slot and re-sync the guard's mirrors (WP-show-slot-own-value-kind)`.
 3. PR template filled, including "Decisions made" (or "none") and
