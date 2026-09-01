@@ -1,7 +1,7 @@
 ---
 id: WP-smoke-live-scheduler-preflight
 title: Refuse to run the install smoke script while this user has live Wienerdog scheduler registrations
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
