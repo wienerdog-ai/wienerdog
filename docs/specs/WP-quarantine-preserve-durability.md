@@ -30,13 +30,19 @@ the quarantine artifact is the user's only route back to text the model wrote.
 that *"nothing may destroy the working copy of a note unless some **durable**
 artifact byte-identically holds THE BYTES THAT ARE THERE NOW."*
 
-`WP-preservation-abort-widening` established the **byte-identity** half: a
+`WP-preservation-abort-widening` established the **byte-identity** conjunct: a
 preservation succeeds only if the artifact is read back and compared, and a
 rejected artifact is disposed of under an ownership contract. It deliberately did
-**not** establish the **durability** half, and this WP is that half. Measured at
-`fc506110`: `grep -rn 'fsync\|fdatasync' src/ tests/` returns **nothing** — the
-product has no durability primitive anywhere today, so this is a new
-cross-cutting concern rather than a repair.
+**not** establish the **durable** conjunct, and this WP is that conjunct.
+
+**This is a REPAIR of a pre-existing gap in a shipped invariant, and it needs a
+mechanism the product does not have.** Q4 has required durability since it
+shipped; it has never been enforced. Measured at `fc506110`:
+`grep -rn 'fsync\|fdatasync' src/ tests/` returns **nothing**. So the defect is
+old and the remedy is new — a cross-cutting durability mechanism with no
+precedent, no existing caller contract and no test idiom in this repository. That
+combination is why it was extracted rather than carried inside an already-sized
+package.
 
 ## What done means
 

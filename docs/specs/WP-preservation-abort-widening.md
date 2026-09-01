@@ -38,11 +38,15 @@ not in `WP-dream-promote-in-workspace.md` where the stub pointed. The stub's
 pointer is wrong; the citation is sound.
 
 **The widening itself is deliberately NOT parked.** Q4 is a shipped canonical
-row that already binds every party; P0–P5 make the gate, the promotion module
-and the pipeline's own record of the rule agree with it.
-That is a defect fix against an existing contract, not a product choice, and
-holding it for a ruling nobody recorded would leave the measured data loss in
-place. What needs a word from the owner is only its blast radius.
+row that already binds every party; P0–P5 bring the gate, the promotion module
+and the pipeline's own record of the rule into line with **the part of Q4 this
+WP enforces** — its VERIFIED-BYTE-IDENTITY subset. Q4's other conjunct, that the
+artifact be **durable**, stays UNMET here and is
+`WP-quarantine-preserve-durability`'s; it has never been met (no `fsync` exists
+in the product), so nothing regresses. That is a defect fix against an existing
+contract, not a product choice, and holding it for a ruling nobody recorded would
+leave the measured data loss in place. What needs a word from the owner is only
+its blast radius.
 
 **The one question for the owner.** Rows P0–P3 make the *whole run* fail loud on
 two arms that today only refuse one note; P0b adds a third occasion — an artifact
@@ -119,9 +123,19 @@ Table Q row **Q4**, quoted here so you need not open it:
 Q4 binds every party that could destroy a working copy. The **implementation**
 of it does not: it fires on one of the three ways the gate reaches its refusing
 arm, and the other two lose the bytes silently. Closing that gap is this work
-package. It is not a new product decision — it is making the gate, the promotion
-module and the pipeline's own record of the rule agree with a canonical row that
-already shipped.
+package. It is not a new product decision — it is bringing the gate, the
+promotion module and the pipeline's own record of the rule into line with a
+canonical row that already shipped.
+
+**Read Q4's two requirements separately, because this WP satisfies one of them.**
+Q4 asks for an artifact that is (i) **byte-identical** to the bytes on disk now
+and (ii) **durable**. This WP establishes (i) and only (i): a preserved artifact
+is read back and compared, which today it never is. It does not establish (ii),
+and (ii) has never been established — the product contains no `fsync` at all
+(`grep -rn 'fsync\|fdatasync' src/ tests/` returns nothing at `fc506110`). So
+after this WP, Q4's durability conjunct remains **unmet and unregressed**, owned
+by `WP-quarantine-preserve-durability` (Draft). Every claim below about Q4 is a
+claim about subset (i); nowhere does this spec assert Q4 is satisfied whole.
 
 ## Current state
 
@@ -191,8 +205,8 @@ redactCopy.bytes)` (`validate.js:1054`) compares `afterBytes` against the alias
 of itself that `quarantinePreserve` returned, never against the artifact, so a
 corrupt artifact counts as recovery. Both reviewers of round 1 reproduced this
 independently. It is why Table P row **P0b** exists: "empty record" is only a
-sound operationalization of Q4 once a non-empty record means a VERIFIED
-artifact.
+sound operationalization of Q4's byte-identity conjunct once a non-empty record
+means a VERIFIED artifact.
 
 **One of the three message values is already dead code, and the tests say so.**
 The abort's `redactedName` argument is `redactCopy ? redactCopy.name : null`, and
@@ -259,11 +273,17 @@ names the OTHER half explicitly — *"its Table B row B3b decides the condition,
 its Table Q row Q18 decides the message"* — and B3b
 (`WP-secret-fence-ep2-redact-arm.md:1565`) still scopes that condition to
 *"B3's OWN preserve returned `null` after ANY redact-arm fall-through"*. B3b's
-CONDITION is already the right test — it says so in terms, *"the condition is a
-byte-identity test, not a copy-existence test"* — and Table P generalises its
-SCOPE rather than replacing it. Amending G5 and Q18 while leaving B3b narrow
-would leave Q4's cited condition owner contradicting the canonical table, so
-B3b is amended in the same pass.
+CONDITION is already the right SHAPE — it says so in terms, *"the condition is a
+byte-identity test, not a copy-existence test"* — so Table P generalises its
+scope rather than replacing it. But that condition has **two conjuncts**, *"no
+**durable** copy OF THE TARGET'S CURRENT BYTES"*, and this WP enforces only the
+second: the byte-identity test moves from vacuous to real, while the durability
+requirement stays where it has always been — written down and never enforced.
+The amendment clause below therefore **defers that conjunct explicitly** rather
+than calling the condition unchanged; saying "unchanged" would leave the amended
+cell describing behaviour no code performs. Amending G5 and Q18 while leaving
+B3b untouched would additionally leave Q4's cited condition owner contradicting
+the canonical table, so B3b is amended in the same pass.
 
 **What is and is not recorded about the ruling.** See **Dispatch
 precondition**, above.
@@ -350,7 +370,7 @@ this spec cites it.
 
 | # | Party / arm | The failure | Shipped behavior at `fc506110` (measured) | Required after this WP | Abort message's "which preserves failed" value |
 |---|---|---|---|---|---|
-| **P0** | The EP2 gate, as a whole | any preservation step leaves no verified artifact holding the bytes being judged | not a stated rule; enforced on one arm only | **THE RULE: the gate never returns a `{refuse:true}` verdict whose `preserved` record is empty. That state raises the Q18 abort instead.** An arm whose `redacted/` copy survives **and is verified per P0b** is NOT this state — that copy is on the record and the run continues, exactly as today | — |
+| **P0** | The EP2 gate, as a whole | any preservation step leaves no VERIFIED artifact holding the bytes being judged — **Q4's byte-identity conjunct, which is the subset this WP enforces; Q4's durability conjunct is not decided here** (see below Table D) | not a stated rule; enforced on one arm only | **THE RULE: the gate never returns a `{refuse:true}` verdict whose `preserved` record is empty. That state raises the Q18 abort instead.** An arm whose `redacted/` copy survives **and is verified per P0b** is NOT this state — that copy is on the record and the run continues, exactly as today | — |
 | **P0b** | Every preserving arm — **what a successful preservation MEANS** | the artifact does not hold the judged bytes: wrong bytes, a short write, or a file gone by the time anyone looks | **nothing is checked.** `quarantinePreserve` writes, renames, and returns the buffer it was HANDED (`validate.js:667-670`); no read-back. Measured, a corrupted write yields a non-empty record and no abort | **a preservation SUCCEEDS only if the artifact itself is read back and byte-compares equal to the judged bytes.** A mismatch, or an artifact that cannot be read, is a preservation FAILURE, reported exactly as an unwritable directory is, and P0 carries it to the abort. **What happens to the file that failure leaves behind is Table D's**, not this row's. The bytes a SUCCESS reports are **the bytes read back from the artifact**; every later use — P3's escape included — uses that verified value, never the input alias. **This row establishes byte-identity, NOT durability** — see "What this WP does not make durable" below Table D | — |
 | **P1** | Gate, hard-secret withhold arm (`hasHardFinding` true) | `quarantinePreserve(…,'withheld')` returns `null` | **refuses with `preserved: []`, does not throw**; the run continues, commits, and teardown destroys the sole copy | abort (P0) | `the withheld copy could not be saved; no redaction copy was attempted` |
 | **P2** | Gate, unscannable withhold arm — two causes: the delta record's `binary === true`, and bytes that are not lossless UTF-8 (`WP-ep2-unscannable-preserve`, Table U) | same step, same failure | **same as P1** | abort (P0) | same value as P1 — the redact arm is not entered on either cause |
@@ -403,8 +423,9 @@ the medium, and an unlink is not durable until the containing directory is
 flushed. That is the whole of `WP-quarantine-preserve-durability` (Draft), which
 `depends_on` this WP and owns the sync protocol, the recursively-created-directory
 entry problem, the platform's silent `F_FULLFSYNC` → `F_BARRIERFSYNC` → `fsync`
-fallback, and the honest guarantee sentence. **This WP does not weaken Q4 and
-does not widen that exposure:** the product contains no `fsync` today
+fallback, and the honest guarantee sentence. **This WP enforces Q4's
+byte-identity conjunct and leaves its durability conjunct unmet; it weakens
+nothing and widens no exposure:** the product contains no `fsync` today
 (`grep -rn 'fsync\|fdatasync' src/ tests/` returns nothing at `fc506110`), so the
 crash window is pre-existing and unchanged, while this WP strictly *reduces* it —
 more runs now abort, and an abort retains the workspace instead of destroying the
@@ -463,7 +484,7 @@ on the spot.
   each at the end of the row's first content cell:
 
   ```text
-  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. The byte-identity CONDITION this row decides is unchanged — Table P generalises it rather than replacing it, and row P0b tightens what counts as a copy at all: one this gate has read back and byte-compared — and this clause restates none of Table P's members.**
+  **Amended 2026-09-02 (`WP-preservation-abort-widening`): the TRIGGER CLASS is that spec's Table P, which supersedes this row's scoping of the condition to a redact-arm fall-through. This row's condition has TWO conjuncts and they are now enforced separately. The BYTE-IDENTITY conjunct is ENFORCED for the first time: row P0b requires a preserved copy to be read back from the artifact and byte-compared, where this gate previously compared a buffer against itself. The DURABLE conjunct is PRESERVED AS WRITTEN AND EXPLICITLY DEFERRED: it has never been enforced — the product has no `fsync` — and `WP-preservation-abort-widening` does not enforce it either; it is `WP-quarantine-preserve-durability`'s, and until that lands this row states a standing obligation rather than shipped behaviour. Nothing here permits a teardown that this row's full condition forbids that was not already permitted. This clause restates none of Table P's members.**
   ```
 
   ```text
@@ -508,8 +529,9 @@ on the spot.
   a design move, not a third patch: the ownership contract that IS this WP's was
   pulled into **Table D**, and durability was extracted whole into
   `WP-quarantine-preserve-durability` (Draft). The round records carry the rest.
-  **Why extracted rather than tabled here:** CLAUDE.md's own split rule is *"if
-  you can't write literal verification commands for it, split it"*, and crash
+  **Why extracted rather than tabled here:** the architect's own sizing rule
+  (`.claude/agents/wd-architect.md:17`) is *"If you can't write literal
+  verification commands for it, split it."*, and crash
   durability has none — a crash cannot be staged inside `npm test`, so the only
   cheap evidence is a call-order assertion, which round 3 itself showed proves
   nothing (libuv degrades `F_FULLFSYNC` → `F_BARRIERFSYNC` → `fsync` silently, so
@@ -579,9 +601,14 @@ on the spot.
 - [ ] **Table D, D3**: a removal that cannot be completed raises a
       `WienerdogError` naming the path, rather than returning a preservation
       failure. No cleanup failure is suppressed.
-- [ ] **Table D, D4**, as the property that ties D0–D2 together: after **any**
-      preservation failure, the quarantine tree holds no file the preservation
-      record does not name — no `.tmp-*` residue and no rejected artifact.
+- [ ] **Table D, D4**, as the property that ties D0–D2 together, and scoped to
+      **the paths this invocation owns** — not to the quarantine tree at large,
+      which legitimately holds earlier runs' artifacts: after **any** preservation
+      failure, the `tmp` this call wrote and the `dest` it renamed onto are both
+      absent, and **every pre-existing file in the quarantine tree — the D1
+      collision candidate included — is byte-identical to what it was before the
+      call**. Evidence must run against a NON-EMPTY quarantine: an empty-fixture
+      test satisfies the first half vacuously and cannot see the second at all.
 - [ ] **P0** holds: the EP2 gate returns no `{refuse:true}` verdict with an empty
       `preserved` record. Driven on P1 (hard secret) and on **both** of P2's
       causes (`record.binary === true`; bytes that are not lossless UTF-8), with
