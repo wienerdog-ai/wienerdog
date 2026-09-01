@@ -32,11 +32,33 @@ only the worktree's own `AGENTS.md`). Raw outputs are committed BEFORE
 adjudication, one file per channel per round
 (`2026-09-01-index-guard-gate-raw-round<N>-<channel>.txt`).
 
-## Round zero (`374728a2`)
+## Round zero (`374728a2` → fixes in `7fe16406`)
 
-_(pending — template conformance by a clean-context executor; coherence pass
-re-running every executable claim; orchestrator's own re-measurement of the
-load-bearing ones.)_
+Template conformance (clean-context executor, sonnet): **CONFORMANT** — every
+template section present, the one conditional item carries its `N/A — reason`,
+no glossary synonyms, no ungated universal. Coherence pass (second
+clean-context executor, sonnet; the orchestrator re-measured the load-bearing
+claims independently): every `file:line` citation, every quoted fragment,
+every count (`PRODUCING` 1 / `**PRODUCING**` 0 on line 541, `produces: true`
+×4, `| W1 |` one line), the sweep baseline, both git-frame experiments (the
+relative index lands at the WORKTREE TOP under `-C <repo>/sub`, git 2.39.5)
+and the `getPaths({HOME:'relhome'})` claim reproduced; the four
+untouched-tree verification commands behaved as the spec predicts (pair
+check red 0/4, negated grep red, module gate green, sweep = baseline).
+**5 findings (1 B, 4 C), all FIX, applied in `7fe16406`:**
+
+1. **B** — the Mirrored Surface Checklist omitted the template's
+   acceptance-criteria and verification-command mirror categories
+   (`_TEMPLATE.md:93-97`) for all three tables; registered with criterion
+   numbers and block headers as locators, the preamble split into sweep-found
+   tree surfaces and in-spec surfaces the sweep cannot reach.
+2. **C** — two divergent copies of the "unchanged" invariant (Deliverables
+   cell vs criterion 4); the cell is the owner, criterion 4 and 7 cite it.
+3. **C** — `paths.js:21-33` → `:21-31`. 4. **C** — the W1(c) foreclosure
+   quoted with its actual double quotes. 5. **C** — `:1039` is the property
+   `stateDir: paths.state,`, not an assignment.
+   The architect's whole-spec re-read caught one self-inflicted falsification
+   (a checklist entry describing criterion 7 by its pre-fix wording).
 
 ## Rounds
 
