@@ -4,12 +4,62 @@ title: Widen the only-copy abort trigger from the named case to its class
 status: Ready
 model: sonnet
 size: S
-depends_on: []
-adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0034]
+depends_on: [WP-dream-promote-in-workspace, WP-secret-fence-ep2-redact-arm]
+adrs: [ADR-0004, ADR-0031, ADR-0034]
 epic: dream-promotion
 ---
 
 # WP-preservation-abort-widening: Widen the only-copy abort trigger from the named case to its class
+
+## Dispatch precondition (one owner confirmation; changes no Deliverables row)
+
+Read this first and then read on: the row ids it uses (**P0**–**P6**) are
+Table P's, under **Contract reference** below, and **Q4** is the shipped
+only-copy invariant quoted in full in **Context**.
+
+**What is recorded, and what is not.** The stub this spec replaces cited an owner
+ruling that "widened the G5 trigger from the specific named case to the whole
+class, on Q4's 'every party' binding". **That ruling text is not recorded
+anywhere in this tree** — not in `docs/specs/`, `docs/specs/done/`,
+`docs/specs/logbook/`, `docs/adr/`, `memory/`, or any commit message. What *is*
+recorded is (a) the review-gate finding quoted in **Current state** below, which routes
+the G5-vs-Q4 scope gap to the architect as an open decision, and (b)
+`docs/HANDOVER.md:49-50`, which queues this work package by name and records the
+sequencing half byte-exactly:
+
+```text
+3. `WP-preservation-abort-widening` then `WP-quarantine-banner-location` —
+   two small, fully measured fixes; sequenced in that order by owner ruling.
+```
+
+The stub's third citation — "the Q18 message fields carry what the abort must
+say" — resolves: Q18 exists, in `WP-secret-fence-ep2-redact-arm.md`'s Table Q,
+not in `WP-dream-promote-in-workspace.md` where the stub pointed. The stub's
+pointer is wrong; the citation is sound.
+
+**The widening itself is deliberately NOT parked.** Q4 is a shipped canonical
+row that already binds every party; P0–P5 make the gate, the promotion module
+and the pipeline's own record of the rule agree with it.
+That is a defect fix against an existing contract, not a product choice, and
+holding it for a ruling nobody recorded would leave the measured data loss in
+place. What needs a word from the owner is only its blast radius.
+
+**The one question for the owner.** Rows P0–P3 make the *whole run* fail loud on
+two arms that today only refuse one note. Confirm that blast radius, or say the
+two new arms should refuse-and-continue instead.
+
+**Recommendation: confirm fail-loud, and it is close to free.** Q4 forbids
+destroying the working copy, and the pipeline has no shape in which one note's
+workspace survives while the run continues — teardown is all-or-nothing (P5).
+The trigger is a broken quarantine directory, which fails *every* preserve in the
+run, so any soft-finding note in the same run already aborts it today via P3;
+the widening changes which note reports the failure far more often than whether
+the run fails. And the failure is recoverable by hand: the workspace is retained
+and the transcript ledger is not advanced, so the sessions are retried next run.
+
+**Do not dispatch until this is answered.** A "refuse-and-continue" answer
+changes rows P0–P2 and their criteria; it changes no path in the Deliverables
+table.
 
 ## Context (read this, nothing else)
 
@@ -47,8 +97,9 @@ Table Q row **Q4**, quoted here so you need not open it:
 Q4 binds every party that could destroy a working copy. The **implementation**
 of it does not: it fires on one of the three ways the gate reaches its refusing
 arm, and the other two lose the bytes silently. Closing that gap is this work
-package. It is not a new product decision — it is making three code sites agree
-with a canonical row that already shipped.
+package. It is not a new product decision — it is making the gate, the promotion
+module and the pipeline's own record of the rule agree with a canonical row that
+already shipped.
 
 ## Current state
 
@@ -87,7 +138,7 @@ C redact fall-through  : THREW=WienerdogError  | (aborted before returning)
 
 The same defect was measured independently by the PR #55 round-2 review gate and
 routed to the architect —
-`docs/specs/logbook/2026-08-31-pr55-gate-raw-round2-wd-reviewer.txt:83`:
+`docs/specs/logbook/2026-08-31-pr55-gate-raw-round2-wd-reviewer.txt:79-83`:
 
 > `HARD SECRET  : THROWN null | WORKSPACE SURVIVES false | BYTES SURVIVE false`
 > `UNSCANNABLE  : THROWN null | WORKSPACE SURVIVES false | BYTES SURVIVE false`
@@ -103,9 +154,12 @@ record. The **refuse** arm at `:1195` reads the same record
 (`readRecord(verdict.preserved, rel, 'refuse')`) and never checks it.
 
 **The pipeline's teardown exception is already class-wide in code.**
-`src/cli/dream.js:947-963` wraps the whole `promote()` call in
-`catch (err) { retainWorkspace = true; throw err; }`, so *any* throw out of
-`promote()` retains the workspace; `:1184` is the only teardown call
+`src/cli/dream.js:940-963` is one `try`/`catch` around the whole `promote()`
+call: `try {` at `:940`, the call at `:941-952`, `} catch (err) {` at `:953`,
+and — structurally, with seven comment lines interleaved at `:954-960` — the
+catch body sets `retainWorkspace = true` (`:961`) and rethrows (`:962`). It
+inspects nothing about the error, so *any* throw out of `promote()` retains the
+workspace; `:1184` is the only teardown call
 (`if (!retainWorkspace) destroyWorkspace(workspaceDir)`). **No pipeline code
 change is needed.** What is narrow there is the comment at `:954-960`, which
 names only `when a note's redaction AND its withheld preservation both failed`,
@@ -125,7 +179,8 @@ exists. Q18 was written when only one arm could reach the abort, so its
 `ABORT.onlyWithheldFailed`). Table P below adds the third and changes nothing
 else about Q18.
 
-**What is and is not recorded about the ruling.** See "Dispatch precondition".
+**What is and is not recorded about the ruling.** See **Dispatch
+precondition**, above.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -192,7 +247,7 @@ this spec cites it.
 | **P2** | Gate, unscannable withhold arm — two causes: the delta record's `binary === true`, and bytes that are not lossless UTF-8 (`WP-ep2-unscannable-preserve`, Table U) | same step, same failure | **same as P1** | abort (P0) | same value as P1 — the redact arm is not entered on either cause |
 | **P3** | Gate, redact fall-through arm (`redactFellThrough`) | the `redacted/` preserve failed, or the scrub produced nothing, AND the withheld preserve failed | **aborts, unless a byte-identical `redacted/` copy survives** (`validate.js:1042`) | **UNCHANGED in behavior**, including the recoverable escape | the two shipped values, unchanged: `neither the redaction copy nor the withheld copy could be saved` / `the withheld copy could not be saved; the redaction copy was saved` |
 | **P4** | `promote()` — Q4's module share, against an INJECTED gate it may not trust | the gate reports an empty preservation record on a **refusal** | the **redact** branch throws (`promote.js:1221`); the **refuse** branch at `:1195` does not check | the refuse branch throws too, with: `` promote: the secret gate's withhold arm reported no preserved copy for `<rel>` — the only-copy invariant is unsatisfied and nothing is promoted `` — naming the **withhold** arm, never reusing the redact arm's wording | — |
-| **P5** | The pipeline's teardown (row G5) | any of the above throws out of `promote()` | **already class-wide**: `dream.js:947-963` retains the workspace on ANY throw from `promote()`; `:1184` is the only teardown call | **no code change.** The comment at `:954-960` and row G5 state the class (this table), not the one named case | — |
+| **P5** | The pipeline's teardown (row G5) | any of the above throws out of `promote()` | **already class-wide**: `dream.js:940-963` is one `try`/`catch` around the whole call and inspects nothing about the error, so it retains the workspace on ANY throw from `promote()`; `:1184` is the only teardown call | **no code change.** The comment at `:954-960` and row G5 state the class (this table), not the one named case | — |
 | **P6** | The three message values above | — | two values, pairwise non-substring; `tests/unit/dream-validate.test.js:1859-1862` asserts each arm's value is present and **the others absent** | **the three values stay pairwise non-substring**, so that absence assertion keeps discriminating | — |
 
 Two things this table does **not** change, stated so no one infers them:
@@ -213,7 +268,7 @@ on the spot.
 - [ ] **Deliverables cells** — the `src/core/dream/validate.js` row (P0–P3 +
       message), the `src/core/dream/promote.js` row (P4), the
       `src/cli/dream.js` row (P5), both test rows, and both `docs/specs/done/`
-      rows (G5 → P5, Q18 → the message column).
+      rows (G5 → Table P, the trigger class; Q18 → the message column).
 - [ ] **Acceptance criteria** — every criterion below that names an arm, a
       message value, or the empty-record rule.
 - [ ] **Verification commands** — V2 (P1/P2's message value), V3 (P4's
@@ -224,56 +279,11 @@ on the spot.
 - [ ] **Operative prose** — the "Exact contracts" note that a `refuse` verdict
       can no longer carry an empty `preserved`; the two "does not change"
       paragraphs directly under Table P.
-- [ ] **Out-of-spec mirrors this WP must move** — the `ABORT` map at
+- [ ] **Mirrors outside this document (all inside the Deliverables boundary)** — the `ABORT` map at
       `tests/unit/dream-validate.test.js:1842`, the gate's `@throws` JSDoc in
       `validate.js`, the `dream.js:954-960` comment, row **G5**
       (`WP-dream-promote-in-workspace.md:465`) and row **Q18**
       (`WP-secret-fence-ep2-redact-arm.md:1647`).
-
-## Dispatch precondition (one owner confirmation; changes no Deliverables row)
-
-**What is recorded, and what is not.** The stub this spec replaces cited an owner
-ruling that "widened the G5 trigger from the specific named case to the whole
-class, on Q4's 'every party' binding". **That ruling text is not recorded
-anywhere in this tree** — not in `docs/specs/`, `docs/specs/done/`,
-`docs/specs/logbook/`, `docs/adr/`, `memory/`, or any commit message. What *is*
-recorded is (a) the review-gate finding quoted under Current state, which routes
-the G5-vs-Q4 scope gap to the architect as an open decision, and (b)
-`docs/HANDOVER.md:49-50`, which queues this work package by name and records the
-sequencing half byte-exactly:
-
-```text
-3. `WP-preservation-abort-widening` then `WP-quarantine-banner-location` —
-   two small, fully measured fixes; sequenced in that order by owner ruling.
-```
-
-The stub's third citation — "the Q18 message fields carry what the abort must
-say" — resolves: Q18 exists, in `WP-secret-fence-ep2-redact-arm.md`'s Table Q,
-not in `WP-dream-promote-in-workspace.md` where the stub pointed. The stub's
-pointer is wrong; the citation is sound.
-
-**The widening itself is deliberately NOT parked.** Q4 is a shipped canonical
-row that already binds every party; P0–P5 make three code sites conform to it.
-That is a defect fix against an existing contract, not a product choice, and
-holding it for a ruling nobody recorded would leave the measured data loss in
-place. What needs a word from the owner is only its blast radius.
-
-**The one question for the owner.** Rows P0–P3 make the *whole run* fail loud on
-two arms that today only refuse one note. Confirm that blast radius, or say the
-two new arms should refuse-and-continue instead.
-
-**Recommendation: confirm fail-loud, and it is close to free.** Q4 forbids
-destroying the working copy, and the pipeline has no shape in which one note's
-workspace survives while the run continues — teardown is all-or-nothing (P5).
-The trigger is a broken quarantine directory, which fails *every* preserve in the
-run, so any soft-finding note in the same run already aborts it today via P3;
-the widening changes which note reports the failure far more often than whether
-the run fails. And the failure is recoverable by hand: the workspace is retained
-and the transcript ledger is not advanced, so the sessions are retried next run.
-
-**Do not dispatch until this is answered.** A "refuse-and-continue" answer
-changes rows P0–P2 and their criteria; it changes no path in the Deliverables
-table.
 
 ## Implementation notes & constraints
 
@@ -337,8 +347,11 @@ table.
 - [ ] **P5**: the `src/cli/dream.js` comment no longer describes the teardown
       exception as the redaction-AND-preservation cross-product — that file is
       the only carrier of the claim in `src/`, measured at `fc506110` by the
-      flattened sweep in V4 run over every `src/**/*.js`. Row G5 and row Q18
-      carry their dated amendment clauses and no other edit.
+      flattened sweep in V4 run over every `src/**/*.js`.
+- [ ] Row **G5** and row **Q18** each carry a dated amendment clause and no
+      other edit: G5's cites Table P for the trigger class, Q18's appends Table
+      P's third "which preserves failed" value. Neither file is otherwise
+      touched (`git diff` shows one changed line per file).
 - [ ] The abort path writes nothing outside `state/quarantine/`: no vault byte,
       no commit, no index change, and the note's own bytes are byte-identical
       after the abort.
@@ -405,13 +418,11 @@ npm test -- --test-name-pattern "EP2|only-copy|Q4|dream-promote"
 - A second pipeline-level fixture in `tests/unit/dream-pipeline.test.js` — see
   the Deliverables exclusions.
 - The criterion→test-name mapping harness — `WP-criterion-red-harness`.
-- **Discovered issues to report in the PR body, not to fix here** (all measured
-  at `fc506110`, all previously routed to the architect and none of them this
-  WP's subject): `neutralise()` is duplicated in `src/cli/dream.js` and
-  `src/core/dream/promote.js` with no single owner; row **V1** of
-  `WP-dream-promote-in-workspace.md` contradicts row **G12** on the
-  changed-extract record, and the code follows G12, so V1's "Inherited by" cell
-  is the stale mirror.
+- **Discovered issue to report in the PR body, not to fix here** (measured at
+  `fc506110`, previously routed to the architect, not this WP's subject):
+  `neutralise()` is duplicated in `src/cli/dream.js` and
+  `src/core/dream/promote.js` with no single owner — one security contract, two
+  code carriers.
 
 ## Definition of done
 
