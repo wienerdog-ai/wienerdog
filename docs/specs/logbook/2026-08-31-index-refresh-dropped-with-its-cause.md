@@ -353,7 +353,7 @@ a legitimate private `GIT_INDEX_FILE` set and every disposition clause of row
 W1(c) satisfied. **A data slot that cannot tell data from an option is not
 pinned at all.**
 
-**THE RULING (owner, 2026-08-31, shipped at `5c5d082`): pin the object-name
+**THE RULING (owner, 2026-08-31, shipped at `c853245b`): pin the object-name
 slots to the run's OWN computed values.** A second placeholder, `RUN_VALUE`,
 sits beside `ANY`. **It does not inspect the token** — inspecting tokens is the
 direction this entry retires. It compares the token to values THIS RUN PRODUCED
@@ -365,11 +365,14 @@ identity to an observed value is available **without any grammar**.
 > Same structural ground the pinned set stands on: our own values are ours to
 > enumerate; git's grammar is not.
 
-**Applied to every slot the rule reaches, not only the exploited one** —
-`ls-tree`'s tree-ish, `update-index --cacheinfo`'s sha, `read-tree`'s tree-ish,
-`commit-tree`'s tree and parent, `update-ref`'s two shas. Slots holding data the
-run did not compute — modes, paths, messages — stay `ANY`. **The set itself, and
-each slot's kind, is Table W row W1(c)'s and this entry does not spell it.**
+**Applied at `c853245b` to every slot the own-value rule reached, not only the
+exploited one** — `ls-tree`'s tree-ish, `update-index --cacheinfo`'s sha,
+`read-tree`'s tree-ish, `commit-tree`'s tree and parent, `update-ref`'s two
+shas. **The set itself, and each slot's kind, is Table W row W1(c)'s and this
+entry does not spell it.** A sentence naming what the remaining slots held stood
+here until 2026-09-01 and is retired with its cause: it spelled a slot kind this
+entry defers, and W1(c) has since amended that kind for shape (4)
+(`WP-show-slot-own-value-kind`).
 
 **Measured both directions**, through the real `classify` in the live fixture and
 again in isolation:
@@ -406,24 +409,26 @@ differs from its exploit in arity dies before it reaches the slot under test.
 This is the `+0`-delta shape one level in: the assertion ran, and it ran past the
 thing it was believed to be checking.
 
-#### One residual, stated rather than closed
+#### One residual, stated rather than closed — and closed at `b19121bb`
 
-**The shipped own-value set is wider than the four sources the ruling names.**
-The seam admits the single-line output of any pinned call it observed succeed —
-so besides the head, blob, tree and commit names it also admits `ls-tree`'s
-output line (harmless: it begins with a mode, so it equals no argument the run
-passes) and **the committed content of the quarantine-warnings file** read by
-`show HEAD:<warnings>`, whenever that content is one line after trimming. That
+**As shipped at `c853245b`, the own-value set was wider than the sources the
+ruling names.** The seam admitted the trimmed one-line stdout of any pinned call
+it observed succeed — so besides the head, blob, tree and commit names it also
+admitted `ls-tree`'s output line (harmless: it begins with a mode, so it equals
+no argument the run passes) and **the committed content of the quarantine-warnings
+file** read by shape (4), whenever that content was one line after trimming. That
 content is in the user's vault history and is therefore user-controllable, so a
-run **mutated** to issue the two-token redirect would be admitted again in a
-vault whose committed warnings file consists of exactly that argument.
+run **mutated** to issue the two-token redirect would have been admitted again in
+a vault whose committed warnings file consisted of exactly that argument.
 
-The exploit needs BOTH the mutation and the crafted vault, so this narrows the
-pin rather than opening a live data-loss path. It is recorded in Table W row
+The exploit needed BOTH the mutation and the crafted vault, so it narrowed the
+pin rather than opening a live data-loss path. It was recorded in Table W row
 W1(c) as owner-visible work with the shape of its remedy, **and it was not
-narrowed away in prose**: the row and `KNOWN_CALLS` are a registered pair, and a
-row claiming four sources while the code admits six is the exact drift Table W
-was extracted to end.
+narrowed away in prose**: the row and `KNOWN_CALLS` are a registered pair.
+**The remedy shipped at `b19121bb`** — the own-value set now learns only from the
+shapes whose stdout is an object name the run computed — **and W1(c) carries the
+closure record.** This paragraph is history; the live statement is that row, and
+what owns the fact is the `produces` markers beside the set.
 
 ### What was measured SOUND and is kept rather than dropped
 
