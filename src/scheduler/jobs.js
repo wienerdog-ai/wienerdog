@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const manifestLib = require('../core/manifest');
+const { writeFilePrivate } = require('../core/private-fs');
 
 /**
  * Job definitions live in a managed `jobs:` section of config.yaml (stable
@@ -233,10 +234,7 @@ function writeScheduleState(paths, name, patch) {
   const state = readScheduleState(paths);
   state[name] = { ...state[name], ...patch };
   const file = scheduleStatePath(paths);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  writeFilePrivate(file, `${JSON.stringify(state, null, 2)}\n`, { core: paths.core });
 }
 
 module.exports = {

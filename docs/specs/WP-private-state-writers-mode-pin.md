@@ -1,7 +1,7 @@
 ---
 id: WP-private-state-writers-mode-pin
 title: Write every private-listed state file through the private writer, so no rewrite can loosen it
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-failloud-survives-state-write-failure]
