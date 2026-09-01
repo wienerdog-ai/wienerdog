@@ -1,0 +1,63 @@
+SHADOW ROUND 3 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 5de0a63c, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted during the review: the guard-file suite and the full suite outside the sandbox (44 pass; 2444/2432/0). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: the spec still permits wrong-green PRODUCING evidence and makes the refusal diagnostic incompatible with W1(c).
+
+FINDING 1
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 206-209, 316-323  
+Confidence: 0.99  
+Materiality: B  
+Body: R2-B is not genuinely closed. A verifier can hard-code an incorrect expected producer mapping, mark the row to match it, and still produce all three mandated REDs. Executed with wrong mapping `[1,5,7,8]`: compliant-state green, same-count swap red, label swap red, decoy red. The pasted “reviewer comparison” does not require either side to be independently derived from the actual module and row. Thus the required evidence can certify markers that disagree with the untouched module.  
+Recommendation: Require evidence derived independently from both actual surfaces, and require a one-sided producer-membership change on either surface to make the identity check RED. Hard-coded expected ordinals must not satisfy criterion 4.
+
+FINDING 2
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 169-177, 206-206  
+Confidence: 1.0  
+Materiality: C  
+Body: R2-F is not fully fixed. The spec says the live mapping is “never predicted in this spec,” but its worked example explicitly assigns `PRODUCING` to real shape (2). This is an undated live mapping, not exempt SHA-pinned provenance, and criterion 4a checks counts only. It creates another prose copy of module-owned membership.  
+Recommendation: Make the marker example schematic, using a non-real ordinal/shape placeholder, or show only the literal insertion position without identifying a producer.
+
+FINDING 3
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 158-158, 194-195, 238-241, 303-307  
+Confidence: 0.98  
+Materiality: B  
+Body: Design (B) cannot meet W1(c)’s existing diagnostic contract within its frozen edit surface. W1(c) says every RED carries full args, cwd, and `GIT_INDEX_FILE` disposition/resolution. The required error is raised inside `classify(args, env)`, while this spec freezes that signature and every call site; `cwd` is unavailable. For a relative value, cwd is precisely the missing context needed to diagnose the refusal, and “where it resolved” is intentionally unknowable. Criterion 1’s weaker “naming the invocation” can pass while the canonical whole-cell requirement becomes false.  
+Recommendation: Either explicitly exempt unjudged harness errors from W1(c)’s diagnostic sentence, or permit the outer `spawnGit` path/signature to construct an error containing args, cwd, raw `GIT_INDEX_FILE`, and an explicit “unjudged” state. Require that complete diagnostic in criterion 1.
+
+FINDING 4
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 23-25, 281-281, 435-439  
+Confidence: 0.96  
+Materiality: B  
+Body: The owner’s “no” branch is not actually pre-written. Alternative (A) mentions re-scoping only W1(c)’s “nothing asks git” sentence, but the locator also contradicts W1(c)’s live statements that there is no question which index an invocation would write and that deciding that target was retired. It would also invalidate design (B)’s frozen `classify` signature/call sites, without specifying locator-failure behavior or replacement evidence. A “no” therefore starts another design cycle rather than selecting an executable alternative.  
+Recommendation: Either describe the consequence honestly as “no → return to design,” or provide a complete Branch A change order covering every affected W1(c) clause, signature/call-site changes, locator failure semantics, and acceptance evidence.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- `git status --short --branch`, `git rev-parse HEAD`, `git rev-parse main`, branch log, diff names/stat, and full target-spec diff — exit 0. Confirmed HEAD `5de0a63c`, main `fc506110`, detached clean tree.
+- Complete reads of the target spec, CLAUDE.md, spec-authoring runbook, cited source/test ranges, whole known-calls module, round record, and all round-1/2 raws — exit 0.
+- Full W1(c) read via `sed -n 541p … | fold -s -w 180`, split into numbered chunks — exit 0.
+- `npm test -- tests/unit/dream-pipeline.test.js` — sandbox attempt exit 1 (`EPERM` creating temp root); permitted rerun exit 0, 44 passed.
+- `npm test` — exit 0, 2,432 passed, 12 skipped, 0 failed.
+- `npm test -- --test-name-pattern "claim-2b-pipeline"` — exit 0; the intended test remained selected.
+- Known-calls byte-identity gate — exit 0.
+- Untouched-tree guarded loose-wording gate — exit 1, expected before implementation.
+- Exact claim sweep — exit 0; matched the documented baseline.
+- Boundary check — exit 0.
+- Relative-HOME probe — exit 0: state was relative, as documented.
+- Wrong-mapping/hard-coded-verifier probe — exit 0: wrong mapping green; all three required mutations red.
+- `wc -l` — exit 0: target spec is 450 lines.
+- `git diff --check main...HEAD` — exit 2 solely on Markdown-significant trailing spaces in committed verbatim review raws.
+- `npm run lint` — NOT RUN as a review result; orchestrator-owned, and no network access was authorized.
+
+DONE_ROUND_3

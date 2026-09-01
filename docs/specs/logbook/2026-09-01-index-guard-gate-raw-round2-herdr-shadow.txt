@@ -1,0 +1,66 @@
+SHADOW ROUND 2 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ f6a99c6b, fresh thread via /new). Captured via an approved scratch-file write (tee), pane client too narrow to scrape. No approvals granted during the review itself (its npm test and lint attempts failed inside the sandbox and are disclosed under EXECUTED). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: R1-A/B/F are coherently addressed, but R1-C/D/E remain wrong-green or unsatisfiable.
+
+FINDING 1
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 146, 175-177, 229-231, 399-408, 550-555  
+Confidence: 1.0  
+Materiality: B  
+Body: R1-E is not genuinely fixed. Criterion 5a forbids a source count in any spec/docs prose, but this spec itself says `produces: true` occurs four times, calls the module’s four markers current, enumerates both live ordinal mappings, and prints `[2,5,7,8]`. These are present-tense statements of the live source set, not the explicitly preserved SHA-pinned historical sentence. An implementation following the Deliverables cannot satisfy criterion 5a without also rewriting substantial unlisted parts of its controlling spec.  
+Recommendation: Remove all present-tense source counts and hard-coded ordinal mappings from this spec. Let verification derive and print the mapping without the spec predicting it; retain only the registered historical W1(c) sentence.
+
+FINDING 2
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 228-232, 445-468, 550-557  
+Confidence: 1.0  
+Materiality: B  
+Body: R1-C remains evadable. The identity script treats every `**(n)**` inside the delimiter span as an entry and credits a marker anywhere before the next ordinal. An in-memory mutation removed shape (2)’s real marker and inserted `**(2)** DECOY — **PRODUCING**`; the script still derived `[2,5,7,8]`, matched the module, and passed. It neither requires nine unique ordinals nor anchors each marker after that entry’s call-site citation. A malformed canonical enumeration can therefore ship green.  
+Recommendation: Require unique, ordered entries 1–9 and bind each marker to its actual entry at the specified citation-to-period position; reject duplicate/decoy ordinals. State these outcomes rather than embedding the parser implementation.
+
+FINDING 3
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 412-425, 494-524, 561-571  
+Confidence: 1.0  
+Materiality: B  
+Body: R1-D’s positive checks do not establish their claims. Per-file citation counts pass when both new `row W1(c)` strings are placed at one site and the other required site remains uncited; the in-memory counts were still exactly 2 and 5. The concept regex also misses the false universal “The pipeline routes its complete Git traffic through this seam,” while rejecting the correctly scoped “Every git call the pipeline issues from src/cli/dream.js traverses this seam; this is not total over the dream path.” Thus an over-claim can ship green and valid replacement wording can be blocked.  
+Recommendation: Verify the citation within each named comment block, not by file totals. Replace the open-ended prose regex with site-local assertions for Table C’s required scope and leave semantic completeness to the mandated whole-cell/comment reread.
+
+FINDING 4
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 66-99, 302-319, 359-371, 431-571  
+Confidence: 0.99  
+Materiality: C  
+Body: At 613 lines, the spec materially violates `spec-authoring.md:7-19`: it prescribes fixture topology, exact JavaScript/shell implementations, mutation lists, and grep portability mechanics. The model-tier commentary at 302-304 has no contract/check consumer and should be cut. The detailed measurement protocols should collapse to their result plus provenance. The wrong-green mechanisms above demonstrate the cost: the spec is maintaining a second brittle test suite instead of stating observable behavior.  
+Recommendation: Keep the frame, fail-closed, identity, per-surface citation, and semantic reread outcomes; remove the embedded implementations and mutation recipes. Retain one provenance line per measurement.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Complete `nl`/`sed` reads of the target spec, cited source/test ranges, whole known-calls module, CLAUDE.md, spec-authoring runbook, round-1 raws, and round record — exit 0.
+- Whole W1(c) read via `sed -n '541p' … | fold -s -w 180`, chunked — exit 0.
+- `git status`, HEAD/main verification, log, diff/stat/name inspection — exit 0; HEAD `f6a99c6b`, main `fc506110`, worktree clean.
+- Git 2.39.5 linked-worktree probes: `rev-parse --show-toplevel` from root/subdir and absolute relative-index resolution — exit 0; relative index resolved at worktree top.
+- `rev-parse --show-toplevel` from the worktree gitdir, common `.git`, and `/tmp` — exit 128 each, confirming fail-closed edge behavior.
+- Known-calls byte-identity gate — exit 0.
+- Untouched-tree ordinal identity check — exit 1 as predicted: `[]` versus `[2,5,7,8]`.
+- Guarded loose-wording check — exit 1 as predicted.
+- Exact claim sweep — exit 0; all seven stated baseline hits matched.
+- Citation-count checks — exit 1/1 with baselines 0/3.
+- Concept checks — exit 1/1 with one expected hit per file.
+- In-memory decoy-ordinal, concept false-negative/false-positive, and citation-concentration probes — exit 0; all bypasses reproduced.
+- Initial heredoc probe — exit 1 because the read-only shell could not create its temporary heredoc file; rerun with `node -e` — exit 0.
+- `npm test -- tests/unit/dream-pipeline.test.js` and `npm test` — exit 1 before tests; temp-root `mkdtemp` denied with `EPERM`.
+- `npm run lint` — exit 1; markdownlint dependency lookup failed with network `ENOTFOUND`; remaining frontmatter check passed.
+- Boundary-check — exit 0.
+- `git diff --check main...HEAD` — exit 2 on intentional verbatim trailing spaces in the round-1 raw record.
+- Final `git status --short --branch` — exit 0, no worktree changes.
+
+DONE_ROUND_2

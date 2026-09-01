@@ -1,0 +1,27 @@
+PLUGIN GATE ROUND 1 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main), tip 49b54eaa, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch. Four B-material design defects remain; no scope objections. The b19121bb historical sentence and test-title non-move are defensible. Executed: mandated reads (exit 0); Git 2.39.5 frame probes (0); Node frame counterexample (0); module gate (0); pair check (1, expected RED: 0/4); guarded negated grep (1, expected RED); sweep (0, exact stated baseline); boundary-check (0); lint (0). Guard-file and full test suites both exited 1 before testing because the read-only sandbox denied mkdtemp, so runtime GREEN was not independently verified.
+
+Findings:
+- [medium] [B] Table A's “never more permissive” guarantee is false (docs/specs/WP-index-guard-residuals.md:185-190)
+  Changing from process cwd to invocation cwd does not monotonically narrow the existing classifier. Using the actual fixture layout, I constructed a relative value whose old resolution equals the user's index but whose new resolution is outside the vault; the Node probe printed oldRejects=true and newRejects=false. More importantly, the future-cwd argument fails once the contract's required symlink resolution is considered: with top/link resolving inside the worktree and top/sub/link resolving outside, Git resolves link/index from the top and writes inside, while a guard based at top/sub resolves outside and admits it. Criterion 1 exercises only new-rejects/old-admits, so neither reverse case is detected. Criterion 3 also permits an unused default-frame fallback to remain while every supplied-frame test passes.
+  Recommendation: Resolve against Git's actual worktree-top frame—the vault root for all pinned shapes—or explicitly constrain the guarantee to the current nine shapes. Replace the monotonicity claim with one the chosen frame establishes, and require evidence for the reverse direction and for a missing frame failing closed.
+- [medium] [B] The mandated REPAIR edit leaves a known-false sentence in W1(c) (docs/specs/WP-index-guard-residuals.md:201-204)
+  Table B orders the original ordering paragraph to remain unchanged. That paragraph says every passed object name was “computed by an EARLIER pinned read.” The row and known-calls module themselves refute this: the head is read from the user's ref, while hash-object, write-tree, and commit-tree are PRODUCING commands rather than reads. The module explicitly records that wording claiming the run made these values was retired as false for HEAD. Removing only the exact “values THIS RUN PRODUCED” sentence therefore leaves the canonical cell internally false, while criterion 5 and its case-sensitive grep still pass.
+  Recommendation: Include the ordering sentence in Table B's row-cell edit. State only that an own-value token is admitted after an earlier pinned PRODUCING call returned and its whole stdout joined the set; avoid “computed” and “read.” Update criterion 5 to cover the semantic residual, not only the exact old phrase.
+- [medium] [B] PRODUCING identity can be wrong while every automated gate is green (docs/specs/WP-index-guard-residuals.md:360-368)
+  The contract requires shape-by-shape identity, but the only executable check compares counts and explicitly concedes it proves no identity. Removing a marker from one correct shape and adding it to one incorrect shape preserves the count, keeps the module byte-identical, satisfies the negated grep, and passes the sweep. The required one-at-a-time RED mutations do not exercise this swap. Human review is being used as the sole enforcement of a mechanically checkable contract, so a wrong canonical mapping can reach both review gates as an otherwise green implementation.
+  Recommendation: Require machine-verifiable shape-by-shape equality between row markers and module properties, including a swap mutation that must fail. Per spec-authoring.md, state the identity property and required evidence rather than prescribing a count-based implementation.
+- [medium] [B] The claimed concept sweep is only an exact-wording sweep (docs/specs/WP-index-guard-residuals.md:376-410)
+  The fixed literals cannot establish criteria 5, 7, or 8. Replacing a false comment with “All Git calls made by the pipeline traverse this seam” produces zero hits while preserving the defect and adding no W1(c) citation. Likewise, a prose count such as “the four source shapes” evades every pattern. This directly violates spec-authoring.md's requirement to sweep for the claim rather than remembered wording. The executed sweep matched the stated baseline exactly, demonstrating only that those five phrases are present—not that the claimed concepts are exhaustively covered.
+  Recommendation: Replace the fixed-phrase completeness claim with verification that reaches the concepts: false seam-total universals, required W1(c) citations at each edited comment, and prose source counts/mappings. Leave the concrete search/test design to the implementer, as required by spec-authoring.md.
+
+Next steps:
+- Revise Tables A and B before implementation dispatch.
+- Replace count-only and exact-phrase verification with evidence that proves identity and semantic coverage.
+- Rerun the guard-file and full test suites in a writable environment; the review sandbox blocked both before test execution.

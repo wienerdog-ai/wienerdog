@@ -1,0 +1,16 @@
+PLUGIN GATE ROUND 4 (closing confirmation) — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main), tip dee2d1fd, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No-ship: R3-2, R3-3, and R3-4 are closed, but R3-1 remains internally contradictory. No scope objections. EXECUTED: repository/diff reads 0; claim sweep 0; known-calls byte-identity 0; boundary-check 0; lint 0; guarded loose-wording check 1 as expected on the untouched implementation; targeted and full tests 1 before execution because the read-only sandbox denied mkdtemp; git diff --check 2 from preserved trailing whitespace in verbatim raw records.
+
+Findings:
+- [low] The final evidence inventory still requires only three criterion-4 mutations (docs/specs/WP-index-guard-residuals.md:442-446)
+  [Materiality C] Criterion 4 correctly requires four REDs, with the new scratch-module `produces` flip being the evidence that the comparison actually reads the module. The later “both directions” inventory still says “criterion 4's three mutations.” An implementer following this final verification summary can omit exactly the new RED that closes R3-1, leaving conflicting completion instructions and allowing the hard-coded-module-side failure class to escape the promised evidence.
+  Recommendation: Replace the stale three-mutation reference with a citation to criterion 4, avoiding another count/list copy; alternatively say four and explicitly include the scratch-module `produces` flip.
+
+Next steps:
+- Correct the stale criterion-4 evidence inventory, then perform the implementation review in an environment where the targeted and full test suites can create temporary directories.

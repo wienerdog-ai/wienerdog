@@ -1,0 +1,71 @@
+SHADOW ROUND 1 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 49b54eaa, fresh thread via /new). The pane client was 45 columns wide at report time, so the report was captured by asking the agent to write it verbatim to a scratch file (one approved tee), not by pane scrape. One approval granted mid-run: `npm test -- tests/unit/dream-pipeline.test.js` outside the sandbox (temp root); a lint-with-network request was declined. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: the spec preserves false coverage claims, contains an unsatisfiable acceptance criterion, and permits materially wrong-but-green implementations.
+
+FINDING 1
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 197-204, 243-248, 326-332  
+Confidence: 1.0  
+Materiality: B  
+Body: Criterion 5 requires that “no surface states a count of own-value sources,” while two explicitly registered NON-moves still do exactly that: `tests/unit/dream-pipeline.known-calls.js:68-70` says “Its four members” and enumerates them; `tests/unit/dream-pipeline.test.js:226-238` says “four shapes” and “four members.” The module is forbidden from changing, and the recorder comment is explicitly “do not edit,” so no implementation can satisfy the acceptance criterion within the permission boundary.  
+Recommendation: Either permit comment-only edits to both surfaces, including the required digest re-pin, or narrow the no-count contract explicitly to the canonical row. Do not retain the current impossible combination.
+
+FINDING 2
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 197-200, 360-368, 412-418  
+Confidence: 1.0  
+Materiality: B  
+Body: The PRODUCING verification checks only equal non-zero counts. A virtual row marking wrong shapes 1, 3, 4, and 6 produced `row=4`, `mod=4`, and passed the exact predicate. Thus an implementer can misassign every marker and pass every literal verification command. The prescribed remove-one/add-one REDs do not test the same-count swap failure. The spec honestly calls this a tripwire, but its command and success message claim the pair “AGREES,” while acceptance requires identity.  
+Recommendation: Require verification that establishes shape identity and rejects same-count misassignment, leaving the mechanism to the implementer. Remove the mutation-level test prescription, consistent with `spec-authoring.md:7-14`.
+
+FINDING 3
+
+Affected file: docs/specs/done/WP-dream-promote-in-workspace.md  
+Lines: 541-541  
+Confidence: 1.0  
+Materiality: B  
+Body: The canonical cell still says the run’s own git invocations are “every one of them through the seam of (c),” while the same cell later names `validate.js` as an in-scope, un-seamed invocation and `promote.js` as another dream-path spawn point. Table C omits this false universal, and the fixed-phrase sweep misses it. Shipping the cleanup would therefore leave the canonical security/enforcement contract internally contradictory.  
+Recommendation: Add this sentence to Table C’s surfaces and rewrite it to cite the COVERAGE limit without restating the spawn-point list. Replace the phrase-only sweep with a concept-level coverage sweep that catches equivalent universals.
+
+FINDING 4
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 206-214, 252-258  
+Confidence: 0.98  
+Materiality: B  
+Body: The registered test-title NON-move is not justified. Pinning a title means its caller must move with it, not that false wording becomes acceptable; ownership by CLAIM 2b does not let this individual test overstate its evidence; and the committed `--test-name-pattern "claim-2b-pipeline"` command does not select `claim-2b-merge-cwd`. The pipeline test observes only calls arriving through `opts.spawnGit`, yet its title continues to claim “no product code invokes git.” Narrowing only the adjacent comment leaves a misleading green test name.  
+Recommendation: Rename the test to its observed pipeline-seam scope and update the pinned command, or provide an aggregate verification whose name genuinely covers all contributing scopes.
+
+FINDING 5
+
+Affected file: docs/specs/WP-index-guard-residuals.md  
+Lines: 185-190, 299-304, 308-320  
+Confidence: 0.93  
+Materiality: B  
+Body: Table A’s “never more permissive” proof exceeds its evidence. Only `read-tree` on Git 2.39.5 was measured, but the text generalizes Git’s worktree-top resolution to future calls. Its “at or below” containment argument also fails once the promised symlink/`..` semantics apply: with top `T`, cwd `T/sub`, and `../escape/x`, the parent’s `escape` can resolve into `T` while `T/escape` resolves outside it, so Git can land inside while the guard admits the differently resolved path. Current pinned calls avoid this because their `-C` directory equals the worktree top; the future-call claim does not. Separately, criterion 3 only says no caller relies on a default, so an implementation retaining `cwd = process.cwd()` passes all required calls and RED/GREEN evidence despite Table A forbidding that hidden frame.  
+Recommendation: Limit the safety claim to the nine current shapes whose bases coincide, treat any below-top future call as requiring new measurement, and require the classifier to fail on an omitted frame rather than accepting a default.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- `git status --short --branch`; `git rev-parse HEAD`; `git rev-parse main`; diff/stat inspection — exit 0. Confirmed HEAD `49b54eaa`, main `fc506110`.
+- `nl`/`sed` reads of the complete target spec, `CLAUDE.md`, and `docs/runbooks/spec-authoring.md` — exit 0.
+- `sed -n '541p' ... | fold -s -w 180`, including chunked rereads of the entire W1 cell — exit 0.
+- `nl`/`sed` reads of every requested source/test range, the complete known-calls module, C2 at line 717, CLAIM 2b at 1114/1454, and `dream-promote.test.js:886` — exit 0.
+- `git grep`/`rg` coverage and producing-source concept searches — exit 0.
+- `npm test -- tests/unit/dream-pipeline.test.js` in the restricted sandbox — exit 1 (`EPERM` creating the temporary root); approved rerun — exit 0, 44 passed.
+- Known-calls byte-identity gate — exit 0.
+- PRODUCING pair check on the untouched tree — exit 1, as predicted.
+- Guarded `values THIS RUN PRODUCED` negated grep — exit 1, as predicted.
+- Exact claim sweep — exit 0; baseline matched all seven stated hits exactly.
+- Wrong-shape virtual marker mapping `[1,3,4,6]` against the exact count predicate — exit 0 with `count_gate_passes:true`.
+- `node scripts/boundary-check.js ...` — exit 0.
+- `git --version`; `node --version`; `grep --version` — exit 0: Git 2.39.5 Apple Git-154, Node v25.9.0, BSD grep 2.6.0-FreeBSD.
+- lint: not run (no node_modules).
+
+DONE_ROUND_1
