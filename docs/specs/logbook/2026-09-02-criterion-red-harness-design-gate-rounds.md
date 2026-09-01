@@ -35,7 +35,7 @@ adjudication (`2026-09-02-red-harness-gate-raw-round<N>-<channel>.txt`).
 
 ## Round zero (`56c5a99e`)
 
-_(pending)_
+Pending — template conformance by a clean-context executor; coherence pass re-running every executable claim.
 
 ## Rounds
 
