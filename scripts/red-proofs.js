@@ -97,6 +97,10 @@ const RUNNER_REL = 'scripts/red-proofs.js';
 /** `--root` implies this declaration directory. One flag, not two. */
 const DECL_DIR_REL = 'tests/red-proofs';
 
+/** The tree's own test entry — a path the runner NEEDS to operate, so a `file`
+ *  may never resolve to it (Table A's `file` row). */
+const SUITE_ENTRY_REL = 'tests/run.js';
+
 /** Excluded from the snapshot domain by declaration, not by implementation note. */
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules']);
 
@@ -188,13 +192,20 @@ const REACH = [
   '           failure. The mechanical rules reject the direct self-mutation move (a mutation may',
   '           not target the suite, this runner or a declaration), not every indirect one.',
   '           Completeness and relevance are REVIEW judgments.',
-  '  LANE LIMIT: isolation covers only the paths this runner PROVIDES — each phase\'s working',
-  '           directory, TMPDIR/TMP/TEMP, HOME, the four XDG roots and the Wienerdog override',
-  '           names — all inside that phase\'s own copy, whose common parent is held non-writable',
-  '           while a child runs. A suite that writes ANYWHERE ELSE (an absolute path this runner',
-  '           does not own, or a chmod out of that parent) is UNSUPPORTED BY THE LANE rather than',
-  '           guarded against: full confinement needs OS-level sandboxing, which ADR-0004 and',
-  '           portability put out of reach. Same-user boundary, as docs/THREAT-MODEL.md draws it.',
+  '  LANE LIMIT: isolation covers only the paths this runner PROVIDES. Each phase\'s working',
+  '           directory, TMPDIR/TMP/TEMP, HOME and the four XDG roots live INSIDE that phase\'s own',
+  '           copy. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
+  '           WIENERDOG_CLAUDE_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) are REMOVED from the phase',
+  '           environment rather than set, so their roots land inside that copy through the',
+  '           redirected HOME they all default under. Each copy is created, manifest-verified and',
+  '           locked immediately before its own phase and deleted after it, and while a child runs',
+  '           the copies\' parent and the sandbox above it are non-writable and the snapshot is',
+  '           read-only — so the running copy is the only writable tree this runner provides.',
+  '           A suite that writes ANYWHERE ELSE (an absolute path this runner does not own, the',
+  '           ambient temp root above the sandbox, or a chmod out of the locked parent) is',
+  '           UNSUPPORTED BY THE LANE rather than guarded against: full confinement needs OS-level',
+  '           sandboxing, which ADR-0004 and portability put out of reach. Same-user boundary, as',
+  '           docs/THREAT-MODEL.md draws it.',
 ].join('\n');
 
 // ── Node floor ───────────────────────────────────────────────────────────────
@@ -226,11 +237,17 @@ function nodeFloorOk(version) {
  */
 function loadDeclarations(root) {
   const dir = path.join(root, DECL_DIR_REL);
-  let names = [];
+  let names;
   try {
     names = fs.readdirSync(dir).filter((n) => n.endsWith('.proofs.json')).sort();
-  } catch {
-    names = [];
+  } catch (e) {
+    // NOT V1. V1 is reserved for a directory the runner SUCCESSFULLY scanned and
+    // found empty. An unreadable, missing or non-directory path means the runner
+    // could not obtain a trustworthy result at all, which is Table E2's ERROR —
+    // collapsing `EACCES`/`ENOTDIR`/a bad `--root` into "an empty scan" reports
+    // a typo'd invocation as a clean vacuity verdict.
+    throw error(`the declaration directory could not be scanned: ${dir} (${e.code || e.message}) `
+      + '— an unreadable, missing or non-directory path is an ERROR, never V1');
   }
   if (names.length === 0) {
     throw new RedProofError('VACUOUS', `V1: no declaration files — ${dir} holds no *.proofs.json`);
@@ -315,6 +332,9 @@ function validateProof(declFile, suite, proof, seenIds) {
     throw error(where('"file" must not be the suite it reddens — a mutation may not edit the assertion, its expected literal or its host'));
   }
   if (file === RUNNER_REL) throw error(where('"file" must not be the RED-proof runner itself'));
+  if (file === SUITE_ENTRY_REL) {
+    throw error(where(`"file" must not be ${SUITE_ENTRY_REL} — the runner spawns it to start every phase`));
+  }
   if (file === DECL_DIR_REL || file.startsWith(`${DECL_DIR_REL}/`)) {
     throw error(where('"file" must not be a declaration'));
   }
@@ -340,9 +360,21 @@ function validateProof(declFile, suite, proof, seenIds) {
   }
 }
 
-/** @param {string} p @returns {string} `p` with `\` separators folded and no `./` lead */
+/**
+ * `p` with `\` separators folded and the path COLLAPSED — `.` and `..` segments
+ * resolved lexically. Collapsing is load-bearing, not tidiness: measured at
+ * PR #204 round 1, a `file` of `tests/../tests/suite-basic.js` compared unequal
+ * to `tests/suite-basic.js` under a fold-only rule, walked past every protected
+ * target check, and let a proof mutate the assertion host itself and report
+ * PROVEN. This is the FIRST of two layers; `assertNotProtected` is the
+ * authoritative one, over canonical paths inside the fresh copy.
+ *
+ * @param {string} p @returns {string}
+ */
 function normaliseRel(p) {
-  return String(p).replace(/\\/g, '/').replace(/^\.\//, '');
+  const folded = String(p).replace(/\\/g, '/');
+  const collapsed = path.posix.normalize(folded);
+  return collapsed.replace(/^\.\//, '').replace(/\/$/, '') || '.';
 }
 
 // ── SNAPSHOT: the manifest over the declared domain ──────────────────────────
@@ -363,24 +395,43 @@ function buildManifest(root) {
   /** @param {string} rel */
   const walk = (rel) => {
     const abs = rel === '' ? root : path.join(root, rel);
-    const entries = fs.readdirSync(abs, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+    let entries;
+    try {
+      entries = fs.readdirSync(abs, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+    } catch (e) {
+      throw error(`the snapshot domain could not be read at ${rel === '' ? '.' : rel} (${e.code || e.message})`);
+    }
     for (const ent of entries) {
       const childRel = rel === '' ? ent.name : `${rel}/${ent.name}`;
       const childAbs = path.join(root, childRel);
-      const st = fs.lstatSync(childAbs);
+      let st;
+      try {
+        st = fs.lstatSync(childAbs);
+      } catch (e) {
+        throw error(`the snapshot domain could not be read at ${childRel} (${e.code || e.message})`);
+      }
+      // ENTRY TYPE IS DECIDED BEFORE ANY EXCLUSION, and the order is the fix for
+      // a measured hole: filtering `.git`/`node_modules` by NAME first silently
+      // accepted a source tree whose `node_modules` was itself a SYMLINK — a
+      // dependency link, which Table B row 2a requires to be an ERROR naming its
+      // path, and the run returned PROVEN over it.
       if (st.isSymbolicLink()) {
-        throw error(`unsupported entry type: symbolic link at ${childRel} — the copy step refuses symlinks`);
+        throw error(`unsupported entry type: symbolic link at ${childRel} — the copy step refuses symlinks, dependency links included`);
       }
-      if (st.isDirectory()) {
-        if (EXCLUDED_DIRS.has(ent.name)) continue;
-        out.set(childRel, { type: 'dir', mode: st.mode & 0o7777 });
-        walk(childRel);
-        continue;
-      }
-      if (!st.isFile()) {
+      if (!st.isDirectory() && !st.isFile()) {
         const kind = st.isBlockDevice() || st.isCharacterDevice() ? 'device'
           : st.isSocket() ? 'socket' : st.isFIFO() ? 'FIFO' : 'unsupported entry';
         throw error(`unsupported entry type: ${kind} at ${childRel}`);
+      }
+      // The exclusion is by BASENAME and applies to a FILE as well as a
+      // directory — in a LINKED GIT WORKTREE `.git` is a regular file, and this
+      // repository is one. `copyTree`'s filter uses the same rule, so the two
+      // agree by construction rather than by call-site ordering.
+      if (EXCLUDED_DIRS.has(ent.name)) continue;
+      if (st.isDirectory()) {
+        out.set(childRel, { type: 'dir', mode: st.mode & 0o7777 });
+        walk(childRel);
+        continue;
       }
       out.set(childRel, {
         type: 'file',
@@ -437,6 +488,28 @@ function copyTree(src, dest) {
 }
 
 /**
+ * Hold the snapshot tree read-only (every write bit cleared) while a child runs,
+ * and restore its true modes from the manifest before a copy is taken.
+ *
+ * The snapshot is a path THE RUNNER PROVIDES and it sits above every phase copy,
+ * so it is reachable by traversal even with the copies' parent and the sandbox
+ * locked. Restoring exact modes before each copy is what keeps the copy
+ * manifest-conformant, so the mode column stays a real check rather than one the
+ * runner has arranged to pass.
+ *
+ * @param {string} snapshot @param {Map<string, any>} manifest @param {boolean} writable
+ * @returns {void}
+ */
+function setSnapshotWritable(snapshot, manifest, writable) {
+  for (const [rel, entry] of manifest) {
+    try {
+      fs.chmodSync(path.join(snapshot, rel), writable ? entry.mode : (entry.mode & ~0o222));
+    } catch { /* best effort: a mode we cannot set is caught by verifyCopy */ }
+  }
+  try { fs.chmodSync(snapshot, writable ? 0o700 : 0o500); } catch { /* best effort */ }
+}
+
+/**
  * Create the per-phase scratch INSIDE the copy, after it is manifest-verified.
  * @param {string} copyDir @returns {void}
  */
@@ -476,7 +549,7 @@ function phaseEnv(copyDir) {
  * this WP adds no second place that sets it.
  *
  * @param {string} copyDir @param {string} suiteRel @param {string|undefined} pattern
- * @returns {{status:number|null, stdout:string, stderr:string}}
+ * @returns {{status:number|null, signal:string|null, spawnError:Error|null, stdout:string, stderr:string}}
  */
 function runSuite(copyDir, suiteRel, pattern) {
   const runner = path.join(copyDir, 'tests', 'run.js');
@@ -493,7 +566,65 @@ function runSuite(copyDir, suiteRel, pattern) {
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+  return {
+    status: r.status,
+    signal: r.signal || null,
+    spawnError: r.error || null,
+    stdout: r.stdout || '',
+    stderr: r.stderr || '',
+  };
+}
+
+/**
+ * THE CHILD MUST HAVE COMPLETED BEFORE ITS TAP MEANS ANYTHING.
+ *
+ * A killed child, a spawn failure or a stream cut short by `maxBuffer` can leave
+ * stdout holding a PREFIX of the run — one that may already carry every declared
+ * `not ok` while the rest of the failing set was never emitted. Judging the
+ * equality rule on a fragment would let a proof reach PROVEN over a run nobody
+ * observed the end of, so the phases refuse the fragment instead: no status, a
+ * terminating signal, a status the reporter never produces, a missing plan, or a
+ * plan the emitted result lines do not fill, are each an ERROR.
+ *
+ * @param {{status:number|null, signal:string|null, spawnError:Error|null, stdout:string}} run
+ * @param {string} where @param {string} phase
+ * @returns {void}
+ */
+function assertCompleteRun(run, where, phase) {
+  if (run.spawnError) {
+    throw error(`${where} ${phase}: the suite process could not be run (${run.spawnError.code || run.spawnError.message})`);
+  }
+  if (run.signal) {
+    throw error(`${where} ${phase}: the suite process was KILLED by ${run.signal} — its TAP is partial, and a partial failing set is not a measurement`);
+  }
+  if (run.status === null) {
+    throw error(`${where} ${phase}: the suite process did not exit normally — no exit status, so its TAP cannot be trusted to be complete`);
+  }
+  if (run.status !== 0 && run.status !== 1) {
+    throw error(`${where} ${phase}: the suite process exited ${run.status}; the TAP reporter exits 0 (all green) or 1 (failures), so any other status means the run was cut short`);
+  }
+  // AND THE SAME RULE ONE LEVEL IN. `tests/run.js` and `node --test` normalise a
+  // test file's own exit code to the reporter's 0/1, so a child that called
+  // `process.exit(3)` mid-stream arrives as a plain outer status 1. The reporter
+  // still records what the FILE did, as `exitCode:` on its file-level record —
+  // measured: 3 for a child torn down mid-run, 1 for a file that merely failed
+  // (a module that would not parse). Only a file-level diagnostic sits at two
+  // spaces of indentation, so this reads file records and never a nested test's.
+  const fileExit = [...run.stdout.matchAll(/^ {2}exitCode: (\d+)$/gm)].map((m) => Number(m[1]));
+  const cutShort = fileExit.find((n) => n !== 0 && n !== 1);
+  if (cutShort !== undefined) {
+    throw error(`${where} ${phase}: a test file exited ${cutShort}; the reporter's own codes are 0 and 1, so the file was torn down mid-run and its TAP is a prefix`);
+  }
+  const lines = run.stdout.split('\n');
+  const plans = lines.filter((l) => /^1\.\.\d+$/.test(l));
+  if (plans.length === 0 || !/^# tests \d+$/m.test(run.stdout)) {
+    throw error(`${where} ${phase}: the TAP stream is INCOMPLETE — no top-level plan and summary were emitted, so the observed set is a prefix of the run`);
+  }
+  const planned = Number(plans[plans.length - 1].slice('1..'.length));
+  const emitted = lines.filter((l) => /^(not ok|ok)(\s|$)/.test(l)).length;
+  if (emitted !== planned) {
+    throw error(`${where} ${phase}: the TAP plan announces ${planned} top-level result(s) but ${emitted} were emitted — the stream is truncated`);
+  }
 }
 
 // ── TAP: identity, terminal status and failure KIND ──────────────────────────
@@ -565,12 +696,21 @@ function parseTap(text, suiteArg) {
   }
 
   let roots = byDepth.get(0) || [];
-  // A file-level wrapper: Node emits one when a run matched no test at all
-  // (measured — an inner `1..0` under an outer file-level `ok`, exit 0). It is
-  // not part of any test's identity.
+  // A file-level wrapper is not part of any test's identity. Node emits one when
+  // a run matched no test at all on Node >= 25 (an inner `1..0` under an outer
+  // file-level `ok`, exit 0), and on any Node when the file itself fails. ITS
+  // NAME IS NOT THE SAME STRING ON EVERY NODE — measured: Node v25.9.0 names it
+  // exactly as the path was passed, Node v20.20.2 names it with the ABSOLUTE
+  // path — so the match is over the relative form, the basename and any
+  // path-suffix of it, never one version's spelling.
   if (suiteArg) {
-    const names = new Set([suiteArg, normaliseRel(suiteArg), path.basename(suiteArg)]);
-    roots = roots.flatMap((n) => (names.has(n.name) ? n.children : [n]));
+    const rel = normaliseRel(suiteArg);
+    const base = path.basename(suiteArg);
+    const isFileNode = (n) => {
+      const name = normaliseRel(n.name);
+      return name === rel || name === base || name.endsWith(`/${rel}`);
+    };
+    roots = roots.flatMap((n) => (isFileNode(n) ? n.children : [n]));
   }
   return roots;
 }
@@ -615,6 +755,22 @@ function flattenTap(roots, prefix = [], out = []) {
   return out;
 }
 
+/**
+ * The records that actually RAN. A SKIP directive means the test did not run, and
+ * that is the whole of the unmatched-pattern class: measured on Node v20.20.2
+ * (this repository's CI), a `--test-name-pattern` matching nothing reports EVERY
+ * test as `ok N - <name> # SKIP test name does not match pattern` rather than the
+ * inner `1..0` plan Node v25.9.0 emits. Both shapes exit 0 and neither emits a
+ * `not ok`, so "the run was green" passes under both. The runner implements the
+ * RULE — zero tests ran — never either shape.
+ *
+ * @param {{node:TapNode, path:string[]}[]} nodes
+ * @returns {{node:TapNode, path:string[]}[]}
+ */
+function ranNodes(nodes) {
+  return nodes.filter((n) => n.node.directive !== 'SKIP');
+}
+
 /** @param {{node:TapNode}} entry @returns {boolean} a `not ok` that is not a TODO */
 function isFailure(entry) {
   return !entry.node.ok && entry.node.directive !== 'TODO';
@@ -649,6 +805,48 @@ function resolveInside(dir, rel, label) {
     throw error(`${label}: ${JSON.stringify(rel)} canonicalises OUTSIDE the copy (${real}) — refused before any write`);
   }
   return real;
+}
+
+/**
+ * THE AUTHORITATIVE PROTECTED-TARGET CHECK — over the CANONICAL path inside the
+ * fresh copy, never over the declaration's literal.
+ *
+ * Table A's `file` row forbids the suite, the runner, a declaration and any path
+ * the runner needs to operate. Comparing repo-relative STRINGS is not enough:
+ * measured at PR #204 round 1, `tests/../tests/suite-basic.js` compared unequal
+ * to the suite, passed every literal check, and a proof mutated its own assertion
+ * host to PROVEN. The comparison therefore happens after `realpathSync`, on both
+ * sides, inside the copy the mutation will be written to.
+ *
+ * @param {string} copyDir @param {string} target the resolved absolute mutation target
+ * @param {string} suiteRel @param {string} where
+ * @returns {void}
+ */
+function assertNotProtected(copyDir, target, suiteRel, where) {
+  const declDir = realOrNull(path.join(copyDir, DECL_DIR_REL));
+  if (declDir && (target === declDir || target.startsWith(declDir + path.sep))) {
+    throw error(`${where}: "file" resolves to a declaration (${target}) — a proof may not mutate the declaration set`);
+  }
+  const protectedRels = [
+    [normaliseRel(suiteRel), 'the suite it reddens — a mutation may not edit the assertion, its expected literal, its message or the file that hosts it'],
+    [SUITE_ENTRY_REL, 'the test entry the runner spawns to start every phase'],
+    [RUNNER_REL, 'the RED-proof runner itself'],
+  ];
+  for (const [rel, why] of protectedRels) {
+    const real = realOrNull(path.join(copyDir, rel));
+    if (real !== null && real === target) {
+      throw error(`${where}: "file" resolves to ${rel} — ${why}`);
+    }
+  }
+}
+
+/** @param {string} p @returns {string|null} the canonical path, or null if it does not exist */
+function realOrNull(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -693,10 +891,12 @@ function replaceOccurrences(text, find, replace) {
  * which a partial or overlapping replacement also satisfies.
  *
  * @param {string} copyDir @param {Object} proof @param {string} where
+ * @param {string} [suiteRel] the declaration's suite, protected against aliases
  * @returns {{path:string, occurrences:number}}
  */
-function applyMutation(copyDir, proof, where) {
+function applyMutation(copyDir, proof, where, suiteRel) {
   const target = resolveInside(copyDir, proof.file, where);
+  if (suiteRel !== undefined) assertNotProtected(copyDir, target, suiteRel, where);
   const pristine = fs.readFileSync(target, 'utf8');
   const wanted = proof.occurrences === undefined ? 1 : proof.occurrences;
   const counted = countOccurrences(pristine, proof.find);
@@ -744,10 +944,37 @@ function uniqueMatch(nodes, identity, where) {
 function phaseBaseline(copyDir, decl, proof, where) {
   resolveInside(copyDir, decl.suite, `${where} BASELINE`);
   const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+  assertCompleteRun(run, where, 'BASELINE');
   if (run.status !== 0) {
     throw error(`${where} BASELINE: the pristine suite was not green (exit ${run.status})\n${tail(run.stdout, run.stderr)}`);
   }
   evaluateBaseline(flattenTap(parseTap(run.stdout, normaliseRel(decl.suite))), proof, where);
+}
+
+/**
+ * ZERO TESTS RAN is an ERROR in every phase, under BOTH pinned reporter shapes
+ * for the unmatched-pattern class (see `ranNodes`). Stated once, here, so the
+ * two phases enforce one rule rather than two readings of one Node's output.
+ *
+ * @param {{node:TapNode, path:string[]}[]} nodes @param {Object} proof @param {string} where
+ * @param {boolean} [requireAny] true where an EMPTY observation is itself the failure
+ * @returns {void}
+ */
+function assertTestsRan(nodes, proof, where, requireAny) {
+  if (ranNodes(nodes).length > 0) return;
+  // A tree of records that ALL carry a SKIP directive is the unmatched-pattern
+  // class itself, and it is an ERROR in every phase. NO records at all is a
+  // different thing — a module that failed to load emits none — and only
+  // BASELINE treats that as its own ERROR, so criterion 4's load-failure
+  // mutation keeps reaching RED's equality rule and its FAILED verdict.
+  if (nodes.length === 0 && !requireAny) return;
+  const scoped = proof.testNamePattern
+    ? ` — the testNamePattern ${JSON.stringify(proof.testNamePattern)} selected nothing`
+    : '';
+  throw error(`${where}: ZERO TESTS RAN${scoped}. Every observed record either does not exist or carries a SKIP `
+    + 'directive, which is the unmatched-pattern class under both of its pinned reporter shapes '
+    + '(an inner `1..0` plan on Node >= 25; every test `ok N - <name> # SKIP` on Node 20.x). '
+    + 'Both exit 0 and neither emits a `not ok`, so a naive "the run was green" check passes there.');
 }
 
 /**
@@ -756,6 +983,7 @@ function phaseBaseline(copyDir, decl, proof, where) {
  * @returns {void}
  */
 function evaluateBaseline(nodes, proof, where) {
+  assertTestsRan(nodes, proof, `${where} BASELINE`, true);
   for (const entry of proof.expectRed) {
     const hit = uniqueMatch(nodes, entry.test, `${where} BASELINE`);
     if (!hit) {
@@ -780,6 +1008,7 @@ function evaluateBaseline(nodes, proof, where) {
  */
 function phaseRed(copyDir, decl, proof, where) {
   const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+  assertCompleteRun(run, where, 'RED');
   return evaluateRed(flattenTap(parseTap(run.stdout, normaliseRel(decl.suite))), proof, where);
 }
 
@@ -789,6 +1018,7 @@ function phaseRed(copyDir, decl, proof, where) {
  * @returns {{failures:number}}
  */
 function evaluateRed(nodes, proof, where) {
+  assertTestsRan(nodes, proof, `${where} RED`, false);
   const failures = nodes.filter(isFailure);
 
   /** @type {{node:TapNode, path:string[]}[]} */
@@ -844,6 +1074,7 @@ function evaluateRed(nodes, proof, where) {
  */
 function phaseControl(copyDir, decl, proof, where) {
   const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+  assertCompleteRun(run, where, 'CONTROL');
   if (run.status !== 0) {
     throw error(`${where} CONTROL: the post-RED pristine copy was NOT green (exit ${run.status}) — the red was ambient, not the mutation's\n${tail(run.stdout, run.stderr)}`);
   }
@@ -878,22 +1109,34 @@ function runProof(ctx, decl, proof, opts = {}) {
   const parent = path.join(ctx.sandbox, proof.id);
   fs.mkdirSync(parent, { recursive: true });
   let applied = false;
-  let locked = false;
   try {
-    const dirs = {};
-    for (const phase of control ? ['baseline', 'red', 'control'] : ['baseline', 'red']) {
-      dirs[phase] = path.join(parent, phase);
-      copyTree(ctx.snapshot, dirs[phase]);
-      verifyCopy(dirs[phase], ctx.manifest);
-      preparePhaseDirs(dirs[phase]);
+    const phases = control ? ['baseline', 'red', 'control'] : ['baseline', 'red'];
+    for (const phase of phases) {
+      const dir = path.join(parent, phase);
+      // BUILT IMMEDIATELY BEFORE ITS OWN PHASE, and deleted immediately after,
+      // so no unused copy exists while another phase's child runs. Creating all
+      // three up front was measured to be a live channel at PR #204 round 1: a
+      // 0500 parent is r-x, which PERMITS TRAVERSAL, so a BASELINE child wrote
+      // `../red/subject/subject.js` and APPLY then read the planted bytes.
+      unlockSandbox(ctx, parent);
+      copyTree(ctx.snapshot, dir);
+      if (opts.onPhaseCopy) opts.onPhaseCopy(phase, dir);
+      verifyCopy(dir, ctx.manifest);
+      preparePhaseDirs(dir);
+      if (phase === 'red') {
+        applyMutation(dir, proof, `${where} APPLY`, decl.suite);
+        applied = true;
+      }
+      lockSandbox(ctx, parent);
+      try {
+        if (phase === 'baseline') phaseBaseline(dir, decl, proof, where);
+        else if (phase === 'red') phaseRed(dir, decl, proof, where);
+        else phaseControl(dir, decl, proof, where);
+      } finally {
+        unlockSandbox(ctx, parent);
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
     }
-    fs.chmodSync(parent, 0o500);
-    locked = true;
-
-    phaseBaseline(dirs.baseline, decl, proof, where);
-    applyMutation(dirs.red, proof, `${where} APPLY`);
-    applied = true;
-    phaseRed(dirs.red, decl, proof, where);
     if (!control) {
       return {
         verdict: 'UNCONTROLLED',
@@ -901,17 +1144,38 @@ function runProof(ctx, decl, proof, opts = {}) {
         applied,
       };
     }
-    phaseControl(dirs.control, decl, proof, where);
     return { verdict: 'PROVEN', note: proof.why, applied };
   } catch (e) {
     if (e instanceof RedProofError) return { verdict: e.verdict, note: e.message, applied };
     return { verdict: 'ERROR', note: `${where}: ${e && e.stack ? e.stack : e}`, applied };
   } finally {
-    if (locked) {
-      try { fs.chmodSync(parent, 0o700); } catch { /* best effort */ }
-    }
+    try { unlockSandbox(ctx, parent); } catch { /* best effort */ }
     try { fs.rmSync(parent, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+}
+
+/**
+ * Hold every writable path the runner provides, except the running phase's own
+ * copy, out of reach for the child's lifetime: the copies' parent and the
+ * sandbox above it are 0500 (so `../x` and `../../x` cannot be created) and the
+ * snapshot is read-only (so `../../snapshot/<file>` cannot be overwritten).
+ *
+ * Above the sandbox is the ambient temp root, which the runner does not own —
+ * that is the LANE LIMIT the REACH footer prints, not a guarantee.
+ *
+ * @param {Object} ctx @param {string} parent @returns {void}
+ */
+function lockSandbox(ctx, parent) {
+  setSnapshotWritable(ctx.snapshot, ctx.manifest, false);
+  fs.chmodSync(parent, 0o500);
+  fs.chmodSync(ctx.sandbox, 0o500);
+}
+
+/** @param {Object} ctx @param {string} parent @returns {void} */
+function unlockSandbox(ctx, parent) {
+  try { fs.chmodSync(ctx.sandbox, 0o700); } catch { /* best effort */ }
+  try { fs.chmodSync(parent, 0o700); } catch { /* best effort */ }
+  setSnapshotWritable(ctx.snapshot, ctx.manifest, true);
 }
 
 // ── The run ──────────────────────────────────────────────────────────────────
@@ -942,7 +1206,11 @@ function parseArgs(argv) {
  * The whole run. Returns rather than exits, so the runner's own suite can drive
  * it; `main` is what turns the verdict into an exit code.
  *
- * @param {{root?:string, wp?:string, proof?:string, control?:boolean}} [opts]
+ * @param {{root?:string, wp?:string, proof?:string, control?:boolean,
+ *           onPhaseCopy?:(phase:string, dir:string)=>void}} [opts]
+ *        `control:false` and `onPhaseCopy` are the runner's OWN SUITE proving the
+ *        `UNCONTROLLED` verdict and the manifest-verification call site; the CLI
+ *        sets neither.
  * @returns {{verdict:string, exitCode:number, report:string, proofs:Object[], criteria:Object[]}}
  */
 function runAll(opts = {}) {
@@ -1001,10 +1269,26 @@ function runAll(opts = {}) {
     const snapshot = path.join(sandbox, 'snapshot');
     let manifest;
     try {
-      copyTree(root, snapshot);
-      manifest = buildManifest(snapshot);
+      // CLASSIFY FIRST, COPY SECOND. `fs.cpSync` over a FIFO throws
+      // ERR_INTERNAL_ASSERTION — measured — which used to escape `runAll`
+      // entirely: no verdict, no REACH footer, a bare stack trace. Building the
+      // manifest over `--root` names an unsupported entry before anything is
+      // copied, and the copy itself is wrapped so a native failure still lands in
+      // the report as the ERROR it is.
+      manifest = buildManifest(root);
+      try {
+        copyTree(root, snapshot);
+      } catch (e) {
+        throw error(`the snapshot copy failed${e && e.path ? ` at ${e.path}` : ''} (${(e && (e.code || e.message)) || e})`);
+      }
+      // The snapshot is verified against the manifest too, so a copy that lost or
+      // changed something is an ERROR before any phase derives from it.
+      verifyCopy(snapshot, manifest);
     } catch (e) {
-      if (!(e instanceof RedProofError)) throw e;
+      if (!(e instanceof RedProofError)) {
+        say(`ERROR: SNAPSHOT — ${(e && (e.code || e.message)) || e}`);
+        return done('ERROR');
+      }
       say(`ERROR: SNAPSHOT — ${e.message}`);
       return done('ERROR');
     }
@@ -1012,7 +1296,8 @@ function runAll(opts = {}) {
     say('');
 
     for (const { declFile, suite, proof } of selected) {
-      const r = runProof({ snapshot, manifest, sandbox }, { declFile, suite }, proof, { control: opts.control });
+      const r = runProof({ snapshot, manifest, sandbox }, { declFile, suite }, proof,
+        { control: opts.control, onPhaseCopy: opts.onPhaseCopy });
       if (r.applied) applications += 1;
       results.push({ id: proof.id, wp: proof.wp, criterion: proof.criterion, verdict: r.verdict, note: r.note });
       runVerdict = worstVerdict(runVerdict, r.verdict);
@@ -1020,6 +1305,7 @@ function runAll(opts = {}) {
       say(`             ${r.note}`);
     }
   } finally {
+    try { fs.chmodSync(sandbox, 0o700); } catch { /* best effort */ }
     try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 
@@ -1126,8 +1412,15 @@ module.exports = {
   phaseEnv,
   parseTap,
   flattenTap,
+  ranNodes,
+  assertTestsRan,
+  assertCompleteRun,
+  assertNotProtected,
+  setSnapshotWritable,
+  SUITE_ENTRY_REL,
   evaluateBaseline,
   evaluateRed,
+  normaliseRel,
   countOccurrences,
   replaceOccurrences,
   resolveInside,

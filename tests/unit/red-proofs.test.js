@@ -228,19 +228,70 @@ test('red-proofs: a declared identity that does not RUN is an ERROR, not a pass 
   assert.ok(r.report.includes('did not RUN'), r.report);
 });
 
-test('red-proofs: a testNamePattern matching nothing exits 0 with a pass count in Node — and is still an ERROR here (criterion 3)', () => {
-  // The measured trap, reproduced first: an unmatched pattern prints an inner
-  // `1..0` under an outer file-level `ok` and EXITS 0.
+test('red-proofs: an unmatched testNamePattern exits 0 with no `not ok` on EVERY Node — and is still an ERROR here (criterion 3)', () => {
+  // THE INVARIANTS, NOT THE SHAPE. The reporter's answer to "nothing matched" is
+  // version-dependent — an inner `1..0` plan on Node >= 25, every test
+  // `ok N - <name> # SKIP test name does not match pattern` on Node 20.x — and a
+  // deep-equal against either tree is red on the other. What holds on BOTH, and
+  // what the runner's rule is over, is asserted here.
   const bare = tapOf(BASE, 'tests/suite-basic.js', 'zzz-matches-nothing');
   assert.equal(bare.status, 0, 'precondition: Node exits 0 on an unmatched pattern');
-  assert.ok(/^1\.\.0$/m.test(bare.stdout), bare.stdout);
-  assert.ok(/^ok \d+ - tests[\\/]suite-basic\.js$/m.test(bare.stdout), bare.stdout);
-  // And the file-level wrapper is not a test identity: stripping it leaves none.
-  assert.deepEqual(rp.parseTap(bare.stdout, 'tests/suite-basic.js'), []);
+  assert.equal(/^ *not ok\b/m.test(bare.stdout), false, 'no `not ok` is emitted under either shape');
+  const observed = rp.flattenTap(rp.parseTap(bare.stdout, 'tests/suite-basic.js'));
+  assert.deepEqual(rp.ranNodes(observed), [], 'ZERO TESTS RAN once SKIP-directive records are excluded');
 
   const r = run(newRoot({ proofs: [proof({ testNamePattern: 'zzz-matches-nothing' })] }));
   assert.equal(r.verdict, 'ERROR', r.report);
-  assert.ok(r.report.includes('did not RUN'), r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('ZERO TESTS RAN'), r.report);
+});
+
+test('red-proofs: the NODE 20 unmatched-pattern shape — every test `ok … # SKIP` — is ZERO TESTS RAN, simulated verbatim (criterion 3)', () => {
+  // The exact stream Node v20.20.2 produced on CI run 33627135545, on ubuntu and
+  // macOS alike. Simulated here so the Node-20 branch of the rule is exercised on
+  // whatever Node runs this suite, and not only when CI happens to run it.
+  const node20 = [
+    'TAP version 13',
+    '# Subtest: fixture basic: the greeting is hello',
+    'ok 1 - fixture basic: the greeting is hello # SKIP test name does not match pattern',
+    '  ---',
+    '  duration_ms: 0.1',
+    '  type: \'test\'',
+    '  ...',
+    '# Subtest: fixture basic: the arity is two',
+    'ok 2 - fixture basic: the arity is two # SKIP test name does not match pattern',
+    '  ---',
+    '  duration_ms: 0.1',
+    '  type: \'test\'',
+    '  ...',
+    '1..2',
+    '# tests 2',
+    '# pass 0',
+    '# fail 0',
+    '# skipped 2',
+    '',
+  ].join('\n');
+  const observed = rp.flattenTap(rp.parseTap(node20, 'tests/suite-basic.js'));
+  assert.equal(observed.length, 2, 'both records are parsed');
+  assert.ok(observed.every((n) => n.node.directive === 'SKIP'), 'both carry a SKIP directive');
+  assert.equal(/^ *not ok\b/m.test(node20), false);
+  assert.deepEqual(rp.ranNodes(observed), [], 'ZERO TESTS RAN');
+  assert.throws(
+    () => rp.evaluateBaseline(observed, proof({ testNamePattern: 'zzz' }), 'unit'),
+    (e) => e.verdict === 'ERROR' && /ZERO TESTS RAN/.test(e.message)
+  );
+  // And the completeness gate accepts this stream: it is complete, not truncated.
+  rp.assertCompleteRun({ status: 0, signal: null, spawnError: null, stdout: node20 }, 'unit', 'BASELINE');
+});
+
+test('red-proofs: an ALL-SKIP suite is ZERO TESTS RAN end-to-end, on whatever Node runs this (criterion 3)', () => {
+  const r = run(newRoot({
+    suite: 'tests/suite-allskip.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture allskip: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+  }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('ZERO TESTS RAN'), r.report);
 });
 
 test('red-proofs: a declared identity observed as SKIP is an ERROR, not a terminal PASS (criterion 3)', () => {
@@ -408,9 +459,15 @@ test('red-proofs: the pinned TAP shapes are observed on the Node running this su
   assert.equal(parent.node.diag.failureType, 'subtestsFailed');
   assert.ok(nested.some((n) => n.path.join(' > ') === 'fixture nest: outer > inner-declared'));
 
-  // (5) a pattern matching nothing yields NO identities at all
+  // (5) THE NO-MATCH FIXTURE, as the three invariants criterion 4b requires and
+  // no fourth — a deep-equal against one Node's parse tree is exactly what failed
+  // on CI's Node 20 while passing on the author's Node 25.
   const none = tapOf(root, 'tests/suite-basic.js', 'zzz-matches-nothing');
-  assert.deepEqual(rp.parseTap(none.stdout, 'tests/suite-basic.js'), []);
+  const noneNodes = rp.flattenTap(rp.parseTap(none.stdout, 'tests/suite-basic.js'));
+  assert.equal(none.status, 0, '(i) the run exits 0 — zero tests RAN is not a failure to the reporter');
+  assert.equal(/^ *not ok\b/m.test(none.stdout), false, '(ii) no `not ok` record appears');
+  assert.deepEqual(rp.ranNodes(noneNodes), [],
+    '(iii) the observed identity set is EMPTY once every SKIP-directive record is excluded');
 });
 
 test('red-proofs: the report names the Node version it ran on (criterion 4b)', () => {
@@ -562,8 +619,8 @@ test('red-proofs: resolveInside refuses `..`, an absolute path and a SYMLINK esc
   }
 });
 
-test('red-proofs: a `..` file escaping into a SIBLING phase copy is an ERROR before any write (criterion 7a)', () => {
-  const r = run(newRoot({ proofs: [proof({ file: '../baseline/subject/subject.js' })] }));
+test('red-proofs: a `..` file escaping into the runner\'s own SNAPSHOT is an ERROR before any write (criterion 7a)', () => {
+  const r = run(newRoot({ proofs: [proof({ file: '../../snapshot/subject/subject.js' })] }));
   assert.equal(r.verdict, 'ERROR', r.report);
   assert.ok(r.report.includes('canonicalises OUTSIDE'), r.report);
 });
@@ -642,6 +699,220 @@ test('red-proofs: the snapshot domain excludes `.git/` and `node_modules/` (Tabl
   assert.ok(manifest.has('subject/subject.js'));
 });
 
+// ── ROUND-1 FINDINGS — each one's RED, kept beside the criterion it serves
+
+/** The self-mutation the alias made possible: it edits the assertion's EXPECTED
+ *  LITERAL, so the named test reddens with its own declared signal, restores
+ *  cleanly, and the proof reports PROVEN while nothing under test ever moved. */
+const SELF_MUTATION = {
+  file: 'tests/../tests/suite-basic.js',
+  find: "subject.greeting, 'hello', 'RP-SIGNAL-GREETING'",
+  replace: "subject.greeting, 'RP_MUT_ALIAS', 'RP-SIGNAL-GREETING'",
+  marker: 'RP_MUT_ALIAS',
+};
+
+test('red-proofs: an ALIAS of the suite (`tests/../tests/suite-basic.js`) is an ERROR — a proof may not mutate its own assertion host (Table A `file`)', () => {
+  // Without the two layers this declaration reaches PROVEN: it reddens the named
+  // test with its declared signal by rewriting that test's own expected literal,
+  // certifying only that an assertion can be edited (PR #204 round 1).
+  const r = run(newRoot({ proofs: [proof(SELF_MUTATION)] }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(/must not be the suite|resolves to tests\/suite-basic\.js/.test(r.report), r.report);
+});
+
+test('red-proofs: normaliseRel COLLAPSES `..` and `.`, which is the first of the two layers (Table A `file`)', () => {
+  assert.equal(rp.normaliseRel('tests/../tests/suite-basic.js'), 'tests/suite-basic.js');
+  assert.equal(rp.normaliseRel('./tests/./run.js'), 'tests/run.js');
+  assert.equal(rp.normaliseRel('a/b/../../scripts/red-proofs.js'), 'scripts/red-proofs.js');
+  assert.equal(rp.normaliseRel('tests\\red-proofs\\a.proofs.json'), 'tests/red-proofs/a.proofs.json');
+  // A path that genuinely leaves the tree keeps its lead, for APPLY to refuse.
+  assert.equal(rp.normaliseRel('../outside.js'), '../outside.js');
+});
+
+test('red-proofs: `tests/run.js` — a path the runner NEEDS to operate — is a protected target (Table A `file`)', () => {
+  const r = run(newRoot({ proofs: [proof({ file: 'tests/run.js' })] }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.ok(r.report.includes('tests/run.js'), r.report);
+});
+
+test('red-proofs: the protected-target check is over CANONICAL paths inside the copy, not literals (Table A `file`)', () => {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-prot-'));
+  fs.cpSync(BASE, copy, { recursive: true });
+  const suiteRel = 'tests/suite-basic.js';
+  const target = fs.realpathSync(path.join(copy, suiteRel));
+  // Every alias of the suite resolves to the same canonical path, and each is
+  // refused on that path rather than on the string the declaration wrote.
+  assert.throws(() => rp.assertNotProtected(copy, target, suiteRel, 'unit'),
+    (e) => e.verdict === 'ERROR' && /may not edit the assertion/.test(e.message));
+  assert.throws(() => rp.assertNotProtected(copy, fs.realpathSync(path.join(copy, 'tests/run.js')), suiteRel, 'unit'),
+    (e) => e.verdict === 'ERROR' && /tests\/run\.js/.test(e.message));
+  assert.throws(() => rp.assertNotProtected(copy, fs.realpathSync(path.join(copy, 'tests/red-proofs/base.proofs.json')), suiteRel, 'unit'),
+    (e) => e.verdict === 'ERROR' && /resolves to a declaration/.test(e.message));
+  // A legitimate target is untouched.
+  rp.assertNotProtected(copy, fs.realpathSync(path.join(copy, 'subject/subject.js')), suiteRel, 'unit');
+  // And applyMutation refuses the alias before writing a byte. The `find` here
+  // really occurs in the suite, so without this layer the write would LAND —
+  // an "occurs 0 times" ERROR would prove nothing about the protection.
+  const before = fs.readFileSync(path.join(copy, suiteRel), 'utf8');
+  assert.ok(before.includes(SELF_MUTATION.find), 'precondition: the self-mutation would otherwise apply');
+  assert.throws(
+    () => rp.applyMutation(copy, proof(SELF_MUTATION), 'unit APPLY', suiteRel),
+    (e) => e.verdict === 'ERROR' && /may not edit the assertion/.test(e.message)
+  );
+  assert.equal(fs.readFileSync(path.join(copy, suiteRel), 'utf8'), before, 'the assertion host is untouched');
+});
+
+test('red-proofs: a child killed or cut short is an ERROR, even when every declared `not ok` was already emitted (Table B row 5)', () => {
+  // End-to-end: the suite reddens exactly as declared, then tears the process
+  // down before the plan and summary are written.
+  const r = run(newRoot({
+    suite: 'tests/suite-truncated.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture trunc: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+  }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('a test file exited 3'), r.report);
+  assert.ok(r.report.includes('its TAP is a prefix'), r.report);
+});
+
+test('red-proofs: the completeness gate names every way a run can fail to finish (Table B row 5)', () => {
+  const complete = 'TAP version 13\nok 1 - a\n1..1\n# tests 1\n# fail 0\n';
+  rp.assertCompleteRun({ status: 0, signal: null, spawnError: null, stdout: complete }, 'unit', 'RED');
+  const cases = [
+    [{ status: null, signal: 'SIGKILL', spawnError: null, stdout: complete }, /KILLED by SIGKILL/],
+    [{ status: null, signal: null, spawnError: null, stdout: complete }, /did not exit normally/],
+    [{ status: null, signal: null, spawnError: Object.assign(new Error('x'), { code: 'ENOBUFS' }), stdout: complete }, /could not be run \(ENOBUFS\)/],
+    [{ status: 3, signal: null, spawnError: null, stdout: complete }, /exited 3/],
+    [{ status: 1, signal: null, spawnError: null, stdout: 'TAP version 13\nnot ok 1 - a\n' }, /INCOMPLETE/],
+    [{ status: 1, signal: null, spawnError: null, stdout: 'TAP version 13\nnot ok 1 - a\n1..2\n# tests 2\n' }, /announces 2 top-level result\(s\) but 1 were emitted/],
+    [{ status: 1, signal: null, spawnError: null, stdout: 'TAP version 13\nnot ok 1 - f\n  ---\n  exitCode: 3\n  ...\n1..1\n# tests 1\n' }, /a test file exited 3/],
+  ];
+  // exitCode 1 is the reporter's OWN failure code — a file that merely failed,
+  // including a module that would not parse — and must pass the gate so RED's
+  // equality rule decides it (criterion 4's load-failure outcome is FAILED).
+  rp.assertCompleteRun(
+    { status: 1, signal: null, spawnError: null, stdout: 'TAP version 13\nnot ok 1 - f\n  ---\n  exitCode: 1\n  ...\n1..1\n# tests 1\n' },
+    'unit', 'RED');
+  for (const [run_, needle] of cases) {
+    assert.throws(() => rp.assertCompleteRun(run_, 'unit', 'RED'),
+      (e) => e.verdict === 'ERROR' && needle.test(e.message), needle.source);
+  }
+});
+
+test('red-proofs: a FIFO in the source tree is an ERROR naming its path, with a verdict and the REACH footer (Table E1)', () => {
+  const root = newRoot();
+  const fifo = path.join(root, 'a-fifo');
+  const mk = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+  assert.equal(mk.status, 0, `precondition: mkfifo is available (${mk.stderr || mk.error})`);
+  const r = run(root);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('unsupported entry type: FIFO at a-fifo'), r.report);
+  assert.ok(r.report.endsWith(`${rp.REACH}\n`), 'the footer is printed even on a snapshot ERROR');
+});
+
+test('red-proofs: a `node_modules` that is itself a SYMLINK is an ERROR — the type is decided BEFORE the exclusion (Table B row 2a)', () => {
+  const root = newRoot();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-deps-'));
+  fs.writeFileSync(path.join(outside, 'index.js'), 'module.exports = 1;\n');
+  fs.symlinkSync(outside, path.join(root, 'node_modules'));
+  const r = run(root);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('symbolic link at node_modules'), r.report);
+  assert.ok(r.report.includes('dependency links included'), r.report);
+  // The same holds for an excluded `.git` symlink, by the same ordering.
+  const root2 = newRoot();
+  fs.symlinkSync(outside, path.join(root2, '.git'));
+  const r2 = run(root2);
+  assert.equal(r2.verdict, 'ERROR', r2.report);
+  assert.ok(r2.report.includes('symbolic link at .git'), r2.report);
+});
+
+test('red-proofs: `.git` and `node_modules` are excluded by BASENAME whatever their type — a linked worktree `.git` is a FILE (Table E1)', () => {
+  const root = newRoot();
+  fs.writeFileSync(path.join(root, '.git'), 'gitdir: /somewhere/else\n');
+  fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'node_modules', 'x.js'), 'x\n');
+  const manifest = rp.buildManifest(root);
+  assert.equal(manifest.has('.git'), false, 'a `.git` FILE is excluded, not recorded');
+  assert.ok([...manifest.keys()].every((k) => !k.startsWith('node_modules')));
+  // copyTree agrees, so the two cannot drift apart by call-site ordering.
+  const dest = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-cp-')), 'copy');
+  rp.copyTree(root, dest);
+  assert.equal(fs.existsSync(path.join(dest, '.git')), false);
+  assert.equal(fs.existsSync(path.join(dest, 'node_modules')), false);
+  rp.verifyCopy(dest, manifest);
+  const r = run(root);
+  assert.equal(r.verdict, 'PROVEN', r.report);
+});
+
+test('red-proofs: an UNREADABLE or MISSING declaration directory is an ERROR, never VACUOUS V1 (Table E2)', () => {
+  const missing = newRoot({ declText: null });
+  fs.rmSync(path.join(missing, 'tests', 'red-proofs'), { recursive: true, force: true });
+  const r1 = run(missing);
+  assert.equal(r1.verdict, 'ERROR', r1.report);
+  assert.ok(r1.report.includes('could not be scanned'), r1.report);
+  assert.ok(r1.report.includes('never V1'), r1.report);
+
+  const unreadable = newRoot();
+  const dir = path.join(unreadable, 'tests', 'red-proofs');
+  fs.chmodSync(dir, 0o000);
+  try {
+    const r2 = run(unreadable);
+    assert.equal(r2.verdict, 'ERROR', r2.report);
+    assert.ok(/EACCES|EPERM/.test(r2.report), r2.report);
+  } finally {
+    fs.chmodSync(dir, 0o700);
+  }
+
+  // And the successfully-scanned empty directory is still V1, not ERROR.
+  const empty = run(newRoot({ declText: null }));
+  assert.equal(empty.verdict, 'VACUOUS', empty.report);
+  assert.ok(empty.report.includes('V1: no declaration files'), empty.report);
+});
+
+test('red-proofs: a phase copy corrupted after creation is caught by the manifest BEFORE the phase uses it (Table B row 2)', () => {
+  // The verification call site is the thing under test: with it deleted, the
+  // runner\'s whole suite stayed green (measured by the reviewer at round 1).
+  const seen = [];
+  const r = run(newRoot(), {
+    onPhaseCopy: (phase, dir) => {
+      seen.push(phase);
+      if (phase === 'baseline') fs.rmSync(path.join(dir, 'subject', 'subject.js'));
+    },
+  });
+  assert.deepEqual(seen, ['baseline'], 'the run stops at the corrupted copy');
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('does not match the snapshot manifest'), r.report);
+  assert.ok(r.report.includes('missing: subject/subject.js'), r.report);
+
+  // Both directions: the same run with the hook absent is PROVEN.
+  const control = run(newRoot());
+  assert.equal(control.verdict, 'PROVEN', control.report);
+});
+
+test('red-proofs: a MODE DRIFT introduced into a phase copy is caught the same way (Table E1)', () => {
+  const r = run(newRoot(), {
+    onPhaseCopy: (phase, dir) => {
+      if (phase === 'baseline') fs.chmodSync(path.join(dir, 'bin', 'rp-exec.js'), 0o644);
+    },
+  });
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.ok(r.report.includes('mode differs: bin/rp-exec.js (755 -> 644)'), r.report);
+});
+
+test('red-proofs: NO SIBLING COPY EXISTS while a child runs, and neither the sandbox nor the snapshot is writable from it (criterion 7b2)', () => {
+  const r = run(newRoot({
+    suite: 'tests/suite-traversal.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture trav: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+  }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+});
+
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot
 
 test('red-proofs: the runner borrows no production seam and starts every suite through the sandbox\'s tests/run.js (criterion 8)', () => {
@@ -657,9 +928,15 @@ test('red-proofs: the runner borrows no production seam and starts every suite t
   // negated grep goes vacuously green. MEASURED: the runner carried two NUL
   // bytes — from a template literal separator — and criterion 8's verification
   // command passed on a deliberately violating copy.
-  assert.deepEqual(
-    [...Buffer.from(src)].map((b, i) => [i, b]).filter(([, b]) => b < 9 || (b > 13 && b < 32)),
-    [], 'scripts/red-proofs.js must hold no control byte, or the verification greps read as binary');
+  // BOTH files the two guarded greps read, not only this one: criterion 11's
+  // negated grep runs over package.json and is defeated by a control byte there
+  // in exactly the same way.
+  for (const rel of ['scripts/red-proofs.js', 'package.json']) {
+    const bytes = fs.readFileSync(path.resolve(__dirname, '../..', rel));
+    assert.deepEqual(
+      [...bytes].map((b, i) => [i, b]).filter(([, b]) => b < 9 || (b > 13 && b < 32)),
+      [], `${rel} must hold no control byte, or the verification greps read as binary`);
+  }
   // That the guard really reaches the child — which only `tests/run.js` sets —
   // is asserted inside the phase itself, by tests/suite-isolation.js.
 });
@@ -703,6 +980,11 @@ test('red-proofs: every run — green or red — ends with the REACH footer, nam
     assert.ok(r.report.includes('SEMANTICALLY RELEVANT'), r.report);
     assert.ok(r.report.includes('LANE LIMIT'), r.report);
     assert.ok(r.report.includes('UNSUPPORTED BY THE LANE'), r.report);
+    // The footer states the MECHANISM it actually has: the override names are
+    // REMOVED, and their roots land inside the copy through the redirected HOME.
+    assert.ok(r.report.includes('are REMOVED from the phase'), r.report);
+    assert.ok(r.report.includes('redirected HOME they all default under'), r.report);
+    assert.ok(r.report.includes('locked immediately before its own phase'), r.report);
     // It describes the SELECTED evidence, never "each declared mutation".
     assert.ok(r.report.includes('each SELECTED declared mutation'), r.report);
   }
