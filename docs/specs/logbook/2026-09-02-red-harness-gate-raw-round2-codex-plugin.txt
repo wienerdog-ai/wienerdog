@@ -1,0 +1,21 @@
+PLUGIN GATE ROUND 2 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a5 worktree), tip c490b5e0 (the working tree also carried an uncommitted criterion-9 severance-fallback paragraph during the review, committed right after as a docs-only edit; the reviewer noted it as not part of reviewed HEAD). Focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No-ship. R1-A/B/E/F/G are genuinely fixed, and R1-C works on Node 25.9, but R1-D remains bypassable after its one-time path check and the TAP contract excludes part of the declared Node >=18 range. No scope objection: neither finding requires unsigned CI/template doctrine. EXECUTED: real-file TAP exit 0; nested duplicate TAP exit 0; assertion failure exit 1 with ERR_ASSERTION; thrown error exit 1 with ERR_TEST_FAILURE; unmatched dream pattern exit 0 with inner 1..0 and outer pass; both guarded greps absent/compliant/violating = 1/0/1; npm run lint exit 0; git diff --check exit 0. The initially clean worktree acquired an uncommitted criterion-9 fallback block concurrently during review; it is not part of reviewed HEAD.
+
+Findings:
+- [high] Mutation containment is vulnerable to a post-BASELINE symlink swap (docs/specs/WP-criterion-red-harness.md:210-217)
+  Materiality A — SANDBOX canonicalises the mutation path before BASELINE, but BASELINE executes the suite before APPLY. The suite can replace the checked file with a symlink into the real checkout; APPLY and RESTORE can then follow it, transiently mutate the checkout, redden the sandboxed suite through that same link, restore the original bytes, and leave the criterion 7 git-status comparison unchanged. The three required escape cases exercise only pre-existing paths, so they do not close this check/use race. The writable node_modules symlink similarly has no mechanism enforcing the claimed “resolution-only” use.
+  Recommendation: Require containment to be re-established atomically at every APPLY/RESTORE write—using no-follow descriptors or equivalent identity checks—and add a fixture whose BASELINE swaps the target to an outward symlink. Test or remove the claim that the dependency link cannot be written through, and mirror the corrected boundary into ADR-0042 before signature.
+- [medium] The TAP invocation is unsupported on part of Node >=18 (docs/specs/WP-criterion-red-harness.md:243-250)
+  Materiality B — the package supports every Node 18 release, but Table D unconditionally forwards --test-reporter=tap. Node’s official reporter history records that flag as added only in v18.15.0, so Node 18.0–18.14 reject the invocation before BASELINE. The “use whatever field the running Node emits” rule does not repair an option the runtime cannot parse, leaving the new lane unavailable on a supported installation. [Node test reporter history](https://nodejs.org/download/release/v22.17.0/docs/api/test.html#test-reporters)
+  Recommendation: Either support pre-18.15 by using its default TAP output or explicitly raise the repository/runtime floor. Add an acceptance run on the oldest supported Node version and pin the assertion-versus-thrown-error diagnostics expected there.
+
+Next steps:
+- Close the post-BASELINE path-swap and dependency-link boundary before implementation dispatch.
+- Resolve the Node 18.0–18.14 reporter incompatibility and verify the oldest supported runtime.
+- Commit the concurrent criterion-9 fallback only if it is intended, then rerun round 2 on a stable clean tip.

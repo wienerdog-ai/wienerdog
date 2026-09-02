@@ -1,0 +1,59 @@
+SHADOW ROUND 1 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 8b0296d9, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: TAP probes running the adopted suite outside the sandbox (44 pass, duration_ms 14413). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — Do not ship: the contract permits false PROVEN verdicts and does not establish its claimed sandbox boundary.
+
+FINDING 1
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 132-186
+Confidence: 0.99
+Materiality: A
+Body: LOAD precedes SANDBOX, but declarations are executable CommonJS. A declaration can perform a filesystem write before exporting a completely valid Table-A object, so the write occurs against the original root before containment exists. The adopted suite also creates directories through `os.tmpdir()` (`dream-pipeline.test.js:248-265`); the wrapper points that at the outer run root, not necessarily the copied repository. Nevertheless criterion 7 checks only net `git status`, which cannot detect restored writes or writes elsewhere. Thus an implementation can satisfy the stated verification while violating “no path outside [the sandbox] is written.”
+Recommendation: Use an inert declaration format such as JSON, or copy before evaluating declarations in a restricted child. Define the containment boundary explicitly, redirect child TMPDIR/TMP/TEMP inside it, canonicalize mutation paths against it, and test an attempted escape. Narrow the claim if spawned suites are not actually contained.
+
+FINDING 2
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 170-176
+Confidence: 0.99
+Materiality: A
+Body: Table A permits mutating the suite containing the named assertion. A proof can replace the expected `"UNKNOWN SHAPE..."` value at `dream-pipeline.test.js:1601-1607` with a wrong value plus a marker comment, scope to the plain row-G8 host, and use that assertion’s existing message as `signal`. BASELINE passes, APPLY changes bytes, exactly that host fails, RESTORE passes, and the runner reports PROVEN although classifier behavior never changed. This directly falsifies criterion 9’s claim that naming a canary shows the canary is non-vacuous and makes Table C’s “ENFORCED once declared” reach dishonest. The legitimate adoption is satisfiable: mutate the `read-tree` slot from `RUN_VALUE` to `ANY` in `dream-pipeline.known-calls.js` and scope to one layout.
+Recommendation: Require the mutation to target the condition/input the assertion observes, never the assertion or its host suite. At minimum reject `file === suite` and runner/declaration self-mutations, and make criterion 9 explicitly verify the mutation-to-canary relationship.
+
+FINDING 3
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 176-189
+Confidence: 0.98
+Materiality: A
+Body: Name-set equality plus an arbitrary diagnostic substring does not prove a named assertion failed. `signal` is not required to be non-empty, so `""` matches every diagnostic. A mutation causing a lazy-loaded module to throw `SyntaxError`, or a `beforeEach` hook to fail, can therefore produce the expected test name without executing its assertion. TAP also permits skipped/TODO records and duplicate test names; reducing names to a set loses identity and multiplicity. These runs can satisfy the written RED rule while proving only that test infrastructure broke.
+Recommendation: Require non-empty `test` and `signal`; exactly one baseline `type: test` pass per declared identity; reject skipped, TODO, cancelled, suite, hook and file-level failures; and require an assertion failure diagnostic such as `failureType: testCodeFailure` plus `ERR_ASSERTION`. Reject duplicate observed or declared identities.
+
+FINDING 4
+Affected file: docs/adr/0042-machine-run-red-proofs.md
+Lines: 47-53
+Confidence: 0.96
+Materiality: B
+Body: The ADR says a criterion is PROVEN only when all its proofs pass, but the spec allows `--proof` to select one proof and then rolls results up per criterion. If criterion C has proofs A and B, selecting only A can exit 0 under V4 and be rolled up as criterion C PROVEN without running B. The standing footer also says “each declared mutation,” not “each selected mutation,” overstating a filtered run.
+Recommendation: Filtered runs may report selected proofs PROVEN but must report criterion roll-ups as PARTIAL/FILTERED. Emit criterion PROVEN only when every declaration for that `(wp, criterion)` was selected, ran, and passed; make the footer describe selected evidence.
+
+FINDING 5
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 171-188
+Confidence: 0.95
+Materiality: B
+Body: APPLY does not define occurrence or transformation semantics. For `find: "aa"` in `"aaa"`, overlapping counting yields two occurrences while ordinary replacement changes one. The stated postconditions—marker present and digest changed—still pass. Empty `find`, non-positive/non-integer `occurrences`, replacement of only one among several matches, and replacement text retaining `find` are likewise not closed by the schema. Consequently conforming implementations can disagree about whether the declared mutation landed.
+Recommendation: Require non-empty `find`, a positive integer `occurrences`, and define left-to-right non-overlapping matching. Compute the exact expected post-mutation bytes by replacing every counted occurrence and require the written bytes/digest to equal that expected result.
+
+SCOPE OBJECTIONS
+None. The verdict does not rely on putting ADR-0042 doctrine, a template rule, or a blocking CI lane into force before signature.
+
+EXECUTED
+- Repository identity/status and `git diff main...HEAD` inspection: exit 0; HEAD `8b0296d9`, main `9870f79a`; worktree unchanged.
+- Named-file inspection via `sed`, `nl`, `wc`, and targeted `rg`: exit 0.
+- `node tests/run.js --test-reporter=tap tests/unit/dream-pipeline.test.js`: exit 0; 44 pass, 0 fail, `duration_ms 14413.125875`.
+- Scoped plain-row-G8 TAP run: exit 0; exactly 1 test passed, `duration_ms 618.738083`.
+- No-match `node --test --test-name-pattern=...`: exit 0; file-level pass count 1, no named row test observed.
+- Guarded runner grep states: absent exit 1; compliant surrogate exit 0; violating surrogate exit 1.
+- Guarded package-script grep states: absent exit 1; compliant exit 0; violating surrogate exit 1.
+- TAP experiments using `--test --eval`, stdin, and process substitution: exit 1 respectively; unsupported option combination/path and restricted process substitution.
+- `git diff --check main...HEAD`: exit 0.
+
+DONE_ROUND_1

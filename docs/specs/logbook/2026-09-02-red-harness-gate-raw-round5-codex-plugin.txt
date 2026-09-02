@@ -1,0 +1,20 @@
+PLUGIN GATE ROUND 5 (closing confirmation) — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a5 worktree), tip 0238f697, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+No-ship: R4-B and R4-D are genuinely fixed, but R4-A omits a real higher-precedence path override and R4-C retains conflicting FAILED/ERROR rules. EXECUTED: repository/diff inspection 0; environment grep 0; override-precedence probe 0 (`/shared/claude` won); package guarded grep 0; runner guarded grep 1 because the implementation file is absent; mirror-walk 0; manifest-domain hash probe 0 (18,590,498 bytes, 0.12 s); tracked-symlink probe 0 with none found; dream-pipeline git-path inspection 0; chmod-0500 probe 1 because the read-only sandbox denied `mkdtemp` before the permission behavior could run; `git diff --check` 2 on trailing whitespace in verbatim raw records.
+
+Findings:
+- [high] The provided environment set omits a path override that defeats the Claude-directory redirect (docs/specs/WP-criterion-red-harness.md:256)
+  Materiality A — Table B redirects `CLAUDE_CONFIG_DIR` but omits `WIENERDOG_CLAUDE_DIR`. `src/core/paths.js:11,56-61` identifies the latter as a path-defining override and gives it precedence over `CLAUDE_CONFIG_DIR`; `tests/run.js` preserves the ambient environment. The adopted suite's `ENV_KEYS` also neither saves nor clears it. The executed probe confirmed that an ambient `/shared/claude` wins over redirected `/phase/claude`. Consequently phases can still observe or modify one shared Claude tree while satisfying the enumerated redirect contract, allowing state unrelated to the mutation to influence BASELINE, RED, and CONTROL.
+  Recommendation: Add `WIENERDOG_CLAUDE_DIR` to the redirected set and every relevant mirror. Add a criterion-7 fixture where an ambient value points outside the phase copy and verify the phase-local value wins over `CLAUDE_CONFIG_DIR` according to `getPaths` precedence.
+- [medium] The supposedly total verdict taxonomy still assigns peer failures two different verdicts (docs/specs/WP-criterion-red-harness.md:193-209)
+  Materiality B — the Round-4 edit makes an undeclared own-body failure `FAILED` and says E2 owns the verdict, but the immediately following identity rules still classify any peer failure as `ERROR`. Criterion 4a repeats `ERROR` at lines 639-640, and criterion 9 calls an unlisted collateral failure `ERROR` at line 731. An unexpected peer assertion is exactly an undeclared own-body failure, so conforming implementations can emit different verdicts and precedence for the same observation. This leaves R4-C's total taxonomy unresolved even though both choices exit non-zero.
+  Recommendation: Make E2 authoritative throughout: classify undeclared peer own-body failures as `FAILED`, while reserving `ERROR` for untrustworthy infrastructure/identity conditions such as unattributable propagation. Update criteria 4a and 9 and add a peer-own-body fixture asserting the exact verdict.
+
+Next steps:
+- Close both contradictions and rerun the closing design gate.
+- Run the chmod-0500 parent probe in a writable environment, including restoration before creating the next phase copy.

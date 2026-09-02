@@ -1,0 +1,49 @@
+SHADOW ROUND 3 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 84ddf5cd, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: two self-cleaning temp-dir probes (TAP shapes; fs.cpSync symlink behaviour). Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No ship: the round-2 wording fixes landed, but fresh repository copies still share mutable suite-visible state, allowing false PROVEN results.
+
+FINDING 1
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 252-257, 362-387  
+Confidence: 0.99  
+Materiality: A  
+Body: “Fresh copy” isolates repository directories, not the state tests observe. The runner is wrapped once, and `tests/with-temp-root.js` creates one temp root for the entire run, so BASELINE, RED, and optional CONTROL share scratch state. The suggested copies also link every phase to the same real `node_modules`; restricting runner writes does not make suite writes through that link “resolution-only.” The executed `fs.cpSync` probe additionally showed that an outward symlink is recreated as a symlink and writing through the copied path changes the external target. A stateful suite can therefore pass BASELINE, seed shared state, fail the exact declared assertion and signal during RED for reasons unrelated to the mutation, then potentially pass CONTROL after another state transition. The claim that the trees “differ only by the declared mutation — by construction” is false.  
+Recommendation: Give every suite phase a distinct temp root; prohibit writable shared dependency targets; define copy semantics for all symlinks, rejecting outward links or safely materializing permitted targets. Add fixtures proving BASELINE cannot influence RED through TMPDIR, `node_modules`, or a tracked outward symlink.
+
+FINDING 2
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 257-258, 512-517  
+Confidence: 0.97  
+Materiality: B  
+Body: Reusing BASELINE as CONTROL can still report PROVEN when the test becomes red because of time, ordering, or external drift rather than the mutation. The spec admits this residual while simultaneously claiming CONTROL rules out an ambient red. Reporting which earlier green was reused is observability, not a counterfactual check; own-body attribution and signal matching do not establish mutation causality.  
+Recommendation: Require a fresh pristine post-RED run for PROVEN, using phase-isolated state. Treat a baseline-only pair as incomplete evidence rather than PROVEN.
+
+FINDING 3
+
+Affected file: docs/adr/0042-machine-run-red-proofs.md  
+Lines: 47-55, 69-76, 98-106  
+Confidence: 1.0  
+Materiality: B  
+Body: The ADR remains internally contradictory after the fresh-copy rewrite. Decision 3 says nothing is restored because nothing is mutated in place, but Decision 1 still requires the runner to “restore,” and Decision 4 still makes “a restore that returns the suite to green” part of causal attribution. Once signed, this durable doctrine could be read as requiring the discarded single-copy lifecycle and its write-after-suite race.  
+Recommendation: Replace both restore requirements with the pristine CONTROL model and state whether post-RED control is mandatory.
+
+SCOPE OBJECTIONS
+
+None. The unsigned template/CI doctrine and repository-wide `engines` raise remain owner/successor decisions and are not grounds for this verdict.
+
+EXECUTED
+
+- Repository status, revision, diff stat, and changed-file inspection: exit 0; HEAD `84ddf5cd`, main `9870f79a`; final worktree clean.
+- Full requested-file inspection with `wc`, `nl`, `sed`, and targeted `rg`: exit 0.
+- `node --version`: exit 0; `v25.9.0`.
+- Initial temporary TAP probe inside the read-only sandbox: exit 1, `EPERM` creating scratch.
+- Approved self-cleaning TAP probe: command exit 0, inner test exit 1; emitted `ERR_ASSERTION`, `ERR_TEST_FAILURE`, and parent `subtestsFailed` as specified.
+- Approved self-cleaning `fs.cpSync` symlink probe: exit 0; copied path remained a symlink and writing through it changed the external scratch target.
+- Guarded runner-import grep: exit 1 because `scripts/red-proofs.js` is absent.
+- Guarded `npm test`/RED-lane grep: exit 0.
+- `git diff --check main...HEAD`: exit 2; trailing whitespace in the committed round-2 shadow raw record.
+- `npm run lint`: exit 1; markdownlint dependency lookup failed with `ENOTFOUND`; frontmatter check passed.
+
+DONE_ROUND_3
