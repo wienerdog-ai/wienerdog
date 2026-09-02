@@ -1,0 +1,88 @@
+PR GATE ROUND 4 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 22f30298. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a062a2-0169-7be0-8b3a-16d76fbb8c35).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' '--- AGENTS ---'; nl -ba AGENTS.md | sed -n '1,180p'; printf '%s...
+[codex] Command completed: /bin/zsh -lc "printf '%s\\n' '--- AGENTS ---'; nl -ba AGENTS.md | sed -n '1,180p'; printf '%s... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE '"'^### Table|''^## Acceptance|''^## Contract|''^### (LOAD|SANDBOX)|''...
+[codex] Command completed: /bin/zsh -lc "grep -nE '"'^### Table|''^## Acceptance|''^## Contract|''^### (LOAD|SANDBOX)|''... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '170,345p' docs/specs/WP-criterion-red-harness.md; sed -n '377,460p' doc...
+[codex] Command completed: /bin/zsh -lc "sed -n '170,345p' docs/specs/WP-criterion-red-harness.md; sed -n '377,460p' doc... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '790,900p' docs/specs/WP-criterion-red-harness.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '790,900p' docs/specs/WP-criterion-red-harness.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '414,820p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '414,820p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '778,1200p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '778,1200p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1190,1617p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1190,1617p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/run.js; cat tests/with-temp-root.js | sed -n '150,210p'; cat tests/re...
+[codex] Command failed: /bin/zsh -lc "cat tests/run.js; cat tests/with-temp-root.js | sed -n '150,210p'; cat tests/re... (exit 1)
+[codex] Running command: /bin/zsh -lc 'node --version && node --test --test-reporter=tap tests/fixtures/red-proofs/bas...
+[codex] Command completed: /bin/zsh -lc 'node --version && node --test --test-reporter=tap tests/fixtures/red-proofs/bas... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/fixtures/red-proofs/base/tests/suite-nested.js; printf '\\n--- nested...
+[codex] Command completed: /bin/zsh -lc "cat tests/fixtures/red-proofs/base/tests/suite-nested.js; printf '\\n--- nested... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat tests/fixtures/red-proofs/base/tests/suite-truncated.js; node --test --test...
+[codex] Command completed: /bin/zsh -lc 'cat tests/fixtures/red-proofs/base/tests/suite-truncated.js; node --test --test... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"rollUp\\|FILTERED\\|--wp\\|criteria\" tests/unit/red-proofs.test.js |...
+[codex] Command completed: /bin/zsh -lc "grep -n \"rollUp\\|FILTERED\\|--wp\\|criteria\" tests/unit/red-proofs.test.js |... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '560,625p' tests/unit/red-proofs.test.js; sed -n '1,240p' tests/unit/red...
+[codex] Command completed: /bin/zsh -lc "sed -n '560,625p' tests/unit/red-proofs.test.js; sed -n '1,240p' tests/unit/red... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE 'win32|uid 0|root user|POSIX mode|UNSUPPORTED.*host|host refusal' docs...
+[codex] Command completed: /bin/zsh -lc "grep -nE 'win32|uid 0|root user|POSIX mode|UNSUPPORTED.*host|host refusal' docs... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -C 6 -E 'load|parse|suite-level|hook|ERR_TEST_FAILURE|module' tests/uni...
+[codex] Command completed: /bin/zsh -lc "grep -n -C 6 -E 'load|parse|suite-level|hook|ERR_TEST_FAILURE|module' tests/uni... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '330,455p' tests/unit/red-proofs.test.js; sed -n '760,1065p' tests/unit/...
+[codex] Command completed: /bin/zsh -lc "sed -n '330,455p' tests/unit/red-proofs.test.js; sed -n '760,1065p' tests/unit/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --test --test-reporter=tap -- tests/fixtures/red-proofs/base/tests/suite-b...
+[codex] Command completed: /bin/zsh -lc 'node --test --test-reporter=tap -- tests/fixtures/red-proofs/base/tests/suite-b... (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness-pr204-raw-round3* docs/specs/logbook/*...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness-pr204-raw-round3* docs/specs/logbook/*... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round1-codex-plugin.txt...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round1-codex-plugin.txt... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); const assert=require('node:as...
+[codex] Command completed: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); const assert=require('node:as... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); const assert=require('node:as...
+[codex] Running command: /bin/zsh -lc "node --test --test-reporter=tap \"data:text/javascript,const%20test%3Drequire('...
+[codex] Command completed: /bin/zsh -lc "node --test --test-reporter=tap \"data:text/javascript,const%20test%3Drequire('... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --test --test-reporter=tap /dev/fd/3 3<<<\"const test=require('node:test')...
+[codex] Command completed: /bin/zsh -lc "node --test --test-reporter=tap /dev/fd/3 3<<<\"const test=require('node:test')... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '460,668p' docs/specs/WP-criterion-red-harness.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '460,668p' docs/specs/WP-criterion-red-harness.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '176,205p;279,298p;366,3...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '176,205p;279,298p;366,3... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '620,725p'; cat tests/fixtures/re...
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '620,725p'; cat tests/fixtures/re... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat tests/fixtures/red-proofs/base/tests/suite-isolation.js; grep -n "SKIP_ON_U...
+[codex] Command completed: /bin/zsh -lc 'cat tests/fixtures/red-proofs/base/tests/suite-isolation.js; grep -n "SKIP_ON_U... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '80,110p;818,836p;1006,1028p;1088...
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '80,110p;818,836p;1006,1028p;1088... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner can execute a different suite than declared and can alter bytes outside the declar...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner can execute a different suite than declared and can alter bytes outside the declared mutation while still reporting PROVEN. The new unit suite also fails on explicitly unsupported host types rather than remaining portable.
+
+Full review comments:
+
+- [P2] Terminate options before appending the suite path — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:684-684
+  When a valid repo-relative suite filename begins with `-` (for example a root file named `--test-name-pattern=target`), Node parses this argument as another option and default-discovers different tests. Because only the declared suite is protected from mutation, a proof can then mutate the actual discovered assertion host and incorrectly reach `PROVEN`. Pass an option terminator before the suite path and validate it as a regular file, as required by [Table A's suite/file rules](docs/specs/WP-criterion-red-harness.md#L181-L187).
+
+- [P2] Preserve untouched bytes during mutation — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1047-1047
+  If the target contains malformed UTF-8 bytes outside the matched substring, decoding with `'utf8'` replaces them with U+FFFD and the later string write re-encodes those replacements. `written === expected` still passes even though unrelated bytes changed, so a named assertion can redden from collateral corruption and be reported `PROVEN`. Mutate Buffers or reject files that do not round-trip exactly to satisfy [Table B row 4's byte-equality requirement](docs/specs/WP-criterion-red-harness.md#L291).
+
+- [P2] Gate mode-dependent tests on the real host — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/tests/unit/red-proofs.test.js:90-99
+  On Windows or under uid 0, injecting `SUPPORTED_HOST` only bypasses the runner's refusal; it does not change the real filesystem semantics used by phase children. The tests expecting writes through 0500 parents to fail therefore receive no `EACCES` (for example the isolation, parent-write, and traversal cases), causing the newly added suite and hence `npm test` to fail in the environments this helper claims to support. Skip or privilege-drop the mode-dependent cases based on the real host instead of spoofing it, so [criterion 13](docs/specs/WP-criterion-red-harness.md#L894) remains true.
+
+- [P2] Skip the POSIX-only FIFO test where mkfifo is unavailable — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/tests/unit/red-proofs.test.js:826-827
+  On a standard Windows development host, `spawnSync('mkfifo', ...)` returns `status: null` with `ENOENT`, so this assertion fails before exercising the runner. Since the runner deliberately refuses Windows but the ordinary unit suite is still expected to pass, gate this test on command/platform capability to preserve [criterion 13](docs/specs/WP-criterion-red-harness.md#L894).
+rc=0

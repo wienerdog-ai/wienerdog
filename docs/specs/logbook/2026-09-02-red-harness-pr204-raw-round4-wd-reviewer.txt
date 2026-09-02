@@ -1,0 +1,96 @@
+PR GATE ROUND 4 — PR #204 — wd-reviewer (same agent resumed), tip 22f30298. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+# Round 4 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `22f30298` — worktree, remote and PR head agree. Spec, `docs/GLOSSARY.md` and `package.json` **untouched** since round 2 (empty diff); glossary re-verified **byte-exact** against the spec block.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu-latest)` 1m4s, `test (macos-latest)` 2m16s |
+| `boundary-check` | **0** clean |
+| `npm test` | **0** — 2542 tests / 2530 pass / **0 fail** / 12 skip |
+| `npm test -- tests/unit/red-proofs.test.js` | **0** — **98 pass / 0 fail / 0 skipped** |
+| same, `NODE_OPTIONS=--require <getuid→0>` | **0** — 98 / **95 pass / 0 fail / 3 skipped** |
+| `npm run lint` | **0** |
+| `npm run red-proofs` ×2 | **0**, **0** — `RUN: PROVEN`; reports and `git status --porcelain` byte-identical |
+| namesake fixture, both directions | **FAILED** / **PROVEN** |
+| drift fixture, 4 modes | **PROVEN** / ERROR ×3 |
+| declaration set: add / modify / delete / control | ERROR ×3 / **PROVEN** |
+| `parseTap` over **real** captured streams, 4 shapes | correct in all four |
+| **5 mutants** on the round-4 code | **4 killed, 1 survives** |
+| criteria 8/11 negated greps, 3 states | absent 1 / compliant 0 / violating 1 |
+| control bytes in both grep targets | 0 / 0 |
+
+Worktree clean and unmodified; all probes under `mktemp -d`, artifacts removed.
+
+---
+
+### The three items
+
+**(1) Structural wrapper detection — FIXED, verified both directions.** Using `suite-namesake.js`, whose three tests all observe the same value so one mutation reddens all three:
+
+```
+declare ONLY the non-namesake test  -> FAILED  exit=1
+   RED: ["tests/suite-namesake.js"] failed in its OWN BODY but is not declared
+declare ALL THREE (namesakes incl.) -> PROVEN  exit=0
+```
+
+The namesake is now visible in the identity set, so an undeclared own-body red can no longer vanish. `M-A` (revert to name-only) kills **4** tests; `M-C` (reverse the tie and drop the childless namesake) kills **4**; `M-B` (drop the `innerZeroPlan` branch) kills **3**.
+
+**I stopped guessing at TAP shapes and captured them.** My first synthetic matrix was wrong twice — I put the parent before its children, and I indented the inner plan — so I captured the real streams instead. Node 25.9.0's unmatched-pattern output is `1..0` at **column 0**, then a childless `ok` named for the file, then `1..1`; a file registering no tests emits the same thing *without* the leading `1..0`. That is exactly the discrimination the code makes, and against real streams it is right:
+
+```
+unmatched pattern          identities=[]                          ranNodes=0
+file registering NO tests  identities=[tests/suite-empty.js]      ranNodes=1
+normal suite               identities=[greeting | arity]          ranNodes=2
+namesake suite             identities=[tests/… | suite-… | …]     ranNodes=3
+```
+
+**Coordinator's attack — does keeping a childless wrapper poison BASELINE's identity lookup?** No, and I pushed it to the pathological case: a suite registering nothing, with the declaration naming the *file itself* as the expected identity. BASELINE accepts the wrapper (it is `ok`), but the run is still **FAILED, exit 1** — *"the declared identity did not fail under the mutation"*. A kept wrapper can satisfy "ran and passed" but never RED's "must fail as an own-body assertion failure with its signal", so it cannot manufacture a PROVEN. The drift fixture confirms the stated diagnostic change: `drift=none` now reports **"did not RUN"** where round 3 reported "ZERO TESTS RAN", still ERROR exit 1, with no-drift still PROVEN.
+
+**(2) Declaration set equality — my round-3 Band C finding, FIXED.**
+
+```
+ADD a new declaration file -> ERROR exit=1  "ADDED between LOAD and SNAPSHOT — the snapshotted
+                                             tree carries a declaration this run never loaded"
+MODIFY / DELETE            -> ERROR exit=1
+no edit (control)          -> PROVEN exit=0
+```
+
+All three edit shapes now covered, the control still reaches PROVEN, and the test additionally asserts `r.proofs.length === 0` — nothing runs once the set is untrustworthy. `M-E` kills 1.
+
+**(3) Host-independent suite — verified with a real stub.** `process.getuid → 0`: **98 tests, 95 pass, 0 fail, 3 skipped**, exactly as claimed. Functional tests inject a supported host; only the real-host assertions skip, with a reason. A developer on root gets a green suite with three honest skips instead of three spurious failures, while the lane itself still refuses. The win32 disclosure — that a whole-process `platform` stub kills Node's internals at exit 254, so that branch is covered by predicate + `runAll({host})` rather than end-to-end — is honest and technically correct.
+
+---
+
+### One new finding
+
+**[quality] The Node 20 absolute-path wrapper branch is load-bearing and untested — `scripts/red-proofs.js:855-858`. Band B. Disposition: fix (≈4 lines in an existing test).**
+
+`M-D` — deleting `|| name.endsWith(\`/${rel}\`)` from `matchesName` — leaves the suite **98 pass / 0 fail**. That branch is what recognises the wrapper under the spelling the code's own comment pins as measured on v20.20.2. I built both variants and ran the absolute spelling through each:
+
+```
+pristine  -> ["fixture basic: the greeting is hello"]
+mutated   -> ["/home/runner/.../tests/suite-basic.js"]
+             ["/home/runner/.../tests/suite-basic.js", "fixture basic: the greeting is hello"]
+```
+
+Under the mutant the wrapper is kept *and* every real test is nested beneath it, so a declaration naming the bare test name matches neither — every proof would ERROR at BASELINE on Node 20. Fail-safe, but the lane would be inoperative on the Node CI runs.
+
+Two things keep this at Band B rather than blocking. The shipped code is **correct** — this is a coverage gap, not a defect. And CI's Node 20 leg almost certainly kills `M-D` end-to-end through the functional tests, so the branch is not unexercised, merely unpinned; I could not confirm that directly, having no Node 20 locally.
+
+What makes it worth fixing now is the asymmetry inside this one commit: the *other* Node-20-specific fact — the all-SKIP unmatched-pattern shape — **is** simulated verbatim in a version-independent test (`red-proofs: the NODE 20 unmatched-pattern shape … simulated verbatim`), while the absolute-spelling fact from the same measured comment block is not. The structural test at `tests/unit/red-proofs.test.js` already has cases (a)-(d) in exactly the right form; case (d) with an absolute wrapper name is a four-line addition, and the shape is now demonstrated above. Given a round is already open, adding it is cheaper than carrying it. I would not hold the merge for it as a standalone round.
+
+### Carried residuals, all still correctly recorded
+
+- The two `applyMutation` defensive postconditions (my round-1 3b/3c) — disclosed as residual, "as graded".
+- `M12`, the `fs.cpSync` wrapper — listed **in** the matrix as a survivor rather than omitted. Of 20 numbered mutations, 19 killed, 1 disclosed.
+- Spec `:446`, the stale round-5 "provided set" line — verified unchanged and still routed to wd-architect, with the correct note that the spec is not this WP's to amend beyond `status:`.
+
+---
+
+**Verdict.** All three round-3 items are genuinely fixed and each dies under its own mutant, verified by my execution rather than the pasted matrix. Both attacks the coordinator named come back clean: the absolute spelling is handled correctly, and a kept childless wrapper cannot reach PROVEN. The one gap I found is an untested branch rather than a wrong one, it fails safe, and CI covers it end-to-end — worth the four-line pin, not worth another round. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
