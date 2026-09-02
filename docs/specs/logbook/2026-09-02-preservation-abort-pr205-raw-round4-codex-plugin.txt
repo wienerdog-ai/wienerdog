@@ -1,0 +1,53 @@
+PR GATE ROUND 4 — PR #205 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip ac657f17. Captured verbatim from stdout. git status --porcelain identical before and after (both empty). NOTE: the reviewer states the suite could not be executed in its sandbox — this verdict is a READING; the wd-reviewer and shadow executed the suite on the same tip.
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a06237-b2a5-73d1-89e5-9d220d4f79bf).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-preservation-abort-widening.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-preservation-abort-widening.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE '"'^### Exact contracts|''^####|''^'"\\| \\*\\*P|"'^'"\\| \\*\\*D|"'^'...
+[codex] Command completed: /bin/zsh -lc "grep -nE '"'^### Exact contracts|''^####|''^'"\\| \\*\\*P|"'^'"\\| \\*\\*D|"'^'... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '319,468p' docs/specs/WP-preservation-abort-widening.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '319,468p' docs/specs/WP-preservation-abort-widening.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "find src tests docs -name 'AGENTS.md' -o -name 'AGENTS.override.md'"
+[codex] Command completed: /bin/zsh -lc "find src tests docs -name 'AGENTS.md' -o -name 'AGENTS.override.md'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=80 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=80 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=50 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=50 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=25 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- tests/unit/dr...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=25 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- tests/unit/dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '600,790p'; nl -ba src/core/dream/pr...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '600,790p'; nl -ba src/core/dream/pr... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Running command: /bin/zsh -lc "sed -n '1,120p' src/core/dream/validate.js; grep -n \"function displayName\\|fu...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,120p' src/core/dream/validate.js; grep -n \"function displayName\\|fu... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '480,535p' src/core/dream/promote.js; grep -n \"function displayName\" s...
+[codex] Command completed: /bin/zsh -lc "sed -n '480,535p' src/core/dream/promote.js; grep -n \"function displayName\" s... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '320,355p' src/core/dream/ledger.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '320,355p' src/core/dream/ledger.js" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=3 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- docs/specs/don...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=3 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- docs/specs/don... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' '--- round3 codex ---'; cat docs/specs/logbook/2026-09-02-preser...
+[codex] Command completed: /bin/zsh -lc "printf '%s\\n' '--- round3 codex ---'; cat docs/specs/logbook/2026-09-02-preser... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate --no-merges d8e4afb69e809f2c6e450dba857e83029d4a42...
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate --no-merges d8e4afb69e809f2c6e450dba857e83029d4a42... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show --stat --oneline a7f24032 && git show --unified=40 --format=fuller a7f...
+[codex] Command completed: /bin/zsh -lc 'git show --stat --oneline a7f24032 && git show --unified=40 --format=fuller a7f... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && npm run lint'
+[codex] Command failed: /bin/zsh -lc 'git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && npm run lint' (exit 130)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '870,955p'; git show d8e4afb69e809f2...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '870,955p'; git show d8e4afb69e809f2... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: No actionable correctness defects were found in the changed code. The implementation matches ...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+No actionable correctness defects were found in the changed code. The implementation matches the work package’s preservation verification, cleanup, widened abort, message taxonomy, and promotion guard contracts; the test suite could not be executed because the read-only sandbox blocks temporary-directory creation.
+rc=0
