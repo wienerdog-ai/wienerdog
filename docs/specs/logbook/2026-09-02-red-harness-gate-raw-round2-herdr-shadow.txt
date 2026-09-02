@@ -1,0 +1,50 @@
+SHADOW ROUND 2 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ c490b5e0, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: TAP probes running the adopted suite outside the sandbox. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No ship: R1-A/B/E/F/G are closed, but R1-C/D remain incomplete and the mandated lane cannot run across the declared Node ≥18 range.
+
+FINDING 1
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 212-218, 442-451  
+Confidence: 0.98  
+Materiality: A  
+Body: Mutation-path containment is checked during SANDBOX, before BASELINE and RED execute arbitrary suite code. Either suite run can replace the validated target—or a parent—with a symlink after validation. APPLY or RESTORE may then follow it and overwrite a path outside the copy. Criterion 7 tests only symlinks present during initial validation, so a conforming path-based implementation can violate boundary 1 while passing every required case.  
+Recommendation: Revalidate canonical containment immediately before every mutation and restore, reject changed inode/type or symlink components, and add BASELINE-created and RED-created symlink escape cases. Define containment relative to the canonical copy root.
+
+FINDING 2
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 189-217, 338-346  
+Confidence: 0.98  
+Materiality: B  
+Body: Hierarchical identity still lacks rules for propagated ancestor failures. On Node 25.9, a nested assertion failure emits `not ok` for the child with `ERR_ASSERTION`, then another `not ok` for its parent with `failureType: subtestsFailed`. Declaring only the child violates failing-set equality; declaring the parent violates the requirement that every declared failure be an assertion failure of its own body. Implementations can therefore reject valid nested assertions or silently exclude unlisted failures.  
+Recommendation: Define the equality set over own-body terminal failures, permit only mechanically attributable `subtestsFailed` ancestor propagation, reject unrelated ancestors/peers, and add this exact nested case to criterion 4.
+
+FINDING 3
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 247-250, 312-346  
+Confidence: 0.99  
+Materiality: B  
+Body: The spec requires `--test-reporter=tap` while retaining Node ≥18 compatibility. Official Node CLI history says that flag was added in 18.15.0; `--test-name-pattern` arrived in 18.11.0. Thus Node 18.0–18.14, explicitly supported by `package.json`, cannot execute the mandated lane. Node also documents reporter text as unstable for programmatic consumption, while the contract leaves parser-version behavior undefined.  
+Recommendation: Raise the repository minimum to Node 18.15 or specify a compatible fallback for earlier Node 18 releases. Pin and test the accepted TAP shapes across every supported Node line, including missing diagnostics and propagated failures.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Repository status, revisions, diff/stat/name inspection, log, and `git diff --check main...HEAD`: exit 0; HEAD `c490b5e0`, main `9870f79a`.
+- Full/targeted inspection using `wc`, `nl`, `sed`, and `rg` over every requested file: exit 0.
+- `node --version`: exit 0; `v25.9.0`.
+- Nested duplicate-name TAP probe: exit 0; two indistinguishable `[parent, child]` identities emitted.
+- Assertion-versus-thrown-error TAP probe: exit 1; both had `failureType: testCodeFailure`, with codes `ERR_ASSERTION` versus `ERR_TEST_FAILURE`.
+- Nested assertion-failure TAP probe: exit 1; child `ERR_ASSERTION`, parent `subtestsFailed`.
+- Parent/child `--test-name-pattern` probes: exits 0/0/0; parent matched and ran its child, while child-only and full-path patterns ran zero tests.
+- Actual pinned-source-form scoped suite run: exit 0; exactly one test passed.
+- Actual unmatched-pattern suite run: exit 0; inner `1..0` plus outer file-level PASS.
+- Guarded runner grep absent/compliant/violating states: exits 1/0/1.
+- Guarded package-script grep absent/compliant/violating states: exits 1/0/1.
+
+DONE_ROUND_2
