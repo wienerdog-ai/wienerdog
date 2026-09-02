@@ -506,6 +506,26 @@ function validateProof(declFile, suite, proof, seenIds) {
       || entry.test.some((n) => typeof n !== 'string' || n.length === 0)) {
       throw error(where('"expectRed[].test" must be a non-empty array of non-empty names, outermost first — never a bare name'));
     }
+    // A RAW CONTROL CHARACTER CAN NEVER BE OBSERVED, so a declaration carrying
+    // one is a permanent "did not RUN" that reads like a renamed test.
+    // MEASURED on v25.9.0 and v20.20.2: Node renders a control character in a
+    // test name as a JS-STYLE ESCAPE and the TAP layer then doubles its
+    // backslash, so `test('nl\na')` is emitted as the SIX bytes `nl\\na` —
+    // byte-for-byte what `test('nl\\na')` emits. The two are indistinguishable
+    // in the stream, so no decoder can invert them and the runner does not
+    // guess: it refuses the declaration and tells the author the spelling the
+    // reporter actually uses.
+    for (const [i, name] of entry.test.entries()) {
+      const ctrl = /[\u0000-\u001f\u007f]/.exec(name);
+      if (ctrl) {
+        const code = `\\u${ctrl[0].codePointAt(0).toString(16).padStart(4, '0')}`;
+        throw error(where(`"expectRed[].test[${i}]" contains a raw control character (${code}) — `
+          + 'the TAP reporter renders control characters as escape sequences, so this identity can never be '
+          + 'observed. Declare the name the reporter prints (a newline appears as a backslash followed by "n"). '
+          + 'NOTE: that spelling is also what a name containing a literal backslash and "n" produces, and the two '
+          + 'are indistinguishable in the stream; when both exist in one suite the ambiguity refusal catches it'));
+      }
+    }
     if (typeof entry.signal !== 'string' || entry.signal.length === 0) {
       throw error(where('"expectRed[].signal" must be a non-empty substring — an empty signal matches every diagnostic'));
     }
@@ -693,6 +713,15 @@ function phaseEnv(copyDir) {
   env.XDG_CACHE_HOME = path.join(copyDir, PHASE_XDG, 'cache');
   env.XDG_DATA_HOME = path.join(copyDir, PHASE_XDG, 'data');
   env.XDG_STATE_HOME = path.join(copyDir, PHASE_XDG, 'state');
+  // `PWD` IS PART OF THE WORKING DIRECTORY, and spawning does not update it.
+  // Row 2b's provided set names "the working directory"; `cwd: copyDir` moves
+  // the process but leaves the INHERITED `PWD` pointing at the real checkout, so
+  // a suite reading `process.env.PWD` — which a shell-shaped script naturally
+  // does — sees the same path in BASELINE, RED and CONTROL: shared state, and a
+  // write path straight into the source tree. `OLDPWD` is the same variable one
+  // step back, so it is removed rather than left pointing somewhere real.
+  env.PWD = copyDir;
+  delete env.OLDPWD;
   for (const name of REDIRECTED_ENV_VARS) delete env[name];
   for (const name of NODE_TEST_RUNNER_VARS) delete env[name];
   return env;

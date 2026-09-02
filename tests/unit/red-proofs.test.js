@@ -1760,6 +1760,89 @@ test('red-proofs: the parser preserves a name\'s own whitespace and strips only 
   rp.assertCompleteRun({ status: 0, signal: null, spawnError: null, stdout: crlf }, 'unit', 'BASELINE');
 });
 
+// ── ROUND-9 FINDINGS — each one's RED
+
+test('red-proofs: PWD names the phase copy, and no phase sees another\'s sentinel through it (criterion 7b2)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
+  // The fixture writes `${PWD}/pwd-sentinel` in every phase and asserts no
+  // earlier phase's sentinel is visible. Before the redirect, PWD was the real
+  // checkout in all three phases: the write landed in the source tree and RED
+  // saw BASELINE's file.
+  const root = newRoot({
+    suite: 'tests/suite-pwd.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture pwd: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+  });
+  const before = rp.buildManifest(root);
+  const r = run(root);
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+  // And the source tree gained nothing — no sentinel, no drift.
+  rp.verifyCopy(root, before);
+  assert.equal(fs.existsSync(path.join(root, 'pwd-sentinel')), false);
+});
+
+test('red-proofs: phaseEnv sets PWD into the copy and drops OLDPWD (Table B row 2b)', () => {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-pwd-'));
+  const saved = { PWD: process.env.PWD, OLDPWD: process.env.OLDPWD };
+  process.env.PWD = '/the/real/checkout';
+  process.env.OLDPWD = '/somewhere/else';
+  try {
+    const env = rp.phaseEnv(copy);
+    assert.equal(env.PWD, copy, 'PWD is the phase copy, never the inherited path');
+    assert.equal(env.OLDPWD, undefined, 'OLDPWD is not left pointing at a real directory');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test('red-proofs: a declared identity carrying a RAW CONTROL CHARACTER is refused at LOAD, naming it (Table A)', () => {
+  // MEASURED on v25.9.0 and v20.20.2: `test('nl\nb')` is emitted as the bytes
+  // `nl\\nb`, which is byte-for-byte what `test('nl\\nb')` emits. The two are
+  // indistinguishable in the stream, so a raw control character in a declaration
+  // can never be observed — and the runner refuses rather than guessing which
+  // of the two names an escaped spelling meant.
+  for (const [label, name, code] of [
+    ['newline', 'nl\nb', '\\u000a'],
+    ['tab', 'ta\tb', '\\u0009'],
+    ['carriage return', 'cr\rb', '\\u000d'],
+  ]) {
+    const r = run(newRoot({ proofs: [proof({ expectRed: [{ test: [name], signal: 'x' }] })] }));
+    assert.equal(r.verdict, 'ERROR', `${label}: ${r.report}`);
+    assert.notEqual(r.exitCode, 0);
+    assert.ok(r.report.includes('contains a raw control character'), r.report);
+    assert.ok(r.report.includes(code), `${label}: the code point is named — ${r.report}`);
+    assert.ok(r.report.includes('can never be observed'), r.report);
+    assert.equal(r.proofs.length, 0);
+  }
+  // A nested position is named by its index.
+  const nested = run(newRoot({ proofs: [proof({ expectRed: [{ test: ['outer', 'in\nner'], signal: 'x' }] })] }));
+  assert.ok(nested.report.includes('"expectRed[].test[1]"'), nested.report);
+});
+
+test('red-proofs: the TAP escape set is decoded exactly, and the ambiguity is refused rather than guessed (Table A)', () => {
+  const suite = 'tests/suite-basic.js';
+  // The reporter's own bytes, measured. `\\` is one literal backslash here.
+  const stream = [
+    'TAP version 13',
+    'ok 1 - bs\\\\d',      // source name: bs<backslash>d
+    'ok 2 - hash\\#e',     // source name: hash#e
+    'ok 3 - nl\\\\na',     // source name: EITHER a real newline OR backslash+n
+    '1..3', '# tests 3', '',
+  ].join('\n');
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(stream, suite)).map((n) => n.path[0]),
+    ['bs\\d', 'hash#e', 'nl\\na'],
+    'the TAP layer is inverted exactly: \\\\ -> \\ and \\# -> #'
+  );
+  // The third is the irreducible one: a real newline and a literal backslash+n
+  // produce this same spelling, so it decodes to the spelling, not to a guess.
+  // A declaration may name it as the reporter prints it — and a raw newline is
+  // refused at LOAD instead of silently never matching.
+  const ok = run(newRoot({ proofs: [proof({ expectRed: [{ test: ['fixture basic: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })] }));
+  assert.equal(ok.verdict, 'PROVEN', ok.report);
+});
+
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot
 
 test('red-proofs: the runner borrows no production seam and starts every suite through the sandbox\'s tests/run.js (criterion 8)', () => {
