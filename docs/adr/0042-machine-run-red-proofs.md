@@ -48,11 +48,14 @@ a result.
    declaration is INERT DATA.** A *RED proof* is a declared exact-substring
    mutation plus the named assertions it must redden, committed beside the suite
    it proves **as JSON that is parsed and validated, never executed**. Running it
-   applies the mutation, proves it landed, requires the declared assertions — and
-   only those — to fail **as assertion failures of their own test bodies**,
-   restores, and requires green again. A criterion is `PROVEN` only when **every**
-   declaration for it was selected, ran and passed; a filtered run reports the
-   criterion as filtered, never proven. Anything else exits non-zero.
+   follows ONE phase order — **BASELINE in a pristine copy, APPLY into a fresh
+   copy, RED in that copy, CONTROL in a further fresh pristine copy after RED** —
+   proving the mutation landed and requiring the declared assertions, and only
+   those, to fail **as assertion failures of their own test bodies**, with the
+   post-RED control green. **Nothing is restored, because nothing is mutated in
+   place.** A criterion is `PROVEN` only when **every** declaration for it was
+   selected, ran and passed; a filtered run reports the criterion as filtered,
+   never proven. Anything else exits non-zero.
 
    The format is data rather than code because declarations are read *before*
    the disposable copy exists: an executable declaration could exit the process
@@ -85,13 +88,14 @@ a result.
    enumerating race windows. **Deleting the step that has to be right is the
    fixed point.**
 
-   Two bounded boundaries follow, and deliberately not one universal promise: the
-   runner's only write into any tree is the declared mutation, and the spawned
-   suite's scratch writes stay inside the test wrapper's own run-scoped temp
-   root, which that wrapper deletes — suites allocate scratch through the system
-   temp directory, so they never land in the copy. Links to installed
-   dependencies are resolution-only by construction, there being no other write
-   to carry outward. **A single "nothing outside the sandbox is written" claim
+   **Fresh directories are not on their own isolation, and that was the third
+   round's finding.** Phases must share no writable path at all: each child's
+   temp directory lives inside its own copy and dies with it, a copy carries no
+   installed-dependency tree and no symlink of any kind, and every copy derives
+   from one verified snapshot taken before any suite code runs. Otherwise the
+   copies stay distinct while the state the suites observe does not — one temp
+   root handed to every phase, one real dependency tree writable by all of them,
+   and symlinks that a recursive copy faithfully recreates as symlinks. **A single "nothing outside the sandbox is written" claim
    would be unsatisfiable, and stating it would only guarantee that every
    implementation silently enforced something narrower.**
 
@@ -101,9 +105,12 @@ a result.
    red the cell's.** Attribution rests on the whole chain: a baseline in which
    each named identity ran and passed exactly once, an apply step that proves the
    exact expected bytes were written, a red that is an assertion failure of the
-   named test rather than a parse, load or hook failure, a restore that returns
-   the suite to green — and, beyond any of it, a reviewed judgment that the
-   mutation is relevant to what the assertion observes (decision 5). The runner
+   named test rather than a parse, load or hook failure, **a fresh pristine
+   control run after RED that is green** — and, beyond any of it, a reviewed
+   judgment that the mutation is relevant to what the assertion observes
+   (decision 5). Evidence resting on the baseline's earlier green alone is
+   uncontrolled and does not prove a criterion: it cannot separate the mutation
+   from drift between the two runs. The runner
    runs and exits — no daemon, no server, no telemetry (ADR-0004).
 
 5. **A green proves the selected declared mutations redden the named assertions,
