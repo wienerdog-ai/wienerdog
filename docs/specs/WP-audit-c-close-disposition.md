@@ -21,27 +21,31 @@ sign. What remains the owner's is a **severity call**, and it changes what
 happens next rather than what the logbook says.
 
 **The call: are D1's open halves a queued work package, or an incident?**
-Measured through the production write path: `makeAdmit` admits
-`01-Projects/example/GEMINI.md` and `writeIntoVault` **wrote it**
-(V1 (c)) — `GEMINI.md` is Gemini CLI's current hierarchical instruction file, and
-that path needs no dot segment and no unusual name, only an ordinary project
-folder. The dot-segment half (V1 (b)) writes
-`01-Projects/example/.github/copilot-instructions.md` the same way. Both are the
-class group C exists to deny.
+Measured through the production write path (V1 (b) and (c), whose samples this
+does not repeat): current, documented instruction files — `GEMINI.md`, `QWEN.md`,
+`WARP.md` — are admitted and **written** beneath an ordinary project folder, with
+no dot segment and no unusual name; dot-segment control paths are written the same
+way. Both are the class group C exists to deny.
 
-- **(i) QUEUED — the recommendation.** `WP-instruction-basename-currency` and
-  `WP-dot-segment-denial` join the queue, currency first. Grounds: the brain must
+- **(i) QUEUED — the recommendation.** Both successors join the queue in the
+  normal order, **`WP-instruction-basename-currency` first and
+  `WP-dot-segment-denial` immediately after it** — currency first because it is
+  the smaller change against the more ordinary path, dot-segment second because
+  it is the structural rule and the larger package. Grounds: the brain must
   choose the path itself, the four ENUMERATED names still hold at every depth
   (V1 (a)), and the vault is the user's own repository.
 - **(ii) INCIDENT.** `WP-instruction-basename-currency` jumps the queue as a
-  hotfix, and an incident entry is filed against *that* dispatch. Grounds: a
-  shipped product writes a current, documented instruction file the audit ruled
-  KEEP, by an ordinary path.
+  hotfix and an incident entry is filed against *that* dispatch;
+  **`WP-dot-segment-denial` follows it directly, ahead of the rest of the queue
+  but not as a second hotfix** — it is the class rule, and rushing a class rule
+  is how the enumerations in this spec's own history got written. Grounds for the
+  hotfix: a shipped product writes current, documented instruction files the audit
+  ruled KEEP, by an ordinary path.
 
 **Either way this WP's own deliverables are identical** — it records, it does not
 fix, and it files no incident entry of its own. The ruling changes only the
 successors' priority; **the dispatch message records it**, and neither branch
-touches Table D, E or F.
+touches Table D or Table E.
 
 ## Context (read this, nothing else)
 
@@ -149,8 +153,9 @@ repeated here.
 ### Exact contracts
 
 **The logbook entry** carries: (1) one paragraph naming the tree measured and the
-honesty rule; (2) **Tables D and F reproduced in full** — F because it is E2's
-only trigger and outlives this spec; (3) the command output pasted for each of
+honesty rule; (2) **Table D reproduced in full**, plus Table E's
+retired-mechanism paragraph — the two retired closure triggers with their cause,
+because that lesson outlives this spec; (3) the command output pasted for each of
 V1–V5; (4) the Dispatch precondition's severity ruling, quoted, with its date. Reproducing Table D is a **transfer of ownership, not a duplicate**:
 this spec is Table D's authority while it is worked, and on the flip to Done the
 logbook becomes it — which is why Table E's cell cites the logbook, not this file.
@@ -172,11 +177,10 @@ epic: audit-close
 ---
 ```
 
-**It is filed as ONE work package covering two enforcement points, and that is a
-decision with a stated cause:** the 2026-08-05 ruling's item 3 (config-side)
-existed *to make item 1 (path-side) unconditional*. Landing either alone leaves
-the class open — which is the exact shape of the defect the round-1 gate found.
-It may be split at maturation; it may not be half-landed. Its body states:
+**One work package covering two enforcement points, with a stated cause:** the
+2026-08-05 ruling's item 3 (config-side) existed *to make item 1 (path-side)
+unconditional*, so landing either alone leaves the class open. It may be split at
+maturation; it may not be half-landed. Its body states:
 
 1. **The rule, as ruled: no write to any path with a dot-prefixed SEGMENT** — a
    class, not a list. Today's `DENIED_SEGMENTS` (`promote.js:99`) enumerates two
@@ -209,6 +213,22 @@ It may be split at maturation; it may not be half-landed. Its body states:
    dot-rule: audit finding C3 owns the layout dot-rule and its notice"* is a live
    deferral to this WP; landing it means updating that comment in the same pass.
 
+**Its REQUIRED VERIFICATION — the part this spec may state and may not itself
+assert.** The proof must establish the **class predicate**, not a list:
+
+- **The property:** *no path segment and no layout segment beginning with `.` is
+  admitted or emitted, at any depth, in any case.* Stated as a universal over the
+  segment alphabet, not over a set of examples.
+- **All three enforcement points**, separately: `makeAdmit`, `readVaultLayout`,
+  `inferLayout`/`adopt`. One passing implies nothing about the others — measured.
+- **Anti-enumeration evidence is mandatory:** show that replacing the predicate
+  with an enumeration of the very names the proof exercises makes the proof go
+  **RED**. Without that, a finite list passes and the class stays open — which is
+  precisely how this spec's own closure triggers failed twice.
+- **Case folding is in scope:** measured, `.GiThUb/copilot-instructions.md` is
+  admitted today while the enumerated `ClAuDe.md` is refused, so the existing
+  fold covers only enumerated names.
+
 **The instruction-currency stub** is the second Draft stub. Frontmatter, verbatim:
 
 ```yaml
@@ -224,40 +244,54 @@ epic: audit-close
 ---
 ```
 
-**Why it is SEPARATE from `WP-dot-segment-denial`, stated because the round-1
-gate punished the opposite call.** Those two are one rule split across two
-enforcement points, so half-landing either leaves the class open. These are
-**two different KINDS of rule** and neither reaches the other: a dot-segment
-class rule does not refuse `01-Projects/example/GEMINI.md` (measured — no dot
-segment), and a basename list does not refuse `.husky/pre-commit.md`. A class
-rule **closes**; an enumeration **never closes** and can only be brought current
-and given a standing obligation. Merging them would put an unclosable item
-inside a closable WP. Its body states:
+**Why it is SEPARATE from `WP-dot-segment-denial`.** Those two are one rule split
+across two enforcement points, so half-landing either leaves the class open.
+These are **two KINDS of rule and neither reaches the other**: a dot-segment rule
+does not refuse `01-Projects/example/GEMINI.md` (measured — no dot segment), and a
+basename list does not refuse `.husky/pre-commit.md`. A class rule **closes**; an
+enumeration **never closes**. Merging them would put an unclosable item inside a
+closable WP. Its body states:
 
 1. **The gap, measured.** `INSTRUCTION_BASENAMES` (`promote.js:96`) holds four
-   names. Production `makeAdmit` admits `01-Projects/example/GEMINI.md`,
-   `06-Identity/GEMINI.md`, `01-Projects/example/copilot-instructions.md` and
-   `01-Projects/example/.cursor/rules.md`; the real `writeIntoVault` wrote
-   `GEMINI.md`. Reproduce with V1 (c), not from this sentence.
-2. **`GEMINI.md` is not a guess.** It is Gemini CLI's documented hierarchical
-   instruction file. `copilot-instructions.md` is GitHub Copilot's. **Confirm
-   both against current vendor documentation when this WP is picked up** — a
-   stale list is exactly the defect being fixed, and a stale citation would
-   repeat it.
-3. **The list stays a list, and that is the accepted design.** The 2026-08-05
-   ruling took item 2 as a name list *with a named residual* because no
-   structural marker exists for instruction filenames. This WP does not overturn
-   that. **What it adds is the obligation the ruling left implicit: a list nobody
-   revisits silently rots**, which is what happened here.
-4. **So the deliverable is TWO things, not one.** (i) the names, brought current;
-   (ii) a stated maintenance obligation — where it is written down, and what
-   event triggers a review. Whether that is a comment, a runbook line or a
-   periodic check is this WP's decision to take deliberately.
-5. **The residual that remains after this WP, named rather than implied.** A
-   genuinely unknown tool's instruction file still passes. That is the ruling's
-   own accepted residual and is not reopened.
-6. **ADR-0004 bounds the fix**: a name list and a written obligation. Nothing
-   that watches, polls or runs.
+   names. Production `makeAdmit` admits — and the real `writeIntoVault` wrote —
+   `01-Projects/example/GEMINI.md`, `01-Projects/example/QWEN.md`,
+   `01-Projects/example/WARP.md` and `01-Projects/example/copilot-instructions.md`.
+   Mixed case passes too: `Gemini.md` is admitted while the enumerated
+   `ClAuDe.md` is refused. Reproduce with V1 (c), not from this sentence.
+2. **These are documented conventions, not guesses** — `GEMINI.md` (Gemini CLI),
+   `QWEN.md` (Qwen Code), `WARP.md` (Warp), `copilot-instructions.md` (GitHub
+   Copilot). **Re-confirm every one against current vendor documentation when this
+   WP is picked up, and cite a URL per entry**: a stale list is the defect being
+   fixed, so a stale citation would repeat it.
+3. **What is NOT this WP's:** anything denied by a dot segment rather than by its
+   basename. `.cursor/rules.md` is the worked example — its basename is merely
+   `rules.md`, so only the dot rule can reach it, and it belongs to
+   `WP-dot-segment-denial`. Keeping it here would double-count one residual and
+   let each WP assume the other closed it.
+4. **The list stays a list, and an enumeration NEVER CLOSES.** The 2026-08-05
+   ruling took item 2 as a name list *with a named residual* because no structural
+   marker exists for instruction filenames. This WP does not overturn that. **Say
+   so plainly in the spec rather than implying completeness** — the honest shape
+   is "current as of a date", never "complete".
+5. **So the deliverable is a DATED INVENTORY plus an OBLIGATION, not a patch.**
+   (i) a dated inventory of documented instruction-file conventions, each with its
+   citation; (ii) **accepted omissions recorded explicitly** — anything found and
+   deliberately not denied, with the reason; (iii) a standing maintenance
+   obligation carrying a **named owner** and an **objective trigger** (for example
+   "re-inventory at every minor release, recorded in the release runbook") —
+   never an unowned comment.
+6. **The residual that remains after this WP, named rather than implied.** A
+   genuinely unknown or undocumented tool's instruction file still passes. That is
+   the ruling's own accepted residual and is not reopened.
+7. **ADR-0004 bounds the fix**: a name list, a dated document and a written
+   obligation. Nothing that watches, polls or runs.
+
+**Its REQUIRED VERIFICATION.** Every entry in the dated inventory must be shown
+to reach **denial across case and depth** — the inventory, not a sample, is the
+completeness boundary, and the accepted-omission list is what makes the boundary
+honest. **This spec states that requirement and asserts none of it**: the
+inventory does not exist yet, and pre-writing its contents here would be the
+fourth enumeration.
 
 ## Contract reference
 
@@ -277,8 +311,8 @@ quietly replaced.**
 
 | # | Finding | Mechanism, as ruled 2026-08-05 | Measured | Verdict | Cause / owner | Step |
 |---|---------|--------------------------------|----------|---------|---------------|------|
-| D1 | **M7** — harness-instruction persistence | the brain writes an instruction file; the fence misses it; it is kept and committed. Item 1 of the fix denied **any dot-prefixed segment**, as a class; item 2 denied instruction filenames as a **name list**, accepted with a named residual | (a) all four ENUMERATED basenames are refused at every depth (16/16). (b) `.github`, `.husky`, `.git`, `.obsidian`, `.cursor` are **admitted beneath an admitted tier** (5/5), and the real `writeIntoVault` with the production `admit` **wrote** `01-Projects/example/.github/copilot-instructions.md`. (c) `GEMINI.md`, `copilot-instructions.md` (tier-local, **no dot segment**) and `.cursor/rules.md` are admitted (4/4), and the production write of `01-Projects/example/GEMINI.md` returned `written:true` | **SPLIT — (a) MOOTED, (b) OPEN, (c) OPEN** | (a) retired by the promote-in inversion: clause (a)+(b) put a vault-**root** instruction file outside the allowlist without enumeration, and `INSTRUCTION_BASENAMES` covers **the four names it enumerates** at any depth. **The claim is scoped to the enumeration and may never be worded as "the current names"** — that wording is what hid (c). (b) **`DENIED_SEGMENTS` (`promote.js:99`) is an ENUMERATION of two names where the ruling required a class**, so item 1 is unmet beneath tiers. Owner: **`WP-dot-segment-denial`**. (c) **`INSTRUCTION_BASENAMES` (`promote.js:96`) is STALE, which is a different defect from being a list.** `GEMINI.md` is Gemini CLI's documented hierarchical instruction file and postdates the list; `copilot-instructions.md` is admitted tier-local, so **the dot-segment fix does not reach either** — (b) and (c) need separate owners. Owner: **`WP-instruction-basename-currency`**. This is NOT the residual accepted at ruling time ("an *unknown* tool's instruction file passes"): these are current, documented conventions. **RETIRED VERDICTS:** this row read MOOTED until round 1, whose evidence tested dot paths only at the vault ROOT, where clause (a) rejects them for being out-of-tier — the probe moved two variables and attributed the refusal to the wrong one. Round 1's replacement then read **(a) MOOTED** on the words "the four current names", which round 2 falsified: the probe enumerated exactly the names the code enumerates, so it could not have failed | V1 |
-| D2 | **M9** — git control state inside the write fence | the validator runs `git add`/`git commit` in the vault repo, parent privileges, **unfiltered env**, no `--no-verify`, no neutral hooks path | (a) `validate.js` has no `add`/`commit`; the run never invokes `git commit`; nine pinned shapes carry none of `add commit clean reset status stash`. (b) with an inherited `GIT_DIR`, the pinned `hash-object -w --stdin` wrote its object into the **redirected** repository and not the vault; `commit-tree` + `update-ref` under the same env **advanced the other repository's HEAD** | **SPLIT — (a) MOOTED, (b) OPEN** | (a) retired by `commitNamedSet`: private index + `commit-tree` + `update-ref`, so `--no-verify` has nothing to suppress — the pre-commit/commit-msg path is **structurally absent**, not disabled. (b) the ruled mechanism **names the unfiltered env**, and `commitNamedSet` spreads `process.env` into every call; a scheduled run gets run-job's clean env, a manual `wienerdog dream` inherits the shell. Owner: **`WP-dream-git-env-pinning`** — Draft, **needs an owner product decision and has not landed**. **RETIRED VERDICT:** this row read MOOTED until the round-1 gate, on the reasoning that the env half was "already owned"; **a registered future decision is not a retiring cause**, and that is the general rule this row now carries. **NOT reopened:** the `reference-transaction` hook residual, ruled out of scope by the owner on 2026-08-31 (`WP-dream-promote-in-workspace` Table W row W1, which also rejects `core.hooksPath` suppression by name). **Not a residual:** `assertGitRepo` is a read-only `rev-parse --git-dir` and writes no control state | V2 |
+| D1 | **M7** — harness-instruction persistence | the brain writes an instruction file; the fence misses it; it is kept and committed. Item 1 of the fix denied **any dot-prefixed segment**, as a class; item 2 denied instruction filenames as a **name list**, accepted with a named residual | (a) all four ENUMERATED basenames are refused at every depth (16/16). (b) `.github`, `.husky`, `.git`, `.obsidian`, `.cursor` are **admitted beneath an admitted tier** (5/5), and the real `writeIntoVault` with the production `admit` **wrote** `01-Projects/example/.github/copilot-instructions.md`. (c) `GEMINI.md`, `QWEN.md`, `WARP.md` and `copilot-instructions.md` — all tier-local, **no dot segment** — are admitted and were **written** through the production path; mixed-case `Gemini.md` is admitted while the enumerated `ClAuDe.md` is refused | **SPLIT — (a) MOOTED, (b) OPEN, (c) OPEN** | (a) retired by the promote-in inversion: clause (a)+(b) put a vault-**root** instruction file outside the allowlist without enumeration, and `INSTRUCTION_BASENAMES` covers **the four names it enumerates** at any depth. **The claim is scoped to the enumeration and may never be worded as "the current names"** — that wording is what hid (c). (b) **`DENIED_SEGMENTS` (`promote.js:99`) is an ENUMERATION of two names where the ruling required a class**, so item 1 is unmet beneath tiers. Owner: **`WP-dot-segment-denial`**, which must prove the predicate **as a class**, with anti-enumeration evidence (its stub's required verification; the reason is Table E's retirement paragraph, not restated here). (c) **`INSTRUCTION_BASENAMES` (`promote.js:96`) is STALE, which is a different defect from being a list.** `GEMINI.md` is Gemini CLI's documented hierarchical instruction file and postdates the list; `copilot-instructions.md` is admitted tier-local, so **the dot-segment fix does not reach either** — (b) and (c) need separate owners. Owner: **`WP-instruction-basename-currency`**, whose required verification is a **dated inventory** rather than a longer list (its stub; cause in Table E's retirement paragraph). This is NOT the residual accepted at ruling time ("an *unknown* tool's instruction file passes"): these are current, documented conventions. **`.cursor/rules.md` is NOT in this row** — its basename is merely `rules.md`, so only the dot rule reaches it and it belongs wholly to (b). **RETIRED VERDICTS:** this row read MOOTED until round 1, whose evidence tested dot paths only at the vault ROOT, where clause (a) rejects them for being out-of-tier — the probe moved two variables and attributed the refusal to the wrong one. Round 1's replacement then read **(a) MOOTED** on the words "the four current names", which round 2 falsified: the probe enumerated exactly the names the code enumerates, so it could not have failed | V1 |
+| D2 | **M9** — git control state inside the write fence | the validator runs `git add`/`git commit` in the vault repo, parent privileges, **unfiltered env**, no `--no-verify`, no neutral hooks path | (a) `validate.js` has no `add`/`commit`; the run never invokes `git commit`; nine pinned shapes carry none of `add commit clean reset status stash`. (b) with an inherited `GIT_DIR`, the pinned `hash-object -w --stdin` wrote its object into the **redirected** repository and not the vault; `commit-tree` + `update-ref` under the same env **advanced the other repository's HEAD** | **SPLIT — (a) MOOTED, (b) OPEN** | (a) retired by `commitNamedSet`: private index + `commit-tree` + `update-ref`, so `--no-verify` has nothing to suppress — the pre-commit/commit-msg path is **structurally absent**, not disabled. (b) the ruled mechanism **names the unfiltered env**, and `commitNamedSet` spreads `process.env` into every call; a scheduled run gets run-job's clean env, a manual `wienerdog dream` inherits the shell. Owner: **`WP-dream-git-env-pinning`** — Draft, **needs an owner product decision and has not landed**. **What that WP must decide, stated here because its spec is outside this WP's Deliverables and this row is the only place the requirement can be recorded:** its canonical table must **enumerate every inherited write-target and config channel the pinned shapes honour** — at least `GIT_DIR`, `GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR`, `GIT_CONFIG_*`, `GIT_NAMESPACE`, and `GIT_INDEX_FILE` (already ours) — so that *pin*, *pin-with-exceptions* and *don't-pin* each name their channel set. **Measured, and this is why the enumeration is the requirement:** with `GIT_DIR` unset, an inherited `GIT_OBJECT_DIRECTORY` alone redirected the pinned `hash-object -w --stdin` write out of the vault — so a `GIT_DIR`-only pin would report success while the mechanism stayed live. **This row states the requirement and asserts no outcome:** *don't-pin* is a legitimate ruling in which the residual is accepted and named, not retired. **RETIRED VERDICT:** this row read MOOTED until the round-1 gate, on the reasoning that the env half was "already owned"; **a registered future decision is not a retiring cause**, and that is the general rule this row now carries. **NOT reopened:** the `reference-transaction` hook residual, ruled out of scope by the owner on 2026-08-31 (`WP-dream-promote-in-workspace` Table W row W1, which also rejects `core.hooksPath` suppression by name). **Not a residual:** `assertGitRepo` is a read-only `rev-parse --git-dir` and writes no control state | V2 |
 | D3 | **M10** — the gitignored/invisible region | `git status … -uall` without `--ignored` classifies; `git clean -fd` (not `-x`) cleans; a dream-written `.gitignore` blinds both | `delta.js` requires only `node:fs`, `node:path`, `../errors` — no route to a process spawner. `assertCleanTree` and `restoreVaultToHead` have no `src/` consumer | **MOOTED** | Retired by the **git-free classifier**: `computeDelta` is a filesystem walk that never consults git, so an ignore file has nothing to blind — **absent, not defeated**, and unaffected by D1's open halves (neither a dot-segment nor an unenumerated-instruction write restores a git dependency the classifier no longer has). **Standing-discipline note:** `restoreVaultToHead`'s `clean -fd` still exists, exported for fixtures and unreachable from `src/`; a future WP that re-wires it re-opens M10's `-fd`-not-`-x` question and must re-run V3 and V4 | V3, V4 |
 | D4 | **C2** — the git seam | ruling item 4: give the seam its own third-party-independent defense — `--no-verify` and a neutralized hooks path | follows D2 exactly | **SPLIT — own-defense half VOID, env half OPEN** | The `--no-verify`/hooks-path half is void by construction: there is no `git commit` to harden. The environment half is D2 (b), OPEN, owned by `WP-dream-git-env-pinning`. **RETIRED VERDICT:** this row read MOOTED with *"nothing new is owed"*; that sentence is **withdrawn** — the seam still owes an independent, constructed environment | V2 |
 | D5 | **C3** — layout | ruling item 3: reject dot-prefixed layout values in `isSafeRelativePath`, so the item-1 write rule is unconditional | `readVaultLayout` returns `projects_dir: .git` unchanged and `makeAdmit` on that layout admits `.git/hooks/note.md`; the **copied** `layout-infer.js` validator has the same gap, and `inferLayout` on a vault holding `.projects/` produced `projects_dir: ".projects"` | **OPEN** | Owner: **`WP-dot-segment-denial`** — the same WP as D1 (b), because item 3 exists to make item 1 unconditional and half-landing either leaves the class open. **Widened at round 1:** the finding is not one condition at one site — it is two validators, one of which (`layout-infer.js`, reached by `adopt --yes`) is a **producer**, so the dot value is not solely the user's | V5 |
@@ -293,35 +327,36 @@ status lives in spec frontmatter and would go stale here, so both cite the
 logbook, which owns the disposition facts. `<LOGBOOK>` is the created entry's
 repo-relative path.
 
-**E1 is the recommendation** — with D1 (b), D1 (c), D2 (b) and D5 open, "group C
-closes" is not an honest cell. **E2 is pre-written for the day the residuals
-land, and its trigger is Table F** — not "the open-evidence steps went red".
+**E1 is the recommendation.** With D1 (b), D1 (c), D2 (b) and D5 open, "group C
+closes" is not an honest cell.
+
+**E2 IS A POINTER, NOT A PRE-WRITTEN ASSERTION SET — and that is the round-3
+correction.** Group C closes by a **later disposition act**, taken when every
+successor named in Table D is Done and that successor's own verification is
+green. **This spec pre-writes no closed-state assertion, and may not acquire
+one.**
+
+**The retired mechanism, with its cause, because it took findings two rounds
+running.** Round 2 retired *"V1 (b), V2 (b) and V5 have gone red"* — a
+defect-presence conjunction a partial fix satisfies. Its replacement, a table of
+per-residual closed-state assertions, was retired at round 3 for the **same
+underlying reason in a new costume**: every one of those assertions was a
+**finite enumeration**, and each was defeated by a partial fix that satisfied the
+listed cases while the class stayed live — a five-name segment list passing while
+`.vscode/instructions.md` was written; `.git`/`.projects` fixtures passing while
+the reader still accepted `.github` and the producer emitted `.identity`; four
+currency examples passing while `QWEN.md` and `WARP.md` were written; a
+`GIT_DIR`-only pin passing while `GIT_OBJECT_DIRECTORY` still redirected the
+write. **The lesson is structural, not another list: a CLASS property can only be
+asserted by the work package that implements the class rule.** A disposition pass
+records what is mooted and what is open; the proof that an open residual is
+closed belongs to the successor that closes it. That content now lives in the
+successor stubs, as their required verification — which is where it is closable.
 
 | # | State | The Status cell, verbatim |
 |---|-------|---------------------------|
 | E1 | **open** — recommended today | **Open — four residuals** — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `<LOGBOOK>`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
-| E2 | **closed** — not yet | **Closed** — every group C mechanism retired or accepted; basis per finding in `<LOGBOOK>`. Apply only when every row of that entry's Table F holds |
-
-### Table F — E2's closure preconditions
-
-**Why this table exists, stated because an earlier draft got it wrong.** E2's
-trigger used to be *"V1 (b), V2 (b) and V5 have gone red"*. That is a
-**defect-presence conjunction, not a closure proof**: each of those steps exits
-non-zero as soon as *any one* of the mechanisms it touches changes. Executed —
-with only `makeAdmit` fixed, the reader still returned `projects_dir: ".git"` and
-the producer still emitted `".projects"`, yet V5 exited 1. **A partial fix met
-the old trigger while D5 stayed live.** So the trigger is now the **expected
-CLOSED-state result, per residual, never an arbitrary non-zero exit**.
-
-Each row must hold **independently**; no row may be inferred from another's
-result, and "the successor WP merged" is a process fact that satisfies no row.
-
-| # | Residual | The assertion that must hold, with its expected result |
-|---|----------|--------------------------------------------------------|
-| F1 | D1 (b) — dot segments | Production `makeAdmit` **refuses all five** of V1 (b)'s dotted paths, **and** the real `writeIntoVault` call on `01-Projects/example/.github/copilot-instructions.md` returns `written:false`. Both, by their expected values — not by the step exiting non-zero |
-| F2 | D1 (c) — stale basename list | Production `makeAdmit` **refuses all four** of V1 (c)'s paths, **and** the real `writeIntoVault` call on `01-Projects/example/GEMINI.md` returns `written:false`, **and** `WP-instruction-basename-currency`'s own verification is green — the maintenance obligation's shape is that WP's to define, so this clause is a pointer, deliberately, rather than a guess at it |
-| F3 | D2 (b) — the git environment | **This row's closed state is not knowable from here**, because `WP-dream-git-env-pinning` is a decision WP whose outcome may be *pin*, *don't pin*, or *pin-with-exceptions*. The trigger is therefore **that WP's own verification green, plus its outcome recorded in its canonical table** — including the *don't-pin* outcome, where the residual is **accepted and named**, not retired. Stating a redirect-refusal assertion here would presume a ruling nobody has made |
-| F4 | D5 — layout dot values | `readVaultLayout` on `vault_layout: projects_dir: .git` **does not return `.git`** (rejects or falls back — whichever `WP-dot-segment-denial` rules), **and** `inferLayout` on a vault containing `.projects/` **does not emit a dot-prefixed value**. Both validators, separately: F1 passing says nothing about either |
+| E2 | **closed** — a later act, not a trigger | **Closed** — every group C mechanism retired or accepted; basis in `<LOGBOOK>`. Written by a later disposition act once every successor in that entry's Table D is Done with its own verification green |
 
 ### Mirrored Surface Checklist
 
@@ -335,22 +370,26 @@ on the spot.
       Status-cell-only rule).
 - [ ] **Acceptance criteria** — AC1 (D1's three halves and D1 (a)'s *enumerated*
       wording), AC2 (both stubs and their body items), AC3 (Table E's E1 count and
-      owners), AC3b (Table F as E2's only trigger), AC4 (D2's residual owners and
+      owners), AC3b (E2 as a pointer, and the ban on closure assertions here), AC4
+      (D2's residual owners and
       the not-reopened hook ruling), AC5 (the honesty rule's literal property),
       AC6 (boundary-check's mandatory arguments).
 - [ ] **Verification commands** — V1 mirrors D1's three halves, V2 mirrors D2/D4's
       two halves, V3 and V4 mirror D3, V5 mirrors D5. **V6 mirrors the most and is
       checked first on any finding**: the Deliverables, Table E's two Status cells
-      **verbatim** (via `RULING`), and AC2–AC6. **Table F has no V-step and must
-      not acquire one** — its assertions are future states.
+      **verbatim** (via `RULING`), and AC2–AC6. **V1–V6 are MEASUREMENTS OF
+      TODAY'S STATE, never closure triggers** — no step here may be reworded into
+      one.
 - [ ] **Current state** — locations only; it states no verdict, so a verdict
       change must NOT edit it. What it does mirror is the *citation* set — if a
       Table D cell's file or symbol moves, both move.
 - [ ] **Operative prose** — the Dispatch precondition (mirrors D1 (b) and D1 (c)'s
       measured cells and their severity), the Context's class-versus-list
-      paragraph (mirrors what D1 and D5 measure against), Table F's preamble
-      (mirrors the retired conjunction trigger), the Implementation-notes
-      open-evidence bullet (mirrors the same), and both stubs' body items.
+      paragraph (mirrors what D1 and D5 measure against), Table E's
+      retired-mechanism paragraph (mirrors both retired triggers and their cause),
+      the Implementation-notes open-evidence bullet (mirrors the same), and both
+      stubs' required-verification items — **which are where the closure proofs
+      moved, and the only place they may live**.
 
 ## Implementation notes & constraints
 
@@ -368,11 +407,12 @@ on the spot.
   spec's own citations were measured at `49d3d467`; V1–V6 depend on none of them.
 - **Re-measure; do not transcribe.** If any of V1–V5 disagrees with its Table D
   cell, that is a spec bug: report it and stop.
-- **The open rows are evidence-bearing.** V1 (b), V1 (c), V2 (b) and V5 pass
-  *while the defect exists*. A red there is good news — but it is **not** E2's
-  trigger and never was: each of those steps also reddens on a PARTIAL fix
-  (measured — see Table F's preamble). Table F is the trigger. Never "fix the
-  check".
+- **V1–V6 measure TODAY'S STATE; none of them is a closure trigger.** V1 (b),
+  V1 (c), V2 (b) and V5 pass *while the defect exists*, which makes them honest
+  evidence for Table D and nothing more. A red there is news, not a closure: each
+  reddens on a PARTIAL fix (measured, twice — Table E's retired-mechanism
+  paragraph). **Do not rewrite any step into a closure assertion**; that is the
+  move this spec retired. Never "fix the check".
 
 ## Security checklist
 
@@ -398,9 +438,10 @@ on the spot.
       recorded state (**E1, four residuals, three owners**), `<LOGBOOK>` resolved,
       the other two cells byte-identical, and **that file changed by exactly one
       line**. Checked by V6 (d).
-- [ ] **AC3b** — the logbook reproduces **Table F**, whose rows are E2's only
-      trigger. No deliverable states or implies that E2 follows from an
-      open-evidence step going red.
+- [ ] **AC3b** — the logbook records that **E2 is a later disposition act, not a
+      trigger**, and reproduces Table E's retired-mechanism paragraph with its
+      cause. **No deliverable states a closed-state assertion**, and none implies
+      E2 follows from a V-step going red.
 - [ ] **AC4** — the logbook names `WP-dream-git-env-pinning` as D2 (b)'s owner
       **and** states that the 2026-08-31 hook ruling
       (`WP-dream-promote-in-workspace` Table W row W1) is *not* reopened.
@@ -420,16 +461,28 @@ on the spot.
 
 ## Verification steps (run these; paste output in the PR)
 
-Run from the repo root; each step exit-codes. **Every step must be observed in
-all the states its band requires — for V6, the deliverable-ABSENT state as well
-as compliant and violating.** How to produce the violating state is the
-implementer's to choose; what must be reported is the state exercised, the
-command, and its output.
+Run from the repo root; each step exit-codes.
+
+**WHAT THESE STEPS ARE.** They MEASURE TODAY'S STATE, and that is their whole
+job: V1 (a), V2 (a), V3 and V4 evidence a *mooted* verdict; V1 (b), V1 (c),
+V2 (b) and V5 evidence an *open* one and are therefore **green precisely because
+the defect is live**. **None of them is a closure trigger, and none may be
+reworded into one** — the samples they carry establish that a residual exists,
+never that one is gone. Closure proofs belong to the successors named in Table D,
+in the required-verification clauses of their stubs.
+
+**Every step must be observed in all the states its band requires — for V6, the
+deliverable-ABSENT state as well as compliant and violating.** How to produce the
+violating state is the implementer's to choose; what must be reported is the
+state exercised, the command, and its output.
 
 ```bash
 # V1 — D1, all three halves. (a) is the mooted claim; (b) and (c) pass WHILE THEIR
 # DEFECT LIVES. (a) tests only the names the code ENUMERATES, which is why it cannot
-# see (c) — that is the gap round 2 found, kept here as the reason the halves are split.
+# see (c) — the gap round 2 found, kept as the reason the halves are split.
+# These lists are SAMPLES that establish the residual is live. They are NOT a
+# completeness boundary and must never be read as one: the class proof is
+# WP-dot-segment-denial's, the inventory is WP-instruction-basename-currency's.
 node -e '
 const fs=require("fs"),os=require("os"),path=require("path");
 const {makeAdmit}=require("./src/core/dream/promote.js");
@@ -449,13 +502,16 @@ const v=fs.mkdtempSync(path.join(os.tmpdir(),"v1-"));
 const resB=writeIntoVault({vaultDir:v,rel:"01-Projects/example/.github/copilot-instructions.md",
   bytes:Buffer.from("x\n"),admit});
 console.log("(b) OPEN: "+open.length+"/"+dotted.length+" dot-segment paths admitted beneath a tier; writeIntoVault written="+resB.written);
-const unenum=["01-Projects/example/GEMINI.md","06-Identity/GEMINI.md",
-  "01-Projects/example/copilot-instructions.md","01-Projects/example/.cursor/rules.md"];
+// (c) carries NO dot-segment path: those belong to (b), and double-counting one
+// residual would let each successor assume the other closed it.
+const unenum=["01-Projects/example/GEMINI.md","06-Identity/GEMINI.md","01-Projects/example/QWEN.md",
+  "01-Projects/example/WARP.md","01-Projects/example/copilot-instructions.md","01-Projects/example/Gemini.md"];
 const openC=unenum.filter(p=>admit(p)===null);
-const resC=writeIntoVault({vaultDir:v,rel:"01-Projects/example/GEMINI.md",bytes:Buffer.from("x\n"),admit});
-console.log("(c) OPEN: "+openC.length+"/"+unenum.length+" current-but-unenumerated instruction paths admitted; production write of GEMINI.md written="+resC.written);
+const resC=writeIntoVault({vaultDir:v,rel:"01-Projects/example/QWEN.md",bytes:Buffer.from("x\n"),admit});
+const folded=admit("01-Projects/example/ClAuDe.md")!==null;   // enumerated names ARE folded
+console.log("(c) OPEN: "+openC.length+"/"+unenum.length+" documented instruction paths admitted (incl. mixed-case Gemini.md); production write of QWEN.md written="+resC.written+"; enumerated ClAuDe.md refused="+folded);
 process.exit(open.length===dotted.length&&resB.written===true
-          && openC.length===unenum.length&&resC.written===true?0:1);'
+          && openC.length===unenum.length&&resC.written===true&&folded?0:1);'
 
 # V2 (a) — D2's mooted half: no `git add`/`git commit` on the dream path, and none pinned.
 for f in src/cli/dream.js src/core/dream/validate.js src/core/dream/promote.js \
@@ -472,8 +528,9 @@ const hit=KNOWN_CALLS.flatMap(k=>k.args).filter(x=>typeof x==="string"&&forbidde
 if(hit.length){console.error("pinned set carries: "+hit.join(","));process.exit(1);}
 console.log("(a) pinned set = "+KNOWN_CALLS.length+" shapes, none of: "+[...forbidden].join(" "));'
 
-# V2 (b) — D2's OPEN half. Passes WHILE THE DEFECT LIVES: an inherited GIT_DIR
-# redirects the run's own pinned write shape away from the vault.
+# V2 (b) — D2's OPEN half: an inherited GIT_DIR redirects the run's own pinned
+# write shape away from the vault. `GIT_OBJECT_DIRECTORY` does the same alone —
+# which is why D2 (b)'s owner cell requires a channel enumeration, not this sample.
 V=$(mktemp -d); O=$(mktemp -d)
 git init -q "$V" && git -C "$V" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
 git init -q "$O" && git -C "$O" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
@@ -483,7 +540,7 @@ GIT_DIR="$O/.git" git cat-file -e "$SHA" || { echo "FAIL: object landed nowhere 
 echo "(b) OPEN: pinned hash-object wrote into the redirected repo, not the vault ($SHA)"
 
 # V3 — D3: the classifier has no route to a process spawner. A bare child_process
-# grep is NOT sufficient (validate.js spawns git via ../exec-identity and reads green).
+# grep is insufficient — validate.js reaches git via ../exec-identity.
 node -e '
 const f=process.argv[1];const s=require("fs").readFileSync(f,"utf8");
 const reqs=[...s.matchAll(/require\(\s*["\x27]([^"\x27]+)["\x27]\s*\)/g)].map(m=>m[1]);
@@ -517,7 +574,7 @@ console.log("producer inferLayout     -> projects_dir="+JSON.stringify(inferred.
 process.exit(read.projects_dir===".git"&&admitted&&String(inferred.projects_dir).startsWith(".")?0:1);'
 
 # V6 — the deliverables exist, agree with Table D/E, and pass the repo gates.
-RULING=E1   # or E2, per Table E — E1 until every Table F row holds
+RULING=E1   # or E2, per Table E — E1 today; E2 is a later act, not this WP's
 
 n=$(ls docs/specs/logbook/*-audit-group-c-disposition.md 2>/dev/null | wc -l | tr -d ' ')
 [ "$n" = 1 ] || { echo "FAIL: expected exactly 1 disposition logbook entry, found $n"; exit 1; }
@@ -525,13 +582,13 @@ LOG=$(ls docs/specs/logbook/*-audit-group-c-disposition.md)
 
 # (a) AC1 and AC4 — the logbook carries every required fact.
 for pat in 'M7' 'M9' 'M10' 'MOOTED' 'OPEN' 'WP-dot-segment-denial' \
-           'WP-instruction-basename-currency' 'GEMINI.md' 'Table F' \
+           'WP-instruction-basename-currency' 'GEMINI.md' 'QWEN.md' 'WARP.md' \
            'WP-dream-git-env-pinning' 'WP-dream-promote-in-workspace' \
            'Table W row W1' 'not reopened' '2026-08-31'; do
   grep -q "$pat" "$LOG" || { echo "FAIL: logbook entry is missing $pat"; exit 1; }
 done
 
-# (b) AC5 — the literal property, and nothing wider than it.
+# (b) AC5 — the literal property, nothing wider.
 grep -qiE 'harness[- ]refusal' "$LOG" || { echo "FAIL: $LOG never states the honesty rule"; exit 1; }
 grep -niE 'harness[- ]refusal' "$LOG" | grep -viq 'non-load-bearing' \
   && { echo "FAIL: $LOG has a harness-refusal line not marked non-load-bearing"; exit 1; }
@@ -546,11 +603,10 @@ for stub in docs/specs/WP-dot-segment-denial.md docs/specs/WP-instruction-basena
   grep -q '^status: Draft' "$stub" || { echo "FAIL: $stub is absent or not Draft"; exit 1; }
 done
 
-# (d) AC3 — the EXACT, fully substituted row occurs exactly once, and HANDOVER
-#     changed by exactly one line with no other hunk.
+# (d) AC3 — the EXACT substituted row occurs once; HANDOVER changed by one line.
 case "$RULING" in
   E1) CELL='**Open — four residuals** — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `'"$LOG"'`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning`' ;;
-  E2) CELL='**Closed** — every group C mechanism retired or accepted; basis per finding in `'"$LOG"'`. Apply only when every row of that entry'"'"'s Table F holds' ;;
+  E2) CELL='**Closed** — every group C mechanism retired or accepted; basis in `'"$LOG"'`. Written by a later disposition act once every successor in that entry'"'"'s Table D is Done with its own verification green' ;;
   *)  echo "FAIL: set RULING to E1 or E2"; exit 1 ;;
 esac
 ROW="| C | Dream write fence (machinery-controlling files) | $CELL |"
@@ -561,16 +617,13 @@ NS=$(git diff --numstat main -- docs/HANDOVER.md)
   || { echo "FAIL: HANDOVER numstat is [$NS], want [1<TAB>1<TAB>docs/HANDOVER.md]"; exit 1; }
 
 node scripts/check-frontmatter.js
-# boundary-check REQUIRES the spec path AND the changed-file list; with no arguments
-# it prints its usage and exits 1, so an argument-less call can never pass. The list
-# is built the way `.github/workflows/ci.yml` builds it (three-dot, committed work) —
-# and asserted non-vacuous first, because an uncommitted tree yields a list that does
-# not contain the deliverables and would pass this check for the wrong reason.
+# boundary-check REQUIRES the spec path AND the changed-file list (no arguments =
+# usage, exit 1). The list is built as `.github/workflows/ci.yml` builds it, and
+# asserted non-vacuous first: an uncommitted tree yields a list without the
+# deliverables and would pass for the wrong reason.
 CHANGED=$(git diff --name-only main...HEAD)
-# Non-vacuity: the list must contain THE DELIVERABLES, not merely this spec. Checking
-# only the spec is not enough — it is already in the list from this WP's earlier
-# commits, so boundary-check would run over a list holding none of the new files and
-# pass for the wrong reason. (Measured on a compliant-but-uncommitted fixture.)
+# The list must contain THE DELIVERABLES, not merely this spec — the spec is
+# already in it from earlier commits. (Measured on an uncommitted fixture.)
 for d in "$LOG" docs/specs/WP-dot-segment-denial.md \
          docs/specs/WP-instruction-basename-currency.md docs/HANDOVER.md; do
   printf '%s\n' "$CHANGED" | grep -qx "$d" \
@@ -586,8 +639,9 @@ echo "V6 OK (ruling $RULING)"
 - **Fixing anything.** `WP-dot-segment-denial` owns D1 (b) and D5;
   `WP-instruction-basename-currency` owns D1 (c); `WP-dream-git-env-pinning` owns
   D2 (b). This WP creates the two stubs and stops.
-- **Applying Table E row E2, or asserting any Table F row.** F's assertions are
-  future states; nothing here may run or pre-judge them.
+- **Applying Table E row E2, or writing ANY closed-state assertion.** Proving a
+  class property belongs to the WP that implements the class rule; two rounds of
+  attempts here were retired. Nothing in this spec may pre-judge a successor.
 - **Reopening the `reference-transaction` hook ruling** of 2026-08-31, or touching
   `WP-dream-promote-in-workspace` Table W or its Mirrored Surface Checklist.
 - **Re-wiring `restoreVaultToHead` or `assertCleanTree`**, or removing either.
