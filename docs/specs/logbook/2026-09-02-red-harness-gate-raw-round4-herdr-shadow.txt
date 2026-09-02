@@ -1,0 +1,62 @@
+SHADOW ROUND 4 (herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 4ba901ed, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: self-cleaning temp-dir probes (TMPDIR-in-copy, manifest shape), the scoped dream-pipeline TAP run (44 pass, duration_ms 15380); a full npm test PTY run was interrupted by the reviewer after prolonged silence. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No ship: Round 3’s requested edits landed, but phase isolation, copy equivalence, verdict semantics, and the ADR’s cost model remain materially unsound.
+
+FINDING 1
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 252-254, 308, 480-488  
+Confidence: 0.99  
+Materiality: A  
+Body: “No two phases share any writable path” is false without OS-level confinement. The probe confirmed separate TMPDIRs hide the baseline temp sentinel, but both children retained `/Users/gyulafeher` as HOME, and RED observed a sentinel BASELINE wrote into the copies’ writable parent. Absolute locations such as `/dev/shm` are equally shared. `tests/run.js` preserves ambient environment, while the wrapper redirects only TMPDIR/TMP/TEMP. The adopted dream suite normally overrides HOME/WIENERDOG_HOME into its phase-local `os.tmpdir()` tree, but the runner’s universal contract applies to arbitrary suite code. A stateful suite can therefore produce pass→expected-red→pass through shared ambient state, unrelated to the mutation, and report PROVEN.  
+Recommendation: Either provide genuine process filesystem confinement, or narrow the invariant to explicitly enumerated runner-provided paths. Redirect HOME and relevant cache/config variables per phase, document unavoidable absolute-path residuals, and add a parent/HOME shared-state fixture—not only a TMPDIR sentinel.
+
+FINDING 2
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 252-258, 384-393, 561-569  
+Confidence: 0.98  
+Materiality: B  
+Body: The specified manifest—relative path, size, digest per file—cannot establish that phase trees differ only by the mutation. It ignores file modes, entry types, and empty directories. The probe produced manifest-identical trees where one executable was 0755 versus 0644 and only one tree contained an empty directory. This repository has multiple tracked executable fixtures, including `tests/fixtures/dream/fake-brain.js`. A phase-specific permission-copy defect can therefore alter suite behavior while every mandated manifest check passes. The `.git` and `node_modules` exclusions are also implementation-note-only rather than part of the manifest’s declared domain.  
+Recommendation: Define the snapshot over every included lstat entry, recording type and relevant mode bits plus directories, with explicit `.git`/`node_modules` exclusions. Reject unsupported entry types and test mode drift and missing-directory cases.
+
+FINDING 3
+
+Affected file: docs/specs/WP-criterion-red-harness.md  
+Lines: 191, 257-263, 533-539, 570-580  
+Confidence: 0.98  
+Materiality: B  
+Body: The verdict/exit taxonomy is not exhaustive or internally consistent. Row 7 creates `FILTERED`, yet V4 omits it from non-zero outcomes; a filtered selection can also satisfy V4’s stated condition that every selected proof is PROVEN. V4 likewise omits the many mandated `ERROR` outcomes. Separately, an unlisted own-body failure is `ERROR` in Table A but `FAILED` in criterion 4. ADR-0042 says any non-PROVEN criterion exits non-zero, leaving a conforming implementation free to choose conflicting exit behavior from the WP. No precedence handles simultaneous FILTERED plus FAILED/ERROR, or UNSUPPORTED versus VACUOUS during LOAD.  
+Recommendation: Add one total verdict table defining proof, criterion, and run verdicts; precedence when several apply; and the exact exit code class for PROVEN, FILTERED, VACUOUS, UNCONTROLLED, UNSUPPORTED, FAILED, and ERROR. Align every criterion and ADR-0042 to it.
+
+FINDING 4
+
+Affected file: docs/adr/0042-machine-run-red-proofs.md  
+Lines: 66-70, 138-139  
+Confidence: 0.99  
+Materiality: B  
+Body: The ADR still describes the retired cost model: one suite execution per proof and one fresh copy per proof atop a shared pristine copy. Round 3 now requires three unshared copies and three suite executions per proof. The adopted suite measured 15.38 seconds here, so the minimum two proofs cost about 92 seconds of suite runtime plus six copy/manifest operations—not roughly two runs. This contradicts the WP’s own three-copies-per-proof rule and materially understates the future blocking lane’s cost. The guarded package grep confirms real proofs remain outside `npm test`; runner fixture-test cost is still unspecified.  
+Recommendation: Update the ADR and WP lane row to three copies and three suite runs per proof, state the adopted lane’s approximately 90-second minimum, and reassess size M or take criterion 9’s documented severance before dispatch.
+
+SCOPE OBJECTIONS
+
+None. ADR signature/template doctrine, the blocking CI job, repository engine-floor changes, and a supported-Node matrix remain owner/successor options and do not drive this verdict.
+
+EXECUTED
+
+- Repository status/revisions/diff/stat/name/log and all requested-file inspections with `nl`, `sed`, `wc`, and `rg`: exit 0. HEAD `4ba901ed`; main `9870f79a`.
+- `git diff 84ddf5cd..HEAD` and Round 3 commit inspection: exit 0.
+- `git diff --check main...HEAD`: exit 2; existing trailing whitespace in verbatim Round 2/3 raw records.
+- Guarded runner-import grep: exit 1 because `scripts/red-proofs.js` is absent.
+- Guarded `npm test`/RED-lane grep: exit 0.
+- Tracked-symlink probe: exit 0, zero results.
+- Tracked-mode probe: exit 0; multiple 100755 files found.
+- TMPDIR-in-copy probe: sandbox exit 1 (`EPERM`); approved self-cleaning rerun exit 0. Own temp sentinel was absent in phase 2; shared-parent sentinel was present; HOME matched across phases.
+- Manifest-shaped probe: exit 0; `manifestEqual:true` despite modes `755`/`644` and an empty directory existing in only one tree.
+- Scoped dream-pipeline TAP suite: exit 0; 44 pass, 0 fail, `duration_ms 15380.808083`.
+- Full `npm test`: sandbox exit 1 (`EPERM`); escalated PTY run was manually interrupted after prolonged silence, exit 1, with no test failure observed before interruption.
+- Process inspection with `ps`: exit 1; sandbox denied it.
+- `node --version`: exit 0, `v25.9.0`.
+- Final `git status --short --branch`: exit 0; detached and clean.
+
+DONE_ROUND_4
