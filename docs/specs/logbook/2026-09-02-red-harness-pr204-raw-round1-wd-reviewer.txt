@@ -1,0 +1,122 @@
+PR GATE ROUND 1 — PR #204 — wd-reviewer (spec-fidelity gate, claude subagent), tip 6e45c88a. Verdict REQUEST-CHANGES. Relayed verbatim from the agent's final message.
+
+I have everything. Here is the review.
+
+## REQUEST-CHANGES
+
+**Reviewed tip:** `6e45c88a` (PR #204 head; remote `wp/criterion-red-harness`). Note finding 10 — the local worktree moved to `489c61bb` mid-review.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `node scripts/boundary-check.js <spec> $(git diff --name-only origin/main...HEAD)` | **0** clean; both-directions control with a stray `README.md` → **1**, offender named |
+| `npm test` (full suite, local Node v25.9.0) | **0** — 2512 tests / 2500 pass / 12 skip / 0 fail |
+| `npm run lint` | **0** — 627 md files, shellcheck, frontmatter 265 specs |
+| `npm run red-proofs` ×2 (~100 s each) | **0**, **0** — `RUN: PROVEN`, both proofs + both criteria PROVEN; reports byte-identical, `git status --porcelain` byte-identical (criterion 12 ✔) |
+| `npm run red-proofs -- --proof no-such-proof-exists` | **1**, `VACUOUS: V2` (V2 ✔) |
+| `node scripts/red-proofs.js --root <empty decl dir>` | **1**, `VACUOUS: V1` (V1 ✔) |
+| `node scripts/red-proofs.js --root tests/fixtures/red-proofs/base` | `RUN: PROVEN` — `--root` implies `<root>/tests/red-proofs` ✔ |
+| same, `--proof fixture-greeting` | **1**, proof `PROVEN` + criterion `FILTERED` naming `fixture-arity` (criterion 6a, both directions ✔) |
+| criterion 8 negated grep, 3 states | absent **1** / compliant **0** / violating **1** ✔ |
+| criterion 11 negated grep, 3 states | absent **1** / compliant **0** / violating **1** ✔ |
+| control-byte scan of `scripts/red-proofs.js` and `package.json` | 0 control bytes in each — the greps are not vacuous ✔ |
+| GLOSSARY byte-compare vs the spec's `text` block | both entries **BYTE-EXACT** ✔ |
+| `nodeFloorOk()` over 11 versions | refuses 18.0/18.11/18.14.9, accepts ≥18.15.0 ✔; `VERDICT_ORDER` === Table E2 precedence ✔; `countOccurrences('aaa','aa')===1` ✔ |
+| `phaseEnv()` + `getPaths()` on a scratch copy | all 5 override names removed; `home/core/vault/claudeDir/codexDir` all resolve **INSIDE** the phase copy ✔ |
+| round-5 reproduction: `WIENERDOG_CLAUDE_DIR=<abs> npm test -- tests/unit/dream-pipeline.test.js` | **1** — 7 pass / 37 fail (clean env: **0**, 44/44) |
+| filesystem probe: 0500 parent, write to `../red/target.txt` | **succeeds** |
+| end-to-end probe: fixture root whose BASELINE writes into `../red/subject/subject.js` | runner reports `APPLY: "find" occurs 0 time(s)` — the plant landed |
+| 4 mutants of the runner × `npm test -- tests/unit/red-proofs.test.js` | 3 survive 68/68 green |
+| `gh pr checks 204` | `test (ubuntu-latest)` **fail**, `test (macos-latest)` **fail**; lint/boundary/pr-title/smoke pass |
+
+Package hygiene: `package.json` gained exactly one script (`red-proofs`), no dependency (`googleapis` unchanged, `markdownlint-cli2` unchanged), `engines` still `>=18`, `files` untouched. Spec flipped `Ready`→`In-Review`, nothing else. PR template complete incl. `Generated-by: claude-opus-5`, Decisions made (9), Discovered issues, Lessons (6). Worktree clean after every probe; all probe copies under `mktemp -d`.
+
+---
+
+### Findings
+
+**1. [criteria] `npm test` FAILS on CI on both platforms — `tests/unit/red-proofs.test.js:414` and `:231`. Band A. Disposition: fix.**
+CI runs **Node 20** (`.github/workflows/ci.yml:38-39`); the implementer measured on Node 25.9.0. Two failures, identical on ubuntu-latest and macos-latest, both in the new suite:
+- `not ok 1680 — red-proofs: a testNamePattern matching nothing exits 0 with a pass count in Node — and is still an ERROR here (criterion 3)` (`:231`)
+- `not ok 1692 — red-proofs: the pinned TAP shapes are observed on the Node running this suite (criterion 4b)` (`:384`, failing at `:414-415`)
+
+Root cause, from the CI diagnostic's own parsed tree: on Node 20 an unmatched `--test-name-pattern` emits **`ok N - <name> # SKIP` per test** (`directive: 'SKIP'`, `ok: true`), not the zero-test `1..0` shape Node 25 emits. So `assert.deepEqual(rp.parseTap(none.stdout, 'tests/suite-basic.js'), [])` at `:415` gets two SKIP nodes.
+
+This is criterion 4b's own compatibility evidence firing red — the criterion that exists exactly to catch this, using "CI's existing ubuntu/macOS matrix" as the evidence. Criterion 13 is unmet and Definition of done items 1 and 5 are unmet. The PR body's `V2 — npm test exit=0` and `V15 — npm test exit=0` are true only on the author's Node 25.9.0; I reproduced them locally and they do not generalise. Node 20 is inside the repo's declared support (`engines: >=18`) and **above** the lane's 18.15.0 floor, so `nodeFloorOk('20.11.1')` returns OK (I checked) and the runner accepts a Node whose TAP it has not validated.
+
+Fix is the implementer's and stays inside the Deliverables: make `parseTap`/`evaluateBaseline` and the two tests accept **both** shapes for an unmatched pattern, and make the criterion-4b test assert version-tolerant invariants rather than a deep-equal against one Node's exact tree. The owner rulings in force forbid the `engines` raise and the Node-matrix expansion, so version tolerance is the only open route. (The *runner* still fails closed on Node 20 — `evaluateBaseline` would throw ERROR on the SKIP directive — so this is a pinning/testing defect, not a silent-pass defect. That is the one piece of good news here.)
+
+**Also route to wd-architect:** Table A's pinned shapes ("Measured on Node v25.9.0") and criterion 3's literal "*measured this round, that prints an inner `1..0` under an outer file-level `ok` and exits 0*" are stated as canonical contract but are Node-25-specific. Measurement has now falsified them on Node 20. The canonical table needs the second data point; do not let the implementer guess which shape is normative.
+
+**2. [contract] The `..` channel between sibling phase copies is open — `scripts/red-proofs.js:883-890`. Band B. Disposition: fix.**
+`runProof` creates **all three** phase copies up front, manifest-verifies each at creation, then chmods only their **common parent** to `0500`. Mode `0500` is `r-x`: it blocks creating a new entry *in the parent*, which is the case criterion 7(b2) tests (`../sentinel`) — but it does **not** stop a phase child from traversing into an already-created sibling copy and writing inside it, because those copies carry the source root's mode.
+
+Demonstrated end-to-end against the real runner, on a `mktemp` copy of `tests/fixtures/red-proofs/base` whose suite writes `../red/subject/subject.js` during BASELINE:
+
+```
+ERROR        fixture-greeting  (WP-red-proofs-fixture criterion 1)
+             tests/red-proofs/base.proofs.json [fixture-greeting] APPLY: "find" occurs 0 time(s)
+             in subject/subject.js, "occurrences" declares 1
+```
+
+BASELINE's child controlled the bytes APPLY read; a second write planted a file into the `control` copy. This contradicts four contract surfaces:
+- Table B row 2b — "NO TWO PHASES SHARE ANY WRITABLE PATH THE RUNNER PROVIDES"; the runner provides all three copies and they are mutually writable.
+- Table B row 2 — "verified against the manifest **before use**": the control copy is verified three suite runs before it is used.
+- Table B row 4 — "because nothing has executed there the check cannot be raced": a child *has* executed somewhere that can write there.
+- Security checklist — "no interval in which suite code can swap the target or a parent for a symlink".
+
+Cheap, local fix that needs no spec change: create and manifest-verify **each phase copy immediately before its own phase** (unlock parent → copy → verify → prepare → relock), so no unused copy exists while another phase's child runs. This is also the more faithful reading of rows 4 and 6's word "FRESH". I am not reopening the LINEAGE frame — the frame closed on *"no shared writable path the runner provides"*, and sibling copies are provided by the runner.
+
+**Also route to wd-architect:** criterion 7(b2)'s four-fixture inventory is a contract surface now known incomplete; the sibling-copy write belongs in it.
+
+**3. [quality] Three load-bearing clauses of the runner survive deletion with its own 68-test suite fully green. Band B (a) / C (b, c). Disposition: fix (a), residual (b, c).**
+I mutation-tested the runner in a throwaway copy and re-ran `npm test -- tests/unit/red-proofs.test.js` per mutant:
+
+| Mutation | Result |
+|---|---|
+| (a) `:887` `verifyCopy(dirs[phase], ctx.manifest)` call site deleted | **68 pass / 0 fail** |
+| (b) `:712` `if (written !== expected)` neutered | **68 pass / 0 fail** |
+| (c) `:715` `if (!written.includes(proof.marker))` neutered | **68 pass / 0 fail** |
+| control: `:706` `if (pristine.includes(proof.marker))` neutered | 67 pass / **1 fail** ✔ |
+
+(a) is material and is the same defect as finding 2 seen from the other side: the manifest is exercised only as a pure function (`tests/unit/red-proofs.test.js:449-483`), and **nothing asserts that any phase copy is ever verified before use**. Table B row 2 and criterion 5's "*established rather than asserted*" currently have no test that can fail — a decoupled guard enforcing nothing, which is verbatim one of the six measured shapes in this spec's own Context. Add a case that corrupts a phase copy after creation and requires the run to ERROR.
+
+(b) and (c) are defensive postconditions that no validated input can reach (`replace` must contain `marker` is enforced at LOAD; a write-then-read mismatch needs a filesystem fault), so I grade them residual — but note them, because Table B row 4 and Table C's fourth row name (b) as *the* answer to the measured shell-escaping class, and the spec's both-directions rule asks every new assertion for a red.
+
+**4. [contract] Mirror drift on Table B row 2b — Decision 1. Band B. Disposition: route to wd-architect; no implementer change.**
+**I judge Decision 1 correct and within contract, not a scope change.** I verified both halves rather than taking the PR's word:
+- The conflict is real: clean env → the adopted suite is 44/44 green; `WIENERDOG_CLAUDE_DIR=<abs>` → 7 pass / **37 fail**. Any *set* phase-local value beats the `CLAUDE_CONFIG_DIR` the adopted suite installs, via `getPaths`' precedence (`src/core/paths.js:56-61`). So row 2b's set-a-value reading and criterion 9 genuinely cannot both hold.
+- Removal preserves the property row 2b exists for: I ran `getPaths(phaseEnv(copy))` and every one of `home/core/vault/claudeDir/codexDir` resolves **inside** the phase copy, because all five names fall back under `HOME` (`paths.js:52-63`) and `HOME` is redirected. Criterion 7(b2)'s literal observable (an ambient absolute `WIENERDOG_CLAUDE_DIR` observed by no phase) is satisfied — arguably better than by setting. Criteria 8 and 8b are unaffected.
+- CLAUDE.md's "ambiguity → the simpler option, recorded under Decisions made" is followed exactly.
+
+What is *not* resolved is the paperwork: row 2b's canonical text still says "redirected per phase **INTO** that phase's own copy", and its four registered mirrors (Table D write-boundaries, Table D seam row, the security checklist, criteria 7/8b) plus the shipped REACH footer all repeat that language. Under the Closed-Contract Drift Check this is a settled canonical contract whose facts measurement has changed, and its facts may only change by editing the table and every registered mirror in one pass — which the implementer cannot do. Hand row 2b + its four mirrors to wd-architect.
+
+**5. [quality] REACH footer overstates the mechanism — `scripts/red-proofs.js:192`. Band C. Disposition: fix (one line), alongside finding 4.**
+The LANE LIMIT lists "the four XDG roots and the Wienerdog override names — all inside that phase's own copy". Those names are *removed*, not provided; their roots land inside the copy only indirectly, via the redirected `HOME`. Say so, or the footer misdescribes the guarantee it exists to bound.
+
+**6. [quality] The control-byte regression assertion covers only the runner — `tests/unit/red-proofs.test.js:660-662`. Band C. Disposition: fix (cheap).**
+Good catch by the implementer and a genuinely valuable lesson, but criterion 11's negated grep runs over **`package.json`**, which is equally defeated by a control byte there and is not asserted. I confirmed `package.json` currently holds none. Extend the assertion to both files the two guarded greps read.
+
+**7. [quality] `.git` exclusion is type-asymmetric — `scripts/red-proofs.js:375` vs `:435`. Band C. Disposition: residual.**
+`buildManifest` skips `.git`/`node_modules` only inside its `isDirectory()` branch; `copyTree` filters on basename regardless of type. In a **linked git worktree** `.git` is a regular file — which is exactly this checkout. Measured: `buildManifest(<worktree root>)` returns **1163** entries including a `.git` file entry, while the runner's snapshot reports **1162**. The two agree today only because the manifest is built over the snapshot *copy* (`:1005`), not over `root` — a load-bearing coincidence that no test pins. Align the exclusion on basename in both, so the invariant does not depend on call-site ordering.
+
+**8. [contract] Table A's `file` rule is under-enforced — `scripts/red-proofs.js:302-311` vs `:482`. Band C. Disposition: residual.**
+The row requires `file` to be "not a path the runner itself needs to operate". `suite`, `RUNNER_REL` and the declaration directory are enforced; `tests/run.js` — which `runSuite` spawns out of the copy — is not.
+
+**9. [quality] `main()`'s argument-error path skips the REACH footer — `scripts/red-proofs.js:1098-1103`. Band C. Disposition: drop.**
+Criterion 10 says "every run — green or red — ends with the footer". An unparsable argv is arguably not a run, and every path through `runAll` does append it. Noting only so it is a decision rather than an oversight.
+
+**10. [boundary] The local worktree carries an unpushed commit the PR does not — `489c61bb`. Band C. Disposition: fix (process).**
+`docs(specs): commit PR #204 round-1 plugin raw pre-adjudication`, adding `docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round1-codex-plugin.txt`, appeared in the worktree **during** this review; the remote tip is still `6e45c88a`. `boundary-check` is clean on it (`docs/specs/logbook/` is always-allowed), and it touches nothing I reviewed. Flagging so the tip under review is unambiguous: **my file-level findings are against `6e45c88a`.** Either push it or drop it before the next round.
+
+---
+
+### Round count and routing
+
+This is **round 1** on this WP, so the two-round escalation rule is not yet triggered. But findings 1, 2 and 4 all land on the same contract family — **the Node-version pinning and the phase-isolation invariant** — and two of them are spec-side. My recommendation is to split the round rather than send it all back to the implementer:
+
+- **wd-architect** owns: Table A's Node-25-only TAP shapes and criterion 3's `1..0` literal (finding 1); Table B row 2b's "redirected" language plus its four registered mirrors and criterion 7(b2)'s fixture inventory (findings 2 and 4). Three canonical cells, one amendment pass.
+- **Implementer** owns: findings 1 (version tolerance in `parseTap` and the two tests), 2 (per-phase copy creation), 3a (a failing case for `verifyCopy`), 5, 6, 10.
+
+Everything else in the PR is genuinely strong: the boundary is exact, the glossary is byte-exact, the vacuity guards V1/V2/V3 and the roll-up hold in both directions under my own runs, criterion 12 is byte-identical across two real lane runs, the adopted proofs reach PROVEN with a legitimate mutation-to-canary argument, and the NUL-byte lesson is a real find that makes both negated greps trustworthy. The blocking problem is that the evidence was gathered on one Node and the repo's CI runs another — which is, precisely, this WP's own thesis turned on itself.
