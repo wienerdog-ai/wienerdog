@@ -1043,8 +1043,15 @@ function makeGates(o = {}) {
    *          |{redact:true, sanitizedBytes:Buffer,
    *            redaction:{lines:number, labels:string},
    *            preserved:Array<{artifact:string, location:string}>}}
-   * @throws {WienerdogError} the preservation-failure abort — the one case in
-   *   which no durable artefact holds the bytes being judged
+   * @throws {WienerdogError} TWO structurally different throws.
+   *   (1) Table P row P0 (`WP-preservation-abort-widening`): no VERIFIED
+   *   artifact holds the judged bytes — the trigger is a CLASS (Table P rows
+   *   P0-P3), not a single named case, and only byte-identity is established
+   *   (P0b); the durable conjunct stays deferred to
+   *   `WP-quarantine-preserve-durability`.
+   *   (2) Table D row D3: a preservation failure's cleanup (removing `tmp` or
+   *   `dest`) could not be completed — this propagates out of
+   *   `quarantinePreserve` and straight out of this function unchanged.
    */
   const secret = (g) => {
     const { rel, afterBytes, date } = g;
