@@ -1,0 +1,86 @@
+PR GATE ROUND 7 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 29590681. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0633f-96e6-7250-9ec2-7bb2fc63aeac).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n '"'^### Table'"\\|"'^### Exact'"\\|"'^## Acceptance'"\\|"'^### Phase'"\...
+[codex] Command completed: /bin/zsh -lc "grep -n '"'^### Table'"\\|"'^### Exact'"\\|"'^## Acceptance'"\\|"'^### Phase'"\... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '270,430p' docs/specs/WP-criterion-red-harness.md && printf '\\n--- SCRI...
+[codex] Command completed: /bin/zsh -lc "sed -n '270,430p' docs/specs/WP-criterion-red-harness.md && printf '\\n--- SCRI... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,560p' scripts/red-proofs.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,560p' scripts/red-proofs.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '560,1165p' scripts/red-proofs.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '560,1165p' scripts/red-proofs.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1160,1760p' scripts/red-proofs.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1160,1760p' scripts/red-proofs.js" (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*; do echo "--- $f"; grep -E '"'"'^'"\\...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*; do echo "--- $f"; grep -E '"'"'^'"\\... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate --max-count=20 && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate --max-count=20 && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -- '--wp\\|FILTERED\\|roll-up' docs/specs/WP-criterion-red-harness.md |...
+[codex] Command completed: /bin/zsh -lc "grep -n -- '--wp\\|FILTERED\\|roll-up' docs/specs/WP-criterion-red-harness.md |... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n '"'^test('"' tests/unit/red-proofs.test.js"
+[codex] Command completed: /bin/zsh -lc "grep -n '"'^test('"' tests/unit/red-proofs.test.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE 'hook|before|after|suite-level|parse|load' tests/unit/red-proofs.test....
+[codex] Command completed: /bin/zsh -lc "grep -nE 'hook|before|after|suite-level|parse|load' tests/unit/red-proofs.test.... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js'
+[codex] Command failed: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js' (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e \"const p=require('./package-lock.json'); console.log(p.lockfileVersion...
+[codex] Command completed: /bin/zsh -lc "node -e \"const p=require('./package-lock.json'); console.log(p.lockfileVersion... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '680,775p' docs/specs/WP-criterion-red-harness.md && sed -n '430,485p' t...
+[codex] Command completed: /bin/zsh -lc "sed -n '680,775p' docs/specs/WP-criterion-red-harness.md && sed -n '430,485p' t... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n 'parseArgs\\|unknown argument\\|needs a value\\|mkdtemp\\|sandbox' test...
+[codex] Command completed: /bin/zsh -lc "grep -n 'parseArgs\\|unknown argument\\|needs a value\\|mkdtemp\\|sandbox' test... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,180p' tests/unit/red-proofs.test.js && sed -n '1180,1335p' tests/unit...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,180p' tests/unit/red-proofs.test.js && sed -n '1180,1335p' tests/unit... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1588,1645p' tests/unit/red-proofs.test.js && sed -n '1,100p' src/core/p...
+[codex] Command completed: /bin/zsh -lc "sed -n '1588,1645p' tests/unit/red-proofs.test.js && sed -n '1,100p' src/core/p... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '150,220p' tests/with-temp-root.js && nl -ba scripts/red-proofs.js | sed...
+[codex] Command completed: /bin/zsh -lc "sed -n '150,220p' tests/with-temp-root.js && nl -ba scripts/red-proofs.js | sed... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R '\"id\": \"snapshot\"\\|id:.*snapshot' -n tests scripts | head -20 && n...
+[codex] Command completed: /bin/zsh -lc "grep -R '\"id\": \"snapshot\"\\|id:.*snapshot' -n tests scripts | head -20 && n... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -A8 -B3 'REACH footer overstates' docs/specs/logbook/2026-09-02-red-har...
+[codex] Command completed: /bin/zsh -lc "grep -n -A8 -B3 'REACH footer overstates' docs/specs/logbook/2026-09-02-red-har... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1640,1668p' tests/unit/red-proofs.test.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1640,1668p' tests/unit/red-proofs.test.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "printf \"const assert=require('node:assert'); assert.fail('TOP-SIGNAL');\\n\" |...
+[codex] Running command: /bin/zsh -lc 'node --check scripts/red-proofs.js && node --check tests/unit/red-proofs.test.j...
+[codex] Command failed: /bin/zsh -lc 'node --check scripts/red-proofs.js && node --check tests/unit/red-proofs.test.j... (exit 1)
+[codex] Running command: /bin/zsh -lc "node tests/run.js --test-reporter=tap -- tests/fixtures/red-proofs/base/tests/s...
+[codex] Command completed: /bin/zsh -lc "node tests/run.js --test-reporter=tap -- tests/fixtures/red-proofs/base/tests/s... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat tests/run.js && cat tests/fixtures/red-proofs/base/tests/run.js'
+[codex] Command completed: /bin/zsh -lc 'cat tests/run.js && cat tests/fixtures/red-proofs/base/tests/run.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1598,1635p;1640,1682p' && nl -ba docs/sp...
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1598,1635p;1640,1682p' && nl -ba docs/sp... (exit 0)
+[codex] Running command: /bin/zsh -lc "node scripts/red-proofs.js --bogus 2>&1; printf 'exit=%s\\n' "'$?'
+[codex] Command completed: /bin/zsh -lc "node scripts/red-proofs.js --bogus 2>&1; printf 'exit=%s\\n' "'$?' (exit 0)
+[codex] Running command: /bin/zsh -lc 'tail -120 docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round6-wd-reviewe...
+[codex] Command completed: /bin/zsh -lc 'tail -120 docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round6-wd-reviewe... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner can violate its source-tree isolation when the ambient temp directory is nested un...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner can violate its source-tree isolation when the ambient temp directory is nested under the selected root, and an otherwise valid proof ID collides with internal snapshot state. Its error and roll-up reporting also omit required contract information on specific paths.
+
+Full review comments:
+
+- [P1] Keep the sandbox outside the source root — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1565-1565
+  When `TMPDIR` lies beneath `--root`—for example `TMPDIR=$PWD/.tmp npm run red-proofs`—the wrapper preserves that placement and this call creates the sandbox inside the source tree. The snapshot destination then becomes a descendant of the tree being copied, causing `fs.cpSync` to reject a self-copy (or include transient runner state) while the runner also writes into the checkout it promises only to snapshot. Validate that the canonical sandbox location is outside `--root`, as required by the [snapshot/copy invariant](docs/specs/WP-criterion-red-harness.md#L287-L289).
+
+- [P2] Isolate proof IDs from the snapshot namespace — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1360-1361
+  A valid proof ID of `snapshot` makes `parent` equal `ctx.snapshot`; the first phase therefore tries to copy the snapshot into `snapshot/baseline`, and the `finally` block subsequently deletes the shared snapshot. The proof returns `ERROR` despite satisfying [Table A's unrestricted kebab-slug ID contract](docs/specs/WP-criterion-red-harness.md#L183); place proof working directories under a separate namespace or explicitly reserve this name.
+
+- [P2] Route argument errors through the normal report — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1690-1693
+  For malformed direct invocations such as `node scripts/red-proofs.js --bogus`, this catch prints only a bare usage error and bypasses the structured `ERROR` verdict and REACH footer. That contradicts [criterion 10's requirement that every green or red run end with the footer](docs/specs/WP-criterion-red-harness.md#L868-L870), so parse failures should be rendered through the same reporting path as other LOAD errors.
+
+- [P2] Retain the declaration purpose in failed reports — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1607-1610
+  When a proof is `FAILED`, `ERROR`, or `UNCONTROLLED`, `r.note` contains only the phase diagnostic, and the result/criterion roll-up retains only the ID and verdict; consequently `proof.why` disappears from the report. This violates [Table A's requirement that `why` be printed in the roll-up](docs/specs/WP-criterion-red-harness.md#L186), precisely when readers need both the proof's purpose and its failure reason.
+rc=0

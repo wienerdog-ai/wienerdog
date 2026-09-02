@@ -1,0 +1,162 @@
+PR GATE ROUND 7 — PR #204 — wd-reviewer (same agent resumed), tip 29590681. Verdict APPROVE (interim report, then final). Relayed verbatim from the agent's final messages.
+
+Three background jobs are finishing (mutants, lane/lint, guarded idempotence). Here is the round-7 report on everything confirmed; I will append the pending lines when they land.
+
+# Round 7 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `29590681` (code at `503d7b38`). Worktree, remote and PR head agree; tree clean. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+**I have to lead with this: the nested-namesake hole is one I cleared.** In round 4 I attacked the round-3 unwrap rule, found only the untested absolute-path branch, and approved the rest. The rule's "name + children" half was a guess, and I did not test the shape that falsifies it. Two other channels found it. That is a miss on my part, and the correct lesson is the one the implementer drew: I reasoned about the reporter instead of measuring it.
+
+### The wrapper claim — I measured it myself on Node v25.9.0
+
+```
+file whose tests RUN            -> ok 1 - plain one / ok 2 - plain two / 1..2      NO WRAPPER AT ALL
+file registering nothing        -> ok 1 - tests/p-empty.js / 1..1                  CHILDLESS, no inner plan
+namesake test WITH subtests     -> ok 1 - tests/p-nested.js  WITH nested children   ← a REAL test
+unmatched --test-name-pattern   -> 1..0 (col 0) then childless ok / 1..1           CHILDLESS + inner zero plan
+```
+
+Every wrapper Node actually emits is **childless**; the only name-matching node with children is a genuine nested test. So the round-3 rule's premise was false, and the new rule — sole root, childless, plus positive evidence (`innerZeroPlan`) — matches what the reporter does. The remaining ambiguity (a file registering nothing is byte-identical to a real childless namesake) is still broken fail-safe by keeping, and the asymmetry argument for that is sound: keeping only adds an identity and makes RED stricter; dropping removes an own-body failure, which is how both false PROVENs arose.
+
+This also means **my round-4 case (e) tested a shape that does not exist** — I asked for a pin on an absolute-path wrapper *with children*. It has been corrected to a childless sole wrapper, which is the real shape, while still exercising the absolute-name branch.
+
+### The two namesake fixtures, both directions
+
+```
+nested: declare ONLY the non-namesake test   -> FAILED  exit=1
+        RED: ["tests/suite-namesake-nested.js"] failed in its OWN BODY but is not declared
+nested: declare BOTH                          -> PROVEN  exit=0
+solo:   sole name-matching root WITH children -> PROVEN  exit=0
+```
+
+`suite-namesake-solo.js` is a good self-attack: it is exactly the shape a `roots.length === 1` rule *alone* would still unwrap, and it confirms the rule needs all three conjuncts.
+
+**The decisive regression.** I reconstructed the round-3 rule and ran the identical declarations against it:
+
+| Declaration | round-3 rule | round-7 rule |
+|---|---|---|
+| parent undeclared | **PROVEN, exit 0** (false) | **FAILED, exit 1** |
+| parent declared | **ERROR** "did not RUN" | **PROVEN, exit 0** |
+
+So the old rule made the parent simultaneously invisible as a failure and undeclarable as an identity. Band A, correctly closed.
+
+### The symlinked `--root` — band A, reproduced both directions
+
+```
+PRE-FIX  6d86ac23:  REAL tree BEFORE: bin,subject,tests
+                    REAL tree AFTER : .red-proofs-home,.red-proofs-tmp,.red-proofs-xdg,bin,subject,tests
+                    >>> REAL TREE MUTATED FROM OUTSIDE THE SANDBOX
+POST-FIX 503d7b38:  REAL TREE BYTE-IDENTICAL — refused:
+                    "ERROR: --root is a SYMBOLIC LINK (…) — the copy step refuses symlinks"
+```
+
+One honest correction to my own method: my first probe hashed only `subject/subject.js`, saw it unchanged, and I nearly reported the pre-fix defect as unreproducible. It was my instrument that was wrong, not the finding. Widening to the whole tree showed the runner writing its phase scratch directories **into the real tree through the link** — `cpSync` reproduces a symlinked source as a link, so the snapshot and every phase copy aliased onto the real tree, and `preparePhaseDirs` wrote through it.
+
+I did **not** reproduce the mutation itself landing, and I can say why: in my setup BASELINE runs first, leaves `.red-proofs-*` in the shared real tree, and the RED phase's `verifyCopy` then aborts on those as `extra:` entries before APPLY runs. The implementer and shadow report the mutation landing, which needs a slightly different phase ordering. The invariant breach is proven either way — the runner wrote outside its sandbox — so the disposition is unaffected; I simply cannot confirm that exact hash pair.
+
+### Verified this round
+
+`npm test` **0** — 2556 / 2544 pass / **0 fail** / 12 skip. CI **all 7 pass** (both Node 20 legs). Boundary **0**. Negated greps compliant; control bytes 0/0; glossary byte-exact.
+
+### Pending — three lines
+
+Mutation matrix (including a revert to the round-3 rule, dropping each conjunct separately, removing the `--root` refusal and its `realpath`, and re-checking my round-4 absolute-path pin), `npm run red-proofs` + `npm run lint`, and the guarded isolated idempotence pair. None can change the verdict: both band-A defects are already demonstrated fixed in both directions by direct execution, and idempotence has held byte-identical at every tip. I will report all three verbatim, including any `MISSING/EMPTY … would be VACUOUS` guard line.
+
+### Carried residuals
+
+Two disclosed survivors (`M12`, `M29`); the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note.
+
+---
+
+**Verdict.** Both band-A defects are real, and I confirmed each by reproducing the broken behaviour and the fixed behaviour rather than reading the claim. The new unwrap rule rests on measurement I repeated independently, and it corrects a guess I had previously cleared. Definition of done 1-4 met; item 5 is the coordinator's. **APPROVE.**
+
+---
+
+# Round 7 — PR #204 (final)
+
+## APPROVE
+
+**Reviewed tip:** `29590681` (code at `503d7b38`). Worktree, remote and PR head agree; tree clean and unchanged by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+**Leading with the miss that matters:** the nested-namesake hole lived in the round-3 unwrap rule, which I attacked in round 4 and cleared. I reasoned about the reporter's shapes instead of measuring them, and the "name + children" half was a guess I did not falsify. Two other channels found it. That is mine.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu)` 1m11s, `test (macos)` 3m29s |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2556 / 2544 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **112 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| isolated idempotence, guarded, instrumentation outside the tree | `run1/run2 exit=0`, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`165f0b31…`) |
+| reporter shapes measured directly, 4 cases | detail below |
+| both namesake fixtures, both directions | detail below |
+| round-3 rule reconstructed and re-run | detail below |
+| symlinked `--root`, pre-fix vs post-fix | detail below |
+| **6 mutants** | **5 killed, 1 survives** |
+
+### The wrapper claim — measured, not accepted
+
+```
+tests RUN                     -> ok 1 - plain one / ok 2 - plain two / 1..2   NO WRAPPER AT ALL
+registers nothing             -> childless ok named for the file / 1..1       no inner plan
+namesake test WITH subtests   -> ok named for the file, WITH children          ← a REAL test
+unmatched --test-name-pattern -> 1..0 (col 0), then a CHILDLESS ok / 1..1
+```
+
+Every wrapper Node emits is childless; the only name-matching node with children is a genuine nested test. The round-3 premise was false. The new rule — sole root, childless, plus `innerZeroPlan` as positive evidence — matches the reporter. This also means **my round-4 case (e) pinned a shape that does not exist** (an absolute-path wrapper *with* children); it has been corrected to a childless sole wrapper while still exercising the absolute-name branch, and `R7-f` confirms that branch still dies under mutation (111/1).
+
+### Both fixtures, both directions, and the regression
+
+```
+nested: parent undeclared -> FAILED  exit=1   RED: ["tests/suite-namesake-nested.js"] failed in its OWN BODY but is not declared
+nested: parent declared   -> PROVEN  exit=0
+solo:   sole name-matching root WITH children -> PROVEN exit=0
+```
+
+I reconstructed the round-3 rule and ran the identical declarations:
+
+| Declaration | round-3 rule | round-7 rule |
+|---|---|---|
+| parent undeclared | **PROVEN, exit 0** (false green) | **FAILED, exit 1** |
+| parent declared | **ERROR** "did not RUN" | **PROVEN, exit 0** |
+
+The old rule made the parent simultaneously invisible as a failure and undeclarable as an identity. `R7-a` (revert) kills 3; `R7-b` (drop the sole-root conjunct) kills 1.
+
+### The symlinked `--root` — band A, both directions
+
+```
+PRE-FIX  6d86ac23: REAL tree AFTER gains .red-proofs-home, .red-proofs-tmp, .red-proofs-xdg
+                   >>> REAL TREE MUTATED FROM OUTSIDE THE SANDBOX
+POST-FIX 503d7b38: REAL TREE BYTE-IDENTICAL — "--root is a SYMBOLIC LINK (…) — the copy step refuses symlinks"
+```
+
+A correction to my own method worth recording: my first probe hashed only `subject/subject.js`, saw it unchanged, and I nearly reported the defect as unreproducible. The instrument was wrong, not the finding — widening to the whole tree showed `cpSync` reproducing the symlinked source as a link, so the snapshot and every phase copy aliased onto the real tree and `preparePhaseDirs` wrote through it. I did **not** reproduce the mutation itself landing: in my ordering BASELINE runs first, leaves `.red-proofs-*` in the shared tree, and RED's `verifyCopy` then aborts on those as `extra:` before APPLY. The invariant breach is proven either way. `R7-d` kills 2, `R7-e` (drop the `realpath`) kills 1.
+
+### One new finding
+
+**[quality] The `children.length === 0` conjunct is untested, and it guards the dangerous direction — `scripts/red-proofs.js`, the `isFileNode` rule. Band C. Disposition: fix (~4 lines).**
+
+`R7-c` (drop that conjunct) survives at **112/0**. I checked whether it is load-bearing rather than assuming. On a synthetic stream that is sole + name-matching + **with children** + a top-level `1..0`, the two variants genuinely differ:
+
+```
+pristine    -> [tests/suite-basic.js | tests/suite-basic.js>inner a]
+nochildless -> [inner a]                       ← the parent is dropped
+```
+
+So the conjunct does real work — and it works in the *safe* direction, since removing it makes the rule unwrap **more**, which is exactly how both false PROVENs in this area arose. On reachability I measured the one stream that could produce it: a namesake parent with subtests, under an unmatched pattern. Node emits `1..0` and then a **childless** record, because the subtest never runs — `parseTap` returns `[]`. So the combination is unreachable on measured behaviour today, which puts it in the `M12`/`M29` family of unreachable fail-safes.
+
+It is worth pinning anyway, with the synthetic stream above, for the same reason my round-4 absolute-path ask was worth it: the guard protects the dangerous direction, a future reporter change could make it reachable, and nothing would then catch its removal. Cheap, same style as the existing structural cases, and not worth a round on its own.
+
+### Carried residuals
+
+Disclosed survivors (`M12`, `M29`) plus this one; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note.
+
+---
+
+**Verdict.** Both band-A defects are real and I confirmed each by reproducing the broken *and* the fixed behaviour rather than reading the claim. The new unwrap rule rests on measurements I repeated independently, and it corrects a guess I had cleared. The single surviving mutant is an unreachable fail-safe I verified as unreachable by measurement, not by argument. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
