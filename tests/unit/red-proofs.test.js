@@ -721,7 +721,7 @@ test('red-proofs: resolveInside refuses `..`, an absolute path and a SYMLINK esc
 });
 
 test('red-proofs: a `..` file escaping into the runner\'s own SNAPSHOT is an ERROR before any write (criterion 7a)', () => {
-  const r = run(newRoot({ proofs: [proof({ file: '../../snapshot/subject/subject.js' })] }));
+  const r = run(newRoot({ proofs: [proof({ file: '../../../snapshot/subject/subject.js' })] }));
   assert.equal(r.verdict, 'ERROR', r.report);
   assert.ok(r.report.includes('canonicalises OUTSIDE'), r.report);
 });
@@ -1292,6 +1292,25 @@ test('red-proofs: the wrapper is recognised by REPORTER STRUCTURE, not by name (
     'the namesake parent is kept WITH its subtest, so its own-body failure stays in the equality set'
   );
 
+  // (f1) THE CHILDLESS CONJUNCT, pinned on the one stream that isolates it: a
+  //      SOLE, NAME-MATCHING root WITH CHILDREN and an inner `1..0`. Every other
+  //      condition for unwrapping holds, so only `children.length === 0` stands
+  //      between this shape and a swallowed own-body failure — the dangerous
+  //      direction of the round-6 defect.
+  const zeroPlanWithChildren = [
+    'TAP version 13', '1..0',
+    '# Subtest: tests/suite-basic.js',
+    '    # Subtest: inner', '    ok 1 - inner', '    1..1',
+    'not ok 1 - tests/suite-basic.js',
+    '  ---', "  failureType: 'testCodeFailure'", "  code: 'ERR_ASSERTION'", '  ...',
+    '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(zeroPlanWithChildren, suite)).map((n) => n.path.join('>')),
+    ['tests/suite-basic.js', 'tests/suite-basic.js>inner'],
+    'a node WITH CHILDREN is a test even when every other wrapper condition holds'
+  );
+
   // (f2) THE SOLE-ROOT GUARD, pinned on a synthetic stream. No measured Node
   //      emits an inner zero plan alongside sibling roots — a zero plan means
   //      nothing ran — so this is defence in depth, and it is asserted rather
@@ -1581,6 +1600,100 @@ test('red-proofs: a legal root whose ANCESTOR is a symlink still runs, and the r
     assert.equal(r.report.includes('root resolves to '), false, r.report);
   }
   assert.ok(r.report.includes(`RED proofs — root ${root}`), r.report);
+});
+
+// ── ROUND-7 FINDINGS — each one's RED
+
+test('red-proofs: a TMPDIR INSIDE `--root` is refused — the snapshot destination may not descend from its source (Table B rows 2, 2a)', () => {
+  const root = newRoot();
+  // The manifest is taken BEFORE the temp directory exists, so the comparison
+  // afterwards is against the tree as the run found it.
+  const before = rp.buildManifest(root);
+  const inside = path.join(root, '.tmp');
+  fs.mkdirSync(inside, { recursive: true });
+  const saved = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
+  process.env.TMPDIR = inside;
+  process.env.TMP = inside;
+  process.env.TEMP = inside;
+  try {
+    const r = run(root);
+    assert.equal(r.verdict, 'ERROR', r.report);
+    assert.notEqual(r.exitCode, 0);
+    assert.ok(r.report.includes('the sandbox would be created inside the tree it snapshots'), r.report);
+    assert.ok(r.report.includes(fs.realpathSync(root)), 'the ERROR names --root');
+    assert.equal(r.proofs.length, 0, 'nothing runs once the sandbox would nest inside the source');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+  // And the tree is byte-identical: nothing was copied, mutated or deleted.
+  fs.rmSync(inside, { recursive: true, force: true });
+  rp.verifyCopy(root, before);
+});
+
+test('red-proofs: a proof id of `snapshot` is a legal kebab slug and reaches PROVEN (Table A `id`)', () => {
+  // As a sibling of the snapshot directory this id made the proof's parent EQUAL
+  // `ctx.snapshot`: the first phase copied the snapshot into itself and the
+  // cleanup deleted the shared snapshot. Proof directories now have their own
+  // namespace, so no legal id can collide with runner state.
+  const r = run(newRoot({ proofs: [proof({ id: 'snapshot' })] }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+  assert.equal(r.proofs[0].id, 'snapshot');
+
+  // The other reserved-looking names are fine too, and two of them coexist.
+  const both = run(newRoot({
+    proofs: [
+      proof({ id: 'snapshot' }),
+      proof({ id: 'proofs', find: 'const arity = 2;', replace: 'const arity = 3; /* RP_MUT_A */', marker: 'RP_MUT_A',
+        expectRed: [{ test: ['fixture basic: the arity is two'], signal: 'RP-SIGNAL-ARITY' }] }),
+    ],
+  }));
+  assert.equal(both.verdict, 'PROVEN', both.report);
+});
+
+test('red-proofs: an argv error ends with the REACH footer and carries the ERROR verdict word (criterion 10)', () => {
+  const r = spawnSync(process.execPath, [RUNNER_SRC, '--bogus'], {
+    encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(r.stdout.startsWith('ERROR: unknown argument "--bogus"'), r.stdout);
+  assert.ok(r.stdout.includes('usage: node scripts/red-proofs.js'), r.stdout);
+  assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the footer must end an argv error too; got …${JSON.stringify(r.stdout.slice(-80))}`);
+  // A flag missing its value goes the same way.
+  const missing = spawnSync(process.execPath, [RUNNER_SRC, '--root'], {
+    encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(missing.status, 1);
+  assert.ok(missing.stdout.endsWith(`${rp.REACH}\n`), missing.stdout.slice(-80));
+});
+
+test('red-proofs: `why` is printed on EVERY verdict, not only on PROVEN (Table A `why`)', () => {
+  const why = 'the arity assertion observes the subject, so changing it must redden';
+  // A FAILED proof: the note carries the phase diagnostic, and `why` is what
+  // tells a reader what the proof was FOR.
+  const failed = run(newRoot({
+    proofs: [proof({
+      why,
+      expectRed: [{ test: ['fixture basic: the arity is two'], signal: 'RP-SIGNAL-ARITY' }],
+    })],
+  }));
+  assert.equal(failed.verdict, 'FAILED', failed.report);
+  assert.ok(failed.report.includes(`why: ${why}`), failed.report);
+  assert.ok(failed.report.includes('did not fail under the mutation'), failed.report);
+  assert.equal(failed.proofs[0].why, why);
+
+  // An ERROR proof carries it too.
+  const errored = run(newRoot({ proofs: [proof({ why, occurrences: 2 })] }));
+  assert.equal(errored.verdict, 'ERROR', errored.report);
+  assert.ok(errored.report.includes(`why: ${why}`), errored.report);
+  assert.equal(errored.proofs[0].why, why);
+
+  // And PROVEN prints it exactly once, not twice.
+  const proven = run(newRoot({ proofs: [proof({ why })] }));
+  assert.equal(proven.verdict, 'PROVEN', proven.report);
+  assert.equal(proven.report.split(`why: ${why}`).length - 1, 1, proven.report);
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

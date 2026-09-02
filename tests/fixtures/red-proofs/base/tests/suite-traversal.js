@@ -32,13 +32,19 @@ test('fixture trav: no sibling phase copy exists, and none can be created', () =
     /EACCES|EPERM|EROFS/, 'RP-SIGNAL-SIBLING-CREATED');
 });
 
-test('fixture trav: the sandbox ABOVE the locked parent refuses a write', () => {
-  assert.match(codeOf(() => fs.writeFileSync(path.join(process.cwd(), '..', '..', 'rp-counter'), 'x')),
-    /EACCES|EPERM|EROFS/, 'RP-SIGNAL-ANCESTOR-WRITABLE');
+test('fixture trav: every runner-provided ancestor refuses a write', () => {
+  // `..` is the copies' parent, `../..` the `proofs/` namespace, `../../..` the
+  // sandbox itself. Each is a directory the runner provides, and each is held
+  // non-writable for the child's lifetime.
+  for (const up of [['..'], ['..', '..'], ['..', '..', '..']]) {
+    const target = path.join(process.cwd(), ...up, `rp-counter-${up.length}`);
+    assert.match(codeOf(() => fs.writeFileSync(target, 'x')),
+      /EACCES|EPERM|EROFS/, `RP-SIGNAL-ANCESTOR-WRITABLE: ${up.join('/')}`);
+  }
 });
 
 test('fixture trav: the snapshot the copies derive from is read-only', () => {
-  const snapshot = path.join(process.cwd(), '..', '..', 'snapshot', 'subject', 'subject.js');
+  const snapshot = path.join(process.cwd(), '..', '..', '..', 'snapshot', 'subject', 'subject.js');
   assert.ok(fs.existsSync(snapshot), 'RP-SIGNAL-FIXTURE-MISCONFIGURED: the snapshot is not where expected');
   assert.match(codeOf(() => fs.appendFileSync(snapshot, '// tampered\n')),
     /EACCES|EPERM|EROFS/, 'RP-SIGNAL-SNAPSHOT-WRITABLE');

@@ -239,6 +239,8 @@ const REACH = [
   '           locked immediately before its own phase and deleted after it, and while a child runs',
   '           the copies\' parent and the sandbox above it are non-writable and the snapshot is',
   '           read-only — so the running copy is the only writable tree this runner provides.',
+  '           The sandbox itself must lie OUTSIDE --root — the snapshot destination may not be a',
+  '           descendant of the source — so a TMPDIR under the tree being snapshotted is refused.',
   '           Where mode bits cannot enforce that — win32, or running as uid 0 — the lane REFUSES',
   '           at LOAD with UNSUPPORTED rather than reporting a verdict it cannot stand behind.',
   '           A suite that writes ANYWHERE ELSE (an absolute path this runner does not own, the',
@@ -1357,7 +1359,13 @@ function tail(stdout, stderr) {
 function runProof(ctx, decl, proof, opts = {}) {
   const control = opts.control !== false;
   const where = `${decl.declFile} [${proof.id}]`;
-  const parent = path.join(ctx.sandbox, proof.id);
+  // UNDER `proofs/`, NEVER A SIBLING OF `snapshot`. A proof id is an
+  // unrestricted kebab slug (Table A), so `snapshot` is a LEGAL id — and as a
+  // sibling it made `parent` equal `ctx.snapshot`: the first phase copied the
+  // snapshot into itself and the `finally` deleted the shared snapshot out from
+  // under every later proof. A separate namespace removes the collision instead
+  // of reserving a word the contract does not reserve.
+  const parent = path.join(ctx.sandbox, 'proofs', proof.id);
   fs.mkdirSync(parent, { recursive: true });
   let applied = false;
   try {
@@ -1419,12 +1427,19 @@ function runProof(ctx, decl, proof, opts = {}) {
 function lockSandbox(ctx, parent) {
   setSnapshotWritable(ctx.snapshot, ctx.manifest, false);
   fs.chmodSync(parent, 0o500);
+  // THE `proofs/` LEVEL IS LOCKED TOO. Moving proof directories into their own
+  // namespace put a new writable directory between the phase copy and the
+  // sandbox, and `../../<name>` would have reached it — re-opening exactly the
+  // traversal channel round 1 closed. Every runner-provided directory on the
+  // path from a phase copy up to the sandbox is held non-writable.
+  fs.chmodSync(path.dirname(parent), 0o500);
   fs.chmodSync(ctx.sandbox, 0o500);
 }
 
 /** @param {Object} ctx @param {string} parent @returns {void} */
 function unlockSandbox(ctx, parent) {
   try { fs.chmodSync(ctx.sandbox, 0o700); } catch { /* best effort */ }
+  try { fs.chmodSync(path.dirname(parent), 0o700); } catch { /* best effort */ }
   try { fs.chmodSync(parent, 0o700); } catch { /* best effort */ }
   setSnapshotWritable(ctx.snapshot, ctx.manifest, true);
 }
@@ -1562,7 +1577,32 @@ function runAll(opts = {}) {
     return done('VACUOUS');
   }
 
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-redproof-'));
+  // THE SANDBOX MUST LIE OUTSIDE THE TREE IT SNAPSHOTS, and the ambient TMPDIR
+  // decides where it lands. Measured: with `TMPDIR=$PWD/.tmp`, the sandbox — and
+  // therefore the SNAPSHOT DESTINATION — becomes a descendant of `--root`, so
+  // `fs.cpSync` is asked to copy a tree into itself and the runner writes into
+  // the checkout it promises only to read (Table B rows 2 and 2a). Both
+  // containments are refused, on REALPATHS, because either nesting breaks the
+  // invariant.
+  let sandbox;
+  try {
+    const tmpReal = fs.realpathSync(os.tmpdir());
+    // ONE DIRECTION ONLY, and the asymmetry is the point. The defect is the
+    // SANDBOX landing inside `--root`, which happens when the temp root is a
+    // descendant of it. The reverse — a `--root` that lives under the temp
+    // directory — is ordinary and harmless: the sandbox is then a SIBLING of the
+    // root, never an ancestor or a descendant, and every fixture tree in this
+    // repo's own suite is exactly that shape.
+    if (tmpReal === root || tmpReal.startsWith(root + path.sep)) {
+      say(`ERROR: the sandbox would be created inside the tree it snapshots — the temp root ${tmpReal} lies under --root ${root}. `
+        + 'Point TMPDIR at a directory outside --root; the snapshot destination may not be a descendant of its source.');
+      return done('ERROR');
+    }
+    sandbox = fs.mkdtempSync(path.join(tmpReal, 'wd-redproof-'));
+  } catch (e) {
+    say(`ERROR: the sandbox could not be created (${(e && (e.code || e.message)) || e})`);
+    return done('ERROR');
+  }
   let runVerdict = 'PROVEN';
   let applications = 0;
   try {
@@ -1604,13 +1644,21 @@ function runAll(opts = {}) {
       const r = runProof({ snapshot, manifest, sandbox }, { declFile, suite }, proof,
         { control: opts.control, onPhaseCopy: opts.onPhaseCopy });
       if (r.applied) applications += 1;
-      results.push({ id: proof.id, wp: proof.wp, criterion: proof.criterion, verdict: r.verdict, note: r.note });
+      results.push({
+        id: proof.id, wp: proof.wp, criterion: proof.criterion, verdict: r.verdict, note: r.note, why: proof.why,
+      });
       runVerdict = worstVerdict(runVerdict, r.verdict);
       say(`${r.verdict.padEnd(12)} ${proof.id}  (${proof.wp} criterion ${proof.criterion})`);
-      say(`             ${r.note}`);
+      // `why` IS PRINTED ON EVERY VERDICT, not only on PROVEN. Table A requires
+      // it in the roll-up so a reader sees what the proof is FOR without opening
+      // the spec — and a reader needs that most on a FAILED or ERROR, where the
+      // note carries the phase diagnostic and nothing else.
+      say(`             why: ${proof.why}`);
+      if (r.note !== proof.why) say(`             ${r.note}`);
     }
   } finally {
     try { fs.chmodSync(sandbox, 0o700); } catch { /* best effort */ }
+    try { fs.chmodSync(path.join(sandbox, 'proofs'), 0o700); } catch { /* best effort */ }
     try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 
@@ -1683,13 +1731,30 @@ function rollUp(all, selected, results) {
   return out;
 }
 
+/**
+ * The report envelope for a failure that happens before a run can start. It
+ * carries the ERROR verdict word and the REACH footer, because criterion 10 asks
+ * every run — green or red — to end with the footer, and a reader who mistyped a
+ * flag is exactly a reader who has not yet learned what the output means.
+ *
+ * @param {string} message @returns {{verdict:string, exitCode:number, report:string, proofs:Object[], criteria:Object[]}}
+ */
+function preRunError(message) {
+  return { verdict: 'ERROR', exitCode: 1, report: `ERROR: ${message}\n\n${REACH}\n`, proofs: [], criteria: [] };
+}
+
 function main() {
   let args;
   try {
     args = parseArgs(process.argv.slice(2));
   } catch (e) {
-    process.stderr.write(`${e.message}\n`);
-    process.exitCode = 1;
+    // Round 1 dispositioned this as "an unparsable argv is not a run"; the
+    // plugin raised it again independently at round 7, and the second reading is
+    // the better one — the footer costs nothing and the usage line is still the
+    // first thing printed.
+    const bad = preRunError(e.message);
+    process.exitCode = bad.exitCode;
+    process.stdout.write(bad.report);
     return;
   }
   const r = runAll(args);
@@ -1713,6 +1778,7 @@ module.exports = {
   VERDICT_ORDER,
   RedProofError,
   worstVerdict,
+  preRunError,
   nodeFloorOk,
   unsupportedHostReason,
   loadDeclarations,
