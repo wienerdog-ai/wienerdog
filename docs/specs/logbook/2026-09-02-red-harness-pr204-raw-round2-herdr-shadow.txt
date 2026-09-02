@@ -1,0 +1,22 @@
+PR GATE ROUND 2 — PR #204 — herdr-spawned hermetic Codex shadow #3 (clean CODEX_HOME, -s read-only, detached worktree @ 961401df, fresh thread, pr-rubric.md + round-2 note). Captured via an approved scratch-file write (base64 chunks). Worktree porcelain identical before and after (the reviewer diffed its own captures). Its one finding — CONTROL accepting a zero-run exit 0 — CONVERGED with the plugin's round-2 P1 and was fixed at 50f7d3ab before this raw landed.
+
+{
+  "findings": [
+    {
+      "title": "[P1][B] Reject a control in which zero tests ran",
+      "body": "Materiality B. When a suite runs normally in BASELINE and RED but marks every test SKIP in the fresh control copy, `assertCompleteRun` accepts the complete zero-run TAP and this status-only check treats exit 0 as green; an isolated OS-temp fixture reproduced `PROVEN` with exit 0. That leaves the required post-RED counterfactual vacuous and contradicts the runner's zero-tests-RAN rule and [Table B's requirement that CONTROL be a genuine fresh green](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:293); parse the control TAP and reject a zero-run control before returning `PROVEN`.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {
+          "start": 1077,
+          "end": 1079
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The round-1 alias, traversal/shared-ancestor, partial-TAP, FIFO, excluded-symlink, scan-error, phase-verification, footer, and Node-20 fixes are genuinely present and their focused regressions pass, but CONTROL can still report a silent false PROVEN when zero tests run, so the patch is incorrect; the disclosed M12 snapshot-copy-wrapper survivor remains a non-blocking test residual rather than a second functional finding. EXECUTED (exit statuses): rubric/spec/amendment/diff/deliverable inspections 0; initial and final git status --porcelain 0 with identical empty output; focused npm test -- tests/unit/red-proofs.test.js 0 (83/83); full npm test 0 (2527 total, 2515 pass, 12 skip, 0 fail); adopted npm run red-proofs twice 0/0 (both RUN: PROVEN); guarded empty-selection assertion 0 with the inner lane non-zero (VACUOUS V2); corrected OS-temp zero-control probe 0 and reproduced runner verdict PROVEN/exit 0 (an earlier malformed quoting attempt exited 1 and was superseded); pre/post porcelain diff 0; boundary check 0; both guarded source greps 0; node --check 0; git diff --check 0. npm run lint was NOT RUN per user instruction because the orchestrator owns lint; no network, install, real-vault/home probe, or git-state-changing command ran, and the report path is outside the worktree.",
+  "overall_confidence_score": 0.99
+}
