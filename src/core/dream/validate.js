@@ -643,6 +643,16 @@ function removeOwnedQuarantinePath(p) {
  * atomic write (tmp + rename), name `<date>-<sanitized-basename>` with a
  * numeric suffix before the extension on collision.
  *
+ * `tmp` IS CREATED EXCLUSIVELY (`WP-preservation-abort-widening`, Table D
+ * row D1): a crash can leave a `.tmp-<pid>-<stem>` file behind, and pids are
+ * reused, so a later invocation naming the same path must never open it for
+ * writing — that would silently overwrite a foreign file, and treating the
+ * reused pathname as this invocation's own would then delete it on any later
+ * failure. `flag: 'wx'` makes that collision an ordinary preservation
+ * FAILURE instead: `tmp` becomes this invocation's OWN path only once the
+ * exclusive create succeeds, and the pre-existing file is never opened,
+ * written or removed.
+ *
  * Best-effort in ONE direction only: any failure up to and including a failed
  * rename (including a missing stateDir) returns `null`, and `null` is falsy
  * exactly where the previous `false` was, so the withhold call site keeps its
@@ -685,6 +695,7 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   let tmp = null;
   let dest = null;
   let name = null;
+  let tmpOwned = false; // true only once the EXCLUSIVE create of `tmp` succeeds
   try {
     if (!stateDir) return null;
     if (!Buffer.isBuffer(content)) return null;
@@ -703,15 +714,24 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
       dest = path.join(qdir, name);
     }
     tmp = path.join(qdir, `.tmp-${process.pid}-${stem}${ext}`);
-    fs.writeFileSync(tmp, content, { mode: 0o600 });
+    // EXCLUSIVE create (`WP-preservation-abort-widening`, Table D row D1): a
+    // pre-existing file at this exact name — a crash-leftover from a REUSED
+    // pid, same stem — is a collision candidate, never opened for writing.
+    // `EEXIST` (or any other write failure) falls straight into the catch
+    // below with `tmpOwned` still false, so that foreign file is reported as
+    // an ordinary preservation failure and is never touched.
+    fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
+    tmpOwned = true;
     fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, dest);
   } catch {
-    // Table D rows D0/D1. `tmp` is assigned only once the write was
-    // ATTEMPTED, so its presence alone tells the two apart. `dest` is NOT
-    // owned in this state and MUST NOT be touched: the collision loop above
-    // may have pointed it at a name an earlier run's artifact already holds.
-    if (tmp) removeOwnedQuarantinePath(tmp);
+    // Table D rows D0/D1. `tmpOwned` is true only once the EXCLUSIVE create
+    // of `tmp` succeeded, so a foreign file already sitting at that name is
+    // NEVER treated as owned and is left untouched — exactly like a `dest`
+    // collision candidate. `dest` itself is NOT owned in this state either:
+    // the collision loop above may have pointed it at a name an earlier
+    // run's artifact already holds.
+    if (tmpOwned) removeOwnedQuarantinePath(tmp);
     return null;
   }
 

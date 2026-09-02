@@ -2431,6 +2431,69 @@ test('quarantinePreserve (Table D row D1): the rename fails after a successful w
   assert.deepEqual(fs.readdirSync(qdir), [], 'both the tmp and the never-created dest are absent');
 });
 
+// ── herdr-shadow, PR #205 round 1, P1 (band A): `tmp`'s name is
+//    `.tmp-<pid>-<stem>`, and a crash can leave one behind. Pids are
+//    reused, so a LATER invocation with the same pid and stem must never
+//    open that path for writing — that would silently overwrite the
+//    foreign bytes, and any later failure would then delete them as
+//    "owned" (Table D row D1's own rule: this invocation removes only
+//    what IT created). `flag: 'wx'` is the fix; these two tests are its
+//    RED evidence.
+test('quarantinePreserve (Table D row D1, herdr-shadow round 1 P1): a FOREIGN file already at the tmp pathname (crash + reused pid) is never overwritten, and a later failure does not delete it', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const foreignBytes = Buffer.from('bytes a crashed EARLIER invocation left behind\n');
+  fs.writeFileSync(tmpPath, foreignBytes, { mode: 0o600 });
+
+  // Belt-and-suspenders: also inject a rename failure, reproducing the
+  // exact shape of the reported bug (write silently overwrites the
+  // foreign file, chmod succeeds, rename fails, cleanup deletes the
+  // "owned" tmp — destroying bytes this invocation never wrote). With the
+  // fix this injected failure is never even reached: the exclusive create
+  // fails first.
+  const un = patchFs('renameSync', () => function () {
+    const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
+  });
+  const content = Buffer.from('the judged bytes\n');
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { un(); }
+
+  assert.equal(res, null, 'a preservation failure, not a success');
+  assert.ok(fs.existsSync(tmpPath), 'the foreign file was never removed');
+  assert.deepEqual(
+    fs.readFileSync(tmpPath), foreignBytes,
+    'the foreign file is byte-identical — never opened for writing, never overwritten'
+  );
+});
+
+test('quarantinePreserve (Table D row D1, herdr-shadow round 1 P1): the EXCLUSIVE create alone fails the preservation over a foreign tmp, on an otherwise-happy path', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const foreignBytes = Buffer.from('bytes a crashed EARLIER invocation left behind\n');
+  fs.writeFileSync(tmpPath, foreignBytes, { mode: 0o600 });
+
+  // No other failure injected: write, chmod and rename would all succeed
+  // today if the write were allowed to proceed. It is not — `flag: 'wx'`
+  // alone is what fails this call, proving the fix rather than an
+  // incidental side effect of some other injected failure.
+  const content = Buffer.from('the judged bytes\n');
+  const res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+
+  assert.equal(res, null, 'the exclusive create alone reports a preservation FAILURE');
+  assert.deepEqual(
+    fs.readFileSync(tmpPath), foreignBytes,
+    'the foreign file at the tmp pathname is untouched'
+  );
+  const dest = path.join(qdir, '2026-07-02-x.md');
+  assert.equal(fs.existsSync(dest), false, 'no dest was ever created either');
+});
+
 test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after a failed rename fails LOUD', () => {
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
