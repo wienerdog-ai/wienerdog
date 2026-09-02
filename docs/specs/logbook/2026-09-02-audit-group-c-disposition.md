@@ -24,7 +24,7 @@ all five together is the simpler fix. **Honesty rule,
 inherited from the 2026-08-05 ruling and binding here:** the archive's
 harness-refusal measurement for `.git` writes is explicitly ruled non-load-bearing — it rests on unverified third-party behaviour this project neither owns nor tests, and no disposition below rests on it; every Table D cell rests instead on a command in the Verification steps pasted in section 3.
 
-## 2. Table D — the disposition of audit group C (reproduced from the spec; this entry is now its authority)
+## 2. Table D — the disposition of audit group C (reproduced from the spec; becomes Table D's authority on this WP's flip to Done — until then the spec's Table D is canonical and this copy is byte-identical to it)
 
 The single place every disposition fact is decided. A **mooted** row names what
 retired the mechanism; an **open** row names the WP that owns it. Every measured
