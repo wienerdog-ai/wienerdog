@@ -55,6 +55,45 @@ resuming it.
 > Round records and raw gate outputs: `docs/specs/logbook/2026-09-01-*` and
 > `2026-09-02-*`. The audit status table above is NOT updated here — row C's
 > cell is `WP-audit-c-close-disposition`'s own deliverable.
+>
+> **Status pass, 2026-09-02 afternoon (owner rulings landed; every Ready WP
+> implemented).** The four parked rulings were given on 2026-09-02 (record:
+> `docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md`, PR #201) and all
+> four Ready WPs went through implementation and the PR double gate (wd-reviewer,
+> Codex plugin and hermetic herdr shadow, raws committed pre-adjudication under
+> `docs/specs/logbook/2026-09-02-*-pr20N-raw-round*`). Measured at the time of
+> writing:
+>
+> | # | Spec | PR | Rounds | Gate state | Merge note |
+> |---|------|----|--------|------------|------------|
+> | — | owner rulings record | #201 | — | docs-only, CI green | merge FIRST (the #202 stubs and logbook cite it) |
+> | 2 | `WP-index-guard-residuals` | #203 | 2 | APPROVE / shadow clean / plugin P2 residual (concurred, routed to wd-architect) | any order |
+> | 3a | `WP-preservation-abort-widening` | #205 | 4 | APPROVE / clean / clean | after #203 (both touch `src/cli/dream.js` comments and the done specs) |
+> | 4 | `WP-audit-c-close-disposition` | #202 | 3 | APPROVE / clean / 1×C fixed; files `WP-instruction-basename-currency` and `WP-dot-segment-denial` as Draft stubs; group C row below reads **Open — four residuals** once merged | after #201 |
+> | 5 | `WP-criterion-red-harness` | #204 | 14 | plugin CLEAN / wd-reviewer APPROVE / shadow clean on f729ba04; nineteen gate-found defects closed (see the PR's closing comment) | last |
+>
+> **What the gates caught after the implementers' own green** (the reason the
+> rounds exist): #204 — pinned TAP shapes were Node-25-only and CI's Node 20 went
+> red; six false-PROVEN paths (alias `..`, accepted zero-run CONTROL, dropped
+> namesake test, ignored added declaration, `-`-prefixed suite path, UTF-8
+> decode rewriting bytes outside the mutation). #205 — a `.tmp-${pid}` overwrite
+> of a crash leftover, then the fix's own regression (ownership recorded after
+> the whole write; reproduced with a real `ulimit -f` EFBIG). #202 — Table D
+> cells claiming more than V1/V2 recorded, fixed by making V2 (b) prove the
+> claims; tier-local `copilot-instructions.md` is not a documented Copilot path.
+>
+> **Follow-ups for wd-architect, not dispatched:** the W1 wording family from
+> #203 (positional citations in `docs/specs/done/WP-show-slot-own-value-kind.md`
+> rotted by the test file's growth; the `computed` JSDoc; the (c)(i)/(c)(ii)
+> scope framing); `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1565`
+> (B3b's action cell instructs carrying the basename, which the pair rule now
+> forbids); `WP-criterion-red-harness.md:446` (stale round-5 "provided set" line).
+>
+> **Next in the queue:** `WP-quarantine-banner-location` →
+> `WP-quarantine-preserve-durability` (owner-sequenced 2026-09-02);
+> `WP-instruction-basename-currency` → `WP-dot-segment-denial` (ruled option
+> (i), QUEUED); items 6–9 unchanged; `WP-dream-git-env-pinning` still needs the
+> owner's product decision.
 
 Every item below has a Draft spec stub. **The stubs are deliberately Draft:
 they carry the context, the intent, the known traps and the done-definition,
