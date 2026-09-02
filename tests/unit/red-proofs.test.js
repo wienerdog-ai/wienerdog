@@ -78,8 +78,25 @@ function newRoot(o = {}) {
   return dir;
 }
 
+/**
+ * THE LANE'S HOST REFUSAL MUST NOT TAKE THE UNIT SUITE WITH IT. `runAll` refuses
+ * win32 and uid 0 (mode bits cannot enforce Table B row 2b there), so on a
+ * Windows dev box or in a root container EVERY functional test below would
+ * short-circuit to UNSUPPORTED and `npm test` would fail wholesale rather than
+ * confirming the refusal — criterion 13. Functional tests therefore inject a
+ * SUPPORTED host description; the dedicated refusal tests inject an unsupported
+ * one, and the few cases that must run the real CLI skip with a reason.
+ */
+const SUPPORTED_HOST = { platform: 'linux', uid: 501 };
+
+/** Non-null when THIS host cannot enforce the lane; the reason is the skip text. */
+const HOST_REASON = rp.unsupportedHostReason();
+const SKIP_ON_UNSUPPORTED_HOST = HOST_REASON
+  ? { skip: `this host cannot enforce the lane, which the runner refuses by design: ${HOST_REASON}` }
+  : {};
+
 /** @param {string} root @param {Object} [opts] @returns {Object} */
-const run = (root, opts = {}) => rp.runAll({ root, ...opts });
+const run = (root, opts = {}) => rp.runAll({ host: SUPPORTED_HOST, root, ...opts });
 
 /**
  * Real TAP from the fixture tree, under whatever Node runs `npm test`.
@@ -979,12 +996,20 @@ test('red-proofs: a CONTROL that registers NO TEST AT ALL exits 0 and must NOT b
     assert.equal(r.verdict, 'ERROR', r.report);
     assert.notEqual(r.exitCode, 0);
     assert.ok(r.report.includes('CONTROL(post-RED)'), r.report);
-    assert.ok(r.report.includes('ZERO TESTS RAN'), r.report);
+    // A file that registers nothing emits a childless record named for the file
+    // and no inner zero plan — the ambiguous shape the wrapper rule KEEPS — so
+    // the declared identity is reported missing rather than as zero tests run.
+    // Either way the CONTROL is refused, which is what row 6 requires.
+    assert.ok(r.report.includes('did not RUN'), r.report);
   } finally {
     for (const [k, v] of [['RP_DRIFT_COUNTER', saved.c], ['RP_DRIFT_AFTER', saved.a], ['RP_DRIFT_MODE', saved.m]]) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
     }
   }
+});
+
+test('red-proofs: THIS host can enforce the lane (skipped, with its reason, where it cannot)', SKIP_ON_UNSUPPORTED_HOST, () => {
+  assert.equal(HOST_REASON, null);
 });
 
 test('red-proofs: the lane REFUSES a host whose mode bits cannot enforce isolation — win32 and uid 0 (Table B row 2b)', () => {
@@ -993,9 +1018,6 @@ test('red-proofs: the lane REFUSES a host whose mode bits cannot enforce isolati
   assert.match(rp.unsupportedHostReason({ platform: 'darwin', uid: 0 }), /uid 0 \(root\) bypasses/);
   assert.equal(rp.unsupportedHostReason({ platform: 'linux', uid: 501 }), null);
   assert.equal(rp.unsupportedHostReason({ platform: 'darwin', uid: 1 }), null);
-  // CI's own hosts are supported, so this refusal changes nothing there.
-  assert.equal(rp.unsupportedHostReason(), null, 'this host must be able to enforce the isolation');
-
   // And the refusal is UNSUPPORTED, in the same class and shape as the Node floor.
   // Injecting the HOST, not the answer: this exercises `runAll`'s own call site.
   const r = run(BASE, { host: { platform: 'win32', uid: 501 } });
@@ -1041,7 +1063,7 @@ test('red-proofs: a declaration edited between LOAD and SNAPSHOT is an ERROR nam
   assert.ok(/not readable in the snapshot|could not be read/.test(r2.report), r2.report);
 });
 
-test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FIFO must not block, a symlink must not be followed (Table E1)', () => {
+test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FIFO must not block, a symlink must not be followed (Table E1)', SKIP_ON_UNSUPPORTED_HOST, () => {
   const fifoRoot = newRoot();
   const fifo = path.join(fifoRoot, 'tests', 'red-proofs', 'b.proofs.json');
   const mk = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
@@ -1068,7 +1090,7 @@ test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FI
   assert.ok(r2.report.includes('tests/red-proofs/c.proofs.json'), r2.report);
 });
 
-test('red-proofs: a report larger than the pipe buffer reaches its REACH footer intact (criterion 10)', () => {
+test('red-proofs: a report larger than the pipe buffer reaches its REACH footer intact (criterion 10)', SKIP_ON_UNSUPPORTED_HOST, () => {
   // `process.exit` discards what is still queued on a pipe. The footer is the
   // tail of the report, so it is exactly what a truncating exit loses.
   const root = newRoot({ proofs: [proof({ why: `${'why '.repeat(40000)}END-OF-WHY` })] });
@@ -1079,6 +1101,110 @@ test('red-proofs: a report larger than the pipe buffer reaches its REACH footer 
   assert.ok(r.stdout.includes('END-OF-WHY'), 'the long note survived');
   assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the REACH footer must end the report; got …${JSON.stringify(r.stdout.slice(-120))}`);
   assert.equal(r.status, 0, r.stderr);
+});
+
+// ── ROUND-3 FINDINGS — each one's RED
+
+/** A mutation of the value all three namesake-suite assertions observe. */
+const SHARED_MUTATION = {
+  find: "const shared = 'shared-ok';",
+  replace: "const shared = 'RP_MUT_S';",
+  marker: 'RP_MUT_S',
+};
+
+test('red-proofs: a top-level test NAMED LIKE THE SUITE is a test, not the reporter\'s wrapper — its undeclared failure is FAILED, never dropped (Table A)', () => {
+  // `tests/suite-namesake.js` and `suite-namesake.js` are real top-level tests.
+  // A name-only wrapper rule replaced each with its children — none, being
+  // leaves — so both vanished from the identity set and their own-body failures
+  // never reached RED's equality rule. Declaring only the third test then
+  // reported PROVEN over two undeclared reds.
+  const r = run(newRoot({
+    suite: 'tests/suite-namesake.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [{ test: ['fixture namesake: the declared test'], signal: 'RP-SIGNAL-GREETING' }],
+    })],
+  }));
+  assert.equal(r.verdict, 'FAILED', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('failed in its OWN BODY but is not declared'), r.report);
+  assert.ok(/suite-namesake\.js/.test(r.report), r.report);
+});
+
+test('red-proofs: the same namesake tests, DECLARED, are observed and the proof is PROVEN (Table A)', () => {
+  // The other direction: the identities must be reachable, not merely un-dropped.
+  const r = run(newRoot({
+    suite: 'tests/suite-namesake.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [
+        { test: ['tests/suite-namesake.js'], signal: 'RP-SIGNAL-NAMESAKE-PATH' },
+        { test: ['suite-namesake.js'], signal: 'RP-SIGNAL-NAMESAKE-BASE' },
+        { test: ['fixture namesake: the declared test'], signal: 'RP-SIGNAL-GREETING' },
+      ],
+    })],
+  }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+});
+
+test('red-proofs: the wrapper is recognised by REPORTER STRUCTURE, not by name (Table A)', () => {
+  const suite = 'tests/suite-basic.js';
+  // (a) the no-match shape: an INNER `1..0` plan, then a childless record named
+  //     for the file. That record is the wrapper, and it is unwrapped.
+  const noMatch = [
+    'TAP version 13', '1..0', '# Subtest: tests/suite-basic.js', 'ok 1 - tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...', '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(rp.parseTap(noMatch, suite), [], 'the file wrapper is not an identity');
+
+  // (b) the SAME name, childless, with no inner zero plan: a real test, kept.
+  const realTest = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js', 'not ok 1 - tests/suite-basic.js',
+    '  ---', "  failureType: 'testCodeFailure'", "  error: 'RP-SIGNAL-X'", "  code: 'ERR_ASSERTION'", '  ...',
+    '# Subtest: other', 'ok 2 - other', '1..2', '# tests 2', '',
+  ].join('\n');
+  const kept = rp.flattenTap(rp.parseTap(realTest, suite));
+  assert.deepEqual(kept.map((n) => n.path.join('>')), ['tests/suite-basic.js', 'other']);
+
+  // (c) THE AMBIGUOUS SHAPE — a file that registered no test emits exactly what a
+  //     real childless namesake test emits. The tie is broken FAIL-SAFE: keep it,
+  //     because a kept wrapper only makes the equality rule stricter while a
+  //     dropped test makes it weaker.
+  const registeredNothing = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js', 'ok 1 - tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...', '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(registeredNothing, suite)).map((n) => n.path.join('>')),
+    ['tests/suite-basic.js'],
+    'the ambiguous shape is KEPT — dropping it is how an undeclared own-body failure vanishes'
+  );
+
+  // (d) a name-matching node WITH children is the wrapper, and unwraps.
+  const wrapped = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js',
+    '    # Subtest: inner', '    ok 1 - inner', '    1..1',
+    'ok 1 - tests/suite-basic.js', '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(rp.flattenTap(rp.parseTap(wrapped, suite)).map((n) => n.path.join('>')), ['inner']);
+});
+
+test('red-proofs: a declaration ADDED between LOAD and SNAPSHOT is an ERROR naming the file (Table B row 2)', () => {
+  const root = newRoot();
+  const r = run(root, {
+    afterLoad: () => fs.writeFileSync(
+      path.join(root, 'tests', 'red-proofs', 'b-added.proofs.json'),
+      JSON.stringify({ suite: 'tests/suite-basic.js', proofs: [proof({ id: 'added-in-the-window' })] })
+    ),
+  });
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('ADDED between LOAD and SNAPSHOT'), r.report);
+  assert.ok(r.report.includes('tests/red-proofs/b-added.proofs.json'), r.report);
+  // Without the set comparison the added file is copied, manifest-verified and
+  // ignored — its proofs never run while their criterion rolls up as complete.
+  assert.equal(r.proofs.length, 0, 'nothing runs once the declaration set is untrustworthy');
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

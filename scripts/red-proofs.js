@@ -366,10 +366,29 @@ function loadDeclarations(root) {
  * declaration no longer present in the tree the phases actually ran. Row 2's
  * concurrent-edit guarantee is only real if the two are compared.
  *
+ * The comparison is over the SET as well as the bytes. A declaration ADDED in the
+ * window is copied and manifest-verified like any other file, and a digest-only
+ * loop never looks at it — so its proofs are never run while the criterion they
+ * belong to rolls up PROVEN on the declarations that were (demonstrated at
+ * PR #204 round 3 by both gates). Extra means ERROR, naming the file.
+ *
  * @param {string} snapshot @param {Map<string,string>} digests
  * @returns {void}
  */
 function assertDeclarationsMatchSnapshot(snapshot, digests) {
+  let present;
+  try {
+    present = fs.readdirSync(path.join(snapshot, DECL_DIR_REL))
+      .filter((n) => n.endsWith('.proofs.json')).sort();
+  } catch (e) {
+    throw error(`the declaration directory is not readable in the snapshot (${e.code || e.message}) — the declaration set changed under the run`);
+  }
+  for (const name of present) {
+    const declFile = path.join(DECL_DIR_REL, name);
+    if (!digests.has(declFile)) {
+      throw error(`${declFile}: ADDED between LOAD and SNAPSHOT — the snapshotted tree carries a declaration this run never loaded, so its proofs would go unrun while their criterion rolled up as if complete`);
+    }
+  }
   for (const [declFile, want] of digests) {
     const full = path.join(snapshot, declFile);
     let raw;
@@ -805,15 +824,39 @@ function parseTap(text, suiteArg) {
   // file-level `ok`, exit 0), and on any Node when the file itself fails. ITS
   // NAME IS NOT THE SAME STRING ON EVERY NODE — measured: Node v25.9.0 names it
   // exactly as the path was passed, Node v20.20.2 names it with the ABSOLUTE
-  // path — so the match is over the relative form, the basename and any
+  // path — so the name match is over the relative form, the basename and any
   // path-suffix of it, never one version's spelling.
+  //
+  // BUT A NAME MATCH IS NOT ENOUGH, and that was a false-PROVEN hole (PR #204
+  // round 3). `test('suite-basic.js', …)` is a perfectly legal top-level test;
+  // dropping it because it is spelled like the suite removed it from the identity
+  // set, so an UNDECLARED OWN-BODY FAILURE inside it vanished from RED's equality
+  // rule and the proof reported PROVEN. A wrapper is therefore recognised by
+  // REPORTER STRUCTURE as well as by name:
+  //   (a) it HAS CHILDREN — the file's tests are nested under it; or
+  //   (b) the child stream announced an INNER PLAN OF ZERO (a `1..0` that is not
+  //       the final plan), which is the no-match shape exactly: the file ran no
+  //       test, and the parent synthesised one record to stand for the file.
+  // A CHILDLESS root with neither is a TEST, and it stays.
+  //
+  // ONE SHAPE IS GENUINELY AMBIGUOUS, and the tie is broken FAIL-SAFE. A file
+  // that registers no test at all emits a childless `ok` record named for the
+  // file with NO inner zero plan — measured on v25.9.0 and v20.20.2 alike —
+  // which is byte-for-byte the shape of a real childless test named like the
+  // suite. The runner KEEPS it, because the two errors are not symmetric:
+  // keeping a wrapper only ADDS an identity, which can make RED's equality rule
+  // stricter and BASELINE's lookup fail loudly; DROPPING a test removes an
+  // own-body failure from the equality set, which is how the false PROVEN arose.
   if (suiteArg) {
     const rel = normaliseRel(suiteArg);
     const base = path.basename(suiteArg);
-    const isFileNode = (n) => {
+    const plans = lines.filter((l) => /^1\.\.\d+$/.test(l));
+    const innerZeroPlan = plans.slice(0, -1).includes('1..0');
+    const matchesName = (n) => {
       const name = normaliseRel(n.name);
       return name === rel || name === base || name.endsWith(`/${rel}`);
     };
+    const isFileNode = (n) => matchesName(n) && (n.children.length > 0 || innerZeroPlan);
     roots = roots.flatMap((n) => (isFileNode(n) ? n.children : [n]));
   }
   return roots;
