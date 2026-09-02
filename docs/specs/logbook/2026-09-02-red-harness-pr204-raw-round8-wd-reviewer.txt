@@ -1,0 +1,85 @@
+PR GATE ROUND 8 — PR #204 — wd-reviewer (same agent resumed), tip e66ed3f9. Verdict APPROVE, no new findings, 6/6 mutants killed. Relayed verbatim from the agent's final message.
+
+# Round 8 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `e66ed3f9` (code at `ad9b64e0`). Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — both `test` legs incl. Node 20 |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2560 / 2548 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **116 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`7b76e21a…`) |
+| **6 mutants** | **6 killed, 0 survive** |
+| independent traversal probe, 6 depths | detail below |
+
+### The five items, each both directions
+
+**(1) Sandbox nested inside `--root` — refused, and the honesty is the notable part.**
+
+```
+TMPDIR under the fixture root -> ERROR exit=1
+  "the sandbox would be created inside the tree it snapshots — the temp root …/root/.tmp lies under --root …"
+  names BOTH paths: true     REAL TREE BYTE-IDENTICAL     ends with REACH: true
+control (--root under TMPDIR, the ordinary shape) -> PROVEN exit=0
+```
+
+The one-directional containment is the right call and the reasoning is stated where it belongs: the reverse nesting is how *every* fixture root in this repo legitimately lives, so refusing both turned 48 tests red. Equally, the PR states plainly that the pre-fix outcome on this Node was a fail-safe `ERR_FS_CP_EINVAL` — **the fix buys a diagnosis, not a prevented corruption**. That is the correct way to report a guard whose value is legibility rather than safety, and it is the opposite of the inflation this WP exists to catch. `R8-b` kills 1.
+
+**(2) `proofs/<id>` namespace — collision gone, and the new level does not reopen round 1.** A proof legally named `snapshot` now reaches **PROVEN exit=0**. `R8-c` (revert to a sibling of `snapshot`) kills 3.
+
+I ran my **own** traversal probe rather than trusting the fixture, at every depth the new level introduces:
+
+```
+A ../<sibling copy>        refused(ENOENT)    — no sibling exists at all
+B ../   (phase parent)     refused(EACCES)
+C ../../ (proofs/  NEW)    refused(EACCES)    ← the level this round added
+D ../../../ (sandbox)      refused(EACCES)
+E ../../../snapshot file   refused(EACCES)
+F ../../../../ (ambient)   WROTE              — the declared lane limit, unchanged
+```
+
+cwd confirms the new namespace (`…/wd-redproof-XXXX/proofs/fixture-greeting/baseline`). `R8-d` (drop the `proofs/` lock) kills 1.
+
+On the lock/unlock ordering the coordinator asked about: `lockSandbox` goes parent → `proofs` → sandbox and `unlockSandbox` reverses it, which is safe because `chmod` needs ownership rather than parent write, and `0500` retains the `x` bit for lookup. The pairing is balanced — demonstrated, not argued, by the two-proof fixture and two-proof adopted lane both reaching PROVEN, which requires `proofs/` to be writable again when the second proof's `mkdirSync` runs. And no proof can leave state for another: during any child's lifetime `proofs/` is `0500`, so the next proof's directory cannot even be created early, and each proof's own directory is removed in its `finally`.
+
+**(3) argv errors — my round-1 drop, correctly reversed.**
+
+```
+node scripts/red-proofs.js --bogus-flag   exit=1
+first line : ERROR: unknown argument "--bogus-flag" — usage: …
+ends with REACH: true    stderr empty: yes    survives a pipe: yes
+```
+
+I dispositioned this "drop" in round 1 on the reasoning that an unparsable argv is not a run. The plugin raised it independently at round 7 and the second reading is better: the footer costs nothing, the usage line is still first, and a reader who mistyped a flag is precisely the reader who has not yet learned what the output means. Moving it to stdout also puts it on the same drain the round-5 fix protects. `R8-e` kills 1.
+
+**(4) `why` on every verdict — verified on a FAILED, which is where it matters.** A proof with a deliberately wrong `signal` prints `why: THE-WHY-MARKER: …` above the phase diagnostic. `R8-f` kills 3.
+
+**(5) My round-7 childless-conjunct pin — landed.** `R8-a` (drop `n.children.length === 0`) now **kills 1**; it survived at 112/0 last round. The guard that protects the dangerous direction of the unwrap rule is now pinned.
+
+### Mutation matrix — no survivors in mine
+
+| Mutation | Result |
+|---|---|
+| control | 116 / 0 |
+| R8-a childless conjunct (my round-7 C) | **115 / 1** |
+| R8-b sandbox-inside-root refusal | **115 / 1** |
+| R8-c `proofs/` → sibling of `snapshot` | **113 / 3** |
+| R8-d `proofs/` level lock | **115 / 1** |
+| R8-e argv error loses REACH | **115 / 1** |
+| R8-f `why` not printed | **113 / 3** |
+
+### Carried residuals
+
+`M12` and `M29`, both still disclosed in the PR's own matrix rather than dropped; the two `applyMutation` postconditions; the `runSuite` spawn timeout, still correctly a residual; spec `:446` routed to wd-architect; the `win32` stub note.
+
+---
+
+**Verdict.** All five items hold in both directions under my own execution, the new `proofs/` level closes rather than reopens the round-1 traversal channel at every depth I could reach, and my round-7 pin is in and killing. Nothing survived this round's matrix. Two of this round's items — the one-directional containment and the "diagnosis, not prevention" framing — are cases where the honest narrower claim was chosen over the impressive broader one, which is the standard this WP has been held to throughout. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**

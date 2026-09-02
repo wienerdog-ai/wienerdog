@@ -1,0 +1,90 @@
+PR GATE ROUND 8 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip e66ed3f9. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a06375-6cb7-77a3-9af2-0a05cc12c81d).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE '"'^### Table|''^## Acceptance|''^### Acceptance|''^### Exact|''^'"\\|...
+[codex] Command completed: /bin/zsh -lc "grep -nE '"'^### Table|''^## Acceptance|''^### Acceptance|''^### Exact|''^'"\\|... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '275,445p' docs/specs/WP-criterion-red-harness.md; sed -n '669,920p' doc...
+[codex] Command completed: /bin/zsh -lc "sed -n '275,445p' docs/specs/WP-criterion-red-harness.md; sed -n '669,920p' doc... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,430p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,430p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '408,830p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '408,830p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '820,1185p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '820,1185p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1170,1515p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1170,1515p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1480,1815p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1480,1815p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js'
+[codex] Command failed: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js' (exit 1)
+[codex] Running command: /bin/zsh -lc "cat tests/red-proofs/dream-pipeline.proofs.json && sed -n '1,260p' tests/unit/r...
+[codex] Command completed: /bin/zsh -lc "cat tests/red-proofs/dream-pipeline.proofs.json && sed -n '1,260p' tests/unit/r... (exit 0)
+[codex] Running command: /bin/zsh -lc 'grep -n "''^test(" tests/unit/red-proofs.test.js'
+[codex] Command completed: /bin/zsh -lc 'grep -n "''^test(" tests/unit/red-proofs.test.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'node tests/fixtures/red-proofs/base/tests/run.js --test-reporter=tap -- tests/s...
+[codex] Command failed: /bin/zsh -lc 'node tests/fixtures/red-proofs/base/tests/run.js --test-reporter=tap -- tests/s... (exit 1)
+[codex] Running command: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-nested.js'
+[codex] Command completed: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-nested.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/run.js; cat tests/fixtures/red-proofs/base/tests/run.js; cat tests/fi...
+[codex] Command completed: /bin/zsh -lc "cat tests/run.js; cat tests/fixtures/red-proofs/base/tests/run.js; cat tests/fi... (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*round7*; do echo ===$f; cat "$f"; done'
+[codex] Command failed: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*round7*; do echo ===$f; cat "$f"; done' (exit 1)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round7-codex-plugin.txt...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round7-codex-plugin.txt... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate --max-count=20 && git status --short && git rev-pa...
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate --max-count=20 && git status --short && git rev-pa... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1180,1360p' tests/unit/red-proofs.test.js; git show --stat --oneline ad...
+[codex] Command completed: /bin/zsh -lc "sed -n '1180,1360p' tests/unit/red-proofs.test.js; git show --stat --oneline ad... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-truncated.js; true'
+[codex] Command completed: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-truncated.js; true' (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"const ANY\\|show', 'HEAD:reports\" tests/unit/dream-pipeline.known-ca...
+[codex] Command completed: /bin/zsh -lc "grep -n \"const ANY\\|show', 'HEAD:reports\" tests/unit/dream-pipeline.known-ca... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '130,240p' tests/with-temp-root.js; sed -n '377,430p' docs/specs/WP-crit...
+[codex] Command completed: /bin/zsh -lc "sed -n '130,240p' tests/with-temp-root.js; sed -n '377,430p' docs/specs/WP-crit... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node tests/run.js --test-reporter=tap --test-name-pattern=NO_SUCH -- tests/suit...
+[codex] Command completed: /bin/zsh -lc 'node tests/run.js --test-reporter=tap --test-name-pattern=NO_SUCH -- tests/suit... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/fixtures/red-proofs/base/tests/suite-ambient.js; cat tests/fixtures/r...
+[codex] Command completed: /bin/zsh -lc "cat tests/fixtures/red-proofs/base/tests/suite-ambient.js; cat tests/fixtures/r... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R -n \"M12\\|M29\\|applyMutation postconditions\\|spawn timeout\" docs/sp...
+[codex] Command completed: /bin/zsh -lc "grep -R -n \"M12\\|M29\\|applyMutation postconditions\\|spawn timeout\" docs/sp... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --test --test-reporter=tap 'data:text/javascript,import%20test%20from%20%2...
+[codex] Command failed: /bin/zsh -lc "node --test --test-reporter=tap 'data:text/javascript,import%20test%20from%20%2... (exit 1)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); test('a\\\\nb',()=>{});\" | n...
+[codex] Command failed: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); test('a\\\\nb',()=>{});\" | n... (exit 1)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); test('a\\\\nb',()=>{});\" | n...
+[codex] Command failed: /bin/zsh -lc "printf '%s\\n' \"const test=require('node:test'); test('a\\\\nb',()=>{});\" | n... (exit 130)
+[codex] Running command: /bin/zsh -lc "node -e \"const test=require('node:test'); test('a\\\\nb',()=>{});\""
+[codex] Command completed: /bin/zsh -lc "node -e \"const test=require('node:test'); test('a\\\\nb',()=>{});\"" (exit 0)
+[codex] Running command: /bin/zsh -lc "node --test-reporter=tap -e \"const test=require('node:test'); test('a\\\\nb',(...
+[codex] Command completed: /bin/zsh -lc "node --test-reporter=tap -e \"const test=require('node:test'); test('a\\\\nb',(... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '178,205p'; node -e 'con...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '178,205p'; node -e 'con... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); for (const name of ...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); for (const name of ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {spawnSync}=require(\"node:child_process\"); const rp=require(\"... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner incorrectly normalizes legal TAP test names with trailing whitespace, making valid...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner incorrectly normalizes legal TAP test names with trailing whitespace, making valid declarations fail or become ambiguous. The remainder of the inspected implementation appears consistent with the specification.
+
+Review comment:
+
+- [P2] Stop trimming TAP test identities — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:821-821
+  When a valid Node test name ends in whitespace, such as `test('case ', ...)`, the TAP reporter preserves that whitespace, but `trimEnd()` changes the observed identity to `case`. A declaration naming `['case ']` therefore fails BASELINE as “did not RUN,” and `case`/`case ` become spuriously ambiguous, despite [Table A](docs/specs/WP-criterion-red-harness.md#L193) accepting any non-empty test name and requiring exact hierarchical identities.
+rc=0
