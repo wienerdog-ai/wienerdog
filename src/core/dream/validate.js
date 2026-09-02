@@ -649,9 +649,13 @@ function removeOwnedQuarantinePath(p) {
  * writing — that would silently overwrite a foreign file, and treating the
  * reused pathname as this invocation's own would then delete it on any later
  * failure. `flag: 'wx'` makes that collision an ordinary preservation
- * FAILURE instead: `tmp` becomes this invocation's OWN path only once the
- * exclusive create succeeds, and the pre-existing file is never opened,
- * written or removed.
+ * FAILURE instead, and OWNERSHIP BEGINS AT THE SUCCESSFUL EXCLUSIVE CREATE,
+ * NOT AT A FULLY SUCCESSFUL WRITE: `EEXIST` is the only outcome in which the
+ * path is not ours; a write failure AFTER the create (ENOSPC, a filesize
+ * limit, an I/O error) still leaves this invocation's own partial bytes on
+ * disk under that name, and Table D row D1 requires those be found and
+ * removed, not left behind because the write never finished. The
+ * pre-existing foreign file itself is never opened, written or removed.
  *
  * Best-effort in ONE direction only: any failure up to and including a failed
  * rename (including a missing stateDir) returns `null`, and `null` is falsy
@@ -717,20 +721,33 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
     // EXCLUSIVE create (`WP-preservation-abort-widening`, Table D row D1): a
     // pre-existing file at this exact name — a crash-leftover from a REUSED
     // pid, same stem — is a collision candidate, never opened for writing.
-    // `EEXIST` (or any other write failure) falls straight into the catch
-    // below with `tmpOwned` still false, so that foreign file is reported as
-    // an ordinary preservation failure and is never touched.
-    fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
+    // `EEXIST` is the ONLY outcome in which the path is not ours; every
+    // OTHER failure here happened AFTER the exclusive create allocated the
+    // directory entry, so the file exists and IS ours (round-3 review: a
+    // truncation limit or disk-full error after `O_CREAT|O_EXCL` used to
+    // leave a partial secret-bearing temp file on disk with `tmpOwned` still
+    // false, so cleanup skipped it). `tmpOwned` is therefore set inside this
+    // inner catch for every code but `EEXIST`, and the rethrow lets the
+    // outer catch below run the ordinary D0/D1 cleanup either way.
+    try {
+      fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
+    } catch (err) {
+      if (!err || err.code !== 'EEXIST') tmpOwned = true;
+      throw err;
+    }
     tmpOwned = true;
     fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, dest);
   } catch {
-    // Table D rows D0/D1. `tmpOwned` is true only once the EXCLUSIVE create
-    // of `tmp` succeeded, so a foreign file already sitting at that name is
-    // NEVER treated as owned and is left untouched — exactly like a `dest`
-    // collision candidate. `dest` itself is NOT owned in this state either:
-    // the collision loop above may have pointed it at a name an earlier
-    // run's artifact already holds.
+    // Table D rows D0/D1. `tmpOwned` is true whenever this invocation is
+    // known to have created `tmp` — either the exclusive create succeeded
+    // outright, or it failed with something other than `EEXIST` (meaning
+    // the directory entry was allocated before the failure). A foreign file
+    // already sitting at that name on an `EEXIST` is NEVER treated as
+    // owned and is left untouched — exactly like a `dest` collision
+    // candidate. `dest` itself is NOT owned in this state either: the
+    // collision loop above may have pointed it at a name an earlier run's
+    // artifact already holds.
     if (tmpOwned) removeOwnedQuarantinePath(tmp);
     return null;
   }
@@ -973,14 +990,20 @@ function secretGateAbortMessage(rel, redactedName, identity, which) {
         `non-null redactedName ${JSON.stringify(redactedName)}`
     );
   }
+  // A CLOSED two-member enum, looked up with `Object.hasOwn` rather than a
+  // bare `messages[which]` (round-3 review, codex plugin P3): a plain object
+  // literal inherits `Object.prototype`, so an out-of-enum `which` such as
+  // `'toString'` or `'__proto__'` would otherwise resolve to an inherited
+  // function/object instead of `undefined`, rendering a malformed message
+  // instead of failing loud.
   const messages = {
     'no-redaction-attempted': 'the withheld copy could not be saved; no redaction copy was attempted',
     'both-failed': 'neither the redaction copy nor the withheld copy could be saved',
   };
-  const whichText = messages[which];
-  if (whichText === undefined) {
+  if (!Object.hasOwn(messages, which)) {
     throw new WienerdogError(`secretGateAbortMessage: unknown which ${JSON.stringify(which)}`);
   }
+  const whichText = messages[which];
   return (
     `the secret check stopped before changing ${JSON.stringify(rel)}: ${whichText}, and the check ` +
     `that the file on disk still matches a saved copy was ${identity}. Nothing was reverted, ` +

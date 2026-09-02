@@ -2219,6 +2219,19 @@ test('secretGateAbortMessage: an unknown `which` value fails loud rather than co
     (err) => err instanceof WienerdogError && /unknown which/.test(err.message)
   );
 });
+test("secretGateAbortMessage (round-3 review, codex plugin P3): an `Object.prototype`-inherited `which` fails loud, not a malformed message", () => {
+  // A bare `messages[which]` resolves 'toString'/'__proto__'/'constructor' to
+  // an INHERITED function or object rather than `undefined`, which would
+  // silently pass the old `=== undefined` check and interpolate that value
+  // into the message instead of failing loud — a closed-enum violation.
+  for (const which of ['toString', '__proto__', 'constructor', 'hasOwnProperty']) {
+    assert.throws(
+      () => secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, which),
+      (err) => err instanceof WienerdogError && /unknown which/.test(err.message),
+      `expected a fail-loud throw for which=${JSON.stringify(which)}`
+    );
+  }
+});
 
 // ── P1/P2 — the trigger widens from the redact fall-through alone to the
 //    CLASS: a hard-secret or unscannable withhold whose ONLY preserve fails
@@ -2492,6 +2505,40 @@ test('quarantinePreserve (Table D row D1, herdr-shadow round 1 P1): the EXCLUSIV
   );
   const dest = path.join(qdir, '2026-07-02-x.md');
   assert.equal(fs.existsSync(dest), false, 'no dest was ever created either');
+});
+
+// ── round-3 review (wd-reviewer, band A): `flag: 'wx'` (`O_CREAT|O_EXCL`)
+//    allocates the directory entry INSIDE the write call, so a failure
+//    AFTER that point (ENOSPC, a filesize limit, an I/O error) used to
+//    leave `tmpOwned` false — the whole write had to succeed first — and
+//    cleanup skipped a partial secret-bearing temp file THIS invocation
+//    created. The RED calls THROUGH to the real exclusive create (so the
+//    directory entry genuinely exists on disk, not merely simulated) and
+//    then throws, proving ownership is now established at the create, not
+//    at the write's full completion.
+test("quarantinePreserve (Table D row D1, round-3 review): a failure AFTER the exclusive create still removes this invocation's OWN partial tmp file", () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const un = patchFs('writeFileSync', (orig) => function (p, data, opts) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(tmpPath) && opts && opts.flag === 'wx') {
+      // Call THROUGH: the real O_CREAT|O_EXCL create runs and genuinely
+      // allocates `tmpPath` on disk before the injected failure fires —
+      // exactly the shape of a disk-full or filesize-limit error that
+      // strikes after the directory entry already exists.
+      orig.call(this, p, data, opts);
+      const e = new Error('ENOSPC: injected after the exclusive create'); e.code = 'ENOSPC';
+      throw e;
+    }
+    return orig.call(this, p, data, opts);
+  });
+  const content = Buffer.from('the judged bytes\n');
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { un(); }
+  assert.equal(res, null, 'a preservation failure, not a success');
+  assert.equal(fs.existsSync(tmpPath), false, "this invocation's own partial tmp file is removed and confirmed absent");
 });
 
 test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after a failed rename fails LOUD', () => {
