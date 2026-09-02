@@ -93,7 +93,9 @@ a result.
 
    **Fresh directories are not on their own isolation, and that was the third
    round's finding.** Phases must share no writable path **that the runner
-   provides**: each child's
+   provides** — a set derived from the product's own path-override variables so
+   it cannot fall behind them, checked against that export by the runner's test
+   suite rather than by importing it: each child's
    temp directory lives inside its own copy and dies with it, a copy carries no
    installed-dependency tree and no symlink of any kind, and every copy derives
    from one verified snapshot taken before any suite code runs. Otherwise the
