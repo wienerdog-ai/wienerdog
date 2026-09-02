@@ -64,10 +64,13 @@ a result.
    discipline, and JSON removes it.
 
 2. **Proofs run in their own lane, never in `npm test`.** `npm test` stays a
-   fast, side-effect-free regression signal; a proof run re-executes a whole
-   suite once per declared mutation (the first adopted suite is ~15 s per run,
-   measured at `49d3d467`). Once this ADR is signed the lane also gets its own CI
-   job, so a proof that stops proving fails the PR.
+   fast, side-effect-free regression signal. **Each proof costs three suite
+   executions — baseline, red, and the post-red control — in three separate
+   verified copies, none shared**; the first adopted suite measures ~15 s per
+   run, so its two proofs cost roughly 90 seconds of suite runtime plus one
+   snapshot and six copy/manifest operations. Once this ADR is signed the lane
+   also gets its own CI job, so a proof that stops proving fails the PR — and
+   that cost is what the job will pay per run.
 
 3. **The runner never writes into a tree in which suite code has already run.**
    Each phase needing a tree gets its own fresh copy of the repository, and the
@@ -89,13 +92,26 @@ a result.
    fixed point.**
 
    **Fresh directories are not on their own isolation, and that was the third
-   round's finding.** Phases must share no writable path at all: each child's
+   round's finding.** Phases must share no writable path **that the runner
+   provides**: each child's
    temp directory lives inside its own copy and dies with it, a copy carries no
    installed-dependency tree and no symlink of any kind, and every copy derives
    from one verified snapshot taken before any suite code runs. Otherwise the
    copies stay distinct while the state the suites observe does not — one temp
    root handed to every phase, one real dependency tree writable by all of them,
-   and symlinks that a recursive copy faithfully recreates as symlinks. **A single "nothing outside the sandbox is written" claim
+   and symlinks that a recursive copy faithfully recreates as symlinks.
+
+   **The claim stops exactly there, and that is the fourth round's finding.**
+   Complete filesystem isolation of a child process needs OS-level confinement,
+   which a zero-dependency, portable, daemon-free tool cannot provide
+   (ADR-0004). So the runner controls the paths it hands the child — working
+   directory, temp, home, and the config/cache variables the suites actually
+   read — holds the copies' common parent non-writable while a child runs, and
+   **declares a suite that writes anywhere else unsupported by the lane rather
+   than pretending to contain it.** Absolute locations the runner does not own,
+   and a suite that chmods its way out, are the same same-user boundary the
+   threat model already draws. **A guarantee that cannot be enforced is withdrawn,
+   not defended.** **A single "nothing outside the sandbox is written" claim
    would be unsatisfiable, and stating it would only guarantee that every
    implementation silently enforced something narrower.**
 
@@ -135,8 +151,14 @@ a result.
   the right one.
 - A spec may cite a proof id as its RED evidence only once decision 1 is signed;
   until then a spec still pastes the pair by hand.
-- Runtime and disk are paid per declared proof — one fresh repository copy per
-  proof on top of a shared pristine one — in a lane developers opt into.
+- Runtime and disk are paid per declared proof — **three suite executions and
+  three verified repository copies each, none shared** — in a lane developers opt
+  into. The earlier budget of one copy atop a shared pristine one is withdrawn:
+  a shared copy would put two phases on one writable path.
+- The verdict taxonomy is total and lives in the work package's Table E:
+  `PROVEN` is the only zero exit, and **`FILTERED` — a criterion whose evidence
+  is only partly selected — exits non-zero**, because partial evidence must never
+  read as success in automation.
 - The lane requires a newer Node than the package as a whole (the TAP reporter
   flag), so it **refuses below its own floor** instead of failing obscurely.
   Raising the package's floor stays a separate product decision for the owner.
