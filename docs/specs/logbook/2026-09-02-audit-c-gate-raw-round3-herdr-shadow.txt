@@ -1,0 +1,64 @@
+SHADOW ROUND 3 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ ac8f2ac2, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: V1/V2(b)/V5 and the partial-fix, QWEN/WARP, GIT_OBJECT_DIRECTORY and case-fold probes in isolated OS-temp fixtures. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: every Table F family can still declare closure after a demonstrated partial fix.
+
+FINDING 1
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 305-324  
+Confidence: 0.99  
+Materiality: A  
+Body: F1 and F4 test finite examples although the ruled residual is the class “any dot-prefixed segment.” An in-memory production-code simulation enumerating only F1’s five names made all five refusals and the `.github` write pass, while `01-Projects/example/.vscode/instructions.md` was written. Likewise, special-casing only F4’s `.git`/`.projects` fixtures satisfied both expected results while the reader still accepted `.github` and the producer emitted `.identity`. E2 can therefore claim closure while both dot-segment mechanisms remain live.  
+Recommendation: Without adding a V-step, make F1/F4 assert the universal class property over every path/layout segment beginning with `.`, and defer proof to `WP-dot-segment-denial`’s green verification rather than treating listed examples as exhaustive.
+
+FINDING 2
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 322-322  
+Confidence: 0.99  
+Materiality: A  
+Body: F2’s moving target is already stale. Current official documentation identifies project-level [`QWEN.md`](https://qwenlm.github.io/qwen-code-docs/en/users/features/memory/) and [`WARP.md`](https://docs.warp.dev/knowledge-and-collaboration/warp-drive/ai-objects) as automatically loaded instruction files. Production `makeAdmit` admitted and `writeIntoVault` wrote both. A simulated patch adding only `GEMINI.md`, `copilot-instructions.md`, and `.cursor` satisfied every concrete F2 assertion while still writing QWEN/WARP. The successor stub mandates checking only Gemini/Copilot and permits a maintenance comment/runbook line without naming an owner, so its future verification can legitimately mirror that incomplete scope and turn green.  
+Recommendation: Add the currently documented QWEN/WARP conventions, require a dated authoritative inventory or explicitly accepted omissions, and give the maintenance trigger a named owner. Make F2 require that recorded inventory/outcome, not only four examples plus unspecified successor verification.
+
+FINDING 3
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 323-323  
+Confidence: 0.98  
+Materiality: A  
+Body: F3 delegates to a Draft successor whose only required RED is exported `GIT_DIR`. A `GIT_DIR`-only pin can therefore produce green verification and a recorded “pin” outcome. Executed with `GIT_DIR` absent, inherited `GIT_OBJECT_DIRECTORY` still redirected the exact pinned `hash-object -w --stdin` write outside the vault (`in_vault=1`, redirected lookup=0). The unfiltered-environment mechanism would remain live while F3 permits E2.  
+Recommendation: Make F3 outcome-specific: “pin” must prove a constructed/allowlisted environment prevents every inherited write-target/config redirection; “pin-with-exceptions” or “don’t-pin” must enumerate accepted channels such as `GIT_OBJECT_DIRECTORY` in the canonical ruling.
+
+SCOPE OBJECTIONS
+
+- The queued/incident decision remains owner scope, not verdict scope. Both branches state that fixes occur in successor WPs, but the incident branch prioritizes only `WP-instruction-basename-currency`; it does not say where `WP-dot-segment-denial` remains in the queue.
+- At 613 lines, the spec still prescribes literal fixtures and shell/test mechanics contrary to `spec-authoring.md:7-19`. This is process debt, not an additional disposition finding.
+- The parked ADR-0029/HANDOVER-table question was not treated as a blocker.
+
+EXECUTED
+
+- Repository identity/status, `git diff --name-status/stat main...HEAD`, full diff, `git log/show` — exit 0; HEAD `ac8f2ac2`, main `9870f79a`.
+- Full `nl`/`sed` reads of the spec, harvest, HANDOVER, round record/raws, requested source files, successor WP, ADR-0029, runbook, CLAUDE.md, and CI — exit 0.
+- Writer/Git/layout/instruction `rg` sweeps — exit 0.
+- V1 initial sandbox run — exit 1 (`EPERM`); isolated approved run — exit 0: 16/16 enumerated names refused, 5/5 dotted paths admitted/written, 4/4 currency paths admitted, GEMINI written.
+- V2(a) — exit 0: nine shapes, none of `add commit clean reset status stash`.
+- V2(b) — exit 0: object written only to the `GIT_DIR`-redirected repository.
+- V3 — exit 0: no process-spawner dependency.
+- V4 — exit 0: no source consumer outside `validate.js`.
+- V5 — exit 0: reader accepted `.git`; producer emitted `.projects`.
+- V6 deliverable-absent state — exit 1 as required.
+- V6 CI-shaped deliverable non-vacuity loop — exit 1 as required; first deliverable absent.
+- F1 finite-enumeration partial-fix simulation — exit 0; F1 passed while `.vscode/instructions.md` was written.
+- F4 exact-value partial-fix simulation — exit 0; F4 passed while `.github`/`.identity` remained accepted.
+- F2 partial-fix simulation — exit 0; all concrete F2 assertions passed while QWEN/WARP were written.
+- QWEN/WARP production admission/write probe — exit 0.
+- `GIT_OBJECT_DIRECTORY` redirection probe — exit 0; write landed only in the redirected object directory.
+- Case-fold probe — exit 0; enumerated CLAUDE variants refused; unenumerated mixed-case Gemini and `.GiThUb` admitted.
+- `node scripts/check-frontmatter.js` — exit 0.
+- Boundary check under the spec’s Bash shape — exit 0; direct zsh scalar expansion — exit 1 because newline splitting differs.
+- BSD grep/`-z` probe — exit 0; ugrep absent.
+- `git diff --check main...HEAD` — exit 2 from preserved trailing whitespace in raw gate transcripts.
+- `npm run lint` — not run as a completed review gate; an earlier sandbox attempt exited 1 on blocked npm DNS, and the escalated rerun was declined/aborted. Orchestrator-owned per instruction.
+- Final status — exit 0; detached tree clean.
+
+DONE_ROUND_3
