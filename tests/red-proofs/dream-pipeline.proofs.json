@@ -1,0 +1,59 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "dream-private-index-dropped",
+      "wp": "WP-show-slot-own-value-kind",
+      "criterion": "3",
+      "why": "the index guard's enforcement is not vacuously green: dropping the run's private GIT_INDEX_FILE makes the pinned-shape check fire in all three vault layouts",
+      "file": "src/cli/dream.js",
+      "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
+      "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+      "marker": "RP_MUT_PRIVATE_INDEX_DROPPED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, plain vault (row G8)"],
+          "signal": "known shape missing its private GIT_INDEX_FILE"
+        },
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, separate-git-dir vault (row G8)"],
+          "signal": "known shape missing its private GIT_INDEX_FILE"
+        },
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, linked-worktree vault (row G8)"],
+          "signal": "known shape missing its private GIT_INDEX_FILE"
+        }
+      ]
+    },
+    {
+      "id": "known-calls-show-slot-widened",
+      "wp": "WP-show-slot-own-value-kind",
+      "criterion": "2",
+      "why": "the two-token `show --output=<user index>` canary is not vacuous: widening shape (4)'s literal slot to ANY makes the canary's rejection stop happening, and the canary reddens",
+      "file": "tests/unit/dream-pipeline.known-calls.js",
+      "find": "{ env: 'unset',   args: ['show', 'HEAD:reports/warnings.md'] },",
+      "replace": "{ env: 'unset',   args: ['show', ANY] }, // RP_MUT_SHOW_SLOT_WIDENED",
+      "marker": "RP_MUT_SHOW_SLOT_WIDENED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: the pinned call set module is its canonical SOURCE FORM (Table W row W1(c))"],
+          "signal": "the pinned call set module is not its canonical source form"
+        },
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, plain vault (row G8)"],
+          "signal": "the two-token show redirect must be rejected"
+        },
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, separate-git-dir vault (row G8)"],
+          "signal": "the two-token show redirect must be rejected"
+        },
+        {
+          "test": ["dream-pipeline: the run does not touch the user's git index — at all, linked-worktree vault (row G8)"],
+          "signal": "the two-token show redirect must be rejected"
+        }
+      ]
+    }
+  ]
+}
