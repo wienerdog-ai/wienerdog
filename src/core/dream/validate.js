@@ -614,19 +614,52 @@ const REDACTED_SUBDIR = 'redacted';
 const REDACTED_RETENTION_CAP = 50;
 
 /**
+ * Table D's disposal primitive (`WP-preservation-abort-widening`): remove the
+ * ONE path this invocation owns and confirm it is gone. A removal that cannot
+ * be completed is Table D row D3 — it fails loud rather than let
+ * secret-bearing bytes sit on disk under a name no preservation record, no
+ * cleanup pass and no abort message can reach.
+ * @param {string} p
+ * @throws {WienerdogError} D3 — the path could not be removed
+ */
+function removeOwnedQuarantinePath(p) {
+  try {
+    fs.rmSync(p, { force: true });
+  } catch (err) {
+    throw new WienerdogError(
+      `quarantinePreserve: could not remove ${JSON.stringify(p)} after a preservation failure: ${err.message}`
+    );
+  }
+  if (fs.existsSync(p)) {
+    throw new WienerdogError(
+      `quarantinePreserve: ${JSON.stringify(p)} still exists after its removal was attempted`
+    );
+  }
+}
+
+/**
  * Preserve the working-tree bytes of a flagged vault file into the private
  * quarantine tree (audit A5, WP-123 OWNER-APPROVED): dir 0700, file 0600,
  * atomic write (tmp + rename), name `<date>-<sanitized-basename>` with a
  * numeric suffix before the extension on collision.
  *
- * Best-effort: any failure (including a missing stateDir) returns `null`.
- * `null` is falsy exactly where the previous `false` was, so the withhold call
- * site keeps its `if (!preserved)` shape.
+ * Best-effort in ONE direction only: any failure up to and including a failed
+ * rename (including a missing stateDir) returns `null`, and `null` is falsy
+ * exactly where the previous `false` was, so the withhold call site keeps its
+ * `if (!preserved)` shape. It is NOT best-effort about what a non-`null`
+ * return means (`WP-preservation-abort-widening`, Table P row P0b): after the
+ * rename, the artifact is read back and byte-compared against `content`
+ * before success is reported, and a failed cleanup after either a write/rename
+ * failure (Table D row D1) or a failed verification (row D2) is a
+ * `WienerdogError`, not a swallowed failure (row D3).
  *
  * TAKES THE BYTES, NEVER A PATH TO READ. Under promotion the flagged content is
  * the brain's workspace bytes, which the gate already holds — the delta carried
  * them — and a second read would preserve something other than what is being
  * judged. The TOCTOU the old vault read closed is closed here by construction.
+ * The read-back P0b adds is a DIFFERENT read: it re-reads the ARTIFACT this
+ * call itself just wrote, never the TARGET, so it does not conflict with the
+ * "one captured buffer" contract above.
  * @param {string|undefined} stateDir
  * @param {Buffer} content  the EXACT bytes to preserve
  * @param {string} rel  vault-relative path of the flagged file (names the copy)
@@ -635,9 +668,13 @@ const REDACTED_RETENTION_CAP = 50;
  *   'withheld' -> <stateDir>/quarantine/           (nothing was promoted)
  *   'redacted' -> <stateDir>/quarantine/redacted/  (the sanitized form was promoted)
  * @returns {{name:string, bytes:Buffer}|null} the destination BASENAME actually
- *   written TOGETHER WITH THE EXACT BYTES IT PRESERVED, or `null` on any
- *   failure. The caller cannot reconstruct the name — `displayName` throws the
- *   directories away and the collision loop appends `-1`, `-2`, … .
+ *   written TOGETHER WITH THE VERIFIED BYTES READ BACK FROM IT, or `null` when
+ *   the write, the rename, or the verification failed. The caller cannot
+ *   reconstruct the name — `displayName` throws the directories away and the
+ *   collision loop appends `-1`, `-2`, … .
+ * @throws {WienerdogError} Table D row D3 — the path this invocation owns
+ *   (`tmp` before the rename, `dest` after it) could not be removed following
+ *   a failure
  */
 function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   // Code-supplied, never user input: a typo must fail loudly rather than write
@@ -646,6 +683,8 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
     throw new WienerdogError(`quarantinePreserve: unknown kind ${JSON.stringify(kind)}`);
   }
   let tmp = null;
+  let dest = null;
+  let name = null;
   try {
     if (!stateDir) return null;
     if (!Buffer.isBuffer(content)) return null;
@@ -657,8 +696,8 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
     const base = displayName(rel); // shared attacker-safe basename sanitizer (WP-119/120)
     const ext = path.extname(base);
     const stem = base.slice(0, base.length - ext.length);
-    let name = `${date}-${stem}${ext}`;
-    let dest = path.join(qdir, name);
+    name = `${date}-${stem}${ext}`;
+    dest = path.join(qdir, name);
     for (let n = 1; fs.existsSync(dest); n += 1) {
       name = `${date}-${stem}-${n}${ext}`;
       dest = path.join(qdir, name);
@@ -667,13 +706,31 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
     fs.writeFileSync(tmp, content, { mode: 0o600 });
     fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, dest);
-    return { name, bytes: content };
   } catch {
-    try {
-      if (tmp) fs.rmSync(tmp, { force: true });
-    } catch { /* best-effort tmp cleanup; the caller reverts regardless */ }
+    // Table D rows D0/D1. `tmp` is assigned only once the write was
+    // ATTEMPTED, so its presence alone tells the two apart. `dest` is NOT
+    // owned in this state and MUST NOT be touched: the collision loop above
+    // may have pointed it at a name an earlier run's artifact already holds.
+    if (tmp) removeOwnedQuarantinePath(tmp);
     return null;
   }
+
+  // Table D row D2: the rename COMPLETED — `tmp` no longer exists under that
+  // name, and the path this invocation owns is now `dest`. P0b: a
+  // preservation SUCCEEDS only if the artifact itself is read back and
+  // byte-compares equal to the judged bytes; a mismatch or a read that fails
+  // is a preservation FAILURE, reported exactly as an unwritable directory is.
+  let readBack = null;
+  try {
+    readBack = fs.readFileSync(dest);
+  } catch {
+    readBack = null;
+  }
+  if (readBack !== null && Buffer.compare(readBack, content) === 0) {
+    return { name, bytes: readBack };
+  }
+  removeOwnedQuarantinePath(dest);
+  return null;
 }
 
 
@@ -864,22 +921,50 @@ function pruneRedactedOriginals(stateDir, created) {
  * character and `JSON.parse` returns the original path exactly, so two names
  * that a lossy sanitizer would collapse together stay distinguishable.
  *
+ * `WP-preservation-abort-widening`, Table P widened the trigger from the
+ * redact fall-through alone to the class of "no verified preservation
+ * survives" (row P0), and gave the "which preserves failed" field a fourth
+ * input — `which`, a closed enum the call site supplies — because P1/P2 and
+ * P3 reach this function with otherwise-identical inputs (same `rel`, no
+ * surviving `redacted/` basename, the same identity disposition) yet Table P
+ * gives them different values; selecting on whether a basename exists cannot
+ * tell them apart. THE PAIR RULE: under every arm this WP makes reachable, a
+ * surviving `redacted/` copy always recovers (Table P row P3), so no
+ * reachable abort ever carries a non-null `redactedName` — a call pairing one
+ * with the other is a contract violation, not a message to render, and it
+ * fails loud rather than compose a description of a copy that cannot exist.
  * @param {string} rel  vault-relative path
- * @param {string|null} redactedName  the surviving `redacted/` basename, if any
+ * @param {null} redactedName  ALWAYS null on a reachable abort; kept as a
+ *   parameter because Q18, not this WP, owns the field — see THE PAIR RULE
  * @param {string} identity  what the on-disk check could establish
+ * @param {'both-failed'|'no-redaction-attempted'} which  selects Table P's
+ *   "which preserves failed" value: `'both-failed'` is row P3's (the redact
+ *   arm was attempted and fell through, and the withheld preserve also
+ *   failed); `'no-redaction-attempted'` is P1/P2's (a hard secret or
+ *   unscannable content never entered the redact arm at all)
  * @returns {string}
+ * @throws {WienerdogError} the pair rule — `redactedName` was non-null, or
+ *   `which` was not one of the two active enum members
  */
-function secretGateAbortMessage(rel, redactedName, identity) {
-  const which = redactedName === null
-    ? 'neither the redaction copy nor the withheld copy could be saved'
-    : 'the withheld copy could not be saved; the redaction copy was saved';
-  const where = redactedName === null
-    ? ''
-    : ` The unredacted original is state/quarantine/redacted/${redactedName}.`;
+function secretGateAbortMessage(rel, redactedName, identity, which) {
+  if (redactedName !== null) {
+    throw new WienerdogError(
+      `secretGateAbortMessage: contract violation — ${JSON.stringify(which)} paired with a ` +
+        `non-null redactedName ${JSON.stringify(redactedName)}`
+    );
+  }
+  const messages = {
+    'no-redaction-attempted': 'the withheld copy could not be saved; no redaction copy was attempted',
+    'both-failed': 'neither the redaction copy nor the withheld copy could be saved',
+  };
+  const whichText = messages[which];
+  if (whichText === undefined) {
+    throw new WienerdogError(`secretGateAbortMessage: unknown which ${JSON.stringify(which)}`);
+  }
   return (
-    `the secret check stopped before changing ${JSON.stringify(rel)}: ${which}, and the check ` +
+    `the secret check stopped before changing ${JSON.stringify(rel)}: ${whichText}, and the check ` +
     `that the file on disk still matches a saved copy was ${identity}. Nothing was reverted, ` +
-    `removed or committed, so the note is exactly where it was.${where}`
+    `removed or committed, so the note is exactly where it was.`
   );
 }
 
@@ -1039,30 +1124,34 @@ function makeGates(o = {}) {
     // ── The withhold arm.
     const preserved = quarantinePreserve(stateDir, afterBytes, rel, date, 'withheld');
 
-    if (redactFellThrough && !preserved) {
-      // ── The abort (shipped decision, preserved). Never let the only copy of
-      //    the note go unheld: refuse the whole run unless some durable artefact
-      //    holds THE BYTES BEING JUDGED. Under promotion those bytes are the
-      //    workspace's after-bytes — which is also exactly what
-      //    `quarantinePreserve` was handed — so the identity check compares the
-      //    two directly instead of re-reading a file. Row G5's teardown
-      //    exception is what makes this refusal safe: the workspace holding the
-      //    note is NOT destroyed (`WP-dream-promote-module`, Table Q row Q4).
-      let identity = 'not performed, because there was no saved copy to compare against';
-      let recoverable = false;
-      if (redactCopy) {
-        if (Buffer.compare(afterBytes, redactCopy.bytes) === 0) {
-          recoverable = true;
-          identity = 'performed, and the file on disk matches the saved copy';
-        } else {
-          identity = 'performed, and the file on disk does NOT match the saved copy';
-        }
-      }
-      if (!recoverable) {
-        throw new WienerdogError(
-          secretGateAbortMessage(rel, redactCopy ? redactCopy.name : null, identity)
-        );
-      }
+    // ── The abort (`WP-preservation-abort-widening`, Table P row P0). THE
+    //    RULE: this gate never returns a `{refuse:true}` verdict whose
+    //    `preserved` record would be empty — raise the Q18 abort instead.
+    //    `!preserved && !redactCopy` is exactly that condition: a truthy
+    //    `redactCopy` means the record below will carry it (or, on the
+    //    identity-gated dedup path, that it was a duplicate of a preserved
+    //    withheld copy — either way the record is non-empty), and a truthy
+    //    `preserved` is pushed onto the record directly. P0b already verified
+    //    both by reading the artifact back before returning non-`null`, so a
+    //    surviving `redactCopy` here holds the judged bytes by construction
+    //    (row P3's escape) and needs no second comparison against them.
+    if (!preserved && !redactCopy) {
+      // Never let the only copy of the note go unheld: refuse the whole run
+      // unless some durable artefact holds THE BYTES BEING JUDGED. Row G5's
+      // teardown exception is what makes this refusal safe: the workspace
+      // holding the note is NOT destroyed (`WP-dream-promote-module`, Table Q
+      // row Q4). `redactFellThrough` selects the message: it is true only
+      // when the redact arm was entered and did not complete, which is P3;
+      // false means the redact arm was never entered at all (a hard secret or
+      // unscannable content), which is P1/P2.
+      throw new WienerdogError(
+        secretGateAbortMessage(
+          rel,
+          null,
+          'not performed, because there was no saved copy to compare against',
+          redactFellThrough ? 'both-failed' : 'no-redaction-attempted'
+        )
+      );
     }
 
     /** @type {Array<{artifact:string, location:string}>} the preservation record */
@@ -1179,4 +1268,9 @@ module.exports = {
   // Row G10: the pipeline's ownership-registry call site decides newness from
   // the run's delta, and still needs the draft predicate.
   isNewSkillDraft,
+  // Exported for direct unit coverage of Table D (`WP-preservation-abort-widening`):
+  // its disposal states (D0-D4) and P0b's read-back verification are precise,
+  // ownership-scoped filesystem behaviour that is far more directly tested
+  // against this primitive than indirectly through a gate fixture.
+  quarantinePreserve,
 };
