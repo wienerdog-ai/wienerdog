@@ -221,7 +221,9 @@ On Node v25.9.0, a `--test-name-pattern` matching a PARENT runs its children,
 while a child-only pattern and a full-path pattern each ran **zero** tests. So a
 `testNamePattern` cannot be assumed to select a declared identity: **BASELINE
 requires each declared identity to actually run, and a pattern that would
-exclude one is an ERROR** (Table B row 3), never a quiet zero-test pass.
+exclude one is an ERROR** (Table B row 3), never a quiet zero-test pass. A
+pattern that selects nothing is the **unmatched-pattern class pinned below** —
+zero tests RAN under either of its two pinned reporter shapes.
 
 **The TAP shapes this spec relies on, pinned with their provenance.** Measured on
 **Node v25.9.0** during round 2 of this spec's design gate: an own-body assertion
@@ -233,6 +235,33 @@ carries `failureType: subtestsFailed`. Node documents reporter output as unstabl
 for programmatic use, so **an expected field that is absent on the running Node
 is a loud ERROR** (criterion 4a) — never an assumption that a failure was an
 assertion.
+
+**THE UNMATCHED-PATTERN CLASS — pinned on TWO Nodes, because a one-version pin
+was falsified by this repository's own CI.** A `--test-name-pattern` that matches
+no test does not report itself uniformly; the reporter shape is
+version-dependent. **Both observed shapes are normative here, and a proof, a
+parser or a test that recognises only one is wrong on the other:**
+
+| Node | Observed shape when the pattern matches nothing | Exit |
+|------|------------------------------------------------|------|
+| **≥ 25** — measured **v25.9.0**, round 2 of this spec's design gate | an **inner `1..0` plan** under an outer file-level `ok`: zero test points inside | **0** |
+| **20.x** — measured **v20.20.2**, PR #204 round 1, CI run `33627135545`, ubuntu **and** macOS | **no zero-plan at all**: every test is reported as one `ok N - <name> # SKIP test name does not match pattern` line (`ok: true`, `directive: 'SKIP'`) | **0** |
+
+**The runner's rule is identical under both, and it is the RULE — not either
+shape — that the runner implements: an unmatched pattern is an ERROR because
+ZERO TESTS RAN** (criterion 3), whether the reporter says so with an empty plan
+or by marking every test SKIP. Note what the two shapes share and what a naive
+check does with them: both exit 0, neither emits a `not ok`, and **"the run was
+green" passes under both** — which is why this class is pinned in the contract
+rather than left to the parser's discretion.
+
+**Measurement provenance, so the two data points are the repository's own.** CI
+runs Node 20 on every job (`.github/workflows/ci.yml`, `node-version: 20`, ubuntu
+and macOS) while this spec's design-gate rounds measured a local Node 25 — so the
+two pinned shapes are exactly the two Nodes this repository actually executes
+tests on, not a survey. **This WP does NOT raise `engines` and does NOT add a CI
+matrix leg**; both stay parked owner options (Out of scope — the owner's
+2026-09-02 ruling parked them per this spec's recommendations).
 
 **What a proof may mutate, and why the rule is not just `file !== suite`.** The
 mutation must target the **condition or input the named assertion observes** —
@@ -257,8 +286,8 @@ runner's own vacuity guard and apply to the run as a whole.
 | 1 | LOAD | declarations are read with `JSON.parse` and **never executed**; at least one declaration file; at least one proof after selection; every Table A rule satisfied | a run over nothing; a malformed declaration read as a skip; **a declaration that exits, writes or otherwise acts before confinement exists** — LOAD precedes SANDBOX, so an executable format would run unconfined |
 | 2 | SNAPSHOT | **THE INVARIANT: no two phases share any writable path THE RUNNER PROVIDES, and the runner never writes into a tree in which suite code has already run.** Before any suite code runs, the runner takes ONE snapshot of the `--root` tree and records a **copy manifest** over its declared domain (Table E). Every phase copy is derived from that snapshot and **verified against the manifest before use**; a copy error, a missing entry, a mode difference or a digest mismatch is an ERROR | a concurrent edit to `--root` mid-run; a silently truncated or partial copy; **"the trees differ only by the declared mutation" being ASSERTED rather than established** |
 | 2a | COPY | each phase gets its OWN copy, which the run deletes. **The copy contains NO `node_modules` and no dependency link of any kind**, and **the copy step REFUSES symlinks: any symlink encountered in the source tree is an ERROR naming its path.** A copy is either written by the runner (before any child starts in it) or executed (after which the runner writes nothing into it) — never both, in that order | the check/use race the one-copy design carried — a suite replacing the validated target, or a parent of it, with a symlink into the real checkout so a later write follows it out; **and the shared dependency target: measured, `fs.cpSync` recreates an outward symlink AS a symlink, and writing through the copied path changes the external file** |
-| 2b | PHASE ISOLATION | **THE PROVIDED SET, redirected per phase INTO that phase's own copy** (e.g. `<copy>/.red-proofs-tmp/`, `<copy>/.red-proofs-home/`): the working directory; `TMPDIR`, `TMP`, `TEMP`; `HOME`; the four `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME`; **and every name in `src/core/paths.js`'s exported `OVERRIDE_VARS` — today `WIENERDOG_HOME`, `WIENERDOG_VAULT`, `WIENERDOG_CLAUDE_DIR`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` (`paths.js:11`)**. The runner carries that list as a constant and **its own suite asserts the constant still covers `OVERRIDE_VARS`, failing `npm test` on drift** (criterion 8b) — so the set moves with the code without the runner importing it. **Additionally the copies' COMMON PARENT is held non-writable (mode 0500) for the lifetime of each child and restored on exit**, closing the `..` channel. Anything else a suite writes to is **outside the provided set** — see the lane limit below | **the shared-state channels, all three measured this round:** the wrapper fronts the runner ONCE and injects only `TMPDIR`/`TMP`/`TEMP` (`tests/with-temp-root.js:186`), while `tests/run.js:7` spreads `process.env`, so **`HOME` was identical across phases**; and a sentinel written by BASELINE to the copies' writable common parent (`../sentinel`) **was observed by RED**. Either lets a stateful suite pass → redden the declared assertion → pass for a reason that is not the mutation. **A missed name is not a subtle risk: measured this round, running the adopted row with an ambient absolute `WIENERDOG_CLAUDE_DIR` made BASELINE FAIL with the git-seam canary unexercised — the developer's own environment breaking the lane** |
-| 3 | BASELINE | in a manifest-verified PRISTINE copy — one the runner has not written to — the suite runs green, and each declared identity is observed **exactly once, as a terminal PASS**, with no SKIP, TODO or CANCELLED record matching it; duplicate observed identities, and any file-, parse-, load-, hook- or suite-level failure, are ERRORs | a renamed or deleted test; a `testNamePattern` matching nothing — **measured this round: an unmatched pattern printed an inner `1..0` under an outer file-level `ok` and exited 0**; a duplicate name letting one instance pass while another is skipped; a suite already red for ambient reasons |
+| 2b | PHASE ISOLATION | **THE PROVIDED SET, redirected per phase INTO that phase's own copy** (e.g. `<copy>/.red-proofs-tmp/`, `<copy>/.red-proofs-home/`): the working directory; `TMPDIR`, `TMP`, `TEMP`; `HOME`; the four `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME`. **THE WIENERDOG NAMES GO THE OTHER WAY — every name in `src/core/paths.js`'s exported `OVERRIDE_VARS` (today `WIENERDOG_HOME`, `WIENERDOG_VAULT`, `WIENERDOG_CLAUDE_DIR`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `paths.js:11`) is REMOVED from each phase's environment, never set to a phase-local path.** Measured at PR #204 round 1 and reproduced by the reviewer: **any SET `WIENERDOG_CLAUDE_DIR` beats the `CLAUDE_CONFIG_DIR` the adopted suite installs for its own children**, because `getPaths` takes `WIENERDOG_CLAUDE_DIR` ahead of it (`src/core/paths.js:56-61`) — a phase-local value reddened BASELINE at **37 of 44** tests, so "set it into the copy" and criterion 9 could not both hold. **Removal preserves the property the redirect was for:** all five names DEFAULT under `HOME` (`paths.js:54-62` — `home`, `core`, `vault`, `claudeDir`, `codexDir`), and `HOME` IS redirected, so `getPaths(phaseEnv(copy))` still resolves every one of those roots **inside that phase's own copy**. The runner carries the name list as a constant and **its own suite asserts the constant still covers `OVERRIDE_VARS`, failing `npm test` on drift** (criterion 8b) — so the list moves with the code without the runner importing it. **Additionally the copies' COMMON PARENT is held non-writable (mode 0500) for the lifetime of each child and restored on exit**, closing the direct `..` write; **and each phase copy is created, manifest-verified and locked immediately before its OWN phase, so no unused copy exists while another phase's child runs, and nothing writable the runner provides is reachable from a phase copy by traversal** (criterion 7(b2) requires both refusals observed; the mechanism is the implementer's). Anything else a suite writes to is **outside the provided set** — see the lane limit below | **the shared-state channels, all measured:** the wrapper fronts the runner ONCE and injects only `TMPDIR`/`TMP`/`TEMP` (`tests/with-temp-root.js:186`), while `tests/run.js:7` spreads `process.env`, so **`HOME` was identical across phases**; and a sentinel written by BASELINE to the copies' writable common parent (`../sentinel`) **was observed by RED**. Either lets a stateful suite pass → redden the declared assertion → pass for a reason that is not the mutation. **A missed name is not a subtle risk: measured, running the adopted row with an ambient absolute `WIENERDOG_CLAUDE_DIR` made BASELINE FAIL with the git-seam canary unexercised — the developer's own environment breaking the lane.** **And a 0500 parent alone does not close traversal, demonstrated end-to-end at PR #204 round 1: with all three copies created up front under one 0500 parent, a BASELINE child traversed the parent (r-x permits traversal) into the sibling `red` copy, planted `../red/subject/subject.js`, and APPLY then read the planted bytes; the same channel exists one level up, where a 0500 parent still lets a child write `../../counter` into the writable sandbox above it** |
+| 3 | BASELINE | in a manifest-verified PRISTINE copy — one the runner has not written to — the suite runs green, and each declared identity is observed **exactly once, as a terminal PASS**, with no SKIP, TODO or CANCELLED record matching it; duplicate observed identities, and any file-, parse-, load-, hook- or suite-level failure, are ERRORs | a renamed or deleted test; a `testNamePattern` matching nothing — **under EITHER of Table A's two pinned unmatched-pattern shapes, both of which exit 0 and neither of which emits a `not ok`; the rule this row enforces is ZERO TESTS RAN, never one Node's reporter shape (Table A's unmatched-pattern class is cited here, not restated)**; a duplicate name letting one instance pass while another is skipped; a suite already red for ambient reasons |
 | 4 | APPLY | a **FRESH manifest-verified copy is made and no child has run in it**; `file` canonicalises inside THAT copy — one that does not is an ERROR, and because nothing has executed there the check cannot be raced; `find` occurs exactly `occurrences` times (left-to-right, non-overlapping) in the pristine `file`; `marker` absent from it; **every counted occurrence is replaced and the written bytes EQUAL the expected post-mutation bytes computed from that replacement**; `marker` present afterwards | the measured shell-escaping class — a mutation never applied and read as a green; a marker that certified nothing because it was already there; **a "digest changed" postcondition that a partial or overlapping replacement also satisfies** |
 | 5 | RED | the suite runs in the MUTATED copy; the observed own-body failing-identity set **equals** the declared set on Table A's rules; **each declared failure is an ASSERTION failure of that test's own body** — not a parse, load, hook, timeout or cancellation — and its diagnostic carries the entry's `signal` | a vacuous assertion, which stays green; a red for a reason that is not the cell's — the measured production-seam class; **a mutation that "works" by making a module fail to load, which never reaches the assertion at all** |
 | 6 | CONTROL (was RESTORE) | **nothing is restored, because nothing was mutated in place.** The control is a **FRESH pristine copy, run AFTER RED**, in its own isolated phase — and it must be green. The mutated copy and both pristine copies derive from the one manifest-verified snapshot, so they differ only by the declared mutation. **A post-RED control is REQUIRED for PROVEN: a pair resting on BASELINE's earlier green alone is reported `UNCONTROLLED` and is not PROVEN** | a red caused by ambient state, ordering or drift rather than by the mutation. Reusing BASELINE's green is observability, not a counterfactual: it cannot rule out that the suite turned red between the two runs for a reason the mutation did not cause |
@@ -300,6 +329,13 @@ fake-clock and `PATH` keys) and overrides them per child onto directories under
 `os.tmpdir()`. Every one of those is in the provided set above, which is why
 criterion 9's adoption is sound under the narrowed contract — **and why the set
 is enumerated from what the suites actually rely on rather than guessed.**
+**This is also exactly why row 2b REMOVES the Wienerdog names instead of setting
+them:** the suite installs its own `CLAUDE_CONFIG_DIR` per child, and `getPaths`
+puts `WIENERDOG_CLAUDE_DIR` ahead of it (`paths.js:56-61`), so a phase-local
+`WIENERDOG_CLAUDE_DIR` would override the suite's own redirect — measured at
+PR #204 round 1 as BASELINE 37/44 red. With the names removed, the suite's
+`ENV_KEYS` redirect stands and every derived root still lands under the phase's
+redirected `HOME`.
 
 **The consequence, stated so it is not read as an oversight:** a suite that
 genuinely needs an installed dependency is **outside this lane**. Its declaration
@@ -332,10 +368,10 @@ honestly: an honest limit is fine, a silent one is not.**
 | Entry | `npm run red-proofs` → `node tests/with-temp-root.js scripts/red-proofs.js` — the temp-root wrapper fronts it, per `package.json`'s `"//"` rule |
 | Never in `npm test` | `npm test` does not run RED proofs. **Each proof costs THREE suite executions (BASELINE, RED, post-RED CONTROL) and THREE manifest-verified copies**, none shared. The adopted suite measured **14.6 s** (round 1) and **15.4 s** (round 4) per run, so the adopted two-proof lane costs **~90 s of suite runtime minimum**, plus one snapshot and six copy/manifest operations. `npm test` must stay a fast, side-effect-free regression signal (ADR-0042 decision 2) |
 | Suite invocation | the runner spawns the **sandbox's** `tests/run.js`, never `node --test` directly, so `WIENERDOG_TEST_NO_REAL_SCHEDULER=1` applies to every suite it starts. The env var is set in exactly one place and this WP does not add a second |
-| Reporter | TAP (`--test-reporter=tap`, forwarded through `tests/run.js`), so hierarchical identities, terminal statuses and failure diagnostics are machine-readable. **Node documents reporter output as subject to change between versions, and the shapes under Table A are pinned on ONE Node version** — so the parser's compatibility evidence is criterion 4b: the runner's own TAP fixtures run under whatever Node executes `npm test`, and the report names the Node version it ran on |
+| Reporter | TAP (`--test-reporter=tap`, forwarded through `tests/run.js`), so hierarchical identities, terminal statuses and failure diagnostics are machine-readable. **Node documents reporter output as subject to change between versions, and Table A pins each shape with the Node version it was measured on — v25.9.0, plus v20.20.2 for the unmatched-pattern class, which is the Node CI runs** — so the parser's compatibility evidence is criterion 4b: the runner's own TAP fixtures run under whatever Node executes `npm test`, **asserting version-tolerant invariants rather than one Node's parse tree**, and the report names the Node version it ran on |
 | Node floor — **THE LANE'S, NOT THE REPOSITORY'S** | `--test-reporter=tap` landed in Node **18.15.0** and `--test-name-pattern` in **18.11.0**, while `package.json` declares `>=18` — so Node 18.0–18.14 cannot run this lane at all. The runner **checks `process.versions.node` at LOAD and REFUSES below 18.15.0**: exit non-zero with `UNSUPPORTED` and a plain message naming the flag and the version, never a vacuous pass and never a silent skip. **`npm test` and every other repository entry point are unaffected, and this WP does NOT raise `engines`** — that is the owner's product decision, parked in Out of scope |
-| Write boundaries | **NO TWO PHASES SHARE ANY WRITABLE PATH THE RUNNER PROVIDES** — the qualifier is load-bearing, not hedging. (1) The runner's only write into any tree is the declared mutation, into a **fresh manifest-verified copy in which no child has run** — containment is a property of the phase order, not of a check that can be raced. (2) Each phase gets its own working directory, temp, `HOME`, the XDG variables and **the `OVERRIDE_VARS`-derived Wienerdog set of row 2b (`WIENERDOG_CLAUDE_DIR` included)** — all inside its own copy — and the copies' common parent is non-writable while a child runs. **This cell CITES row 2b's set and never restates it.** (3) A copy carries no `node_modules`, no dependency link and no symlink at all. **A suite writing outside that provided set is unsupported by the lane, not guarded.** Table B rows 2, 2a and 2b own this; criterion 7 states what each check can establish |
-| Production seams | the runner requires **nothing under `src/`** and nothing outside Node's standard library, and spawns no `git`. Instrumentation through the production seam is itself an unrecognised call under a default-deny guard — measured, and the reason this row exists. **This removes one contamination class; it is not on its own a proof that a red is the cell's** (ADR-0042 decision 4). **The rule survived round 5 intact:** the provided set must track `paths.js`'s `OVERRIDE_VARS`, but the runner carries a constant and **its own SUITE** does the drift check (criterion 8b) — a test importing `src/` is unremarkable, so the runner keeps importing nothing and criterion 8's grep is unchanged |
+| Write boundaries | **NO TWO PHASES SHARE ANY WRITABLE PATH THE RUNNER PROVIDES** — the qualifier is load-bearing, not hedging. (1) The runner's only write into any tree is the declared mutation, into a **fresh manifest-verified copy in which no child has run** — containment is a property of the phase order, not of a check that can be raced. (2) Each phase gets its own working directory, temp, `HOME` and the four XDG roots — all inside its own copy — while **row 2b's `OVERRIDE_VARS`-derived Wienerdog names (`WIENERDOG_CLAUDE_DIR` included) are REMOVED from the phase environment rather than set, so their roots land inside that phase's copy via the redirected `HOME`**; the copies' common parent is non-writable while a child runs, and each copy is created, verified and locked immediately before its own phase so no sibling copy is reachable by traversal. **This cell CITES row 2b's set, its removal rule and its copy lifetime, and never restates any of them.** (3) A copy carries no `node_modules`, no dependency link and no symlink at all. **A suite writing outside that provided set is unsupported by the lane, not guarded.** Table B rows 2, 2a and 2b own this; criterion 7 states what each check can establish |
+| Production seams | the runner requires **nothing under `src/`** and nothing outside Node's standard library, and spawns no `git`. Instrumentation through the production seam is itself an unrecognised call under a default-deny guard — measured, and the reason this row exists. **This removes one contamination class; it is not on its own a proof that a red is the cell's** (ADR-0042 decision 4). **The rule survived round 5 intact:** the name list row 2b REMOVES from each phase environment must track `paths.js`'s `OVERRIDE_VARS`, but the runner carries a constant and **its own SUITE** does the drift check (criterion 8b) — a test importing `src/` is unremarkable, so the runner keeps importing nothing and criterion 8's grep is unchanged |
 | CI | **no CI job in this WP.** ADR-0042 records the lane decision and gates the job on its signature (Out of scope) |
 
 ### Table E — the snapshot domain, and the total verdict/exit taxonomy
@@ -414,6 +450,22 @@ on the spot.
       round 4: 5 also asserts **Table E1**'s mode and empty-directory facts; 6a
       asserts **Table E2**'s `FILTERED` exit class; 7(b2) asserts row 2b's full
       provided set (parent, `HOME`); 10 asserts the REACH footer's LANE LIMIT**
+- [ ] **Added at PR #204 round 1 — three registrations.** (i) **Table A's
+      UNMATCHED-PATTERN CLASS** (both pinned reporter shapes and the
+      zero-tests-RAN rule) is mirrored by Table A's scoping paragraph, Table B
+      row 3's rules-out cell, criterion 3, criterion 4b and Table D's reporter
+      row, and by Out of scope's parked `engines` and CI-matrix bullets — every
+      one of them CITES the class rather than restating either shape, so a third
+      measured Node changes one block plus its provenance note. (ii) **Row 2b's
+      REMOVAL rule** for the `OVERRIDE_VARS` names is mirrored by Table D's
+      write-boundaries and seam rows, the adopted-suite paragraph after Table B,
+      the security checklist's write-boundary item, criteria 7(b2), 8b and 10's
+      required footer text, and the `OVERRIDE_VARS`-tracking implementation note.
+      (iii) **Row 2b's per-phase copy lifetime** (created, manifest-verified and
+      locked immediately before its own phase; nothing writable reachable by
+      traversal) is mirrored by Table D's write-boundaries row, the security
+      checklist's write-boundary item, and criterion 7(b2)'s sibling-copy and
+      writable-ancestor refusals
 - [ ] **Table E's mirrors** — E1 is mirrored by Table B row 2 (the manifest
       cited, not restated), row 2a's entry-type refusal, and criterion 5's three
       rejection cases; E2 is mirrored by Table B row V4 and row 7's roll-up, by
@@ -484,9 +536,11 @@ on the spot.
   cheap beside the ~14 s suite run each phase spends anyway. **Do not optimise by
   reusing a copy a child has run in, or by sharing one between phases: that
   reuse IS the defect this design removes.**
-- **How the provided set tracks `OVERRIDE_VARS`, and the two mechanisms NOT
-  taken.** The set must move with `src/core/paths.js` or it silently rots — round
-  5 measured an ambient `WIENERDOG_CLAUDE_DIR` failing BASELINE from the
+- **How the name list tracks `OVERRIDE_VARS`, and the two mechanisms NOT
+  taken.** **Row 2b decides what the runner DOES with those names — it REMOVES
+  them from each phase environment; this note decides only how the LIST stays
+  current.** The list must move with `src/core/paths.js` or it silently rots —
+  round 5 measured an ambient `WIENERDOG_CLAUDE_DIR` failing BASELINE from the
   developer's environment alone. **Taken:** a constant in the runner, with the
   runner's OWN SUITE asserting it covers `OVERRIDE_VARS` (criterion 8b).
   **Rejected (a): the runner imports `paths.js` and iterates the export.** The
@@ -585,11 +639,15 @@ on the spot.
 - [ ] **The security-relevant property: NO TWO PHASES SHARE ANY WRITABLE PATH
       THE RUNNER PROVIDES** (Table B rows 2, 2a and 2b). The runner's ONLY write
       into any tree is the declared mutation, into a fresh manifest-verified copy
-      no child has run in; each phase's working directory, temp, `HOME`, XDG and
-      **`OVERRIDE_VARS`-derived Wienerdog variables (row 2b's set,
-      `WIENERDOG_CLAUDE_DIR` included — cited, not restated)** point inside its
-      own copy and die with it; the
-      copies' common parent is non-writable while a child runs; and a copy
+      no child has run in; each phase's working directory, temp, `HOME` and XDG
+      variables point inside its own copy and die with it, while **row 2b's
+      `OVERRIDE_VARS`-derived Wienerdog names (`WIENERDOG_CLAUDE_DIR` included —
+      cited, not restated) are REMOVED from the phase environment, so their roots
+      resolve inside that copy through the redirected `HOME` instead of
+      overriding what the suite sets for its own children**; the
+      copies' common parent is non-writable while a child runs **and each copy is
+      created, verified and locked immediately before its own phase, so a sibling
+      copy is not reachable by traversal**; and a copy
       carries no `node_modules`, no dependency link and no symlink. **Restricting
       the RUNNER's writes was not enough: suite code writes too**, which is what
       rounds 2 and 3 measured.
@@ -642,9 +700,14 @@ on the spot.
       `testNamePattern` — is an ERROR, not a pass; so is one observed as SKIP,
       TODO or CANCELLED, one observed more than once, and any file-, parse-,
       load-, hook- or suite-level failure. Show it against a pattern matching
-      nothing: **measured this round, that prints an inner `1..0` under an outer
-      file-level `ok` and exits 0**, so a naive "the run was green" check passes
-      there.
+      nothing. **The reporter shape for that case is VERSION-DEPENDENT and Table
+      A pins both observed forms — an inner `1..0` plan on Node ≥ 25, every test
+      reported `ok … # SKIP test name does not match pattern` on Node 20.x — and
+      both exit 0**, so a naive "the run was green" check passes under either.
+      This criterion is over the RULE, not the shape: zero tests RAN → ERROR.
+      **The demonstration must therefore hold on whatever Node runs `npm test`
+      (CI runs Node 20), which means asserting criterion 4b's version-tolerant
+      invariants and never a deep-equal against one Node's parse tree.**
 - [ ] 4. **RED is an assertion failure of the named test, and the cell's own.**
       With the mutation applied, the observed failing-identity set equals the
       declared set; each failure is a **test-code assertion failure of that
@@ -669,14 +732,25 @@ on the spot.
       field that the running Node does not emit is a loud ERROR, never an
       assumption that a failure was an assertion. Show the nested case and the
       ambiguous-identity refusal.
-- [ ] 4b. **The TAP parser's compatibility evidence is a real run, not a claim.**
-      Table A pins the shapes as measured on ONE Node version; Node documents
-      reporter output as subject to change. So the runner's own TAP-parsing
-      fixtures — assertion failure, thrown error, nested propagation, skip, and
-      no-match — run as part of `npm test`, under **whatever Node executes it**,
-      which makes CI's existing ubuntu/macOS matrix the compatibility evidence at
-      no extra lane cost. **The runner's report names the Node version it ran
-      on**, so a green is always attributable to a version.
+- [ ] 4b. **The TAP parser's compatibility evidence is a real run, not a claim —
+      and its assertions are VERSION-TOLERANT INVARIANTS, never a deep-equal
+      against one Node's parse tree.** Table A pins the shapes with their
+      measured Node versions; Node documents reporter output as subject to
+      change. So the runner's own TAP-parsing fixtures — assertion failure,
+      thrown error, nested propagation, skip, and no-match — run as part of
+      `npm test`, under **whatever Node executes it**, which makes CI's existing
+      ubuntu/macOS matrix the compatibility evidence at no extra lane cost.
+      **The runner's report names the Node version it ran on**, so a green is
+      always attributable to a version.
+      **Why the invariant form is required, measured rather than argued:** a
+      deep-equal against the Node 25 unmatched-pattern tree FAILS on Node 20,
+      which is the Node CI runs (Table A's unmatched-pattern class). For the
+      no-match fixture the required assertions are exactly these three
+      invariants, and no fourth: **(i) zero tests RAN; (ii) no `not ok` record
+      appears; (iii) the observed identity set is EMPTY once every record
+      carrying a SKIP directive is excluded.** The same discipline binds the
+      other four fixtures: assert the property the runner depends on, not the
+      shape the reporter happened to print.
 - [ ] 5. **The CONTROL closes the loop, and nothing is restored** (Table B row
       6). The red is paired with a **fresh pristine copy run AFTER RED**, in its
       own isolated phase, and that copy must be green; a pristine tree that is
@@ -713,18 +787,38 @@ on the spot.
       the checkout is untouched, and no revalidation step is involved. **A
       conforming runner has no window to get wrong, because it never writes into
       a tree a child has run in.** **(b2) NO TWO PHASES SHARE A WRITABLE PATH THE
-      RUNNER PROVIDES, shown by four fixtures** (Table B row 2b): a suite that
+      RUNNER PROVIDES, shown by SIX fixtures** (Table B row 2b): a suite that
       **writes a sentinel into its temp directory during BASELINE** must not
       observe it during RED; a suite that writes **`../sentinel`, into the
       copies' common parent**, must not observe it either — **and because that
       parent is held at mode 0500 for the child's lifetime, BASELINE's write
-      itself FAILS: show that failure, not merely the absence at RED**; and a
+      itself FAILS: show that failure, not merely the absence at RED**; a
       suite writing a **HOME-relative sentinel** must not observe it, HOME being
       redirected into each phase's own copy; **and with an ambient absolute
       `WIENERDOG_CLAUDE_DIR` exported into the runner's own environment, no phase
-      observes it** — the phase-local value wins, which is what `getPaths`'
-      precedence (`paths.js:56-61`, `WIENERDOG_CLAUDE_DIR` ahead of
-      `CLAUDE_CONFIG_DIR`) makes load-bearing. Additionally a **source tree
+      observes it** — because row 2b REMOVES that name from the phase
+      environment, so `getPaths` falls through to a root under the redirected
+      `HOME` (`paths.js:56-61` puts `WIENERDOG_CLAUDE_DIR` ahead of
+      `CLAUDE_CONFIG_DIR`, which is why setting it would break the adopted suite
+      rather than isolate it).
+      **The two remaining fixtures are traversal, and they are REQUIRED observed
+      refusals because a 0500 parent alone does not stop either** (both
+      demonstrated end-to-end at PR #204 round 1): **(i) THE SIBLING-COPY WRITE** —
+      a BASELINE child writing `../<other-phase-copy>/<some file>` must be
+      refused, and the bytes must never be visible to the phase that owns that
+      copy (the reviewer planted `../red/subject/subject.js` from BASELINE and
+      APPLY read the planted bytes, because r-x on the parent permits traversal
+      into a writable sibling); **(ii) THE WRITABLE-ANCESTOR WRITE** — a child
+      writing `../../<name>` into the sandbox directory ABOVE the locked parent
+      must be refused, and no later phase may observe it.
+      **The contract consequence, already implied by rows 2b, 4 and 6 ("FRESH";
+      "verified before use"; no two phases sharing a writable path the runner
+      provides), and stated here so it is not left to be inferred: each phase
+      copy is created, manifest-verified and locked immediately before its own
+      phase, no unused copy exists while another phase's child runs, and nothing
+      writable the runner provides is reachable from a phase copy by traversal.
+      The MECHANISM that achieves that is the implementer's; this criterion
+      requires only the two refusals observed.** Additionally a **source tree
       containing a symlink is an ERROR naming the path**, and a copy carries no
       `node_modules`, so there is no shared dependency target to write through.
       **What this does NOT establish is criterion 10's business:** a suite
@@ -739,7 +833,8 @@ on the spot.
       `git`, and starts every suite through the sandbox's `tests/run.js` rather
       than `node --test`, so the scheduler guard applies to every child.
 - [ ] 8b. **The provided set cannot silently fall behind the code.** The runner's
-      redirected-variable constant is asserted by the runner's OWN SUITE to cover
+      name constant — **the names row 2b REMOVES from each phase environment** —
+      is asserted by the runner's OWN SUITE to cover
       every name in `src/core/paths.js`'s exported `OVERRIDE_VARS`; a name added
       there and not here fails `npm test` with both lists printed. **The test
       imports `paths.js`; the runner does not** — which is why criterion 8's grep
@@ -778,7 +873,12 @@ on the spot.
       does not establish, and describes the run's **selected** evidence — on a
       filtered run it says so rather than saying "each declared mutation".
       **It also prints the LANE LIMIT:** isolation covers only the paths the
-      runner provides (Table B row 2b), and a suite that writes outside that set
+      runner provides. **The footer's REQUIRED TEXT, whose facts Table B row 2b
+      decides and this criterion only requires printed: the per-phase working
+      directory, temp, `HOME` and the four XDG roots live inside that phase's own
+      copy, and the Wienerdog `OVERRIDE_VARS` names are REMOVED from the phase
+      environment so their roots land inside the copy via that redirected
+      `HOME`.** A suite that writes outside that set
       — an absolute path the runner does not own, or a chmod out of the
       non-writable parent — is unsupported by the lane rather than guarded
       against.
@@ -895,14 +995,20 @@ one:
   it (Table D). Raising the repository floor from `>=18` would drop support for
   Node 18.0–18.14 for every user of the installer, which is a product decision.
   **Recommendation if the owner ever takes it up: raise it** — those releases are
-  long unsupported upstream — but nothing here depends on the answer.
+  long unsupported upstream — but nothing here depends on the answer. **Owner
+  ruling 2026-09-02: PARKED per that recommendation. This WP does not raise
+  `engines`, and PR #204's Node 20 finding does not reopen it** — the fix for
+  that finding is Table A's two-shape pin plus criterion 4b's version-tolerant
+  invariants, not a narrower supported range.
 - **A SUPPORTED-NODE REPORTER COMPATIBILITY MATRIX — a second parked owner
-  option.** Table A's TAP shapes are pinned on one Node version, and criterion 4b
-  makes CI's existing matrix the compatibility evidence. Running the TAP fixtures
-  across every supported Node major (18.15, 20, 22, 24, …) would be stronger and
-  costs a CI matrix expansion; it is **not** taken here and is **not** a
-  precondition. Recommendation: revisit it together with the `engines` question,
-  since the two decide the same range.
+  option.** Table A's TAP shapes are pinned on the Node versions this repository
+  actually runs (v25.9.0 locally, v20.20.2 in CI), and criterion 4b makes CI's
+  existing ubuntu/macOS matrix the compatibility evidence. Running the TAP
+  fixtures across every supported Node major (18.15, 20, 22, 24, …) would be
+  stronger and costs a CI matrix expansion; it is **not** taken here and is
+  **not** a precondition. Recommendation: revisit it together with the `engines`
+  question, since the two decide the same range. **Owner ruling 2026-09-02:
+  PARKED per that recommendation — no CI matrix leg is added by this WP.**
 - **Using "harness" as the name of anything this WP ships** — `docs/GLOSSARY.md`
   owns that word for the AI CLI.
 
