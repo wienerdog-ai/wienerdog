@@ -1,0 +1,132 @@
+PR GATE ROUND 6 — PR #204 — wd-reviewer (same agent resumed), tip 6d86ac23. Verdict APPROVE. Relayed verbatim from the agent's final messages.
+
+Two background jobs are still finishing (the last mutant and the guarded idempotence pair). Here is the round-6 report on everything confirmed so far; I will append the two outstanding lines when they land.
+
+# Round 6 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `6d86ac23` — worktree, remote and PR head agree, tree clean, implementer idle. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary re-verified byte-exact. **C3 satisfied:** exactly one fix commit (`9d1afcac`) touching `scripts/` and `tests/`.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu)` 1m6s, `test (macos)` 2m55s |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2551 / 2539 pass / **0 fail** / 12 skip |
+| `npm test -- tests/unit/red-proofs.test.js` | **0** — **107 pass / 0 fail / 0 skipped** |
+| same, `getuid→0` stub | **0** — 107 / **93 pass / 0 fail / 14 skipped** |
+| `npm run lint` | **0** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| digest collision, measured directly | detail below |
+| malformed-byte declaration, end to end | ERROR exit 1, control PROVEN |
+| C1a message assertion | precise present, misleading absent |
+| mutants | M28 killed, M29 survives (as disclosed), R6-a killed, R6-b killed |
+| negated greps 3 states / control bytes / glossary | 1-0-1 / 0-0 / byte-exact |
+
+Instrumentation kept outside every measured tree, per last round's lesson.
+
+### The two fixes
+
+**(2) Raw-byte declaration digest — FIXED, and I verified the collision claim rather than the verdict.** Two distinct byte sequences differing only in a lone `0xFF` vs `0xFE` inside a JSON string:
+
+```
+bytes differ:                     true
+decoded strings identical:        true   ("\"<U+FFFD>\"}")
+OLD digest over DECODED TEXT      COLLIDE   19adfc0aff3b1e70 (both)
+NEW digest over RAW BYTES         DIFFER    22870767…  vs  010c4c62…
+```
+
+So the LOAD→SNAPSHOT tie previously could not distinguish two different declaration files — a real soundness gap in a guard added only two rounds ago, now closed. End to end, a malformed byte spliced into a quoted string gives `ERROR exit=1`, *"does not round-trip through UTF-8 … or its bytes cannot be tied to the snapshot"*, naming the file; an untouched declaration still reaches `PROVEN exit=0`.
+
+Three attacks, all clean: the round-trip refusal fires **before** `JSON.parse`, so lossy bytes never reach the parser; **both** sides use the same helper over raw Buffers (`:349` at LOAD, `:430` at the snapshot comparison) — a one-sided fix would have been useless; and the only two `createHash('sha256')` call sites in the file both take Buffers, so no decoded string can reach any digest. `R6-a` (digest over decoded text) and `R6-b` (drop the round-trip refusal) each kill 1.
+
+**(1) Capability-probed host gating — verified.** Real host 107/107/0 skipped; `getuid→0` stub **107 / 93 pass / 0 fail / 14 skipped**, exactly as claimed. All three probes true here (`EXEC_BIT_OK`, `MODE_ENFORCED_OK`, `SYMLINKS_OK`). The design is right for a subtle reason the comment names: probes describe *this filesystem*, but under a `getuid` stub the process is not actually root, so the probes would pass while production would fail — the host refusal ORed in is what makes the stub produce skips at all. Probing rather than inferring from `platform` also covers a share that cannot symlink or a mount that ignores modes.
+
+### My three round-5 items
+
+- **C1a — FIXED.** A test now asserts the precise `is not a regular file in the copy` message *and* the absence of the misleading `the pristine suite was not green`. I confirmed both independently, and `M28` kills 1.
+- **C1b — CORRECTLY DISPOSED.** `M29` survives at 107/0 under my own run, and it is listed **in the matrix** with `fail 0` and named in Discovered issues beside `M12`, rather than deleted to inflate the kill rate. Disclosing an unreachable fail-safe as untested is the honest choice; deleting it to make the matrix read 29/29 would have been the dishonest one.
+- **C2 — FIXED.** The comment now reads *"THE REFUSALS ARE THE MECHANISM and `--` is the belt, not the other way round"*, carries the measured hang, and gives a forward-looking reason to keep the terminator. It matches Decision 23 and my own measurement.
+
+### Outstanding — two lines pending
+
+`R6-c` (dropping the host refusal from the test gate's OR) and the guarded isolated idempotence pair at `6d86ac23` are still executing. Neither can change the verdict: idempotence has held byte-identical at every prior tip and this round touches no copy or write path, and `R6-c` mutates a test gate rather than runner behaviour. I will report both verbatim when they land, including a `MISSING/EMPTY … comparison would be VACUOUS` line if any input is absent — the guard I should have had two rounds ago.
+
+### Carried residuals, all still correctly recorded
+
+Two disclosed survivors of 29 (`M12`, `M29`); the two `applyMutation` postconditions; the `runSuite` spawn timeout with its reasoning intact; spec `:446` routed to wd-architect; and the honest note that a whole-process `win32` stub kills Node at exit 254, with the three host-shaped consequences now **probed** rather than argued.
+
+---
+
+**Verdict.** Both round-5 items are fixed, and the digest one closed a genuine collision I reproduced from first principles rather than accepting on report. All three of my own items are addressed, including the one whose right answer was disclosure rather than a change. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
+
+---
+
+All results are in. Here is the completed round-6 report.
+
+# Round 6 — PR #204 (final)
+
+## APPROVE
+
+**Reviewed tip:** `6d86ac23`, intact. The worktree has since advanced to `954b3f90`, a logbook-only round-6 raws commit touching one `docs/specs/logbook/*.txt` file — no code, and the tree is clean. Nothing in my review is affected.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu)` 1m6s, `test (macos)` 2m55s |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2551 / 2539 pass / **0 fail** / 12 skip |
+| runner suite, real host | **0** — **107 pass / 0 fail / 0 skipped** |
+| runner suite, `getuid→0` stub | **0** — 107 / **93 pass / 0 fail / 14 skipped** |
+| `npm run lint` | **0** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| isolated idempotence, guarded, instrumentation outside the tree | detail below |
+| 5 mutants + 1 discriminating experiment | detail below |
+| digest collision, measured from first principles | detail below |
+| negated greps 3 states / control bytes / glossary / `:446` | 1-0-1 / 0-0 / byte-exact / unchanged |
+
+### Idempotence — settled, guarded, three concurring jobs
+
+```
+run1 exit=0    run2 exit=0
+RUN: PROVEN    RUN: PROVEN
+REPORTS BYTE-IDENTICAL
+TREE BYTE-IDENTICAL (42662ca1c6a3f97d2a380feb6945f7cda71d4d3a)
+```
+
+All six inputs asserted non-empty before comparison, so a missing file would have printed `MISSING/EMPTY … would be VACUOUS` rather than a green — the guard I owed from round 5. Instrumentation lived in a sibling directory, outside the measured tree.
+
+### The two fixes
+
+**(2) Raw-byte declaration digest — FIXED.** I reproduced the collision rather than accepting it: two byte sequences differing only in `0xFF` vs `0xFE` inside a JSON string decode to the *same* UTF-8 string, so the old text digest **collided** (`19adfc0aff3b1e70` for both) while the raw-byte digest **differs** (`22870767…` / `010c4c62…`). The LOAD→SNAPSHOT tie previously could not distinguish two different declaration files — a real soundness gap in a guard only two rounds old. Three attacks clean: the round-trip refusal fires *before* `JSON.parse`; both sides use the same raw-Buffer helper (`:349`, `:430`); and the file's only two `createHash` sites both take Buffers, so no decoded string can reach any digest. `R6-a` and `R6-b` each kill 1.
+
+**(1) Capability-probed host gating — verified, including the part that needed a discriminating experiment.** Real host 107/107/0; uid-0 stub 107 / 93 / 0 fail / **14 skipped**, exactly as claimed; all three probes true here.
+
+My first `R6-c` mutant (drop the host refusal from the gate's OR) came back 107/0 — but I did not report that as a survivor, because on a supported host `HOST_REASON` is null and the gate is already `{}`: **the mutation is a no-op here by construction and could not have been killed.** The discriminating run is under the stub, and it is decisive:
+
+```
+pristine, uid-0 stub:  107 / 93 pass / 0 fail / 14 skipped
+R6-c,     uid-0 stub:  107 / 93 pass / 3 FAIL / 11 skipped
+```
+
+So the host-refusal half of the OR is genuinely load-bearing and genuinely killable — it just needs the right host to observe it. That confirms the design comment's subtle claim: under a `getuid` stub the probes pass because the process is not really root, and only the refusal produces the skips.
+
+### My three round-5 items
+
+- **C1a — FIXED.** The precise `is not a regular file in the copy` message is asserted and the misleading `the pristine suite was not green` is asserted absent; I confirmed both independently. `M28` kills 1.
+- **C1b — CORRECTLY DISPOSED.** `M29` survives at 107/0 under my own run and is listed **in the matrix** with `fail 0` and named in Discovered issues beside `M12`. Disclosing an unreachable fail-safe as untested is right; deleting it to read 29/29 would not have been.
+- **C2 — FIXED.** The comment now reads *"THE REFUSALS ARE THE MECHANISM and `--` is the belt, not the other way round"*, carries the measured hang, and gives a forward-looking reason to keep the terminator.
+- **C3 — SATISFIED.** One fix commit, clean tree, tip equals remote.
+
+### Carried residuals, all correctly recorded
+
+Two disclosed survivors of 29 (`M12`, `M29`); the two `applyMutation` postconditions; the `runSuite` spawn timeout with its reasoning intact; spec `:446` routed to wd-architect; and the honest `win32` stub note, with the three host-shaped consequences now probed rather than argued.
+
+---
+
+**Verdict.** Both round-5 items are fixed, and the digest one closed a collision I derived independently. All three of my own items are addressed, including the one whose right answer was disclosure rather than a change. The one mutant that survived my matrix survived because my mutation was unkillable on this host, not because the code is untested — and the experiment that *can* kill it does. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
+
+No worktree file was touched by me; all probe copies and isolated checkouts are removed.
