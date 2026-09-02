@@ -1,7 +1,7 @@
 ---
 id: WP-preservation-abort-widening
 title: Widen the only-copy abort trigger from the named case to its class
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-dream-promote-in-workspace, WP-secret-fence-ep2-redact-arm]
