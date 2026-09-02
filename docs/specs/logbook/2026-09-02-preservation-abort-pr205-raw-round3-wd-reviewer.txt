@@ -1,0 +1,108 @@
+PR GATE ROUND 3 — PR #205 — wd-reviewer (same agent resumed), tip 80059c0b. Verdict REQUEST-CHANGES. Relayed verbatim from the agent's final message.
+
+---
+
+## REQUEST-CHANGES
+
+The `wx` fix is correct for the defect it was written for, and I confirmed that independently. But it introduces a new violation of the same table — one my rounds 1–2 review also missed. I reproduced it with a **genuine kernel failure and no `fs` patching at all**.
+
+### What I executed on tip `80059c0b` (`40225aff` + one raws commit)
+
+| Command | Result |
+|---|---|
+| `node scripts/boundary-check.js …` | **exit 0** |
+| `npm test` | **exit 0** — `tests 2467 / pass 2455 / fail 0 / skipped 12` |
+| `npm run lint` | **exit 0** |
+| `git diff -U0 origin/main...HEAD -- docs/specs/done/` | still exactly `@@ -465 @@`, `@@ -1565 @@`, `@@ -1647 @@`, one line per row |
+| "Explicitly NOT in the boundary" four | untouched |
+| Crash-leftover scenario, mkdtemp, committed code | `ret=null`, foreign bytes byte-identical, no `dest`, nothing deleted — **fix works** |
+| Same + injected `EXDEV` rename failure | `ret=null`, foreign intact — **fix works** |
+| `tmpOwned` ownership proof over pre-existing regular file / directory / symlink / **dangling symlink** | all four → `ret=null`, same inode, untouched; `O_EXCL` does not follow the symlink |
+| RED proof: `flag: 'wx'` removed, nothing else, full suite | **exit 1**, `fail 2` — exactly the two new tests, no others |
+| **Genuine `EFBIG` mid-write (`ulimit -f 1`, SIGXFSZ ignored, zero `fs` patching)** — pre-fix `c7ff8f12` vs post-fix | **pre-fix: `dir=[]`, D1 satisfied. Post-fix: `dir=[".tmp-<pid>-x.md"]`, size 512, D1 violated** |
+| Same via a faithful `openSync(wx)+partial write+ENOSPC` model | leftover holds `"the judg"` — partial **judged bytes** |
+| All round-1/2 probes re-run (D0–D4, P0b, P3, pair rule, P6, hostile `rel`, D3-escapes-gate) | unchanged and correct |
+| P0 property sweep (5 modes × 4 payloads × binary) | 17 aborts / 11 refusals / 12 ok-redact, **0 violations** |
+| P4 message byte-compare; redact-arm message vs `main` | exact; unchanged |
+
+---
+
+### Findings
+
+**1. `[contract]` Band A — `tmpOwned` is set one statement too late, so a mid-write failure abandons partial secret-bearing bytes. Regression introduced by `40225aff`.**
+`src/core/dream/validate.js:723-724`
+
+```js
+fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
+tmpOwned = true;
+```
+
+`flag: 'wx'` is `O_CREAT|O_EXCL`: the directory entry is created **inside** that call, and any failure *after* the create — `ENOSPC`, `EDQUOT`, `EFBIG`, `EIO`, a failed `close` — throws with `tmpOwned` still `false`. The catch then skips `removeOwnedQuarantinePath(tmp)` and the file this invocation created stays on disk. The block comment at `:718-722` states the rule as intended — *"`EEXIST` (**or any other write failure**) falls straight into the catch below with `tmpOwned` still false"* — and that parenthesis is the bug: only `EEXIST` means "not ours".
+
+**Reproduced with no `fs` patching whatsoever**, under `ulimit -f 1` with `SIGXFSZ` ignored, so the kernel returns `EFBIG` from `write(2)` after `O_EXCL` has already created the file:
+
+```
+prev  (c7ff8f12) ret=null  dir=[]                    D1 satisfied = true
+head  (40225aff) ret=null  dir=[".tmp-87922-x.md"]   D1 satisfied = false
+                           sizes=[512]   ← 512 bytes of the judged content
+```
+
+Same probe, same injection, two trees — so this is a regression of the round-3 commit, not a pre-existing condition.
+
+It violates two things verbatim:
+
+- **Table D row D1** — *"the temp write was ATTEMPTED, and the rename has NOT completed — so **a partial or complete secret-bearing temp file may exist**"* → required: *"remove `tmp` and **confirm it is absent**"*. This is exactly that state, and `tmp` is neither removed nor confirmed absent.
+- **Acceptance criterion D4** — *"after **any** preservation failure, the `tmp` this call wrote … [is] absent"*. This call wrote it; it survives.
+
+Two consequences make it Band A rather than Band B:
+
+- **The bytes are unreachable and invisible.** `listSecretQuarantine` (`src/core/digest.js:858`) filters `!e.name.startsWith('.')`, so a `.tmp-…` leftover never reaches the banner, the preservation record, or the abort message. That is Table D row D3's own stated harm — *"secret-bearing bytes remain on disk under a name no preservation record, no cleanup pass and no abort message can reach"* — now produced by the code the table governs.
+- **It self-poisons.** Once the leftover exists, every later preservation of that note under the same pid hits `EEXIST` and returns `null` forever. I measured two consecutive runs after seeding the residue: `null`, `null`. A transient disk-full becomes a permanent preservation outage for that note — which then feeds P0 and aborts the run every night.
+
+**Why the suite stays green:** every existing D1/D4 fixture injects the failure by throwing from `writeFileSync` *without calling through* (`tests/unit/dream-validate.test.js`, the `.tmp-` guard in the D1 and D4 tests), so no file is ever created and the create-then-fail state is unreachable by the current evidence. A new RED is needed alongside the fix: inject a failure that **calls through to create** and then throws, and assert the `tmp` is absent.
+
+*Disposition: **fix.*** I verified a minimal, seam-preserving fix end to end — full suite **exit 0, 2455 pass / 0 fail**, the genuine `EFBIG` case now `dir=[]`, and the foreign-leftover protection intact (`ret=null`, foreign byte-identical):
+
+```js
+try {
+  fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
+} catch (err) {
+  // EEXIST is the ONLY outcome in which the path is not ours: a foreign
+  // crash-leftover under a reused pid. Every other failure happened AFTER
+  // the exclusive create, so the file exists and IS ours (Table D row D1).
+  if (!err || err.code !== 'EEXIST') tmpOwned = true;
+  throw err;
+}
+tmpOwned = true;
+```
+
+**A warning on the obvious alternative:** I first tried splitting the call into `openSync(tmp,'wx',0o600)` → `tmpOwned = true` → `writeFileSync(fd, content)`. It fixes the gap, but it **breaks 8 existing tests** (`FI-13 tracked/untracked`, `R1`, `R0b tracked/untracked`, the `P0b regression`, D1 and D4), because those fixtures patch `writeFileSync` and match on `typeof p === 'string'` — an fd is a number, so the injection silently stops firing. Do not take that route without rewriting those fixtures.
+
+Also update the two ownership prose surfaces once fixed: the block comment at `:646-655` (*"`tmp` becomes this invocation's OWN path only once the exclusive create succeeds"* — correct as written, but the code records it later than that) and `quarantinePreserve`'s `@throws` at `:686-688`, which promises D3 disposal of *"the path this invocation owns (`tmp` before the rename …)"*.
+
+---
+
+**2. `[criteria]` Band B — the PR body is stale against the tip; the round-3 fix has no recorded evidence.**
+The body is byte-identical to round 2 (`diff` shows zero changed lines). Specifically:
+
+- Pasted V1 output reads `ℹ tests 2465 / pass 2453`; the tree yields **`2467 / 2455`**. Definition of done item 1 requires the pasted output to be the verification actually run.
+- No mention anywhere of the exclusive create, `tmpOwned`, the reused-pid scenario, or the two new tests — and no RED evidence for them, though I confirmed they are genuinely red (`fail 2`, exactly those two) when `wx` is removed. That is the same non-vacuity obligation V5 imposes on every other behaviour in this WP.
+- The Deliverables checklist and Decisions do not record the fix or its origin.
+
+*Disposition: **fix*** — re-paste V1, add the new behaviour to the V5 list with its RED, and record the fix under Decisions. Cheap, but it is the evidence the gate reads.
+
+---
+
+### Attacked, found nothing further
+
+- **`git diff c7ff8f12..HEAD`** is: `validate.js` (+26/−6), `dream-validate.test.js` (+63/−0, purely the two new tests, no existing test altered), and three `docs/specs/logbook/` raw transcripts (always-allowed set; boundary exit 0).
+- **The two new tests are honest** — the second deliberately injects *no* other failure, so `wx` alone is what fails the call. That is the right shape and I confirmed it discriminates.
+- **`O_EXCL` ownership is airtight for foreign paths** — I tried regular file, directory, symlink-to-`/etc/hosts` and dangling symlink; all four leave the inode untouched and report an ordinary failure. Notably it does **not** follow the symlink, so this also closes a symlink-redirection write. `tmpOwned` genuinely cannot be true for a path this invocation did not create; the defect is the converse — it is false for paths it *did* create.
+- **Nothing else regressed**: D0/D2/D3/D4, P0b's read-back and reported-bytes identity, P3's escape, the pair rule, P6's pairwise non-substring, the hostile-`rel` escaping, P4's message, and the arm-agnostic teardown all reproduce exactly as in rounds 1–2.
+- Contract-density: Table D remains the single decision point; the new code and comments cite it rather than restating it. No new mirror was created. The one open residual is unchanged — **B3b's action cell** still instructs a pair-rule violation and is correctly routed to wd-architect in the PR body.
+
+### On my own two rounds
+
+I did not raise the pid-reuse defect the shadow and the plugin converged on; my D1 probes seeded a collision candidate at `dest` but never at `tmp`. That was a real gap in my coverage, and it is why the round-3 fix exists. The finding above is the second-order consequence of that fix, found by asking what the fix's own comment meant by "*or any other write failure*".
+
+**One Band-A fix and one Band-B PR-body refresh.** The verified patch is four lines and keeps the suite green; nothing else in the diff needs to move.
