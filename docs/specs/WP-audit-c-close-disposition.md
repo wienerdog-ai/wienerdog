@@ -338,9 +338,7 @@ crosses an authority boundary; (vi) downstream consumers inherit the disposition
 
 The single place every disposition fact is decided. A **mooted** row names what
 retired the mechanism; an **open** row names the WP that owns it. Every measured
-cell is the output of the step in its last column, and of nothing else — with
-**one named exception**, D2 (b)'s `commit-tree`/`update-ref` sentence, which was
-measured at the round-1 design gate and cites that gate's raw inside the cell.
+cell is the output of the step in its last column, and of nothing else.
 **Rows D1 and D2 were MOOTED before the round-1 gate; both were reproduced live
 and split. The retired verdicts are recorded here, with their cause, rather than
 quietly replaced.**
@@ -348,7 +346,7 @@ quietly replaced.**
 | # | Finding | Mechanism, as ruled 2026-08-05 | Measured | Verdict | Cause / owner | Step |
 |---|---------|--------------------------------|----------|---------|---------------|------|
 | D1 | **M7** — harness-instruction persistence | the brain writes an instruction file; the fence misses it; it is kept and committed. Item 1 of the fix denied **any dot-prefixed segment**, as a class; item 2 denied instruction filenames as a **name list**, accepted with a named residual | (a) all four ENUMERATED basenames are refused at every depth (16/16). (b) `.github`, `.husky`, `.git`, `.obsidian`, `.cursor` are **admitted beneath an admitted tier** (5/5), and the real `writeIntoVault` with the production `admit` **wrote** `01-Projects/example/.github/copilot-instructions.md`. (c) `GEMINI.md`, `QWEN.md` and `WARP.md` — all tier-local, **no dot segment** — are **admitted** (5/5, counting a second depth and mixed-case `Gemini.md`), and the production path is **demonstrated for `QWEN.md`**: the real `writeIntoVault` with the production `admit` wrote it. The others are admitted by the same predicate and were not separately written. The enumerated `ClAuDe.md` is refused | **SPLIT — (a) MOOTED, (b) OPEN, (c) OPEN** | (a) retired by the promote-in inversion: clause (a)+(b) put a vault-**root** instruction file outside the allowlist without enumeration, and `INSTRUCTION_BASENAMES` covers **the four names it enumerates** at any depth. **The claim is scoped to the enumeration and may never be worded as "the current names"** — that wording is what hid (c). (b) **`DENIED_SEGMENTS` (`promote.js:99`) is an ENUMERATION of two names where the ruling required a class**, so item 1 is unmet beneath tiers. Owner: **`WP-dot-segment-denial`**, which must prove the predicate **as a class**, with anti-enumeration evidence (its stub's required verification; the reason is Table E's retirement paragraph, not restated here). (c) **`INSTRUCTION_BASENAMES` (`promote.js:96`) is STALE, which is a different defect from being a list.** `GEMINI.md` is Gemini CLI's documented hierarchical instruction file and postdates the list; `QWEN.md` and `WARP.md` are likewise documented conventions, and all three are admitted tier-local with **no dot segment**, so **the dot-segment fix does not reach them** — (b) and (c) need separate owners. Owner: **`WP-instruction-basename-currency`**, whose required verification is a **dated inventory** rather than a longer list (its stub; cause in Table E's retirement paragraph). This is NOT the residual accepted at ruling time ("an *unknown* tool's instruction file passes"): these are current, documented conventions. **`.cursor/rules.md` and `.github/copilot-instructions.md` are NOT in this row** — `rules.md` is merely a basename, and GitHub documents Copilot's repository-wide instructions at `.github/copilot-instructions.md` and its path-specific ones at `.github/instructions/NAME.instructions.md` (source: docs.github.com, *"Adding repository custom instructions for GitHub Copilot"*), so a bare tier-local `copilot-instructions.md` is an ordinary note and not a documented discovery path. Only the dot rule reaches these two, and they belong wholly to (b). **RETIRED VERDICTS:** this row read MOOTED until round 1, whose evidence tested dot paths only at the vault ROOT, where clause (a) rejects them for being out-of-tier — the probe moved two variables and attributed the refusal to the wrong one. Round 1's replacement then read **(a) MOOTED** on the words "the four current names", which round 2 falsified: the probe enumerated exactly the names the code enumerates, so it could not have failed | V1 |
-| D2 | **M9** — git control state inside the write fence | the validator runs `git add`/`git commit` in the vault repo, parent privileges, **unfiltered env**, no `--no-verify`, no neutral hooks path | (a) `validate.js` has no `add`/`commit`; the run never invokes `git commit`; nine pinned shapes carry none of `add commit clean reset status stash`. (b) with an inherited `GIT_DIR`, the pinned `hash-object -w --stdin` write was **redirected** into the other repository and not the vault — that, and nothing wider, is V2 (b)'s output. The `commit-tree` + `update-ref` **HEAD advance** under the same env was measured at the **round-1 design gate**, not by V2 (b), and is cited as that: raw `docs/specs/logbook/2026-09-02-audit-c-gate-raw-round1-herdr-shadow.txt`, round record `docs/specs/logbook/2026-09-02-audit-c-disposition-design-gate-rounds.md` row 1 | **SPLIT — (a) MOOTED, (b) OPEN** | (a) retired by `commitNamedSet`: private index + `commit-tree` + `update-ref`, so `--no-verify` has nothing to suppress — the pre-commit/commit-msg path is **structurally absent**, not disabled. (b) the ruled mechanism **names the unfiltered env**, and `commitNamedSet` spreads `process.env` into every call; a scheduled run gets run-job's clean env, a manual `wienerdog dream` inherits the shell. Owner: **`WP-dream-git-env-pinning`** — Draft, **needs an owner product decision and has not landed**. **The requirement now lives in THAT WP's own done-contract** (its dated 2026-09-02 amendment, landed on `main` at commit `93072b1d`, not a Deliverable of this WP) — because E2's pointer trusts each successor's own green, and a requirement recorded only here would not reach it. What that amendment obliges: its canonical table must **enumerate every inherited write-target and config channel the pinned shapes honour** — at least `GIT_DIR`, `GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR`, `GIT_CONFIG_*`, `GIT_NAMESPACE`, and `GIT_INDEX_FILE` (already ours) — so that *pin*, *pin-with-exceptions* and *don't-pin* each name their channel set. **Measured, and this is why the enumeration is the requirement:** with `GIT_DIR` unset, an inherited `GIT_OBJECT_DIRECTORY` alone redirected the pinned `hash-object -w --stdin` write out of the vault — so a `GIT_DIR`-only pin would report success while the mechanism stayed live. **Neither this row nor the amendment asserts an outcome:** *don't-pin* is a legitimate ruling in which the residual is accepted and named, not retired — the amendment adds an obligation, not a verdict. **RETIRED VERDICT:** this row read MOOTED until the round-1 gate, on the reasoning that the env half was "already owned"; **a registered future decision is not a retiring cause**, and that is the general rule this row now carries. **NOT reopened:** the `reference-transaction` hook residual, ruled out of scope by the owner on 2026-08-31 (`WP-dream-promote-in-workspace` Table W row W1, which also rejects `core.hooksPath` suppression by name). **Not a residual:** `assertGitRepo` is a read-only `rev-parse --git-dir` and writes no control state | V2 |
+| D2 | **M9** — git control state inside the write fence | the validator runs `git add`/`git commit` in the vault repo, parent privileges, **unfiltered env**, no `--no-verify`, no neutral hooks path | (a) `validate.js` has no `add`/`commit`; the run never invokes `git commit`; nine pinned shapes carry none of `add commit clean reset status stash`. (b) **V2 (b)'s three probes, and nothing wider — every clause here is that step's own recorded output.** With an inherited `GIT_DIR`: (i) the pinned `hash-object -w --stdin` write was **redirected** into the other repository and not the vault, and (ii) the pinned `commit-tree` + `update-ref` pair **advanced the other repository's HEAD** — `moved=yes`, old → new — while the vault's own HEAD stayed unchanged. With `GIT_DIR` unset and an inherited `GIT_OBJECT_DIRECTORY` alone: (iii) the same pinned `hash-object -w --stdin` write landed under the other repository and not under the vault | **SPLIT — (a) MOOTED, (b) OPEN** | (a) retired by `commitNamedSet`: private index + `commit-tree` + `update-ref`, so `--no-verify` has nothing to suppress — the pre-commit/commit-msg path is **structurally absent**, not disabled. (b) the ruled mechanism **names the unfiltered env**, and `commitNamedSet` spreads `process.env` into every call; a scheduled run gets run-job's clean env, a manual `wienerdog dream` inherits the shell. Owner: **`WP-dream-git-env-pinning`** — Draft, **needs an owner product decision and has not landed**. **The requirement now lives in THAT WP's own done-contract** (its dated 2026-09-02 amendment, landed on `main` at commit `93072b1d`, not a Deliverable of this WP) — because E2's pointer trusts each successor's own green, and a requirement recorded only here would not reach it. What that amendment obliges: its canonical table must **enumerate every inherited write-target and config channel the pinned shapes honour** — at least `GIT_DIR`, `GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR`, `GIT_CONFIG_*`, `GIT_NAMESPACE`, and `GIT_INDEX_FILE` (already ours) — so that *pin*, *pin-with-exceptions* and *don't-pin* each name their channel set. **Measured by V2 (b)'s third probe, and this is why the enumeration is the requirement:** with `GIT_DIR` unset, an inherited `GIT_OBJECT_DIRECTORY` alone redirected the pinned `hash-object -w --stdin` write out of the vault — so a `GIT_DIR`-only pin would report success while the mechanism stayed live. **Neither this row nor the amendment asserts an outcome:** *don't-pin* is a legitimate ruling in which the residual is accepted and named, not retired — the amendment adds an obligation, not a verdict. **RETIRED VERDICT:** this row read MOOTED until the round-1 gate, on the reasoning that the env half was "already owned"; **a registered future decision is not a retiring cause**, and that is the general rule this row now carries. **NOT reopened:** the `reference-transaction` hook residual, ruled out of scope by the owner on 2026-08-31 (`WP-dream-promote-in-workspace` Table W row W1, which also rejects `core.hooksPath` suppression by name). **Not a residual:** `assertGitRepo` is a read-only `rev-parse --git-dir` and writes no control state | V2 |
 | D3 | **M10** — the gitignored/invisible region | `git status … -uall` without `--ignored` classifies; `git clean -fd` (not `-x`) cleans; a dream-written `.gitignore` blinds both | `delta.js` requires only `node:fs`, `node:path`, `../errors` — no route to a process spawner. `assertCleanTree` and `restoreVaultToHead` have no `src/` consumer | **MOOTED** | Retired by the **git-free classifier**: `computeDelta` is a filesystem walk that never consults git, so an ignore file has nothing to blind — **absent, not defeated**, and unaffected by D1's open halves (neither a dot-segment nor an unenumerated-instruction write restores a git dependency the classifier no longer has). **Standing-discipline note:** `restoreVaultToHead`'s `clean -fd` still exists, exported for fixtures and unreachable from `src/`; a future WP that re-wires it re-opens M10's `-fd`-not-`-x` question and must re-run V3 and V4 | V3, V4 |
 | D4 | **C2** — the git seam | ruling item 4: give the seam its own third-party-independent defense — `--no-verify` and a neutralized hooks path | follows D2 exactly | **SPLIT — own-defense half VOID, env half OPEN** | The `--no-verify`/hooks-path half is void by construction: there is no `git commit` to harden. The environment half is D2 (b), OPEN, owned by `WP-dream-git-env-pinning`. **RETIRED VERDICT:** this row read MOOTED with *"nothing new is owed"*; that sentence is **withdrawn** — the seam still owes an independent, constructed environment | V2 |
 | D5 | **C3** — layout | ruling item 3: reject dot-prefixed layout values in `isSafeRelativePath`, so the item-1 write rule is unconditional | `readVaultLayout` returns `projects_dir: .git` unchanged and `makeAdmit` on that layout admits `.git/hooks/note.md`; the **copied** `layout-infer.js` validator has the same gap, and `inferLayout` on a vault holding `.projects/` produced `projects_dir: ".projects"` | **OPEN** | Owner: **`WP-dot-segment-denial`** — the same WP as D1 (b), because item 3 exists to make item 1 unconditional and half-landing either leaves the class open. **Widened at round 1:** the finding is not one condition at one site — it is two validators, one of which (`layout-infer.js`, reached by `adopt --yes`) is a **producer**, so the dot value is not solely the user's | V5 |
@@ -411,7 +409,9 @@ on the spot.
       Status-cell-only rule), and the **not-a-deliverable note under the table**
       (mirrors D2 (b)'s owner status and the landed `93072b1d` amendment).
 - [ ] **Acceptance criteria** — AC1 (D1's three halves and D1 (a)'s *enumerated*
-      wording), AC2 (both stubs and their body items), AC3 (Table E's E1 count and
+      wording), AC2 (both stubs, their body items, and the currency stub's
+      `INSTRUCTION_BASENAMES` source-change clause — whose V6 (c) floor entry is
+      that clause's mirror and moves with it), AC3 (Table E's E1 count and
       owners), AC2b (both stubs' presence floor), AC3b (E2 as a pointer, and the
       ban on closure assertions here), AC4
       (D2's residual owners and
@@ -419,7 +419,10 @@ on the spot.
       AC6 (boundary-check's mandatory arguments, and the guard that makes V6's
       exit code carry all three repo gates).
 - [ ] **Verification commands** — V1 mirrors D1's three halves, V2 mirrors D2/D4's
-      two halves, V3 and V4 mirror D3, V5 mirrors D5. **V6 mirrors the most and is
+      two halves — and **V2 (b)'s three probes are the WHOLE basis of D2 (b)'s
+      Measured cell**, so a claim added to that cell must arrive as a probe in
+      that step, never as a citation to a gate raw — V3 and V4 mirror D3, V5
+      mirrors D5. **V6 mirrors the most and is
       checked first on any finding**: the Deliverables, Table E's two Status cells
       **verbatim** (via `RULING`), and AC2–AC6. **V1–V6 are MEASUREMENTS OF
       TODAY'S STATE, never closure triggers** — no step here may be reworded into
@@ -589,16 +592,35 @@ const hit=KNOWN_CALLS.flatMap(k=>k.args).filter(x=>typeof x==="string"&&forbidde
 if(hit.length){console.error("pinned set carries: "+hit.join(","));process.exit(1);}
 console.log("(a) pinned set = "+KNOWN_CALLS.length+" shapes, none of: "+[...forbidden].join(" "));'
 
-# V2 (b) — D2's OPEN half: an inherited GIT_DIR redirects the run's own pinned
-# write shape away from the vault. `GIT_OBJECT_DIRECTORY` does the same alone —
-# which is why D2 (b)'s owner cell requires a channel enumeration, not this sample.
-V=$(mktemp -d); O=$(mktemp -d)
-git init -q "$V" && git -C "$V" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
-git init -q "$O" && git -C "$O" -c user.email=a@b -c user.name=a commit -q --allow-empty -m init
+# V2 (b) — D2's OPEN half, in THREE probes, and Table D's D2 (b) Measured cell is
+# exactly their output and nothing wider. (i) an inherited GIT_DIR redirects the
+# run's own pinned `hash-object -w --stdin` write away from the vault; (ii) the
+# pinned `commit-tree` + `update-ref` pair under the same env ADVANCES THE OTHER
+# REPOSITORY'S HEAD while the vault's HEAD stays put; (iii) `GIT_OBJECT_DIRECTORY`
+# alone, with GIT_DIR unset, redirects the object write on its own — which is why
+# D2 (b)'s owner cell requires a channel ENUMERATION and not a GIT_DIR-only pin.
+# Everything happens in mktemp-only scratch repos; the repo tree is untouched.
+V=$(mktemp -d); O=$(mktemp -d); IDX=$(mktemp -d)/index
+git init -q "$V" && git -C "$V" -c user.email=a@b -c user.name=a commit -q --allow-empty -m vault
+git init -q "$O" && git -C "$O" -c user.email=a@b -c user.name=a commit -q --allow-empty -m other
 SHA=$(printf payload | GIT_DIR="$O/.git" git -C "$V" hash-object -w --stdin)
 git -C "$V" cat-file -e "$SHA" 2>/dev/null && { echo "object landed in the vault — the env residual may have CLOSED; re-measure D2 (b)"; exit 1; }
 GIT_DIR="$O/.git" git cat-file -e "$SHA" || { echo "FAIL: object landed nowhere expected"; exit 1; }
 echo "(b) OPEN: pinned hash-object wrote into the redirected repo, not the vault ($SHA)"
+# (ii) the pinned commit-tree/update-ref pair, same inherited GIT_DIR. The tree
+# comes from `write-tree` over a private GIT_INDEX_FILE, as commitNamedSet does.
+VB=$(git -C "$V" rev-parse HEAD); OB=$(git -C "$O" rev-parse HEAD)
+T=$(GIT_DIR="$O/.git" GIT_INDEX_FILE="$IDX" git -C "$V" write-tree)
+C=$(GIT_DIR="$O/.git" git -C "$V" -c user.name=wienerdog -c user.email=wienerdog@localhost commit-tree "$T" -p "$OB" -m probe)
+GIT_DIR="$O/.git" git -C "$V" update-ref -m probe HEAD "$C" "$OB" || { echo "FAIL: the pinned update-ref did not run"; exit 1; }
+OA=$(git -C "$O" rev-parse HEAD); VA=$(git -C "$V" rev-parse HEAD)
+[ "$OA" = "$C" ] && [ "$OA" != "$OB" ] && [ "$VA" = "$VB" ] || { echo "FAIL: the HEAD advance did not reproduce (other $OB->$OA, vault $VB->$VA) — re-measure D2 (b)"; exit 1; }
+echo "(b) OPEN: pinned commit-tree+update-ref advanced the other repo's HEAD $OB -> $OA moved=yes; vault HEAD $VB unmoved"
+# (iii) GIT_OBJECT_DIRECTORY alone, GIT_DIR explicitly unset for this call.
+SHA2=$(printf payload2 | env -u GIT_DIR GIT_OBJECT_DIRECTORY="$O/.git/objects" git -C "$V" hash-object -w --stdin)
+git -C "$V" cat-file -e "$SHA2" 2>/dev/null && { echo "FAIL: GIT_OBJECT_DIRECTORY did not redirect — re-measure D2 (b)"; exit 1; }
+git -C "$O" cat-file -e "$SHA2" || { echo "FAIL: object landed nowhere expected"; exit 1; }
+echo "(b) OPEN: GIT_OBJECT_DIRECTORY alone redirected the pinned hash-object write into the other repo, not the vault ($SHA2)"
 
 # V3 — D3: the classifier has no route to a process spawner. A bare child_process
 # grep is insufficient — validate.js reaches git via ../exec-identity.
@@ -667,11 +689,14 @@ for stub in docs/specs/WP-dot-segment-denial.md docs/specs/WP-instruction-basena
 done
 # AC2b, a PRESENCE FLOOR: the obligations must be written down. This asserts that
 # each stub SAYS what its proof must establish — never that any of it holds.
+# `INSTRUCTION_BASENAMES` is the floor for AC2's source-change clause: without it
+# a docs-only currency stub passes, and D1 (c) would stay open after its WP lands.
 for pat in 'held-out' 'DENIED_SEGMENTS' 'makeAdmit' 'readVaultLayout' 'inferLayout'; do
   grep -qi "$pat" docs/specs/WP-dot-segment-denial.md \
     || { echo "FAIL: dot-segment stub's required verification is missing $pat"; exit 1; }
 done
-for pat in 'dated inventory' 'accepted omission' 'owner' 'trigger' 'QWEN' 'WARP'; do
+for pat in 'dated inventory' 'accepted omission' 'owner' 'trigger' 'QWEN' 'WARP' \
+           'INSTRUCTION_BASENAMES'; do
   grep -qi "$pat" docs/specs/WP-instruction-basename-currency.md \
     || { echo "FAIL: currency stub's required verification is missing $pat"; exit 1; }
 done
