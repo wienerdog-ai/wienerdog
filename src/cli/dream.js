@@ -153,12 +153,12 @@ function printPlan(sel, cfg, vaultDir, workspaceDir, date, layout, settingsPath)
 }
 
 /**
- * The run's ONE git seam (CLAIM 2b). Every git invocation this pipeline makes
- * goes through here, so a test can substitute it and observe every `cwd` — which
- * is what the pipeline-wide "no git with a cwd at or beneath the workspace root"
- * assertion needs. A source grep cannot discriminate: it is green today, green on
- * a correct implementation, and green on a broken one that passes the path
- * through a variable.
+ * THIS FILE'S git seam (CLAIM 2b): total over `src/cli/dream.js`, NOT over the dream
+ * path — a LIMIT row W1(c)'s COVERAGE clause states and owns. Every invocation goes
+ * through here, so a test can substitute it and observe every `cwd` — which is what
+ * the pipeline-wide "no git with a cwd at or beneath the workspace root" assertion
+ * needs. A source grep cannot discriminate: it is green today, green on a correct
+ * implementation, and green on a broken one that passes the path through a variable.
  * @param {(o:{args:string[], cwd:string, env:NodeJS.ProcessEnv}) => {status:number|null, stdout?:string|Buffer, stderr?:string, error?:Error}} spawnGit
  * @param {string} cwd @param {string[]} args
  * @param {{allowFail?:boolean, input?:Buffer, env?:NodeJS.ProcessEnv}} [opts]
@@ -557,8 +557,8 @@ async function runBrainWithWatchdog(o) {
  */
 async function run(argv, opts = {}) {
   const dryRun = argv.includes('--dry-run');
-  // The run's ONE git seam (CLAIM 2b). JS-only, like every other seam here:
-  // production passes no opts, so the pinned front door always runs.
+  // THIS FILE'S git seam (CLAIM 2b) — not the run's only one; see `gitIn` and
+  // row W1(c). JS-only: production passes no opts, so the pinned door always runs.
   const spawnGit = opts.spawnGit || spawnGitPinned;
 
   // 1. Resolve config + date.
