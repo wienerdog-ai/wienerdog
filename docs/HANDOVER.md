@@ -37,6 +37,25 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-02 (overnight autonomous run, owner-authorized
+> merges).** Items 1–5 below have all been through the double-gate design loop;
+> none is implemented — each is `Ready` and parked on an owner ruling recorded
+> in its Dispatch precondition. Measured, not from memory:
+>
+> | # | Spec | State | Landed in | Owner item parked |
+> |---|------|-------|-----------|-------------------|
+> | 1 | `WP-show-slot-own-value-kind` | **Done** | #192–#195 | — |
+> | 2 | `WP-index-guard-residuals` | Ready | #196 | refusing to judge a non-absolute private `GIT_INDEX_FILE` is not a fifth failure mode |
+> | 3a | `WP-preservation-abort-widening` (+ Draft `WP-quarantine-preserve-durability`) | Ready (M) | #197 | whole-run fail-loud blast radius; successor sequencing |
+> | 3b | `WP-quarantine-banner-location` | Draft | — | depends on 3a |
+> | 4 | `WP-audit-c-close-disposition` (+ Draft `WP-dot-segment-denial`, `WP-instruction-basename-currency`; amendment to `WP-dream-git-env-pinning`) | Ready | #199 | **queued WP or incident?** — the gate found M7 LIVE beneath tiers (dot-prefixed directories and unenumerated instruction basenames are promotable) and M9's environment half LIVE (`GIT_DIR` / `GIT_OBJECT_DIRECTORY` redirect the run's writes); **group C stays Open** |
+> | 5 | `WP-criterion-red-harness` (+ ADR-0042 Proposed) | Ready (M) | #198 | ratify ADR-0042; options: `engines` ≥ 18.15, Node matrix |
+> | 6–9 | unchanged | Draft | — | — |
+>
+> Round records and raw gate outputs: `docs/specs/logbook/2026-09-01-*` and
+> `2026-09-02-*`. The audit status table above is NOT updated here — row C's
+> cell is `WP-audit-c-close-disposition`'s own deliverable.
+
 Every item below has a Draft spec stub. **The stubs are deliberately Draft:
 they carry the context, the intent, the known traps and the done-definition,
 but they have NOT been through spec review.** Maturing one to Ready (via
