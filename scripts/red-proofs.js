@@ -793,7 +793,7 @@ function assertCompleteRun(run, where, phase) {
   if (cutShort !== undefined) {
     throw error(`${where} ${phase}: a test file exited ${cutShort}; the reporter's own codes are 0 and 1, so the file was torn down mid-run and its TAP is a prefix`);
   }
-  const lines = run.stdout.split('\n');
+  const lines = tapLines(run.stdout);
   const plans = lines.filter((l) => /^1\.\.\d+$/.test(l));
   if (plans.length === 0 || !/^# tests \d+$/m.test(run.stdout)) {
     throw error(`${where} ${phase}: the TAP stream is INCOMPLETE — no top-level plan and summary were emitted, so the observed set is a prefix of the run`);
@@ -816,9 +816,36 @@ function assertCompleteRun(run, where, phase) {
  * @property {TapNode[]} children
  */
 
-/** @param {string} s @returns {string} */
+/**
+ * A TAP test name, exactly as the reporter wrote it.
+ *
+ * ONLY THE LINE TERMINATOR IS STRIPPED, never the name's own whitespace. A test
+ * name may legally end in a space — `test('case ', …)` — and MEASURED on
+ * v25.9.0 and v20.20.2 the reporter preserves it verbatim (`ok 1 - case `), as
+ * it preserves leading spaces. A `trimEnd()` here changed the OBSERVED identity:
+ * a declaration naming `['case ']` failed BASELINE as "did not RUN", and
+ * `'case '` and `'case'` collapsed onto one identity and became spuriously
+ * ambiguous. Table A accepts any non-empty name and compares identities exactly,
+ * so the two sides must be byte-for-byte — and the declaration side never
+ * normalised, which is what made this one-sided.
+ *
+ * @param {string} s @returns {string}
+ */
 function unescapeTapName(s) {
-  return s.replace(/\\([\\#])/g, '$1').trimEnd();
+  return s.replace(/\\([\\#])/g, '$1');
+}
+
+/**
+ * Split a reporter stream into lines with the terminator removed — BOTH of it.
+ * JavaScript's `.` excludes `\r` (it is a line terminator), so a CRLF stream made
+ * every result-line match fail and the whole stream parsed to ZERO nodes;
+ * `trimEnd()` never reached it. Stripping the terminator once, here, is what
+ * makes the name-preserving rule above mean anything on such a stream.
+ *
+ * @param {string} text @returns {string[]}
+ */
+function tapLines(text) {
+  return text.split('\n').map((l) => l.replace(/\r$/, ''));
 }
 
 /**
@@ -831,7 +858,7 @@ function unescapeTapName(s) {
  * @returns {TapNode[]} root nodes, with a file-level wrapper (if any) removed
  */
 function parseTap(text, suiteArg) {
-  const lines = text.split('\n');
+  const lines = tapLines(text);
   /** @type {Map<number, TapNode[]>} */
   const byDepth = new Map();
   for (let i = 0; i < lines.length; i++) {
@@ -844,7 +871,12 @@ function parseTap(text, suiteArg) {
     let rest = m[3] === undefined ? '' : m[3];
     /** @type {string|null} */
     let directive = null;
-    const dm = /\s+#\s+(SKIP|TODO)\b.*$/i.exec(rest);
+    // EXACTLY ONE SEPARATOR SPACE, not a run of them. MEASURED on both Nodes: a
+    // skipped `test('skipped ', …)` prints `ok 1 - skipped  # SKIP why` — the
+    // name's own trailing space, then the single space TAP puts before the
+    // directive. A `\s+#` would eat both and corrupt the identity. A `#` inside
+    // a name is escaped (`plain\#hash`), so an unescaped ` #` is unambiguous.
+    const dm = / #\s+(SKIP|TODO)\b.*$/i.exec(rest);
     if (dm) {
       directive = dm[1].toUpperCase();
       rest = rest.slice(0, dm.index);

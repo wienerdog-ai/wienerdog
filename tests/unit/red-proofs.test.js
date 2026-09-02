@@ -1696,6 +1696,70 @@ test('red-proofs: `why` is printed on EVERY verdict, not only on PROVEN (Table A
   assert.equal(proven.report.split(`why: ${why}`).length - 1, 1, proven.report);
 });
 
+// ── ROUND-8 FINDING — its RED
+
+test('red-proofs: test identities are BYTE-EXACT — a name ending in whitespace is declared as written and reaches PROVEN (Table A)', () => {
+  // Under a trimming parser `'case '` and `'case'` collapse onto one identity:
+  // the run is not merely wrong, it is AMBIGUOUS, and the runner refuses.
+  const r = run(newRoot({
+    suite: 'tests/suite-whitespace.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [
+        { test: ['case '], signal: 'RP-SIGNAL-TRAILING-SPACE' },
+        { test: ['case'], signal: 'RP-SIGNAL-BARE' },
+        { test: ['  padded  '], signal: 'RP-SIGNAL-PADDED' },
+      ],
+    })],
+  }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+});
+
+test('red-proofs: the TRIMMED spelling of a padded name does not RUN — identities are not normalised on either side (Table A)', () => {
+  const r = run(newRoot({
+    suite: 'tests/suite-whitespace.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [{ test: ['  padded'], signal: 'RP-SIGNAL-PADDED' }],
+    })],
+  }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('did not RUN'), r.report);
+});
+
+test('red-proofs: the parser preserves a name\'s own whitespace and strips only the directive and the line terminator (Table A)', () => {
+  const suite = 'tests/suite-basic.js';
+  // MEASURED on v25.9.0 and v20.20.2 — these are the reporter's own bytes.
+  const stream = [
+    'TAP version 13',
+    '# Subtest: case ', 'ok 1 - case ',
+    '# Subtest: case', 'ok 2 - case',
+    '# Subtest:   padded  ', 'ok 3 -   padded  ',
+    '# Subtest: skipped ', 'ok 4 - skipped  # SKIP why',
+    '# Subtest: todo ', 'ok 5 - todo  # TODO',
+    '# Subtest: plain\\#hash ', 'ok 6 - plain\\#hash ',
+    '1..6', '# tests 6', '',
+  ].join('\n');
+  const nodes = rp.flattenTap(rp.parseTap(stream, suite));
+  assert.deepEqual(nodes.map((n) => n.path[0]),
+    ['case ', 'case', '  padded  ', 'skipped ', 'todo ', 'plain#hash ']);
+  // The directive is recognised without eating the name's own trailing space.
+  assert.equal(nodes[3].node.directive, 'SKIP');
+  assert.equal(nodes[4].node.directive, 'TODO');
+  assert.equal(nodes[5].node.directive, null, 'an escaped # inside a name is not a directive');
+  // `'case '` and `'case'` stay two identities, so neither is ambiguous.
+  assert.equal(nodes.filter((n) => n.path[0] === 'case').length, 1);
+  assert.equal(nodes.filter((n) => n.path[0] === 'case ').length, 1);
+  // A CRLF stream loses only the terminator.
+  const crlf = ['TAP version 13', 'ok 1 - case ', '1..1', '# tests 1', ''].join('\r\n');
+  assert.deepEqual(rp.flattenTap(rp.parseTap(crlf, suite)).map((n) => n.path[0]), ['case ']);
+  // And the completeness gate reads the same stream — it splits lines too, so
+  // both call sites must strip the terminator or a CRLF run reads as truncated.
+  rp.assertCompleteRun({ status: 0, signal: null, spawnError: null, stdout: crlf }, 'unit', 'BASELINE');
+});
+
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot
 
 test('red-proofs: the runner borrows no production seam and starts every suite through the sandbox\'s tests/run.js (criterion 8)', () => {
