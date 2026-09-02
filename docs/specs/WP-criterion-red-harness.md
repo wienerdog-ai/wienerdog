@@ -37,11 +37,11 @@ cell's; and infrastructure that died silently — a decoupled guard sitting at
 `--test-name-pattern` matching nothing exits 0 with a pass count.
 
 This WP ships the mechanism that makes those preconditions machine-checked: a
-**RED proof** — a declared exact-substring mutation plus the set of named
-assertions it must redden — and the **RED-proof runner** that applies it inside a
-disposable copy of the repository, proves it landed, requires exactly the
-declared assertions to fail for their own stated reason, restores, and requires
-green again. ADR-0042 records the decision and its lane; it is **Proposed and
+**RED proof** — inert committed data declaring one exact-substring mutation plus
+the named assertions it must redden — and the **RED-proof runner** that applies
+it inside a disposable copy of the repository, proves the exact expected bytes
+landed, requires exactly the declared assertions to fail **as assertion failures
+of their own test bodies**, restores, and requires green again. ADR-0042 records the decision and its lane; it is **Proposed and
 unsigned**, and this WP does not wait on it (Out of scope explains what the
 signature unlocks and what it does not).
 
@@ -112,7 +112,7 @@ Every claim below is runnable at `49d3d467`.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | scripts/red-proofs.js | the runner. CLI, declaration schema and phase order per Tables A, B and D; its report ends with a REACH footer stating Table C's limits |
-| create | tests/red-proofs/dream-pipeline.proofs.js | the adopted declaration set for `tests/unit/dream-pipeline.test.js`; coverage property in acceptance criterion 9 |
+| create | tests/red-proofs/dream-pipeline.proofs.json | the adopted declaration set for `tests/unit/dream-pipeline.test.js`. **Inert JSON, never executed** (Table A); coverage property in acceptance criterion 9 |
 | create | tests/unit/red-proofs.test.js | the runner's own suite, run by `npm test`; exercises the runner against the fixture repo below, never against a real suite |
 | create | tests/fixtures/red-proofs/ | the repository tree(s) the runner's own tests point `--root` at. What Tables A and D require of **any** root, and therefore of these: a `tests/red-proofs/` declaration directory, a `tests/run.js` the runner spawns to start the suite, a `suite` path resolving inside the tree, and a `file` the declarations can mutate. **The trees' number and contents are the implementer's** — with one structural consequence to plan around, not a prescription: a LOAD-phase ERROR aborts a whole run, so the deliberately invalid declarations criterion 1 requires cannot all be reachable from one root |
 | modify | package.json | add exactly one script entry, per Table D |
@@ -129,21 +129,32 @@ declaration directory `<root>/tests/red-proofs`** — one flag, not two.
 `--wp` and `--proof` select a subset; a selection matching nothing is a vacuous
 run, not an empty success (Table B, row V2).
 
-A declaration file is CommonJS with no dependencies:
+**A declaration file is INERT DATA — JSON, parsed and validated, NEVER executed.**
+`tests/red-proofs/<name>.proofs.json`:
 
-```js
-'use strict';
-module.exports = {
-  suite: 'tests/unit/<name>.test.js',
-  proofs: [ /* one object per Table A */ ],
-};
+```json
+{
+  "suite": "tests/unit/<name>.test.js",
+  "proofs": [ ]
+}
 ```
+
+**Why the format is data and not code, since the obvious choice was CommonJS.**
+LOAD runs before SANDBOX exists, so an executable declaration runs *before there
+is any confinement*: a `.proofs.js` calling `process.exit(0)` ends the run
+successfully before a single proof is counted — defeating every vacuity guard in
+Table B at once — and one calling `fs.writeFileSync` writes into the real
+checkout before the copy is made. "No dependencies" is a convention, not a
+mechanism: it cannot stop a built-in or a top-level side effect. JSON has no
+execution semantics, so neither attack has a surface. **The runner therefore
+loads declarations with `JSON.parse` and never with `require`, `import`, `eval`
+or a `Function` constructor**, and every value is validated as data (Table A).
 
 The two glossary entries are these definitions, copied — not reworded:
 
 ```text
-RED proof — a committed declaration (`tests/red-proofs/*.proofs.js`) naming one exact-substring mutation and the set of named assertions it must make fail. Its unit of meaning is one acceptance criterion of one work package. (Not: "mutation test", "red test".)
-RED-proof runner — `scripts/red-proofs.js`, run by `npm run red-proofs`. It applies each RED proof inside a disposable copy of the repository, proves the mutation landed, requires exactly the declared assertions to fail, restores, and requires green again. It never writes outside its copy. (Not: "harness" — that word names the AI CLI Wienerdog installs into.)
+RED proof — a committed declaration (`tests/red-proofs/*.proofs.json`) naming one exact-substring mutation and the assertions it must make fail. Inert data: it is parsed and validated, never executed. Its unit of meaning is one acceptance criterion of one work package. (Not: "mutation test", "red test".)
+RED-proof runner — `scripts/red-proofs.js`, run by `npm run red-proofs`. It applies each RED proof inside a disposable copy of the repository, proves the mutation landed, requires the named assertions to fail as assertion failures, restores, and requires green again. Its own writes stay inside that copy. (Not: "harness" — that word names the AI CLI Wienerdog installs into.)
 ```
 
 ## Contract reference
@@ -155,9 +166,12 @@ future declaration set inherit the contract**.
 
 ### Table A — the RED-proof declaration
 
-The single place the declaration's facts are decided. Every field is validated at
+The single place the declaration's facts are decided. **The file is inert JSON,
+parsed and never executed** ("Exact contracts"). Every field is validated at
 LOAD; a violation is an ERROR naming the declaration file and the proof id, never
-a skip and never a pass.
+a skip and never a pass. **Every string field must be non-empty** — an empty
+`signal` matches every diagnostic and an empty `find` has no defined replacement
+semantics, so emptiness is rejected field by field, not left to good sense.
 
 | Field | Required | Value / rule |
 |-------|----------|--------------|
@@ -167,28 +181,42 @@ a skip and never a pass.
 | `proofs[].wp` | yes | the spec id whose criterion this proves, `WP-<slug>` |
 | `proofs[].criterion` | yes | string — the criterion label exactly as that spec writes it (`3`, `4a`) |
 | `proofs[].why` | yes | one sentence naming the vacuity this red rules out; printed in the roll-up, so a reader sees what the proof is for without opening the spec |
-| `proofs[].file` | yes | repo-relative path of the file mutated |
-| `proofs[].find` | yes | exact substring. Not a regex, not a pattern, never passed through a shell |
-| `proofs[].replace` | yes | exact replacement; must differ from `find` and must contain `marker` |
+| `proofs[].file` | yes | repo-relative path of the file mutated. **It must canonicalise inside the sandbox copy** (a value resolving outside it — via `..`, an absolute path or a symlink — is an ERROR, criterion 7(a)). **It must NOT be `suite`**, must not be the runner or any file under the declaration directory, and must not be a path the runner itself needs to operate |
+| `proofs[].find` | yes | exact non-empty substring. Not a regex, not a pattern, never passed through a shell. **Matching is left-to-right and non-overlapping** |
+| `proofs[].replace` | yes | exact replacement; must differ from `find` and must contain `marker`. It may legitimately still contain `find` — the expected-bytes rule below is what decides whether the mutation landed, so no restriction is placed on that |
 | `proofs[].marker` | yes | the token that proves the mutation landed. Must be **ABSENT** from the pristine `file` and **PRESENT** after the write — a marker already present proves nothing |
-| `proofs[].occurrences` | no (default 1) | the exact number of times `find` must occur in the pristine `file`. Any other count is an ERROR |
+| `proofs[].occurrences` | no (default 1) | a **positive integer**; the exact number of left-to-right non-overlapping occurrences of `find` in the pristine `file`. Any other count is an ERROR. **Every counted occurrence is replaced**, and the expected post-mutation bytes are computed from that; APPLY compares the written bytes against them (Table B row 4) |
 | `proofs[].testNamePattern` | no | forwarded to `--test-name-pattern` to scope the run. Scoping never weakens the BASELINE requirement (Table B, row 3) |
-| `proofs[].expectRed` | yes | non-empty array of `{ test, signal }`. `test` is the full test name; `signal` is a substring that must appear in that test's failure diagnostic. **The set of failing tests observed must EQUAL the set of `test` values** — an unlisted failure is an ERROR, because a red whose reason is not the cell's is not a measurement |
+| `proofs[].expectRed` | yes | non-empty array of `{ test, signal }`, no two entries sharing a `test`. **`test` is a hierarchical identity** — a non-empty array of non-empty names, outermost first, ending at the test itself — never a bare name, because duplicate names across parameterised tests and nested subtests make a bare name ambiguous. `signal` is a non-empty substring that must appear in that test's own failure diagnostic. **The set of failing identities observed must EQUAL the set of declared `test` identities** — an unlisted failure is an ERROR, because a red whose reason is not the cell's is not a measurement |
+
+**What a proof may mutate, and why the rule is not just `file !== suite`.** The
+mutation must target the **condition or input the named assertion observes** —
+never the assertion itself, its expected literal, its message, or the file that
+hosts it. Replacing an assertion's expected value with a wrong one makes the
+named test fail, restores cleanly, and reports PROVEN while the behaviour under
+test never moved: the proof would then certify only that the assertion can be
+edited. The three mechanical rules in the `file` row (not `suite`, not the
+runner, not a declaration) block the direct form of that move; **the general
+property is a review judgment and is named as such in Table C's standing-limit
+row.** A mutation is also not permitted to work by breaking the module so it
+fails to parse or load — Table B row 5 requires the RED to be an *assertion*
+failure of the named test.
 
 ### Table B — the phases, in order, and what each rules out
 
-A proof is `PROVEN` only when all seven rows hold. Rows `V*` are the runner's own
-vacuity guard and apply to the run as a whole.
+A proof is `PROVEN` only when every numbered row holds. Rows `V*` are the
+runner's own vacuity guard and apply to the run as a whole.
 
 | # | Phase | What must hold | What it rules out |
 |---|-------|----------------|-------------------|
-| 1 | LOAD | at least one declaration file; at least one proof after selection; every Table A rule satisfied | a run over nothing; a malformed declaration read as a skip |
-| 2 | SANDBOX | the `--root` tree is copied to a disposable directory the run deletes; `suite` and every `file` resolve inside it; **no path outside it is written** | crash residue; a dirty-checkout false red; a tool that edits the developer's tree (ADR-0042 decision 3) |
-| 3 | BASELINE | the suite runs green in the sandbox **and every `expectRed[].test` is observed as a test that RAN and PASSED** in that run | a renamed or deleted test; a `testNamePattern` matching nothing, which exits 0 with a pass count; a suite already red for ambient reasons |
-| 4 | APPLY | `find` occurs exactly `occurrences` times in the pristine `file`; `marker` absent from it; after the write, `marker` present and the file's SHA-256 changed | the measured shell-escaping class — a mutation never applied and read as a green; a marker that certified nothing because it was already there |
-| 5 | RED | the suite re-runs; the observed failing-test set **equals** the `expectRed` test set, and each carries its `signal` | a vacuous assertion, which stays green; a red for a reason that is not the cell's — the measured production-seam class |
+| 1 | LOAD | declarations are read with `JSON.parse` and **never executed**; at least one declaration file; at least one proof after selection; every Table A rule satisfied | a run over nothing; a malformed declaration read as a skip; **a declaration that exits, writes or otherwise acts before confinement exists** — LOAD precedes SANDBOX, so an executable format would run unconfined |
+| 2 | SANDBOX | the `--root` tree is copied to a disposable directory the run deletes; `suite` and every `file` canonicalise **inside** the copy, and one that does not is an ERROR; **every write the RUNNER performs — the copy, the mutation, the restore — lands inside the copy** (boundary 1 of two; see the row below and Table D) | crash residue; a dirty-checkout false red; a tool that edits the developer's tree (ADR-0042 decision 3); a `file` escaping the copy by `..`, an absolute path or a symlink |
+| 2b | SANDBOX (boundary 2) | the spawned suite's own scratch writes go to the **wrapper-owned temp root**, not into the copy: `tests/with-temp-root.js` redirects TMPDIR/TMP/TEMP and deletes that root. Dependency links into the real `node_modules` are **resolution-only** — read, never written through | a claim the runner cannot keep. The adopted suite `mkdtemp`s under `os.tmpdir()`, so a single "nothing outside the sandbox is written" promise is unsatisfiable and would be silently narrowed by any implementation |
+| 3 | BASELINE | the suite runs green in the sandbox, and each declared identity is observed **exactly once, as a terminal PASS**, with no SKIP, TODO or CANCELLED record matching it; duplicate observed identities, and any file-, parse-, load-, hook- or suite-level failure, are ERRORs | a renamed or deleted test; a `testNamePattern` matching nothing — **measured this round: an unmatched pattern printed an inner `1..0` under an outer file-level `ok` and exited 0**; a duplicate name letting one instance pass while another is skipped; a suite already red for ambient reasons |
+| 4 | APPLY | `find` occurs exactly `occurrences` times (left-to-right, non-overlapping) in the pristine `file`; `marker` absent from it; **every counted occurrence is replaced and the written bytes EQUAL the expected post-mutation bytes computed from that replacement**; `marker` present afterwards | the measured shell-escaping class — a mutation never applied and read as a green; a marker that certified nothing because it was already there; **a "digest changed" postcondition that a partial or overlapping replacement also satisfies** |
+| 5 | RED | the suite re-runs; the observed failing-identity set **equals** the declared set; **each failure is an ASSERTION failure of that test's own body** — a test-code assertion failure, not a parse, load, hook, timeout or cancellation — and its diagnostic carries the entry's `signal` | a vacuous assertion, which stays green; a red for a reason that is not the cell's — the measured production-seam class; **a mutation that "works" by making a module fail to load, which never reaches the assertion at all** |
 | 6 | RESTORE | the pristine bytes are written back, the file's SHA-256 equals the pristine digest, and the suite runs green again | a red caused by ambient state rather than by the mutation |
-| 7 | REPORT | per-proof verdict, rolled up per `(wp, criterion)`; the report ends with the REACH footer stating Table C's limits | a green read as "this criterion is non-vacuous" |
+| 7 | REPORT | per-proof verdict; a `(wp, criterion)` roll-up reports **PROVEN only when every declaration for that pair was selected, ran and passed** — otherwise `FILTERED`, naming what was left out. The report ends with the REACH footer stating Table C's limits, described over the **selected** evidence | a green read as "this criterion is non-vacuous"; **a `--proof`-filtered run reporting a criterion PROVEN on one of its two proofs** |
 | V1 | — | zero declaration files found | an empty scan and a clean scan reading identically |
 | V2 | — | zero proofs after `--wp` / `--proof` selection | a typo'd selector reporting success over nothing |
 | V3 | — | zero mutations applied while the run reports success | the infrastructure dying silently, which is this WP's own failure shape |
@@ -204,13 +232,13 @@ honestly: an honest limit is fine, a silent one is not.**
 
 | Shape | Reach |
 |-------|-------|
-| a guard that cannot fail because the test itself established the condition it certifies | **ENFORCED once declared.** The mutation breaks the thing the guard reads; a guard that stays green is a FAILED proof, and the criterion is reported unproven |
+| a guard that cannot fail because the test itself established the condition it certifies | **ENFORCED once declared, FOR A RELEVANT MUTATION.** The mutation breaks the thing the guard reads; a guard that stays green is a FAILED proof, and the criterion is reported unproven. The mechanical half — the mutation is not the assertion, its host suite, the runner or a declaration, and the RED is an assertion failure — is enforced by Table A's `file` row and Table B row 5. **Whether the mutation targets what the assertion actually observes is not machine-decidable and is carried by the standing-limit row below** |
 | a non-vacuity guard whose pattern matches an unrelated fixture line | **REACHABLE ONLY IF DECLARED.** A mutation that removes the intended content while leaving the unrelated line must redden the guard. The runner cannot tell that the declared mutation is the *right* one |
 | infrastructure dying silently — the guard must notice its own death | **ENFORCED, on the runner itself.** Rows 3, 4, V1–V4: a run that read nothing, selected nothing, applied nothing, or whose named tests never ran, exits non-zero |
-| a mutation "matrix" whose mutations were never applied (shell escaping) | **ENFORCED.** Row 4: exact-substring replacement in Node, an occurrence count, a marker absent-then-present, and a changed digest. No shell touches the mutation path |
+| a mutation "matrix" whose mutations were never applied (shell escaping) | **ENFORCED.** Row 4: exact-substring replacement in Node, a left-to-right non-overlapping occurrence count, a marker absent-then-present, and **written bytes equal to the computed expected bytes** — not merely "the digest changed", which a partial replacement also satisfies. No shell touches the mutation path |
 | a canary differing from the exploit by ARITY, dying before the slot under test | **REACHABLE ONLY IF DECLARED.** Mutate the slot the canary claims to exercise: a canary that stays green is arity-blind. Argument count is not a property the runner can inspect |
 | an endpoint comparison blind to a transient write-then-restore effect | **REACHABLE ONLY IF DECLARED.** A mutation that writes then restores must redden the comparison; if it does not, the comparison is blind and the proof FAILS |
-| **THE STANDING LIMIT, printed in the report** | A green proves that each **declared** mutation reddens the **named** assertions and only those. It does **not** establish that the declared set is complete, that a criterion carries any proof at all, or that a test is non-vacuous in a way nobody declared. **Completeness is a review judgment; there is no criterion-inventory check** — locating criteria inside spec prose was retired by measurement (`WP-show-slot-own-value-kind`: a checker that must find its subject inside a large file enumerates the ways the format can hide it, and that never closes) |
+| **THE STANDING LIMIT, printed in the report** | A green proves that each **selected declared** mutation reddens the **named** assertions, only those, and as assertion failures. It does **not** establish: that the declared set is **complete**; that a criterion carries any proof at all; that a test is non-vacuous in a way nobody declared; or — **the limit this round added** — that a declared mutation is SEMANTICALLY RELEVANT, i.e. that it changes the condition the assertion observes rather than something merely upstream of the same failure. The mechanical rules reject the direct self-mutation move, not every indirect one. **Completeness and relevance are review judgments; there is no criterion-inventory check** — locating criteria inside spec prose was retired by measurement (`WP-show-slot-own-value-kind`: a checker that must find its subject inside a large file enumerates the ways the format can hide it, and that never closes) |
 
 ### Table D — the lane
 
@@ -219,8 +247,9 @@ honestly: an honest limit is fine, a silent one is not.**
 | Entry | `npm run red-proofs` → `node tests/with-temp-root.js scripts/red-proofs.js` — the temp-root wrapper fronts it, per `package.json`'s `"//"` rule |
 | Never in `npm test` | `npm test` does not run RED proofs. A proof re-executes a whole suite once per mutation, the adopted suite measuring 14.6 s per run (Current state), and `npm test` must stay a fast, side-effect-free regression signal (ADR-0042 decision 2) |
 | Suite invocation | the runner spawns the **sandbox's** `tests/run.js`, never `node --test` directly, so `WIENERDOG_TEST_NO_REAL_SCHEDULER=1` applies to every suite it starts. The env var is set in exactly one place and this WP does not add a second |
-| Reporter | TAP (`--test-reporter=tap`, forwarded through `tests/run.js`), so failing test names and their diagnostics are machine-readable |
-| Production seams | the runner requires **nothing under `src/`** and nothing outside Node's standard library, and spawns no `git`. Instrumentation through the production seam is itself an unrecognised call under a default-deny guard — measured, and the reason this row exists |
+| Reporter | TAP (`--test-reporter=tap`, forwarded through `tests/run.js`), so hierarchical identities, terminal statuses and failure diagnostics are machine-readable |
+| Write boundaries | **two, and neither is "nothing outside the sandbox".** (1) Runner-controlled writes — copy, mutation, restore — stay inside the copied tree. (2) The spawned suite's scratch writes stay inside the wrapper-owned temp root. Links into the real `node_modules` are resolution-only. Table B rows 2 and 2b own this; criterion 7 states what each check can establish |
+| Production seams | the runner requires **nothing under `src/`** and nothing outside Node's standard library, and spawns no `git`. Instrumentation through the production seam is itself an unrecognised call under a default-deny guard — measured, and the reason this row exists. **This removes one contamination class; it is not on its own a proof that a red is the cell's** (ADR-0042 decision 4) |
 | CI | **no CI job in this WP.** ADR-0042 records the lane decision and gates the job on its signature (Out of scope) |
 
 ### Mirrored Surface Checklist
@@ -231,7 +260,7 @@ on the spot.
 
 - [ ] **Deliverables-table cells** — the `scripts/red-proofs.js` row (cites A, B,
       D, and Table C's standing-limit row for the report's REACH footer), the
-      `tests/red-proofs/dream-pipeline.proofs.js` row (cites criterion 9's
+      `tests/red-proofs/dream-pipeline.proofs.json` row (cites criterion 9's
       coverage property), the
       `tests/fixtures/red-proofs/` row (states what Tables A and D require of any
       `--root`, and cites criterion 1 for the invalid declarations — it
@@ -239,16 +268,20 @@ on the spot.
       `docs/GLOSSARY.md` row — whose two entries are the byte-exact block under
       "Exact contracts", copied rather than reworded, so the definition is
       decided in one place
-- [ ] **Acceptance criteria** — 1 asserts Table A; 2 asserts Table B's order and
-      row 4; 3 asserts row 3; 4 asserts row 5; 5 asserts row 6; 6 asserts
-      V1–V4; 7 and 12 assert row 2; 8 asserts Table D's seam and suite-invocation
-      rows; 9 asserts the adoption coverage; 10 asserts Table B row 7 and Table
-      C's standing-limit row; 11 asserts Table D's "never in `npm test`" row; 13
-      asserts nothing in these tables
+- [ ] **Acceptance criteria** — 1 asserts Table A; **1a asserts Table B row 1's
+      inert-load rule**; 2 and **2a** assert Table B row 4; 3 asserts row 3; 4
+      asserts row 5; 5 asserts row 6; 6 asserts V1–V4; **6a asserts row 7's
+      roll-up rule**; 7 and 12 assert rows 2 and 2b and Table D's
+      write-boundaries row; 8 asserts Table D's seam and suite-invocation rows;
+      9 asserts the adoption coverage **and Table A's mutation-target rule**; 10
+      asserts Table B row 7 and Table C's standing-limit row; 11 asserts Table
+      D's "never in `npm test`" row; 13 asserts nothing in these tables
 - [ ] **Verification commands** — the vacuous-selection red (V2), the
-      working-tree diff (row 2), the two guarded negated greps (Table D's seam
-      row and its "never in `npm test`" row). Both greps are a **FLOOR on source
-      text only**, and the both-directions paragraph says so
+      tracked-checkout diff (rows 2/2b, and it is labelled with what it cannot
+      see), the two guarded negated greps (Table D's seam row and its "never in
+      `npm test`" row). Both greps are a **FLOOR on source text only**, and the
+      both-directions paragraph says so; that paragraph also carries the
+      roll-up pair (6a) and the escape ERRORs (7a)
 - [ ] **Current-state description** — the entry chain and `tests/run.js`'s env
       var (Table D), the measured 14.6 s (Table D's `npm test` row), the
       `mirror-walk.js` precedent (Table B row 7, Table C's standing-limit row), the
@@ -256,11 +289,15 @@ on the spot.
 - [ ] **Operative prose** — Context's three evidence-gathering failures (Table C
       rows 3–4 and Table D's seam row) and its naming paragraph (the `harness`
       collision, mirrored by the glossary block and by Out of scope's last
-      bullet); "Exact contracts" (`--root` implying the declaration directory:
-      Table A's `id` uniqueness scope and Table B's V1/V2; and the two glossary
-      definitions);
-      Implementation notes (the sandbox mechanics for Table B row 2, and the
-      named temp-directory residual)
+      bullet); "Exact contracts" — the JSON shape and the **why-not-CommonJS
+      paragraph** (Table B row 1, ADR-0042 decision 1 and its rejected
+      alternative), `--root` implying the declaration directory (Table A's `id`
+      uniqueness scope and Table B's V1/V2), and the two glossary definitions;
+      **Table A's mutation-target paragraph** (Table C's first row and
+      standing-limit row, criterion 9); Implementation notes (the sandbox
+      mechanics and the `node_modules` resolution-only note for Table B rows 2
+      and 2b, the identity/failure-kind note for row 5, and the named
+      temp-directory residual)
 - [ ] **ADR-0042** — its decisions 1–5 restate Tables B, C and D at ADR altitude.
       It is **unsigned**: while it stays Proposed it moves with these tables. Once
       the owner signs it, a divergence is fixed by a new dated amendment, never by
@@ -281,18 +318,32 @@ on the spot.
   copy resolves the same modules — the tracked tree measured 20 MB at
   `49d3d467`. Whatever the mechanism, BASELINE green in the sandbox is what
   proves the copy is equivalent, so a sandbox that silently loses something
-  cannot pass.
+  cannot pass. **That `node_modules` link is resolution-only** — the runner
+  reads through it and never writes through it (Table B row 2b), so it is not a
+  hole in boundary 1.
 - **Named residual:** an interrupted run leaves its sandbox directory behind
-  under the temp root. The working tree is unaffected by construction (nothing
-  outside the sandbox is written), and `tests/with-temp-root.js` scopes and
-  deletes the run's temp root when the run completes. This is the same residual
-  that wrapper already documents for signal-terminated runs, and it is not
-  widened here.
+  under the temp root. The tracked checkout is unaffected by construction (the
+  runner's own writes go inside the copy), and `tests/with-temp-root.js` scopes
+  and deletes the run's temp root when the run completes. This is the same
+  residual that wrapper already documents for signal-terminated runs, and it is
+  not widened here.
+- **The spawned suite is not confined to the copy, and the spec does not pretend
+  it is** (Table B row 2b). The adopted suite `mkdtemp`s under `os.tmpdir()`,
+  which the wrapper points at its own run root. Redirecting the child's
+  TMPDIR/TMP/TEMP *into* the copy is a legitimate implementation choice and would
+  tighten boundary 2; it is **not required**, because the wrapper already deletes
+  what it scopes and no acceptance criterion rests on the stronger claim.
 - **Do not add a second place that sets `WIENERDOG_TEST_NO_REAL_SCHEDULER`.**
   Spawning the sandbox's `tests/run.js` is what keeps it at one (Table D).
-- **Failure-set identification is a property, not a parser.** The runner must
-  determine which named tests failed and what their diagnostics said; TAP is the
-  reporter because it is machine-readable. How it is read is the implementer's.
+- **Identity, terminal status and failure kind are properties, not a parser.**
+  The runner must determine which declared identities ran, whether each reached a
+  terminal PASS, which failed, whether a failure was an assertion failure of the
+  test's own body rather than a load/parse/hook/timeout event, and what its
+  diagnostic said. TAP is the reporter because it carries all of that; **how it
+  is read is the implementer's.** Node's TAP diagnostics expose the distinction
+  (a test-code assertion failure versus other failure types) — use whatever field
+  the running Node version actually emits, and fail loudly if it is absent rather
+  than assuming a failure was an assertion.
 - **Do not enumerate criteria out of spec markdown**, and do not add a check that
   a spec's criteria all carry proofs — Table C's standing-limit row records why that
   direction was retired by measurement.
@@ -306,13 +357,23 @@ on the spot.
 - [ ] The template's untrusted-identifier item is **N/A — no untrusted identifier
       reaches a filesystem path or a shell command.** Declaration files are
       committed, developer-authored repository content, not input from a user
-      machine, and the runner spawns `process.execPath` with an argument array —
-      never a shell command string, and never a `find`/`replace` value on a
-      command line.
-- [ ] **The one security-relevant property: the runner writes nothing outside its
-      own disposable sandbox** (Table B row 2, criterion 7). It ships nothing to
-      a user machine — `package.json`'s `files` list is `bin/`, `src/`, `skills/`,
-      `templates/`, none of which this WP touches — and it adds no runtime
+      machine; they are **parsed as JSON and never executed**; and the runner
+      spawns `process.execPath` with an argument array — never a shell command
+      string, and never a `find`/`replace` value on a command line.
+- [ ] **`file` is a path this repo's own content controls, and it is still
+      validated as if it were not.** It must canonicalise inside the sandbox
+      copy: `..`, an absolute path and a symlink escape are each an ERROR, and
+      the check is on the RESOLVED path, not the literal — a start-anchored or
+      literal-only check accepts `a/../../x`. Criterion 7 requires the escape
+      case observed as a red.
+- [ ] **The security-relevant property, stated as the two boundaries it actually
+      keeps** (Table B rows 2 and 2b): the runner's own writes — copy, mutation,
+      restore — stay inside the copied tree, and the spawned suite's scratch
+      writes stay inside the wrapper-owned temp root that the wrapper deletes.
+      **Neither is a universal "nothing outside is written"**, and criterion 7
+      says what its check can and cannot see. The runner ships nothing to a user
+      machine — `package.json`'s `files` list is `bin/`, `src/`, `skills/`,
+      `templates/`, none of which this WP touches — and adds no runtime
       dependency, no network access and no process that outlives the run.
 - [ ] **Named residual:** the interrupted-run sandbox directory, above. It
       contains only a copy of committed repository content.
@@ -321,23 +382,49 @@ on the spot.
 
 - [ ] 1. **The declaration format is Table A, and a violation is an ERROR.**
       Every required field's absence, and every stated rule's violation —
+      an empty string in any string field (`signal` and `find` included),
       `replace` equal to `find`, `replace` not containing `marker`, a duplicate
-      `id`, an `occurrences` count that does not match, a `marker` already
-      present in the pristine file, an empty `proofs` array — is reported as an
-      ERROR naming the declaration file and the proof id, and exits non-zero.
-      Never a skip, never a pass.
+      `id`, a duplicate `test` identity within one `expectRed`, an
+      `occurrences` value that is not a positive integer or does not match the
+      counted occurrences, a `marker` already present in the pristine file, a
+      `file` equal to `suite`, a `file` naming the runner or a declaration, and
+      an empty `proofs` array — is reported as an ERROR naming the declaration
+      file and the proof id, and exits non-zero. Never a skip, never a pass.
+- [ ] 1a. **Declarations are inert.** They are loaded with `JSON.parse` and never
+      executed. Show it: a declaration file whose bytes would, under an
+      executing loader, terminate the process successfully or write to the
+      checkout is instead **rejected as invalid JSON or invalid schema**, and
+      the run exits non-zero having written nothing. LOAD precedes SANDBOX, so
+      this is the one phase where confinement does not yet exist.
 - [ ] 2. **The phases run in Table B's order and each rules out what its row
       names.** In particular a proof cannot reach RED without APPLY having proved
-      the mutation landed (`marker` absent → present, digest changed).
-- [ ] 3. **BASELINE proves the named tests exist and pass before anything is
-      mutated.** A declared `expectRed[].test` that does not RUN in the baseline —
-      renamed, deleted, or excluded by `testNamePattern` — is an ERROR, not a
-      pass. Show it against a pattern that matches nothing, which `node --test`
-      reports as 0 failures.
-- [ ] 4. **RED is the cell's own.** With the mutation applied, the observed
-      failing-test set equals the declared set and each carries its `signal`. A
-      green run, an unlisted failing test, or a missing `signal` each makes the
-      proof FAILED and the run exit non-zero. Show all four outcomes.
+      the mutation landed — `marker` absent → present, and the written bytes
+      **equal the expected post-mutation bytes**.
+- [ ] 2a. **APPLY's transformation is exact** (Table A's `find`/`occurrences`
+      rows). Occurrences are counted left-to-right and non-overlapping; every
+      counted occurrence is replaced; the result must equal the computed
+      expected bytes. Show that a declaration whose `occurrences` disagrees with
+      the counted number is an ERROR, and that a `find` with overlapping
+      candidates (`aa` in `aaa`) is counted and replaced by that one rule rather
+      than by whichever the implementation happened to pick.
+- [ ] 3. **BASELINE proves each declared identity ran, passed, and did so once.**
+      A declared identity that does not RUN — renamed, deleted, or excluded by
+      `testNamePattern` — is an ERROR, not a pass; so is one observed as SKIP,
+      TODO or CANCELLED, one observed more than once, and any file-, parse-,
+      load-, hook- or suite-level failure. Show it against a pattern matching
+      nothing: **measured this round, that prints an inner `1..0` under an outer
+      file-level `ok` and exits 0**, so a naive "the run was green" check passes
+      there.
+- [ ] 4. **RED is an assertion failure of the named test, and the cell's own.**
+      With the mutation applied, the observed failing-identity set equals the
+      declared set; each failure is a **test-code assertion failure of that
+      test's own body**, not a parse, load, hook, timeout or cancellation; and
+      each diagnostic carries its non-empty `signal`. A green run, an unlisted
+      failing identity, a missing `signal`, and a failure that is not an
+      assertion failure each make the proof FAILED and the run exit non-zero.
+      Show all five outcomes — **the last one with a mutation that makes the
+      module fail to load, which reddens the named test without ever reaching
+      its assertion.**
 - [ ] 5. **RESTORE closes the loop.** The pristine digest is restored and the
       suite is green again; a restored run that is still red is an ERROR — the
       red was ambient, not the mutation's.
@@ -347,34 +434,65 @@ on the spot.
       declaration set must be shown RED**, beside a real green on the adopted
       set — a runner that reports green on nothing is the exact failure it
       exists to catch.
-- [ ] 7. **Nothing outside the sandbox is written.** `git status --porcelain` is
-      byte-identical before and after a full run, and after a run in which a
-      proof FAILED. No clean-tree precondition is needed, and none is added.
+- [ ] 6a. **A filtered run never reports a criterion PROVEN on part of its
+      evidence** (Table B row 7). With two proofs declared for one
+      `(wp, criterion)`, selecting one with `--proof` reports that proof PROVEN
+      and the criterion **`FILTERED`**, naming the declaration left out; only an
+      unfiltered run in which both ran and passed reports it PROVEN. Show both.
+- [ ] 7. **The two write boundaries hold, and each check is reported for what it
+      establishes** (Table B rows 2 and 2b). **(a)** A declaration whose `file`
+      canonicalises outside the copy — by `..`, by an absolute path, and by a
+      symlink, each shown — is an ERROR before any write. **(b)**
+      `git status --porcelain` is byte-identical before and after a full run and
+      after a run in which a proof FAILED; **this establishes only that the
+      tracked checkout is unchanged NET** — it cannot see a write-then-restore,
+      an untracked write, or a write elsewhere on disk, and the criterion says so
+      rather than resting the boundary on it. **(c)** No clean-tree precondition
+      is needed, and none is added.
 - [ ] 8. **No production seam is borrowed** (Table D). The runner requires
       nothing under `src/` and nothing outside Node's standard library, spawns no
       `git`, and starts every suite through the sandbox's `tests/run.js` rather
       than `node --test`, so the scheduler guard applies to every child.
 - [ ] 9. **Adopted on one existing suite, and `npm run red-proofs` reports every
-      proof PROVEN.** `tests/red-proofs/dream-pipeline.proofs.js` declares **at
+      proof PROVEN.** `tests/red-proofs/dream-pipeline.proofs.json` declares **at
       least two** proofs against `tests/unit/dream-pipeline.test.js`, satisfying
       both: **(a)** at least one whose `file` is under `src/`, so the runner is
       shown reaching production code; **(b)** at least one whose `expectRed`
       names one of that guard's own non-vacuity canaries (Current state lists
       them), so a canary is shown to be non-vacuous. **Those canaries live inside
       the three parameterised tests, not in tests of their own, so it is the
-      `signal` that names the canary and the `test` that names its host.** Which
-      mutations achieve this is the implementer's.
+      `signal` that names the canary and the `test` that names its host.**
+      **The mutation-to-canary relationship must be stated and checked, not
+      assumed:** for (b) the PR must say which input the canary observes and how
+      the mutation changes it — a proof that instead edits the canary's expected
+      value or its host suite is rejected by Table A's `file` row and does not
+      satisfy this criterion. A worked, legitimate shape (**an existence proof,
+      not a prescription**): the canary asserts that `classify` rejects the
+      two-token `read-tree --index-output=<user index>`, and what it observes is
+      the pinned call set, so widening that slot in
+      `tests/unit/dream-pipeline.known-calls.js` changes the observed condition
+      rather than the assertion. **If that module is the one mutated, note that
+      its source form is digest-pinned** — the pin test fails too, so it belongs
+      in `expectRed` or must be excluded by `testNamePattern`; Table B row 5's
+      EQUAL rule makes an unlisted collateral failure an ERROR, and that is the
+      intended behaviour, not an obstacle. Which mutations are declared remains
+      the implementer's.
 - [ ] 10. **The report states its own reach.** Every run — green or red — ends
       with a footer carrying Table C's standing limit in the runner's own output,
       following `scripts/mirror-walk.js`'s `REACH` precedent, so a green is never
-      read as "this criterion is non-vacuous".
+      read as "this criterion is non-vacuous". The footer names **completeness**
+      and **semantic relevance of the declared mutation** as the two things it
+      does not establish, and describes the run's **selected** evidence — on a
+      filtered run it says so rather than saying "each declared mutation".
 - [ ] 11. **`npm test` does not run RED proofs** (Table D). The runner's own
       suite runs against `tests/fixtures/red-proofs/` via `--root` and loads no
       declaration from `tests/red-proofs/`, so `npm test` starts no real suite
       through the runner.
 - [ ] 12. **Idempotency:** two consecutive `npm run red-proofs` runs give the
       same verdict and leave `git status --porcelain` byte-identical — the
-      command writes nothing outside its disposable sandbox.
+      runner's own writes stay inside its disposable copy, and the suite's
+      scratch inside the wrapper-owned temp root the wrapper deletes (Table B
+      rows 2 and 2b).
 - [ ] 13. `npm test` and `npm run lint` pass; `boundary-check` is clean.
 
 ## Verification steps (run these; paste output in the PR)
@@ -397,12 +515,14 @@ echo "red-proofs exit=$?"
 ! npm run --silent red-proofs -- --proof no-such-proof-exists \
   && echo "vacuity guard: an empty selection exits non-zero"
 
-# Criterion 7 — a full run leaves the working tree untouched.
+# Criterion 7(b) — the tracked checkout is unchanged NET by a full run. This
+# cannot see a write-then-restore, an untracked write, or a write elsewhere:
+# 7(a)'s escape ERRORs are what carry the boundary.
 git status --porcelain > /tmp/wd-tree-before.txt
 npm run red-proofs
 git status --porcelain > /tmp/wd-tree-after.txt
 diff /tmp/wd-tree-before.txt /tmp/wd-tree-after.txt \
-  && echo "working tree unchanged by a full run"
+  && echo "tracked checkout unchanged (net) by a full run"
 
 # Criterion 8 — a FLOOR on the runner's source text, not a proof of its imports.
 # GUARDED: a bare negated grep passes hardest when the file does not exist.
@@ -427,15 +547,22 @@ one:
 
 - the vacuity guard: green on the adopted set, RED on an empty declaration
   directory and on the unmatched `--proof` selector above (criterion 6);
+- the roll-up: PROVEN on an unfiltered run over both of a criterion's proofs,
+  `FILTERED` on the same criterion with one selected (criterion 6a);
 - the working-tree diff: green after a full run, and green again after a run in
-  which a proof FAILED (criterion 7);
+  which a proof FAILED (criterion 7b) — **paired with 7(a)'s three escape
+  ERRORs (`..`, absolute, symlink), which are what the boundary actually rests
+  on**;
 - **both guarded negated greps in all THREE states** — file absent → RED, file
   compliant → green, file violating → RED. They establish only that the source
   text lacks a pattern; criterion 8's substance rests on criterion 9's pasted
   runs and on review;
-- every ERROR and FAILED outcome criteria 1, 3, 4 and 5 enumerate, each shown as
-  a non-zero exit with the offender named. Those criteria own their lists and
-  this inventory does not restate them.
+- every ERROR and FAILED outcome criteria 1, 1a, 2a, 3, 4 and 5 enumerate, each
+  shown as a non-zero exit with the offender named. Those criteria own their
+  lists and this inventory does not restate them. **Two deserve naming as the
+  ones this round's gate produced:** the load-failure mutation of criterion 4,
+  which reddens the named test without reaching its assertion, and criterion 1a's
+  inert-format case.
 
 ## Out of scope (do NOT do these)
 

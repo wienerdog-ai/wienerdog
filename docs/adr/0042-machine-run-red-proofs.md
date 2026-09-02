@@ -44,13 +44,21 @@ a result.
 
 ## Decision
 
-1. **RED evidence may be machine-run from a committed declaration.** A *RED
-   proof* is a declared exact-substring mutation plus the set of named
-   assertions it must redden, committed beside the suite it proves. Running it
-   applies the mutation, proves it landed, requires the declared assertions —
-   and only those — to fail for their own stated reason, restores, and requires
-   green again. A criterion whose proofs all pass is `PROVEN`; anything else
-   exits non-zero.
+1. **RED evidence may be machine-run from a committed declaration, and the
+   declaration is INERT DATA.** A *RED proof* is a declared exact-substring
+   mutation plus the named assertions it must redden, committed beside the suite
+   it proves **as JSON that is parsed and validated, never executed**. Running it
+   applies the mutation, proves it landed, requires the declared assertions — and
+   only those — to fail **as assertion failures of their own test bodies**,
+   restores, and requires green again. A criterion is `PROVEN` only when **every**
+   declaration for it was selected, ran and passed; a filtered run reports the
+   criterion as filtered, never proven. Anything else exits non-zero.
+
+   The format is data rather than code because declarations are read *before*
+   the disposable copy exists: an executable declaration could exit the process
+   successfully before any proof is counted, or write to the checkout before
+   confinement. That is a property of the phase order, not of any author's
+   discipline, and JSON removes it.
 
 2. **Proofs run in their own lane, never in `npm test`.** `npm test` stays a
    fast, side-effect-free regression signal; a proof run re-executes a whole
@@ -58,28 +66,48 @@ a result.
    measured at `49d3d467`). Once this ADR is signed the lane also gets its own CI
    job, so a proof that stops proving fails the PR.
 
-3. **A proof run never modifies the working tree.** Mutations are applied inside
-   a disposable copy of the repository, which the run deletes. This removes the
-   whole class of crash residue, dirty-tree false reds, and "the tool edited my
-   checkout" — and it is why no clean-tree precondition or restore-by-`git
-   checkout` is needed.
+3. **A proof run does not modify the working tree, and it keeps TWO bounded
+   write boundaries rather than one universal promise.** The runner's own writes
+   — the copy, the mutation, the restore — stay inside a disposable copy of the
+   repository, which the run deletes, and a declared mutation path that
+   canonicalises outside that copy is refused. The spawned suite's scratch
+   writes stay inside the test wrapper's own run-scoped temp root, which that
+   wrapper deletes; they do not land inside the copy, because suites allocate
+   scratch through the system temp directory. Links to installed dependencies
+   are resolution-only. This removes crash residue, dirty-tree false reds and
+   "the tool edited my checkout" — and it is why no clean-tree precondition is
+   needed. **A single "nothing outside the sandbox is written" claim would be
+   unsatisfiable, and stating it would only guarantee that every implementation
+   silently enforced something narrower.**
 
-4. **The runner borrows no production seam.** It imports nothing from `src/` and
-   depends on nothing outside Node's standard library, so a red it reports can
-   only be the cell's. It runs and exits — no daemon, no server, no telemetry
-   (ADR-0004).
+4. **The runner borrows no production seam** — it imports nothing from `src/`
+   and depends on nothing outside Node's standard library. **This removes the
+   measured production-seam contamination class; it does not by itself make a
+   red the cell's.** Attribution rests on the whole chain: a baseline in which
+   each named identity ran and passed exactly once, an apply step that proves the
+   exact expected bytes were written, a red that is an assertion failure of the
+   named test rather than a parse, load or hook failure, a restore that returns
+   the suite to green — and, beyond any of it, a reviewed judgment that the
+   mutation is relevant to what the assertion observes (decision 5). The runner
+   runs and exits — no daemon, no server, no telemetry (ADR-0004).
 
-5. **A green proves the declared mutation reddens the named assertion, and
-   nothing more.** It does not establish that the declared set is complete, that
-   a criterion has any proof at all, or that a test is non-vacuous in ways nobody
-   declared. Completeness stays a review judgment, and the runner's report says
+5. **A green proves the selected declared mutations redden the named assertions,
+   and nothing more.** It does not establish that the declared set is complete,
+   that a criterion has any proof at all, that a test is non-vacuous in ways
+   nobody declared, or that a declared mutation is **semantically relevant** —
+   that it changes the condition the assertion observes rather than something
+   merely upstream of the same failure. Mechanical rules reject the direct form
+   of an irrelevant mutation (a proof may not edit the assertion, its host suite,
+   the runner or a declaration); the general property is not machine-decidable.
+   Completeness and relevance stay review judgments, and the runner's report says
    so in its own output rather than leaving a reader to infer it.
 
 ## Consequences
 
-- A new committed artifact class (`tests/red-proofs/*.proofs.js`) that must be
+- A new committed artifact class (`tests/red-proofs/*.proofs.json`) that must be
   maintained with the code it mutates: a `find` string that stops matching is a
-  loud error, by design.
+  loud error, by design. Being JSON, it carries no comments — the `why` field
+  exists so a proof can still say what it is for.
 - Review rounds can stop re-deriving mutation evidence by hand for criteria that
   carry a declaration; what they must still judge is whether the declared set is
   the right one.
@@ -102,7 +130,17 @@ a result.
 - **Declaring mutations in the spec's own markdown and parsing them out.** A
   checker that must locate its subject inside a large prose file enumerates the
   ways the host format can hide it, and that never closes — measured over four
-  rounds in `WP-show-slot-own-value-kind`. Give the artifact a file of its own.
+  rounds in `WP-show-slot-own-value-kind`. Give the artifact a file of its own;
+  decision 1 does exactly that, and settles the file's format separately.
+- **An executable (CommonJS) declaration file**, which was the first draft.
+  Convenient — comments, computed values, shared constants — but declarations
+  are loaded before the disposable copy exists, so the file's own top-level code
+  runs unconfined: `process.exit(0)` reports success over zero proofs and
+  defeats every vacuity guard at once, and a top-level write reaches the real
+  checkout. A "no dependencies, no side effects" convention cannot enforce
+  either. A restricted child loader could police premature exit and output but
+  **still could not enforce the filesystem boundary**, so the closable answer is
+  a format with no execution semantics.
 - **Applying mutations with `sed`/shell string surgery.** The measured cause of
   three false greens. Node-side exact-substring replacement with an
   occurrence-count check and a post-write marker grep has no escaping layer.
