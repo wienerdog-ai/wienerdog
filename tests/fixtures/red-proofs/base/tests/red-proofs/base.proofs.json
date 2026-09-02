@@ -1,0 +1,31 @@
+{
+  "suite": "tests/suite-basic.js",
+  "proofs": [
+    {
+      "id": "fixture-greeting",
+      "wp": "WP-red-proofs-fixture",
+      "criterion": "1",
+      "why": "the greeting assertion is not vacuously green — changing the value it observes reddens it",
+      "file": "subject/subject.js",
+      "find": "const greeting = 'hello';",
+      "replace": "const greeting = 'RP_MUT_GREETING';",
+      "marker": "RP_MUT_GREETING",
+      "expectRed": [
+        { "test": ["fixture basic: the greeting is hello"], "signal": "RP-SIGNAL-GREETING" }
+      ]
+    },
+    {
+      "id": "fixture-arity",
+      "wp": "WP-red-proofs-fixture",
+      "criterion": "1",
+      "why": "the arity assertion is not vacuously green — changing the value it observes reddens it",
+      "file": "subject/subject.js",
+      "find": "const arity = 2;",
+      "replace": "const arity = 3; /* RP_MUT_ARITY */",
+      "marker": "RP_MUT_ARITY",
+      "expectRed": [
+        { "test": ["fixture basic: the arity is two"], "signal": "RP-SIGNAL-ARITY" }
+      ]
+    }
+  ]
+}
