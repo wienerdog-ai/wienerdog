@@ -1,4 +1,4 @@
-PR GATE ROUND 1 — PR #205 — herdr-spawned hermetic Codex shadow #2 (CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 70a639c0, fresh thread, pr-rubric.md applied). Captured via an approved scratch-file write. Approvals granted: V4 comment probe, D4 probe and the V5 five-counterfactual probe, all in mktemp copies. Worktree porcelain empty before and after (re-checked: 0 entries).
+PR GATE ROUND 1 — PR #205 — herdr-spawned hermetic Codex shadow #2 (CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 70a639c0, fresh thread, pr-rubric.md applied). Captured via an approved scratch-file write (this is the COMPLETE report; an earlier commit of this file carried the first chunk only, before the reviewer's second write was approved). Approvals granted: V4 comment probe, D4 probe and the V5 five-counterfactual probe, all in mktemp copies. Worktree porcelain empty before and after (re-checked: 0 entries).
 
 {
   "findings": [
@@ -14,3 +14,6 @@ PR GATE ROUND 1 — PR #205 — herdr-spawned hermetic Codex shadow #2 (CODEX_HO
     }
   ],
   "overall_correctness": "patch is incorrect",
+  "overall_explanation": "EXECUTED: rubric read exit 0; initial git status exit 0 and empty; diff name/boundary inspection, complete spec read, focused deliverable reads, and git diff --check all exit 0; npm test exit 0 (2465 tests, 2453 pass, 0 fail, 12 skipped); npm run lint NOT RUN because the user declined it and stated the orchestrator runs lint; V2/V3 lexical guards exit 0; V4 exact catch-comment comparison exit 0; Q18/B3b exact-clause check exit 0; D4 stale-temp mkdtemp probe exit 0 and reproduced deletion; final git status exit 0 and empty, identical to the initial status. V5 ran five full-suite counterfactuals in isolated mkdtemp archive copies: trigger, P4, P6, read-back, and disposal each exited 1 and each named failing assertions in this WP's changed dream-validate or dream-promote tests; the collector exited 0, and unrelated concurrency-sensitive reap/update checks also failed in those parallel mutation runs but were not used as evidence. The diff boundary exactly matches the seven Deliverables plus the governing spec and the exact mirrored prose is compliant, but the reproduced D4 pre-existing-temp deletion can silently lose quarantined bytes, so the patch is not correct.",
+  "overall_confidence_score": 0.99
+}
