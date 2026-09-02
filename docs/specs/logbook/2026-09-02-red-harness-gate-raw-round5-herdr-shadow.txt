@@ -1,0 +1,38 @@
+SHADOW ROUND 5 (closing confirmation; herdr-spawned hermetic Codex #2, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 0238f697, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: scoped dream-pipeline runs (control and with an ambient WIENERDOG_CLAUDE_DIR) and a disposable chmod-0500 parent probe. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No ship: R4-B/D are closed, but R4-A omits a real adopted-suite path override and R4-C still assigns conflicting verdicts.
+
+FINDING 1
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 193-209, 359-373, 624-644
+Confidence: 0.99
+Materiality: B
+Body: The “total” taxonomy remains contradictory. Table A, E2, and criterion 4 classify an unlisted own-body failure as FAILED, but the identity prose and criterion 4a classify any peer failure as ERROR. A peer assertion failure is exactly an unlisted own-body failure. Precedence cannot resolve this because the conflict is in classification itself, allowing incompatible implementations and test expectations.
+Recommendation: Classify every unlisted own-body failure, including peers, as FAILED. Reserve ERROR for infrastructure/non-own-body propagation, absent TAP fields, and ambiguous identity; align criterion 4a and its mirrors.
+
+FINDING 2
+Affected file: docs/specs/WP-criterion-red-harness.md
+Lines: 256, 292-298
+Confidence: 1.0
+Materiality: B
+Body: The enumerated provided set omits `WIENERDOG_CLAUDE_DIR`. `src/core/paths.js:11,56-61` defines it as a path override with precedence over `CLAUDE_CONFIG_DIR`; `dream-pipeline.test.js:41-43,307-319` neither saves nor clears it. The scoped adopted row passed normally but failed under an ambient absolute `WIENERDOG_CLAUDE_DIR`, with its git-seam canary unexercised. Therefore the claimed measurement that the provided set covers what the adopted suite relies on is false, and `npm run red-proofs` can fail BASELINE solely because of developer environment.
+Recommendation: Redirect or clear `WIENERDOG_CLAUDE_DIR` per phase, add it to Table B/D and the ADR mirror, and add an acceptance fixture proving a hostile ambient value cannot affect another phase.
+
+SCOPE OBJECTIONS
+None.
+
+EXECUTED
+- Repository status/revisions and `git diff --stat/name-only main...HEAD`: exit 0; HEAD `0238f697`, main `9870f79a`.
+- Full requested-file and round-record inspection with `nl`, `sed`, `wc`, and `rg`: exit 0.
+- `git diff 4ba901ed..HEAD` over the spec and ADR: exit 0.
+- Guarded runner-import grep: exit 1 because `scripts/red-proofs.js` is absent.
+- Guarded `npm test`/RED-lane grep: exit 0.
+- Environment-variable greps over `tests/` and `src/core/paths.js`: exit 0; found omitted `WIENERDOG_CLAUDE_DIR`.
+- Scoped dream-pipeline control: exit 0; 1 pass.
+- Same scoped test with ambient `WIENERDOG_CLAUDE_DIR`: exit 1; 1 assertion failure, git seam unexercised.
+- Disposable chmod-0500 parent probe: exit 0; child write exited 1 with `EACCES`, no sentinel created, cleanup completed.
+- `node scripts/mirror-walk.js --scope criterion-red`: exit 0; non-vacuous, resolved.
+- `git diff --check main...HEAD`: exit 2 on previously committed trailing whitespace in verbatim round raws.
+- Final `git status --short --branch`: exit 0; detached and clean.
+
+DONE_ROUND_5
