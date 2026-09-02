@@ -95,6 +95,29 @@ const SKIP_ON_UNSUPPORTED_HOST = HOST_REASON
   ? { skip: `this host cannot enforce the lane, which the runner refuses by design: ${HOST_REASON}` }
   : {};
 
+/**
+ * INJECTING A SUPPORTED HOST BYPASSES THE REFUSAL, NOT THE FILESYSTEM. Under
+ * uid 0 or on win32 a 0500 directory does not actually stop a child — root
+ * ignores the permission check and Windows has no POSIX mode — so the cases
+ * that assert an EACCES from the phase isolation would get no error and fail
+ * for a reason that is the HOST's, not the code's. Those cases are gated on the
+ * REAL host; every other functional case keeps the injected one and stays
+ * meaningful everywhere.
+ */
+const SKIP_WITHOUT_MODE_ENFORCEMENT = SKIP_ON_UNSUPPORTED_HOST;
+
+/** `mkfifo` is POSIX-only, and absent on a standard Windows development host. */
+const MKFIFO_OK = (() => {
+  if (process.platform === 'win32') return false;
+  const probe = spawnSync('mkfifo', ['--version'], { encoding: 'utf8' });
+  // BSD `mkfifo` has no `--version` and exits non-zero; ENOENT is the only
+  // answer that means "not installed".
+  return !(probe.error && probe.error.code === 'ENOENT');
+})();
+const SKIP_WITHOUT_MKFIFO = MKFIFO_OK
+  ? {}
+  : { skip: 'mkfifo is unavailable on this host, so a FIFO cannot be created to refuse' };
+
 /** @param {string} root @param {Object} [opts] @returns {Object} */
 const run = (root, opts = {}) => rp.runAll({ host: SUPPORTED_HOST, root, ...opts });
 
@@ -323,7 +346,7 @@ test('red-proofs: a declared identity observed as SKIP is an ERROR, not a termin
   assert.ok(r.report.includes('observed as SKIP'), r.report);
 });
 
-test('red-proofs: a suite-level failure at BASELINE is an ERROR, and V3 records that no mutation was applied (criteria 3, 6)', () => {
+test('red-proofs: a suite-level failure at BASELINE is an ERROR, and V3 records that no mutation was applied (criteria 3, 6)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   const r = run(newRoot({ suite: 'tests/suite-parent-write.js', proofs: [proof({
     expectRed: [{ test: ['fixture parent: writes ../rp-parent-sentinel'], signal: 'RP-SIGNAL-GREETING' }],
   })] }));
@@ -681,7 +704,7 @@ test('red-proofs: a suite that plants a symlink at the mutation target AND at a 
   }
 });
 
-test('red-proofs: NO TWO PHASES SHARE A WRITABLE PATH THE RUNNER PROVIDES — temp, HOME, the common parent and an ambient override (criterion 7b2)', () => {
+test('red-proofs: NO TWO PHASES SHARE A WRITABLE PATH THE RUNNER PROVIDES — temp, HOME, the common parent and an ambient override (criterion 7b2)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   const ambient = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-ambient-'));
   const saved = { w: process.env.WIENERDOG_CLAUDE_DIR, a: process.env.RP_AMBIENT_CLAUDE_DIR };
   process.env.WIENERDOG_CLAUDE_DIR = ambient;
@@ -702,7 +725,7 @@ test('red-proofs: NO TWO PHASES SHARE A WRITABLE PATH THE RUNNER PROVIDES — te
   }
 });
 
-test('red-proofs: the copies\' common parent is held NON-WRITABLE, so a suite writing `../sentinel` FAILS during BASELINE (criterion 7b2)', () => {
+test('red-proofs: the copies\' common parent is held NON-WRITABLE, so a suite writing `../sentinel` FAILS during BASELINE (criterion 7b2)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   const r = run(newRoot({
     suite: 'tests/suite-parent-write.js',
     proofs: [proof({ expectRed: [{ test: ['fixture parent: writes ../rp-parent-sentinel'], signal: 'RP-SIGNAL-GREETING' }] })],
@@ -820,7 +843,7 @@ test('red-proofs: the completeness gate names every way a run can fail to finish
   }
 });
 
-test('red-proofs: a FIFO in the source tree is an ERROR naming its path, with a verdict and the REACH footer (Table E1)', () => {
+test('red-proofs: a FIFO in the source tree is an ERROR naming its path, with a verdict and the REACH footer (Table E1)', SKIP_WITHOUT_MKFIFO, () => {
   const root = newRoot();
   const fifo = path.join(root, 'a-fifo');
   const mk = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
@@ -924,7 +947,7 @@ test('red-proofs: a MODE DRIFT introduced into a phase copy is caught the same w
   assert.ok(r.report.includes('mode differs: bin/rp-exec.js (755 -> 644)'), r.report);
 });
 
-test('red-proofs: NO SIBLING COPY EXISTS while a child runs, and neither the sandbox nor the snapshot is writable from it (criterion 7b2)', () => {
+test('red-proofs: NO SIBLING COPY EXISTS while a child runs, and neither the sandbox nor the snapshot is writable from it (criterion 7b2)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   const r = run(newRoot({
     suite: 'tests/suite-traversal.js',
     proofs: [proof({ expectRed: [{ test: ['fixture trav: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
@@ -1063,7 +1086,7 @@ test('red-proofs: a declaration edited between LOAD and SNAPSHOT is an ERROR nam
   assert.ok(/not readable in the snapshot|could not be read/.test(r2.report), r2.report);
 });
 
-test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FIFO must not block, a symlink must not be followed (Table E1)', SKIP_ON_UNSUPPORTED_HOST, () => {
+test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FIFO must not block, a symlink must not be followed (Table E1)', MKFIFO_OK ? SKIP_ON_UNSUPPORTED_HOST : SKIP_WITHOUT_MKFIFO, () => {
   const fifoRoot = newRoot();
   const fifo = path.join(fifoRoot, 'tests', 'red-proofs', 'b.proofs.json');
   const mk = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
@@ -1181,6 +1204,26 @@ test('red-proofs: the wrapper is recognised by REPORTER STRUCTURE, not by name (
     'the ambiguous shape is KEPT — dropping it is how an undeclared own-body failure vanishes'
   );
 
+  // (e) THE NODE 20 SPELLING — measured on v20.20.2, the wrapper carries the
+  //     ABSOLUTE path while v25.9.0 carries the path as given. Without the
+  //     path-suffix branch the wrapper is KEPT and every real test nests under
+  //     it, so a declaration naming a bare test name matches nothing and every
+  //     proof ERRORs at BASELINE — fail-safe, but the lane is inoperative on the
+  //     Node CI actually runs.
+  const node20Absolute = [
+    'TAP version 13', '# Subtest: /home/runner/work/wienerdog/wienerdog/tests/suite-basic.js',
+    '    # Subtest: fixture basic: the greeting is hello',
+    '    ok 1 - fixture basic: the greeting is hello',
+    '    1..1',
+    'ok 1 - /home/runner/work/wienerdog/wienerdog/tests/suite-basic.js',
+    '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(node20Absolute, suite)).map((n) => n.path.join('>')),
+    ['fixture basic: the greeting is hello'],
+    'the absolutely-spelled wrapper is unwrapped and the identity is the bare test name'
+  );
+
   // (d) a name-matching node WITH children is the wrapper, and unwraps.
   const wrapped = [
     'TAP version 13', '# Subtest: tests/suite-basic.js',
@@ -1205,6 +1248,95 @@ test('red-proofs: a declaration ADDED between LOAD and SNAPSHOT is an ERROR nami
   // Without the set comparison the added file is copied, manifest-verified and
   // ignored — its proofs never run while their criterion rolls up as complete.
   assert.equal(r.proofs.length, 0, 'nothing runs once the declaration set is untrustworthy');
+});
+
+// ── ROUND-4 FINDINGS — each one's RED
+
+test('red-proofs: a suite path that a command line reads as an OPTION is refused at LOAD, before any argv is built (Table A `suite`)', () => {
+  const root = newRoot({ suite: '--test-name-pattern=target' });
+  // The file really exists, so nothing here rests on it being missing.
+  fs.writeFileSync(path.join(root, '--test-name-pattern=target'),
+    "'use strict';\nrequire('node:test')('fixture dash: ran the declared file', () => {});\n");
+  const r = run(root);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('must not begin with "-"'), r.report);
+  assert.equal(r.proofs.length, 0, 'nothing runs, so default discovery is never reached');
+});
+
+test('red-proofs: `runSuite` refuses the same shape, so no internal caller can reach the measured HANG (Table A `suite`)', () => {
+  // MEASURED on v25.9.0, in a tree whose fixture suites are not discoverable:
+  //   node --test --test-reporter=tap '--test-name-pattern=target'  -> 1..0, exit 0
+  //     (the path was read as an OPTION and DEFAULT DISCOVERY ran instead)
+  //   node --test --test-reporter=tap -- '--test-name-pattern=target' -> HANGS
+  //     (Node waits for a script on stdin; killed at 20 s)
+  // The terminator alone therefore does not rescue this path — it converts a
+  // wrong run into an unreportable one — so the path is refused at both layers.
+  // OUT OF PROCESS, WITH A TIMEOUT, for the round-2 reason: without the guard
+  // this call BLOCKS SYNCHRONOUSLY inside spawnSync, and a synchronous block
+  // cannot be interrupted by a test timeout — in-process, a regression here
+  // would hang the suite and CI rather than failing them.
+  const probe = spawnSync(process.execPath, ['-e', `
+    const rp = require(process.argv[1]);
+    try { rp.runSuite(process.argv[2], '--test-name-pattern=target', undefined); console.log('NO-REFUSAL'); }
+    catch (e) { console.log(e.verdict + ':' + e.message); }
+  `, RUNNER_SRC, BASE], { encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.equal(probe.signal, null, 'runSuite must refuse the path, never block on it');
+  assert.ok(/^ERROR:.*begins with "-"/.test(probe.stdout.trim()), probe.stdout + probe.stderr);
+});
+
+test('red-proofs: the option terminator is present and harmless for a legal path (Table A `suite`)', () => {
+  const src = fs.readFileSync(RUNNER_SRC, 'utf8');
+  assert.ok(src.includes("args.push('--', suiteRel)"), 'the suite path follows an option terminator');
+  // And a normal path still runs its own file through it — measured, 2 tests.
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-term-'));
+  fs.cpSync(BASE, copy, { recursive: true });
+  for (const d of ['.red-proofs-tmp', '.red-proofs-home', '.red-proofs-xdg/config',
+    '.red-proofs-xdg/cache', '.red-proofs-xdg/data', '.red-proofs-xdg/state']) {
+    fs.mkdirSync(path.join(copy, d), { recursive: true });
+  }
+  const out = rp.runSuite(copy, 'tests/suite-basic.js', undefined);
+  assert.equal(out.status, 0, out.stderr);
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(out.stdout, 'tests/suite-basic.js')).map((n) => n.path.join('>')),
+    ['fixture basic: the greeting is hello', 'fixture basic: the arity is two']
+  );
+});
+
+test('red-proofs: a target that does not round-trip through UTF-8 is an ERROR — bytes outside the match may not change (Table B row 4)', () => {
+  const root = newRoot();
+  const target = path.join(root, 'subject', 'subject.js');
+  const pristine = Buffer.concat([
+    fs.readFileSync(target),
+    Buffer.from('// a lone continuation byte, outside every match: '),
+    Buffer.from([0xff, 0xfe]),
+    Buffer.from('\n'),
+  ]);
+  fs.writeFileSync(target, pristine);
+  // Reading with 'utf8' would replace those two bytes with U+FFFD and the write
+  // would re-encode the replacement — `written === expected` on both sides while
+  // bytes OUTSIDE the declared mutation silently changed.
+  const naive = Buffer.from(fs.readFileSync(target, 'utf8'), 'utf8');
+  assert.equal(naive.equals(pristine), false, 'precondition: a text round-trip loses these bytes');
+
+  const r = run(root);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('does not round-trip through UTF-8'), r.report);
+  assert.ok(fs.readFileSync(target).equals(pristine), 'and the file itself is untouched');
+});
+
+test('red-proofs: legal multi-byte UTF-8 outside the match is preserved byte-for-byte and still PROVEN (Table B row 4)', () => {
+  // The other direction: the guard must refuse malformed bytes, not non-ASCII.
+  const root = newRoot();
+  const target = path.join(root, 'subject', 'subject.js');
+  const decorated = `${fs.readFileSync(target, 'utf8')}// über — 日本語 — 🐕\n`;
+  fs.writeFileSync(target, decorated);
+  const r = run(root);
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+  assert.ok(fs.readFileSync(target, 'utf8').includes('// über — 日本語 — 🐕'),
+    'the decorated source is unchanged in the checkout — the runner mutates copies');
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

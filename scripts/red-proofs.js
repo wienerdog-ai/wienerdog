@@ -343,6 +343,11 @@ function loadDeclarations(root) {
     if (typeof suite !== 'string' || suite.length === 0) {
       throw error(`${declFile}: "suite" must be a non-empty string`);
     }
+    // Refused as DATA, before any argv is built: a suite path that begins with
+    // `-` is indistinguishable from an option to every command line it reaches.
+    if (normaliseRel(suite).startsWith('-')) {
+      throw error(`${declFile}: "suite" must not begin with "-" (got ${JSON.stringify(suite)}) — a path a command line reads as an option is not a suite`);
+    }
     if (!Array.isArray(doc.proofs)) {
       throw error(`${declFile}: "proofs" must be an array`);
     }
@@ -679,9 +684,27 @@ function runSuite(copyDir, suiteRel, pattern) {
   if (!fs.existsSync(runner)) {
     throw error(`the root provides no tests/run.js — expected ${path.join('tests', 'run.js')} inside the copy at ${copyDir}`);
   }
+  // REFUSED HERE TOO, not only at LOAD, and the reason is measured. `node --test`
+  // reads a `-`-leading path as an OPTION and falls back to DEFAULT DISCOVERY,
+  // running files nobody declared (measured: `1..0`, exit 0, in a tree with no
+  // discoverable tests — and OTHER SUITES in a tree that has them, whose
+  // assertion hosts are not protected mutation targets). Adding `--` does NOT
+  // rescue that path: measured on v25.9.0, `node --test -- <dash-path>` HANGS,
+  // waiting for a script on stdin, which is the one failure a runner cannot
+  // report. So the path is refused at both layers and the hang is unreachable.
+  if (normaliseRel(suiteRel).startsWith('-')) {
+    throw error(`the suite path ${JSON.stringify(suiteRel)} begins with "-" — a command line reads it as an option, never as a file`);
+  }
   const args = [runner, '--test-reporter=tap'];
   if (pattern) args.push(`--test-name-pattern=${pattern}`);
-  args.push(suiteRel);
+  // `--` FIRST, THEN THE PATH. A repo-relative filename may legally begin with
+  // `-` — `--test-name-pattern=target` is a valid file name — and Node would
+  // read it as ANOTHER OPTION, run its DEFAULT DISCOVERY over other test files,
+  // and hand the runner a suite it never declared. Only the declared suite is a
+  // protected mutation target, so a proof could then redden (and mutate) the
+  // assertion host of a file nobody named. The terminator is the mechanism; the
+  // LOAD-time refusal below is the belt.
+  args.push('--', suiteRel);
   const r = spawnSync(process.execPath, args, {
     cwd: copyDir,
     env: phaseEnv(copyDir),
@@ -1044,7 +1067,18 @@ function replaceOccurrences(text, find, replace) {
 function applyMutation(copyDir, proof, where, suiteRel) {
   const target = resolveInside(copyDir, proof.file, where);
   if (suiteRel !== undefined) assertNotProtected(copyDir, target, suiteRel, where);
-  const pristine = fs.readFileSync(target, 'utf8');
+  // BYTE EQUALITY IS THE POSTCONDITION, so the decode may not lose a byte.
+  // Reading with 'utf8' replaces every malformed sequence with U+FFFD, and the
+  // string write re-encodes the replacement: bytes OUTSIDE the matched substring
+  // change, while `written === expected` still holds because both sides carry
+  // the same corruption. Table B row 4 wants the written bytes to equal the
+  // expected post-mutation bytes of the PRISTINE file, so a target that does not
+  // survive a decode/encode round-trip is refused rather than quietly rewritten.
+  const pristineBuf = fs.readFileSync(target);
+  const pristine = pristineBuf.toString('utf8');
+  if (!Buffer.from(pristine, 'utf8').equals(pristineBuf)) {
+    throw error(`${where}: ${proof.file} does not round-trip through UTF-8 — it holds bytes a text mutation would silently rewrite outside the match. Table B row 4's byte equality cannot be established here`);
+  }
   const wanted = proof.occurrences === undefined ? 1 : proof.occurrences;
   const counted = countOccurrences(pristine, proof.find);
   if (counted !== wanted) {
@@ -1054,11 +1088,15 @@ function applyMutation(copyDir, proof, where, suiteRel) {
     throw error(`${where}: "marker" ${JSON.stringify(proof.marker)} is ALREADY present in the pristine ${proof.file} — a marker already there proves nothing`);
   }
   const expected = replaceOccurrences(pristine, proof.find, proof.replace);
-  fs.writeFileSync(target, expected);
-  const written = fs.readFileSync(target, 'utf8');
-  if (written !== expected) {
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  fs.writeFileSync(target, expectedBuf);
+  // Compared as BYTES, not as decoded text: two different byte strings can
+  // decode to one string, which is exactly the equality this row must not accept.
+  const writtenBuf = fs.readFileSync(target);
+  if (!writtenBuf.equals(expectedBuf)) {
     throw error(`${where}: the bytes written to ${proof.file} do not equal the expected post-mutation bytes`);
   }
+  const written = writtenBuf.toString('utf8');
   if (!written.includes(proof.marker)) {
     throw error(`${where}: "marker" ${JSON.stringify(proof.marker)} is absent after the write`);
   }
@@ -1089,7 +1127,13 @@ function uniqueMatch(nodes, identity, where) {
  * @returns {void}
  */
 function phaseBaseline(copyDir, decl, proof, where) {
-  resolveInside(copyDir, decl.suite, `${where} BASELINE`);
+  const suiteTarget = resolveInside(copyDir, decl.suite, `${where} BASELINE`);
+  // A REGULAR FILE, checked with `lstat` in the copy: a directory or a device
+  // named as the suite would send Node back to default discovery or block.
+  const st = fs.lstatSync(suiteTarget);
+  if (!st.isFile()) {
+    throw error(`${where} BASELINE: "suite" ${JSON.stringify(decl.suite)} is not a regular file in the copy`);
+  }
   const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
   assertCompleteRun(run, where, 'BASELINE');
   if (run.status !== 0) {
@@ -1597,6 +1641,7 @@ module.exports = {
   verifyCopy,
   copyTree,
   phaseEnv,
+  runSuite,
   parseTap,
   flattenTap,
   ranNodes,
