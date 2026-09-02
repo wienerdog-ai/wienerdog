@@ -1,0 +1,71 @@
+PR GATE ROUND 12 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 85a79fba. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0645e-bba3-7ab0-b362-09b46f8c94ce).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- changed files ---\\n' && git diff --name-s...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- changed files ---\\n' && git diff --name-s... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' '--- AGENTS ---'; nl -ba AGENTS.md | sed -n '1,220p'; printf '%s...
+[codex] Command completed: /bin/zsh -lc "printf '%s\\n' '--- AGENTS ---'; nl -ba AGENTS.md | sed -n '1,220p'; printf '%s... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '279,620p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '279,620p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '618,820p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '618,820p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '779,940p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '779,940p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE '"'^(const|function|async function|class) '"' scripts/red-proofs.js; p...
+[codex] Command completed: /bin/zsh -lc "grep -nE '"'^(const|function|async function|class) '"' scripts/red-proofs.js; p... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,430p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,430p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '428,850p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '428,850p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '839,1268p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '839,1268p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1260,1708p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1260,1708p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1690,2045p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1690,2045p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js'
+[codex] Command failed: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js' (exit 1)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*round11* docs/specs/logbook/*round10*; do echo "--...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/*round11* docs/specs/logbook/*round10*; do echo "--... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R -n -C 8 -E 'M12|M29|spawn timeout|applyMutation postconditions|Carried ...
+[codex] Command completed: /bin/zsh -lc "grep -R -n -C 8 -E 'M12|M29|spawn timeout|applyMutation postconditions|Carried ... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -C 5 -E 'load|parse|file-level|ERR_TEST_FAILURE|suite-level|syntax' tes...
+[codex] Command completed: /bin/zsh -lc "grep -n -C 5 -E 'load|parse|file-level|ERR_TEST_FAILURE|suite-level|syntax' tes... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '430,535p;840,930p;1230,1345p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '430,535p;840,930p;1230,1345p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,180p'; grep -n -C 4 -E 'MODE_E...
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,180p'; grep -n -C 4 -E 'MODE_E... (exit 0)
+[codex] Running command: /bin/zsh -lc "git log --oneline --decorate --max-count=20 && printf '\\n--- commits after rou...
+[codex] Command completed: /bin/zsh -lc "git log --oneline --decorate --max-count=20 && printf '\\n--- commits after rou... (exit 0)
+[codex] Running command: /bin/zsh -lc "command -v -a node || true; ls -1 ~/.nvm/versions/node 2>/dev/null || true; ls ...
+[codex] Command failed: /bin/zsh -lc "command -v -a node || true; ls -1 ~/.nvm/versions/node 2>/dev/null || true; ls ... (exit 1)
+[codex] Running command: /bin/zsh -lc 'which -a node; find "$HOME/.nvm/versions/node" -maxdepth 1 -mindepth 1 -type d ...
+[codex] Command completed: /bin/zsh -lc 'which -a node; find "$HOME/.nvm/versions/node" -maxdepth 1 -mindepth 1 -type d ... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R -n -C 6 'FORCE_COLOR' docs/specs/logbook/*red-harness*"
+[codex] Command completed: /bin/zsh -lc "grep -R -n -C 6 'FORCE_COLOR' docs/specs/logbook/*red-harness*" (exit 0)
+[codex] Running command: /bin/zsh -lc "FORCE_COLOR=1 node --test-reporter=tap -e 'require(\"node:test\")(\"x\",()=>{})...
+[codex] Command completed: /bin/zsh -lc "FORCE_COLOR=1 node --test-reporter=tap -e 'require(\"node:test\")(\"x\",()=>{})... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/run.js; cat tests/fixtures/red-proofs/base/tests/run.js; cat package....
+[codex] Command completed: /bin/zsh -lc "cat tests/run.js; cat tests/fixtures/red-proofs/base/tests/run.js; cat package.... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"const rp=require('./scripts/red-proofs'),root=process.cwd(); process....
+[codex] Command completed: /bin/zsh -lc "node -e \"const rp=require('./scripts/red-proofs'),root=process.cwd(); process.... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner still has conditional isolation bypasses through inherited Node dependency paths a...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner still has conditional isolation bypasses through inherited Node dependency paths and filesystems that do not enforce its chmod-based locks. Either can undermine the trustworthiness of a successful RED-proof verdict.
+
+Full review comments:
+
+- [P1] Strip inherited Node module search paths — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:726-727
+  When the caller exports `NODE_PATH` pointing at `<root>/node_modules`, spreading `process.env` forwards that path unchanged into every phase. A suite can consequently load dependencies from the real checkout even though `node_modules` was excluded from every copy, giving all phases a shared writable dependency tree and allowing a dependency-using suite to pass instead of failing honestly at BASELINE. This violates [Table B row 2a](docs/specs/WP-criterion-red-harness.md#L288); remove or root-sanitize `NODE_PATH` before spawning the suite.
+
+- [P2] Refuse filesystems that do not enforce mode bits — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:124-129
+  On a non-root POSIX host whose temp filesystem accepts `chmod` but does not enforce permission bits, this returns `null` even though the 0500 sandbox locks cannot prevent child writes to shared ancestors or the snapshot. The runner can then silently report `PROVEN` after cross-phase state leakage; the unit suite capability-probes this case only to skip affected tests, not to gate the CLI. [Table B row 2b](docs/specs/WP-criterion-red-harness.md#L289) requires those paths to be non-writable, so probe enforcement on the actual temp filesystem and return `UNSUPPORTED` when it is absent.
+rc=0
