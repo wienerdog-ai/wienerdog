@@ -1,0 +1,102 @@
+PR GATE ROUND 1 — PR #205 — wd-reviewer (spec-fidelity gate, claude subagent), tip 70a639c0 (re-verified at 096428ce). Verdict REQUEST-CHANGES. Relayed verbatim from the agent's final message.
+
+I've completed the review. Everything below was executed, not read.
+
+---
+
+## REQUEST-CHANGES
+
+Two Band-B findings, both cheap. The implementation itself is contract-faithful and unusually well-evidenced — all five V5 counterfactuals reproduce red against my own mutations, and a 40-case property sweep found zero P0 violations. What is missing is two of the spec's own *mirror* obligations.
+
+### What I executed (with exit codes)
+
+| Command | Result |
+|---|---|
+| `node scripts/boundary-check.js docs/specs/WP-preservation-abort-widening.md $(git diff --name-only origin/main...HEAD)` | **exit 0** |
+| `npm test` (branch, in place) | **exit 0** — `tests 2465 / pass 2453 / fail 0 / skipped 12` |
+| `npm run lint` | **exit 0** — markdownlint 0 issues, shellcheck clean, frontmatter 265 specs / 4 agents |
+| V2 (2 assertions) | **exit 0** both |
+| V3 (3 assertions) | **exit 0** all three |
+| V4 (`diff -u expected actual`, 10-line literal) | **exit 0**, byte-identical |
+| V2/V3/V4 three-state proof in a mkdtemp fixture | compliant → green; files renamed away → **red**; literals reworded + catch comment replaced by a *synonym of the old cross-product claim* → **red**; catch comment deleted → **red** |
+| V5 baseline in an isolated `git archive` copy | **exit 0**, 2453 pass / 0 fail |
+| V5-1 trigger narrowed (`redactFellThrough && !preserved && !redactCopy`) | **exit 1**, 7 fail, all `dream-validate.test.js`, each on `driveAbort`'s `the gate must have thrown` |
+| V5-2 P4 refuse-branch check deleted | **exit 1**, 2 fail, both `dream-promote.test.js` P4 tests |
+| V5-3 active values made mutually substring | **exit 1**, 7 fail, all `dream-validate.test.js` `assertAbort` checks |
+| V5-4 P0b read-back removed (`return {name, bytes: content}`) | **exit 1**, 6 fail, incl. the `P0b regression` gate test and 5 `quarantinePreserve` unit tests |
+| V5-5 `removeOwnedQuarantinePath` reverted to swallowed `try/catch` | **exit 1**, 2 fail, both `Table D row D3 … fails LOUD` |
+| Independent P0b / Table D probes (mkdtemp, `fs` patched) | corrupt artifact → `null` + `dest` absent; unreadable artifact → `null` + `dest` absent; happy path → `bytes` a *different* Buffer object; D1 write-fail and rename-fail → `tmp` absent, collision candidate byte-unchanged; D3 (rm throws, and rm no-ops) → `WienerdogError` naming the path |
+| Independent gate probe, P1 / P2a / P2b / P3 / pair rule / hostile `rel` | all four arms abort with the right discriminant; pair rule and unknown-enum both throw; hostile `rel` renders with no raw `\n`, no `0x1b`, and still identifies the note |
+| P0 property sweep (5 failure modes × 4 payloads × binary flag) | 17 aborts, 11 refusals, 12 ok/redact, **0 refusals with an empty `preserved` record** |
+| P4 message byte-compare against the spec literal | exact match; redact-arm message byte-identical to `origin/main` |
+
+**Note on the tip.** I was given `70a639c0`; the worktree HEAD advanced to `096428ce` mid-review (a local, unpushed `docs/specs/logbook/…-raw-round1-codex-plugin.txt`). `git diff --name-status 70a639c0 096428ce` is that one added file only — `src/` and `tests/` are identical, logbook paths are in the always-allowed set, and boundary-check is exit 0 at both. Everything above stands for the PR head.
+
+---
+
+### Findings
+
+**1. `[contract]` Band B — a registered mirror named in the spec's own checklist was left byte-unchanged.**
+`/Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/preservation-abort-widening/src/core/dream/validate.js:1046-1047`
+
+```js
+   * @throws {WienerdogError} the preservation-failure abort — the one case in
+   *   which no durable artefact holds the bytes being judged
+```
+
+This is identical to `origin/main`, yet the Mirrored Surface Checklist lists it first under "Mirrors outside this document (all inside the Deliverables boundary) — **the gate's `@throws` JSDoc** and `quarantinePreserve`'s `@returns` in `validate.js`". The `@returns` mirror was updated; this one was not. It is now wrong in three ways:
+
+- **It declares one throw where there are now two structurally different ones.** Table D row D3 propagates out of `quarantinePreserve` and straight out of `secret()`. I confirmed it escapes the gate: driving a hard secret with a corrupted quarantine write and `rmSync` throwing yields `WienerdogError: quarantinePreserve: could not remove "…/quarantine/2026-09-02-n.md" after a preservation failure: EPERM`. That is a cleanup failure, not "no artefact holds the bytes being judged", and a caller reading this contract does not learn it exists.
+- **"the one case"** is the narrowing the WP exists to retire; the trigger is now a class (Table P rows P0–P3).
+- **"durable"** over-claims. B3b's own new clause spells out that the durable conjunct is deferred to `WP-quarantine-preserve-durability` and that P0b establishes byte-identity only. A gate contract saying the abort fires when no *durable* artefact holds the bytes asserts more than the code enforces.
+
+*Disposition: **fix.*** One JSDoc block in a Deliverables-listed file; comment-only, no behaviour change, no new test. Suggested shape: state the class (Table P row P0 — no verified artifact holds the judged bytes) and add a second `@throws` line for Table D row D3, and drop or qualify "durable" the way `quarantinePreserve`'s amended `@returns` already does.
+
+---
+
+**2. `[criteria]` Band B — the spec-mandated whole-cell re-read report is absent from the PR body, and performing it surfaces a live drifted mirror.**
+Spec `docs/specs/WP-preservation-abort-widening.md`, Implementation notes: *"Then re-read each amended cell WHOLE and report, in the PR body, any sentence the clause leaves false — the clause scopes the universals it names, and a cell can hold one it does not."*
+
+I grepped the full PR body for `re-read` / `amended cell` / `leaves false` / any per-row report — there is none. The three mentions of `G5/Q18/B3b` are a commit subject, a dispatch-time location check, and a `sed` pattern.
+
+I performed the re-read. **Q18 is clean**: its clause scopes "every statement in this row and its holder list that quantifies over 'all three arms' or over the R0/R0b enumeration", which covers cell 2's *"whenever the `redacted/` copy survives, its basename"* and cell 3's four-holder list.
+
+**B3b is not.** `docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1565`, second content cell, states in its own voice:
+
+> **The error message is the only surface that reaches the user on an abort, so it is the one that must carry the basename**
+
+Under this WP's pair rule that is now a *forbidden* instruction, not merely an unreachable one: `secretGateAbortMessage` throws `contract violation — … paired with a non-null redactedName` on any such call (I reproduced this directly for both enum members). B3b's appended clause scopes the trigger class and the two conjuncts and says nothing about the basename; Q18's clause scopes *"this row and its holder list"* — Q18's row, not B3b's. So an implementer working from B3b's action cell would write a pair-rule violation.
+
+*Disposition: **fix + route.*** The **fix** is the missing PR-body report, naming this sentence — that is what the spec asked for and it costs a paragraph. The **drift itself is a residual for wd-architect**, not for this implementer: the spec's Out of scope forbids "any change … to any row of either `Done` spec other than G5, Q18 and B3b" and pins the placement to "the end of the row's first content cell", and the acceptance criterion requires `git diff` to show exactly one changed line per row — which it does (I confirmed the hunks are exactly `:465`, `:1565`, `:1647`, one line each, and both appended clauses are byte-exact against the spec's `text` blocks). The implementer could not have fixed B3b cell 2 within the boundary. Recommend wd-architect amend B3b's action cell in a follow-up so Q4's cited condition owner stops instructing a fail-loud violation.
+
+---
+
+**3. `[quality]` Band C — a negative regression guard was retired with no replacement.**
+`tests/unit/dream-validate.test.js` — on `origin/main`, `:1232` and `:1247` each carried `assert.ok(!/quarantine copy failed/.test(entry.reason), 'the retired suffix is not re-added')`, guarding row G7's retirement of that reason suffix. Both tests were rewritten (correctly — those fixtures now abort and have no `entry.reason`), and `git grep` confirms the literal `quarantine copy failed` now appears **nowhere** in `src/` or `tests/`. It was already absent from `src/` on main, so nothing is currently broken.
+*Disposition: **residual*** — note it in the PR body's Decisions or Discovered issues so the guard's disappearance is deliberate rather than silent. Not worth re-homing a test for.
+
+**4. `[quality]` Band C — V4's "VIOLATING" state in the PR body is weaker than the spec's stated one.**
+PR body, V4 section: the violating tree was produced by rewording `The run fails` → `The build fails`. The spec requires the violating state to include *"replaced by a synonym of the old cross-product claim"*. I ran the spec's stated mutation myself (catch comment replaced with a two-line paraphrase of the retired *"when a note's redaction and its withheld preservation both failed"* claim) and V4 is **red**, as is outright deletion. The obligation is met in substance.
+*Disposition: **drop.***
+
+**5. `[quality]` Band C — V5 failure counts in the PR body are mutation-shape dependent, not fabricated.**
+PR body reports 8 red for V5-1 and 6 for V5-3; I measured 7 and 7. The difference is the mutation, not the tree: the PR's V5-1 drops the `!redactCopy` conjunct entirely (which additionally breaks the R0b escape tests, hence its extra two), while mine kept it; my V5-3 collision shape also catches the hostile-`rel` test. Both directions are red and both name assertions inside this WP's own changed test files. I verified each mutation landed by `diff` against a pre-mutation backup before believing its red.
+*Disposition: **drop*** — recorded so the discrepancy is not read as an unverified paste.
+
+---
+
+### On the implementer's three Decisions
+
+- **Exporting `quarantinePreserve` and `secretGateAbortMessage`** — accept. Both live in a Deliverables-listed file, the spec leaves test design to the implementer while *requiring* evidence for D0–D4 and the pair rule, and the pair rule is by the spec's own construction unreachable through the gate ("no reachable abort has one"), so a direct call is the only way to exercise it. Additive, documented at the export site, no new importer, no behaviour change.
+- **`identity` simplified to a fixed literal** — accept, and it is what the spec's own text implies: *"on every arm this WP makes reachable there is no `redacted/` copy, so the identity disposition is the shipped `not performed…`"*. The parameter is correctly retained (Q18 owns the field). The old `Buffer.compare` branch was the alias-against-itself bug the WP exists to retire, so keeping it as dead code would have been worse.
+- **"Fixes to several pre-existing test gate-stubs that encoded the old behaviour"** — accept. I read all seven. Every one is inside `tests/unit/dream-promote.test.js` (a Deliverables path), and each adds only a non-empty `preserved` array so the fixture keeps testing its original subject under P4's new precondition. No assertion changed subject, and no behaviour beyond Table P/D was touched. This is the necessary consequence of P4, not scope expansion. The two `dream-validate.test.js` rewrites are likewise mandated — they asserted the exact `preserved: []` refusal P0 now forbids.
+
+### Contract-density / Closed-Contract Drift Check (ADR-0031)
+
+Tables P and D held: no contract-dense inline prose is competing with them, the two amendment clauses restate no member of either table, and the discriminant is genuinely canonicalised in one place (`messages`, one selector, one call site). The settled contracts this refinement touches — Q4, G5, Q18, B3b — were each amended by editing the row, not by promoting a mirror; Q4 itself is untouched, and B3b's clause correctly declines to say "unchanged" about a condition whose durable conjunct no code performs. The one drift is finding 2: **B3b's action cell is a mirror of Q18's basename field that has fallen out of agreement with Table P's pair rule**, and it is unreachable from inside this WP's boundary. That plus finding 1 (a checklist-registered code mirror left unswept) are both in the same contract family — the abort message's field set — which is worth wd-architect's attention if a third round lands there, though at round 1 it does not yet warrant a canonical-extraction pass.
+
+### Everything else verified clean
+
+Boundary exact — seven Deliverables paths plus the spec, nothing from the "Explicitly NOT in the boundary" list (`dream-pipeline.test.js`, `ledger.js`, `digest.js`, `THREAT-MODEL.md`) touched. `src/cli/dream.js` is comment-only (I filtered the diff for non-comment `+`/`-` lines: none). Conventional commits with the WP id on all seven; PR title byte-matches the spec's required string; branch `wp/preservation-abort-widening`; PR template complete with Decisions made, Discovered issues (the `neutralise()` duplication, correctly reported not fixed), four WP-prefixed Lessons, and `Generated-by: claude-sonnet-5`. `memory/lessons/inbox.md` correctly untouched. Zero runtime deps, no `.ts` under `src/`, nothing started that outlives its call. Spec `status:` flipped to `In-Review`; unchecked acceptance-criteria boxes match the house convention (`WP-secret-fence-ep2-redact-arm.md` in `done/` carries 43 unchecked, 0 checked).
+
+Both Band-B findings are comment-and-prose edits inside the existing boundary. Nothing needs new code or a new test.
