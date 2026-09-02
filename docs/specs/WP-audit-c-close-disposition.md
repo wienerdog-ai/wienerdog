@@ -1,7 +1,7 @@
 ---
 id: WP-audit-c-close-disposition
 title: Measure C2 (git seam) and C3 (layout) against the landed promote-in architecture and disposition group C
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
