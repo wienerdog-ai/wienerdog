@@ -113,7 +113,10 @@ const SCHEMA_CASES = [
   ['a missing id', [{ ...proof(), id: undefined }], '"id" must be a non-empty kebab slug'],
   ['an id that is not a kebab slug', [proof({ id: 'Not A Slug' })], '"id" must be a non-empty kebab slug'],
   ['a missing wp', [proof({ wp: undefined })], '"wp" must be a non-empty string'],
-  ['a wp that is not a WP id', [proof({ wp: 'nope' })], '"wp" must be a WP id'],
+  ['a wp that is not a WP id', [proof({ wp: 'nope' })], '"wp" must be a kebab-case WP id'],
+  ['a wp with a TRAILING segment separator', [proof({ wp: 'WP-bad-' })], '"wp" must be a kebab-case WP id'],
+  ['a wp with a DOUBLED separator', [proof({ wp: 'WP-a--b' })], '"wp" must be a kebab-case WP id'],
+  ['a wp with an EMPTY slug', [proof({ wp: 'WP-' })], '"wp" must be a kebab-case WP id'],
   ['a missing criterion', [proof({ criterion: undefined })], '"criterion" must be a non-empty string'],
   ['an empty criterion', [proof({ criterion: '' })], '"criterion" must be a non-empty string'],
   ['a missing why', [proof({ why: undefined })], '"why" must be a non-empty string'],
@@ -911,6 +914,171 @@ test('red-proofs: NO SIBLING COPY EXISTS while a child runs, and neither the san
   }));
   assert.equal(r.verdict, 'PROVEN', r.report);
   assert.equal(r.exitCode, 0);
+});
+
+// ── ROUND-2 FINDINGS — each one's RED
+
+test('red-proofs: a CONTROL that SKIPS every declared test exits 0 and must NOT be accepted (Table B row 6)', () => {
+  // The drift a post-RED control exists to catch. BASELINE and RED register the
+  // test normally; the third run — the CONTROL — registers it as SKIP and the
+  // process still exits 0. A status-only check reports PROVEN over it.
+  const counter = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-drift-')), 'runs');
+  const saved = { c: process.env.RP_DRIFT_COUNTER, a: process.env.RP_DRIFT_AFTER, m: process.env.RP_DRIFT_MODE };
+  process.env.RP_DRIFT_COUNTER = counter;
+  process.env.RP_DRIFT_AFTER = '3';
+  process.env.RP_DRIFT_MODE = 'skip';
+  try {
+    const r = run(newRoot({
+      suite: 'tests/suite-drift.js',
+      proofs: [proof({ expectRed: [{ test: ['fixture drift: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    }));
+    assert.equal(r.verdict, 'ERROR', r.report);
+    assert.notEqual(r.exitCode, 0);
+    assert.ok(r.report.includes('CONTROL(post-RED)'), r.report);
+    assert.ok(r.report.includes('observed as SKIP'), r.report);
+  } finally {
+    for (const [k, v] of [['RP_DRIFT_COUNTER', saved.c], ['RP_DRIFT_AFTER', saved.a], ['RP_DRIFT_MODE', saved.m]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test('red-proofs: a CONTROL that REGISTERS NOTHING exits 0 and must NOT be accepted either (Table B row 6)', () => {
+  const counter = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-drift2-')), 'runs');
+  const saved = { c: process.env.RP_DRIFT_COUNTER, a: process.env.RP_DRIFT_AFTER, m: process.env.RP_DRIFT_MODE };
+  process.env.RP_DRIFT_COUNTER = counter;
+  process.env.RP_DRIFT_AFTER = '3';
+  process.env.RP_DRIFT_MODE = 'omit';
+  try {
+    const r = run(newRoot({
+      suite: 'tests/suite-drift.js',
+      proofs: [proof({ expectRed: [{ test: ['fixture drift: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    }));
+    assert.equal(r.verdict, 'ERROR', r.report);
+    assert.notEqual(r.exitCode, 0);
+    assert.ok(r.report.includes('CONTROL(post-RED)'), r.report);
+    assert.ok(r.report.includes('did not RUN'), r.report);
+  } finally {
+    for (const [k, v] of [['RP_DRIFT_COUNTER', saved.c], ['RP_DRIFT_AFTER', saved.a], ['RP_DRIFT_MODE', saved.m]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test('red-proofs: a CONTROL that registers NO TEST AT ALL exits 0 and must NOT be accepted either (Table B row 6)', () => {
+  const counter = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-drift3-')), 'runs');
+  const saved = { c: process.env.RP_DRIFT_COUNTER, a: process.env.RP_DRIFT_AFTER, m: process.env.RP_DRIFT_MODE };
+  process.env.RP_DRIFT_COUNTER = counter;
+  process.env.RP_DRIFT_AFTER = '3';
+  process.env.RP_DRIFT_MODE = 'none';
+  try {
+    const r = run(newRoot({
+      suite: 'tests/suite-drift.js',
+      proofs: [proof({ expectRed: [{ test: ['fixture drift: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    }));
+    assert.equal(r.verdict, 'ERROR', r.report);
+    assert.notEqual(r.exitCode, 0);
+    assert.ok(r.report.includes('CONTROL(post-RED)'), r.report);
+    assert.ok(r.report.includes('ZERO TESTS RAN'), r.report);
+  } finally {
+    for (const [k, v] of [['RP_DRIFT_COUNTER', saved.c], ['RP_DRIFT_AFTER', saved.a], ['RP_DRIFT_MODE', saved.m]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test('red-proofs: the lane REFUSES a host whose mode bits cannot enforce isolation — win32 and uid 0 (Table B row 2b)', () => {
+  assert.match(rp.unsupportedHostReason({ platform: 'win32', uid: 501 }), /win32 does not implement them/);
+  assert.match(rp.unsupportedHostReason({ platform: 'linux', uid: 0 }), /uid 0 \(root\) bypasses/);
+  assert.match(rp.unsupportedHostReason({ platform: 'darwin', uid: 0 }), /uid 0 \(root\) bypasses/);
+  assert.equal(rp.unsupportedHostReason({ platform: 'linux', uid: 501 }), null);
+  assert.equal(rp.unsupportedHostReason({ platform: 'darwin', uid: 1 }), null);
+  // CI's own hosts are supported, so this refusal changes nothing there.
+  assert.equal(rp.unsupportedHostReason(), null, 'this host must be able to enforce the isolation');
+
+  // And the refusal is UNSUPPORTED, in the same class and shape as the Node floor.
+  // Injecting the HOST, not the answer: this exercises `runAll`'s own call site.
+  const r = run(BASE, { host: { platform: 'win32', uid: 501 } });
+  assert.equal(r.verdict, 'UNSUPPORTED', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('UNSUPPORTED:'), r.report);
+  assert.ok(r.report.includes('Table B row 2b'), r.report);
+  assert.equal(r.proofs.length, 0, 'nothing is run on a host that cannot enforce the lane');
+  assert.ok(r.report.endsWith(`${rp.REACH}\n`), 'the footer still ends the run');
+
+  const asRoot = run(BASE, { host: { platform: 'linux', uid: 0 } });
+  assert.equal(asRoot.verdict, 'UNSUPPORTED', asRoot.report);
+  assert.ok(asRoot.report.includes('uid 0 (root) bypasses'), asRoot.report);
+
+  // And a supported host is NOT refused — the guard must not be a blanket no.
+  const ok = run(BASE, { host: { platform: 'linux', uid: 501 }, proof: 'no-such-proof' });
+  assert.equal(ok.verdict, 'VACUOUS', ok.report);
+});
+
+test('red-proofs: a declaration edited between LOAD and SNAPSHOT is an ERROR naming the file (Table B row 2)', () => {
+  const root = newRoot();
+  const decl = path.join(root, 'tests', 'red-proofs', 'a.proofs.json');
+  const r = run(root, {
+    afterLoad: () => {
+      const doc = JSON.parse(fs.readFileSync(decl, 'utf8'));
+      doc.proofs[0].why = 'edited under the run';
+      fs.writeFileSync(decl, JSON.stringify(doc, null, 2));
+    },
+  });
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('changed between LOAD and SNAPSHOT'), r.report);
+  assert.ok(r.report.includes('tests/red-proofs/a.proofs.json'), r.report);
+
+  // Both directions: the same run with no edit in the window is PROVEN.
+  const control = run(newRoot(), { afterLoad: () => {} });
+  assert.equal(control.verdict, 'PROVEN', control.report);
+
+  // A declaration DELETED in the window is named too.
+  const gone = newRoot();
+  const r2 = run(gone, { afterLoad: () => fs.rmSync(path.join(gone, 'tests', 'red-proofs', 'a.proofs.json')) });
+  assert.equal(r2.verdict, 'ERROR', r2.report);
+  assert.ok(/not readable in the snapshot|could not be read/.test(r2.report), r2.report);
+});
+
+test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FIFO must not block, a symlink must not be followed (Table E1)', () => {
+  const fifoRoot = newRoot();
+  const fifo = path.join(fifoRoot, 'tests', 'red-proofs', 'b.proofs.json');
+  const mk = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+  assert.equal(mk.status, 0, `precondition: mkfifo is available (${mk.stderr || mk.error})`);
+  // RUN OUT OF PROCESS, WITH A TIMEOUT, ON PURPOSE. `readFileSync` on a FIFO
+  // BLOCKS SYNCHRONOUSLY waiting for a writer, and a synchronous block cannot be
+  // interrupted by a test timeout — in-process, a regression here would hang the
+  // whole suite (and CI) instead of failing it. A killed child fails loudly.
+  const r = spawnSync(process.execPath, [RUNNER_SRC, '--root', fifoRoot], {
+    encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(r.signal, null, 'the runner must classify the FIFO, never block on it');
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes('unsupported entry type: FIFO'), r.stdout);
+  assert.ok(r.stdout.includes('tests/red-proofs/b.proofs.json'), r.stdout);
+
+  const linkRoot = newRoot();
+  const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-decl-')), 'evil.proofs.json');
+  fs.writeFileSync(outside, JSON.stringify({ suite: 'tests/suite-basic.js', proofs: [proof()] }));
+  fs.symlinkSync(outside, path.join(linkRoot, 'tests', 'red-proofs', 'c.proofs.json'));
+  const r2 = run(linkRoot);
+  assert.equal(r2.verdict, 'ERROR', r2.report);
+  assert.ok(r2.report.includes('unsupported entry type: symbolic link'), r2.report);
+  assert.ok(r2.report.includes('tests/red-proofs/c.proofs.json'), r2.report);
+});
+
+test('red-proofs: a report larger than the pipe buffer reaches its REACH footer intact (criterion 10)', () => {
+  // `process.exit` discards what is still queued on a pipe. The footer is the
+  // tail of the report, so it is exactly what a truncating exit loses.
+  const root = newRoot({ proofs: [proof({ why: `${'why '.repeat(40000)}END-OF-WHY` })] });
+  const r = spawnSync(process.execPath, [RUNNER_SRC, '--root', root], {
+    encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.ok(r.stdout.length > 160000, `the report must exceed the pipe buffer (got ${r.stdout.length} bytes)`);
+  assert.ok(r.stdout.includes('END-OF-WHY'), 'the long note survived');
+  assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the REACH footer must end the report; got …${JSON.stringify(r.stdout.slice(-120))}`);
+  assert.equal(r.status, 0, r.stderr);
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

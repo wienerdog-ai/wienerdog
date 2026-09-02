@@ -91,6 +91,44 @@ const { spawnSync } = require('node:child_process');
 /** The lane's own Node floor: `--test-reporter=tap` landed in 18.15.0. */
 const NODE_FLOOR = [18, 15, 0];
 
+/**
+ * THE HOSTS WHERE THIS LANE REFUSES TO RUN, and why the refusal is the honest
+ * answer rather than a caveat.
+ *
+ * Table B row 2b's isolation is enforced with MODE BITS: the copies' parent, the
+ * sandbox above it and the snapshot are made non-writable for each child's
+ * lifetime. Mode bits are INERT for uid 0 — root bypasses the permission check
+ * entirely — and Windows does not implement POSIX modes, so `chmod 0500` there
+ * changes nothing a child must obey. On either host a stateful suite can write
+ * `../sentinel` or `../../counter`, communicate between phases, and drive a
+ * false PROVEN, while every check the runner performs still passes.
+ *
+ * So the runner refuses, in the same `UNSUPPORTED` class as the Node floor and
+ * with the same message shape: a lane that cannot demonstrate its own isolation
+ * must not report on anybody else's evidence. CI is unaffected — its ubuntu and
+ * macOS runners execute as a non-root user on POSIX.
+ *
+ * @param {{platform?:string, uid?:number|null}} [host]
+ * @returns {string|null} the reason to refuse, or null when the host can enforce it
+ */
+function unsupportedHostReason(host = {}) {
+  const platform = host.platform === undefined ? process.platform : host.platform;
+  const uid = host.uid === undefined
+    ? (typeof process.getuid === 'function' ? process.getuid() : null)
+    : host.uid;
+  if (platform === 'win32') {
+    return 'this lane needs POSIX mode bits to hold the phase copies\' parent, the sandbox and the '
+      + 'snapshot non-writable while a child runs (Table B row 2b); win32 does not implement them, '
+      + 'so the isolation cannot be enforced and no verdict here would mean anything';
+  }
+  if (uid === 0) {
+    return 'this lane needs mode bits to hold the phase copies\' parent, the sandbox and the '
+      + 'snapshot non-writable while a child runs (Table B row 2b); running as uid 0 (root) '
+      + 'bypasses every permission check, so the isolation cannot be enforced. Run as a normal user';
+  }
+  return null;
+}
+
 /** Repo-relative location of this runner — a `file` may never name it. */
 const RUNNER_REL = 'scripts/red-proofs.js';
 
@@ -201,6 +239,8 @@ const REACH = [
   '           locked immediately before its own phase and deleted after it, and while a child runs',
   '           the copies\' parent and the sandbox above it are non-writable and the snapshot is',
   '           read-only — so the running copy is the only writable tree this runner provides.',
+  '           Where mode bits cannot enforce that — win32, or running as uid 0 — the lane REFUSES',
+  '           at LOAD with UNSUPPORTED rather than reporting a verdict it cannot stand behind.',
   '           A suite that writes ANYWHERE ELSE (an absolute path this runner does not own, the',
   '           ambient temp root above the sandbox, or a chmod out of the locked parent) is',
   '           UNSUPPORTED BY THE LANE rather than guarded against: full confinement needs OS-level',
@@ -233,7 +273,9 @@ function nodeFloorOk(version) {
  * SANDBOX, so an executable format would run unconfined.
  *
  * @param {string} root
- * @returns {{declFile:string, suite:string, proof:Object}[]} every declared proof, in file order
+ * @returns {{proofs:{declFile:string, suite:string, proof:Object}[], digests:Map<string,string>}}
+ *          every declared proof in file order, plus the sha256 of the exact bytes
+ *          each declaration was parsed from — the tie to the snapshot (Table B row 2)
  */
 function loadDeclarations(root) {
   const dir = path.join(root, DECL_DIR_REL);
@@ -253,18 +295,47 @@ function loadDeclarations(root) {
     throw new RedProofError('VACUOUS', `V1: no declaration files — ${dir} holds no *.proofs.json`);
   }
 
+  /** sha256 of the exact bytes each declaration was parsed from. @type {Map<string,string>} */
+  const declDigests = new Map();
+
   /** @type {{declFile:string, suite:string, proof:Object}[]} */
   const out = [];
   const seenIds = new Set();
   for (const name of names) {
     const declFile = path.join(DECL_DIR_REL, name);
     const full = path.join(dir, name);
+    // CLASSIFY BEFORE OPENING. `readFileSync` on a FIFO named `*.proofs.json`
+    // BLOCKS FOREVER waiting for a writer — before SNAPSHOT exists to classify
+    // it — and on a symlink it silently follows the link out of the tree. The
+    // same entry-type rule the snapshot domain applies (Table E1) applies here,
+    // at the one place that reads a file earlier than the snapshot does.
+    let st;
+    try {
+      st = fs.lstatSync(full);
+    } catch (e) {
+      throw error(`${declFile}: could not be classified (${e.code || e.message})`);
+    }
+    if (!st.isFile()) {
+      const kind = st.isSymbolicLink() ? 'symbolic link'
+        : st.isDirectory() ? 'directory'
+          : st.isFIFO() ? 'FIFO'
+            : st.isSocket() ? 'socket'
+              : st.isBlockDevice() || st.isCharacterDevice() ? 'device' : 'unsupported entry';
+      throw error(`${declFile}: unsupported entry type: ${kind} — a declaration must be a regular file, and is never opened before it is classified`);
+    }
+    let raw;
     let doc;
     try {
-      doc = JSON.parse(fs.readFileSync(full, 'utf8'));
+      raw = fs.readFileSync(full, 'utf8');
+    } catch (e) {
+      throw error(`${declFile}: could not be read (${e.code || e.message})`);
+    }
+    try {
+      doc = JSON.parse(raw);
     } catch (e) {
       throw error(`${declFile}: not valid JSON — ${e.message}`);
     }
+    declDigests.set(declFile, crypto.createHash('sha256').update(raw, 'utf8').digest('hex'));
     if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
       throw error(`${declFile}: the declaration must be a JSON object`);
     }
@@ -283,7 +354,35 @@ function loadDeclarations(root) {
       out.push({ declFile, suite, proof });
     }
   }
-  return out;
+  return { proofs: out, digests: declDigests };
+}
+
+/**
+ * THE TIE BETWEEN WHAT LOAD PARSED AND WHAT THE SNAPSHOT HOLDS.
+ *
+ * LOAD reads the declarations; SNAPSHOT is taken afterwards. An edit landing in
+ * that window makes the snapshot verify happily against the NEWER bytes while
+ * the runner goes on executing the OLDER in-memory proof — a `PROVEN` for a
+ * declaration no longer present in the tree the phases actually ran. Row 2's
+ * concurrent-edit guarantee is only real if the two are compared.
+ *
+ * @param {string} snapshot @param {Map<string,string>} digests
+ * @returns {void}
+ */
+function assertDeclarationsMatchSnapshot(snapshot, digests) {
+  for (const [declFile, want] of digests) {
+    const full = path.join(snapshot, declFile);
+    let raw;
+    try {
+      raw = fs.readFileSync(full, 'utf8');
+    } catch (e) {
+      throw error(`${declFile}: present at LOAD but not readable in the snapshot (${e.code || e.message}) — the declaration set changed under the run`);
+    }
+    const got = crypto.createHash('sha256').update(raw, 'utf8').digest('hex');
+    if (got !== want) {
+      throw error(`${declFile}: changed between LOAD and SNAPSHOT (sha256 ${want.slice(0, 12)} -> ${got.slice(0, 12)}) — the runner would be executing a proof the snapshotted tree no longer holds`);
+    }
+  }
 }
 
 /**
@@ -311,8 +410,13 @@ function validateProof(declFile, suite, proof, seenIds) {
       throw error(where(`"${field}" must be a non-empty string`));
     }
   }
-  if (!/^WP-[A-Za-z0-9][A-Za-z0-9-]*$/.test(proof.wp)) {
-    throw error(where(`"wp" must be a WP id (got ${JSON.stringify(proof.wp)})`));
+  // Table A says `WP-<slug>`, and `docs/GLOSSARY.md` says a slug is KEBAB-CASE.
+  // The looser form accepted `WP-bad-` and `WP-a--b`, which name no canonical work
+  // package and would be rolled up as if they did. Checked against every spec id
+  // in `docs/specs/` and `docs/specs/done/` (265 of them, all lowercase kebab,
+  // digits included — `WP-087-dream-truncation-index-rebase` matches).
+  if (!/^WP-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(proof.wp)) {
+    throw error(where(`"wp" must be a kebab-case WP id — no empty, doubled or trailing segment (got ${JSON.stringify(proof.wp)})`));
   }
   if (proof.replace === proof.find) throw error(where('"replace" must differ from "find"'));
   if (!proof.replace.includes(proof.marker)) throw error(where('"replace" must contain "marker"'));
@@ -1078,6 +1182,17 @@ function phaseControl(copyDir, decl, proof, where) {
   if (run.status !== 0) {
     throw error(`${where} CONTROL: the post-RED pristine copy was NOT green (exit ${run.status}) — the red was ambient, not the mutation's\n${tail(run.stdout, run.stderr)}`);
   }
+  // EXIT 0 IS NOT A CONTROL. A suite whose registration depends on ambient or
+  // ordering state can skip, TODO or simply not register every declared test and
+  // still exit 0 — which is precisely the drift the post-RED control exists to
+  // detect, so accepting the status alone would report PROVEN over a run that
+  // asserted nothing. The identities are therefore held to BASELINE's own rules:
+  // each observed exactly once, as a terminal PASS, and never zero tests RAN.
+  evaluateBaseline(
+    flattenTap(parseTap(run.stdout, normaliseRel(decl.suite))),
+    proof,
+    `${where} CONTROL(post-RED)`
+  );
 }
 
 /** @param {string} stdout @param {string} stderr @returns {string} the last few lines, for a diagnostic */
@@ -1207,7 +1322,8 @@ function parseArgs(argv) {
  * it; `main` is what turns the verdict into an exit code.
  *
  * @param {{root?:string, wp?:string, proof?:string, control?:boolean,
- *           onPhaseCopy?:(phase:string, dir:string)=>void}} [opts]
+ *           onPhaseCopy?:(phase:string, dir:string)=>void,
+ *           afterLoad?:(root:string)=>void, host?:{platform?:string, uid?:number|null}}} [opts]
  *        `control:false` and `onPhaseCopy` are the runner's OWN SUITE proving the
  *        `UNCONTROLLED` verdict and the manifest-verification call site; the CLI
  *        sets neither.
@@ -1241,10 +1357,26 @@ function runAll(opts = {}) {
     return done('UNSUPPORTED');
   }
 
+  // Checked beside the Node floor, and for the same reason: a runner that cannot
+  // enforce its own isolation cannot report meaningfully on anything else. The
+  // runner's own suite injects a HOST DESCRIPTION rather than a ready-made
+  // answer, so this call site is what the test exercises; the CLI passes none and
+  // the real `process.platform`/`process.getuid()` are read.
+  const hostReason = unsupportedHostReason(opts.host);
+  if (hostReason) {
+    say(`UNSUPPORTED: ${hostReason}.`);
+    return done('UNSUPPORTED');
+  }
+
   /** @type {{declFile:string, suite:string, proof:Object}[]} */
   let all;
+  /** @type {Map<string,string>} */
+  let declDigests;
   try {
-    all = loadDeclarations(root);
+    const loaded = loadDeclarations(root);
+    all = loaded.proofs;
+    declDigests = loaded.digests;
+    if (opts.afterLoad) opts.afterLoad(root);
   } catch (e) {
     if (!(e instanceof RedProofError)) throw e;
     say(`${e.verdict}: ${e.message}`);
@@ -1284,6 +1416,11 @@ function runAll(opts = {}) {
       // The snapshot is verified against the manifest too, so a copy that lost or
       // changed something is an ERROR before any phase derives from it.
       verifyCopy(snapshot, manifest);
+      // And the declarations the phases will execute must be the ones the
+      // snapshot holds — LOAD ran before this, so an edit in the window would
+      // otherwise verify cleanly against newer bytes while the run carried the
+      // older in-memory proof.
+      assertDeclarationsMatchSnapshot(snapshot, declDigests);
     } catch (e) {
       if (!(e instanceof RedProofError)) {
         say(`ERROR: SNAPSHOT — ${(e && (e.code || e.message)) || e}`);
@@ -1384,12 +1521,17 @@ function main() {
     args = parseArgs(process.argv.slice(2));
   } catch (e) {
     process.stderr.write(`${e.message}\n`);
-    process.exit(1);
+    process.exitCode = 1;
     return;
   }
   const r = runAll(args);
+  // `process.exit` DISCARDS whatever is still queued on a pipe. The report ends
+  // with the REACH footer criterion 10 requires on every run, and a report long
+  // enough to exceed the pipe buffer — many proofs, or one long diagnostic —
+  // loses exactly that tail under `| head`, `$(...)` or a CI log collector.
+  // Setting `exitCode` and returning lets the event loop drain the write first.
+  process.exitCode = r.exitCode;
   process.stdout.write(r.report);
-  process.exit(r.exitCode);
 }
 
 if (require.main === module) main();
@@ -1404,7 +1546,9 @@ module.exports = {
   RedProofError,
   worstVerdict,
   nodeFloorOk,
+  unsupportedHostReason,
   loadDeclarations,
+  assertDeclarationsMatchSnapshot,
   validateProof,
   buildManifest,
   verifyCopy,
