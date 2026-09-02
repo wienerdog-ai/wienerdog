@@ -349,6 +349,18 @@ on the spot.
   direction was retired by measurement.
 - Test design, fixture topology and the choice of mutations are the
   implementer's; the criteria state the properties and the evidence required.
+- **DOCUMENTED FALLBACK IF THE SESSION RUNS LONG: criterion 9 is the clean
+  cut.** This WP is sized M on the judgement that the adoption is two
+  declarations while the volume sits in the runner's own fixture matrix. If that
+  judgement proves wrong in the session, **cut criterion 9 — the adoption — into
+  `WP-red-proofs-adopt-index-guard` (proposed id; not yet filed)**, together with
+  its Deliverables row `tests/red-proofs/dream-pipeline.proofs.json`. Criteria
+  1–8 and 10–13 then stand as a coherent, fully verified core: the runner, its
+  own suite, the lane entry and every both-directions proof survive the cut
+  intact, because none of them depends on the adopted declaration set. **Taking
+  the cut is recorded under "Decisions made" in the PR body — never silently**,
+  and the PR says which criteria moved so the successor inherits a stated
+  boundary rather than a guess.
 - **Ambiguity → the simpler option, recorded under "Decisions made"** in the PR
   body. Do NOT expand scope to resolve ambiguity.
 
