@@ -1,0 +1,93 @@
+PR GATE ROUND 1 — PR #203 — wd-reviewer (spec-fidelity gate, claude subagent), tip 5a4a79bd. Verdict REQUEST-CHANGES. Relayed verbatim from the agent's final message.
+
+# REQUEST-CHANGES
+
+PR #203 · branch `wp/index-guard-residuals` · tip `5a4a79bd` · spec `/Users/gyulafeher/Documents/Claude_Projects/wienerdog/docs/specs/WP-index-guard-residuals.md`
+
+One in-boundary sentence is wrong. Everything else I re-derived independently came back clean, including every RED. This is a one-sentence fix, not a re-round.
+
+---
+
+## What I EXECUTED (worktree `/Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/index-guard-residuals`, read-only; all probes in `mktemp -d /tmp/…` fixtures, since removed; HEAD still `5a4a79bd`, `git status --porcelain` empty)
+
+| Check | Result |
+|---|---|
+| `node scripts/boundary-check.js docs/specs/WP-index-guard-residuals.md $(git diff --name-only origin/main...HEAD)` | **exit 0** — exactly 3 deliverable paths + the spec |
+| `git diff --quiet origin/main -- tests/unit/dream-pipeline.known-calls.js` | **exit 0** — byte-identical, no re-pin owed |
+| `src/cli/dream.js` line count, main vs HEAD | **1206 / 1206**; diff touches only `/** */` and `//` lines at two sites (`:156-161`, `:560-561`) — **no executable line** |
+| All 16 `cli/dream.js:NNN` anchors cited by W1(c) re-read (`:166 :178 :221 :230 :234 :238 :253 :256 :258 :261 :263 :562 :587 :941 :1004 :1042`) | **all land** |
+| Table A code review + `classify` five original call sites | signature unchanged; the five sites unchanged (now `:1624 :1637 :1652 :1659 :1664`); one added line `if (!path.isAbsolute(gif)) return UNJUDGED;` at `:221`; four verdict strings intact, **no fifth**; `unset` + relative → `'known shape carrying an unexpected GIT_INDEX_FILE'` preserved; raise carries args/cwd/raw value/UNJUDGED and asserts `doesNotMatch /-> resolved/` |
+| **Table B derived independently** — my own verifier, written without reading theirs: side A `require()`s the module, side B parses the committed `:541` physical entries, no expected mapping | **GREEN** — 9 entries, labels 1..9 in module order, no decoy, every marker between citation and terminating period; PRODUCING on **(2)(5)(7)(8)** = module `produces: true` on `hash-object`, `rev-parse HEAD`, `write-tree`, `commit-tree` |
+| **RED — same-count swap** (marker moved `write-tree`→`read-tree`, count still 4; mutation proven applied) | **exit 1**, positions 6 and 7 flagged |
+| **RED — module-side `produces` flip** (removed from `write-tree` in a scratch module; row unchanged) | **exit 1**, position 7 flagged — proves the module is genuinely read |
+| RED — label swap `(2)`↔`(5)` | **exit 1**, STRUCTURE |
+| RED — decoy ordinal `**(10)**` | **exit 1**, STRUCTURE |
+| **RED — refusal removed** (clone at `5a4a79bd`, `if (!path.isAbsolute(gif))` → `// MUTATION-REMOVED-REFUSAL`, proven applied) | **41 pass / 3 fail**, `actual: 'object'` vs `expected: 'symbol'` — i.e. `null`, **admitted**. The gap is real |
+| RED — byte added to the known-calls module | **43 pass / 1 fail**, source-form digest test |
+| `npm test -- tests/unit/dream-pipeline.test.js` | **exit 0** — 44/44 |
+| `npm test` | **exit 0** — 2444 tests, 2432 pass, 0 fail, 12 skipped |
+| `npm run lint` | **exit 0** |
+| 5-pattern sweep, spec's own loop | **exit 0** — exactly the two expected residuals: Done spec `product code invokes git` ×1 (`:1114`), logbook `values THIS RUN PRODUCED` ×1. Matches the spec's post-state prediction hit for hit |
+| Done-spec diff shape | one hunk `@@ -541 +541 @@`, **1 insertion / 1 deletion**; Mirrored Surface Checklist `:548-1017` untouched |
+| Seven W1(c) edits | all present and matching Tables A/B/C row 0 |
+| PR template / commits / title | complete (Deliverables, Verification, Decisions, Discovered issues, `Generated-by: claude-opus-5`, Lessons); 3 conventional commits with the WP id; title byte-matches Definition of done §2 |
+
+Pasted evidence in the PR body matched what I re-ran, in every case I checked.
+
+---
+
+## Findings
+
+### 1. `[contract]` `docs/specs/done/WP-dream-promote-in-workspace.md:541` — the new preamble sentence claims a registration that does not exist — **materiality B — disposition: FIX (in-boundary)**
+
+The added marker-definition sentence ends:
+
+> …and **the two copies must agree SHAPE BY SHAPE** — the pair is registered in the Mirrored Surface Checklist exactly as `«own …»` ↔ `RUN_VALUE` is.
+
+It is not. I read `:548-1017` and grepped it for `PRODUCING` / `produces` / `RUN_VALUE`: the only registration is the slot-kind pair at **`:685`** (*"The row writes each slot's kind AT the slot (`«own …»` ↔ `RUN_VALUE`, every other guillemet token ↔ `ANY`)"*), inside a bullet that enumerates its registered pairs as (1) the set + slot kinds, (2) the two-clause private-index rule, (3) the fourth verification grep. **PRODUCING ↔ `produces: true` is in none of them**, and the Deliverables cell forbids editing `:548-1017` to add it.
+
+Inside this document, *"the Mirrored Surface Checklist"* means this document's own — the immediately preceding `RUN_VALUE` sentence uses the identical phrase to point there. A reader follows the claim and finds nothing. That is drift on day one, in the canonical cell, and it is exactly what criterion 6 forbids (*"carry no sentence the rewrite falsified"*). Table B's "Preamble sentence" row does **not** ask for this clause — it asks only for the definition, the executable spelling, and shape-by-shape agreement. The clause is additive and false.
+
+Fix, in boundary (line 541 is a Deliverable): drop the registration claim and keep the analogy on the ground the spec actually gives it — e.g. `— the pair moves together exactly as «own …» ↔ RUN_VALUE does.` Do **not** edit `:548-1017` to make the sentence true; if the registration is wanted, that is a wd-architect change order.
+
+### 2. `[contract]` `docs/specs/done/WP-show-slot-own-value-kind.md:265, :276, :350, :367, :370, :393, :708, :716, :724` — 9 positional citations into `tests/unit/dream-pipeline.test.js` rotted by this diff — **materiality B — disposition: RESIDUAL, record + route to wd-architect**
+
+The test file gained ~89 lines above and inside every cited range. Verified anchor by anchor, main vs HEAD:
+
+- `:168` main `* makes must match one of KNOWN_CALLS…` → head `* OBSERVES must match…`
+- `:179` main `function watchIndexWrites(vault) {` → head mid-JSDoc
+- `:190` main the `computed` JSDoc → head `const under = …`
+- `:194` main `const computed = new Set();` → head `const seen = [];`
+- `:277`, `:283`, `:284`, `:292`, `:1632`, `:1658` likewise all land elsewhere. Only `:30` still lands.
+
+The implementer's own lesson names this exact class (*"a comment-only edit is not a no-op if the file is cited by line"*) and they enforced line-count neutrality on `src/cli/dream.js` — but the test file's growth was spec-mandated and its citations live in a Done spec that is not a Deliverable, so this is **not fixable inside this WP**. It should have been reported: add it as a third item under "Discovered issues" in the PR body. The structural fix (positional citations into a live test file, which the Done spec's own checklist already condemns at `:558-560` — *"not by a line range, because ranges rot and this one already had"*) belongs to wd-architect.
+
+### 3. `[quality]` `tests/unit/dream-pipeline.test.js:196-199` — the `computed` JSDoc still carries the sentence W1(c) just retired — **materiality C — disposition: RESIDUAL**
+
+```
+ * Values THIS RUN produced, learned by watching it produce them. Recorded
+ * AFTER each call returns, which is the order the run itself uses: every
+ * object name it passes was computed by an earlier pinned read.
+```
+
+W1(c)'s ORDERING paragraph was rewritten in this very diff because that claim is *"false twice over"* (`rev-parse HEAD` reads; `hash-object -w` / `write-tree` / `commit-tree` are not reads). The code copy survives unchanged. It is outside the Deliverables cell's six sites and covered by criterion 4a's code exemption, so leaving it is correct here — but it is now a live contradiction of the canonical cell and should be queued.
+
+### 4. `[quality]` `docs/specs/done/WP-show-slot-own-value-kind.md:690` — criterion 4a's scan missed one prose count — **materiality C — disposition: RESIDUAL**
+
+Row C3's heading reads *"**The count of own-value sources is FOUR**, and the prose surfaces stop carrying the count"*, and its body ends *"the surface that owns it is the `produces` markers"* — which W1(c) has now superseded (*"the **PRODUCING** markers standing at the shapes in the set above … and no third surface"*). The PR body's 4a scan enumerated `:106`, `:576`, `:724` from that file and did not reach `:690`. It is a superseded Done spec's own change-order table, out of this WP's boundary, and its stale `test.js:192, :195, :197, :198-199` citations were already dead before this diff — but the 4a claim as written in the PR body is incomplete. Correct the 4a paragraph to name it as an out-of-boundary residual rather than leaving 4a asserted clean.
+
+---
+
+## Non-findings I checked and am satisfied with
+
+- **The added `classify` call sites (6 new canaries).** Table A says *"its five call sites are unchanged"* and Deliverables site (c) authorizes *"the canaries the acceptance criteria need"*. The five originals are byte-identical; criterion 1 cannot be met without new ones. Not a conflict.
+- **Decision 3 — one sentence added to the `watchIndexWrites` JSDoc's second paragraph, beyond Table C row 3's `:167-168`.** *"Both clauses are enforced"* would otherwise be a false promise beside the code that breaks it, which criterion 6 forbids. Same comment block, recorded under "Decisions made", simpler option chosen. Accept; if anything the spec's line-range citation was the imprecise party.
+- **`watch.seen` pollution from the new `spawnGit` canary.** `seen` is asserted only as `length > 0` at `:1621`, before the canary; the raise happens before `spawnPinnedSync`, so no git runs with a relative index and the byte-identity assertion downstream is unaffected.
+- **`--test-name-pattern "claim-2b-pipeline"`** still selects the renamed test (token preserved, exactly one occurrence, test green).
+- **`:1114` / `:1454`** unchanged, as the spec's checklist requires.
+
+---
+
+## Closed-contract drift check (ADR-0031)
+
+W1(c) remains the canonical decision surface; Tables A/B/C are change orders that cite it rather than take a family letter, and none promotes a mirror to primary. The genuinely new contract — PRODUCING ↔ `produces: true` — is landed the right way round: the row decides, the module mirrors, the module is untouched so the digest is not owed, and identity is established by an independent shape-by-shape derivation rather than a count (I reproduced this and its four REDs). The coverage-total retraction moved all five registered surfaces in one pass with no orphaned wording, sweep-confirmed. **The one drift is finding 1**: the settled canonical checklist at `:548-1017` was cited as carrying a registration it does not carry, without that checklist being edited — a settled contract's facts changing in one copy only. Findings 2 and 4 are the same family's standing weakness (positional citations and prose counts scattered across superseded Done specs) surfacing again; that recurrence, now landing on the same contract family for a second round, is the signal for a **canonical-extraction pass on the pinned-set mirror registry** — recommend routing findings 2, 3 and 4 to **wd-architect** as one follow-up rather than patching them piecemeal. The spec itself is not at fault for finding 1: Table B specified the preamble's required content precisely, and the extra clause was added beyond it.
