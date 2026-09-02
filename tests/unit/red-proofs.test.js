@@ -1262,33 +1262,63 @@ test('red-proofs: the wrapper is recognised by REPORTER STRUCTURE, not by name (
     'the ambiguous shape is KEPT — dropping it is how an undeclared own-body failure vanishes'
   );
 
-  // (e) THE NODE 20 SPELLING — measured on v20.20.2, the wrapper carries the
-  //     ABSOLUTE path while v25.9.0 carries the path as given. Without the
-  //     path-suffix branch the wrapper is KEPT and every real test nests under
-  //     it, so a declaration naming a bare test name matches nothing and every
-  //     proof ERRORs at BASELINE — fail-safe, but the lane is inoperative on the
-  //     Node CI actually runs.
+  // (e) THE NODE 20 SPELLING — measured on v20.20.2, a wrapper carries the
+  //     ABSOLUTE path while v25.9.0 carries the path as given. Childless, sole
+  //     root, inner zero plan: the unmatched-pattern wrapper, unwrapped.
   const node20Absolute = [
-    'TAP version 13', '# Subtest: /home/runner/work/wienerdog/wienerdog/tests/suite-basic.js',
-    '    # Subtest: fixture basic: the greeting is hello',
-    '    ok 1 - fixture basic: the greeting is hello',
-    '    1..1',
+    'TAP version 13', '1..0',
+    '# Subtest: /home/runner/work/wienerdog/wienerdog/tests/suite-basic.js',
     'ok 1 - /home/runner/work/wienerdog/wienerdog/tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...',
+    '1..1', '# tests 1', '',
+  ].join('\n');
+  assert.deepEqual(rp.parseTap(node20Absolute, suite), [],
+    'the absolutely-spelled wrapper is recognised and unwrapped');
+
+  // (d) A NAME-MATCHING NODE **WITH CHILDREN** IS A TEST, NEVER THE WRAPPER.
+  //     Measured on v25.9.0 and v20.20.2, isolated and not: no reporter wrapper
+  //     ever carries children. Treating "name + children" as a wrapper is what
+  //     swallowed a namesake parent's own-body failure (PR #204 round 6).
+  const namesakeParent = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js',
+    '    # Subtest: inner', '    ok 1 - inner', '    1..1',
+    'not ok 1 - tests/suite-basic.js',
+    '  ---', "  failureType: 'testCodeFailure'", "  code: 'ERR_ASSERTION'", '  ...',
     '1..1', '# tests 1', '',
   ].join('\n');
   assert.deepEqual(
-    rp.flattenTap(rp.parseTap(node20Absolute, suite)).map((n) => n.path.join('>')),
-    ['fixture basic: the greeting is hello'],
-    'the absolutely-spelled wrapper is unwrapped and the identity is the bare test name'
+    rp.flattenTap(rp.parseTap(namesakeParent, suite)).map((n) => n.path.join('>')),
+    ['tests/suite-basic.js', 'tests/suite-basic.js>inner'],
+    'the namesake parent is kept WITH its subtest, so its own-body failure stays in the equality set'
   );
 
-  // (d) a name-matching node WITH children is the wrapper, and unwraps.
-  const wrapped = [
-    'TAP version 13', '# Subtest: tests/suite-basic.js',
-    '    # Subtest: inner', '    ok 1 - inner', '    1..1',
-    'ok 1 - tests/suite-basic.js', '1..1', '# tests 1', '',
+  // (f2) THE SOLE-ROOT GUARD, pinned on a synthetic stream. No measured Node
+  //      emits an inner zero plan alongside sibling roots — a zero plan means
+  //      nothing ran — so this is defence in depth, and it is asserted rather
+  //      than left as an unpinned intention: if a reporter ever did, a
+  //      name-matching sibling is still a test.
+  const zeroPlanWithSibling = [
+    'TAP version 13', '1..0',
+    '# Subtest: tests/suite-basic.js', 'ok 1 - tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...',
+    '# Subtest: sibling', 'ok 2 - sibling', '1..2', '# tests 2', '',
   ].join('\n');
-  assert.deepEqual(rp.flattenTap(rp.parseTap(wrapped, suite)).map((n) => n.path.join('>')), ['inner']);
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(zeroPlanWithSibling, suite)).map((n) => n.path.join('>')),
+    ['tests/suite-basic.js', 'sibling'],
+    'a name-matching node with siblings is a test, inner zero plan or not'
+  );
+
+  // (f) a name-matching node that is one of SEVERAL roots is a test.
+  const withSibling = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js', 'ok 1 - tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...',
+    '# Subtest: sibling', 'ok 2 - sibling', '1..2', '# tests 2', '',
+  ].join('\n');
+  assert.deepEqual(
+    rp.flattenTap(rp.parseTap(withSibling, suite)).map((n) => n.path.join('>')),
+    ['tests/suite-basic.js', 'sibling']
+  );
 });
 
 test('red-proofs: a declaration ADDED between LOAD and SNAPSHOT is an ERROR naming the file (Table B row 2)', () => {
@@ -1467,6 +1497,90 @@ test('red-proofs: a declaration carrying legal multi-byte UTF-8 still loads, and
   const r = run(root);
   assert.equal(r.verdict, 'PROVEN', r.report);
   assert.ok(r.report.includes('日本語'), r.report);
+});
+
+// ── ROUND-6 FINDINGS — each one's RED
+
+test('red-proofs: a NAMESAKE PARENT WITH SUBTESTS is a test — its undeclared own-body failure is FAILED, never swallowed (Table B row 5)', () => {
+  // The subtests stay GREEN under the mutation, so unwrapping the parent leaves
+  // only passing children behind and its own red disappears entirely. Both gate
+  // channels reproduced PROVEN, exit 0, over that shape.
+  const r = run(newRoot({
+    suite: 'tests/suite-namesake-nested.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [{ test: ['fixture nested-namesake: the declared test'], signal: 'RP-SIGNAL-GREETING' }],
+    })],
+  }));
+  assert.equal(r.verdict, 'FAILED', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('failed in its OWN BODY but is not declared'), r.report);
+  assert.ok(r.report.includes('tests/suite-namesake-nested.js'), r.report);
+});
+
+test('red-proofs: the same namesake parent, DECLARED with its subtest identity, is observed and PROVEN (Table B row 5)', () => {
+  // Sole root, name-matching, WITH children — the shape a `roots.length === 1`
+  // rule alone would still unwrap, and then the declaration's nested path would
+  // match nothing at all.
+  const r = run(newRoot({
+    suite: 'tests/suite-namesake-solo.js',
+    proofs: [proof({
+      ...SHARED_MUTATION,
+      expectRed: [
+        { test: ['tests/suite-namesake-solo.js'], signal: 'RP-SIGNAL-NAMESAKE-OWN-BODY' },
+        { test: ['tests/suite-namesake-solo.js', 'the declared subtest'], signal: 'RP-SIGNAL-GREETING' },
+      ],
+    })],
+  }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+});
+
+test('red-proofs: a SYMLINKED `--root` is refused, and the real tree it points at is untouched (Table B rows 2, 2a)', SKIP_WITHOUT_SYMLINKS, () => {
+  // `path.resolve` leaves a link intact, so the manifest walked the TARGET while
+  // `cpSync` reproduced the LINK — and the mutation was written THROUGH it into
+  // the real tree, outside the sandbox, while the run reported normally.
+  const real = newRoot();
+  const before = fs.readFileSync(path.join(real, 'subject', 'subject.js'));
+  const linkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-rootlink-'));
+  const link = path.join(linkDir, 'linked-root');
+  fs.symlinkSync(real, link);
+
+  const r = run(link);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('--root is a SYMBOLIC LINK'), r.report);
+  assert.equal(r.proofs.length, 0, 'nothing runs through a root that aliases another tree');
+  assert.ok(fs.readFileSync(path.join(real, 'subject', 'subject.js')).equals(before),
+    'the real tree behind the link is byte-identical after the run');
+  assert.equal(fs.existsSync(path.join(real, 'subject', 'subject.js.orig')), false);
+});
+
+test('red-proofs: a `--root` that is not a directory is refused too (Table B row 2)', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-rootfile-')), 'not-a-dir');
+  fs.writeFileSync(file, 'x');
+  const r = run(file);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.ok(r.report.includes('--root is not a directory'), r.report);
+});
+
+test('red-proofs: a legal root whose ANCESTOR is a symlink still runs, and the root is RESOLVED once (Table B row 2)', () => {
+  // macOS hands every `os.tmpdir()` path an ancestor symlink (`/var` ->
+  // `/private/var`), so refusing on an ancestor would refuse every fixture here;
+  // Linux usually does not, so the expectation is computed from the host rather
+  // than assumed. Either way exactly ONE root value reaches the manifest, the
+  // copies and the containment checks — mixing a link with its target is what
+  // created the alias the symlinked-root finding exploited.
+  const root = newRoot();
+  const resolved = fs.realpathSync(root);
+  const r = run(root);
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  if (resolved !== root) {
+    assert.ok(r.report.includes(`root resolves to ${resolved}`), r.report);
+  } else {
+    assert.equal(r.report.includes('root resolves to '), false, r.report);
+  }
+  assert.ok(r.report.includes(`RED proofs — root ${root}`), r.report);
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

@@ -892,14 +892,30 @@ function parseTap(text, suiteArg) {
   //       test, and the parent synthesised one record to stand for the file.
   // A CHILDLESS root with neither is a TEST, and it stays.
   //
-  // ONE SHAPE IS GENUINELY AMBIGUOUS, and the tie is broken FAIL-SAFE. A file
-  // that registers no test at all emits a childless `ok` record named for the
-  // file with NO inner zero plan — measured on v25.9.0 and v20.20.2 alike —
-  // which is byte-for-byte the shape of a real childless test named like the
-  // suite. The runner KEEPS it, because the two errors are not symmetric:
-  // keeping a wrapper only ADDS an identity, which can make RED's equality rule
-  // stricter and BASELINE's lookup fail loudly; DROPPING a test removes an
-  // own-body failure from the equality set, which is how the false PROVEN arose.
+  // EVERY MEASURED WRAPPER IS CHILDLESS, AND THAT IS THE WHOLE RULE. Measured on
+  // v25.9.0 and v20.20.2, through `tests/run.js` -> `node --test <file>`, with
+  // and without `--experimental-test-isolation=process`:
+  //   * a file whose tests RUN emits NO wrapper at all — every test, a namesake
+  //     parent WITH SUBTESTS included, is a root in its own right;
+  //   * an unmatched `--test-name-pattern` (Node >= 25) emits an inner `1..0`
+  //     and then a CHILDLESS record named for the file;
+  //   * a file that registers nothing, and a file that fails at file level,
+  //     each emit a CHILDLESS record named for the file.
+  // No measured wrapper has ever carried children. The round-3 rule treated
+  // "matches by name AND has children" as sufficient, and that was a GUESS: a
+  // legal `test('tests/suite-x.js', async (t) => { … })` with subtests was
+  // replaced by those subtests, so its OWN-BODY failure vanished from RED's
+  // equality set and the proof reported PROVEN (PR #204 round 6, found by two
+  // channels independently). A wrapper is therefore recognised as the SOLE root,
+  // CHILDLESS, with positive evidence it is the reporter's record.
+  //
+  // ONE SHAPE STAYS AMBIGUOUS, and the tie is still broken FAIL-SAFE. A file
+  // that registers no test emits a childless record with NO inner zero plan —
+  // byte-for-byte what a real childless namesake test emits. The runner KEEPS
+  // it, because the two errors are not symmetric: keeping a wrapper only ADDS an
+  // identity, which makes RED's equality rule stricter and BASELINE's lookup
+  // fail loudly; DROPPING a test removes an own-body failure from the equality
+  // set, which is how both false PROVENs in this area arose.
   if (suiteArg) {
     const rel = normaliseRel(suiteArg);
     const base = path.basename(suiteArg);
@@ -909,7 +925,10 @@ function parseTap(text, suiteArg) {
       const name = normaliseRel(n.name);
       return name === rel || name === base || name.endsWith(`/${rel}`);
     };
-    const isFileNode = (n) => matchesName(n) && (n.children.length > 0 || innerZeroPlan);
+    const isFileNode = (n) => roots.length === 1
+      && matchesName(n)
+      && n.children.length === 0
+      && innerZeroPlan;
     roots = roots.flatMap((n) => (isFileNode(n) ? n.children : [n]));
   }
   return roots;
@@ -1447,7 +1466,7 @@ function parseArgs(argv) {
  * @returns {{verdict:string, exitCode:number, report:string, proofs:Object[], criteria:Object[]}}
  */
 function runAll(opts = {}) {
-  const root = opts.root ? path.resolve(opts.root) : path.dirname(__dirname);
+  let root = opts.root ? path.resolve(opts.root) : path.dirname(__dirname);
   /** @type {string[]} */
   const lines = [];
   const say = (s) => lines.push(s);
@@ -1483,6 +1502,38 @@ function runAll(opts = {}) {
   if (hostReason) {
     say(`UNSUPPORTED: ${hostReason}.`);
     return done('UNSUPPORTED');
+  }
+
+  // THE ROOT IS AN ENTRY IN THE SOURCE DOMAIN TOO, and it was the one entry
+  // nothing classified. `path.resolve` leaves a symbolic link intact, so a
+  // symlinked `--root` made `buildManifest` walk the link's TARGET while
+  // `fs.cpSync` reproduced the LINK as the snapshot and every phase copy — and
+  // the mutation was then written THROUGH it into the real tree, outside the
+  // sandbox, while the run reported normally (measured at PR #204 round 6: the
+  // real target's sha256 changed under a run that never claimed to touch it).
+  // Table B row 2a refuses every symlink in the source tree; the root is the
+  // outermost one. It is refused here AND resolved, so exactly one root value
+  // reaches LOAD, the manifest, the copies and the containment checks — mixing
+  // a link with its target is what created the alias in the first place.
+  try {
+    const st = fs.lstatSync(root);
+    if (st.isSymbolicLink()) {
+      throw error(`--root is a SYMBOLIC LINK (${root}) — the copy step refuses symlinks, and a linked root would alias the snapshot and every phase copy onto the real tree`);
+    }
+    if (!st.isDirectory()) {
+      throw error(`--root is not a directory (${root})`);
+    }
+    root = fs.realpathSync(root);
+  } catch (e) {
+    if (e instanceof RedProofError) {
+      say(`${e.verdict}: ${e.message}`);
+      return done(e.verdict);
+    }
+    say(`ERROR: --root could not be classified (${(e && (e.code || e.message)) || e})`);
+    return done('ERROR');
+  }
+  if (root !== (opts.root ? path.resolve(opts.root) : path.dirname(__dirname))) {
+    say(`root resolves to ${root}`);
   }
 
   /** @type {{declFile:string, suite:string, proof:Object}[]} */
