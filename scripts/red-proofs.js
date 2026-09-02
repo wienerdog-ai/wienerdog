@@ -129,6 +129,57 @@ function unsupportedHostReason(host = {}) {
   return null;
 }
 
+/**
+ * THE SECOND HALF OF THAT REFUSAL, and it cannot be decided from platform and
+ * uid: whether mode bits are ENFORCED on the filesystem the sandbox lands on.
+ *
+ * `unsupportedHostReason` covers the two hosts where modes are inert by
+ * construction. A non-root POSIX host can still put the sandbox on a mount that
+ * ACCEPTS `chmod` and ignores it — network shares, some FUSE filesystems, a
+ * permissive container overlay. There every `chmod 0500` this runner performs
+ * succeeds, every check it makes passes, and the locks hold nothing: a stateful
+ * suite can still write `../sentinel`, carry state between phases and drive a
+ * false PROVEN. So the capability is PROBED on the actual sandbox filesystem,
+ * at LOAD, rather than assumed from the host's shape — the runner's own suite
+ * calls this same function, so the two can never drift.
+ *
+ * The probe is the lane's own invariant in miniature: make a directory
+ * non-writable, then try from THIS process to create a child in it.
+ *
+ * @param {string} dir an existing directory ON the filesystem to probe
+ * @returns {string|null} the reason to refuse, or null when the bits are enforced
+ */
+function modeEnforcementReason(dir) {
+  let probeDir;
+  try {
+    probeDir = fs.mkdtempSync(path.join(dir, 'enforce-probe-'));
+  } catch (e) {
+    return `the sandbox filesystem at ${dir} could not be probed for mode-bit enforcement `
+      + `(${(e && (e.code || e.message)) || e}), and this lane's isolation is enforced with mode bits (Table B row 2b)`;
+  }
+  const child = path.join(probeDir, 'w');
+  let enforced = false;
+  try {
+    fs.chmodSync(probeDir, 0o500);
+    try {
+      fs.writeFileSync(child, 'x');
+    } catch {
+      enforced = true; // the write was refused: the bits are real here
+    }
+  } catch {
+    // chmod itself failed — treat exactly as "cannot be enforced" below.
+  } finally {
+    try { fs.chmodSync(probeDir, 0o700); } catch { /* best effort */ }
+    try { fs.rmSync(probeDir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+  if (enforced) return null;
+  return `the filesystem holding the sandbox (${dir}) ACCEPTS chmod but does not ENFORCE it — a `
+    + '0500 directory there still took a write from this process, so holding the phase copies\' '
+    + 'parent, the sandbox and the snapshot non-writable while a child runs (Table B row 2b) is '
+    + 'inert and no verdict here would mean anything. Point TMPDIR at a filesystem that enforces '
+    + 'POSIX mode bits';
+}
+
 /** Repo-relative location of this runner — a `file` may never name it. */
 const RUNNER_REL = 'scripts/red-proofs.js';
 
@@ -209,6 +260,35 @@ const XDG_VARS = ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_STA
 const NODE_TEST_RUNNER_VARS = ['NODE_TEST_CONTEXT', 'NODE_TEST_WORKER_ID'];
 
 /**
+ * NODE'S OWN INHERITED ESCAPE HATCHES, REMOVED FROM EVERY PHASE — the two names
+ * that can hand a phase code and dependencies from outside its copy.
+ *
+ * `node_modules` is EXCLUDED from the snapshot and therefore from every copy
+ * (EXCLUDED_DIRS), so a phase has no dependency tree at all — that is the
+ * design, and a suite needing one should fail honestly at BASELINE.
+ * `NODE_PATH` puts a tree back: MEASURED, a suite requiring a package that
+ * exists only in the real checkout resolved it in BASELINE, RED and CONTROL
+ * alike, and the run reported PROVEN over one shared, writable dependency tree
+ * none of the copies carried. `NODE_OPTIONS` is the same hole for CODE:
+ * measured on v25.9.0, `--require`, `-r` and `--import` are all honoured inside
+ * it, each taking a path, so the caller's environment alone can preload a file
+ * from the checkout into every phase.
+ *
+ * REMOVED WHOLE, not sanitised entry by entry, and the reason is different for
+ * each. `NODE_PATH` has no legitimate residue here — unlike `PATH`, which
+ * carries `git` and `sh`, every NODE_PATH entry is a dependency tree the lane
+ * deliberately withholds, and one shared across phases wherever it points.
+ * `NODE_OPTIONS` is a FLAG STRING rather than a path list: removing only the
+ * path-bearing flags would need a hardcoded list of which flags take a path
+ * (`--require`, `-r`, `--import`, `--experimental-loader`, plus whatever a
+ * later Node adds), and an omission there is SILENT — the hole reopens with no
+ * signal. There is also a plainer reason to drop both: a proof's verdict must
+ * not depend on the caller's ambient flags, or the same declaration proves
+ * different things on two machines.
+ */
+const INHERITED_NODE_VARS = ['NODE_PATH', 'NODE_OPTIONS'];
+
+/**
  * The TOTAL verdict taxonomy, in precedence order. A run's verdict is the
  * highest-precedence verdict any proof or criterion reached.
  */
@@ -252,7 +332,10 @@ const REACH = [
   '           directory, TMPDIR/TMP/TEMP, HOME and the four XDG roots live INSIDE that phase\'s own',
   '           copy. PWD names that copy, and the npm-provided cwd-naming variables (INIT_CWD,',
   '           npm_config_local_prefix, npm_package_json) are REMOVED, with PATH stripped of any',
-  '           entry inside --root, so no inherited variable still names the checkout. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
+  '           entry inside --root OR inside the checkout npm was invoked from — which a custom',
+  '           --root makes a DIFFERENT tree — and NODE_PATH and NODE_OPTIONS removed, so no',
+  '           inherited variable still names the checkout and no phase can load code or',
+  '           dependencies from outside its own copy. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
   '           WIENERDOG_CLAUDE_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) are REMOVED from the phase',
   '           environment rather than set, so their roots land inside that copy through the',
   '           redirected HOME they all default under. Each copy is created, manifest-verified and',
@@ -261,8 +344,10 @@ const REACH = [
   '           read-only — so the running copy is the only writable tree this runner provides.',
   '           The sandbox itself must lie OUTSIDE --root — the snapshot destination may not be a',
   '           descendant of the source — so a TMPDIR under the tree being snapshotted is refused.',
-  '           Where mode bits cannot enforce that — win32, or running as uid 0 — the lane REFUSES',
-  '           at LOAD with UNSUPPORTED rather than reporting a verdict it cannot stand behind.',
+  '           Where mode bits cannot enforce that — win32, running as uid 0, or a sandbox',
+  '           filesystem that ACCEPTS chmod without enforcing it, which is PROBED at LOAD on the',
+  '           mount the sandbox actually landed on — the lane REFUSES at LOAD with UNSUPPORTED',
+  '           rather than reporting a verdict it cannot stand behind.',
   '           A suite that writes ANYWHERE ELSE (an absolute path this runner does not own, the',
   '           ambient temp root above the sandbox, or a chmod out of the locked parent) is',
   '           UNSUPPORTED BY THE LANE rather than guarded against: full confinement needs OS-level',
@@ -743,23 +828,43 @@ function phaseEnv(copyDir, root) {
   // step back, so it is removed rather than left pointing somewhere real.
   env.PWD = copyDir;
   delete env.OLDPWD;
+  // THE TREES A PATH ENTRY MAY NOT NAME — collected BEFORE the npm names are
+  // removed. `--root` is one of them; the OTHER is the checkout `npm run` was
+  // invoked FROM, and under a custom `--root` those are DIFFERENT DIRECTORIES.
+  // npm prepends the INVOKING package's `node_modules/.bin`, so filtering on
+  // `--root` alone left a live execution path into a real checkout in every
+  // phase — measured: a marker executable there ran in BASELINE, RED and
+  // CONTROL under a PROVEN verdict. `INIT_CWD` and `npm_config_local_prefix`
+  // are how npm itself names that tree, and the runner already collects them.
+  const barriers = [];
+  for (const p of [root, ...NPM_CWD_VARS.map((n) => env[n])]) {
+    if (typeof p !== 'string' || !p || !path.isAbsolute(p)) continue;
+    for (const c of [p, realpathish(p)]) {
+      // A barrier AT the filesystem root would strip the whole PATH. Nothing
+      // legitimate names it, so such a value is dropped rather than obeyed.
+      if (path.dirname(c) !== c && !barriers.includes(c)) barriers.push(c);
+    }
+  }
   for (const name of NPM_CWD_VARS) delete env[name];
   // PATH IS SANITISED, NOT REMOVED. `npm run` puts `<root>/node_modules/.bin`
-  // on it, which is a path INTO THE SOURCE TREE — and the phase copy carries no
+  // on it, which is a path INTO A REAL CHECKOUT — and the phase copy carries no
   // `node_modules` at all, so such an entry can only ever resolve outside the
   // sandbox. Every other entry is a system path a suite legitimately needs
   // (`git`, `sh`), so they stay.
-  if (root && typeof env.PATH === 'string') {
+  if (barriers.length > 0 && typeof env.PATH === 'string') {
     // COMPARED ON REALPATHS, both sides. `--root` is resolved once at LOAD while
     // npm writes the PATH entry with the path as given — on macOS that is
     // `/var/...` against `/private/var/...`, and a raw string compare lets the
     // entry through. The entry need not exist, so resolution is best-effort.
     const inside = (e) => {
-      for (const c of [e, realpathish(e)]) if (c === root || c.startsWith(root + path.sep)) return true;
+      for (const c of [e, realpathish(e)]) {
+        for (const b of barriers) if (c === b || c.startsWith(b + path.sep)) return true;
+      }
       return false;
     };
     env.PATH = env.PATH.split(path.delimiter).filter((e) => e && !inside(e)).join(path.delimiter);
   }
+  for (const name of INHERITED_NODE_VARS) delete env[name];
   for (const name of REDIRECTED_ENV_VARS) delete env[name];
   for (const name of NODE_TEST_RUNNER_VARS) delete env[name];
   return env;
@@ -1819,6 +1924,18 @@ function runAll(opts = {}) {
     say(`ERROR: the sandbox could not be created (${(e && (e.code || e.message)) || e})`);
     return done('ERROR');
   }
+  // AND THE FILESYSTEM IT LANDED ON MUST ENFORCE THE LOCKS. The host refusal
+  // above is decided from platform and uid; this is the part only the actual
+  // mount can answer, so it is probed HERE — after the sandbox location is
+  // chosen, on that exact filesystem — and refused in the same UNSUPPORTED
+  // class. The sandbox is removed first: a lane that will not run leaves
+  // nothing behind.
+  const enforcementReason = modeEnforcementReason(sandbox);
+  if (enforcementReason) {
+    try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* best effort */ }
+    say(`UNSUPPORTED: ${enforcementReason}.`);
+    return done('UNSUPPORTED');
+  }
   let runVerdict = 'PROVEN';
   let applications = 0;
   try {
@@ -2002,12 +2119,14 @@ module.exports = {
   NPM_CWD_VARS,
   XDG_VARS,
   NODE_TEST_RUNNER_VARS,
+  INHERITED_NODE_VARS,
   VERDICT_ORDER,
   RedProofError,
   worstVerdict,
   preRunError,
   nodeFloorOk,
   unsupportedHostReason,
+  modeEnforcementReason,
   loadDeclarations,
   assertDeclarationsMatchSnapshot,
   declarationDigest,

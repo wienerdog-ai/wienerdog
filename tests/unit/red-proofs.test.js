@@ -129,21 +129,16 @@ const EXEC_BIT_OK = probe(() => {
   return (fs.statSync(f).mode & 0o111) !== 0;
 });
 
-/** mode bits are ENFORCED against this process — false as uid 0, false on win32. */
-const MODE_ENFORCED_OK = probe(() => {
-  const d = path.join(CAP_DIR, 'enforce-probe');
-  fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(d, 'f'), 'x');
-  fs.chmodSync(d, 0o000);
-  try {
-    fs.readdirSync(d);
-    return false; // readable anyway: not enforced against us
-  } catch {
-    return true;
-  } finally {
-    try { fs.chmodSync(d, 0o700); } catch { /* best effort */ }
-  }
-});
+/**
+ * mode bits are ENFORCED against this process — false as uid 0, false on win32,
+ * and false on a mount that accepts `chmod` without honouring it.
+ *
+ * THE RUNNER'S OWN PROBE, called rather than re-implemented: this suite used to
+ * carry a second, differently-shaped probe (read enforcement at 0o000) while the
+ * CLI decided from platform and uid alone, so the gate the tests trusted and the
+ * gate production applied could disagree. They are now one function.
+ */
+const MODE_ENFORCED_OK = probe(() => rp.modeEnforcementReason(CAP_DIR) === null);
 
 /** symlinks can be created — false on a standard unprivileged win32 host. */
 const SYMLINKS_OK = probe(() => {
@@ -1939,30 +1934,55 @@ test('red-proofs: the npm cwd-naming constant cannot silently fall behind what `
     `precondition: npm still exports cwd-naming variables (got ${named.join(', ')})`);
 
   // PWD is SET to the copy, PATH is SANITISED, the rest are REMOVED. Anything
-  // npm names that none of those three cover is drift, and fails here.
-  const handled = new Set([...rp.NPM_CWD_VARS, 'PWD', 'PATH']);
+  // npm names that none of those cover is drift, and fails here.
+  const handled = new Set([...rp.NPM_CWD_VARS, ...rp.INHERITED_NODE_VARS, 'PWD', 'PATH']);
   assert.deepEqual(named.filter((n) => !handled.has(n)), [],
     `npm exports a variable naming its cwd that the runner does not handle.\n`
     + `  named by npm:      ${named.join(', ')}\n`
-    + `  removed:           ${rp.NPM_CWD_VARS.join(', ')}\n`
+    + `  removed:           ${[...rp.NPM_CWD_VARS, ...rp.INHERITED_NODE_VARS].join(', ')}\n`
     + `  set to the copy:   PWD\n  sanitised:         PATH`);
 
   // And each is actually handled, measured on a phase environment built with the
-  // probe package standing in for the checkout.
+  // probe package standing in for the INVOKING CHECKOUT — which is a DIFFERENT
+  // directory from `--root` here, deliberately. The two were the same value in
+  // this test until round 12, and that is exactly why the PATH filter's
+  // `--root`-only rule read as correct while `npm run red-proofs -- --root
+  // <elsewhere>` left the invoking checkout's `.bin` live in every phase.
+  const otherRoot = fs.realpathSync(newRoot());
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-npmenv-'));
   const saved = {};
-  for (const n of named) { saved[n] = process.env[n]; }
+  for (const n of [...named, ...rp.INHERITED_NODE_VARS]) { saved[n] = process.env[n]; }
   process.env.INIT_CWD = pkgRoot;
   process.env.npm_config_local_prefix = pkgRoot;
   process.env.npm_package_json = path.join(pkgRoot, 'package.json');
-  process.env.PATH = `${path.join(pkgRoot, 'node_modules', '.bin')}${path.delimiter}/usr/bin`;
+  process.env.PATH = [
+    path.join(pkgRoot, 'node_modules', '.bin'),
+    path.join(otherRoot, 'node_modules', '.bin'),
+    '/usr/bin',
+  ].join(path.delimiter);
+  process.env.NODE_PATH = path.join(pkgRoot, 'node_modules');
+  process.env.NODE_OPTIONS = `--require ${path.join(pkgRoot, 'preload.js')}`;
   try {
-    const env = rp.phaseEnv(copy, fs.realpathSync(pkgRoot));
-    for (const n of rp.NPM_CWD_VARS) assert.equal(env[n], undefined, `${n} must be removed`);
+    const env = rp.phaseEnv(copy, otherRoot);
+    for (const n of [...rp.NPM_CWD_VARS, ...rp.INHERITED_NODE_VARS]) {
+      assert.equal(env[n], undefined, `${n} must be removed`);
+    }
     assert.equal(env.PWD, copy);
-    assert.equal(env.PATH.split(path.delimiter).some((e) => e.startsWith(pkgRoot)), false,
-      `PATH still carries an entry inside the source tree: ${env.PATH}`);
     assert.ok(env.PATH.includes('/usr/bin'), 'system entries survive — a suite needs git and sh');
+
+    // THE DURABLE FORM: not "these named variables are handled", but "NOTHING in
+    // the phase environment still names either tree". A future inherited name
+    // that points into the checkout fails here without anyone listing it.
+    const trees = [pkgRoot, fs.realpathSync(pkgRoot), otherRoot];
+    const leaks = [];
+    for (const [k, v] of Object.entries(env)) {
+      if (typeof v !== 'string' || !v) continue;
+      for (const part of v.split(path.delimiter)) {
+        const c = part.startsWith('file://') ? part.slice('file://'.length) : part;
+        if (trees.some((t) => c === t || c.startsWith(t + path.sep))) { leaks.push(`${k}=${v}`); break; }
+      }
+    }
+    assert.deepEqual(leaks, [], `the phase environment still names a real checkout:\n  ${leaks.join('\n  ')}`);
   } finally {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -2123,4 +2143,168 @@ test('red-proofs: two consecutive runs give the same verdict and leave the fixtu
   assert.equal(second.verdict, first.verdict);
   assert.equal(second.exitCode, first.exitCode);
   rp.verifyCopy(BASE, before); // the runner's only writes go into copies it deletes
+});
+
+// ── ROUND-12 FINDINGS — their REDs
+
+/**
+ * A throwaway INVOKING CHECKOUT: a package root carrying a real `node_modules`
+ * with a marker package and a marker executable in `.bin`, plus a preload
+ * script. It stands in for the tree `npm run red-proofs` was invoked from —
+ * which, with a custom `--root`, is NOT the tree under proof. Every round-12
+ * case needs the two to be DIFFERENT directories; that difference is what the
+ * PATH filter used to miss.
+ *
+ * @returns {string} the checkout path
+ */
+function newCheckout() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-checkout-'));
+  const pkgDir = path.join(dir, 'node_modules', 'rp-marker');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'rp-marker', version: '1.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), "'use strict';\nmodule.exports = 'MARKER-FROM-THE-CHECKOUT';\n");
+  fs.mkdirSync(path.join(dir, 'node_modules', '.bin'), { recursive: true });
+  return dir;
+}
+
+/** Run `fn` with `vars` installed in `process.env`, restoring exactly what was there.
+ *  @param {Object<string,string>} vars @param {Function} fn @returns {any} */
+function withEnv(vars, fn) {
+  const saved = {};
+  for (const [k, v] of Object.entries(vars)) { saved[k] = process.env[k]; process.env[k] = v; }
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+test('red-proofs: an inherited NODE_PATH cannot feed a phase the dependency tree the copy deliberately lacks (Table B row 2a)', () => {
+  // `node_modules` is EXCLUDED from the snapshot and from every copy, so a phase
+  // has no dependency tree at all. NODE_PATH is inherited, and it puts one back:
+  // measured, a suite requiring a package that exists ONLY in the checkout
+  // resolved it in all three phases and the run reported PROVEN over a
+  // dependency the copy never carried — one shared, writable tree behind
+  // BASELINE, RED and CONTROL alike. The honest outcome is the load failing.
+  const checkout = newCheckout();
+  const root = newRoot({
+    suite: 'tests/suite-nodepath.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture nodepath: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    files: {
+      'tests/suite-nodepath.js': [
+        "'use strict';",
+        "const test = require('node:test');",
+        "const assert = require('node:assert');",
+        "const marker = require('rp-marker'); // resolvable ONLY through NODE_PATH",
+        "const subject = require('../subject/subject.js');",
+        '',
+        "test('fixture nodepath: the greeting is hello', () => {",
+        "  assert.equal(marker, 'MARKER-FROM-THE-CHECKOUT');",
+        "  assert.equal(subject.greeting, 'hello', 'RP-SIGNAL-GREETING');",
+        '});',
+        '',
+      ].join('\n'),
+    },
+  });
+  const r = withEnv({ NODE_PATH: path.join(checkout, 'node_modules') }, () => run(root));
+  assert.notEqual(r.verdict, 'PROVEN', `a dependency from outside the copy must not carry a proof:\n${r.report}`);
+  assert.ok(/BASELINE/.test(r.report), r.report);
+  assert.equal(withEnv({ NODE_PATH: path.join(checkout, 'node_modules') },
+    () => rp.phaseEnv(root, root).NODE_PATH), undefined, 'no phase environment carries NODE_PATH');
+});
+
+test('red-proofs: an inherited NODE_OPTIONS cannot preload code from outside the copy into every phase (Table B row 2a)', () => {
+  // MEASURED on v25.9.0: `--require`, `-r` and `--import` are all honoured
+  // inside NODE_OPTIONS, and each takes a path — so the caller's environment
+  // alone can run code from the real checkout in BASELINE, RED and CONTROL.
+  const checkout = newCheckout();
+  const sentinel = path.join(checkout, 'preloaded');
+  const preload = path.join(checkout, 'preload.js');
+  fs.writeFileSync(preload, `'use strict';\nrequire('node:fs').appendFileSync(${JSON.stringify(sentinel)}, 'x');\n`);
+  assert.equal(/\s/.test(preload), false, 'precondition: the preload path needs no quoting');
+  const root = newRoot();
+  const r = withEnv({ NODE_OPTIONS: `--require ${preload}` }, () => run(root));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(fs.existsSync(sentinel), false,
+    'code from outside the copy ran inside the phases — the caller\'s NODE_OPTIONS reached them');
+  assert.equal(withEnv({ NODE_OPTIONS: `--require ${preload}` },
+    () => rp.phaseEnv(root, root).NODE_OPTIONS), undefined, 'no phase environment carries NODE_OPTIONS');
+});
+
+test('red-proofs: PATH is stripped of the npm INVOKING checkout too, not only --root (Table B rows 2a, 2b)', SKIP_WITHOUT_EXEC_BIT, () => {
+  // THE CUSTOM-ROOT CASE, which the `--root`-only filter could not see. Under
+  // `npm run red-proofs -- --root <elsewhere>` npm still prepends the INVOKING
+  // package's `node_modules/.bin`; that entry is a shared execution path into a
+  // real checkout, alive in every phase. Here the two trees are deliberately
+  // different directories.
+  const checkout = newCheckout();
+  const sentinel = path.join(checkout, 'ran-from-the-checkout');
+  const exe = path.join(checkout, 'node_modules', '.bin', 'rp-marker-bin');
+  fs.writeFileSync(exe, `#!${process.execPath}\n'use strict';\nrequire('node:fs').appendFileSync(${JSON.stringify(sentinel)}, 'x');\n`);
+  fs.chmodSync(exe, 0o755);
+  const root = newRoot({
+    suite: 'tests/suite-pathbin.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture pathbin: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    files: {
+      'tests/suite-pathbin.js': [
+        "'use strict';",
+        "const test = require('node:test');",
+        "const assert = require('node:assert');",
+        "const { spawnSync } = require('node:child_process');",
+        "const subject = require('../subject/subject.js');",
+        '',
+        '// Bare name: found only if PATH still carries the checkout\'s .bin.',
+        "spawnSync('rp-marker-bin', { encoding: 'utf8' });",
+        '',
+        "test('fixture pathbin: the greeting is hello', () => {",
+        "  assert.equal(subject.greeting, 'hello', 'RP-SIGNAL-GREETING');",
+        '});',
+        '',
+      ].join('\n'),
+    },
+  });
+  const vars = {
+    INIT_CWD: checkout,
+    npm_config_local_prefix: checkout,
+    PATH: `${path.join(checkout, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH || '/usr/bin'}`,
+  };
+  const r = withEnv(vars, () => run(root));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(fs.existsSync(sentinel), false,
+    'a phase executed a binary from the npm invoking checkout — a shared execution path outside the sandbox');
+  const env = withEnv(vars, () => rp.phaseEnv(root, root));
+  assert.equal(env.PATH.split(path.delimiter).some((e) => e.startsWith(checkout)), false,
+    `PATH still names the invoking checkout: ${env.PATH}`);
+  assert.ok(env.PATH.length > 0, 'system entries survive — a suite needs git and sh');
+});
+
+test('red-proofs: THIS host enforces mode bits on the sandbox filesystem, and the runner probes it rather than assuming (Table B row 2b)', SKIP_ON_UNSUPPORTED_HOST, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-enf-'));
+  assert.equal(rp.modeEnforcementReason(dir), null,
+    'the lane cannot be exercised on a filesystem that ignores its 0500 locks');
+  // And the probe leaves nothing behind, so LOAD can run it on the real sandbox.
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test('red-proofs: a filesystem that ACCEPTS chmod but does not ENFORCE it is UNSUPPORTED, and no proof runs (Table B row 2b)', () => {
+  // The host refusal covered win32 and uid 0 — decided from platform and uid
+  // alone. A non-root POSIX host can still sit on a mount (network, FUSE, a
+  // permissive container) where `chmod 0500` SUCCEEDS and changes nothing, and
+  // there the parent/sandbox/snapshot locks are inert while every check the
+  // runner makes still passes. Stubbed out of process, exactly that shape: a
+  // no-op `chmodSync`, which is what such a filesystem effectively gives you.
+  const root = newRoot();
+  const stub = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-chmod-')), 'stub.js');
+  fs.writeFileSync(stub, "'use strict';\nrequire('node:fs').chmodSync = () => {};\n");
+  const r = spawnSync(process.execPath, ['--require', stub, RUNNER_SRC, '--root', root], {
+    encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(/^UNSUPPORTED: /m.test(r.stdout), r.stdout);
+  assert.ok(r.stdout.includes('does not ENFORCE'), r.stdout);
+  assert.equal(/\[p-one\]/.test(r.stdout), false, 'nothing runs on a filesystem that cannot hold the locks');
+  assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the footer still ends the run; got …${JSON.stringify(r.stdout.slice(-80))}`);
 });
