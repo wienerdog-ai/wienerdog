@@ -1,0 +1,20 @@
+PLUGIN GATE ROUND 2 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a4 worktree), tip 70da1e79, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP. The round-1 D1/D2 splits and successor contract are now factually sound, but Table E can still close group C after a partial fix, and V6 cannot pass as written. EXECUTED: V1 exact=1 (sandbox EPERM; non-writing equivalent=0, 16/16 refused and 5/5 admitted); V2(a)=0; V2(b)=blocked by EPERM; V3=0; V4=0; V5 exact=1 (EPERM; equivalent=0); V6 absent-state=1; partial-fix simulation=0; frontmatter=0; lint=0; boundary command as specified=1; corrected boundary invocation=0; BSD grep check=0.
+
+Findings:
+- [high] E2's mechanical closure trigger accepts a path-only partial fix (docs/specs/WP-audit-c-close-disposition.md:238-247)
+  Materiality A. V1(b) and V5 are defect-presence conjunctions, not proofs that every residual is retired. V5 goes red if any one of makeAdmit, the reader, or the producer changes. An executed non-mutating simulation fixed only makeAdmit and left readVaultLayout accepting `.git` and inferLayout emitting `.projects`; nevertheless both V1(b) and V5 would be red. After V2(b) is fixed, E2's stated condition can therefore be met while D5 remains live. Saying the successor WP “has landed” is only a process fact; V5 is supposed to make closure mechanical but cannot distinguish complete from partial implementation.
+  Recommendation: Replace the “go red” trigger with explicit post-fix assertions: independently prove every dotted V1 path and the real write are refused, readVaultLayout rejects/falls back for dotted segments, and inferLayout never emits them. Require the expected closed-state result, not an arbitrary nonzero exit.
+- [medium] V6 invokes boundary-check without its mandatory arguments (docs/specs/WP-audit-c-close-disposition.md:457-459)
+  Materiality B. V6 runs `node scripts/boundary-check.js` with no spec path or changed files. The script requires both and exits 1 with its usage message; this was executed and reproduced. Consequently AC6 and the Definition of Done are impossible even for a compliant implementation. The same checker exited 0 when supplied the spec path and current changed-file list.
+  Recommendation: Invoke boundary-check with `docs/specs/WP-audit-c-close-disposition.md` and the complete changed-file list derived from the diff, then re-run V6 in absent, compliant, and violating states.
+
+Next steps:
+- Repair E2 and split V5 into independent closure assertions.
+- Correct the boundary-check invocation, then rerun exact V1, V2(b), and V5 in a writable temporary environment.

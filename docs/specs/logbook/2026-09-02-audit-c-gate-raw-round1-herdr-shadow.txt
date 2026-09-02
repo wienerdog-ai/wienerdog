@@ -1,0 +1,70 @@
+SHADOW ROUND 1 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 1e1e2b88, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: V5 and the reproduction probes in an isolated OS-temp fixture. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: M7 and M9 are still reproducible, so the spec would record false MOOTED dispositions and make either HANDOVER ruling untrue.
+
+FINDING 1
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 210-214  
+Confidence: 0.99  
+Materiality: A  
+Body: D1 claims the positive allowlist retired M7, but a full production-policy reproduction using `promote()` and real `makeGates()` promoted and wrote `01-Projects/example/.github/copilot-instructions.md`; `refused` was empty. In a project repository this is a live AI instruction file. The harvested ruling required rejecting any dot-prefixed path segment, while `makeAdmit` only enumerates `.claude`, `.codex`, and selected basenames. V1 passed because it tests dot paths only at vault root, where the tier check rejects them, never beneath an admitted tier. Both Table E alternatives consequently make the false statement that M7 is mooted.  
+Recommendation: Mark M7 OPEN. Expand the successor to cover path-level dot-segment admission, not merely dot-prefixed layout values. Make V1 exercise `.github`, `.git`, and `.husky` beneath default admitted tiers and through the full promotion path.
+
+FINDING 2
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 211-213  
+Confidence: 0.99  
+Materiality: A  
+Body: D2’s own ruled mechanism includes the unfiltered parent environment, yet it declares M9 MOOTED while acknowledging that `commitNamedSet` spreads `process.env`. Using the pinned `hash-object -w --stdin` shape with inherited `GIT_DIR` redirected the object write away from the vault: `inVault:false`, `inRedirect:true`. The same environment reaches the remaining write shapes, including `update-ref`. A Draft candidate awaiting an owner decision is not a retiring cause, so D4’s “nothing new is owed” is also false.  
+Recommendation: Keep M9 and C2 OPEN until the git-environment product decision is made and an independent, constructed environment has landed. The already excluded reference-transaction-hook ruling need not be reopened.
+
+FINDING 3
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 171-186  
+Confidence: 0.98  
+Materiality: B  
+Body: The C3 stub incorrectly says the value is solely the user’s and prescribes one condition only in `layout.js`. `layout-infer.js:34-46` already contains a second copied validator with the same missing dot rule, and `adopt --yes` infers and writes its result without layout confirmation (`src/cli/adopt.js:346-382`). A temporary vault containing `.projects/` produced `projects_dir:".projects"` and an admitted control-path candidate. Fixing only the read-side validator would leave adopt persisting/scaffolding one mapping while later dream runs silently fall back to another.  
+Recommendation: Make the stub name the `inferLayout`/`adopt` producer path and require a round-trip acceptance case for `adopt --yes` with dot-prefixed inferred directories. Decide explicitly whether to centralize the duplicated validator or reject at both producer and reader.
+
+FINDING 4
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 396-430  
+Confidence: 0.98  
+Materiality: B  
+Body: The HANDOVER row is physically one line, so a one-insertion/one-deletion edit is expressible, but V6 does not enforce it. `git diff --stat` is only printed and exits zero even with no diff; the desired-row grep checks only a prefix, while the logbook citation may occur anywhere in the file. Extra HANDOVER edits or a modified Status suffix can therefore pass. V6(b) likewise proves only that literal `harness-refusal` occurrences share a line with `non-load-bearing`; reliance expressed later by a pronoun or synonym passes, and V6 never enforces the logbook’s “nothing more” contract.  
+Recommendation: Assert an exact, fully substituted group-C row and exactly `1	1	docs/HANDOVER.md` in `git diff --numstat`, with no other hunks. Either structurally compare the disposition logbook with canonical Table D or narrow AC5 to the literal property V6 actually checks.
+
+SCOPE OBJECTIONS
+
+- I did not re-argue the owner’s authority to close group C or the 2026-08-31 hook ruling. The objections above concern factually incorrect dispositions.
+- The ADR-0029 rationale is unsupported by the ADR’s text: ADR-0029:31-53 says shared aggregates are generated/effectively write-free and status tables are never committed; the spec narrows that to frontmatter-derived tables without an explicit exception.
+- The 468-line spec conflicts with `spec-authoring.md`: “Current state” and the Mirrored Surface Checklist duplicate Table D without an external consumer, while the RED recipes at lines 328-438 prescribe test designs and mutation lists that the runbook assigns to the implementer.
+
+EXECUTED
+
+- `sed -n '1,520p' docs/specs/WP-audit-c-close-disposition.md` — exit 0.
+- `git status…; git rev-parse…; git diff --stat/name-status main...HEAD` — exit 0; HEAD `1e1e2b88`, main `9870f79a`.
+- `git diff --no-ext-diff --unified=80 main...HEAD -- …` — exit 0.
+- `sed`/`nl` reads of the requested harvest, HANDOVER, ADR-0029, runbook, CLAUDE.md, promote, vault-write, validate, delta, layout, dream CLI, known calls, and vault sources — all exit 0.
+- `rg` writer, git-call, validator-reachability, config-writer, scaffold, environment, and ignore/status sweeps — all exit 0.
+- V1 — exit 0: `row C9: 10 refused, 2 admitted`.
+- V2 — exit 0: `pinned set = 9 shapes`.
+- V3 — exit 0: classifier requires only `node:fs`, `node:path`, `../errors`.
+- V4 — exit 0: no source consumer outside `validate.js`.
+- V5 initial sandbox run — exit 1, `EPERM` creating the OS-temp fixture.
+- V5 approved OS-temp rerun — exit 0: `.git/hooks/note.md admitted=true`.
+- V6 on absent deliverables — exit 1: `expected exactly 1 disposition logbook entry, found 0`.
+- Dot-path admission matrix — exit 0; `.github`, `.husky`, and `.git` paths beneath a default tier were all admitted.
+- Direct `writeIntoVault` `.github/copilot-instructions.md` reproduction — exit 0, `written:true`.
+- Full `promote()` plus real gates reproduction — exit 0; instruction file promoted, written, and not refused.
+- Inherited-`GIT_DIR` `hash-object -w --stdin` reproduction — exit 0; object written only to the redirected repository.
+- `inferLayout` `.projects` reproduction — exit 0; inferred dot-prefixed tier and admitted candidate.
+- `git diff --stat/--numstat main -- docs/HANDOVER.md` — exit 0 with empty output, confirming the command itself asserts nothing.
+- `git diff --check main...HEAD` — exit 0.
+- `grep --version` — exit 0; BSD grep 2.6.0-FreeBSD, not ugrep.
+
+DONE_ROUND_1

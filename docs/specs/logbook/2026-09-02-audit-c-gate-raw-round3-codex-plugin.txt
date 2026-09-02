@@ -1,0 +1,21 @@
+PLUGIN GATE ROUND 3 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a4 worktree), tip ac8f2ac2, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP. R2-A’s three-way split and successor stubs, R2-B’s per-residual Table F structure, and R2-C’s committed-deliverable checks are present, but F1 and F2 still permit false closure after partial fixes. EXECUTED: V1 exact=1 (sandbox EPERM after 16/16 basename result); policy-only equivalent=0 (16/16 refused, 5/5 dotted and 4/4 currency paths admitted); V2(a)=0; V2(b) setup=1 (mktemp EPERM, reproduction not executed); V3=0; V4=0; V5 exact=1 (sandbox EPERM); V6 absent-state=1 as required; frontmatter=0; lint=0; git diff --check=2 from preserved trailing whitespace in raw transcripts; BSD grep 2.6.0, ugrep absent.
+
+Findings:
+- [high] F1 can close a class-wide residual with another finite enumeration (docs/specs/WP-audit-c-close-disposition.md:319-321)
+  Materiality A. F1 proves only that five named dot directories and one `.github` write are refused. A partial fix that expands `DENIED_SEGMENTS` to exactly `.github`, `.husky`, `.git`, `.obsidian`, and `.cursor` satisfies every F1 assertion, including `writeIntoVault` returning `written:false`, while still admitting `01-Projects/example/.smart-env/control.md` or any future dot-prefixed segment. E2 could therefore declare group C closed while the original class invariant—no write beneath any dot-prefixed segment—remains false and machinery-controlling content can still be promoted and committed.
+  Recommendation: Make F1 require the successor’s verification to prove the segment predicate as a class, including mutation evidence that replacing it with the five-name enumeration fails. Retain representative production-write and resolved-path cases, but do not use those finite examples as the completeness boundary.
+- [high] F2 has no mechanical definition of “current” and includes a path owned by F1 (docs/specs/WP-audit-c-close-disposition.md:322)
+  Materiality A. F2’s fixed matrix is not a completeness test for basename currency. Two entries are the same `GEMINI.md` basename at different depths; one is `copilot-instructions.md`; and `.cursor/rules.md` is actually denied by the dot-segment rule because its basename is merely `rules.md`. Adding the first two basenames, landing F1, and giving the successor any self-defined green maintenance check satisfies F2 without establishing that all currently documented conventions were inventoried. The stub merely says to consult two vendors when picked up and leaves the maintenance mechanism to that WP, with no required owner or dated completeness record. Consequently E2 can close on a stale sample—the same failure mode this residual records.
+  Recommendation: Define F2 against a canonical, dated vendor-inventory produced by the successor and require its verification to map every inventory entry, across case and depth, to denial. Require a named maintenance owner and objective review trigger. Remove `.cursor/rules.md` from D1(c), V1(c), and F2; it belongs solely to the dot-segment residual.
+
+Next steps:
+- Strengthen F1 from five examples to a class-level closure assertion with anti-enumeration mutation evidence.
+- Give F2 a dated completeness inventory, owner, trigger, and non-overlapping probe set.
+- Re-run the design gate after updating Table D/F, both stub contracts, acceptance criteria, and mirrored prose.

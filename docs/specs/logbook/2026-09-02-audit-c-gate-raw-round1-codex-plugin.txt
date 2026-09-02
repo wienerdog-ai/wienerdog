@@ -1,0 +1,28 @@
+PLUGIN GATE ROUND 1 — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a4 worktree), tip 1e1e2b88, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP. M9/C2 is incorrectly marked MOOTED while unfiltered Git environment redirection remains write-capable. EXECUTED: V1=0, V2=0, V3=0, V4=0; exact V5=1 (sandbox EPERM), equivalent stdin V5=0; V6=1 as predicted (deliverables absent). Adversarial probes: GIT_DIR redirection=0, incomplete-V1 mutation=0, dot-layout inference=0, non-asserting diff-stat=0.
+
+Findings:
+- [high] M9/C2 is closed while its unfiltered-environment write mechanism remains live (docs/specs/WP-audit-c-close-disposition.md:211-213)
+  Materiality A. D2 acknowledges `{...process.env}` but treats it as a parked residual and still declares M9 MOOTED; D4 then says nothing new is owed. In `commitNamedSet`, that environment reaches `hash-object -w`, `commit-tree`, and `update-ref`, all of which write Git objects or refs. A read-only reproduction with `GIT_DIR=<main-repo> git -C <vault-worktree> rev-parse --git-path objects` resolved to the main repository’s object store, and `symbolic-ref HEAD` resolved to `refs/heads/main` (both exit 0). Thus a dream run can build a commit and advance another repository’s HEAD. The cited Draft WP only requests a future owner decision and does not retire this mechanism. E1 and E2 would therefore both record the false statement that M9 is mooted.
+  Recommendation: Mark M9/C2 OPEN and make `WP-dream-git-env-pinning` the owning residual until an owner decision is implemented or explicitly accepted. Verification must exercise at least `GIT_DIR`, `GIT_WORK_TREE`, and the `GIT_CONFIG_*` surface against the write-capable pinned calls.
+- [medium] D1 falsely claims every vault write passes row C9, and V1 misses current instruction basenames (docs/specs/WP-audit-c-close-disposition.md:210)
+  Materiality B. `refreshWarnings` calls `writeIntoVault` with its separate `admitWarningsPath`, and the commit reconciliation directly adds `WARNINGS_REL`; therefore the statement that nothing bypasses row C9 is factually false, although the current fixed warnings path is safe. V1 also tests only two of the four tier-contained instruction basenames: it omits `CLAUDE.local.md` and `AGENTS.md`. An injected admit function that allowed both paths passed the exact V1 predicate with exit 0. The canonical disposition could therefore read green after reopening a current instruction-file mechanism.
+  Recommendation: Describe both vault-writing authorities accurately. Extend V1 to exercise all four current instruction basenames inside an admitted tier, and separately verify that the code-owned warnings writer and commit member remain fixed to `reports/warnings.md`.
+- [medium] The C3 successor’s prescribed one-site fix conflicts with an existing config producer (docs/specs/WP-audit-c-close-disposition.md:171-186)
+  Materiality B. The stub must claim the fix is one condition only in `layout.js` and that the value is the user’s own. In fact, `layout-infer.js` contains a copied validator that also accepts dot-prefixed values, and `adopt.js` writes its inferred layout into `config.yaml` and scaffolds those directories. A synthetic `.projects` directory was inferred as `projects_dir: .projects` with exit 0. Changing only `readVaultLayout` would make adoption write and scaffold a mapping that later runs silently discard for the default, producing inconsistent behavior. Wienerdog therefore can generate the relevant config value itself.
+  Recommendation: Make the Draft stub require consistent rejection across every layout producer and consumer, including adoption. Preserve one validation authority by exporting/reusing the predicate or otherwise prove that inference cannot emit a value runtime parsing rejects.
+- [medium] V6 does not enforce the Status-cell-only HANDOVER edit (docs/specs/WP-audit-c-close-disposition.md:412-430)
+  Materiality B. V6 checks only the beginning of the selected row, then searches for the logbook path anywhere in HANDOVER. It neither compares the complete Table E text nor requires the citation to occur in that row. The `git diff --stat` command merely prints output and exits 0 even with no HANDOVER change, as executed. An implementation can truncate or alter the Status text, cite the logbook elsewhere, or modify unrelated HANDOVER lines while V6 remains green.
+  Recommendation: Compare the complete expected row byte-for-byte after substituting `<LOGBOOK>`, assert it is the sole matching row, and mechanically verify the HANDOVER diff contains exactly one deleted line and one inserted line with no other hunks.
+
+Next steps:
+- Correct D2/D4 and both Table E branches before owner ratification.
+- Repair the D1 writer model and V1 mutation coverage.
+- Expand the C3 Draft contract to cover layout inference/adoption consistency.
+- Replace V6’s observational checks with exact assertions; then trim duplicated procedural prose that has no consumer beyond Table D/E.

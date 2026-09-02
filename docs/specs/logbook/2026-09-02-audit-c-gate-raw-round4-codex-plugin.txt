@@ -1,0 +1,16 @@
+PLUGIN GATE ROUND 4 (closing confirmation) — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the a4 worktree), tip 1ee030dc, focus text as recorded in the round record. Captured verbatim from stdout.
+
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+NO-SHIP: E2 can still close after a partial environment fix because the exhaustive channel requirement is not part of the environment successor’s own verification. EXECUTED: V1 exact=1 (sandbox EPERM), policy equivalent=0; V2(a)=0; V2(b)=1 (sandbox EPERM); V3=0; V4=0; V5 exact=1 (sandbox EPERM), no-write equivalent=0; V6 absent=1 and committed-deliverable guard=1 as expected; frontmatter=0; lint=0; diff-check=2 from preserved trailing whitespace in raw transcripts.
+
+Findings:
+- [high] E2 trusts an environment successor whose own green permits a GIT_DIR-only partial fix (docs/specs/WP-audit-c-close-disposition.md:333-359)
+  Materiality A. E2’s operational readiness condition is that every successor is Done with its own verification green. However, `WP-dream-git-env-pinning` still defines a pinned outcome using only a RED for exported `GIT_DIR`. The new all-channel requirement exists solely in D2(b), which explicitly says the successor spec is outside this WP’s Deliverables. Consequently a GIT_DIR-only pin can satisfy that successor’s current Done/green contract while inherited `GIT_OBJECT_DIRECTORY` still redirects `hash-object`; this spec itself records that demonstrated partial-fix failure at lines 315 and 349. Once the other successors finish, E2’s stated condition is met even though D2(b) was neither retired nor deliberately accepted. Calling closure a later act does not connect the missing requirement to the successor’s verification.
+  Recommendation: Keep E2 as a pointer, but make `WP-dream-git-env-pinning.md` a deliverable and incorporate the D2(b) channel-set obligation into its own Done/verification contract. Every pin, pin-with-exceptions, or don't-pin outcome must enumerate the applicable write-target/config channels; a pin outcome must not become green from GIT_DIR alone.
+
+Next steps:
+- Wire D2(b)’s full channel requirement into the environment successor’s own canonical verification, then rerun the closing confirmation.
