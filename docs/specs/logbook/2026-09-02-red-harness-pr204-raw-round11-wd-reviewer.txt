@@ -1,0 +1,84 @@
+PR GATE ROUND 11 — PR #204 — wd-reviewer (same agent resumed), tip d9ba3261. Verdict APPROVE, one band-C finding (a stale comment carrying the retracted round-3 reasoning). Relayed verbatim from the agent's final message.
+
+# Round 11 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `d9ba3261` (code at `824472fb`). Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2570 / 2558 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **126 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`23e5af10…`) |
+| phase env dumped under a **real** `npm run` | detail below |
+| drift check with an injected variable | detail below |
+| **6 mutants** (incl. one I had to redo) | **6 killed** |
+
+### My round-10 REQUEST-CHANGES — closed, and closed as a class
+
+I dumped the full phase environment from a fixture suite under a real `npm run`, with `--root` equal to the invoking package (the lane's actual shape):
+
+```
+RUN: PROVEN
+any phase env var naming the root?  NONE
+PATH entries naming the root:       0
+```
+
+Three phase dumps, no leak. The five variables are handled the way row 2b handles `OVERRIDE_VARS` — a named constant, removed — with `PATH` **sanitised** rather than removed, which is the right call since suites need `git`/`sh`. The realpath comparison on both sides matters on macOS (`/var` vs `/private/var`), and `R11-c` (compare raw strings only) kills 1, so it is load-bearing rather than defensive.
+
+The implementer went wider than my three and found `PATH` as a fifth — that is the finding I did not make.
+
+**The drift check is real, and I proved it non-vacuous rather than reading it.** It spawns `npm run` in a throwaway package, collects every variable whose value names that directory, and requires each to be handled. Injecting one extra variable reddens it with the offender named:
+
+```
+npm exports a variable naming its cwd that the runner does not handle.
+  named by npm: INIT_CWD, PATH, PWD, RP_FAKE_CHECKOUT_VAR, npm_config_local_prefix, npm_package_json
+  actual: [ 'RP_FAKE_CHECKOUT_VAR' ]
+```
+
+It also carries a precondition assertion (npm still exports `PWD`/`INIT_CWD`), so it cannot go quietly green if npm changes. That converts my round-10 finding from "three variables patched" into "the class is guarded", which is the durable form.
+
+### The converged band-A — the conditional namesake
+
+```
+shadow's suite-conditional.js        -> ERROR  exit=1  (SOLE CHILDLESS record … refuses rather than counting it as a terminal PASS)
+criterion 4's load-failure mutation  -> FAILED exit=1  (narrowing to passing records preserves it)
+CONTROL empty-suite (drift 'none')   -> ERROR  exit=1
+```
+
+The narrowing `if (!roots[0].ok || roots[0].directive) return;` is the right cut, and `R11-e` (refuse failing records too) kills 2, so it is not over-broad by accident.
+
+**On the CONTROL empty-suite diagnostic:** the *verdict* is unchanged (ERROR), but the *message* has changed — from round 4's "did not RUN" to the ambiguity refusal. That is an improvement, not a regression: it names the actual undecidable shape rather than blaming a renamed test. Stating it precisely since "unchanged" would overclaim.
+
+**And the retraction is earned.** My redone mutant makes the refusal a no-op and the exploit reaches **PROVEN, exit 0** — reproducing the defect exactly and confirming the guard is what closes it. The code comment retracts round 3's "keeping only adds an identity" reasoning in full, names the hole, credits the channel that found it, and gives the measurement. That reasoning is one I accepted in my rounds 4 and 7; the retraction is correct and I was wrong to clear it.
+
+### One finding
+
+**[quality] The retracted reasoning still stands as live justification in `parseTap` — `scripts/red-proofs.js:1014-1020`. Band C. Disposition: fix (a few lines of comment).**
+
+The new block at `:1067` says plainly *"THAT REASONING HAD A HOLE"*. But the older comment thirteen lines up still reads:
+
+> `ONE SHAPE STAYS AMBIGUOUS, and the tie is still broken FAIL-SAFE … The runner KEEPS it, because the two errors are not symmetric: keeping a wrapper only ADDS an identity, which makes RED's equality rule stricter and BASELINE's lookup fail loudly`
+
+My `R11-d2` mutant falsifies that claim directly: with `assertNotAmbiguousSuiteShape` disabled, `parseTap`'s keeping alone yields **PROVEN exit 0** on the exploit — BASELINE's lookup does not fail loudly, it silently reads a test that never ran as a terminal PASS. So a maintainer reading `parseTap` in isolation gets a safety property that measurement has disproved, with no pointer to the separate function that actually provides it — and could reasonably delete that function on the strength of it.
+
+This is the same class as my round-5 finding 2 (the stale terminator comment contradicting the round-5 measurement), which was fixed in round 6 and has now recurred elsewhere. In this file the comments are the measured-provenance record, so a stale one is a real defect even at Band C. A cross-reference from `:1014` to `assertNotAmbiguousSuiteShape` would close it.
+
+### One observation, not a finding
+
+`PATH` sanitisation is scoped to `--root`. When `--root` differs from the invoking checkout — the runner's own suite, `--root tests/fixtures/...` — `<checkout>/node_modules/.bin` survives on `PATH`. That is correct by the runner's own rule: the entry lies outside the tree it snapshots, it is an execution path rather than a write path, and it is the same class as the ambient temp root the LANE LIMIT already declares. Recording it because the round's brief said to expect none, and in that configuration there is one.
+
+### Carried residuals
+
+`M12`, `M29`; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note.
+
+---
+
+**Verdict.** My round-10 blocker is closed, and closed better than I asked — a guarded class rather than three patched names, with a drift check I confirmed reddens. The converged band-A is genuinely fixed, the narrowing preserves criterion 4, and the retraction of reasoning I had myself cleared is honest and complete where it is written. The one finding is a stale comment carrying that same retracted reasoning in a second place. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
