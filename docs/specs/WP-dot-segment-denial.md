@@ -15,8 +15,10 @@ epic: audit-close
 
 Disposition record: `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`,
 Table D rows D1 (b) and D5. Owner ruling on severity: queued (option (i)), joining
-the queue immediately after `WP-instruction-basename-currency`
-(`docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md`, item 3).
+the queue immediately after `WP-instruction-basename-currency` — quoted
+verbatim in that disposition record's section 4, the in-patch record. (Primary
+record: `docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md`, item 3;
+lands with PR #201.)
 
 The 2026-08-05 audit ruling's item 1 was **"no write to any path with a
 dot-prefixed segment"**, stated as a class so future control directories need

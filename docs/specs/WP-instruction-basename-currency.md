@@ -15,9 +15,11 @@ epic: audit-close
 
 Disposition record: `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`,
 Table D row D1 (c). Owner ruling on severity: queued (option (i)), joining the
-queue first, ahead of `WP-dot-segment-denial`
-(`docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md`, item 3) —
-currency first because it is the smaller change against the more ordinary path.
+queue first, ahead of `WP-dot-segment-denial` — quoted verbatim in that
+disposition record's section 4, the in-patch record. (Primary record:
+`docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md`, item 3; lands
+with PR #201.) Currency first because it is the smaller change against the
+more ordinary path.
 
 `INSTRUCTION_BASENAMES` (`promote.js:96`) holds four names and is **stale**:
 measured (Table D row D1 (c)), production `makeAdmit` **admits**
