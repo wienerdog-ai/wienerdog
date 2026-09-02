@@ -1,0 +1,50 @@
+SHADOW ROUND 4 (closing confirmation; herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 1ee030dc, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: V1/V2(b)/V5 and the M7/M9/M10 probes in isolated OS-temp fixtures. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: the round-3 closure-proof relocation remains internally inconsistent and can green-light incomplete successor stubs.
+
+FINDING 1
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 216-230  
+Confidence: 0.97  
+Materiality: B  
+Body: The mandatory anti-enumeration RED is not a valid class proof. An enumeration containing “the very names the proof exercises” is observationally identical to the class predicate for every exercised name, so it cannot go RED. If “very names” instead means only the named examples, a broader finite matcher—prefix table, bounded-length rule, or regex covering those fixtures—can pass while still admitting other dot-prefixed segments. This repeats the partial-fix weakness Table F was retired for.  
+Recommendation: Replace this recipe with an observable property proof derived from `segment.startsWith('.')` semantics over generated/held-out suffixes at all three enforcement points. Use the current production enumeration as the RED mutant, not an enumeration of every exercised value.
+
+FINDING 2
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 367-392, 431-435, 601-604  
+Confidence: 0.99  
+Materiality: B  
+Body: Table F was not genuinely retired: the operative Mirrored Surface Checklist still requires the logbook to mirror “F1–F4,” contradicting the ban on pre-written closure assertions. Conversely, neither AC2 nor V6 consumes the new REQUIRED VERIFICATION sections: V6 checks only `status: Draft` and absence of `harness-refusal`. Executed, a frontmatter-only stub passes both exact predicates. AC2 also says the currency stub has six body items although its contract has seven. The WP can therefore pass its mechanical gate with the successor proof obligations omitted—or an implementer can follow the stale checklist and resurrect Table F. Either path undermines E2’s later reliance on successor verification.  
+Recommendation: Remove the F1–F4 reference, correct the currency count, and make AC2/V6 require both stubs’ complete required-verification obligations without asserting future outcomes.
+
+SCOPE OBJECTIONS
+
+None. Both dispatch branches place both successors. The `post-index-change` probe fired on pinned `read-tree` and `update-index`, but it was not raised as a finding because the explicit owner ruling rejects `core.hooksPath` suppression.
+
+EXECUTED
+
+- Repository identity/status, `git diff --stat/name-status main...HEAD`, log/show/diff reads — exit 0; HEAD `1ee030dc`, main `60d91ff3`.
+- Full spec and all requested evidence/source/round-record reads — exit 0.
+- Writer, Git-channel, layout, classifier, Table-F, closure-trigger and mirror sweeps with `rg` — exit 0.
+- V1 initial sandbox execution — exit 1 (`EPERM` creating temp fixture); approved isolated rerun — exit 0: 16/16 enumerated basenames refused, 5/5 dot paths admitted/written, 6/6 currency paths admitted, QWEN write succeeded.
+- V2(a) — exit 0: nine pinned shapes, none of `add commit clean reset status stash`.
+- V2(b) — exit 0: `GIT_DIR` redirected `hash-object -w` outside the vault.
+- V3 — exit 0: classifier requires only `node:fs`, `node:path`, `../errors`.
+- V4 — exit 0: no production consumer outside `validate.js`.
+- V5 — exit 0: reader accepted `.git`; producer emitted `.projects`.
+- V6 untouched/deliverable-absent state — exit 1 as required: zero disposition logbooks.
+- M7 alternate-writer/member sweep — exit 0: promoted/report members derive from gated results; the other vault-content authority is fixed `reports/warnings.md`.
+- M9 `post-index-change` probe — exit 0: hook fired for both pinned `read-tree` and `update-index`.
+- M9 `commit.gpgSign=true` probe — exit 0; exact `commit-tree` shape remained successful.
+- M10 `.gitignore` probe — exit 0: classifier reported both `.gitignore` and its ignored `hidden.md`.
+- Frontmatter-only-stub V6 predicate probe — status predicate exit 0; forbidden-phrase grep exit 1, which V6 treats as success.
+- `node scripts/check-frontmatter.js` — exit 0.
+- `node scripts/boundary-check.js <spec> <changed-files>` — exit 0.
+- `npm run lint` — not run to completion; initial sandbox attempt stopped at markdownlint registry `ENOTFOUND`, network rerun declined, and lint is orchestrator-owned.
+- `git diff --check main...HEAD` — exit 2 from preserved trailing whitespace in committed raw review transcripts.
+- Final `git status --short --branch` — exit 0; detached worktree clean.
+
+DONE_ROUND_4
