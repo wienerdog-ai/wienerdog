@@ -66,19 +66,34 @@ a result.
    measured at `49d3d467`). Once this ADR is signed the lane also gets its own CI
    job, so a proof that stops proving fails the PR.
 
-3. **A proof run does not modify the working tree, and it keeps TWO bounded
-   write boundaries rather than one universal promise.** The runner's own writes
-   — the copy, the mutation, the restore — stay inside a disposable copy of the
-   repository, which the run deletes, and a declared mutation path that
-   canonicalises outside that copy is refused. The spawned suite's scratch
-   writes stay inside the test wrapper's own run-scoped temp root, which that
-   wrapper deletes; they do not land inside the copy, because suites allocate
-   scratch through the system temp directory. Links to installed dependencies
-   are resolution-only. This removes crash residue, dirty-tree false reds and
-   "the tool edited my checkout" — and it is why no clean-tree precondition is
-   needed. **A single "nothing outside the sandbox is written" claim would be
-   unsatisfiable, and stating it would only guarantee that every implementation
-   silently enforced something narrower.**
+3. **The runner never writes into a tree in which suite code has already run.**
+   Each phase needing a tree gets its own fresh copy of the repository, and the
+   run deletes them: the baseline runs in a pristine copy the runner never writes
+   to; the mutation is written into a **fresh** copy before any child has started
+   in it, and the red is then observed there; nothing is restored, because
+   nothing was mutated in place. A declared mutation path that canonicalises
+   outside its fresh copy is refused, and that check cannot be raced because no
+   code has executed in that tree.
+
+   **This is the second attempt at containment, and the change is a design move
+   rather than another patch.** The first version copied once, validated the
+   mutation path, then executed the suite before writing — so the suite could
+   replace the target, or a parent of it, with a symlink into the real checkout,
+   and the later write followed it out and back, leaving every check green.
+   Hardening that (revalidate before each write, no-follow descriptors, reject
+   changed inodes) is possible but keeps the design in the business of
+   enumerating race windows. **Deleting the step that has to be right is the
+   fixed point.**
+
+   Two bounded boundaries follow, and deliberately not one universal promise: the
+   runner's only write into any tree is the declared mutation, and the spawned
+   suite's scratch writes stay inside the test wrapper's own run-scoped temp
+   root, which that wrapper deletes — suites allocate scratch through the system
+   temp directory, so they never land in the copy. Links to installed
+   dependencies are resolution-only by construction, there being no other write
+   to carry outward. **A single "nothing outside the sandbox is written" claim
+   would be unsatisfiable, and stating it would only guarantee that every
+   implementation silently enforced something narrower.**
 
 4. **The runner borrows no production seam** — it imports nothing from `src/`
    and depends on nothing outside Node's standard library. **This removes the
@@ -113,7 +128,11 @@ a result.
   the right one.
 - A spec may cite a proof id as its RED evidence only once decision 1 is signed;
   until then a spec still pastes the pair by hand.
-- Runtime is paid per declared proof, in a lane developers opt into.
+- Runtime and disk are paid per declared proof — one fresh repository copy per
+  proof on top of a shared pristine one — in a lane developers opt into.
+- The lane requires a newer Node than the package as a whole (the TAP reporter
+  flag), so it **refuses below its own floor** instead of failing obscurely.
+  Raising the package's floor stays a separate product decision for the owner.
 
 ## Alternatives rejected
 
@@ -141,6 +160,14 @@ a result.
   either. A restricted child loader could police premature exit and output but
   **still could not enforce the filesystem boundary**, so the closable answer is
   a format with no execution semantics.
+- **Hardening the single-copy design instead of replacing it** — revalidating
+  canonical containment immediately before every write, refusing symlink
+  components and changed inode/type, and using no-follow descriptors. It can be
+  made correct, and it was the obvious repair when the race was found. Rejected
+  because it keeps a check whose correctness depends on enumerating the windows
+  in which suite code can act, and this project has twice paid for designs that
+  enumerate an adversary's options rather than removing them. The fresh-copy rule
+  has no window to enumerate.
 - **Applying mutations with `sed`/shell string surgery.** The measured cause of
   three false greens. Node-side exact-substring replacement with an
   occurrence-count check and a post-write marker grep has no escaping layer.
