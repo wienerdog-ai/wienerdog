@@ -1,0 +1,94 @@
+PLUGIN GATE ROUND 5 (dispatch-time reconciliation confirmation) — codex plugin adversarial-review (codex-companion.mjs adversarial-review --wait --base main, run from the wp/audit-c-close-disposition worktree), tip aa82ec13, focus text as recorded in the round record. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a061c9-08be-76a1-bd93-fe9cf8ed9305).
+[codex] Turn started (01a061c9-096b-7b52-98b4-ac8443e01152).
+[codex] Assistant message captured: {"verdict":"approve","summary":"I’m re-running the reconciliation checks read-only: full env-...
+[codex] Running command: /bin/zsh -lc "git status --porcelain=v1 && git diff main...HEAD -- docs/specs/WP-audit-c-clos...
+[codex] Command completed: /bin/zsh -lc "git status --porcelain=v1 && git diff main...HEAD -- docs/specs/WP-audit-c-clos... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n -i -C 2 'env-pinning' docs/specs/WP-audit-c-close-disposition.md"
+[codex] Command completed: /bin/zsh -lc "rg -n -i -C 2 'env-pinning' docs/specs/WP-audit-c-close-disposition.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-audit-group-c-disposition.md docs/specs/...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-audit-group-c-disposition.md docs/specs/... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-c-close-disposition.md | sed -n '600,692p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-c-close-disposition.md | sed -n '600,692p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "git show main:docs/specs/WP-dream-git-env-pinning.md | rg -n -C 3 'Amendment, 2...
+[codex] Command completed: /bin/zsh -lc "git show main:docs/specs/WP-dream-git-env-pinning.md | rg -n -C 3 'Amendment, 2... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/...
+[codex] Command completed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md src/c...
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/...
+[codex] Command failed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md src/c... (exit 1)
+[codex] Command failed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/... (exit 1)
+[codex] Running command: /bin/zsh -lc "RULING=E1; LOG=docs/specs/logbook/2026-09-02-audit-group-c-disposition.md; CELL...
+[codex] Command failed: /bin/zsh -lc "RULING=E1; LOG=docs/specs/logbook/2026-09-02-audit-group-c-disposition.md; CELL... (exit 1)
+[codex] Running command: /bin/zsh -lc "stub=docs/specs/WP-dot-segment-denial.md; grep -q '"'^status: Draft'"' \""'$stu...
+[codex] Running command: /bin/zsh -lc "stub=docs/specs/WP-instruction-basename-currency.md; grep -q '"'^status: Draft'...
+[codex] Command failed: /bin/zsh -lc "stub=docs/specs/WP-dot-segment-denial.md; grep -q '"'^status: Draft'"' \""'$stu... (exit 1)
+[codex] Command failed: /bin/zsh -lc "stub=docs/specs/WP-instruction-basename-currency.md; grep -q '"'^status: Draft'... (exit 1)
+[codex] Running command: /bin/zsh -lc "grep -q '2026-09-02' docs/specs/WP-dream-git-env-pinning.md && grep -q 'GIT_OBJ...
+[codex] Command completed: /bin/zsh -lc "grep -q '2026-09-02' docs/specs/WP-dream-git-env-pinning.md && grep -q 'GIT_OBJ... (exit 0)
+[codex] Running command: /bin/zsh -lc 'n=$(ls docs/specs/logbook/*-audit-group-c-disposition.md 2>/dev/null | wc -l | ...
+[codex] Command failed: /bin/zsh -lc 'n=$(ls docs/specs/logbook/*-audit-group-c-disposition.md 2>/dev/null | wc -l | ... (exit 1)
+[codex] Running command: /bin/zsh -lc "sed -n '612,688p' docs/specs/WP-audit-c-close-disposition.md | bash"
+[codex] Command failed: /bin/zsh -lc "sed -n '612,688p' docs/specs/WP-audit-c-close-disposition.md | bash" (exit 1)
+[codex] Running command: /bin/zsh -lc 'git diff --name-only main...HEAD'
+[codex] Command completed: /bin/zsh -lc 'git diff --name-only main...HEAD' (exit 0)
+[codex] Running command: /bin/zsh -lc "git show --format='%H %s' --no-patch 93072b1d && git show --format= --name-only...
+[codex] Command completed: /bin/zsh -lc "git show --format='%H %s' --no-patch 93072b1d && git show --format= --name-only... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --exit-code 93072b1d main -- docs/specs/WP-dream-git-env-pinning.md'
+[codex] Command completed: /bin/zsh -lc 'git diff --exit-code 93072b1d main -- docs/specs/WP-dream-git-env-pinning.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show main:docs/specs/WP-audit-c-close-disposition.md | node scripts/boundar...
+[codex] Command completed: /bin/zsh -lc 'git show main:docs/specs/WP-audit-c-close-disposition.md | node scripts/boundar... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/...
+[codex] Command failed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/... (exit 1)
+[codex] Running command: /bin/zsh -lc 'git show main:docs/specs/WP-audit-c-close-disposition.md | node scripts/boundar...
+[codex] Command completed: /bin/zsh -lc 'git show main:docs/specs/WP-audit-c-close-disposition.md | node scripts/boundar... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/...
+[codex] Command completed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git merge-base --is-ancestor 93072b1d main'
+[codex] Command completed: /bin/zsh -lc 'git merge-base --is-ancestor 93072b1d main' (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md src/c...
+[codex] Command failed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md src/c... (exit 1)
+[codex] Running command: /bin/zsh -lc "rg -n -i 'five deliverables|five["'^'"\\n]*deliverable|env-pinning["'^'"\\n]*(a...
+[codex] Command completed: /bin/zsh -lc "rg -n -i 'five deliverables|five["'^'"\\n]*deliverable|env-pinning["'^'"\\n]*(a... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --porcelain=v1'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain=v1' (exit 0)
+[codex] Running command: /bin/zsh -lc 'CHANGED=$(git diff --name-only main...HEAD); node scripts/boundary-check.js doc...
+[codex] Command completed: /bin/zsh -lc 'CHANGED=$(git diff --name-only main...HEAD); node scripts/boundary-check.js doc... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Running command: /bin/zsh -lc 'node scripts/check-frontmatter.js'
+[codex] Command completed: /bin/zsh -lc 'node scripts/check-frontmatter.js' (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"The adversarial checks have found no reconciliation defect so...
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Command failed: /bin/zsh -lc 'npm run lint' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm run lint' (exit 1)
+[codex] Running command: /bin/zsh -lc 'git status --porcelain=v1'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain=v1' (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"SHIP. No material A/B/C finding. Every env-pinning reference ...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: approve
+
+SHIP. No material A/B/C finding. Every env-pinning reference reflects the amendment as already landed and not a deliverable. V6 goes RED for a missing logbook, either stub, and the unchanged HANDOVER cell; its amendment floor passes. Boundary behavior changed only for env-pinning. adopt.js citations :347, :349, and :381 are exact. Deliverables, AC6, and V6 remain consistent. Scope objections: none. git status --porcelain was empty before and after. npm lint could not complete because restricted networking prevented fetching markdownlint-cli2; this is environmental, not change-induced.
+
+No material findings.
+
+Next steps:
+- Executed: git status + target diff + reconciliation greps + adopt.js/boundary-check inspection — exit 0.
+- Executed: V6 text extraction; all env-pinning hits; main amendment inspection — exit 0 each.
+- Executed boundary allow-list check for the four deliverables — exit 0.
+- Executed boundary rejection for WP-dream-git-env-pinning.md and src/cli/adopt.js — exit 1 each, expected.
+- Executed exact V6 body against the current pre-implementation tree — exit 1 at missing logbook, expected.
+- Executed isolated missing-logbook, missing-dot-stub, missing-currency-stub, and unchanged-HANDOVER gates — exit 1 each, expected.
+- Executed 2026-09-02 plus GIT_OBJECT_DIRECTORY amendment floor — exit 0.
+- Executed git diff --name-only main...HEAD and commit 93072b1d inspection — exit 0 each.
+- Executed old/new boundary matrix: old accepts env-pinning (0), new rejects it (1); both accept remaining deliverables (0); both reject unrelated src/cli/adopt.js (1).
+- Executed git merge-base --is-ancestor 93072b1d main and env-pinning unchanged-since-landing diff — exit 0 each.
+- Executed node scripts/check-frontmatter.js — exit 0.
+- Executed actual branch-diff boundary check — exit 0.
+- Executed npm run lint — exit 1 due ENOTFOUND for registry.npmjs.org/markdownlint-cli2; remaining lint stages ran and frontmatter passed.
+- Executed final git status --porcelain=v1 — exit 0 with empty stdout, identical to the initial state.
+rc=0
