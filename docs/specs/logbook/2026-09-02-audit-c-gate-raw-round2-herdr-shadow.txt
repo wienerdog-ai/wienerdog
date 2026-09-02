@@ -1,0 +1,37 @@
+SHADOW ROUND 2 (herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 70da1e79, fresh thread via /new). Captured via an approved scratch-file write (tee). Approvals granted: V1, V2(b), V5 and the GEMINI.md write reproduction in isolated OS-temp fixtures. Worktree porcelain empty before and after.
+
+VERDICT: needs-attention — No-ship: D1(a) still falsely retires a current instruction-file mechanism, making both Table E states incorrect.
+
+FINDING 1
+
+Affected file: docs/specs/WP-audit-c-close-disposition.md  
+Lines: 222-247  
+Confidence: 0.99  
+Materiality: A  
+Body: D1(a) calls four enumerated basenames the “four current names” and declares the instruction-basename half MOOTED. But `GEMINI.md` is an official, current hierarchical instruction file for Gemini CLI ([official documentation](https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html)). Production `makeAdmit` admits `01-Projects/example/GEMINI.md`; the real `writeIntoVault` wrote it successfully (`denial:null, written:true`). V1(a) remains green because it tests only the four entries already present in `INSTRUCTION_BASENAMES`. The successor explicitly preserves this as merely an “unknown tool” residual and will not close it. Consequently E1’s “three residuals” count and claim that the instruction-basename half retired are false, while E2 can declare every mechanism retired without ever testing this live path.  
+Recommendation: Split D1 again: retain the four enumerated names as mooted, disposition the current `GEMINI.md` mechanism OPEN, assign it a Draft owner, and add a production-policy write probe. Update E1’s residual count and require that new probe to go red before E2 can apply.
+
+SCOPE OBJECTIONS
+
+None.
+
+EXECUTED
+
+- Repository identity/status, `git diff --stat main...HEAD`, full spec read — exit 0; HEAD `70da1e79`, main `9870f79a`, clean detached tree.
+- Named-file discovery and initial `wc` batch — exit 1 due to an incorrect guessed ADR filename; corrected to `docs/adr/0029-spec-identity-and-derived-views.md`.
+- Full/relevant `sed`, `nl`, and `rg` reads of the requested evidence set, round record/raws, both vault writers, Git paths, layout producer/reader, adopt, run-job, and `src/core/vault.js` reachability — exit 0.
+- V1 sandbox run — exit 1 (`EPERM` creating temporary vault); approved rerun — exit 0: 16/16 enumerated basename paths refused, 5/5 dot-segment paths admitted, write succeeded.
+- V2(a) — exit 0: nine pinned shapes, none of `add commit clean reset status stash`.
+- V2(b) sandbox run — exit 1 (`mktemp` denied); approved rerun — exit 0: object written only to redirected repository.
+- V3 — exit 0: delta requires only `node:fs`, `node:path`, `../errors`.
+- V4 — exit 0: no source consumer outside `validate.js`.
+- V5 sandbox run — exit 1 (`EPERM`); approved rerun — exit 0: reader accepted `.git`, producer inferred `.projects`.
+- V6 deliverable-absent state — exit 1 as required: disposition logbook count was zero.
+- Instruction convention matrix — exit 0: four enumerated names and `.mcp.json` refused; `GEMINI.md`, tier-local `copilot-instructions.md`, `.github/copilot-instructions.md`, and `.cursor/rules.md` admitted.
+- Production `GEMINI.md` write reproduction — exit 0: `{"denial":null,"written":true,"exists":true}`.
+- Official Gemini/GitHub documentation lookup — succeeded.
+- `grep --version` / ugrep check — BSD grep 2.6.0; ugrep absent; V2/V4 recipes remained green.
+- `git diff --check main...HEAD` — exit 2 from trailing whitespace preserved in the round-one raw transcript.
+- Final `git status --short --branch` — exit 0; no working-tree changes.
+
+DONE_ROUND_2
