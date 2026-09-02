@@ -104,7 +104,65 @@ const SKIP_ON_UNSUPPORTED_HOST = HOST_REASON
  * REAL host; every other functional case keeps the injected one and stays
  * meaningful everywhere.
  */
-const SKIP_WITHOUT_MODE_ENFORCEMENT = SKIP_ON_UNSUPPORTED_HOST;
+/**
+ * CAPABILITIES ARE PROBED, NOT INFERRED — and the host refusal is ORed in so the
+ * gate is demonstrable. A probe tells the truth about THIS filesystem (a share
+ * that cannot symlink, a mount that ignores modes); the refusal predicate covers
+ * the hosts the lane declines, including a real uid 0 where these probes would
+ * pass under a stub but fail in production. Either one skips.
+ */
+function probe(fn) {
+  try {
+    return fn();
+  } catch {
+    return false;
+  }
+}
+
+const CAP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-cap-'));
+
+/** chmod can establish an executable bit — false on win32. */
+const EXEC_BIT_OK = probe(() => {
+  const f = path.join(CAP_DIR, 'exec-probe');
+  fs.writeFileSync(f, 'x');
+  fs.chmodSync(f, 0o755);
+  return (fs.statSync(f).mode & 0o111) !== 0;
+});
+
+/** mode bits are ENFORCED against this process — false as uid 0, false on win32. */
+const MODE_ENFORCED_OK = probe(() => {
+  const d = path.join(CAP_DIR, 'enforce-probe');
+  fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, 'f'), 'x');
+  fs.chmodSync(d, 0o000);
+  try {
+    fs.readdirSync(d);
+    return false; // readable anyway: not enforced against us
+  } catch {
+    return true;
+  } finally {
+    try { fs.chmodSync(d, 0o700); } catch { /* best effort */ }
+  }
+});
+
+/** symlinks can be created — false on a standard unprivileged win32 host. */
+const SYMLINKS_OK = probe(() => {
+  const l = path.join(CAP_DIR, 'link-probe');
+  fs.symlinkSync(path.join(CAP_DIR, 'exec-probe'), l);
+  return fs.lstatSync(l).isSymbolicLink();
+});
+
+/** @param {boolean} ok @param {string} what @returns {Object} a node:test options object */
+function skipUnless(ok, what) {
+  if (HOST_REASON) {
+    return { skip: `this host cannot enforce the lane, which the runner refuses by design: ${HOST_REASON}` };
+  }
+  return ok ? {} : { skip: `this host cannot ${what}, so the case cannot be exercised here` };
+}
+
+const SKIP_WITHOUT_MODE_ENFORCEMENT = skipUnless(MODE_ENFORCED_OK, 'have mode bits enforced against it');
+const SKIP_WITHOUT_EXEC_BIT = skipUnless(EXEC_BIT_OK, 'set an executable mode bit');
+const SKIP_WITHOUT_SYMLINKS = skipUnless(SYMLINKS_OK, 'create symbolic links');
 
 /** `mkfifo` is POSIX-only, and absent on a standard Windows development host. */
 const MKFIFO_OK = (() => {
@@ -546,7 +604,7 @@ test('red-proofs: a post-RED pristine copy that is RED is an ERROR — the red w
   }
 });
 
-test('red-proofs: the manifest rejects a MISSING FILE, a MODE DRIFT and a MISSING EMPTY DIRECTORY (criterion 5, Table E1)', () => {
+test('red-proofs: the manifest rejects a MISSING FILE, a MODE DRIFT and a MISSING EMPTY DIRECTORY (criterion 5, Table E1)', SKIP_WITHOUT_EXEC_BIT, () => {
   const src = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-man-'));
   fs.mkdirSync(path.join(src, 'empty'));
   fs.mkdirSync(path.join(src, 'sub'));
@@ -644,7 +702,7 @@ test('red-proofs: the lane refuses below its Node floor rather than passing vacu
 
 // ── criterion 7 — containment is a property of the phase order
 
-test('red-proofs: resolveInside refuses `..`, an absolute path and a SYMLINK escape, on the RESOLVED path (criterion 7a)', () => {
+test('red-proofs: resolveInside refuses `..`, an absolute path and a SYMLINK escape, on the RESOLVED path (criterion 7a)', SKIP_WITHOUT_SYMLINKS, () => {
   const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-esc-'));
   const inside = path.join(outer, 'copy');
   fs.mkdirSync(inside);
@@ -677,7 +735,7 @@ test('red-proofs: an ABSOLUTE file outside the copy is an ERROR before any write
   assert.equal(fs.readFileSync(outside, 'utf8'), `${GREETING_FIND}\n`, 'nothing outside the copy is written');
 });
 
-test('red-proofs: a SYMLINK anywhere in the source tree is an ERROR naming its path (criteria 7a, 7b2)', () => {
+test('red-proofs: a SYMLINK anywhere in the source tree is an ERROR naming its path (criteria 7a, 7b2)', SKIP_WITHOUT_SYMLINKS, () => {
   const root = newRoot();
   fs.symlinkSync(path.join(root, 'subject', 'subject.js'), path.join(root, 'subject', 'alias.js'));
   const r = run(root);
@@ -685,7 +743,7 @@ test('red-proofs: a SYMLINK anywhere in the source tree is an ERROR naming its p
   assert.ok(r.report.includes('symbolic link at subject/alias.js'), r.report);
 });
 
-test('red-proofs: a suite that plants a symlink at the mutation target AND at a parent of it reaches nothing — the write goes into a FRESH copy (criterion 7b)', () => {
+test('red-proofs: a suite that plants a symlink at the mutation target AND at a parent of it reaches nothing — the write goes into a FRESH copy (criterion 7b)', SKIP_WITHOUT_SYMLINKS, () => {
   const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-plant-')), 'checkout.js');
   fs.writeFileSync(outside, 'THE REAL CHECKOUT\n');
   const saved = process.env.RP_PLANT_TARGET;
@@ -855,7 +913,7 @@ test('red-proofs: a FIFO in the source tree is an ERROR naming its path, with a 
   assert.ok(r.report.endsWith(`${rp.REACH}\n`), 'the footer is printed even on a snapshot ERROR');
 });
 
-test('red-proofs: a `node_modules` that is itself a SYMLINK is an ERROR — the type is decided BEFORE the exclusion (Table B row 2a)', () => {
+test('red-proofs: a `node_modules` that is itself a SYMLINK is an ERROR — the type is decided BEFORE the exclusion (Table B row 2a)', SKIP_WITHOUT_SYMLINKS, () => {
   const root = newRoot();
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-deps-'));
   fs.writeFileSync(path.join(outside, 'index.js'), 'module.exports = 1;\n');
@@ -891,7 +949,7 @@ test('red-proofs: `.git` and `node_modules` are excluded by BASENAME whatever th
   assert.equal(r.verdict, 'PROVEN', r.report);
 });
 
-test('red-proofs: an UNREADABLE or MISSING declaration directory is an ERROR, never VACUOUS V1 (Table E2)', () => {
+test('red-proofs: an UNREADABLE or MISSING declaration directory is an ERROR, never VACUOUS V1 (Table E2)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   const missing = newRoot({ declText: null });
   fs.rmSync(path.join(missing, 'tests', 'red-proofs'), { recursive: true, force: true });
   const r1 = run(missing);
@@ -937,7 +995,7 @@ test('red-proofs: a phase copy corrupted after creation is caught by the manifes
   assert.equal(control.verdict, 'PROVEN', control.report);
 });
 
-test('red-proofs: a MODE DRIFT introduced into a phase copy is caught the same way (Table E1)', () => {
+test('red-proofs: a MODE DRIFT introduced into a phase copy is caught the same way (Table E1)', SKIP_WITHOUT_EXEC_BIT, () => {
   const r = run(newRoot(), {
     onPhaseCopy: (phase, dir) => {
       if (phase === 'baseline') fs.chmodSync(path.join(dir, 'bin', 'rp-exec.js'), 0o644);
@@ -1285,6 +1343,18 @@ test('red-proofs: `runSuite` refuses the same shape, so no internal caller can r
   assert.ok(/^ERROR:.*begins with "-"/.test(probe.stdout.trim()), probe.stdout + probe.stderr);
 });
 
+test('red-proofs: a `suite` that is not a REGULAR FILE is an ERROR naming that, not a suite-level failure (Table A `suite`)', () => {
+  // `tests` is a directory inside the copy: it resolves, it is inside, and it
+  // would send Node back to default discovery. Without the lstat the run still
+  // ERRORs — but as "the pristine suite was not green", which names the wrong
+  // cause and sends a reader looking at their tests. The message is the assertion.
+  const r = run(newRoot({ suite: 'tests' }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('is not a regular file in the copy'), r.report);
+  assert.equal(r.report.includes('the pristine suite was not green'), false, r.report);
+});
+
 test('red-proofs: the option terminator is present and harmless for a legal path (Table A `suite`)', () => {
   const src = fs.readFileSync(RUNNER_SRC, 'utf8');
   assert.ok(src.includes("args.push('--', suiteRel)"), 'the suite path follows an option terminator');
@@ -1337,6 +1407,66 @@ test('red-proofs: legal multi-byte UTF-8 outside the match is preserved byte-for
   assert.equal(r.exitCode, 0);
   assert.ok(fs.readFileSync(target, 'utf8').includes('// über — 日本語 — 🐕'),
     'the decorated source is unchanged in the checkout — the runner mutates copies');
+});
+
+// ── ROUND-5 FINDINGS — each one's RED
+
+test('red-proofs: a declaration that does not round-trip through UTF-8 is an ERROR naming the file (Table B row 2)', () => {
+  const root = newRoot();
+  const decl = path.join(root, 'tests', 'red-proofs', 'a.proofs.json');
+  const doc = JSON.parse(fs.readFileSync(decl, 'utf8'));
+  // A malformed byte INSIDE a quoted string. Decoding with 'utf8' replaces it
+  // with U+FFFD, so `JSON.parse` accepts data that is not valid UTF-8 JSON and
+  // the digest would be taken over the normalised string rather than the file.
+  const text = JSON.stringify(doc, null, 2);
+  const at = text.indexOf('"why"');
+  assert.ok(at > 0, 'precondition: the declaration carries a why');
+  const malformed = Buffer.concat([
+    Buffer.from(text.slice(0, text.indexOf(':', at) + 3), 'utf8'),
+    Buffer.from([0xff]),
+    Buffer.from(text.slice(text.indexOf(':', at) + 3), 'utf8'),
+  ]);
+  assert.equal(Buffer.from(malformed.toString('utf8'), 'utf8').equals(malformed), false,
+    'precondition: these bytes do not survive a utf8 round-trip');
+  fs.writeFileSync(decl, malformed);
+
+  const r = run(root);
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('does not round-trip through UTF-8'), r.report);
+  assert.ok(r.report.includes('tests/red-proofs/a.proofs.json'), r.report);
+  assert.equal(r.proofs.length, 0, 'nothing runs on a declaration set that cannot be tied to the snapshot');
+});
+
+test('red-proofs: the declaration digest is over RAW BYTES — two files that decode alike hash differently (Table B row 2)', () => {
+  const body = Buffer.from('{"suite":"tests/suite-basic.js","proofs":[]}\n// ', 'utf8');
+  const a = Buffer.concat([body, Buffer.from([0xff]), Buffer.from('\n')]);
+  const b = Buffer.concat([body, Buffer.from([0xfe]), Buffer.from('\n')]);
+  assert.equal(a.equals(b), false, 'the two files differ by one byte');
+
+  // THE DEFECT, shown first: both decode to the SAME string, because each stray
+  // byte becomes U+FFFD — so a digest over the decoded text cannot tell them
+  // apart, and an edit in the LOAD -> SNAPSHOT window would evade the tie.
+  assert.equal(a.toString('utf8'), b.toString('utf8'), 'they decode identically');
+  const overText = (buf) => require('node:crypto').createHash('sha256')
+    .update(buf.toString('utf8'), 'utf8').digest('hex');
+  assert.equal(overText(a), overText(b), 'a digest over the DECODED string collides');
+
+  // The shipped digest is over the bytes, so it does not.
+  assert.notEqual(rp.declarationDigest(a), rp.declarationDigest(b));
+  assert.equal(rp.declarationDigest(a), rp.declarationDigest(Buffer.from(a)));
+});
+
+test('red-proofs: a declaration carrying legal multi-byte UTF-8 still loads, and its digest is stable (Table B row 2)', () => {
+  // The other direction: the guard must refuse malformed bytes, not non-ASCII.
+  const root = newRoot();
+  const decl = path.join(root, 'tests', 'red-proofs', 'a.proofs.json');
+  const doc = JSON.parse(fs.readFileSync(decl, 'utf8'));
+  doc.proofs[0].why = 'a why with über — 日本語 — 🐕 in it';
+  fs.writeFileSync(decl, JSON.stringify(doc, null, 2));
+  const r = run(root);
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.ok(r.report.includes('日本語'), r.report);
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot

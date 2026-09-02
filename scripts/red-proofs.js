@@ -323,19 +323,30 @@ function loadDeclarations(root) {
               : st.isBlockDevice() || st.isCharacterDevice() ? 'device' : 'unsupported entry';
       throw error(`${declFile}: unsupported entry type: ${kind} — a declaration must be a regular file, and is never opened before it is classified`);
     }
-    let raw;
+    let rawBuf;
     let doc;
     try {
-      raw = fs.readFileSync(full, 'utf8');
+      rawBuf = fs.readFileSync(full);
     } catch (e) {
       throw error(`${declFile}: could not be read (${e.code || e.message})`);
+    }
+    // THE SAME BYTE DISCIPLINE THE MUTATION TARGET GETS, and for the same
+    // reason. Decoding with 'utf8' replaces every malformed sequence with
+    // U+FFFD, so `JSON.parse` would accept data that is not valid UTF-8 JSON
+    // and the digest would be taken over the NORMALISED string — two distinct
+    // byte sequences hashing identically, which is exactly the equality the
+    // LOAD→SNAPSHOT tie must not accept (Table B row 2). Refuse the lossy
+    // decode, then hash the ORIGINAL bytes.
+    const raw = rawBuf.toString('utf8');
+    if (!Buffer.from(raw, 'utf8').equals(rawBuf)) {
+      throw error(`${declFile}: does not round-trip through UTF-8 — a declaration must be valid UTF-8 JSON, or its bytes cannot be tied to the snapshot`);
     }
     try {
       doc = JSON.parse(raw);
     } catch (e) {
       throw error(`${declFile}: not valid JSON — ${e.message}`);
     }
-    declDigests.set(declFile, crypto.createHash('sha256').update(raw, 'utf8').digest('hex'));
+    declDigests.set(declFile, declarationDigest(rawBuf));
     if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
       throw error(`${declFile}: the declaration must be a JSON object`);
     }
@@ -360,6 +371,18 @@ function loadDeclarations(root) {
     }
   }
   return { proofs: out, digests: declDigests };
+}
+
+/**
+ * The digest a declaration is tied by: sha256 over its EXACT BYTES, never over a
+ * decoded string. Two byte sequences can decode to one string — that is what a
+ * lossy UTF-8 replacement does — and a tie that cannot tell them apart is not a
+ * tie.
+ *
+ * @param {Buffer} rawBuf @returns {string}
+ */
+function declarationDigest(rawBuf) {
+  return crypto.createHash('sha256').update(rawBuf).digest('hex');
 }
 
 /**
@@ -396,13 +419,15 @@ function assertDeclarationsMatchSnapshot(snapshot, digests) {
   }
   for (const [declFile, want] of digests) {
     const full = path.join(snapshot, declFile);
-    let raw;
+    let rawBuf;
     try {
-      raw = fs.readFileSync(full, 'utf8');
+      rawBuf = fs.readFileSync(full);
     } catch (e) {
       throw error(`${declFile}: present at LOAD but not readable in the snapshot (${e.code || e.message}) — the declaration set changed under the run`);
     }
-    const got = crypto.createHash('sha256').update(raw, 'utf8').digest('hex');
+    // Over the RAW BYTES on this side too, or the comparison is between two
+    // normalisations rather than between two files.
+    const got = declarationDigest(rawBuf);
     if (got !== want) {
       throw error(`${declFile}: changed between LOAD and SNAPSHOT (sha256 ${want.slice(0, 12)} -> ${got.slice(0, 12)}) — the runner would be executing a proof the snapshotted tree no longer holds`);
     }
@@ -702,8 +727,13 @@ function runSuite(copyDir, suiteRel, pattern) {
   // read it as ANOTHER OPTION, run its DEFAULT DISCOVERY over other test files,
   // and hand the runner a suite it never declared. Only the declared suite is a
   // protected mutation target, so a proof could then redden (and mutate) the
-  // assertion host of a file nobody named. The terminator is the mechanism; the
-  // LOAD-time refusal below is the belt.
+  // assertion host of a file nobody named. THE REFUSALS ARE THE MECHANISM and
+  // `--` is the belt, not the other way round: measured, `node --test --
+  // <dash-path>` does not run that file either — Node waits for a script on
+  // stdin and HANGS. So the path is refused as data at LOAD and again at the top
+  // of this function, and the terminator stays because it is measured harmless
+  // for legal paths and ends option parsing for one that is legal today but
+  // option-shaped under some future Node.
   args.push('--', suiteRel);
   const r = spawnSync(process.execPath, args, {
     cwd: copyDir,
@@ -1636,6 +1666,7 @@ module.exports = {
   unsupportedHostReason,
   loadDeclarations,
   assertDeclarationsMatchSnapshot,
+  declarationDigest,
   validateProof,
   buildManifest,
   verifyCopy,
