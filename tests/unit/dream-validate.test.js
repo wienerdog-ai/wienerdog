@@ -14,6 +14,7 @@ const {
   assertGitRepo,
   restoreVaultToHead,
   quarantinePreserve,
+  secretGateAbortMessage,
 } = require('../../src/core/dream/validate');
 const { createPins } = require('../../src/core/exec-identity');
 const { getPaths } = require('../../src/core/paths');
@@ -2190,6 +2191,34 @@ test('EP2 redact arm: a NOT-lossless-UTF-8 note is withheld, and not one byte of
 // `WP-preservation-abort-widening` — Table P's widened trigger (P0-P3), P0b's
 // artifact read-back, and Table D's disposal contract (D0-D4).
 // ══════════════════════════════════════════════════════════════════════════
+
+// ── THE PAIR RULE — direct coverage. No reachable abort in the gate ever
+//    pairs an active enum member with a non-null `redactedName` (every
+//    reachable abort's `redactedName` is `null`, by construction — Table P's
+//    P3 note), so the contract-violation path can only be exercised by
+//    calling `secretGateAbortMessage` directly.
+test('secretGateAbortMessage (THE PAIR RULE): a non-null redactedName paired with either active value fails loud', () => {
+  for (const which of ['both-failed', 'no-redaction-attempted']) {
+    assert.throws(
+      () => secretGateAbortMessage('04-Atomic/x.md', 'some-copy.md', ABORT.notPerformed, which),
+      (err) => err instanceof WienerdogError && /contract violation/.test(err.message),
+      `expected a contract-violation throw for which=${which}`
+    );
+  }
+});
+test('secretGateAbortMessage: a null redactedName with either active value composes normally', () => {
+  for (const which of ['both-failed', 'no-redaction-attempted']) {
+    const m = secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, which);
+    assert.equal(typeof m, 'string');
+    assert.ok(m.includes(JSON.stringify('04-Atomic/x.md')));
+  }
+});
+test('secretGateAbortMessage: an unknown `which` value fails loud rather than composing a message', () => {
+  assert.throws(
+    () => secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, 'bogus'),
+    (err) => err instanceof WienerdogError && /unknown which/.test(err.message)
+  );
+});
 
 // ── P1/P2 — the trigger widens from the redact fall-through alone to the
 //    CLASS: a hard-secret or unscannable withhold whose ONLY preserve fails

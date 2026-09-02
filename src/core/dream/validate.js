@@ -1273,4 +1273,9 @@ module.exports = {
   // ownership-scoped filesystem behaviour that is far more directly tested
   // against this primitive than indirectly through a gate fixture.
   quarantinePreserve,
+  // Exported for direct unit coverage of THE PAIR RULE (`WP-preservation-abort-widening`,
+  // "Exact contracts"): no reachable abort in the gate ever pairs an active
+  // enum member with a non-null `redactedName`, so the contract-violation
+  // path can only be exercised by calling this function directly.
+  secretGateAbortMessage,
 };
