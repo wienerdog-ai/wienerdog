@@ -177,6 +177,24 @@ const REDIRECTED_ENV_VARS = [
   'CODEX_HOME',
 ];
 
+/**
+ * THE npm-PROVIDED NAMES THAT POINT AT THE REAL CHECKOUT, removed from every
+ * phase environment exactly as the Wienerdog override names are (Decision 1).
+ *
+ * `npm run red-proofs` is the documented entry point, and npm exports several
+ * variables naming the directory it was invoked from. Spawning with `cwd:` moves
+ * the process; it does not touch these. MEASURED by dumping the child's whole
+ * environment under `npm run` and keeping every variable whose value IS the
+ * checkout or lies inside it: `INIT_CWD`, `PWD`, `npm_config_local_prefix`,
+ * `npm_package_json` — and `PATH`, which carries `<root>/node_modules/.bin`.
+ *
+ * `PWD` is SET to the phase copy rather than removed (it has a correct value
+ * here); `PATH` is SANITISED rather than removed (a suite legitimately needs
+ * `git` and friends on it); the rest are removed, because their only meaning is
+ * "where npm was invoked", which is precisely what a phase must not learn.
+ */
+const NPM_CWD_VARS = ['INIT_CWD', 'npm_config_local_prefix', 'npm_package_json'];
+
 /** The XDG names redirected into each phase's own copy. */
 const XDG_VARS = ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME'];
 
@@ -232,7 +250,9 @@ const REACH = [
   '           Completeness and relevance are REVIEW judgments.',
   '  LANE LIMIT: isolation covers only the paths this runner PROVIDES. Each phase\'s working',
   '           directory, TMPDIR/TMP/TEMP, HOME and the four XDG roots live INSIDE that phase\'s own',
-  '           copy. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
+  '           copy. PWD names that copy, and the npm-provided cwd-naming variables (INIT_CWD,',
+  '           npm_config_local_prefix, npm_package_json) are REMOVED, with PATH stripped of any',
+  '           entry inside --root, so no inherited variable still names the checkout. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
   '           WIENERDOG_CLAUDE_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) are REMOVED from the phase',
   '           environment rather than set, so their roots land inside that copy through the',
   '           redirected HOME they all default under. Each copy is created, manifest-verified and',
@@ -700,9 +720,10 @@ function preparePhaseDirs(copyDir) {
  * THE PROVIDED SET, redirected per phase into that phase's own copy. Anything a
  * suite writes to outside this set is UNSUPPORTED BY THE LANE (see REACH).
  *
- * @param {string} copyDir @returns {NodeJS.ProcessEnv}
+ * @param {string} copyDir @param {string} [root] the source tree, for PATH sanitising
+ * @returns {NodeJS.ProcessEnv}
  */
-function phaseEnv(copyDir) {
+function phaseEnv(copyDir, root) {
   const env = { ...process.env };
   const tmp = path.join(copyDir, PHASE_TMP);
   env.TMPDIR = tmp;
@@ -722,6 +743,23 @@ function phaseEnv(copyDir) {
   // step back, so it is removed rather than left pointing somewhere real.
   env.PWD = copyDir;
   delete env.OLDPWD;
+  for (const name of NPM_CWD_VARS) delete env[name];
+  // PATH IS SANITISED, NOT REMOVED. `npm run` puts `<root>/node_modules/.bin`
+  // on it, which is a path INTO THE SOURCE TREE — and the phase copy carries no
+  // `node_modules` at all, so such an entry can only ever resolve outside the
+  // sandbox. Every other entry is a system path a suite legitimately needs
+  // (`git`, `sh`), so they stay.
+  if (root && typeof env.PATH === 'string') {
+    // COMPARED ON REALPATHS, both sides. `--root` is resolved once at LOAD while
+    // npm writes the PATH entry with the path as given — on macOS that is
+    // `/var/...` against `/private/var/...`, and a raw string compare lets the
+    // entry through. The entry need not exist, so resolution is best-effort.
+    const inside = (e) => {
+      for (const c of [e, realpathish(e)]) if (c === root || c.startsWith(root + path.sep)) return true;
+      return false;
+    };
+    env.PATH = env.PATH.split(path.delimiter).filter((e) => e && !inside(e)).join(path.delimiter);
+  }
   for (const name of REDIRECTED_ENV_VARS) delete env[name];
   for (const name of NODE_TEST_RUNNER_VARS) delete env[name];
   return env;
@@ -733,9 +771,10 @@ function phaseEnv(copyDir) {
  * this WP adds no second place that sets it.
  *
  * @param {string} copyDir @param {string} suiteRel @param {string|undefined} pattern
+ * @param {string} [root] the source tree, forwarded to `phaseEnv` for PATH sanitising
  * @returns {{status:number|null, signal:string|null, spawnError:Error|null, stdout:string, stderr:string}}
  */
-function runSuite(copyDir, suiteRel, pattern) {
+function runSuite(copyDir, suiteRel, pattern, root) {
   const runner = path.join(copyDir, 'tests', 'run.js');
   if (!fs.existsSync(runner)) {
     throw error(`the root provides no tests/run.js — expected ${path.join('tests', 'run.js')} inside the copy at ${copyDir}`);
@@ -768,7 +807,7 @@ function runSuite(copyDir, suiteRel, pattern) {
   args.push('--', suiteRel);
   const r = spawnSync(process.execPath, args, {
     cwd: copyDir,
-    env: phaseEnv(copyDir),
+    env: phaseEnv(copyDir, root),
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -1025,6 +1064,52 @@ function parseDiag(diagLines, base) {
 }
 
 /**
+ * THE ONE SHAPE THE PARSER CANNOT DECIDE — refused in every phase, not guessed.
+ *
+ * A file that registers NO tests emits a sole childless record named for the
+ * suite, with no inner zero plan. So does a file whose only test is a childless
+ * test named like the suite. Round 3 broke that tie by KEEPING the node, on the
+ * reasoning that keeping can only ADD an identity and so only make the rules
+ * stricter. THAT REASONING HAD A HOLE, and the hermetic shadow found it: if the
+ * kept node's name IS a declared identity, BASELINE reads it as that identity
+ * having RUN and PASSED. Measured — a suite that registers
+ * `test('tests/suite-conditional.js', …)` only once the mutation lands gives
+ * zero real tests in BASELINE and CONTROL and a real red in RED, and the runner
+ * reported PROVEN, exit 0, over two pristine phases in which nothing ran at all.
+ *
+ * Refusing costs no legitimate proof: a file that registers nothing can never
+ * satisfy BASELINE, and a suite whose only test is a childless namesake is
+ * indistinguishable from it — the author renames the test or adds a second, and
+ * the ambiguity is gone. This is round 9's rule applied one layer up: where the
+ * reporter's output cannot be inverted, refuse rather than pick.
+ *
+ * @param {string} stdout @param {string} suiteRel @param {string} where @param {string} phase
+ * @returns {void}
+ */
+function assertNotAmbiguousSuiteShape(stdout, suiteRel, where, phase) {
+  const plans = tapLines(stdout).filter((l) => /^1\.\.\d+$/.test(l));
+  // An inner zero plan is POSITIVE evidence of the reporter's own record, so the
+  // shape is decided and `parseTap` unwraps it. Nothing to refuse.
+  if (plans.slice(0, -1).includes('1..0')) return;
+  const roots = parseTap(stdout);
+  if (roots.length !== 1 || roots[0].children.length > 0) return;
+  // ONLY A PASSING RECORD IS AMBIGUOUS. A file that registers nothing reports
+  // `ok`; so does a childless namesake test that passed — those two are the tie.
+  // A `not ok` record is a file-level failure or a failing namesake test, and
+  // NEITHER can be read as a terminal PASS, so no false PROVEN is reachable
+  // through it: BASELINE refuses it as not green, and RED's own rules classify
+  // it. Refusing it here would instead break criterion 4's load-failure outcome,
+  // which must stay FAILED.
+  if (!roots[0].ok || roots[0].directive) return;
+  const rel = normaliseRel(suiteRel);
+  const name = normaliseRel(roots[0].name);
+  if (!(name === rel || name === path.basename(suiteRel) || name.endsWith(`/${rel}`))) return;
+  throw error(`${where} ${phase}: the stream is a SOLE CHILDLESS record named for the suite with no zero-plan — `
+    + 'a suite that registers no tests is indistinguishable from a single test named like the suite, so the runner '
+    + 'refuses rather than counting it as a terminal PASS. Rename that test, or add a second, so the shape is decidable');
+}
+
+/**
  * @param {TapNode[]} roots @param {string[]} [prefix] @param {{node:TapNode, path:string[]}[]} [out]
  * @returns {{node:TapNode, path:string[]}[]}
  */
@@ -1120,6 +1205,32 @@ function assertNotProtected(copyDir, target, suiteRel, where) {
       throw error(`${where}: "file" resolves to ${rel} — ${why}`);
     }
   }
+}
+
+/**
+ * The canonical form of a path that NEED NOT EXIST: the nearest existing
+ * ancestor is resolved and the remainder re-appended. A plain `realpathSync`
+ * throws on a missing leaf and a plain `path.resolve` leaves a symlinked
+ * ancestor unresolved — and on macOS that is the difference between `/var/...`
+ * and `/private/var/...`, which is exactly how a PATH entry inside the source
+ * tree survived a containment filter.
+ *
+ * @param {string} p @returns {string}
+ */
+function realpathish(p) {
+  let cur = path.resolve(p);
+  const rest = [];
+  for (let i = 0; i < 64; i += 1) {
+    try {
+      return rest.length === 0 ? fs.realpathSync(cur) : path.join(fs.realpathSync(cur), ...rest);
+    } catch {
+      const up = path.dirname(cur);
+      if (up === cur) return path.resolve(p);
+      rest.unshift(path.basename(cur));
+      cur = up;
+    }
+  }
+  return path.resolve(p);
 }
 
 /** @param {string} p @returns {string|null} the canonical path, or null if it does not exist */
@@ -1238,7 +1349,7 @@ function uniqueMatch(nodes, identity, where) {
  * @param {string} copyDir @param {Object} decl @param {Object} proof @param {string} where
  * @returns {void}
  */
-function phaseBaseline(copyDir, decl, proof, where) {
+function phaseBaseline(copyDir, decl, proof, where, root) {
   const suiteTarget = resolveInside(copyDir, decl.suite, `${where} BASELINE`);
   // A REGULAR FILE, checked with `lstat` in the copy: a directory or a device
   // named as the suite would send Node back to default discovery or block.
@@ -1246,8 +1357,9 @@ function phaseBaseline(copyDir, decl, proof, where) {
   if (!st.isFile()) {
     throw error(`${where} BASELINE: "suite" ${JSON.stringify(decl.suite)} is not a regular file in the copy`);
   }
-  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern, root);
   assertCompleteRun(run, where, 'BASELINE');
+  assertNotAmbiguousSuiteShape(run.stdout, normaliseRel(decl.suite), where, 'BASELINE');
   if (run.status !== 0) {
     throw error(`${where} BASELINE: the pristine suite was not green (exit ${run.status})\n${tail(run.stdout, run.stderr)}`);
   }
@@ -1309,9 +1421,10 @@ function evaluateBaseline(nodes, proof, where) {
  * @param {string} copyDir @param {Object} decl @param {Object} proof @param {string} where
  * @returns {{failures:number}}
  */
-function phaseRed(copyDir, decl, proof, where) {
-  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+function phaseRed(copyDir, decl, proof, where, root) {
+  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern, root);
   assertCompleteRun(run, where, 'RED');
+  assertNotAmbiguousSuiteShape(run.stdout, normaliseRel(decl.suite), where, 'RED');
   return evaluateRed(flattenTap(parseTap(run.stdout, normaliseRel(decl.suite))), proof, where);
 }
 
@@ -1375,9 +1488,10 @@ function evaluateRed(nodes, proof, where) {
  * @param {string} copyDir @param {Object} decl @param {Object} proof @param {string} where
  * @returns {void}
  */
-function phaseControl(copyDir, decl, proof, where) {
-  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern);
+function phaseControl(copyDir, decl, proof, where, root) {
+  const run = runSuite(copyDir, normaliseRel(decl.suite), proof.testNamePattern, root);
   assertCompleteRun(run, where, 'CONTROL');
+  assertNotAmbiguousSuiteShape(run.stdout, normaliseRel(decl.suite), where, 'CONTROL');
   if (run.status !== 0) {
     throw error(`${where} CONTROL: the post-RED pristine copy was NOT green (exit ${run.status}) — the red was ambient, not the mutation's\n${tail(run.stdout, run.stderr)}`);
   }
@@ -1449,9 +1563,9 @@ function runProof(ctx, decl, proof, opts = {}) {
       }
       lockSandbox(ctx, parent);
       try {
-        if (phase === 'baseline') phaseBaseline(dir, decl, proof, where);
-        else if (phase === 'red') phaseRed(dir, decl, proof, where);
-        else phaseControl(dir, decl, proof, where);
+        if (phase === 'baseline') phaseBaseline(dir, decl, proof, where, ctx.root);
+        else if (phase === 'red') phaseRed(dir, decl, proof, where, ctx.root);
+        else phaseControl(dir, decl, proof, where, ctx.root);
       } finally {
         unlockSandbox(ctx, parent);
       }
@@ -1702,7 +1816,7 @@ function runAll(opts = {}) {
     say('');
 
     for (const { declFile, suite, proof } of selected) {
-      const r = runProof({ snapshot, manifest, sandbox }, { declFile, suite }, proof,
+      const r = runProof({ snapshot, manifest, sandbox, root }, { declFile, suite }, proof,
         { control: opts.control, onPhaseCopy: opts.onPhaseCopy });
       if (r.applied) applications += 1;
       results.push({
@@ -1834,6 +1948,7 @@ module.exports = {
   NODE_FLOOR,
   REACH,
   REDIRECTED_ENV_VARS,
+  NPM_CWD_VARS,
   XDG_VARS,
   NODE_TEST_RUNNER_VARS,
   VERDICT_ORDER,
@@ -1852,6 +1967,7 @@ module.exports = {
   phaseEnv,
   runSuite,
   parseTap,
+  assertNotAmbiguousSuiteShape,
   flattenTap,
   ranNodes,
   assertTestsRan,
@@ -1865,6 +1981,7 @@ module.exports = {
   countOccurrences,
   replaceOccurrences,
   resolveInside,
+  realpathish,
   applyMutation,
   rollUp,
   runAll,

@@ -1076,12 +1076,12 @@ test('red-proofs: a CONTROL that registers NO TEST AT ALL exits 0 and must NOT b
     }));
     assert.equal(r.verdict, 'ERROR', r.report);
     assert.notEqual(r.exitCode, 0);
-    assert.ok(r.report.includes('CONTROL(post-RED)'), r.report);
+    assert.ok(r.report.includes('CONTROL'), r.report);
     // A file that registers nothing emits a childless record named for the file
-    // and no inner zero plan — the ambiguous shape the wrapper rule KEEPS — so
-    // the declared identity is reported missing rather than as zero tests run.
-    // Either way the CONTROL is refused, which is what row 6 requires.
-    assert.ok(r.report.includes('did not RUN'), r.report);
+    // with no inner zero plan — the shape a single childless namesake test also
+    // produces — so the CONTROL is refused as AMBIGUOUS rather than read either
+    // way. Row 6 is satisfied: the control is not accepted.
+    assert.ok(r.report.includes('SOLE CHILDLESS record named for the suite'), r.report);
   } finally {
     for (const [k, v] of [['RP_DRIFT_COUNTER', saved.c], ['RP_DRIFT_AFTER', saved.a], ['RP_DRIFT_MODE', saved.m]]) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -1841,6 +1841,133 @@ test('red-proofs: the TAP escape set is decoded exactly, and the ambiguity is re
   // refused at LOAD instead of silently never matching.
   const ok = run(newRoot({ proofs: [proof({ expectRed: [{ test: ['fixture basic: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })] }));
   assert.equal(ok.verdict, 'PROVEN', ok.report);
+});
+
+// ── ROUND-10 (hermetic shadow, band A) — its RED
+
+test('red-proofs: a suite that registers its NAMESAKE only under the mutation is refused, not counted as a PASS (Table B row 3)', () => {
+  // BASELINE and CONTROL register NOTHING; RED registers a real namesake test
+  // and fails it. Keeping the empty-file wrapper as a test made the declared
+  // identity read as RUN and PASSED in both pristine phases, and the runner
+  // reported PROVEN, exit 0, over two phases in which nothing ran.
+  const r = run(newRoot({
+    suite: 'tests/suite-conditional.js',
+    proofs: [proof({
+      expectRed: [{ test: ['tests/suite-conditional.js'], signal: 'RP-SIGNAL-CONDITIONAL' }],
+    })],
+  }));
+  assert.equal(r.verdict, 'ERROR', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes('BASELINE'), r.report);
+  assert.ok(r.report.includes('SOLE CHILDLESS record named for the suite'), r.report);
+  assert.ok(r.report.includes('indistinguishable from a single test named like the suite'), r.report);
+});
+
+test('red-proofs: the ambiguous shape is refused by the RULE, not by the fixture — every phase, and only that shape (Table B row 3)', () => {
+  const suite = 'tests/suite-basic.js';
+  const refuse = (stdout, phase) => assert.throws(
+    () => rp.assertNotAmbiguousSuiteShape(stdout, suite, 'unit', phase),
+    (e) => e.verdict === 'ERROR' && /SOLE CHILDLESS record named for the suite/.test(e.message),
+    `${phase} must refuse the ambiguous shape`
+  );
+  const ambiguous = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js', 'ok 1 - tests/suite-basic.js',
+    '  ---', "  type: 'test'", '  ...', '1..1', '# tests 1', '',
+  ].join('\n');
+  for (const phase of ['BASELINE', 'RED', 'CONTROL']) refuse(ambiguous, phase);
+
+  // NOT refused, because each carries evidence the shape is decidable:
+  //   an inner zero plan — the reporter's own record, unwrapped;
+  const zeroPlan = ['TAP version 13', '1..0', 'ok 1 - tests/suite-basic.js', '1..1', '# tests 1', ''].join('\n');
+  rp.assertNotAmbiguousSuiteShape(zeroPlan, suite, 'unit', 'BASELINE');
+  //   children — a namesake parent is a test;
+  const withChildren = [
+    'TAP version 13', '# Subtest: tests/suite-basic.js',
+    '    # Subtest: inner', '    ok 1 - inner', '    1..1',
+    'ok 1 - tests/suite-basic.js', '1..1', '# tests 1', '',
+  ].join('\n');
+  rp.assertNotAmbiguousSuiteShape(withChildren, suite, 'unit', 'BASELINE');
+  //   a sibling — more than one root;
+  const withSibling = [
+    'TAP version 13', 'ok 1 - tests/suite-basic.js', 'ok 2 - sibling', '1..2', '# tests 2', '',
+  ].join('\n');
+  rp.assertNotAmbiguousSuiteShape(withSibling, suite, 'unit', 'BASELINE');
+  //   a name that is not the suite's.
+  const otherName = ['TAP version 13', 'ok 1 - some other test', '1..1', '# tests 1', ''].join('\n');
+  rp.assertNotAmbiguousSuiteShape(otherName, suite, 'unit', 'BASELINE');
+  //   and a FAILING record: a file-level failure and a failing namesake test are
+  //   both reds, and neither can be read as a terminal PASS — refusing that shape
+  //   would break criterion 4's load-failure outcome, which must stay FAILED.
+  const failing = [
+    'TAP version 13', 'not ok 1 - tests/suite-basic.js',
+    '  ---', "  failureType: 'testCodeFailure'", '  exitCode: 1', '  ...', '1..1', '# tests 1', '',
+  ].join('\n');
+  rp.assertNotAmbiguousSuiteShape(failing, suite, 'unit', 'RED');
+});
+
+test('red-proofs: the npm cwd-naming constant cannot silently fall behind what `npm run` actually sets (criterion 8b shape)', () => {
+  // THE DURABLE FORM, and the reason it exists: "the working directory" has now
+  // twice had members nobody enumerated — PWD at round 9, three npm variables at
+  // round 10. So this does not hard-code a list to compare against; it ASKS npm,
+  // in a throwaway package, which variables name or contain the directory it was
+  // invoked from, and requires every one to be handled.
+  const pkgRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-npm-'));
+  const probe = path.join(pkgRoot, 'probe.js');
+  fs.writeFileSync(probe, `
+    'use strict';
+    const fs = require('node:fs'); const path = require('node:path');
+    const root = fs.realpathSync(process.argv[2]);
+    const hits = [];
+    for (const [k, v] of Object.entries(process.env)) {
+      if (typeof v !== 'string' || !v || !path.isAbsolute(v)) continue;
+      let real = v; try { real = fs.realpathSync(v); } catch { /* may not exist */ }
+      for (const c of [real, v]) if (c === root || c.startsWith(root + path.sep)) { hits.push(k); break; }
+    }
+    console.log(JSON.stringify([...new Set(hits)].sort()));
+  `);
+  fs.writeFileSync(path.join(pkgRoot, 'package.json'), JSON.stringify({
+    name: 'wd-rp-npm-probe', version: '1.0.0', private: true,
+    scripts: { probe: `node probe.js ${JSON.stringify(pkgRoot)}` },
+  }));
+  const r = spawnSync('npm', ['run', '--silent', 'probe'], {
+    cwd: pkgRoot, encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (r.error && r.error.code === 'ENOENT') return; // no npm on this host: nothing to check
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const named = JSON.parse(r.stdout.trim().split('\n').pop());
+  assert.ok(named.includes('PWD') && named.includes('INIT_CWD'),
+    `precondition: npm still exports cwd-naming variables (got ${named.join(', ')})`);
+
+  // PWD is SET to the copy, PATH is SANITISED, the rest are REMOVED. Anything
+  // npm names that none of those three cover is drift, and fails here.
+  const handled = new Set([...rp.NPM_CWD_VARS, 'PWD', 'PATH']);
+  assert.deepEqual(named.filter((n) => !handled.has(n)), [],
+    `npm exports a variable naming its cwd that the runner does not handle.\n`
+    + `  named by npm:      ${named.join(', ')}\n`
+    + `  removed:           ${rp.NPM_CWD_VARS.join(', ')}\n`
+    + `  set to the copy:   PWD\n  sanitised:         PATH`);
+
+  // And each is actually handled, measured on a phase environment built with the
+  // probe package standing in for the checkout.
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-npmenv-'));
+  const saved = {};
+  for (const n of named) { saved[n] = process.env[n]; }
+  process.env.INIT_CWD = pkgRoot;
+  process.env.npm_config_local_prefix = pkgRoot;
+  process.env.npm_package_json = path.join(pkgRoot, 'package.json');
+  process.env.PATH = `${path.join(pkgRoot, 'node_modules', '.bin')}${path.delimiter}/usr/bin`;
+  try {
+    const env = rp.phaseEnv(copy, fs.realpathSync(pkgRoot));
+    for (const n of rp.NPM_CWD_VARS) assert.equal(env[n], undefined, `${n} must be removed`);
+    assert.equal(env.PWD, copy);
+    assert.equal(env.PATH.split(path.delimiter).some((e) => e.startsWith(pkgRoot)), false,
+      `PATH still carries an entry inside the source tree: ${env.PATH}`);
+    assert.ok(env.PATH.includes('/usr/bin'), 'system entries survive — a suite needs git and sh');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
 });
 
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot
