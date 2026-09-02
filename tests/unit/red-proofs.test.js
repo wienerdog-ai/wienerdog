@@ -1970,6 +1970,63 @@ test('red-proofs: the npm cwd-naming constant cannot silently fall behind what `
   }
 });
 
+// ── ROUND-11 FINDING — its RED
+
+test('red-proofs: a schema-valid id longer than a path component reaches PROVEN, never a raw stack (criterion 10, Table A `id`)', () => {
+  // 300 bytes of legal kebab slug. Table A puts no length bound on `id`; every
+  // filesystem this lane runs on caps a path component at 255, so the directory
+  // allocation threw ENAMETOOLONG before the phase loop and escaped `runAll`.
+  const longId = `${'a'.repeat(149)}-${'b'.repeat(150)}`;
+  assert.equal(longId.length, 300);
+  assert.match(longId, /^[a-z0-9]+(-[a-z0-9]+)*$/, 'precondition: the id is schema-valid');
+  const r = run(newRoot({ proofs: [proof({ id: longId })] }));
+  assert.equal(r.verdict, 'PROVEN', r.report);
+  assert.equal(r.exitCode, 0);
+  assert.equal(r.proofs[0].id, longId, 'the report still names the id in full');
+});
+
+test('red-proofs: the bounded directory component keeps distinct ids distinct (Table A `id`)', () => {
+  const short = 'a-short-id';
+  assert.equal(rp.proofDirName(short), short, 'a short id is used verbatim, so diagnostics stay readable');
+  const prefix = 'z'.repeat(260);
+  const a = rp.proofDirName(`${prefix}-one`);
+  const b = rp.proofDirName(`${prefix}-two`);
+  assert.notEqual(a, b, 'two ids sharing a long prefix must not collapse onto one directory');
+  for (const name of [a, b]) {
+    assert.ok(Buffer.byteLength(name, 'utf8') <= 200, `${name.length} bytes is within a path component`);
+    assert.equal(name.includes(path.sep), false);
+  }
+  assert.equal(rp.proofDirName(`${prefix}-one`), a, 'and the mapping is stable');
+});
+
+test('red-proofs: a working-directory allocation failure is an ERROR naming it, with the footer (criterion 10)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
+  // The belt behind the bounded name: whatever makes the allocation fail, the
+  // run reports rather than throwing. Here the sandbox's `proofs/` parent is
+  // made unwritable through a stubbed mkdir, out of process so a regression
+  // cannot hang or corrupt this suite's own temp tree.
+  const root = newRoot();
+  const stub = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-mkdir-')), 'stub.js');
+  fs.writeFileSync(stub, `
+    'use strict';
+    const fs = require('node:fs');
+    const real = fs.mkdirSync;
+    fs.mkdirSync = (p, ...rest) => {
+      if (String(p).includes(require('node:path').join('proofs', 'p-one'))) {
+        throw Object.assign(new Error('ENAMETOOLONG: name too long'), { code: 'ENAMETOOLONG' });
+      }
+      return real(p, ...rest);
+    };
+  `);
+  const r = spawnSync(process.execPath, ['--require', stub, RUNNER_SRC, '--root', root], {
+    encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.ok(r.stdout.includes("the proof's working directory could not be created (ENAMETOOLONG)"), r.stdout);
+  assert.ok(r.stdout.includes('[p-one]'), 'the ERROR names the proof');
+  assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the footer still ends the run; got …${JSON.stringify(r.stdout.slice(-80))}`);
+  assert.equal(/^\s+at /m.test(r.stderr), false, `no raw stack on stderr: ${r.stderr.slice(0, 300)}`);
+});
+
 // ── criterion 8 / 8b — no production seam, and the provided set cannot rot
 
 test('red-proofs: the runner borrows no production seam and starts every suite through the sandbox\'s tests/run.js (criterion 8)', () => {

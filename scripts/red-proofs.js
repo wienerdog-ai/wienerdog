@@ -1011,13 +1011,23 @@ function parseTap(text, suiteArg) {
   // channels independently). A wrapper is therefore recognised as the SOLE root,
   // CHILDLESS, with positive evidence it is the reporter's record.
   //
-  // ONE SHAPE STAYS AMBIGUOUS, and the tie is still broken FAIL-SAFE. A file
-  // that registers no test emits a childless record with NO inner zero plan —
-  // byte-for-byte what a real childless namesake test emits. The runner KEEPS
-  // it, because the two errors are not symmetric: keeping a wrapper only ADDS an
-  // identity, which makes RED's equality rule stricter and BASELINE's lookup
-  // fail loudly; DROPPING a test removes an own-body failure from the equality
-  // set, which is how both false PROVENs in this area arose.
+  // ONE SHAPE STAYS AMBIGUOUS, AND THIS FUNCTION DOES NOT DECIDE IT. A file that
+  // registers no test emits a childless record with NO inner zero plan —
+  // byte-for-byte what a real childless namesake test emits — so `parseTap`
+  // keeps it and `assertNotAmbiguousSuiteShape` REFUSES the run.
+  //
+  // READ THAT FUNCTION BEFORE CHANGING ANYTHING HERE. Rounds 3–9 justified
+  // keeping the node on the reasoning that keeping "only ADDS an identity, which
+  // can only make the rules stricter". THAT REASONING IS RETRACTED and the
+  // comment stating it is gone: it fails exactly when the added identity is one
+  // somebody DECLARED, because BASELINE then reads the empty-file record as that
+  // identity having RUN and PASSED. Measured at PR #204 round 10 (found
+  // independently by the hermetic shadow and the Codex plugin): a suite that
+  // registers `test('tests/suite-conditional.js', …)` only once the mutation
+  // lands gives zero real tests in BASELINE and CONTROL, and the runner reported
+  // PROVEN, exit 0. Keeping the node here is therefore only safe BECAUSE the
+  // phases refuse the shape; deleting that refusal on the strength of this
+  // paragraph would restore the false PROVEN.
   if (suiteArg) {
     const rel = normaliseRel(suiteArg);
     const base = path.basename(suiteArg);
@@ -1519,6 +1529,26 @@ function tail(stdout, stderr) {
 }
 
 /**
+ * A DIRECTORY COMPONENT FOR ANY LEGAL id, bounded to what a filesystem accepts.
+ *
+ * Table A puts no length bound on `id` — it is an unrestricted kebab slug — but
+ * a path component is capped at 255 bytes on every filesystem this lane runs on.
+ * A schema-valid 300-byte id therefore made `mkdirSync` throw ENAMETOOLONG
+ * before the phase loop, and the throw escaped `runAll` as a raw stack with no
+ * verdict and no footer. The id is kept verbatim while it fits, so diagnostics
+ * stay readable, and past that it is truncated with a digest of the WHOLE id
+ * appended — the digest is what keeps two ids sharing a long prefix distinct.
+ *
+ * @param {string} id @returns {string}
+ */
+function proofDirName(id) {
+  const MAX = 200;
+  if (Buffer.byteLength(id, 'utf8') <= MAX) return id;
+  const digest = crypto.createHash('sha256').update(id, 'utf8').digest('hex').slice(0, 16);
+  return `${id.slice(0, MAX - digest.length - 1)}-${digest}`;
+}
+
+/**
  * Run one proof through BASELINE, APPLY, RED and CONTROL, each in its own
  * manifest-verified copy derived from the one snapshot. The copies' COMMON
  * PARENT is held non-writable for the lifetime of every child and restored on
@@ -1540,8 +1570,19 @@ function runProof(ctx, decl, proof, opts = {}) {
   // snapshot into itself and the `finally` deleted the shared snapshot out from
   // under every later proof. A separate namespace removes the collision instead
   // of reserving a word the contract does not reserve.
-  const parent = path.join(ctx.sandbox, 'proofs', proof.id);
-  fs.mkdirSync(parent, { recursive: true });
+  const parent = path.join(ctx.sandbox, 'proofs', proofDirName(proof.id));
+  try {
+    fs.mkdirSync(parent, { recursive: true });
+  } catch (e) {
+    // Reported, never thrown past the caller: this is the last allocation before
+    // the phases, and an uncaught failure here would escape `runAll` as a raw
+    // stack with no verdict and no REACH footer.
+    return {
+      verdict: 'ERROR',
+      note: `${where}: the proof's working directory could not be created (${(e && (e.code || e.message)) || e})`,
+      applied: false,
+    };
+  }
   let applied = false;
   try {
     const phases = control ? ['baseline', 'red', 'control'] : ['baseline', 'red'];
@@ -1932,7 +1973,17 @@ function main() {
     process.stdout.write(bad.report);
     return;
   }
-  const r = runAll(args);
+  // NOTHING ESCAPES WITHOUT A VERDICT AND A FOOTER. The ENAMETOOLONG path above
+  // is fixed at its source, but it was one instance of a general gap: an
+  // unexpected throw anywhere under `runAll` would print a stack and no report.
+  // Criterion 10 is about every run, so the catch-all is the durable half and
+  // the specific fix is the correct one.
+  let r;
+  try {
+    r = runAll(args);
+  } catch (e) {
+    r = preRunError(`the run failed unexpectedly — ${(e && e.stack) || e}`);
+  }
   // `process.exit` DISCARDS whatever is still queued on a pipe. The report ends
   // with the REACH footer criterion 10 requires on every run, and a report long
   // enough to exceed the pipe buffer — many proofs, or one long diagnostic —
@@ -1978,6 +2029,7 @@ module.exports = {
   evaluateBaseline,
   evaluateRed,
   normaliseRel,
+  proofDirName,
   countOccurrences,
   replaceOccurrences,
   resolveInside,
