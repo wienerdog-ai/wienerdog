@@ -399,7 +399,16 @@ test('dream-promote D: the secret gate runs BEFORE the merge and a withheld path
 
   const seen = [];
   const res = run(sc, {
-    gates: gates({ secret: () => ({ refuse: true, reason: 'hard secret in added lines' }) }),
+    // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+    // preservation record now throws, so this fixture — which is not testing
+    // P4 — carries a non-empty one.
+    gates: gates({
+      secret: () => ({
+        refuse: true,
+        reason: 'hard secret in added lines',
+        preserved: [{ artifact: 'n.md', location: 'quarantine' }],
+      }),
+    }),
     spawnGit: (o) => {
       seen.push(o);
       return spawnGitForMerge(o);
@@ -714,6 +723,54 @@ test('dream-promote Q4: the only-copy invariant — no artifact means nothing is
     (err) => err instanceof WienerdogError && /only-copy invariant is unsatisfied/.test(err.message)
   );
   assert.deepEqual(get(sc.vaultDir, NOTE), B('user bytes\nsaved mid-run\n'), 'the working copy is byte-unchanged');
+});
+
+// ── Table P row P4 (`WP-preservation-abort-widening`) — the REFUSE (withhold)
+//    arm gains the SAME check the redact arm above already had: an empty
+//    preservation record on a refusal is refused fail-loud too, naming the
+//    WITHHOLD arm rather than reusing the redact arm's wording.
+test('dream-promote P4: a refuse verdict carrying an empty preservation record is refused fail-loud, naming the withhold arm', () => {
+  const sc = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
+  assert.throws(
+    () => run(sc, { gates: gates({ secret: () => ({ refuse: true, reason: 'hard secret', preserved: [] }) }) }),
+    (err) => err instanceof WienerdogError && /withhold arm reported no preserved copy/.test(err.message)
+  );
+  assert.equal(get(sc.vaultDir, NOTE), null, 'nothing was published');
+});
+
+test('dream-promote P4: a refuse verdict with NO `preserved` field at all is treated the same as an empty record', () => {
+  // `readRecord` maps `undefined`/`null` to `[]` — the gate's contract does not
+  // require the field, so an omission must not silently pass P4's check.
+  const sc = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
+  assert.throws(
+    () => run(sc, { gates: gates({ secret: () => ({ refuse: true, reason: 'hard secret' }) }) }),
+    (err) => err instanceof WienerdogError && /withhold arm reported no preserved copy/.test(err.message)
+  );
+});
+
+test('dream-promote P4: the redact arm\'s existing check and message are unaffected by the new withhold-arm check', () => {
+  const sc = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
+  assert.throws(
+    () => run(sc, { gates: gates({ secret: () => ({ redact: true, sanitizedBytes: B('note\n[REDACTED]\n'), redaction: { lines: 1, labels: 'x' }, preserved: [] }) }) }),
+    (err) => err instanceof WienerdogError && /redact arm reported no preserved copy/.test(err.message)
+       && !/withhold/.test(err.message)
+  );
+});
+
+test('dream-promote P4: a refuse verdict WITH a non-empty preservation record is refused normally, not thrown', () => {
+  const sc = scenario({ brain: { [NOTE]: 'note\nsecret\n' } });
+  const res = run(sc, {
+    gates: gates({
+      secret: () => ({
+        refuse: true,
+        reason: 'hard secret',
+        preserved: [{ artifact: '2026-08-29-n.md', location: 'quarantine' }],
+      }),
+    }),
+  });
+  const hit = res.refused.find((r) => r.rel === NOTE);
+  assert.ok(hit, 'a real preservation record is refused, not thrown');
+  assert.equal(hit.preserved.length, 1);
 });
 
 test('dream-promote Q8: a redaction that is LATER refused carries its copy TYPED, and the reason names none', () => {
@@ -1072,7 +1129,12 @@ test('dream-promote E: promotion accounting partitions the delta exactly', () =>
   const res = run(sc, {
     gates: gates({
       secret: ({ rel }) => {
-        if (rel.endsWith('secret.md')) return { refuse: true, reason: 'hard secret' };
+        // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+        // preservation record now throws, so this fixture — which is not
+        // testing P4 — carries a non-empty record like any real gate would.
+        if (rel.endsWith('secret.md')) {
+          return { refuse: true, reason: 'hard secret', preserved: [{ artifact: 'secret.md', location: 'quarantine' }] };
+        }
         if (rel.endsWith('entropy.md')) {
           return {
             redact: true,
@@ -1224,7 +1286,15 @@ test('dream-promote report-fallback R1: with no report for the date, the code se
 test('dream-promote report-fallback R2: run 1\'s report is byte-preserved and this run\'s section appended below it', () => {
   const run1 = '# Dream report — 2026-08-29\n\nrun one\n';
   const sc = scenario({ vault: { [REPORT]: run1 }, brain: { [REPORT]: body('two') } });
-  const res = run(sc, { gates: gates({ secret: ({ rel }) => (rel === REPORT ? { refuse: true, reason: 'hard secret' } : { ok: true }) }) });
+  // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+  // preservation record now throws, so this fixture carries a non-empty one —
+  // this test is not about P4.
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) =>
+        (rel === REPORT ? { refuse: true, reason: 'hard secret', preserved: [{ artifact: 'r2.md', location: 'quarantine' }] } : { ok: true }),
+    }),
+  });
 
   assert.equal(res.report.outcome, 'fallback');
   const now = String(get(sc.vaultDir, REPORT));
@@ -1241,7 +1311,15 @@ test('dream-promote report-fallback R3: a report the USER edited is preserved ve
   // the middle of the file, and no trailing newline.
   const edited = '# my own report\n\nI deleted the machine section and wrote this instead.';
   const sc = scenario({ vault: { [REPORT]: edited }, brain: { [REPORT]: body('two') } });
-  const res = run(sc, { gates: gates({ secret: ({ rel }) => (rel === REPORT ? { refuse: true, reason: 'hard secret' } : { ok: true }) }) });
+  // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+  // preservation record now throws, so this fixture carries a non-empty one —
+  // this test is not about P4.
+  const res = run(sc, {
+    gates: gates({
+      secret: ({ rel }) =>
+        (rel === REPORT ? { refuse: true, reason: 'hard secret', preserved: [{ artifact: 'r3.md', location: 'quarantine' }] } : { ok: true }),
+    }),
+  });
 
   assert.equal(res.report.outcome, 'fallback');
   const now = String(get(sc.vaultDir, REPORT));
@@ -1877,7 +1955,15 @@ test('dream-promote report-fallback: each consumer takes the path Table Z names,
     const targetedF = [];
     const readF = [];
     const resF = run(scF, {
-      gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+      // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+      // preservation record now throws, so this fixture carries a non-empty
+      // one — this test is not about P4.
+      gates: gates({
+        secret: ({ rel }) =>
+          (rel.startsWith('reports/')
+            ? { refuse: true, reason: 'hard secret', preserved: [{ artifact: 'r-fallback.md', location: 'quarantine' }] }
+            : { ok: true }),
+      }),
       writeFile: (o) => { targetedF.push(o.rel); readF.push(o.expect === undefined ? 'R1' : 'R2/R3'); return realWrite(o); },
     });
     const shape = existing === null ? 'R1' : 'R2/R3';
@@ -1892,8 +1978,16 @@ test('dream-promote report-fallback: each consumer takes the path Table Z names,
     }
   }
   const scF = scenario({ layout: { ...defaultLayout(), reports_dir: NFC }, brain: { [`${NFD}/2026-08-29.md`]: body('one') } });
+  // P4 (`WP-preservation-abort-widening`): a refusal with an empty
+  // preservation record now throws, so this fixture carries a non-empty one —
+  // this test is not about P4.
   const resF = run(scF, {
-    gates: gates({ secret: ({ rel }) => (rel.startsWith('reports/') ? { refuse: true, reason: 'hard secret', preserved: [] } : { ok: true }) }),
+    gates: gates({
+      secret: ({ rel }) =>
+        (rel.startsWith('reports/')
+          ? { refuse: true, reason: 'hard secret', preserved: [{ artifact: 'r-fallback-2.md', location: 'quarantine' }] }
+          : { ok: true }),
+    }),
   });
   // Row Z5(c): the record names the file THE BRAIN WROTE, not the derived path.
   // This is where the round-2 gate's own proposed fix would have gone wrong.
