@@ -1,0 +1,19 @@
+PR GATE ROUND 3 — PR #205 — herdr-spawned hermetic Codex shadow #2 (clean CODEX_HOME, -s read-only, detached worktree @ 80059c0b, fresh thread, pr-rubric.md + round-3 note). Captured via an approved scratch-file write. Worktree porcelain empty before and after. CONVERGED with wd-reviewer round 3 on the same band-A regression (tmpOwned set after the whole write); fixed at a7f24032 before this raw landed.
+
+{
+  "findings": [
+    {
+      "title": "[P1][Band A] Track temp ownership immediately after exclusive create",
+      "body": "Band A: if the exclusive open creates `tmp` but a later write inside `writeFileSync` fails (for example, ENOSPC after a partial write), execution throws before `tmpOwned = true`; the catch therefore returns `null` without removing the invocation-owned partial secret file. I reproduced this against the committed export by allowing the real `wx` write to create `PARTIAL SECRET\\n` and then throwing: the temp survived and cleanup was called zero times. This silently strands an unrecorded secret-bearing artifact and violates Table D row D1's requirement to remove and confirm absent every temp created by an attempted write ([governing spec](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/docs/specs/WP-preservation-abort-widening.md:414); [AGENTS.md](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/AGENTS.md:14)). Split exclusive creation from writing so ownership becomes true immediately after creation succeeds, before any byte write can fail.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/src/core/dream/validate.js",
+        "line_range": {"start": 723, "end": 724}
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "Executed (exit statuses): initial and final `git status --porcelain=v1` 0/0 with identical empty output; `git diff --name-status main...HEAD` 0; `git diff --name-status c7ff8f12..HEAD` 0; `git diff --check main...HEAD` 0; `git diff --check c7ff8f12..HEAD` 0; Done-spec numstat check 0 (G5 1+/1-, Q18+B3b 2+/2-); corrected `scripts/boundary-check.js` invocation 0 (an earlier malformed usage-only invocation exited 1); `npm test` 0 (2467 tests, 2455 passed, 12 skipped, 0 failed); V2 exits 0/0; V3 exits 0/0/0; V4 approved `/tmp` rerun exits 0/0 (the first sandboxed mktemp attempt exited 1/2 because fixture creation was denied); seeded crash-leftover fixture 0 (`result:null`, seeded bytes intact, rename calls 0, cleanup calls 0), proving `tmpOwned` cannot become true for that foreign pathname; partial-write ownership probe 0 and reproduced the finding (owned partial temp survived, cleanup calls 0). Not run: `npm run lint`, per user direction because it needs network/orchestrator coverage; V5 counterfactual mutation trees, because this shadow review is read-only; the earlier bundled npm-test/lint approval was declined before execution and `npm test` was then run alone. The exclusive-create change genuinely closes the exact crash-leftover scenario, but the newly introduced ownership flag remains false when creation succeeds and the subsequent write fails, so Table D's D1/D4 cleanup guarantee is still materially broken.",
+  "overall_confidence_score": 0.99
+}
