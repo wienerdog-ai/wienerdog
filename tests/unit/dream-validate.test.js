@@ -2282,6 +2282,29 @@ test('EP2 unscannable withhold arm (P2, NOT-lossless-UTF-8 cause): its ONLY pres
   });
 });
 
+// ── Security checklist: the path is ATTACKER-INFLUENCEABLE and this abort is
+//    the ONLY surface that reaches the user on P1/P2 — non-vacuous evidence
+//    that a raw newline and a raw ESC byte in `rel` never reach the rendered
+//    message, and the note is still identified (via its escaped JSON form).
+//    `!m.includes('\n')` on a rel with no newline in it proves nothing; this
+//    is the fixture that makes the assertion mean something.
+test('EP2 hard-secret withhold arm (P1): a HOSTILE rel (newline + ANSI escape) never reaches the abort message raw', () => {
+  const ESC = String.fromCharCode(27);
+  const hostileRel = '04-Atomic/hostile' + String.fromCharCode(10) + ESC + 'namepwn.md';
+  const f = hardSecretFixture(hostileRel);
+  const before = fs.readFileSync(f.abs);
+  const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
+  // assertAbort already asserts no raw newline / ESC and the JSON.stringify
+  // form is present; the non-vacuity is that THIS rel actually contains both.
+  assert.ok(
+    hostileRel.includes(String.fromCharCode(10)) && hostileRel.includes(ESC),
+    'precondition: the fixture is really hostile'
+  );
+});
+
 // ── The Current-State regression, closed: a CORRUPTED redacted/ artifact used
 //    to count as recovery (`Buffer.compare` raced the input alias against
 //    itself); P0b makes it a preservation FAILURE like any other, so — when
