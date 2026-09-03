@@ -1,0 +1,22 @@
+PR GATE ROUND 5 (shadow) / PR round 11 — PR #204 — herdr-spawned hermetic Codex shadow #3 (clean CODEX_HOME, -s read-only, detached worktree @ d9ba3261, fresh thread, pr-rubric.md + round-5 note). Captured via an approved scratch-file write. Worktree porcelain empty before and after (re-checked: 0 entries). Its one P1 (PATH sanitisation scoped to --root, leaving the invoking checkout's node_modules/.bin on the phase PATH under a custom root) was fixed at 72fbb460/dab736a5 before this raw landed.
+
+{
+  "findings": [
+    {
+      "title": "[P1] Sanitize the npm invocation checkout for custom roots",
+      "body": "Materiality A: when the documented `npm run red-proofs` entry is used with a supported custom `--root`, this filter removes only PATH entries below that proof root, not npm's invoking checkout. npm therefore leaves `<checkout>/node_modules/.bin` in every phase; an OS-temp reproduction with separate invocation and proof roots derived the invocation root from that entry and wrote a sentinel there in BASELINE, RED, and CONTROL while the runner returned `PROVEN`. This silently restores a write path into the real checkout and contradicts the phase-isolation contract in [Table B row 2b](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:289); sanitize both the npm invocation checkout and `--root` (or all npm-prepended entries), and cover the case where those directories differ, since the current drift test passes the same `pkgRoot` as both.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {
+          "start": 758,
+          "end": 761
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "EXECUTED: initial `git status --porcelain` exit 0 (empty); diff inventories and `git diff 29590681..HEAD`/`git show 824472fb` exit 0; focused `npm test -- tests/unit/red-proofs.test.js` exit 0 (126/126); direct conditional-namesake probe process exit 0 with runner `ERROR`/1 as required; npm-run environment-dump probe process exit 1 by its assertion, with runner `PROVEN`/0 and `grep -F <checkout>` exit 0 finding PATH leaks in all three phases; safe PATH write-through probe exit 0 with runner `PROVEN`/0 and a throwaway-checkout sentinel written three times; valid vacuity assertion exit 0 with runner `VACUOUS`/1 (the first unprivileged attempt hit EPERM and was not counted); `npm run red-proofs` exit 0 twice, with tracked-status comparison exit 0/identical; both guarded source greps, boundary check, `git diff --check`, `node --check`, and final git status exited 0, with final status empty and identical; full `npm test` and lint were not run to completion after approval was declined, no npm install or network action ran, and a process-list check was unavailable due EPERM. The conditional-namesake fix is confirmed, but the custom-root PATH leak permits silent writes into the npm invocation checkout, so the patch is not correct.",
+  "overall_confidence_score": 0.99
+}
