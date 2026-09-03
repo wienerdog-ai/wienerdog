@@ -2303,6 +2303,39 @@ test('red-proofs: the CLI\'s enforcement gate and this suite\'s capability gate 
     `the CLI and the probe disagree about this filesystem:\n${r.stdout.slice(0, 400)}`);
 });
 
+test('red-proofs: the enforcement probe LOCKS its directory before it tries to write — a probe that skips the lock always answers "not enforced" (Table B row 2b)', () => {
+  // THE MUTANT THIS EXISTS FOR: delete the probe's `chmod 0500` and it reports
+  // "not enforced" on every host, the whole lane refuses, and this suite goes
+  // quietly GREEN because every enforcement-dependent case then SKIPS on its own
+  // gate. A capability gate can only hide a broken probe, never fail on one — so
+  // the probe's MECHANISM is asserted directly, and on any host, since "chmod
+  // 0500 was called on the probe directory before the write" needs no knowledge
+  // of what the filesystem does with it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-mech-'));
+  /** @type {Array<[string, number]>} */
+  const chmods = [];
+  const realChmod = fs.chmodSync;
+  const realWrite = fs.writeFileSync;
+  let lockedBeforeWrite = false;
+  fs.chmodSync = (p, m) => { chmods.push([String(p), m]); return realChmod(p, m); };
+  fs.writeFileSync = (p, ...rest) => {
+    if (String(p).includes('enforce-probe-')) {
+      lockedBeforeWrite = chmods.some(([q, m]) => String(p).startsWith(q) && m === 0o500);
+    }
+    return realWrite(p, ...rest);
+  };
+  try {
+    rp.modeEnforcementReason(dir);
+  } finally {
+    fs.chmodSync = realChmod;
+    fs.writeFileSync = realWrite;
+  }
+  assert.ok(chmods.some(([p, m]) => p.includes('enforce-probe-') && m === 0o500),
+    `the probe must make its own directory non-writable; chmods seen: ${JSON.stringify(chmods)}`);
+  assert.equal(lockedBeforeWrite, true, 'and it must do so BEFORE attempting the write');
+  assert.deepEqual(fs.readdirSync(dir), [], 'and clean up after itself');
+});
+
 test('red-proofs: a filesystem that ACCEPTS chmod but does not ENFORCE it is UNSUPPORTED, and no proof runs (Table B row 2b)', SKIP_ON_UNSUPPORTED_HOST, () => {
   // The host refusal covered win32 and uid 0 — decided from platform and uid
   // alone. A non-root POSIX host can still sit on a mount (network, FUSE, a
