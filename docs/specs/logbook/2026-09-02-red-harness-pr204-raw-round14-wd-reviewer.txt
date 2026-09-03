@@ -1,0 +1,74 @@
+PR GATE ROUND 14 — PR #204 — wd-reviewer (same agent resumed), tip f729ba04. Verdict APPROVE, no new findings, 3/3 mutants killed. Relayed verbatim from the agent's final message.
+
+# Round 14 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `f729ba04`. Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2583 / 2571 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **139 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`b3382c28…`) |
+| ancestor `node_modules`, three states | detail below |
+| `module.globalPaths` under an injected HOME | detail below |
+| enforcement probe, ENOSPC vs real host | detail below |
+| **3 mutants** | **3 killed** |
+
+### (1) The implicit ancestor `node_modules` walk
+
+```
+clean TMPDIR, nothing above it        -> RUN: PROVEN
+plant <ancestor>/node_modules two up  -> exit 1, UNSUPPORTED, 0 proofs, ends with REACH
+                                          names the exact offending directory
+remove it again                       -> RUN: PROVEN
+```
+
+Three states, so the guard is non-vacuous in both directions. The implementation is careful in ways worth naming: it realpaths first, uses `lstat` rather than `existsSync` (a symlinked *or dangling* `node_modules` still shadows resolution, so presence is the fact), and bounds the walk at 256 levels. `R14-a` (bypass) kills 2; `R14-b` (check only the sandbox directory, no walk) also kills 2 — so the *walk*, not just the check, is pinned.
+
+**I verified the stated residue rather than accepting it.** Under an injected HOME, `module.globalPaths` is:
+
+```
+<HOME>/.node_modules      ← follows the injected HOME
+<HOME>/.node_libraries    ← follows the injected HOME
+/opt/homebrew/Cellar/node/25.9.0_2/lib/node   ← the Node installation
+```
+
+Two of the three track HOME, which the runner redirects into the phase copy, so they land inside it and are not shared across phases. The third is the Node installation's own `lib/node` — correctly named as the installation's trust boundary rather than pretended away. The REACH footer states exactly this.
+
+**The false-positive question the coordinator raised — I tested it, and it is not a false positive.** I built the realistic case (`TMPDIR=$HOME/tmp` with a stray `$HOME/node_modules`) and then checked whether the refusal is *earned*:
+
+```
+bare import from a sandbox-shaped dir -> RESOLVED-FROM-HOME
+```
+
+Node really does resolve a bare import from a sandbox-shaped directory through that tree. So on such a host the isolation genuinely would be broken, and refusing is the right call — a developer with that layout has a real shared, writable dependency source above every phase copy. The message is actionable on all three counts a refusal needs: it names the offending directory by full path, names the sandbox it sits above, explains the mechanism ("Node walks EVERY ancestor … with no environment variable involved"), and gives two concrete remedies ("Point TMPDIR at a directory with no node_modules above it, or remove that tree"). I would not change it.
+
+### (2) My C-1 — fixed
+
+```
+ENOSPC on a non-enforcing mount -> REFUSED
+   "could not be SHOWN to enforce mode bits — the probe's write into a 0500 directory failed with …"
+real host                       -> proceeds (correct)
+```
+
+The probe now concludes enforcement only from a permission refusal and names any other code. That flips the one permissive edge I found last round back to fail-closed, matching the rest of the runner. `R14-c` (revert to "any error counts") kills 1.
+
+### (3) My C-2 — disclosed
+
+`M55-no-fs-root-barrier-guard SURVIVES` appears in the PR's matrix, with the reachability analysis and failure direction recorded in Discovered issues. That is the right disposition for an unreachable guard that fails closed.
+
+### Carried residuals
+
+`M12`, `M29`, `M50`, `M55` — four disclosed survivors, all unreachable fail-safes, all listed rather than dropped; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note; the `NODE_OPTIONS` divergence note from round 13.
+
+---
+
+**Verdict.** Both of my round-13 findings are closed — one fixed, one disclosed with the analysis intact — and the new band-A is a genuine resolution channel that I confirmed exploitable before accepting the refusal, then confirmed the refusal is correctly scoped by proving the same resolution happens in the case that looked like a false positive. The residue the footer declares is real and I measured it. Nothing survived this round's matrix. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
