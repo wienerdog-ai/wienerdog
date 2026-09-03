@@ -1166,7 +1166,11 @@ test('red-proofs: a declaration entry is CLASSIFIED before it is opened — a FI
   assert.ok(r2.report.includes('tests/red-proofs/c.proofs.json'), r2.report);
 });
 
-test('red-proofs: a report larger than the pipe buffer reaches its REACH footer intact (criterion 10)', SKIP_ON_UNSUPPORTED_HOST, () => {
+// SPAWNS THE REAL CLI, which describes no host and therefore PROBES the sandbox
+// filesystem — so this needs the capability gate, not only the host predicate: on
+// a mount that ignores mode bits the CLI answers UNSUPPORTED before it ever
+// builds a report to truncate.
+test('red-proofs: a report larger than the pipe buffer reaches its REACH footer intact (criterion 10)', SKIP_WITHOUT_MODE_ENFORCEMENT, () => {
   // `process.exit` discards what is still queued on a pipe. The footer is the
   // tail of the report, so it is exactly what a truncating exit loses.
   const root = newRoot({ proofs: [proof({ why: `${'why '.repeat(40000)}END-OF-WHY` })] });
@@ -2281,15 +2285,25 @@ test('red-proofs: PATH is stripped of the npm INVOKING checkout too, not only --
   assert.ok(env.PATH.length > 0, 'system entries survive — a suite needs git and sh');
 });
 
-test('red-proofs: THIS host enforces mode bits on the sandbox filesystem, and the runner probes it rather than assuming (Table B row 2b)', SKIP_ON_UNSUPPORTED_HOST, () => {
+test('red-proofs: the CLI\'s enforcement gate and this suite\'s capability gate are ONE probe, and it agrees with a real run (Table B row 2b)', SKIP_ON_UNSUPPORTED_HOST, () => {
+  // NOT "this host enforces" — that is the host's business, and stating it as an
+  // assertion would just fail on a mount that does not. What must hold either
+  // way is that the THREE places that answer the question agree: this suite's
+  // capability gate, the exported probe, and what the CLI actually does.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-enf-'));
-  assert.equal(rp.modeEnforcementReason(dir), null,
-    'the lane cannot be exercised on a filesystem that ignores its 0500 locks');
-  // And the probe leaves nothing behind, so LOAD can run it on the real sandbox.
-  assert.deepEqual(fs.readdirSync(dir), []);
+  const reason = rp.modeEnforcementReason(dir);
+  // The probe leaves nothing behind, so LOAD can run it on the real sandbox.
+  assert.deepEqual(fs.readdirSync(dir), [], 'the probe cleans up after itself');
+  assert.equal(reason === null, MODE_ENFORCED_OK, 'this suite gates on the runner\'s own probe');
+  const r = spawnSync(process.execPath, [RUNNER_SRC, '--root', BASE], {
+    encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const refused = /^UNSUPPORTED: the filesystem holding the sandbox/m.test(r.stdout);
+  assert.equal(refused, reason !== null,
+    `the CLI and the probe disagree about this filesystem:\n${r.stdout.slice(0, 400)}`);
 });
 
-test('red-proofs: a filesystem that ACCEPTS chmod but does not ENFORCE it is UNSUPPORTED, and no proof runs (Table B row 2b)', () => {
+test('red-proofs: a filesystem that ACCEPTS chmod but does not ENFORCE it is UNSUPPORTED, and no proof runs (Table B row 2b)', SKIP_ON_UNSUPPORTED_HOST, () => {
   // The host refusal covered win32 and uid 0 — decided from platform and uid
   // alone. A non-root POSIX host can still sit on a mount (network, FUSE, a
   // permissive container) where `chmod 0500` SUCCEEDS and changes nothing, and

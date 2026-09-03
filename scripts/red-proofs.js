@@ -1930,7 +1930,15 @@ function runAll(opts = {}) {
   // chosen, on that exact filesystem — and refused in the same UNSUPPORTED
   // class. The sandbox is removed first: a lane that will not run leaves
   // nothing behind.
-  const enforcementReason = modeEnforcementReason(sandbox);
+  //
+  // IT BELONGS TO THE SAME SEAM AS `opts.host`, for the reason criterion 13
+  // exists: a caller that DESCRIBES the host is asserting the host story, and
+  // the runner's own suite does exactly that so its functional cases stay
+  // meaningful on a machine the lane would refuse. The CLI never describes a
+  // host, so every real run probes. The probe's own two outcomes are covered
+  // OUT OF PROCESS, through the CLI, which is the only way to exercise the
+  // branch this line guards.
+  const enforcementReason = opts.host ? null : modeEnforcementReason(sandbox);
   if (enforcementReason) {
     try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* best effort */ }
     say(`UNSUPPORTED: ${enforcementReason}.`);
