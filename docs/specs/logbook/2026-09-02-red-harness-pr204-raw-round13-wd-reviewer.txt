@@ -1,0 +1,81 @@
+PR GATE ROUND 13 — PR #204 — wd-reviewer (same agent resumed), tip 26d4800d. Verdict APPROVE, two band-C findings. Relayed verbatim from the agent's final message.
+
+# Round 13 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `26d4800d` (code at `dab736a5`). Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2579 / 2567 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **135 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`03f148a6…`) |
+| shadow band-A repro under real `npm run` | detail below |
+| non-enforcing-mount stub, both directions | detail below |
+| **5 mutants** | **4 killed, 1 survives** |
+
+### The three items
+
+**(1)+(2) together, in the shape that matters.** I built a *separate* invoking checkout carrying a marker executable on its `node_modules/.bin`, pointed `--root` at a *different* fixture tree, set `NODE_PATH` and a real `NODE_OPTIONS=--require …` preload, and ran through a genuine `npm run`:
+
+```
+RUN: PROVEN
+per phase (×3):  NODE_PATH=undefined   NODE_OPTIONS=undefined   markerRan="ENOENT"
+PATH entries naming either tree: 0
+preload executions recorded: 2   (outer processes only — 0 in any phase)
+```
+
+The marker binary in the invoking checkout is unreachable from every phase, both Node variables are gone, and the preload ran only outside the phases. That closes the round-11 observation I made and the shadow escalated to band A. `R13-a` kills 3; `R13-b` (barriers from `--root` only, the pre-fix shape) kills 2 — so the second barrier is load-bearing, not belt-and-braces.
+
+The ordering detail is right too: barriers are collected **before** the npm names are deleted, so the fix cannot silently become a no-op.
+
+**(3) The mode-enforcement probe, both directions.** With `chmod` stubbed to a no-op on the probe directory — a mount that accepts mode bits without enforcing them:
+
+```
+runner: exit=1, UNSUPPORTED "ACCEPTS chmod but does not ENFORCE it", 0 proofs run, ends with REACH
+suite:  135 tests / 127 pass / 0 fail / 8 skipped   ← skips, does not fail
+```
+
+Joining the `opts.host` seam is what makes the second line true, and `R13-c` (bypass the probe) kills 1. The commit that asserts *the probe's own mechanism* is the interesting one: `R13-d` (probe never chmods) kills 1 **and** drops the pass count to 126, which is exactly the failure mode it was written for — a broken probe that answers "not enforced" everywhere would otherwise have turned the suite green by skipping. A capability gate can only hide a broken probe, so asserting the mechanism directly is the right move.
+
+### My two attacks
+
+**Removing `NODE_OPTIONS` whole — nothing the suite needs.** Nothing in `tests/run.js`, `tests/with-temp-root.js` or `package.json` references either variable, and the adopted lane reaches PROVEN. The residual is worth one line: a developer with an ambient `NODE_OPTIONS` (say `--max-old-space-size`) gets `npm test` running with it and phases running without, so a phase could fail where the outer suite passes. That is the correct trade — a `--require` preload is arbitrary code execution against the checkout, and `NODE_OPTIONS` is a flag string rather than a path list, so partial filtering isn't practical. The code says exactly that.
+
+**Can the probe false-positive?** Yes, in one narrow direction, and this is my finding.
+
+### Two findings, both Band C
+
+**1. [quality] The enforcement probe treats *any* write failure as proof of enforcement — `scripts/red-proofs.js:161-171`. Disposition: fix (~1 line).**
+
+```js
+try { fs.writeFileSync(child, 'x'); } catch { enforced = true; }
+```
+
+Stubbing a non-enforcing mount whose write fails for an unrelated reason:
+
+```
+probe verdict on a non-enforcing mount whose write fails ENOSPC: >>> "ENFORCED" (code not checked)
+control, real host:                                              enforced (correct)
+```
+
+The error code is never inspected, so `ENOSPC`/`EDQUOT`/`EIO` on a mount that does *not* enforce mode bits reads as enforcement and the lane proceeds with inert locks. The window is narrow — it needs an exotic non-enforcing filesystem *and* a transient non-permission write failure, and `mkdtempSync` catches the common cases (`EROFS`, most `ENOSPC`) by refusing first. But the direction is permissive, in a guard whose whole job is to decide whether the lane's safety mechanism is real, and every other decision in this runner fails closed. Requiring `EACCES`/`EPERM` before concluding enforcement — and refusing with the code named otherwise — matches the file's own idiom (`assertCompleteRun` checks specific statuses; the traversal fixture matches `/EACCES|EPERM|EROFS/`).
+
+**2. [quality] `R13-e` survives — the filesystem-root barrier guard is untested. Disposition: disclose or drop.**
+
+Removing `path.dirname(c) !== c` leaves the suite at 135/0. I checked reachability rather than assuming: a `/` barrier needs `--root /` or `INIT_CWD=/`, and I confirmed the sandbox-inside-root check does **not** fire for `root = "/"` (`"/private/var/…".startsWith("//")` is false), so it isn't screened out earlier — but `buildManifest` walking `/` would hit a device or socket long before `PATH` mattered. And removal fails **closed**: a `/` barrier empties `PATH`, suites lose `git`/`sh`, and BASELINE goes red. So this is a usability guard against a bogus input, not a safety guard — the same unreachable-fail-safe family as `M12`, `M29` and `M50`, and it belongs in that disclosed list rather than being left implicit.
+
+### Carried residuals
+
+`M12`, `M29`, `M50`, plus `R13-e` above; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note; and the new `NODE_OPTIONS` divergence note.
+
+---
+
+**Verdict.** All three items verified in both directions on evidence I produced — including the band-A shape reproduced end to end under a real `npm run` with a separate invoking checkout, which is the configuration my round-11 observation described and the shadow proved exploitable. The probe's mechanism being asserted directly is the right lesson from a capability gate that could hide its own breakage. The two findings are a permissive edge in an otherwise fail-closed guard and one undisclosed unreachable survivor; neither affects a verdict today. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
