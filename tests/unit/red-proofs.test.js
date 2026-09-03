@@ -2355,3 +2355,125 @@ test('red-proofs: a filesystem that ACCEPTS chmod but does not ENFORCE it is UNS
   assert.equal(/\[p-one\]/.test(r.stdout), false, 'nothing runs on a filesystem that cannot hold the locks');
   assert.ok(r.stdout.endsWith(`${rp.REACH}\n`), `the footer still ends the run; got …${JSON.stringify(r.stdout.slice(-80))}`);
 });
+
+// ── ROUND-13 FINDINGS — their REDs
+
+/** Plant a package under `<dir>/node_modules` that exists nowhere else.
+ *  @param {string} dir @param {string} [value] @returns {string} the planted node_modules path */
+function plantAncestorPackage(dir, value = 'FROM-AN-ANCESTOR-NODE_MODULES') {
+  const nm = path.join(dir, 'node_modules');
+  const pkg = path.join(nm, 'rp-ancestor');
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.writeFileSync(path.join(pkg, 'package.json'),
+    JSON.stringify({ name: 'rp-ancestor', version: '1.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkg, 'index.js'), `'use strict';\nmodule.exports = ${JSON.stringify(value)};\n`);
+  return nm;
+}
+
+/** A fixture root whose declared suite requires `rp-ancestor` — resolvable only
+ *  through Node's IMPLICIT ancestor walk. @returns {string} */
+function newAncestorRoot() {
+  return newRoot({
+    suite: 'tests/suite-ancestor.js',
+    proofs: [proof({ expectRed: [{ test: ['fixture ancestor: the greeting is hello'], signal: 'RP-SIGNAL-GREETING' }] })],
+    files: {
+      'tests/suite-ancestor.js': [
+        "'use strict';",
+        "const test = require('node:test');",
+        "const assert = require('node:assert');",
+        "const marker = require('rp-ancestor'); // no NODE_PATH, no local node_modules",
+        "const subject = require('../subject/subject.js');",
+        '',
+        "test('fixture ancestor: the greeting is hello', () => {",
+        "  assert.equal(marker, 'FROM-AN-ANCESTOR-NODE_MODULES');",
+        "  assert.equal(subject.greeting, 'hello', 'RP-SIGNAL-GREETING');",
+        '});',
+        '',
+      ].join('\n'),
+    },
+  });
+}
+
+test('red-proofs: a node_modules on ANY ancestor of the sandbox is UNSUPPORTED, naming it, with no proof run (Table B row 2a)', () => {
+  // MEASURED, on v25.9.0 and v20.20.2 alike: Node walks EVERY ancestor of the
+  // requiring file for `node_modules`, with no environment variable involved —
+  // so a writable `<tmpdir>/node_modules` is a dependency tree shared by
+  // BASELINE, RED and CONTROL even though every copy omits one. Stripping
+  // NODE_PATH does not touch this path; only refusing the location does.
+  const root = newAncestorRoot();                       // built under the normal temp root
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-anctmp-'));
+  const nm = plantAncestorPackage(tmp);
+  const r = withEnv({ TMPDIR: tmp, TMP: tmp, TEMP: tmp }, () => run(root));
+  assert.equal(r.verdict, 'UNSUPPORTED', r.report);
+  assert.notEqual(r.exitCode, 0);
+  assert.ok(r.report.includes(nm) || r.report.includes(fs.realpathSync(nm)),
+    `the refusal must name the offending directory:\n${r.report}`);
+  assert.equal(r.proofs.length, 0, 'nothing runs where module resolution can escape the copy');
+  assert.ok(r.report.endsWith(`${rp.REACH}\n`), 'the footer still ends the run');
+});
+
+test('red-proofs: the same temp root WITHOUT an ancestor node_modules runs normally (Table B row 2a)', () => {
+  // The other direction, and the reason the refusal is a location check rather
+  // than a blanket one: an ordinary temp root carries no dependency tree, and
+  // the lane must not refuse it.
+  const root = newAncestorRoot();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-anctmp-'));
+  const r = withEnv({ TMPDIR: tmp, TMP: tmp, TEMP: tmp }, () => run(root));
+  // The suite still cannot find `rp-ancestor` — which is the POINT: a phase gets
+  // no dependency tree at all, so the load fails honestly instead of passing.
+  assert.notEqual(r.verdict, 'UNSUPPORTED', r.report);
+  assert.equal(fs.existsSync(path.join(tmp, 'node_modules')), false);
+
+  // And a plain fixture root on that same temp root reaches PROVEN.
+  assert.equal(withEnv({ TMPDIR: tmp, TMP: tmp, TEMP: tmp }, () => run(newRoot())).verdict, 'PROVEN');
+});
+
+test('red-proofs: the ancestor scan walks to the filesystem root and reports the FIRST tree it finds (Table B row 2a)', () => {
+  const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-ancdeep-'));
+  const nm = plantAncestorPackage(outer);
+  const deep = path.join(outer, 'a', 'b', 'c');
+  fs.mkdirSync(deep, { recursive: true });
+  const reason = rp.ancestorNodeModulesReason(deep);
+  assert.ok(reason && reason.includes(nm), `expected ${nm} to be named; got ${reason}`);
+  // A directory with no such ancestor is accepted — measured against this host's
+  // own temp root, which is what every ordinary run uses.
+  const clean = fs.mkdtempSync(path.join(outer, 'clean-'));
+  fs.rmSync(nm, { recursive: true, force: true });
+  assert.equal(rp.ancestorNodeModulesReason(clean), null);
+});
+
+test('red-proofs: the enforcement probe concludes ENFORCED only from EACCES/EPERM — any other write failure is UNSUPPORTED naming the code (Table B row 2b)', () => {
+  // FAIL CLOSED, like every other decision in this file. A write that fails for
+  // an unrelated reason — ENOSPC, EDQUOT, EIO — is not evidence that mode bits
+  // are enforced, and on a mount that does not enforce them it would have read
+  // as proof that they are.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-rp-nospc-'));
+  const realWrite = fs.writeFileSync;
+  const codes = ['ENOSPC', 'EDQUOT', 'EIO'];
+  try {
+    for (const code of codes) {
+      fs.writeFileSync = (p, ...rest) => {
+        if (String(p).includes('enforce-probe-')) {
+          throw Object.assign(new Error(`${code}: stubbed`), { code });
+        }
+        return realWrite(p, ...rest);
+      };
+      const reason = rp.modeEnforcementReason(dir);
+      assert.ok(reason, `${code} must not read as enforcement`);
+      assert.ok(reason.includes(code), `the refusal must name the code; got ${reason}`);
+    }
+    // And the permission codes DO conclude enforcement.
+    for (const code of ['EACCES', 'EPERM']) {
+      fs.writeFileSync = (p, ...rest) => {
+        if (String(p).includes('enforce-probe-')) {
+          throw Object.assign(new Error(`${code}: stubbed`), { code });
+        }
+        return realWrite(p, ...rest);
+      };
+      assert.equal(rp.modeEnforcementReason(dir), null, `${code} is the refusal the probe is looking for`);
+    }
+  } finally {
+    fs.writeFileSync = realWrite;
+  }
+  assert.deepEqual(fs.readdirSync(dir), [], 'every branch cleans up after itself');
+});

@@ -159,12 +159,21 @@ function modeEnforcementReason(dir) {
   }
   const child = path.join(probeDir, 'w');
   let enforced = false;
+  let otherCode = null;
   try {
     fs.chmodSync(probeDir, 0o500);
     try {
       fs.writeFileSync(child, 'x');
-    } catch {
-      enforced = true; // the write was refused: the bits are real here
+    } catch (e) {
+      // ONLY A PERMISSION REFUSAL IS EVIDENCE. "The write failed" is not the
+      // same fact as "the mode bits stopped it": an ENOSPC, EDQUOT or EIO on a
+      // mount that does NOT enforce modes would otherwise read as proof that it
+      // does, and the lane would proceed with inert locks. Every other decision
+      // in this file fails closed, so this one does too — an unexpected code is
+      // refused BY NAME rather than interpreted.
+      const code = (e && e.code) || String((e && e.message) || e);
+      if (code === 'EACCES' || code === 'EPERM') enforced = true;
+      else otherCode = code;
     }
   } catch {
     // chmod itself failed — treat exactly as "cannot be enforced" below.
@@ -172,12 +181,79 @@ function modeEnforcementReason(dir) {
     try { fs.chmodSync(probeDir, 0o700); } catch { /* best effort */ }
     try { fs.rmSync(probeDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+  if (otherCode) {
+    return `the filesystem holding the sandbox (${dir}) could not be SHOWN to enforce mode bits — the `
+      + `probe's write into a 0500 directory failed with ${otherCode}, which is not a permission `
+      + 'refusal and so is no evidence that the 0500 locks this lane depends on (Table B row 2b) '
+      + 'would stop a suite. Clear the condition that code names, or point TMPDIR elsewhere';
+  }
   if (enforced) return null;
   return `the filesystem holding the sandbox (${dir}) ACCEPTS chmod but does not ENFORCE it — a `
     + '0500 directory there still took a write from this process, so holding the phase copies\' '
     + 'parent, the sandbox and the snapshot non-writable while a child runs (Table B row 2b) is '
     + 'inert and no verdict here would mean anything. Point TMPDIR at a filesystem that enforces '
     + 'POSIX mode bits';
+}
+
+/**
+ * THE DEPENDENCY CHANNEL NO ENVIRONMENT VARIABLE OPENS — and the reason removing
+ * `NODE_PATH` was necessary but not sufficient.
+ *
+ * MEASURED on v25.9.0 and v20.20.2 alike: Node resolves a bare specifier by
+ * walking EVERY ANCESTOR of the requiring file, appending `node_modules` to each
+ * (`Module._nodeModulePaths`), with no variable involved. The phase copies live
+ * under the sandbox, the sandbox under the ambient temp root — so a writable
+ * `<tmpdir>/node_modules`, or one on any directory above it, is a dependency
+ * tree BASELINE, RED and CONTROL all resolve through, while every copy carries
+ * none. That is Table B row 2a's shared state, reachable without touching the
+ * environment at all.
+ *
+ * It is refused at LOAD rather than guarded against, because there is nothing to
+ * guard with: the walk is Node's own, it cannot be turned off, and a location
+ * this runner does not own is not a location it can clean. The refusal names the
+ * directory so the operator can move TMPDIR or remove the tree.
+ *
+ * THE RESIDUE, stated because REACH must be honest. After the ancestor walk Node
+ * consults three GLOBAL FOLDERS. Two of them — `~/.node_modules` and
+ * `~/.node_libraries` — are read from the CHILD's `HOME`, which this runner
+ * redirects into the phase's own copy; measured on both Nodes, `module.globalPaths`
+ * follows the injected `HOME`, so they land inside the copy exactly as the other
+ * redirected roots do. The third, `$PREFIX/lib/node`, belongs to the Node
+ * INSTALLATION, is consulted only after every ancestor, and is not this runner's
+ * to police — a shared Node install is the same trust boundary as the `node`
+ * binary itself.
+ *
+ * @param {string} dir the sandbox — every phase copy lives beneath it
+ * @returns {string|null} the reason to refuse, or null when no ancestor holds one
+ */
+function ancestorNodeModulesReason(dir) {
+  let cur;
+  try {
+    cur = fs.realpathSync(dir);
+  } catch {
+    cur = path.resolve(dir);
+  }
+  for (let i = 0; i < 256; i += 1) {
+    const nm = path.join(cur, 'node_modules');
+    let present = false;
+    // lstat, not exists: a SYMLINK named node_modules resolves for Node too, and
+    // a dangling one still shadows nothing — either way its presence is the fact.
+    try {
+      fs.lstatSync(nm);
+      present = true;
+    } catch { /* absent here; keep walking */ }
+    if (present) {
+      return `module resolution can escape the phase copy — ${nm} sits on an ancestor of the sandbox `
+        + `(${dir}), and Node walks EVERY ancestor of a requiring file for node_modules with no `
+        + 'environment variable involved, so BASELINE, RED and CONTROL would all resolve bare '
+        + 'imports through that one shared, writable tree while each copy carries none (Table B '
+        + 'row 2a). Point TMPDIR at a directory with no node_modules above it, or remove that tree';
+    }
+    const up = path.dirname(cur);
+    if (up === cur) return null;
+    cur = up;
+  }
+  return null;
 }
 
 /** Repo-relative location of this runner — a `file` may never name it. */
@@ -335,7 +411,12 @@ const REACH = [
   '           entry inside --root OR inside the checkout npm was invoked from — which a custom',
   '           --root makes a DIFFERENT tree — and NODE_PATH and NODE_OPTIONS removed, so no',
   '           inherited variable still names the checkout and no phase can load code or',
-  '           dependencies from outside its own copy. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
+  '           dependencies from outside its own copy. Node\'s IMPLICIT resolution is closed by',
+  '           LOCATION instead, since no variable opens it: a node_modules on ANY ancestor of the',
+  '           sandbox is refused UNSUPPORTED. Two of Node\'s three global folders (~/.node_modules,',
+  '           ~/.node_libraries) follow the redirected HOME into the copy — measured on both Nodes;',
+  '           the third, $PREFIX/lib/node, belongs to the Node INSTALLATION, is consulted only after',
+  '           every ancestor, and is the same trust boundary as the `node` binary itself. The Wienerdog OVERRIDE_VARS names (WIENERDOG_HOME, WIENERDOG_VAULT,',
   '           WIENERDOG_CLAUDE_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) are REMOVED from the phase',
   '           environment rather than set, so their roots land inside that copy through the',
   '           redirected HOME they all default under. Each copy is created, manifest-verified and',
@@ -346,8 +427,9 @@ const REACH = [
   '           descendant of the source — so a TMPDIR under the tree being snapshotted is refused.',
   '           Where mode bits cannot enforce that — win32, running as uid 0, or a sandbox',
   '           filesystem that ACCEPTS chmod without enforcing it, which is PROBED at LOAD on the',
-  '           mount the sandbox actually landed on — the lane REFUSES at LOAD with UNSUPPORTED',
-  '           rather than reporting a verdict it cannot stand behind.',
+  '           mount the sandbox actually landed on, the probe concluding ENFORCED only from an',
+  '           EACCES/EPERM refusal and refusing any other error by name — the lane REFUSES at LOAD',
+  '           with UNSUPPORTED rather than reporting a verdict it cannot stand behind.',
   '           A suite that writes ANYWHERE ELSE (an absolute path this runner does not own, the',
   '           ambient temp root above the sandbox, or a chmod out of the locked parent) is',
   '           UNSUPPORTED BY THE LANE rather than guarded against: full confinement needs OS-level',
@@ -1944,6 +2026,18 @@ function runAll(opts = {}) {
     say(`UNSUPPORTED: ${enforcementReason}.`);
     return done('UNSUPPORTED');
   }
+  // AND NOTHING ABOVE IT MAY HOLD A DEPENDENCY TREE. This one is checked on the
+  // REAL host in every case, injected description or not: unlike the mode-bit
+  // probe it costs no capability the runner's own suite would have to simulate,
+  // and it is a property of the LOCATION rather than of the host — so the suite
+  // exercises it by pointing TMPDIR at a planted tree, exactly as an operator
+  // would hit it.
+  const resolutionReason = ancestorNodeModulesReason(sandbox);
+  if (resolutionReason) {
+    try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* best effort */ }
+    say(`UNSUPPORTED: ${resolutionReason}.`);
+    return done('UNSUPPORTED');
+  }
   let runVerdict = 'PROVEN';
   let applications = 0;
   try {
@@ -2135,6 +2229,7 @@ module.exports = {
   nodeFloorOk,
   unsupportedHostReason,
   modeEnforcementReason,
+  ancestorNodeModulesReason,
   loadDeclarations,
   assertDeclarationsMatchSnapshot,
   declarationDigest,
