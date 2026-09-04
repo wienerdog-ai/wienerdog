@@ -465,7 +465,7 @@ arm rather than only on the success path.
 | **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment claiming byte-identity with *"the sentence the digest banner uses for the same class"* — **which names the wrong surface**: it is byte-identical to L1, `ledger.js`'s exhausted banner, and not to L5, `digest.js`'s | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
 | **L4** | `doctor.js` `quarantineReport`, the `secret-revert-exhausted` row | the transcript ledger. **No copy** | states `The withheld copies are in state/quarantine/.` | the same import, the same substitution. The row's count, its position in the Table A order, and the four other rows are byte-unchanged |
 | **L5** | `digest.js` `secretQuarantineWarn` | **the folder**: `listSecretQuarantine` lists direct file entries of `state/quarantine/` | names `state/quarantine/`, lists the basenames it observed, and keeps the `(not the redacted/ folder inside it)` parenthetical | **UNCHANGED, and this row is why.** It satisfies L0 for every copy it announces. What it cannot announce is a copy on the other shelf — measured, `listSecretQuarantine` returns `[]` in that state — and closing that needs durable state the product does not have. Out of scope owns it; nothing here weakens or widens this banner. **One sentence of this banner IS false and is PARKED, not overlooked:** *this notice clears when no withheld copies are left* — see the Dispatch precondition's second owner item, which states the measured state, the recommendation and the cost of overruling it |
-| **L7** | `src/cli/dream.js`, row G11's undelivered-record delivery | — (it is the ORDER, not a claim) | the record is printed at step **20**, AFTER `writeLedger` (step 18), after the summary line, after `regenerateDigest()` and after the vault warnings refresh | **it runs as step 17b, BEFORE step 18.** Measured: a fault injected at the digest write — the first pointer-bearing durable surface after the ledger — aborts the run with the ledger already persisted and, in today's order, with the record never printed. L1-L4's sentence says the run named each copy and its folder; printed after those surfaces it is a promise about output a throw can still prevent, and on the refused redacted-only-copy arm that is the user's only route to a bounded-shelf copy. Moving it makes the sentence true by construction on every arm instead of wording around it. **This is a REORDER and nothing else**: no statement changes, no value changes, no durable state is added (so ADR-0004 and the durability successor are both untouched) |
+| **L7** | `src/cli/dream.js`, row G11's undelivered-record delivery | — (it is the ORDER, not a claim) | the record is printed at step **20**, AFTER `writeLedger` (step 18), after the summary line, after `regenerateDigest()` and after the vault warnings refresh | **it runs as step 17b, BEFORE step 18.** Measured at the LEDGER BOUNDARY, which is where the first durable claim is made: with `transcript-ledger.json`'s atomic rename delegated and the run aborted immediately after it, today's order leaves the final ledger on disk and the record never printed — and so does a placement after `writeLedger`. Only the step-17b placement delivers first. L1-L4's sentence says the run named each copy and its folder; printed after those surfaces it is a promise about output a throw can still prevent, and on the refused redacted-only-copy arm that is the user's only route to a bounded-shelf copy. Moving it makes the sentence true by construction on every arm instead of wording around it. **This is a REORDER and nothing else**: no statement changes, no value changes, no durable state is added (so ADR-0004 and the durability successor are both untouched) |
 | **L6** | `promote.js` `copyClause` | the record entry: `artifact`, `location`, `remediation` | renders `` unredacted copy at state/<location>/<artifact> `` | **UNCHANGED — the canonical renderer.** It is the surface L1–L4's pointer points at. Its `remediation` VALUE is a separate, owner-ruled contract (`WP-dream-promote-module` Table Q row Q9) and is not touched; Out of scope records the tension it leaves |
 
 Two things this table does **not** change, stated so no one infers them.
@@ -936,13 +936,22 @@ added here on the spot.
       of its own does not move, its declared identity stays green, and
       `evaluateRed` refuses the proof. V2 remains as a cheap lexical guard over
       the **contiguous** retyped case and claims nothing more.
-- [ ] **6.** **L7 — the record is delivered before anything claims it was.**
-      On the refused-report arm, with a fault injected at the first
-      pointer-bearing durable surface after the ledger is persisted, the run
-      aborts AND its output already carries the complete enforcement record —
-      the announcing line and the record's own lines. The same evidence run
-      against the shipped ordering must FAIL: the seam, the fixture and the
-      assertion shape are the implementer's, the discrimination is not.
+- [ ] **6.** **L7 — the record is delivered before the FIRST thing that can
+      claim it was, and that thing is the transcript ledger.** On the
+      refused-report arm, at the instant `transcript-ledger.json` becomes
+      durable — its atomic rename delegated so the final ledger IS on disk, and
+      the run then aborted immediately — the output already carries the complete
+      enforcement record: the announcing line **and** the record's own lines.
+      **The discrimination is three-state and is the criterion, not the
+      mechanism:** the shipped ordering must FAIL, a placement AFTER
+      `writeLedger` but before the digest must ALSO FAIL, and only the step-17b
+      placement may pass. The seam, the fixture and the assertion shape are the
+      implementer's; the three states are not. **Why the ledger and not the
+      digest:** `writeLedger` renames the temp onto the destination and only
+      then chmods it, so a crash, a termination or a chmod failure in that gap
+      leaves the final ledger durable — and every pointer-bearing surface is a
+      function of that ledger. A detector at the digest write is a whole step
+      too late and accepts the wrong placement; measured, it does.
       Nothing else about the block changes: same statements, same condition,
       same two arms, same neutralisation.
 - [ ] **7.** **L5 and L6 did not move.** `src/core/digest.js` and
@@ -963,8 +972,12 @@ added here on the spot.
       carries the claim it scopes. The placement half is **V5's**, because a
       Table Q row is one line and the one-changed-line half cannot see a clause
       that landed in the wrong cell.
-- [ ] **10.** Idempotence: `N/A — this package ships no command and writes
-      nothing outside the repo; it changes the text of four rendered sentences.`
+- [ ] **10.** Idempotence: `N/A`, and the reason is stated for what the package
+      now actually is. Four of its five changes are text substitutions. The
+      fifth, row **L7**, adds no write, no persistent state and no retry: it
+      moves an existing output block so that it runs before writes that already
+      happen, in the order they already happen. No new command ships and nothing
+      outside the repo is written.
 - [ ] **11.** `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
@@ -1126,16 +1139,33 @@ npm run lint
   output**, which is what makes L7's move free — measured, not assumed. If a
   seventh breaks, something outside Table L moved and it is a finding, not a
   fixture to update.
-- **Row L7's evidence, both directions, measured.** The failure-injection
-  rehearsal — refused-report arm, a fault at the digest write, which is the
-  first pointer-bearing durable surface after the ledger — **passes on the
-  reordered tree** (`tests 1 / pass 1`) and **fails on the shipped ordering**
-  (`tests 1 / pass 0 / fail 1`, diagnostic *"the record was delivered BEFORE the
-  fault:"* followed by an output carrying none). The seam used in the rehearsal
-  was `fs.renameSync` on the digest's atomic rename; `fs.writeFileSync` does
-  **not** work, because `writeFilePrivate` writes through `openSync`/`writeSync`
-  on a randomly named temp. That trap is recorded so the implementer does not
-  conclude the window is unreachable.
+- **Row L7's evidence is THREE-state, and the third state is why the seam
+  moved.** The rehearsal patches `fs.renameSync` for the destination ending in
+  `transcript-ledger.json`, **delegates that rename first** so the final ledger
+  is genuinely durable, and throws immediately after it. Measured on three
+  scratch copies of `8302ce8e`, all carrying the four-carrier fix:
+
+  | placement of the record print | detector at the LEDGER rename |
+  |---|---|
+  | shipped ordering (step 20) | `tests 1 / pass 0 / fail 1` |
+  | **after `writeLedger`, before the digest** | `tests 1 / pass 0 / fail 1` |
+  | **step 17b (specified)** | `tests 1 / pass 1 / fail 0` |
+
+  **And the round-2 seam is measured failing to discriminate**, which is why it
+  was replaced rather than merely improved: the same wrong placement, checked by
+  a fault at the DIGEST rename, scores `tests 1 / pass 1 / fail 0`. A detector a
+  whole step downstream of the first durable claim cannot see a print that
+  landed between them.
+- **Two seam traps, both found by running the seam rather than reasoning about
+  it.** (i) `fs.writeFileSync` never fires for these destinations —
+  `writeFilePrivate` writes through `openSync`/`writeSync` on a randomly named
+  temp and only then renames, so the destination name appears at the RENAME.
+  (ii) The ledger patch must **delegate** the rename before throwing; a patch
+  that throws instead of renaming tests a ledger that never became durable,
+  which is a different and much weaker claim. The fixture must also carry no
+  `state/watermarks.json`, or step 4's one-time migration writes the ledger
+  first and the fault lands before `promote()` has run — assert that
+  precondition rather than assuming it.
 
 ## Out of scope (do NOT do these)
 
@@ -1182,7 +1212,9 @@ npm run lint
 1. All verification steps pass locally; output pasted into the PR body,
    including V1's and V2's four states each (the composed-duplicate state
    included, where they are green), V5's seven states, V3's five roll-up lines,
-   and row L7's failure-injection test run in both directions.
+   and row L7's failure-injection test run in all THREE states — the shipped
+   ordering, a placement after `writeLedger`, and step 17b — with only the last
+   green.
 2. Conventional commits; PR titled
    `fix(dream): stop the ledger-derived banners naming a quarantine shelf (WP-quarantine-banner-location)`.
 3. PR template filled, including "Decisions made" (or "none"), "Discovered

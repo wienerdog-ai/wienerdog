@@ -605,3 +605,80 @@ documents: `Linting: 636 file(s)`, `0 error(s)`,
 - **The Q1/Q2/Q9 clause texts are byte-identical to round zero's.** Findings 1
   and 3 of round 1, and finding 1 of round 2, all changed how they are CHECKED,
   never what they say.
+
+### Round 3 fixes — architect, 2026-09-05, on top of `9671821c`
+
+**Nothing about the product's design.** Both channels confirmed R2-A closed by
+V5's byte comparison (extracted and run: RED on the untouched tree; the clauses
+carry no `|` and their backticks survive shell capture), R2-B closed, the R2-C
+reorder coherent, all six declarations matching once and parsing, and **size M /
+one atomic WP honest** — the plugin's own words: *"L7 is mechanically separable
+but semantically required by the new pointer sentence, so splitting creates
+sequencing risk."* **Zero scope objections counted.** Two findings, both about
+row L7's EVIDENCE rather than its design, and both **LIGHT** under weighted
+closure: fixed inside the frozen surface, no new machinery.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A, CONVERGED] | The L7 detector faulted at the DIGEST rename — a whole step downstream of the first durable claim. An implementation that moved the record print to just after `writeLedger` (before `regenerateDigest`) would pass it while keeping a real window: `writeLedger` renames `transcript-ledger.json` and only then chmods it, so a crash, a termination or a chmod failure in that gap leaves the final ledger durable with the only complete record undelivered — exactly the family L7 claims to close | **FIXED by moving the detector to the LEDGER boundary.** It patches `fs.renameSync` for the destination ending in `transcript-ledger.json`, **delegates that rename first** so the final ledger is genuinely on disk, then throws immediately, and asserts the announcing line and every `report.record` line were already captured. Criterion 6 is now explicitly **three-state** — shipped ordering RED, after-`writeLedger` RED, step 17b GREEN — with the discrimination stated as the criterion and the mechanism left to the implementer. Table L row L7's evidence cell and the seam-trap paragraph were updated in the same pass |
+| **2** [C, shadow] | Criterion 10's idempotence rationale still described the pre-L7, text-only package (*"ships no command … only changes four rendered sentences"*), while L7 moves an output block around writes | **FIXED, verdict kept.** `N/A` stands; the justification now states the actual invariant — L7 adds no write, no persistent state and no retry, it moves an existing output block so it runs before writes that already happen, in the order they already happen; the other four changes are text substitutions |
+
+### 3.1 Round-3 measurements — the detector in three states, and the old one failing
+
+All three trees are `git archive` copies of `8302ce8e` carrying the four-carrier
+fix; they differ only in where the record-print block sits.
+
+```text
+DETECTOR AT THE LEDGER RENAME (the fix)
+  shipped ordering (step 20)                     tests 1 / pass 0 / fail 1
+  after writeLedger, before the digest (WRONG)   tests 1 / pass 0 / fail 1
+  step 17b (specified)                           tests 1 / pass 1 / fail 0
+
+DETECTOR AT THE DIGEST RENAME (round 2's form) — the false green, reproduced
+  after writeLedger, before the digest (WRONG)   tests 1 / pass 1 / fail 0
+```
+
+The failing diagnostic in both RED states is
+`AssertionError: the announcing line was already printed:` over an output that
+carries none. **The middle row of the first block and the single row of the
+second are the whole finding**: the same wrong implementation, checked two
+different ways, and only the ledger-boundary check sees it.
+
+**Three preconditions the rehearsal had to get right, each recorded in the spec
+because each one silently weakens the test:**
+
+1. **Delegate the rename before throwing.** A patch that throws *instead* of
+   renaming tests a ledger that never became durable — a different and much
+   weaker claim.
+2. **`fs.writeFileSync` is the wrong seam.** `writeFilePrivate` writes through
+   `openSync`/`writeSync` on a randomly named temp, so the destination name only
+   ever appears at the rename. (This trap was already recorded in round 2 and
+   still applies.)
+3. **The fixture must carry no `state/watermarks.json`.** Otherwise step 4's
+   one-time migration writes the ledger first and the fault lands before
+   `promote()` has run, which would make the assertion vacuous. The rehearsal
+   asserts the precondition rather than assuming it, and the ledger rename is
+   asserted to have fired exactly once.
+
+**Unchanged:** the full suite on the step-17b tree with the new detector is
+`tests 2619 / pass 2601 / fail 6` — the same six wording pins in the same four
+files as every round since round zero. `npm run lint` with both revised
+documents: `Linting: 636 file(s)`, `0 error(s)`,
+`frontmatter check passed: 267 spec(s), 4 agent(s)`. V1/V2/V5 extracted from the
+fenced block and run on the untouched tree: `V1/V2 RED`, `rc=1`.
+
+### 3.2 What round 3 did not change
+
+- **No product behaviour, and no design.** Row L7's move, the pointer sentence,
+  Table L, Table C's six declarations, V5 and the three Q-clauses are all
+  byte-identical to round 2. Only the EVIDENCE for L7 changed, plus one stale
+  rationale sentence.
+- **No new machinery.** The detector moved seam; it did not become a second
+  test, a second declaration file or a new verification step. That is the
+  frozen-surface rule applied to a finding about the machinery itself.
+- **No acceptance criterion was weakened**, and none was renumbered: criterion 6
+  gained its third state and criterion 10 gained an honest reason.
+- **Both owner items stand untouched** in the Dispatch precondition — the
+  four surfaces' confirmation, and L5's false clearing sentence with its
+  recommendation to route to the successor. Both channels routed them as scope
+  objections and neither counted toward the verdict.
