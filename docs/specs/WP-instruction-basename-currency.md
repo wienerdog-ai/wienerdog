@@ -1,7 +1,7 @@
 ---
 id: WP-instruction-basename-currency
 title: Bring the instruction-basename denial current and give the list a maintenance obligation
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []

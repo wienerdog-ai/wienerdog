@@ -1,0 +1,35 @@
+PASS V3 --write 2026-09-04: expect green, rc=0 — V3 --write: rendered docs/instruction-file-inventory.md from docs/specs/WP-instruction-basename-currency.md at
+PASS V3 compare 2026-09-04: expect green, rc=0 — V3 OK: docs/instruction-file-inventory.md is byte-identical to the canonical rendering of docs/specs/WP-instru
+PASS V3 impossible date: expect red, rc=1 — FAIL: 2026-99-99 is not a real calendar date
+PASS V3 two dates: expect red, rc=1 — FAIL: pass exactly one date argument, got 2: ["2026-09-04","2027-01-01"]
+PASS V3 no date: expect red, rc=1 — FAIL: pass exactly one date argument, got 0: []
+PASS V3 before floor: expect red, rc=1 — FAIL: 2020-01-01 is earlier than 2026-09-04, the date this spec read its citations
+PASS V3 not a date: expect red, rc=1 — FAIL: "NOT-A-DATE" is not shaped YYYY-MM-DD
+PASS V3 doc drop QWEN row: expect red, rc=1 — FAIL: first difference at line 41, column 11
+PASS V3 doc NOT-A-DATE cells: expect red, rc=1 — FAIL: first difference at line 35, column 129
+PASS V3 doc opening removed: expect red, rc=1 — FAIL: first difference at line 1, column 2
+PASS V3 doc CRLF: expect red, rc=1 — FAIL: first difference at line 1, column 29
+PASS V3 doc heading suffix: expect red, rc=1 — FAIL: first difference at line 18, column 12
+!!FAIL V3 2027 doc vs 2027 arg: expect green, rc=1 — FAIL: first difference at line 79, column 250
+PASS V3 2027 doc vs 2026 arg: expect red, rc=1 — FAIL: first difference at line 3, column 20
+PASS V3 spec interior fence: expect red, rc=1 — FAIL: the payload carries 1 fence delimiter line(s); the first is "```"
+PASS V3 spec all @DATE@ hardcoded: expect red, rc=1 — FAIL: 9 DENY row(s) do not end in a @DATE@ Fetched cell; the first ends "claude.com/docs/en/memory | 2026-09-0
+PASS V3 spec one DENY row hardcoded: expect red, rc=1 — FAIL: 1 DENY row(s) do not end in a @DATE@ Fetched cell; the first ends "claude.com/docs/en/memory | 2026-09-0
+PASS V3 spec extra prose site: expect red, rc=1 — FAIL: 11 @DATE@ site(s) in the payload, but 10 are accounted for (1 Current-as-of + 9 DENY rows); every site m
+PASS V3 spec duplicate BEGIN sentinel: expect red, rc=1 — FAIL: sentinel <!-- BEGIN-CANONICAL-INVENTORY --> occurs 2 times in docs/specs/WP-instruction-basename-currenc
+PASS V3 done/-only --write: expect green, rc=0 — V3 --write: rendered docs/instruction-file-inventory.md from docs/specs/done/WP-instruction-basename-currency.
+PASS V3 done/-only compare: expect green, rc=0 — V3 OK: docs/instruction-file-inventory.md is byte-identical to the canonical rendering of docs/specs/done/WP-i
+PASS V3 both paths: expect red, rc=1 — FAIL: exactly one of the draft and done spec paths must exist; found 2: docs/specs/WP-instruction-basename-cur
+PASS V3 no spec: expect red, rc=1 — FAIL: exactly one of the draft and done spec paths must exist; found 0
+PASS V4 compliant step: expect green, rc=0 — V4 OK: docs/runbooks/release.md carries the canonical step body exactly once, outside any fence (525 bytes utf
+PASS V4 inside fence only: expect red, rc=1 — FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 real step + fenced example: expect green, rc=0 — V4 OK: docs/runbooks/release.md carries the canonical step body exactly once, outside any fence (525 bytes utf
+PASS V4 negated: expect red, rc=1 — FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 MUST->should: expect red, rc=1 — FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 two copies: expect red, rc=1 — FAIL: 2 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 bulleted: expect red, rc=1 — FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 indented: expect red, rc=1 — FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly
+PASS V4 unclosed fence: expect red, rc=1 — FAIL: docs/runbooks/release.md ends inside an unclosed fence
+
+31/32 cases behaved as expected; sentence bytes utf8 = 525; spec at /Users/gyulafeher/Documents/Claude_Projects/wienerdog/.claude/worktrees/agent-a8cbea386d26d784b
+PROPER 2027 ROUND-TRIP: write rc and compare rc above
