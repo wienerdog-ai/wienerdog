@@ -1,0 +1,15 @@
+# Raw gate output — Codex plugin review (native rubric, no focus text), PR #211 round 1, head deeba7a4 (base main = 1f44371d). Committed BEFORE adjudication.
+
+# Codex Review
+
+Target: branch diff against main
+
+The runtime deny-list itself matches the current inventory, but the maintenance step is ordered after publication and the required code-side invariant is not pinned by the unit suite. Lint passed; `npm test` could not execute because the read-only sandbox denied temporary-directory creation.
+
+Full review comments:
+
+- [P2] Move re-inventory before publishing — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/instruction-basename-currency/docs/runbooks/release.md:14-14
+  On a MINOR release where the sweep finds a new convention, this step runs only after the package has already been published and tagged, so the released version lacks the new denial and the required code/test update cannot be included in the same release PR. Move this step before the version commit and publish steps; the trigger and same-PR requirement are explicit in `docs/specs/WP-instruction-basename-currency.md:303-306`.
+
+- [P2] Assert the code-side basename count in the suite — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/instruction-basename-currency/tests/unit/dream-promote.test.js:381-387
+  If a future edit adds an extra or non-folded member to `INSTRUCTION_BASENAMES`, both new tests remain green because this equality assertion compares only the inventory with the hand-written array; `makeAdmit` also continues denying every expected name. The manual V2 check is not part of `npm test`, so add a persistent assertion for the code literal's exact count and NFC-lowercased members as required by `docs/specs/WP-instruction-basename-currency.md:555-558`.
