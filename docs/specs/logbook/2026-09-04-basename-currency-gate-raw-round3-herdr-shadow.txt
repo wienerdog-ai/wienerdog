@@ -1,0 +1,167 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 3, detached worktree at f070c888 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision f070c8882fea08571f7ded935dfabb1df15b468c vs main: docs/specs/WP-instruction-basename-currency.md",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch yet. The whole-artifact comparisons close the Round-2 region/token bypasses, but V3 still accepts invalid date states and malformed fenced renderings, and its canonical-source path breaks after the spec moves under docs/specs/done/.",
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-bn3.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored operating instructions and USER_FOCUS."
+    },
+    {
+      "command": "git status --porcelain && git diff --stat main...HEAD -- docs/specs/WP-instruction-basename-currency.md docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md && sed -n '1,820p' docs/specs/WP-instruction-basename-currency.md && sed -n '1,820p' docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Initial porcelain status was empty. Read both in-scope files; captured output was truncated by the command-output limit, so subsequent bounded reads completed the inspection."
+    },
+    {
+      "command": "wc -l docs/specs/WP-instruction-basename-currency.md docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md && rg -n \"Verification V3|...|```\" docs/specs/WP-instruction-basename-currency.md",
+      "exit_status": 1,
+      "result": "Shell rejected the exploratory command with 'unmatched \"' because the search expression contained a backtick fence."
+    },
+    {
+      "command": "wc -l docs/specs/WP-instruction-basename-currency.md docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md; rg -n 'Verification V3|Verification V4|BEGIN-CANONICAL|END-CANONICAL|Table [ABCD]|criterion 7|Criterion 7|Mirrored Surface|ADR-0004|size:|523|--write|@DATE@' docs/specs/WP-instruction-basename-currency.md",
+      "exit_status": 0,
+      "result": "Confirmed 737 spec lines, 636 logbook lines, and located all contracts, sentinels, criteria, and verification bodies."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-instruction-basename-currency.md | sed -n '185,470p'; nl -ba docs/specs/WP-instruction-basename-currency.md | sed -n '470,710p'",
+      "exit_status": 0,
+      "result": "Read the canonical blocks, pointer sections, mirrored-surface checklist, acceptance criteria, and V1-V6 with stable line numbers."
+    },
+    {
+      "command": "sed -n '626,660p' docs/specs/WP-instruction-basename-currency.md | sh",
+      "exit_status": 1,
+      "result": "Executed fenced V3 verbatim on the untouched tree: FAIL: missing input docs/instruction-file-inventory.md."
+    },
+    {
+      "command": "sed -n '671,686p' docs/specs/WP-instruction-basename-currency.md | sh",
+      "exit_status": 1,
+      "result": "Executed fenced V4 verbatim on the untouched tree: FAIL: 0 numbered line(s) of docs/runbooks/release.md carry the canonical step body, expected exactly 1."
+    },
+    {
+      "command": "git diff --check main...HEAD -- <two in-scope files>; rg -n 'Table A|Table B|Table C|Table D' <spec>; rg -n 'Mirrored Surface Checklist|six mirrored surfaces|five mirrored surfaces|seven mirrored surfaces' <spec>",
+      "exit_status": 0,
+      "result": "No diff-check failure. All Table A/B/C references resolve to the canonical block or explicit pointer sections; Table D and the mirrored-surface registrations remain present. The declared six mirrored surfaces remain stated."
+    },
+    {
+      "command": "rg/nl bounded reads over the logbook, contract-reference, mirrored-surface, and Round-2 sections",
+      "exit_status": 0,
+      "result": "Verified the recorded Round-1/Round-2 dispositions and the redesign claims."
+    },
+    {
+      "command": "node <<'NODE' ... in-memory checker harness ... NODE",
+      "exit_status": 1,
+      "result": "The shell could not create its temporary heredoc file: 'operation not permitted'. No harness or repository code executed and no file was written."
+    },
+    {
+      "command": "node -e '<inline memory-map harness extracting and executing the unmodified fenced V3 and V4 JavaScript bodies>'",
+      "exit_status": 0,
+      "result": "V3 results: compliant write/compare rc=0/0; duplicate sentinel rc=1; missing opener rc=1; inner closing fence write/compare rc=0/0; CRLF spec rc=1; 2026-99-99 write/compare rc=0/0; two date arguments rc=0; zero-placeholder spec write/compare rc=0/0; literal unreplaced @DATE@ document rc=1; --write silently overwrote a different existing document, rc=0. V4 results: compliant rc=0; unnumbered rc=1; bullet rc=1; indented continuation rc=1; indented numbered-looking continuation rc=1; 0. and 999. prefixes rc=0; suffix mutation rc=1; duplicate sentinel rc=1; missing opener rc=1; additional fence rc=1; CRLF spec rc=1. Reported body length was 523 JavaScript code units but 525 UTF-8 bytes."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-instruction-basename-currency.md | sed -n '688,737p'; git diff --name-status main...HEAD; git diff --unified=3 main...HEAD -- docs/specs/WP-instruction-basename-currency.md | sed -n '1,260p'",
+      "exit_status": 0,
+      "result": "Checked Definition of done and revision scope. Besides the two in-scope files, the revision adds four raw review-output logbook files."
+    },
+    {
+      "command": "node -e '<inline post-Done memory-layout execution of exact V3 body>'",
+      "exit_status": 0,
+      "result": "The simulated checker result was rc=1: FAIL: missing input docs/specs/WP-instruction-basename-currency.md. The rendered inventory contained the draft path and did not contain the done path."
+    },
+    {
+      "command": "grep -cx '<sentinels>' <spec>; awk over canonical inventory | grep counts; awk line 311 character/byte counts; rg canonical spec paths",
+      "exit_status": 0,
+      "result": "Each sentinel occurs exactly once. The rendering contains 11 @DATE@ tokens and nine DENY rows. The canonical release line is 525 UTF-8 bytes. Path references occur at lines 212, 293, 311, 628, and 673."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Final porcelain status was empty. Git emitted sandbox-related xcrun cache warnings, but the command succeeded. Status was byte-identical before and after."
+    }
+  ],
+  "findings": [
+    {
+      "title": "The regeneration source becomes unreachable when the spec enters its documented Done location",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 628,
+      "line_end": 630,
+      "materiality": "A",
+      "confidence": 1.0,
+      "body": "V3 and V4 hardcode the draft path docs/specs/WP-instruction-basename-currency.md. The shipped rendering also identifies that draft path as its regeneration source at lines 211-213. In contrast, Table C says that after completion the spec is under docs/specs/done/ at line 293, and the pinned release obligation explicitly directs maintainers to that Done path at line 311. The exact V3 body was executed in memory with only the documented Done-path spec present and failed with 'missing input docs/specs/WP-instruction-basename-currency.md'. Meanwhile, the currently compliant rendered artifact passes V3 while embedding the path that will become stale. This silently ships a broken canonical-source reference and prevents the promised future re-render workflow.",
+      "recommendation": "Make both the rendered source reference and V3/V4 resolve the lifecycle location consistently. A small option is to accept exactly one of the draft and Done paths, failing if zero or both exist; generate the inventory text with the path that will remain valid after completion."
+    },
+    {
+      "title": "V3 does not enforce its date and placeholder contract",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 631,
+      "line_end": 643,
+      "materiality": "A",
+      "confidence": 1.0,
+      "body": "The checker selects only the first non---write argument, validates only its lexical shape and lower bound, and merely checks that no @DATE@ remains after replacement. Exact-body executions proved three violating states green: 2026-99-99 was rendered and compared successfully; two supplied dates were accepted with the second silently ignored; and a canonical block with every @DATE@ hardcoded passed --write and compare even when invoked with a different pass date. The last case allows a future refresh to claim a new pass while retaining an old hardcoded date. A document that literally leaves @DATE@ unreplaced does fail, but that does not close the zero-placeholder or partial-hardcoding cases.",
+      "recommendation": "Require exactly one non-flag argument; validate it as a real calendar date with a UTC construction and round-trip; require the extracted template to contain date placeholders; and reject any rendered date-bearing value not derived from those placeholders. At minimum, reject zero placeholders and literal ISO dates in the canonical date positions."
+    },
+    {
+      "title": "An interior closing fence produces a malformed inventory that V3 writes and approves",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 637,
+      "line_end": 642,
+      "materiality": "A",
+      "confidence": 0.99,
+      "body": "V3 checks only the line immediately after BEGIN and immediately before END. It does not reject an earlier line that closes the Markdown fence. In-memory execution inserted a standalone ``` after the inventory H1; V3 --write returned rc=0 and generated a 100-line document containing that fence, and comparison also returned rc=0. This contradicts the logbook claim that a mis-extraction always fails and permits a malformed fenced canonical source to generate and certify a malformed shipped document.",
+      "recommendation": "Reject any fence-closing line inside the extracted payload before the expected final closer, using Markdown fence semantics rather than only exact equality, or adopt an extraction representation whose payload cannot terminate its own wrapper."
+    },
+    {
+      "title": "The pinned release sentence is 525 UTF-8 bytes, not 523 bytes",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 300,
+      "line_end": 311,
+      "materiality": "C",
+      "confidence": 1.0,
+      "body": "The line contains a Unicode em dash. JavaScript String.length reports 523 UTF-16 code units, which V4 labels as bytes, while Buffer.byteLength and LC_ALL=C awk both report 525 UTF-8 bytes. The equality check itself remains effective, so this is evidence/reporting drift rather than a bypass.",
+      "recommendation": "Call the value characters/code units, or report Buffer.byteLength(want, 'utf8') and update the prose/logbook from 523 to 525 bytes."
+    }
+  ],
+  "confirmed_closures": [
+    "R2-A's skeleton-less and NOT-A-DATE document attacks are closed for the unchanged current canonical template: whole-file differences fail.",
+    "R2-B's negated-token attack is closed: V4 requires exact body equality.",
+    "Duplicate or missing sentinels fail V3/V4.",
+    "A missing outer fence fails both checkers; V4 also rejects an extra/nested fence because it requires the one-line shape.",
+    "A CRLF spec fails loudly rather than mis-extracting.",
+    "An unreplaced literal @DATE@ in the shipped document fails.",
+    "V4 rejects unnumbered, bulleted, suffixed, and indented-continuation copies. A bare numeric list marker, including 0. or 999., counts as its numbered-line shape.",
+    "The untouched release runbook contains no existing exact canonical step.",
+    "V3 --write deliberately and silently replaces an existing differing generated file. Given the explicit GENERATED/never-hand-edit contract, this was not counted as a material finding.",
+    "The canonical block currently has nine DENY rows and one shared placeholder token appearing in 11 locations.",
+    "The one-date re-fetch obligation is stated in the canonical Table A/Table C text and in implementation notes; the logbook records the citations as fetched on 2026-09-04, the review date.",
+    "Table A/B/C pointer references are not dangling after the move, and the Mirrored Surface Checklist still registers Tables A-D, V3/V4, criterion 7, and the negative A/B mirror.",
+    "Table D's intended anchoring is coherent on paper: the four-name revert should redden criterion 7 reachability on a correctly completed implementation, while a shrunken baseline should fail the hand-written set equality before mutation. It could not be executed because this design revision intentionally contains no future source/test implementation.",
+    "No implementation deliverable outside the listed boundary is required. The post-Done path defect above affects maintenance after completion, not the initial listed write target.",
+    "ADR-0004 remains honest: the design adds files and a human runbook obligation, not a daemon, watcher, hook, scheduled process, or CI job. Size S remains credible."
+  ],
+  "routed_scope_objections": [
+    {
+      "subject": "Dispatch-precondition owner rulings for replit.md, AGENT.md, and role-based ownership",
+      "routing": "Owner decision; excluded by USER_FOCUS and not counted toward verdict."
+    },
+    {
+      "subject": "The 2026-08-05 list-with-residual ruling and dot-prefixed path class",
+      "routing": "Owned by prior adjudication and WP-dot-segment-denial; excluded from verdict."
+    },
+    {
+      "subject": "Source/test implementation and executable RED-proof behavior",
+      "routing": "No src/ or tests/ files change in this design revision. Only the spec's prospective design was assessed."
+    },
+    {
+      "subject": "Four added raw review-output files under docs/specs/logbook/",
+      "routing": "Present in git diff --name-status but outside the two-file review scope; not reviewed or counted."
+    }
+  ],
+  "worktree_integrity": {
+    "before_git_status_porcelain": "",
+    "after_git_status_porcelain": "",
+    "identical": true,
+    "writes": "None. All successful mutation probes used an in-memory filesystem map."
+  }
+}

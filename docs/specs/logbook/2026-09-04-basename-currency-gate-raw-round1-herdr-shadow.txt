@@ -1,0 +1,196 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 1, detached worktree at f43f6c62 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision f43f6c621e756e97c7080f2b511026dbfebb0e56 vs main: docs/specs/WP-instruction-basename-currency.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: the denial mechanics and RED-proof design are reachable, but two verification gaps allow materially incomplete documentation or maintenance obligations to appear green.",
+  "findings": [
+    {
+      "materiality": "A",
+      "title": "V1 does not verify the canonical copy and permits a synchronized subset to ship",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 464,
+      "line_end": 470,
+      "confidence": 0.99,
+      "body": "V1 claims that the new test carries criteria 1, 2, and 3, but its only document-level operations are an existence guard and an unasserted DENY-row count. The specified test parses only lines beginning exactly `| DENY |`, rejects only the zero-row case, and tests that parsed subset. V2 then compares the constant against the same parsed subset. Consequently, an implementation can omit one canonical row such as QWEN.md from the shipped inventory, omit qwen.md from the constant and explicit fixtures, and still pass the described behavioral test, V2, and the four-name RED mutation. The same gap leaves Table B, Table C, their preambles, headings, citations, and copy-exception rules entirely unchecked. This defeats the stated verbatim-copy contract and can leave a documented instruction filename promotable into the vault while all prescribed automated gates are green.",
+      "recommendation": "Add an executable verification step that compares the shipped document's Table A/B/C preambles and tables against this spec, allowing only the two date substitutions defined by criterion 1. It must reject missing or malformed rows and changed headings or cells. Do not use the inventory parser and constant as the only two mutually validating mirrors."
+    },
+    {
+      "materiality": "B",
+      "title": "V3 passes without the required owner, trigger, or numbered obligation",
+      "affected_file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 495,
+      "line_end": 497,
+      "confidence": 0.99,
+      "body": "Criterion 4 requires a numbered release step containing the inventory path, the release-maintainer owner, and the minor-version trigger. V3 checks only that the file exists and contains `instruction-file-inventory.md` anywhere. A comment, prose link, or unrelated step containing that path passes while the standing obligation is absent. The defect is review-detectable, but the declared verification itself is false-green and can recreate the stale-list failure this work package is meant to prevent.",
+      "recommendation": "Make V3 validate the complete numbered-step contract, preferably by comparing against fixed required wording or by checking one numbered item for the literal path, release-maintainer owner, minor-version trigger, citation refresh, and same-PR source/test synchronization."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "subject": "Whether AGENT.md and replit.md should be denied despite plausible ordinary-note collisions",
+      "route": "Owner ruling through the Dispatch precondition",
+      "verdict_effect": "none"
+    },
+    {
+      "subject": "Whether the maintenance owner should be a role or a named person",
+      "route": "Owner ruling through the Dispatch precondition",
+      "verdict_effect": "none"
+    },
+    {
+      "subject": "The list-with-named-residual design and user-configured or undocumented filenames",
+      "route": "Accepted 2026-08-05 owner ruling",
+      "verdict_effect": "none"
+    },
+    {
+      "subject": "Dot-prefixed path classes and their validators",
+      "route": "WP-dot-segment-denial",
+      "verdict_effect": "none"
+    }
+  ],
+  "review_checks": {
+    "reachability": "PASS. All nine Table A stored spellings are ASCII, NFC, and lowercase. `foldedSegments` applies NFC plus lowercase before the Set lookup, so every proposed member is reachable across the specified case variants and depths. The current four names were refused and the five intended additions were admitted, matching the expected RED baseline.",
+    "copy_boundary_content": "PASS as prose. The copied preambles and tables contain no remaining transitional sentence or unresolved spec-only reference. The material problem is that no verification enforces this boundary.",
+    "parser_shape": "FAIL as discrimination. Exact `| DENY |` prefixes and second-cell parsing are documented, and zero rows must fail, but any nonzero subset can be accepted when the code and fixtures shrink with it.",
+    "red_proof": "PASS by analysis; V4 was not executed as directed. The runner requires `failureType=testCodeFailure` and `code=ERR_ASSERTION`. A direct probe confirmed that `assert.match(null, /is a harness instruction file/)` throws `AssertionError` with `ERR_ASSERTION`. Reverting the completed Set to four names therefore can redden the new behavioral test as an assertion failure, and `testNamePattern` can scope away the two other extended tests if desired.",
+    "table_b_completeness": "No defensible missing bare-path convention found. Current official Zed and Cline documentation enumerates names already represented by Tables A/B. Official OpenAI documentation confirms Codex's fixed project names are AGENTS.override.md and AGENTS.md, while additional fallback names are user-configured and therefore covered by the named residual: [OpenAI Docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [Zed instructions](https://zed.dev/docs/ai/instructions), [Cline rules](https://docs.cline.bot/customization/cline-rules). The openai-docs skill governed the Codex-source check.",
+    "deliverables_boundary": "PASS. The implementer needs only the five listed deliverables plus the always-allowed spec status flip. `scripts/red-proofs.js`, package.json, tests/run.js, CI, and docs/GLOSSARY.md require no edit.",
+    "adr_0004": "PASS. The inventory and release obligation are static files and a human runbook step; nothing watches, polls, schedules, or persists.",
+    "size": "PASS. Size S and the one Set statement plus one JSDoc block restriction are credible for the bounded implementation."
+  },
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../focus-bn1.txt",
+      "exit_statuses": {
+        "prompt": 0,
+        "focus": 0
+      }
+    },
+    {
+      "command": "git status --porcelain; git diff main...HEAD --stat; git diff --no-ext-diff --unified=80 main...HEAD -- docs/specs/WP-instruction-basename-currency.md docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md",
+      "exit_statuses": {
+        "status": 0,
+        "stat": 0,
+        "diff": 0
+      },
+      "output_note": "Diff stat: 2 files changed, 895 insertions, 84 deletions."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-instruction-basename-currency.md | sed -n '1,190p'; sed -n '191,380p'; sed -n '381,620p'",
+      "exit_statuses": {
+        "chunk_1": 0,
+        "chunk_2": 0,
+        "chunk_3": 0
+      }
+    },
+    {
+      "command": "nl -ba docs/specs/WP-instruction-basename-currency.md | sed -n '238,337p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md | sed -n '1,190p'; sed -n '191,400p'",
+      "exit_statuses": {
+        "chunk_1": 0,
+        "chunk_2": 0
+      }
+    },
+    {
+      "command": "Read src/core/dream/promote.js, tests/unit/dream-promote.test.js, docs/runbooks/release.md with nl/sed; rg relevant symbols in package.json, scripts/red-proofs.js, tests/red-proofs, and the unit test",
+      "exit_statuses": {
+        "promote": 0,
+        "test": 0,
+        "release": 0,
+        "rg": 0
+      }
+    },
+    {
+      "command": "rg --files tests/red-proofs; read tests/red-proofs/*.proofs.json; rg RED-proof schema and phase terms in scripts/red-proofs.js",
+      "exit_statuses": {
+        "files": 0,
+        "declarations": 0,
+        "rg": 0
+      }
+    },
+    {
+      "command": "Read scripts/red-proofs.js lines 1-82, 460-730, 1535-1685, and 1730-1830",
+      "exit_statuses": {
+        "header": 0,
+        "schema": 0,
+        "phases": 0,
+        "run": 0
+      }
+    },
+    {
+      "command": "V1 exactly: test -f docs/instruction-file-inventory.md || { echo \"MISSING DELIVERABLE: docs/instruction-file-inventory.md\"; exit 1; }; grep -c '^| DENY |' docs/instruction-file-inventory.md; npm test",
+      "exit_status": 1,
+      "output": "MISSING DELIVERABLE: docs/instruction-file-inventory.md",
+      "assessment": "RED for the intended absent-deliverable reason. npm test was correctly short-circuited."
+    },
+    {
+      "command": "V2 exactly: the node -e block from spec lines 478-493",
+      "exit_status": 1,
+      "output": "FAIL: missing input docs/instruction-file-inventory.md",
+      "assessment": "RED for the intended absent-input reason."
+    },
+    {
+      "command": "V3 exactly: test -f docs/runbooks/release.md && grep -n 'instruction-file-inventory\\.md' docs/runbooks/release.md",
+      "exit_status": 1,
+      "output": "",
+      "assessment": "RED because the obligation is not present."
+    },
+    {
+      "command": "Node assertion-shape probe for assert.match(null, /is a harness instruction file/) and NFC/lowercase mapping of all nine Table A names",
+      "exit_statuses": {
+        "assertion_shape": 0,
+        "fold_table": 0
+      },
+      "output": "AssertionError, code ERR_ASSERTION; all nine stored forms were NFC-lowercase."
+    },
+    {
+      "command": "Attempted node heredoc synchronized-subset probe using an OS-temp fixture",
+      "exit_status": 1,
+      "output": "zsh: can't create temp file for here document: operation not permitted",
+      "assessment": "The shell failed before Node or the fixture ran; no repository or fixture write occurred."
+    },
+    {
+      "command": "node -e OS-temp mkdtemp capability probe",
+      "exit_status": 1,
+      "output": "EPERM creating the mkdtemp directory",
+      "assessment": "The sandbox denies even OS-temp writes. No further mutation fixture was attempted."
+    },
+    {
+      "command": "sed -n '1,320p' /Users/gyulafeher/.codex-review-home/skills/.system/openai-docs/SKILL.md",
+      "exit_status": 0
+    },
+    {
+      "command": "Read-only Node parse/reachability check over all Table A rows using production makeAdmit(defaultLayout())",
+      "exit_status": 0,
+      "output": "Parsed 9 rows; all stored spellings matched NFC-lowercase. Current code refused CLAUDE.md, CLAUDE.local.md, AGENTS.md, and AGENTS.override.md; it admitted AGENT.md, GEMINI.md, QWEN.md, WARP.md, and replit.md."
+    },
+    {
+      "command": "Final git status --porcelain; git rev-parse HEAD; git rev-parse main; git merge-base main HEAD",
+      "exit_statuses": {
+        "status": 0,
+        "revisions": 0
+      },
+      "output": "Status output remained empty. HEAD=f43f6c621e756e97c7080f2b511026dbfebb0e56; main=dab3c3e437d7d591b36264318d155de5ce95741c; merge-base=705ae2865a864ae152c698b8b8184aa906c3cc7c."
+    }
+  ],
+  "external_lookups": [
+    {
+      "operation": "Web searches for current bare project-instruction filename conventions",
+      "status": "completed; web operations expose no Unix exit status"
+    },
+    {
+      "operation": "Opened current official Zed, Cline, Roo Code, Devin, and OpenAI documentation",
+      "status": "completed; web operations expose no Unix exit status"
+    }
+  ],
+  "repository_integrity": {
+    "before_git_status_porcelain": "",
+    "after_git_status_porcelain": "",
+    "identical": true,
+    "writes_to_worktree": false,
+    "v4_executed": false
+  }
+}
