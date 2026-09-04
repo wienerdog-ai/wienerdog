@@ -1,0 +1,160 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 2, detached worktree at 82506ab6 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 82506ab618f25a95b643bd7593246ed4d4a06702 vs main: docs/specs/WP-dot-segment-denial.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: all ten Table E rows and the RED-proof partition are coherent, but V2 still gives a perfect score to a cheap bounded-length implementation that violates the class property at B1, B2, and B3. The work should remain one atomic WP, but the spec also exceeds the repository's contract-only authoring boundary.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && printf '\\n===FOCUS===\\n' && sed -n '1,260p' ../focus-ds2.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain && git diff --stat main -- <two in-scope documents> && git diff --unified=80 main -- <two in-scope documents>",
+      "exit_status": 0,
+      "result": "Initial porcelain status was empty; diff reported 1584 insertions and 77 deletions across the two requested documents."
+    },
+    {
+      "command": "rg -n '<headings and contract/oracle terms>' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '<complete file in four ranges>'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '240,460p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '459,692p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/layout.js; nl -ba src/core/layout-infer.js; nl -ba src/core/frontmatter.js | sed -n '1,180p'; nl -ba src/core/dream/promote.js | sed -n '80,300p'; nl -ba src/core/dream/promote.js | sed -n '1000,1080p'",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '810,916p' docs/specs/WP-dot-segment-denial.md | bash",
+      "exit_status": 1,
+      "result": "The literal V2 began but the sandbox denied fs.mkdtempSync with EPERM."
+    },
+    {
+      "command": "rg -n '<vault-write path-resolution terms>' src/core/dream/vault-write.js src/core/dream -g '*.js'; nl -ba src/core/dream/vault-write.js | sed -n '1,280p'; nl -ba tests/unit/dream-promote.test.js | sed -n '1900,1975p'; nl -ba scripts/red-proofs.js | sed -n '1,320p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/vault-write.js | sed -n '100,370p'; nl -ba tests/unit/dream-promote.test.js | sed -n '1910,1970p'; rg -n '<evaluateRed/rollUp terms>' scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1540,1715p'; nl -ba scripts/red-proofs.js | sed -n '2100,2185p'; nl -ba tests/run.js | sed -n '1,180p'; rg -n 'adopt-e2e|dot-segment' tests/run.js package.json",
+      "exit_status": 1,
+      "result": "The reads succeeded; the final rg had no matches."
+    },
+    {
+      "command": "sed -n '1,320p' docs/runbooks/spec-authoring.md; sed -n '<initial guessed template/ADR paths>'; sed -n '1,300p' scripts/boundary-check.js",
+      "exit_status": 0,
+      "result": "The guessed template/ADR paths produced ENOENT diagnostics; the final boundary-check read succeeded."
+    },
+    {
+      "command": "rg --files docs/adr docs/specs | rg '(^docs/specs/_TEMPLATE\\.md$|0004|0031|0036)'",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,280p' docs/specs/_TEMPLATE.md; sed -n '1,300p' docs/adr/0031-contract-reference-tables-single-source.md; sed -n '1,300p' docs/adr/0036-mechanism-cell-schema-for-contract-tables.md; sed -n '1,220p' docs/adr/0004-no-daemon-invariant.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-04-dot-segment-denial-design-gate-rounds.md | sed -n '<complete file in three ranges>'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'bounded-length|bounded|finite matcher|shape|class proof|wrong implementation|fit' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '692,762p'",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '808,818p' docs/specs/WP-dot-segment-denial.md; sed -n '908,920p' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "node <<'NODE' <in-memory V2 harness> NODE",
+      "exit_status": 1,
+      "result": "zsh could not create its temporary here-document file; no worktree write occurred."
+    },
+    {
+      "command": "printf %s '<base64 in-memory V2 harness>' | base64 -d | node",
+      "exit_status": 1,
+      "result": "First subprocess attempt failed with SyntaxError because the extracted block redeclared fs in the same VM scope."
+    },
+    {
+      "command": "printf %s '<corrected base64 in-memory exact-V2 harness>' | base64 -d | node",
+      "exit_status": 1,
+      "result": "Exact untouched-tree result: admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 36/87 | boundary 16/34; 621 of 686 wrong. This matches the required baseline exactly."
+    },
+    {
+      "command": "printf %s '<base64 in-memory length-capped mutant plus exact extracted V2>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "Mutant result: admit 312/312 | reader 234/234 | producer 7/7 | over 12/12 | handoff 87/87 | boundary 34/34; V2 OK. Direct attacks showed B1 returned null, B2 returned .abcdefghijklmnop unchanged, and B3 emitted .abcdefghijklmnopprojects."
+    },
+    {
+      "command": "git rev-parse HEAD main; git diff --name-only main HEAD; node scripts/boundary-check.js docs/specs/WP-dot-segment-denial.md $(git diff --name-only main HEAD); wc -l <two in-scope documents>; git status --porcelain",
+      "exit_status": 0,
+      "result": "HEAD 82506ab6; main 29c61d03. Boundary check passed. Spec is 1014 lines and logbook is 581 lines. Porcelain status remained empty. Two additional changed raw-review records were under docs/specs/logbook/ and therefore boundary-allowed but out of review scope."
+    },
+    {
+      "command": "node -e \"<path.join/path.relative and vault-write splitRel-equivalent leading-space probe>\"",
+      "exit_status": 0,
+      "result": "01-Projects/x/ .hi/b.md preserved the leading-space segment through resolution and satisfied the primitive's segment rules."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Final porcelain status was empty, identical to the initial state. Git printed only sandbox-related xcrun cache warnings."
+    }
+  ],
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "A simple length-capped predicate passes all three V2 oracles while leaving the class open",
+      "affected_file": "docs/specs/WP-dot-segment-denial.md",
+      "line_start": 823,
+      "line_end": 827,
+      "confidence": 1.0,
+      "body": "The held-out generator produces opaque dot segments only 5–8 characters long and keyword-bearing producer values no longer than 16 characters. Table D and Table E also contain no refusing dot segment longer than 16. I compiled the intended source changes entirely in memory but used `seg.startsWith('.') && seg.length <= 16` at both decision sites, then ran the exact extracted V2 body. It scored 686/686 and exited 0. Nevertheless, `.abcdefghijklmnop` was admitted by makeAdmit and honored by readVaultLayout, while `.abcdefghijklmnopprojects` was emitted by inferLayout. This violates criterion 1's universal class property at every enforcement point. The residual at lines 509–518 acknowledges an enumerator fitted to the whole union, but this attack is materially cheaper: one length conjunct exploits the generator's fixed range and passes every oracle.",
+      "impact": "A wrong implementation ships with a perfect verification result while long dot-prefixed control directories remain writable, configurable, and producer-emittable.",
+      "recommendation": "Vary generated segment lengths per seed across the realistic filename domain and add a fixed long dot-prefixed refusal at B1, B2, and B3. Also add a dot-plus-non-ASCII refusal such as `.éclair` so an ASCII-only dot predicate cannot exploit the same homogeneous refusal family. Re-run V2 against the length-capped mutant and require it to fail."
+    },
+    {
+      "materiality_band": "C",
+      "title": "The 1014-line WP crosses the repository's contract-only spec boundary",
+      "affected_file": "docs/specs/WP-dot-segment-denial.md",
+      "line_start": 221,
+      "line_end": 227,
+      "confidence": 0.99,
+      "body": "The mandatory spec-authoring rules say a spec states observable contracts and never prescribes test designs, fixture shapes, mutation lists, or code structure because doing so duplicates an implementer's surface. These Deliverables prescribe exact loop placement, exact counts of comment edits and source clauses, exact test titles and test count, literal fixture arrays, assertion-message markers, and mutation structure; later sections reproduce executable test machinery. This is a repository-process violation with concrete drift cost, not formatting feedback. The 1014-line size reflects duplicated implementation mechanics even though the actual product edit is small.",
+      "impact": "The implementation and its verification become coupled to a second, manually synchronized implementation in prose, increasing false failures and contract drift during delivery and review.",
+      "recommendation": "Keep B1 and B2/B3 in one atomic WP because half-landing either side leaves the security invariant open. Do not split at that seam. Instead, prune the document to the observable class rule, fallback/refusal behavior, atomic deliverables, and acceptance outcomes; leave exact test structure, fixtures, mutation replacements, assertion strings, and executable V2 implementation to the implementer and implementation review."
+    }
+  ],
+  "focused_assessments": {
+    "table_e": "All ten rows encode the correct result for their stated point. E1's `.` and `..` candidates cannot reach makeAdmit through writeIntoVault because the primitive rejects them as caller-contract violations, but makeAdmit's directly tested class contract still correctly refuses them with A6 when invoked directly. E4's leading-space paths are legal; E7 and E9 differ for stated, real trim sites. The Unicode look-alikes remain legal under NFC. No row silently requires a different verdict between B1, B2, and B3.",
+    "whitespace": "A leading-space segment can reach makeAdmit. splitRel rejects only empty, `.`, `..`, and backslash-bearing segments; path joining and path.relative preserve ` .hi`. The primitive therefore permits the write when policy admits it. Table E's legal B1 verdict commits the implementation to behavior the real vault-write primitive supports. Whole-value config whitespace is stripped before B2, while inferred names are trimmed before B3, exactly explaining E7 and E9.",
+    "red_proofs": "The identity partition is coherent. C1 should fail exactly T1, T2, and T3; C2 exactly T4 and T5. T6 is in the declared unit suite and runs under both mutations, but remains green because both mutations only admit more. The adopt-e2e integration test is in a different file and is not selected: runSuite passes the declaration's exact suite path after `--`. evaluateRed requires testCodeFailure, ERR_ASSERTION, the declared signal in the diagnostic, and rejects every undeclared own-body failure. Requiring every assertion to carry its band's marker is compatible with that matcher. Both proofs using criterion `1` produce one rollUp line for their shared `(wp, criterion)` pair naming both ids.",
+    "report_fallback": "E5 restores the removed values' reader-side coverage in the required new suite by asserting fallback rather than the formerly honored value. The retained Row Z3 comment remains factually true for an in-memory layout object, although after the case removal it no longer describes an exercised branch and `admits` becomes constant true, as the spec already records for Discovered issues.",
+    "v2_untouched": "The literal fenced command could not allocate OS temporary directories under this sandbox. Running its exact extracted body against an in-memory filesystem produced the required result: admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 36/87 | boundary 16/34, exit 1.",
+    "deliverables_boundary_adr_size": "The current revision changes the requested spec plus logbook records; scripts/boundary-check.js accepts them. No daemon, watcher, server, telemetry, or persistent process is introduced, so ADR-0004 is satisfied. The source change remains naturally atomic and small enough for one implementation session; splitting at B1/B2-B3 would create exactly the unsafe half-landings the design identifies. The corrective action for the 1014-line growth is pruning implementation mechanics, not splitting the security invariant."
+  },
+  "routed_scope_objections": [],
+  "scope_routing": "The silent-fallback owner decision, the 2026-08-05 class ruling, basename-list policy, NFKC normalization, adjudicated round-1 dispositions, implementation changes, the two raw round-1 log files, and all files other than the two named review documents were not counted toward the verdict. Source and runner files were read only as evidence explicitly requested by USER_FOCUS; no finding is filed against them.",
+  "integrity": {
+    "worktree_modified": false,
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "temporary_writes": "The sandbox denied OS-temp writes. Successful behavioral probes used an in-memory virtual filesystem and in-memory module compilation only."
+  }
+}
