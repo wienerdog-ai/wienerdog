@@ -1,0 +1,13 @@
+# Raw gate output — Codex plugin review (native rubric), PR #215 round 3 (closing confirmation), head 84d8da14 (base main = 5fa23ea5). Committed BEFORE adjudication.
+
+# Codex Review
+
+Target: branch diff against main
+
+The production changes consistently deny U+002E-prefixed segments at promotion, layout reading, and layout inference while preserving existing refusal precedence and fallback behavior. The changed files also conform to the work-package boundary and its explicit contracts.
+
+---- orchestrator's mechanical checks on a git-archive copy of 84d8da14 ----
+new suite: pass 6 / fail 0; adopt-e2e with claude absent from PATH: pass 6 / fail 0
+C1 (dot-segment-admit-reverted, find occurs once): not ok 1,2,3 = exactly T1,T2,T3; pass 3 / fail 3
+C2 (dot-segment-layout-reverted, find occurs once): not ok 4,5 = exactly T4,T5; pass 4 / fail 2
+both reverted: the adopt round-trip test fails on conjunct 1 — persisted projects_dir must fall back to the built-in default, got ".projects"
