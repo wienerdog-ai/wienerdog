@@ -221,8 +221,8 @@ and both of its ends were resolved mechanically at round zero.
 | modify | src/core/dream/promote.js | **ONE new loop inside `makeAdmit`, plus THREE comment edits, nothing else.** The loop applies **Table A** to every segment of the candidate path and returns **Table A row A6's refusal string verbatim**; it sits where **row A5** puts it. **(i)** The JSDoc's clause-(c) sentence gains the class rule — clause (c) is where it belongs in a conjunction the JSDoc states unordered, even though row **A5** puts the check itself last — and the loop carries a one-line comment saying why it is last. **(ii)** The *"Deliberately NOT a dot-rule"* paragraph (`:228-229`) is **replaced** by one recording that this work package discharged it — a dangling deferral to a finding this diff closes is a defect, not a leftover. **(iii)** The **row-Z2 comment above the `reportRel` derivation** (`:1045-1057`) states a split of obligations this work package moves and a measurement it falsifies — see Implementation notes; correct both, and **do not touch the `reportRel` derivation itself**, whose `.`-and-empty filter is row Z1's and stays. **This cell owns what stays unchanged in this file:** `INSTRUCTION_BASENAMES`, `DENIED_SEGMENTS`, `DENIED_BASENAME`, `EXTRA_TIER_DIRS`, `fold`, `foldedSegments`, `isUnder`, `admittedDirs`, the order of the existing clause-(c) checks, **every existing refusal string**, and the module's exports (**Table A row A9**) |
 | modify | src/core/layout.js | **ONE new clause inside `isSafeRelativePath`, one JSDoc sentence, one export.** The clause applies **Table A**; the export adds `isSafeRelativePath` to the existing `module.exports` object and changes no other name in it (**Table A row A8**). **This cell owns what stays unchanged:** `LAYOUT_KEYS`, `defaultLayout`, `cleanValue`, `readVaultLayout`'s parser **and its per-key silent fallback** (**Table A row A7**), `resolveDailyPath`, `layoutPromptLines` |
 | modify | src/core/layout-infer.js | **DELETE the copied `isSafeRelativePath` — its JSDoc and its body, `:33-46` — and require the shared one** from `./layout` alongside `defaultLayout` (**Table A row A8**). The hygiene loop's call site is **unchanged**: it already calls `isSafeRelativePath` on every emitted value. **This cell owns what stays unchanged:** `dirExists`, `topLevelDirs`, `pick`, `probeDailyFilename`, `inferLayout`'s selection logic and its `reports_dir` special case, and the module's exports |
-| create | tests/unit/dot-segment-denial.test.js | **The class proof, and the only new test file.** It carries acceptance criteria **1, 2 and 3** — the held-out grading at all three enforcement points, the no-over-denial set, and **Table D's 29 paths as a hand-written literal array in this file** with each path's expected refusal reason. It is the `suite` both RED proofs name (**Table C**). It reads no document under `docs/` and derives no expected value from one |
-| modify | tests/unit/dream-promote.test.js | **ONE site: the case list of the test at `:1923-1960`.** Remove exactly the three values `readVaultLayout` can no longer return unchanged — `.`, `./reports`, `reports/./dreams` — leaving `reports/dreams/` and `reports//dreams`. **Change nothing else in this file**, including that test's title, its `admits` branch and the comment explaining row Z3's residual: the branch's condition becomes constant-true, which is a fact to report under "Discovered issues", not to refactor |
+| create | tests/unit/dot-segment-denial.test.js | **The class proof, and the only new test file.** It carries acceptance criteria **1, 2, 3 and 6** as **exactly the six top-level tests Table C names, with those titles** — the titles are part of the contract because the RED proofs declare failing identities by name and `expectRed` is an equality. Its three oracles: the seeded held-out family, **Table D's 29 paths as a hand-written literal array**, and **Table E's boundary matrix as a second hand-written literal**. Every assertion carries its test's band marker (Table C) so each declaration's `signal` is a fixed string. It reads no document under `docs/` and derives no expected value from one |
+| modify | tests/unit/dream-promote.test.js | **ONE site: the case list of the test at `:1923-1960`.** Remove exactly the three values `readVaultLayout` can no longer return unchanged — `.`, `./reports`, `reports/./dreams` — leaving `reports/dreams/` and `reports//dreams`. **Change nothing else in this file**, including that test's title, its `admits` branch and the comment explaining row Z3's residual: the branch's condition becomes constant-true, which is a fact to report under "Discovered issues", not to refactor. **The three removed values do not lose their reader-side coverage** — they return as **Table E row E5**, asserted as a FALLBACK in the new suite |
 | modify | tests/integration/adopt-e2e.test.js | **ONE new test: the `adopt --yes` round trip** (acceptance criterion **4**), built on the setup the existing test in this file already performs (temp `HOME`/`WIENERDOG_HOME`, `WIENERDOG_LOADER_NOOP=1` to neutralise the OS scheduler, `init.run(['--yes'])`, then `adopt.run([vault, '--yes'])`). Its vault is its own temp directory containing a dot-prefixed tier candidate; the shared `POWERUSER_FIXTURE` is **not** modified. **This cell owns what stays unchanged:** the existing test, its assertions and the file's fixtures and helpers |
 | create | tests/red-proofs/dot-segment-denial.proofs.json | The RED-proof declarations, per **Table C** — **two proofs, one per independently revertible source change**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dot-segment-denial.test.js` |
 
@@ -338,24 +338,59 @@ scores inverted (`makeAdmit 312/312`, `readVaultLayout 0/234`,
 
 | # | Enforcement point | Where the rule sits | What a violation produces | Measured on the untouched tree | Proved by |
 |---|---|---|---|---|---|
-| **B1** | **The promotion allowlist** — `makeAdmit`'s clause (c), applied by `writeIntoVault` to the **resolved** path | the segment loop of "Exact contracts", positioned by row **A5** | the refusal string of row **A6**; the path appears in the dream run's refusals and nothing is written | 17 of Table D's 29 paths **ADMITTED**; `.GiThUb/…` admitted; the real `writeIntoVault` **wrote** `01-Projects/example/.github/copilot-instructions.md` | criteria **1, 2, 3**; V1, V2; RED proof **C1** |
-| **B2** | **The reader** — `readVaultLayout` via `isSafeRelativePath` | the clause of "Exact contracts", after the existing `..` clause | row **A7**'s per-key silent fallback | `projects_dir: .git`, `identity_dir: .GiThUb`, `skills_dir: .`, `inbox_dir: a/.b` all returned **unchanged**, and `makeAdmit` on that layout admitted `.git/hooks/note.md` | criteria **1, 2, 4**; V1, V2; RED proof **C2** |
-| **B3** | **The producer** — `inferLayout`, reached by `wienerdog adopt --yes` | the **same** function as B2, through the hygiene loop's existing call site (row **A8**) | the emitted key falls back to its built-in default **before** `adopt` renders the block, so nothing dot-prefixed is ever persisted | `inferLayout` on a vault holding `.projects/` emitted `projects_dir: ".projects"`, and the rendered block round-tripped that value through `readVaultLayout` unchanged | criteria **1, 4**; V1, V2; RED proof **C2** |
+| **B1** | **The promotion allowlist** — `makeAdmit`'s clause (c), applied by `writeIntoVault` to the **resolved** path | the segment loop of "Exact contracts", positioned by row **A5** | the refusal string of row **A6**; the path appears in the dream run's refusals and nothing is written | 17 of Table D's 29 paths **ADMITTED**; `.GiThUb/…` admitted; the real `writeIntoVault` **wrote** `01-Projects/example/.github/copilot-instructions.md` | criteria **1, 2, 3, 6**; V1, V2; RED proofs **C1** (identities T1-T3) |
+| **B2** | **The reader** — `readVaultLayout` via `isSafeRelativePath` | the clause of "Exact contracts", after the existing `..` clause | row **A7**'s per-key silent fallback | `projects_dir: .git`, `identity_dir: .GiThUb`, `skills_dir: .`, `inbox_dir: a/.b` all returned **unchanged**, and `makeAdmit` on that layout admitted `.git/hooks/note.md` | criteria **1, 2, 4, 6**; V1, V2; RED proof **C2** (identities T4-T5) |
+| **B3** | **The producer** — `inferLayout`, reached by `wienerdog adopt --yes` | the **same** function as B2, through the hygiene loop's existing call site (row **A8**) | the emitted key falls back to its built-in default **before** `adopt` renders the block, so nothing dot-prefixed is ever persisted | `inferLayout` on a vault holding `.projects/` emitted `projects_dir: ".projects"`, and the rendered block round-tripped that value through `readVaultLayout` unchanged | criteria **1, 4, 6**; V1, V2; RED proof **C2** (identities T4-T5) |
 
 ### Table C — canonical: the two RED-proof mutations (ADR-0036)
 
 One declaration file, `suite` = `tests/unit/dot-segment-denial.test.js`, two
-proofs. `find` / `replace` / `marker` / `occurrences` / `expectRed` are the
-implementer's to author against the finished files; these rows decide what each
-mutation **is**. **Two rows and not one because the two edits are independently
-revertible** (ADR-0036 A3) — measured above in Table B's preamble: reverting
-either left the other point fully green, so a single conjoined row could be red
-because of the half nobody was testing.
+proofs, both with `wp: WP-dot-segment-denial` and `criterion: 1` — so the run
+reports **one** roll-up line for that pair naming both ids. `find` / `replace` /
+`marker` / `occurrences` are the implementer's to author against the finished
+files; these rows decide what each mutation **is**, and the identity contract
+below decides what each must declare. **Two rows and not one because the two
+edits are independently revertible** (ADR-0036 A3) — measured in Table B's
+preamble: reverting either left the other point fully green, so a single
+conjoined row could be red because of the half nobody was testing.
+
+**THE SUITE'S TEST IDENTITIES ARE PART OF THIS CONTRACT, because `expectRed` is
+an EQUALITY.** `scripts/red-proofs.js`'s `evaluateRed` requires the observed
+own-body failing set to **equal** the declared set: an undeclared own-body
+failure fails the proof even when the implementation is correct, and a declared
+identity that does not fail fails it too. So the suite carries **exactly these
+six top-level tests**, partitioned by enforcement point so that each mutation's
+failure set is exactly determined:
+
+| # | test identity (the `test` value in `expectRed`) | carries | reddened by |
+|---|---|---|---|
+| **T1** | `dot-segment-denial B1: held-out segments are refused by makeAdmit at every position and depth` | criterion 1, point B1 | **C1** |
+| **T2** | `dot-segment-denial B1: the boundary matrix — the U+002E first-character rule at makeAdmit` | criterion 6, rows E1–E4 | **C1** |
+| **T3** | `dot-segment-denial B1: the handoff oracle — Table D's 29 paths, hand-written` | criterion 3 | **C1** |
+| **T4** | `dot-segment-denial B2/B3: held-out segments are refused by readVaultLayout and never emitted by inferLayout` | criterion 1, points B2 and B3 | **C2** |
+| **T5** | `dot-segment-denial B2/B3: the boundary matrix — the U+002E first-character rule at both layout validators` | criterion 6, rows E5–E10 | **C2** |
+| **T6** | `dot-segment-denial: no over-denial — dot-free paths and layout values stay admitted and honoured` | criterion 2 | **neither** |
+
+**Why the boundary matrix is TWO tests and not one:** it spans all three
+enforcement points, and a single identity would fail under **both** mutations, so
+each declaration would have to list the other's surface and neither failure set
+would be attributable. Split at the B1 / B2-B3 seam, each mutation's set is a
+partition. **Why T6 is in neither list:** both mutations only ever *admit* more,
+so the over-denial test stays green under both — which is also what stops a
+mutation from being credited for reddening the whole suite. Measured: C1's
+mutant scored `boundary 27/34` (the seven B1 rows) with the layout points green;
+C2's scored `boundary 23/34` (the eleven B2/B3 rows) with B1 green.
+
+**The `signal` for each identity** is a stable substring of that test's own
+assertion messages, so every assertion in a test carries its identity's band
+marker verbatim: `B1 held-out`, `B1 boundary`, `B1 handoff`, `B2/B3 held-out`,
+`B2/B3 boundary`, `no over-denial`. Without a fixed marker the declaration's
+`signal` is a guess about a message the implementer has not written yet.
 
 | id | criterion | mechanism — TRIGGER and PATCH | what must redden, and why this mutant |
 |---|---|---|---|
-| **C1** `dot-segment-admit-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `makeAdmit` directly, so nothing must be injected to reach the segment loop; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: delete the segment loop from `makeAdmit`, leaving `DENIED_SEGMENTS` as the module's only segment rule** — which is **byte-for-byte the shipped production enumeration**. The seam is named structurally, by the loop inside the `makeAdmit` declaration, never by a line number (ADR-0036 A2) | the **held-out** assertions for enforcement point **B1**. **Measured on this base:** the shipped enumeration **scores 0 of 312** graded held-out cases at B1 — it admits every one of them — while B2 and B3 stay green, so the mutant fails the class grading in exactly one point. **An enumeration of the segments the proof itself names would NOT be a valid mutant**: it agrees with the predicate on every value it is graded against. Measured, and this is the row's whole point — an **18-name matcher fitted to the dot segments of Table D's paths** satisfies the hand-written oracle **87 of 87** and still scores **0 of 312** on the held-out grading |
-| **C2** `dot-segment-layout-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `readVaultLayout` and `inferLayout` directly. **PATCH: delete the dot clause from `isSafeRelativePath`**, leaving the shipped validator — whose segment enumeration is the **empty set**. Structurally named by the clause inside that function's declaration | the **held-out** assertions for enforcement points **B2** and **B3**, and only those. **Measured:** with this clause absent the grading scores `readVaultLayout 0/234` and `inferLayout 1/7` while `makeAdmit` stays `312/312`. One mutation, one independently revertible change: deleting this clause neither requires nor implies the C1 edit |
+| **C1** `dot-segment-admit-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `makeAdmit` directly, so nothing must be injected to reach the segment loop; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: delete the segment loop from `makeAdmit`, leaving `DENIED_SEGMENTS` as the module's only segment rule** — which is **byte-for-byte the shipped production enumeration**. The seam is named structurally, by the loop inside the `makeAdmit` declaration, never by a line number (ADR-0036 A2) | **`expectRed` MUST list T1, T2 and T3 — all three, and nothing else.** Deleting the loop reddens the held-out B1 assertions, the B1 boundary rows AND all 17 formerly admitted Table D paths at three depths; declaring only the held-out test makes a CORRECT implementation fail the proof on an undeclared own-body failure. Measured under this mutation: `admit 0/312`, `handoff 36/87`, `boundary 27/34`, both layout points green — three reddened identities, T6 green. Beyond that: **Measured on this base:** the shipped enumeration **scores 0 of 312** graded held-out cases at B1 — it admits every one of them — while B2 and B3 stay green, so the mutant fails the class grading in exactly one point. **An enumeration of the segments the proof itself names would NOT be a valid mutant**: it agrees with the predicate on every value it is graded against. Measured, and this is the row's whole point — an **18-name matcher fitted to the dot segments of Table D's paths** satisfies the hand-written oracle **87 of 87** and still scores **0 of 312** on the held-out grading |
+| **C2** `dot-segment-layout-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `readVaultLayout` and `inferLayout` directly. **PATCH: delete the dot clause from `isSafeRelativePath`**, leaving the shipped validator — whose segment enumeration is the **empty set**. Structurally named by the clause inside that function's declaration | **`expectRed` MUST list T4 and T5, and nothing else.** Deleting the clause reddens the B2/B3 held-out assertions and the B2/B3 boundary rows — including E5's three fallback assertions, which are the report-fallback test's removed values. Measured: `reader 0/234`, `producer 1/7`, `boundary 23/34`, B1 and T6 green. Beyond that: **Measured:** with this clause absent the grading scores `readVaultLayout 0/234` and `inferLayout 1/7` while `makeAdmit` stays `312/312`. One mutation, one independently revertible change: deleting this clause neither requires nor implies the C1 edit |
 
 ### Table D — canonical: the handoff closure oracle, hand-transcribed
 
@@ -421,6 +456,67 @@ tree the whole table scores 36 of 87 cases wrong** — the 12 already-refused ro
 already match their expected reason at all three depths, and the 17 admitted ones
 (51 cases) do not; on a scratch copy carrying the two edits, 87 of 87 correct.
 
+### Table E — canonical: the fixed boundary matrix (hand-written, never generated)
+
+**Why it exists, measured rather than argued.** Round 1 executed two wrong
+predicates against the previous verification and both scored **perfectly** on the
+seeded family, on Table D, on the no-over-denial set and on both RED proofs:
+
+| wrong predicate | what it does wrong | which oracle catches it |
+|---|---|---|
+| `seg.length > 1 && seg.startsWith('.')` | still honours `reports_dir: .`, still admits `01-Projects/x/./y.md` | **only Table E** — it scored `boundary 30/34` and everything else green |
+| `seg.trimStart().normalize('NFKC').startsWith('.')` | over-denies legal `<sp>.hi`, `\u2024hidden`, `\uFF0Ehidden` | **only Table E** — `boundary 26/34`, everything else green |
+
+Both the seeded family and Table D consist entirely of `.` + ASCII letters, so
+neither can see the **first-character** boundary. Table E is the third oracle and
+the only one that pins it. **It is hand-written, never generated, for the same
+reason Table D is:** a generator bug cannot shrink a set that was typed out.
+
+**The three trims, each measured, because they decide which rows are legal.**
+`foldedSegments` and `isSafeRelativePath` **do not trim** — so an *interior*
+whitespace-led segment is legal at every point. `coerceScalar`
+(`src/core/frontmatter.js`) trims the **whole config value** before validation —
+so `<sp><sp>.hidden` IS a dot value and must fall back. `pick` in
+`src/core/layout-infer.js` trims a **picked directory name** — so a directory
+named `<sp>.inbox` becomes the dot value `.inbox` and must fall back. Three
+different trims, three different rows below.
+
+**Unicode look-alikes are LEGAL, and this is a decision, not an omission.**
+Measured: `'\u2024hidden'.normalize('NFC')` does **not** begin with `.`, while
+`.normalize('NFKC')` does. The module folds with **NFC** (`fold`), and nothing in
+this codebase applies NFKC. A harness discovers `.github`, never `\u2024github`,
+so refusing a look-alike would refuse ordinary user content — over-denial, which
+row **A10** forbids. Same for a decomposed leading character whose NFC form is
+not a dot.
+
+**Notation:** `<sp>` in the rows below is one literal ASCII space (U+0020),
+written out because a leading space inside a code span is invisible to a reader
+and is stripped by some renderers.
+
+| # | Point | Input | Required outcome |
+|---|---|---|---|
+| **E1** | B1 | `01-Projects/x/./y.md`, `01-Projects/x/../y.md`, `01-Projects//.b/x.md` | refused, reason **A6** — the exact `.`, the exact `..`, and a dot segment after an empty one |
+| **E2** | B1 | `01-Projects/x/.a/y.md`, `.vscode/y.md`, `.ordinary/y.md` (each under `01-Projects/x/`) | refused, reason **A6** — short and ordinary names outside every generated family and outside Table D |
+| **E3** | B1 | `01-Projects/x/.note.md` | refused, reason **A6** — a dot-prefixed **basename**, not a directory |
+| **E4** | B1 | `01-Projects/x/<sp>.hi/b.md`, `\u2024hidden/b.md`, `\uFF0Ehidden/b.md`, `ab./b.md`, `a.b/c.md`, `e\u0301clair/note.md`, `\u2024note.md`, and `07-Daily/2026-09-04.md` | **ADMITTED** — interior leading whitespace, both dot look-alikes, a trailing dot, an interior dot, an NFD leading character, a look-alike basename, and a date basename |
+| **E5** | B2 | `reports_dir` = `.`, `./reports`, `reports/./dreams` | falls back to `reports/dreams`. **These are the three values removed from the report-fallback test's case list** — this row is where their reader-side coverage returns, and it returns as an assertion about the FALLBACK rather than about the honoured value |
+| **E6** | B2 | `reports_dir` = `a//.b`, `.a`, `.vscode`, `.ordinary` | falls back. (`..` also falls back, and already does today, so it is evidence of nothing this work package changes and is not a required row) |
+| **E7** | B2 | `reports_dir` = `<sp><sp>.hidden` | falls back — the reader trims the whole value first, so this is a dot value and not a whitespace one |
+| **E8** | B2 | `projects_dir` = `a/<sp>.hi/b`, `\u2024hidden`, `\uFF0Ehidden`, `ab.`, `a.b`, `My.Notes`, `e\u0301clair` | returned **UNCHANGED** |
+| **E9** | B3 | a vault whose top-level directories are `.projects/`, `<sp>.inbox/`, `.daily/` | emits the built-in defaults for all three — the second is the `pick`-trim case |
+| **E10** | B3 | a vault whose only directory is `\u2024projects/` | emits `\u2024projects` **unchanged** |
+
+**THE RESIDUAL AFTER ALL THREE ORACLES, stated plainly rather than implied
+away.** A matcher fitted to the *union* of the seeded family, Table D's 29 paths
+and Table E's rows is still constructible — enumerate E1–E3's inputs, test the
+`z` shape, and pass everything. Nothing here makes the proof airtight. What the
+three oracles buy is that the union spans **four independent axes** — values
+nobody wrote down (seeded), paths a vendor documented (Table D), the character
+boundary itself (Table E), and the negative direction (no-over-denial) — so a
+fit must be built deliberately against all four at once and is not reachable by
+any of the accidents these gates exist to catch. Beyond that, review is the
+detector, and this paragraph is what tells a reviewer to look.
+
 ### Mirrored Surface Checklist
 
 **Table A** (the class predicate):
@@ -448,6 +544,15 @@ already match their expected reason at all three depths, and the 17 admitted one
 - [ ] The Deliverables cell for `tests/red-proofs/dot-segment-denial.proofs.json`
 - [ ] Acceptance criterion **5** and verification **V3**
 - [ ] Table A row **A9**, which keeps `DENIED_SEGMENTS` alive precisely so C1's mutant is production code
+
+**Table E** (the fixed boundary matrix):
+
+- [ ] Acceptance criterion **6** and verification **V2**
+- [ ] The Deliverables cell for `tests/unit/dot-segment-denial.test.js`, which carries E's rows as a second hand-written literal
+- [ ] **Table C's identity table** — rows T2 and T5 are Table E split at the B1 / B2-B3 seam, and the split exists so each mutation's `expectRed` is a partition; moving a row between the halves moves an `expectRed` list
+- [ ] **Implementation notes' three-trims bullet and the NFKC bullet**, which are where E4/E7/E8/E9/E10's legality is argued from the code
+- [ ] The Out-of-scope NFKC entry, and Table A row **A2**'s U+002E definition — Table E is A2 made executable
+- [ ] **The residual paragraph under Table E**, which is the only place this spec bounds what three oracles do NOT buy
 
 **Table D** (the handoff closure oracle):
 
@@ -518,11 +623,27 @@ already match their expected reason at all three depths, and the 17 admitted one
   own rule, not a regression against it**: the rule exists because a case spent
   on an input the reader cannot produce is a case spent on nothing, and after
   this work package a `.` segment is exactly that — every production caller
-  obtains its layout from `readVaultLayout`. The branch stays as defence in
-  depth for a caller-supplied layout, uncovered; re-covering it belongs to
-  whoever owns row Z1 (`docs/specs/done/WP-dream-promote-report.md`), not here.
-  Report it under "Discovered issues"; do not add a case for it to the new
-  suite, which is about the dot class and not about the report path.
+  obtains its layout from `readVaultLayout`. **The reader-side half of that
+  coverage returns as Table E row E5**, which asserts the three values now fall
+  back; what stays uncovered is only the in-memory branch of row Z1's filter,
+  reachable solely by a caller that builds a layout object itself. The branch
+  stays as defence in depth; re-covering it belongs to whoever owns row Z1
+  (`docs/specs/done/WP-dream-promote-report.md`), not here. Report it under
+  "Discovered issues".
+- **The three trims decide which Table E rows are legal, and each was read out
+  of the code.** `foldedSegments` (promotion) and `isSafeRelativePath` (layout)
+  **do not trim**, so an interior whitespace-led segment such as `<sp>.hi` is legal
+  and must stay admitted. `coerceScalar` in `src/core/frontmatter.js` trims the
+  **whole** config value before validation, so `<sp><sp>.hidden` arrives as `.hidden`
+  and must fall back (row E7). `pick` in `src/core/layout-infer.js` trims a
+  **picked directory name**, so a directory named `<sp>.inbox` becomes the value
+  `.inbox` and must fall back (row E9). Do not add a trim anywhere to make these
+  agree — they already agree, and each row asserts the behaviour that follows
+  from the trim that is actually there.
+- **Do NOT normalise with NFKC anywhere.** Measured: NFKC maps U+2024 and U+FF0E
+  onto `.`, NFC does not, and the module folds with NFC. A round-1 wrong
+  predicate used NFKC and over-denied three legal names; rows E4, E8 and E10 are
+  what catch it. See Out of scope.
 - **The one existing test that must change, and the shape of the change.** It is
   named in the Deliverables cell for `tests/unit/dream-promote.test.js`, and the
   reason is that test's own written rule about its case list. Do **not** widen
@@ -614,12 +735,27 @@ already match their expected reason at all three depths, and the 17 admitted one
       persisted tier while refusing one under the dot-prefixed directory. The
       first conjunct is the discriminating one — it is red on the untouched
       tree, where the block persists `projects_dir: .projects`.
-- [ ] **5.** `npm run red-proofs`, unfiltered, reports a `PROVEN` roll-up line
-      for **both** declarations of Table C, `RUN: PROVEN`, and exits 0. The
-      declared-proof count rises from the **3** this tree carries to **5**; the
-      criterion is the two roll-up lines and the run verdict, not the count,
-      because another work package may add a declaration first.
-- [ ] **6.** Idempotence — `N/A` — this work package ships no command and writes
+- [ ] **5.** `npm run red-proofs`, unfiltered, reports **one** `PROVEN` roll-up
+      line for the pair `WP-dot-segment-denial criterion 1` naming **both**
+      declaration ids (`rollUp` groups by `(wp, criterion)` and joins the
+      contributing ids), `RUN: PROVEN`, and exits 0. The declared-proof count
+      rises from the **3** this tree carries to **5**; the criterion is that
+      roll-up line and the run verdict, not the count, because another work
+      package may add a declaration first.
+- [ ] **6. THE FIXED BOUNDARY MATRIX — the third oracle, and the only one that
+      pins the first character.** Every row of **Table E** holds, at its named
+      enforcement point: E1–E3 and E5–E7 and E9 refuse or fall back, E4 and E8
+      and E10 are admitted or returned unchanged. The inputs are a **literal,
+      hand-written** set in the test file, never generated and never derived from
+      Table D. **Why it exists:** round 1 executed two wrong predicates that
+      scored perfectly on criteria 1, 2, 3 and 4 and on both RED proofs —
+      `seg.length > 1 && seg.startsWith('.')`, which still honours
+      `reports_dir: .`, and `seg.trimStart().normalize('NFKC').startsWith('.')`,
+      which refuses legal `<sp>.hi` and the U+2024 / U+FF0E look-alikes. Both the
+      seeded family and Table D are `.` + ASCII letters throughout, so neither
+      can see the boundary. **Its assertions must redden under the Table C
+      mutation that reaches them** — T2 under C1, T5 under C2.
+- [ ] **7.** Idempotence — `N/A` — this work package ships no command and writes
       nothing outside the repository. It adds one loop, one clause, one export,
       deletes one duplicated function, and adds their tests.
 
@@ -636,27 +772,41 @@ already match their expected reason at all three depths, and the 17 admitted one
 test -f tests/unit/dot-segment-denial.test.js || { echo "MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js"; exit 1; }
 npm test
 
-# V2 — criteria 1, 2 and 3, run OUTSIDE the suite so a reviewer can re-derive the
-# verdict without reading test code. It carries BOTH oracles and prints a
-# per-enforcement-point tally, so a partial fix names itself.
+# V2 — criteria 1, 2, 3 and 6, run OUTSIDE the suite so a reviewer can re-derive
+# the verdict without reading test code. It carries ALL THREE oracles — the
+# seeded held-out family, Table D's hand-written handoff paths, and Table E's
+# fixed boundary matrix — plus the no-over-denial set, and prints a
+# per-enforcement-point tally so a partial fix names itself.
 #
 # THE HELD-OUT SEGMENTS ARE SEEDED PER RUN, not fixed. The seed is printed first
 # and re-supplying it in WD_HELD_OUT_SEED reproduces the run exactly. A fixed set
 # would let an obfuscated reimplementation of the generator inside production
-# code pass the anti-leakage check; a per-run seed defeats that. THE RESIDUAL,
-# stated: seeding varies the VALUES, not the family SHAPE (a `z`-led lowercase
-# run of 4-7 characters, plus its case variants and its keyword-bearing form), so
-# a matcher fitted to the shape rather than to the values still passes. That is
-# what criterion 3's independent oracle and the review gates are for.
+# code pass the anti-leakage check; a per-run seed defeats that.
 #
-# Rehearsed at round zero in five states, all as written: UNTOUCHED tree
-# (makeAdmit 0/312, readVaultLayout 0/234, inferLayout 1/7, handoff 36/87 — rc=1);
-# both edits applied (312/312, 234/234, 7/7, 12/12, 87/87 — rc=0); the promotion
-# clause reverted alone (0/312 and handoff 36/87 with the layout points green —
-# rc=1); the layout clause reverted alone (0/234 and 1/7 with makeAdmit and the
-# handoff oracle green — rc=1); and an 18-name matcher FITTED to the dot segments
-# of Table D's paths (admit 0/312 while handoff scores 87/87 — rc=1). The last
-# state is the one a fixed list cannot survive and is why the grading is held out.
+# TABLE E IS WHY THIS STEP GREW, and it grew to guard a product behaviour rather
+# than itself. Round 1 EXECUTED two wrong predicates that scored a PERFECT
+# 312/234/7/12/87 against the previous version of this step:
+#   seg.length > 1 && seg.startsWith('.')          <- still honours reports_dir: .
+#   seg.trimStart().normalize('NFKC').startsWith('.')  <- refuses legal ' .hi',
+#                                                        U+2024 and U+FF0E names
+# Neither is caught by a generated family whose every member is ASCII '.' plus
+# letters, nor by Table D, whose every path has the same shape. Table E is the
+# only oracle that pins the exact U+002E FIRST-CHARACTER rule, and it is
+# hand-written for the same reason Table D is.
+#
+# Rehearsed at round zero and round 1 in eight states, all as written:
+#   UNTOUCHED tree   admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 |
+#                    handoff 36/87 | boundary 16/34   (621 of 686 wrong)  rc=1
+#   FULL FIX         312/312 | 234/234 | 7/7 | 12/12 | 87/87 | 34/34      rc=0
+#   MUTANT C1        admit 0/312, handoff 36/87, boundary 27/34, layout green rc=1
+#   MUTANT C2        reader 0/234, producer 1/7, boundary 23/34, B1 green    rc=1
+#   FITTED MATCHER   an 18-name list fitted to Table D: handoff 87/87 and
+#                    admit 0/312                                            rc=1
+#   WRONG length>1   everything green EXCEPT boundary 30/34                 rc=1
+#   WRONG NFKC       everything green EXCEPT boundary 26/34 (over-denial)   rc=1
+#   WRONG z-family + Table D names   admit 234/312, producer 1/7, boundary 16/34 rc=1
+# The last three are round 1's own attacks, and each is caught by exactly one
+# oracle — which is the argument for keeping all three.
 node -e "
 const fs=require('fs'), os=require('os'), path=require('path');
 const {makeAdmit}=require(path.resolve('src/core/dream/promote.js'));
@@ -681,7 +831,9 @@ const src=['src/core/dream/promote.js','src/core/layout.js','src/core/layout-inf
   .map((f)=>fs.readFileSync(path.resolve(f),'utf8')).join('\n').toLowerCase();
 const leaked=opaque.concat(keyed).filter((s)=>src.indexOf(s.toLowerCase())>=0);
 if(leaked.length){console.error('FAIL: '+leaked.length+' graded segment(s) occur in the shipped sources, so the set is not held out: '+leaked.slice(0,5).join(', '));process.exit(1);}
-const bad={admit:[],reader:[],producer:[],over:[],handoff:[]};
+const DOT='begins with a dot', ROOT='is a harness instruction-discovery root';
+const EXT='content files are promoted', BASE='is a harness instruction file';
+const bad={admit:[],reader:[],producer:[],over:[],handoff:[],boundary:[]};
 const admit=makeAdmit(defaultLayout());
 for(const s of opaque)
   for(const rel of ['01-Projects/example/'+s+'/x.md','06-Identity/'+s+'/y/z.md','02-Areas/a/b/'+s+'/x.md','01-Projects/example/'+s+'.md'])
@@ -705,8 +857,6 @@ for(const v of values){
   fs.writeFileSync(cfg,'vault_layout:\n  projects_dir: '+v+'\n');
   if(readVaultLayout(cfg).projects_dir!==v) bad.over.push('readVaultLayout dropped '+v);
 }
-const DOT='begins with a dot', ROOT='is a harness instruction-discovery root';
-const EXT='content files are promoted', BASE='is a harness instruction file';
 const HANDOFF=[['.github/copilot-instructions.md',DOT],['.github/instructions/NAME.instructions.md',DOT],
 ['.cursor/rules/x.mdc',EXT],['.cursorrules',EXT],['.windsurfrules',EXT],['.windsurf/rules/x.md',DOT],
 ['.devin/rules/x.md',DOT],['.clinerules/x.md',DOT],['.roo/rules/x.md',DOT],['.roorules',EXT],
@@ -723,16 +873,46 @@ for(const pair of HANDOFF)
     if(got===null) bad.handoff.push('ADMITTED '+rel);
     else if(got.indexOf(pair[1])<0) bad.handoff.push('WRONG REASON '+rel+' -> '+got+'  (wanted: '+pair[1]+')');
   }
+// TABLE E - THE FIXED BOUNDARY MATRIX. Hand-written, never generated, and the
+// only oracle that pins the exact U+002E first-character rule. DOT is the same
+// substring the handoff oracle uses.
+const B1X=['01-Projects/x/./y.md','01-Projects/x/../y.md','01-Projects/x/.a/y.md',
+  '01-Projects/x/.vscode/y.md','01-Projects/x/.ordinary/y.md','01-Projects/x/.note.md',
+  '01-Projects//.b/x.md'];
+for(const rel of B1X){const g=admit(rel);
+  if(g===null) bad.boundary.push('B1 ADMITTED '+JSON.stringify(rel));
+  else if(g.indexOf(DOT)<0) bad.boundary.push('B1 WRONG REASON '+JSON.stringify(rel)+' -> '+g);}
+const B1L=['01-Projects/x/ .hi/b.md','01-Projects/x/․hidden/b.md','01-Projects/x/．hidden/b.md',
+  '01-Projects/x/ab./b.md','01-Projects/x/a.b/c.md','01-Projects/x/éclair/note.md',
+  '01-Projects/x/․note.md','07-Daily/2026-09-04.md'];
+for(const rel of B1L) if(admit(rel)!==null) bad.boundary.push('B1 OVER-DENIED '+JSON.stringify(rel)+': '+admit(rel));
+const rd=(k,v)=>{fs.writeFileSync(cfg,'vault_layout:\n  '+k+': '+v+'\n');return readVaultLayout(cfg)[k];};
+const B2X=['.','./reports','reports/./dreams','a//.b','.a','.vscode','.ordinary','  .hidden'];
+for(const v of B2X){const got=rd('reports_dir',v);
+  if(got!=='reports/dreams') bad.boundary.push('B2 HONOURED reports_dir '+JSON.stringify(v)+' -> '+JSON.stringify(got));}
+const B2L=['a/ .hi/b','․hidden','．hidden','ab.','a.b','My.Notes','éclair'];
+for(const v of B2L){const got=rd('projects_dir',v);
+  if(got!==v) bad.boundary.push('B2 OVER-DENIED projects_dir '+JSON.stringify(v)+' -> '+JSON.stringify(got));}
+const bv=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-b-'));
+for(const d of ['.projects',' .inbox','.daily']) fs.mkdirSync(path.join(bv,d),{recursive:true});
+const bi=inferLayout(bv);
+for(const kv of [['projects_dir','01-Projects'],['inbox_dir','00-Inbox'],['daily_dir','07-Daily']])
+  if(bi[kv[0]]!==kv[1]) bad.boundary.push('B3 EMITTED '+kv[0]+'='+JSON.stringify(bi[kv[0]]));
+const bv2=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-b2-'));
+fs.mkdirSync(path.join(bv2,'․projects'),{recursive:true});
+const bi2=inferLayout(bv2);
+if(bi2.projects_dir!=='․projects') bad.boundary.push('B3 OVER-DENIED projects_dir -> '+JSON.stringify(bi2.projects_dir));
+fs.rmSync(bv,{recursive:true,force:true}); fs.rmSync(bv2,{recursive:true,force:true});
 fs.rmSync(cfgdir,{recursive:true,force:true}); fs.rmSync(vault,{recursive:true,force:true});
-const total={admit:opaque.length*4,reader:opaque.length*3,producer:Object.keys(inferred).length,over:keep.length+values.length,handoff:HANDOFF.length*3};
+const total={admit:opaque.length*4,reader:opaque.length*3,producer:Object.keys(inferred).length,over:keep.length+values.length,handoff:HANDOFF.length*3,boundary:B1X.length+B1L.length+B2X.length+B2L.length+4};
 const line=(k)=>k+' '+(total[k]-bad[k].length)+'/'+total[k];
 console.log('held out: '+opaque.length+' opaque + '+keyed.length+' keyword-bearing segments, generated, none present in the sources');
-console.log(line('admit')+' | '+line('reader')+' | '+line('producer')+' | '+line('over')+' | '+line('handoff'));
-const all=[].concat(bad.admit,bad.reader,bad.producer,bad.over,bad.handoff);
-if(all.length){console.error('FAIL: '+all.length+' of '+(total.admit+total.reader+total.producer+total.over+total.handoff)+' graded cases wrong; the first five:');
+console.log(line('admit')+' | '+line('reader')+' | '+line('producer')+' | '+line('over')+' | '+line('handoff')+' | '+line('boundary'));
+const all=[].concat(bad.admit,bad.reader,bad.producer,bad.over,bad.handoff,bad.boundary);
+if(all.length){console.error('FAIL: '+all.length+' of '+(total.admit+total.reader+total.producer+total.over+total.handoff+total.boundary)+' graded cases wrong; the first five:');
   for(const b of all.slice(0,5)) console.error('  '+b);
   process.exit(1);}
-console.log('V2 OK: the class is refused at all three enforcement points, Table D is closed, and nothing dot-free is over-denied');
+console.log('V2 OK: the class is refused at all three enforcement points, Table D is closed, the U+002E boundary is pinned, and nothing dot-free is over-denied');
 "
 
 # V3 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other
@@ -785,6 +965,10 @@ Paste, for each: the command, its output, and its exit status.
   `docs/specs/done/WP-dream-promote-report.md`'s Table Z row **Z3**, which says
   it *"belongs in its own work package"*. This work package makes the residual
   unreachable **through `config.yaml`** and leaves `isUnder` untouched.
+- **Normalising with NFKC, or otherwise refusing Unicode dot look-alikes.**
+  `\u2024github` is not a discovery path for any harness; refusing it refuses
+  ordinary user content, which row **A10** forbids and rows E4, E8 and E10
+  assert against. The class as ruled is U+002E (Table A row **A2**).
 - **A third RED proof, a fold mutation, or any other growth of
   `tests/red-proofs/`.** Two declarations, two mutations (Table C).
 - **Wiring `npm run red-proofs` into CI.** It is a local gate today and stays

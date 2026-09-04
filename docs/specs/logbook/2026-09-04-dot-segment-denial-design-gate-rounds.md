@@ -474,3 +474,107 @@ at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+
+### Round 1 fixes — architect, 2026-09-04, on top of `7fca573c`
+
+Two findings, **one [A] converged across both channels**, one [B] from the
+plugin. Both fixed. Both channels reported **zero scope objections counted**
+(the silent-fallback item, the 2026-08-05 class shape and the basename list were
+all routed), and both PASSED, unwidened: Table D maps all 17 `HANDOFF` rows onto
+the 29 paths exactly; the loop-LAST ordering preserves every existing refusal
+reason (spot-checked on five production paths); the `adopt --yes` conjunction;
+the Deliverables boundary; ADR-0004; size M.
+
+**THE CONVERGED FINDING WAS EXECUTED, NOT ARGUED, AND IT REPRODUCED HERE.** Both
+channels built a wrong predicate and ran the spec's own V2 against it. So did
+this pass, on scratch copies, before writing a word of the fix:
+
+```text
+                                                  V2 as it stood at 4f02c5f3
+seg.length > 1 && seg.startsWith('.')             admit 312/312 | reader 234/234 |
+                                                  producer 7/7 | over 12/12 |
+                                                  handoff 87/87            rc=0  (!)
+seg.trimStart().normalize('NFKC').startsWith('.') identical perfect score   rc=0  (!)
+```
+
+Both are wrong. The first still honours `reports_dir: .` and admits
+`01-Projects/x/./y.md`; the second refuses legal `<sp>.hi`, `U+2024 hidden` and
+`U+FF0E hidden`. **A verification that scores 100% against two wrong
+implementations is not evidence**, and the reason is structural: every generated
+segment and every Table D path is `.` + ASCII letters, so neither oracle can see
+the FIRST CHARACTER. The third channel-suggested attack — a matcher combining
+the generated family with Table D's segment names — is caught partly by the
+per-run seed added at round zero (`admit 234/312`) and decisively by the new
+matrix.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **R1-A** [A, converged] | The grading families do not pin the exact U+002E first-character boundary: no bare `.`, no whitespace-led segment, no trailing-dot segment, no Unicode look-alike, and the one place the bare `.` WAS exercised is the case list this work package removes. Two wrong predicates pass everything, including both RED proofs | **FIXED with a THIRD ORACLE, hand-written like Table D and for the same reason.** New **Table E — the fixed boundary matrix**, ten rows over all three enforcement points, present in **both** V2 and the shipped suite: refusals `.`, `..`, `a//.b`, `.a`, `.vscode`, `.ordinary`, a dot-prefixed BASENAME, and the three values removed from the report-fallback test (row **E5**, which is where their reader-side coverage returns, now asserted as a FALLBACK); legal positives `<sp>.hi`, `U+2024`/`U+FF0E` look-alikes, a trailing dot, an interior dot, an NFD leading character, plus the producer's own pair (`<sp>.inbox` falls back because `pick` trims it; `U+2024 projects` is emitted unchanged). New acceptance criterion **6**; idempotence moved to **7**. **The three trims and the NFC/NFKC decision are each argued from the code** in Implementation notes, and NFKC normalisation is now explicitly Out of scope. **The residual is stated rather than implied:** a matcher fitted to the UNION of all three oracles is still constructible; what the union buys is four independent axes, and beyond that the detector is review |
+| **R1-B** [B, plugin] | Table C's C1 named only the B1 held-out assertions, but deleting the promotion loop also reddens all 17 formerly admitted Table D paths at three depths. `evaluateRed` requires the observed own-body failing set to EQUAL `expectRed`, so a CORRECT implementation would fail the proof on an undeclared failure | **FIXED by making the suite's test identities part of the contract.** Table C now carries an identity table: six named top-level tests (**T1–T6**), partitioned at the B1 / B2-B3 seam so each mutation's failure set is a partition — **C1 declares T1, T2, T3; C2 declares T4, T5; T6 (no over-denial) is in neither**, because both mutations only ever admit more. The boundary matrix is deliberately **two** tests rather than one: a single identity would fail under both mutations and neither set would be attributable. Each test's assertions carry a fixed band marker so the declaration's `signal` is not a guess about a message nobody has written yet. Both proofs keep `criterion: 1`, so `rollUp` emits ONE line for that pair naming both ids — criterion 5 was reworded to match, after reading `rollUp` |
+
+### 1.1 Round-1 measurements — eight trees, V2 extracted from the spec and run as written
+
+```text
+UNTOUCHED 29c61d03
+  admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 36/87 | boundary 16/34
+  FAIL: 621 of 686                                                              rc=1
+FULL FIX
+  312/312 | 234/234 | 7/7 | 12/12 | 87/87 | 34/34   V2 OK                       rc=0
+MUTANT C1 — the promotion loop deleted (the SHIPPED ENUMERATION)
+  admit 0/312 | reader 234/234 | producer 7/7 | over 12/12 | handoff 36/87 | boundary 27/34
+  FAIL: 370 of 686                                                              rc=1
+MUTANT C2 — the layout clause deleted
+  admit 312/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 87/87 | boundary 23/34
+  FAIL: 251 of 686                                                              rc=1
+FITTED — an 18-name matcher fitted to Table D's dot segments
+  admit 0/312 | ... | handoff 87/87 | boundary 27/34   FAIL: 319 of 686         rc=1
+WRONG 1 — seg.length > 1 && seg.startsWith('.')
+  everything green EXCEPT boundary 30/34   FAIL: 4 of 686                       rc=1
+WRONG 2 — seg.trimStart().normalize('NFKC').startsWith('.')
+  everything green EXCEPT boundary 26/34   FAIL: 8 of 686                       rc=1
+WRONG 3 — the z-family regex UNION Table D's 13 segment names
+  admit 234/312 | producer 1/7 | handoff 87/87 | boundary 16/34  FAIL: 102/686  rc=1
+```
+
+**Each of the last three is caught by exactly one oracle, and that is the
+argument for keeping all three.** WRONG 1 and WRONG 2 are green everywhere but
+the boundary matrix — the finding, reproduced against the fix. WRONG 3 is
+green on the handoff oracle (87/87) and red on the held-out family. FITTED is
+green on the handoff oracle and red on the held-out family. **No single oracle
+catches all four attacks**; the union does.
+
+**The C1/C2 partition, measured** — this is what R1-B's identity table rests on:
+C1 reddens B1's three surfaces (`admit 0/312`, `handoff 36/87`, `boundary 27/34`)
+with both layout points green; C2 reddens B2/B3's two (`reader 0/234`,
+`producer 1/7`, `boundary 23/34`) with B1 green. `over 12/12` under **both**,
+which is why T6 is in neither `expectRed`.
+
+**The boundary rows, measured on both sides.** On the untouched tree every one of
+the 18 refusal rows is wrong (`.`, `./reports` and `reports/./dreams` are
+honoured; `.a`, `.vscode`, `.ordinary`, `.note.md`, `a//.b`, `.projects`,
+`<sp>.inbox`, `.daily` all pass) and all 16 legal positives already hold; under
+the fix all 34 hold. The `U+2024 projects` producer row is the one that would
+have gone red under an NFKC implementation and stays green here.
+
+**V1**, extracted and run on the untouched tree:
+`MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js`, rc=1.
+**`npm run lint`** with both revised documents: `0 error(s)`, rc=0.
+
+### 1.2 What round 1 did not change
+
+- **The ordering decision stands.** Both channels confirmed the loop-LAST
+  partition preserves every existing refusal reason; nothing in either finding
+  argued with it.
+- **No new verification STEP was added.** V2 grew a third oracle inside its
+  existing body — machinery growing to guard a product behaviour, which is the
+  one growth `docs/runbooks/codex-review.md` permits, and in the smallest form
+  that guards it: a literal table, no new parser, no new command.
+- **The Dispatch precondition is untouched**, and both channels routed it.
+- **`status:` stays `Draft`.**
+
+**Weighted closure, the architect's read: HEAVY.** R1-A changes what the
+implementer builds — a new acceptance criterion, a second hand-written literal in
+the shipped test file, and two more declared RED identities — and it changes what
+the finished predicate must do at inputs the previous draft never named. R1-B
+changes the declaration contract the implementer writes. Neither is a wording
+fix. The orchestrator owns the call; this is the input to it.
