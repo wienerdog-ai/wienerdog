@@ -60,11 +60,88 @@ more Table L row, `src/core/digest.js` entering the boundary, and one updated
 full-string pin in `tests/unit/digest.test.js`, which is already a Deliverables
 row for its comment. Nothing else moves.
 
-**Do not dispatch until BOTH are answered.** A "keep an instruction" answer to
-the first changes Table L rows **L1**–**L4** and the byte-exact sentence under
-Implementation notes; an "absorb it" answer to the second adds the row and the
-two files named above. Neither changes any other path in the Deliverables
-table.
+**The third owner item, raised by the round-4 gate channel and parked here under
+escalation (ii) rather than absorbed.** The pointer sentence asserts, of the run
+that withheld a note, that it *names each copy and its folder, in its dream
+report or in the output it printed*. Row **L7** makes that true by construction
+for every run from this package onward. It is **not** true for one class of
+record this package inherits: a `secret-revert-exhausted` record left by a
+**pre-upgrade** run that died inside the old window, so the ledger holds the
+record while nothing ever carried it to the user.
+
+**Which surfaces render it for such a record — measured, not inferred.**
+**L1**, **L3** and **L4** are functions of the ledger alone, so all three render
+the sentence for a hand-built `secret-revert-exhausted` record that no run
+produced: driven over `quarantineBannerLine`, `composeWarnings` and a real
+`wienerdog doctor` spawn against a ledger written straight to disk (the
+design-gate logbook's §4.1). **L2 does not:** `secretRevertSummaryLine` is built from three integers the CURRENT run computed
+and prints only on a run that withheld (`src/cli/dream.js:1109-1117`), so it
+speaks about the run printing it — which row L7 makes honest.
+
+**Four conditions, all of which must hold.** (1) A **pre-upgrade** run wrote the
+record: after L7 the print precedes `writeLedger`. (2) That run's report was on
+an **undelivered arm** — `refused`, or `promoted` with
+`accounting.published === false` (`src/cli/dream.js:1152-1164`); on the
+published arms the report itself holds the record and the sentence is true.
+(3) The run **died between `transcript-ledger.json`'s rename and the step-20
+print**. (4) The run recorded a `secret-revert-exhausted` outcome, which needs a
+transcript already deferred `SECRET_REVERT_MAX_DEFERRALS` (**3**) times.
+
+**What can kill the run in that gap, measured rather than listed.**
+`writeLedger`'s own `fs.chmodSync(dest, 0o600)` after the rename
+(`src/core/dream/ledger.js:133-134`); the summary-line `console.log`;
+`regenerateDigest()` (`src/cli/dream.js:1125`), which is unguarded and whose
+write is `writeFilePrivate` (`src/cli/dream.js:646`) — measured to throw; the
+`console.log` inside `reportWarningsRefresh`; and, needing no throw at all, a
+termination or a power loss anywhere in the gap. **`refreshWarnings` is NOT one
+of them:** it catches everything and returns `{written:false, reason}`
+(`src/core/dream/warnings.js:224-305`) — measured under an injected throw, it
+did not propagate.
+
+**Nothing at render time can tell such a record from a sound one.** The record
+shape is `{fingerprint, outcome, reason?, deferrals?, updated_at, harness}`
+(`src/core/dream/ledger.js:77-84`): no per-record version, no delivery mark.
+
+**Bounded, and stated so the owner can weigh it:** the copies are still on disk
+on whichever shelf the gate wrote them to, so the false sentence costs a
+fruitless look, not bytes; the sentence it replaces was false about the same
+records in a worse direction — it named a folder the copy may not be in and
+instructed a delete; and the class cannot grow, because every run from this
+package on closes the window behind it.
+
+**The three honest fixes, each with its cost, and none of them saves the look.**
+**(a)** A durable per-record delivery stamp, so the surfaces assert for stamped
+records and hedge for unstamped ones: true everywhere and it weakens nothing for
+new records, but it is durable state — which escalation (ii) parks and which is
+the durability successor's territory — it adds the ledger schema to this
+package's Deliverables, and it gives the class two rendered forms where L0 today
+has one author and one string. **(b)** A non-assertive sentence for every record
+— a directive to look rather than a claim the run named the copies. Round 2
+rejected this because it left the user a pointer and no destination on the
+refused arm; **L7 has since closed that objection**, so what it costs today is
+not falsehood but claim strength: every user, on every sound record, is told
+less than the product now guarantees. **(c)** A statement of the rule rather
+than a claim about the particular run — *a dream run that withholds a note names
+each copy and its folder…* — never false, and it buys the legacy reader nothing:
+they still look and still find nothing. **(b) and (c) cost the same
+re-derivation** — the byte-exact sentence, the four measured renderings under
+Exact contracts, the four hand-written pins and Table C's six `find` literals.
+
+**Recommendation: accept it as a named residual and dispatch.** The user-visible
+cost is one fruitless look, and no wording removes it: the surfaces cannot tell
+a legacy record from a sound one, so any hedge hedges for **every** record.
+Only (a) separates them, and (a) is durable state the successor owns. Whether a
+per-record delivery stamp is worth carrying is therefore a question for
+`WP-quarantine-preserve-durability`; it is registered there under Out of scope
+below, and Table L row **L0** carries the pointer to this item.
+
+**Do not dispatch until all THREE are answered.** A "keep an instruction" answer
+to the first changes Table L rows **L1**–**L4** and the byte-exact sentence
+under Implementation notes; an "absorb it" answer to the second adds the row and
+the two files named above; an "overrule" answer to the third either changes the
+byte-exact sentence and everything derived from it (options b and c) or adds a
+ledger-schema row to Deliverables (option a). None changes any other path in
+the Deliverables table.
 
 **One disclosure that is not a question.** The dream report tells the user to
 *delete that copy* for every preserved copy on a refused path, including the
@@ -461,7 +538,7 @@ arm rather than only on the success path.
 
 | # | Surface (construct) | What it can OBSERVE | Shipped behaviour at `8302ce8e` | Required after this WP |
 |---|---|---|---|---|
-| **L0** | — the rule | — | stated for the surfaces downstream of `promote()`'s return (`WP-dream-promote-module` Table Q row **Q9**: *none re-derives one, and none adds a carrier beside it*) and never applied to these four, which state a shelf while observing no copy | **A surface may name the folder a preserved copy is in ONLY IF it observes that copy — by reading the preservation record, or by listing the folder. A surface that observes neither states the CLASS and POINTS at one that does, and names no folder.** The class sentence has exactly one author: `ledger.js`'s exported `PRESERVED_COPIES_POINTER`, whose text is byte-exact under Implementation notes. It contains no path, no basename, no count and no command |
+| **L0** | — the rule | — | stated for the surfaces downstream of `promote()`'s return (`WP-dream-promote-module` Table Q row **Q9**: *none re-derives one, and none adds a carrier beside it*) and never applied to these four, which state a shelf while observing no copy | **A surface may name the folder a preserved copy is in ONLY IF it observes that copy — by reading the preservation record, or by listing the folder. A surface that observes neither states the CLASS and POINTS at one that does, and names no folder.** The class sentence has exactly one author: `ledger.js`'s exported `PRESERVED_COPIES_POINTER`, whose text is byte-exact under Implementation notes. It contains no path, no basename, no count and no command. **One class of record makes this sentence false and is PARKED, not overlooked:** a `secret-revert-exhausted` record left by a PRE-UPGRADE run that died inside the window row **L7** closes — the ledger holds it, no run ever delivered its record, and the shape carries nothing to tell it apart. See the Dispatch precondition's third owner item, which states the four conditions, the three fixes and the recommendation |
 | **L1** | `ledger.js` `quarantineBannerLine`, the `secret-revert-exhausted` sentence | the transcript ledger: which transcripts are quarantined and why. **No copy** | states `The withheld copies are in state/quarantine/` and instructs a delete, both false on the fall-through arm (Current state) | the shelf clause and the disposal instruction are replaced by `PRESERVED_COPIES_POINTER`. **Everything else in this banner is byte-unchanged**: the count, the sanitized basename list, the closing `The session files themselves are untouched.`, the informational sentence, the freshness gate, and the rule that it names no command |
 | **L2** | `ledger.js` `secretRevertSummaryLine`, its closing sentence | three integers | states `The withheld notes are in state/quarantine/.` | replaced by `PRESERVED_COPIES_POINTER`. The three counts and their fail-closed integer coercion are byte-unchanged |
 | **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment claiming byte-identity with *"the sentence the digest banner uses for the same class"* — **which names the wrong surface**: it is byte-identical to L1, `ledger.js`'s exhausted banner, and not to L5, `digest.js`'s | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
@@ -693,6 +770,12 @@ added here on the spot.
       changes and what does not; "Exact contracts" and its four measured
       renderings; the two "does not change" paragraphs under Table L; Table C's
       two residual paragraphs.
+- [ ] **The three parked owner items** — each is decided in ONE place and
+      mirrored in two. The first has no Table L row of its own (it is the
+      whole of L1–L4); the second is decided in row **L5**, the third in row
+      **L0**. Their mirrors are the Dispatch precondition's three blocks and
+      the Out-of-scope bullets that route the second and third to their
+      successors. An owner ruling on any of them updates the row first.
 - [ ] **Operative prose, second entry** — the amendment-placement rule under
       Implementation notes and its per-row target table, which V5 and
       acceptance criterion 9 both mirror.
@@ -1201,7 +1284,16 @@ npm run lint
 - **`pruneRedactedOriginals`' retention cap** evicting an only-copy. Measured
   above as reachable; owned by the same proposed successor.
 - **Making preservation crash-durable** — `WP-quarantine-preserve-durability`
-  (Draft), owner-sequenced immediately after this package.
+  (Draft), owner-sequenced immediately after this package. **Registered there
+  as well: the legacy crash-window record** — a `secret-revert-exhausted`
+  record left by a pre-upgrade run that died inside the window row **L7**
+  closes, for which L1, L3 and L4 render an assertion no run made good. It is
+  the Dispatch precondition's third owner item, which states the four
+  conditions, the three candidate fixes and the recommendation to accept it as
+  a named residual. What the successor inherits is the durable half: whether a
+  per-record delivery stamp on the transcript ledger is worth carrying so a
+  surface can tell a record whose run delivered from one whose run did not.
+  Durable state; not this package's.
 - **Anything about which copies exist, where the gate writes them, when a
   preservation fails, or when the run aborts** — `WP-preservation-abort-widening`
   Tables P and D, both shipped. This package cites them and restates neither.

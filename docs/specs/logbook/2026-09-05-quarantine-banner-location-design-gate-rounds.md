@@ -392,6 +392,7 @@ at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
 | 1 (`007858a7`) | needs-attention / needs-attention | `…round1-codex-plugin.txt`, `…round1-herdr-shadow.txt` (both `7f4fc5d0`) | Plugin 2 A + 1 B, shadow 2 A + 1 B, four scope objections routed and not counted; both confirmed the census (13 hits / 7 files, no template or skill carrier), the six pins and the L1–L4 / L5 split. **Converged (A):** the byte-exact pointer sentence named "each dream report", but on the refused arm no report is written and `report.record` goes only to command output (dream.js's own "not stored anywhere else"; the shipped test proves no report is staged) → FIX: the sentence names the real destinations — "in its dream report or in the output it printed" — with a measured four-arm table (published / unpublished / fallback / refused) under Exact contracts; renderings, pins and `find` literals re-derived. **Converged (A):** V2 was lexical — an unused import plus a sentence composed from two literals (split inside the prefix) passed V1/V2 and every runtime pin → FIX by the runbook's fixed point, not a stronger parser: a runtime DERIVATION PROOF — a marker appended inside L0's literal must move every carrier, with identities pinned against HAND-WRITTEN literals so a composed carrier stays green and `evaluateRed`'s "declared identity did not fail" IS the detection (measured: correct tree MOVED×3, composed defeat MOVED/MOVED/unmoved; the doctor line carries the marker through a real CLI spawn, 385 ms per phase, so the doctor carrier stops being a residual); V2 shrunk to the contiguous-retype case it can honestly claim. **Plugin (B):** V5 accepted a marker-only amendment → extracts each clause from the spec by a STRUCTURAL key and requires the row's cell-4 suffix to be the whole clause plus a `3/3` numstat on the Done spec; rehearsed untouched / cell 4 / marker-only / cell 2 / extra-line. **Shadow (B):** the RED declaration was not writable from the implementer's reading set → two complete declaration files inlined in Table C (six proofs) with five byte-exact source forms, each `find` unique, each mutated file `node --check`ed. **Parked (escalation (ii)) → second owner item:** both channels observed L5's "this notice clears when no withheld copies are left" is false in the mixed-shelf state; the parenthetical stays correct; recommendation: route to the successor because the wording is downstream of the shelf decision, cost of overruling stated. All FIX, applied in `f8549561`. HEAVY (a user-facing sentence and every pin; two declaration files; four identities) → round 2 runs as the closing confirmation. |
 | 2 (`44aa930d`) | needs-attention / needs-attention | `…round2-codex-plugin.txt`, `…round2-herdr-shadow.txt` (both `903dbe90`) | **Both channels verified R1-A/B/D hold** (the four arms coherent; both derivation proofs sound; six inlined mutations each match once and parse); four scope objections routed. **Converged (A):** V5 accepted a same-line reauthoring inside an amended row — numstat counts lines, not bytes → FIX by deleting the step that had to be right: each candidate row must EQUAL `git show main:` base row + its clause, byte for byte; seven rehearsed states. **Shadow (B):** Out of scope still forbade the doctor RED proof Deliverables now require; "three identities" stale → FIX. **Shadow (A) — the pointer-truth family for the SECOND consecutive round → escalation (i), a design question:** dream.js persists the ledger, prints the pointer-bearing summary, regenerates the digest and refreshes warnings BEFORE it prints the undelivered `report.record`, so a crash in that window leaves a durable pointer whose destination never completed. Measured, then settled as option (a) — DELETE THE WINDOW: two hunks relocating the undelivered-record print to step 17b (no line rewritten), full suite unchanged by the move (`2618/2600/6`, the same six wording pins), a failure-injection test discriminating both ways (reordered pass 1; shipped ordering fail 1 with "the record was delivered BEFORE the fault"); `src/cli/dream.js` and `tests/unit/dream-pipeline.test.js` enter Deliverables, Table L row L7, criterion 6 (old 6–11 renumbered with every reference swept). Escalation (ii) does not apply (no durable state). Trap recorded for the implementer: the atomic writer uses `openSync` on a random temp, so the injection seam is `fs.renameSync` on the destination. All FIX in `b7e34215`. HEAVY → round 3 runs as the closing confirmation. |
 | 3 (`f198263a`) | needs-attention / needs-attention | `…round3-codex-plugin.txt`, `…round3-herdr-shadow.txt` (both `9671821c`) | **Both channels verified R2-A/B/C genuinely closed** (V5's byte compare RED on the untouched tree; the doctor contradiction gone; the reorder coherent — no durable pointer-bearing write precedes delivery at step 17b on either output arm, one print site, no duplicate or dropped delivery, G11 pins delivery but not output order) and **size M / one atomic WP honest**; five scope objections routed and not counted. **Converged (A):** criterion 6's detector faulted at the DIGEST rename, a whole step downstream of the first durable claim, so a placement just after `writeLedger` passed it while keeping a real window (`writeLedger` renames, then chmods) → FIX: the detector moves to the LEDGER boundary — `fs.renameSync` on `transcript-ledger.json` delegated, then thrown — and criterion 6 becomes explicitly THREE-state (shipped RED, after-`writeLedger` RED, step 17b GREEN); the round-2 seam is measured passing the wrong placement (`pass 1`), which is why it was replaced. **Shadow (C):** criterion 10's idempotence rationale still described a text-only package → FIX, verdict kept. **Dropped, with the decision recorded:** the shadow's *prefer splitting L7 into a sequenced S package* — kept atomic, because the pointer sentence is only true under the ordering, so the prerequisite and its consumer land together; the plugin independently called the atomic package honest for the same reason. **Named residual (process, not spec):** V5 compares against the LOCAL `main` ref, so the orchestrator fetches before running it at dispatch and in the PR gate — the runbook's dispatch-time re-verification owns this and no line is added to V5. All FIX in `fc088b3c`. Both findings are LIGHT under weighted closure, but the pinned stop criterion names *an acceptance criterion a wrong implementation passes* as material and finding 1 is one → round 4 runs as the closing confirmation. |
+| 4 (`0b76f0af`) | **invalid (contaminated) / approve** | `…round4-codex-plugin.txt`, `…round4-herdr-shadow.txt` (both `cce28212`) | **The shadow APPROVED with ZERO findings** — the first clean external verdict in this loop: R3-A and R3-C confirmed genuinely closed, the round-2 assets byte-identical by sha256 (declarations `e937eed4…`, V5 `1235d787…`, the three Q-clauses `b7d269e0…`), the two declaration files parsed (2 files, 6 proofs), porcelain empty before and after, four scope objections routed and uncounted. **The plugin run is INVALID AS A VERDICT**: its read-only porcelain check saw an untracked file appear mid-run — the ORCHESTRATOR wrote `2026-09-05-owner-rulings-banner-queue.md` into the reviewed worktree while the review was in flight; the reviewer performed no writes. Per the runbook the findings are still adjudicated and **the channel is owed a valid run on the next tip**. **Parked (escalation (ii)) → THIRD owner item [A, plugin]:** the new unconditional pointer sentence is false for a `secret-revert-exhausted` record left by a PRE-UPGRADE run that died inside the window L7 closes; criterion 6 only tests new step-17b runs. Premise verified by MEASUREMENT (§4.1): L1, L3 and L4 render it for a hand-built ledger no run wrote (banner, warnings document, a real doctor spawn), the record shape carries no provenance field, and **L2 is not affected** (three integers the current run computed). Three corrections to the finding and to the orchestrator's draft: L2 excluded, `refreshWarnings` cannot throw (measured), four conjuncts not one. Recommendation: **accept as a named residual and dispatch** — no wording removes the fruitless look, because no surface can tell the two record classes apart; only a durable per-record stamp can, and escalation (ii) parks that with `WP-quarantine-preserve-durability`. Decided in Table L row **L0**, registered under Out of scope, the dispatch gate now reads "all THREE". **FIXED (C, plugin):** §3.2 had claimed Table L was byte-identical to round 2 while L7's evidence cell had changed → corrected with the cell-level diff. **Not added:** the plugin's proposed upgrade fixture (machinery for a rendering §4.1 has measured; frozen-surface rule). Applied in this commit. **Closure:** the shadow's approve plus a parked owner item closes the loop under the pinned criterion; round 5 runs BOTH channels on the next tip as the closing confirmation, because the plugin is owed a valid verdict and the round-4 edits are themselves unreviewed. |
 
 ### Round 1 fixes — architect, 2026-09-05, on top of `7f4fc5d0`
 
@@ -670,10 +671,16 @@ fenced block and run on the untouched tree: `V1/V2 RED`, `rc=1`.
 
 ### 3.2 What round 3 did not change
 
-- **No product behaviour, and no design.** Row L7's move, the pointer sentence,
-  Table L, Table C's six declarations, V5 and the three Q-clauses are all
-  byte-identical to round 2. Only the EVIDENCE for L7 changed, plus one stale
-  rationale sentence.
+- **No product behaviour, and no design.** The pointer sentence, Table C's six
+  declarations, V5 and the three Q-clauses are byte-identical to round 2.
+  **Table L is NOT** — and round 4 corrected this line, which had claimed it
+  was. Measured cell by cell over `9671821c..fc088b3c`: exactly one Table L row
+  line changed, **L7**, and within it exactly one cell, the fifth (*Required
+  after this WP*); cells 1–4 and 6 are byte-identical. Inside that cell the
+  requirement sentence — *it runs as step 17b, BEFORE step 18.* — is
+  byte-identical too; what was replaced is the measurement that follows it, the
+  digest-boundary one by the ledger-boundary one. So the product ordering did
+  not move and its EVIDENCE did. Beyond that, one stale rationale sentence.
 - **No new machinery.** The detector moved seam; it did not become a second
   test, a second declaration file or a new verification step. That is the
   frozen-surface rule applied to a finding about the machinery itself.
@@ -683,3 +690,150 @@ fenced block and run on the untouched tree: `V1/V2 RED`, `rc=1`.
   four surfaces' confirmation, and L5's false clearing sentence with its
   recommendation to route to the successor. Both channels routed them as scope
   objections and neither counted toward the verdict.
+
+### Round 4 fixes — architect, 2026-09-05, on top of `cce28212`
+
+**The shadow returned APPROVE with zero findings** — the first clean external
+verdict in this loop. It confirmed R3-A and R3-C genuinely closed, byte-compared
+the round-2 assets by sha256 (declarations
+`e937eed43bd62251668e26914f745cf39b603a75d7615d55cddcd65f83621136`, V5
+`1235d787554ae4ab7e4e5ea338f6fdc3f057a120f917f20e9819fed29882dfb7`, the three
+Q-clauses `b7d269e02f236ba5606c3e3a67aa96f352cd182e13874327a03152d4481e9717` —
+each identical to round 2), parsed the two declaration files (2 files, 6 proofs),
+and routed four scope objections uncounted. Its porcelain was empty before and
+after.
+
+**The plugin channel returned needs-attention with two findings, and its RUN is
+INVALID as a verdict.** Its read-only porcelain check saw an untracked file
+appear mid-run — `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`,
+written into the reviewed worktree by the ORCHESTRATOR while the review was in
+flight. The reviewer wrote nothing and said so. Under
+`docs/runbooks/codex-review.md` ("Review is read-only, checked mechanically …
+or the run is invalid") the verdict does not stand; the findings are adjudicated
+as findings, and **the channel is owed a valid run on the next tip**. The
+contamination is the orchestrator's process defect, not the reviewer's: a gate
+run pins a tree, and writing into that tree while it is being read destroys the
+one property that distinguishes a review from a reading.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A, plugin] | **The new unconditional pointer is false for a legacy record.** The spec itself proves the shipped ordering can persist a `secret-revert-exhausted` record and then die before the undelivered `report.record` is printed. After the upgrade, the four surfaces render the new sentence for those inherited, unversioned records although neither promised destination exists. Criterion 6 tests only a newly executed step-17b run, so every criterion can pass while the sentence is false in the exact only-copy failure state the package addresses | **PARKED as the THIRD owner item (escalation (ii)), with a recommendation to accept it as a named residual and dispatch.** The premise was verified by MEASUREMENT, not by reading (§4.1), and the finding is accurate in substance and imprecise in three places, all corrected in the spec: the affected carriers are **L1, L3, L4** and **not L2**; `refreshWarnings` cannot throw; and the conditions are four, not one. The reviewer's own two recommendations are exactly options (b) and (a) of the three the spec now prices — and neither is a routine fix: (a) adds durable state, which the pinned escalation (ii) parks and which the durability successor owns; (b) and (c) change the byte-exact user-facing sentence and re-derive the four renderings, the four hand-written pins and Table C's six `find` literals. Both are contract changes, and a contract change is the owner's act (the runbook's *diff size does not measure contract impact* park sub-case). **The recommendation is stronger than the finding suggests, and §4.1 is why: no wording removes the user-visible cost.** The surfaces cannot tell a legacy record from a sound one, so any hedge hedges for every record; only a per-record delivery stamp separates them, and that is durable state. Registered with `WP-quarantine-preserve-durability` under Out of scope; decided in Table L row **L0**; the Dispatch gate became "all THREE" |
+| **2** [C, plugin] | **The round-3 record falsely said Table L was byte-identical to round 2**, while row L7's evidence cell had in fact changed — which obscures which canonical surface moved | **FIXED, and measured rather than reworded.** §3.2 now states the cell-level result from `git diff 9671821c fc088b3c`: exactly one Table L row line changed (**L7**), and within it exactly one cell, the fifth; cells 1–4 and 6 byte-identical; inside cell 5 the requirement sentence *it runs as step 17b, BEFORE step 18.* byte-identical and only the measurement after it replaced. The product ordering did not move; its evidence did |
+
+**Not dropped, but recorded:** the plugin's third recommendation — *add an
+upgrade fixture containing a pre-existing `secret-revert-exhausted` record
+representing the old crash window* — is machinery, and a finding about the
+machinery never justifies more machinery (the runbook's frozen-surface rule).
+The fixture would test a rendering the spec has now MEASURED (§4.1) and that no
+implementation choice can change, because the carriers read a ledger that
+carries no provenance. It is not added. **No criterion changed, no verification
+step was added, and the frozen surface stayed frozen.**
+
+### 4.1 Round-4 measurements — the legacy record, driven
+
+The premise of finding 1 was verified by driving it, on a `git archive HEAD`
+scratch copy carrying the four-carrier fix (the same tree shape round zero
+built). The ledger below was **written by hand straight to disk**: no dream run
+in the process produced it, which is the whole point — if the carriers render
+the sentence for a ledger no run wrote, they cannot be conditioning on how the
+record got there.
+
+```text
+RECORD FIELDS      = ["fingerprint","outcome","reason","updated_at","harness"]
+PROVENANCE FIELD?  = none (no version, no delivery mark)
+L1 banner          renders the pointer? true
+> [!warning] Wienerdog: 1 session transcript(s) are no longer being dreamed over — the notes made from them were withheld by the secret check too many times in a row: legacy.jsonl. Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed. The session files themselves are untouched.
+L3 warnings.md     renders the pointer? true
+### The notes made from these sessions were withheld by the secret check too many times in a row — 1
+Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.
+L2 summary line    renders the pointer? true  — but from THREE INTEGERS the current run computed, not from this ledger
+refreshWarnings under an INJECTED throw: threw=NO  returned={"written":false,"reason":"reports/warnings.md could not be read (INJECTED)"}
+writeFilePrivate on an unwritable dest: threw=YES (ENOENT mkdir)
+--- L4: the real doctor CLI over the SAME hand-built ledger ---
+[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.
+```
+
+**Four things this establishes, and one it corrects.**
+
+1. **The premise holds.** Three ledger-derived carriers — the digest banner, the
+   vault warnings document and a **real `wienerdog doctor` spawn** — render the
+   new sentence for a record no run ever delivered. The render is
+   provenance-blind by construction, not by oversight.
+2. **The record shape has nowhere to put provenance**:
+   `{fingerprint, outcome, reason?, deferrals?, updated_at, harness}`
+   (`src/core/dream/ledger.js:77-84`). That is why nothing at render time can
+   discriminate, and why only new durable state could.
+3. **L2 is NOT one of the affected carriers** — the finding did not distinguish
+   it. `secretRevertSummaryLine` takes three integers the CURRENT run computed
+   and prints only on a run that withheld (`src/cli/dream.js:1109-1117`), so it
+   speaks about the run printing it, which row L7 makes honest. The spec's third
+   item names L1, L3 and L4 and says why L2 is excluded.
+4. **`refreshWarnings` is not a fault site** — the orchestrator's draft
+   disposition had named it as one. Under an injected throw it returned
+   `{written:false, reason}` and did not propagate
+   (`src/core/dream/warnings.js:224-305`). The unguarded sites in the old window
+   are `writeLedger`'s post-rename `fs.chmodSync`
+   (`src/core/dream/ledger.js:133-134`), the summary-line `console.log`,
+   `regenerateDigest()` (`src/cli/dream.js:1125`, whose write is
+   `writeFilePrivate` — measured to throw), the `console.log` inside
+   `reportWarningsRefresh`, and — needing no throw at all — a termination.
+5. **The class is bounded by FOUR conjuncts**, not one: a pre-upgrade run, an
+   undelivered report arm (`refused`, or `promoted` with
+   `accounting.published === false`), a death in the gap, and a
+   `secret-revert-exhausted` outcome, which itself needs a transcript already
+   deferred `SECRET_REVERT_MAX_DEFERRALS` (3) times.
+
+**And the load-bearing conclusion, which the finding's own recommendations do
+not reach:** the user-visible cost of the legacy state is one fruitless look, and
+**no wording removes it**. A surface that cannot tell the two record classes
+apart can only hedge for both, which spends the guarantee L7 just bought on
+every sound record in order to soften a shrinking, inherited class. Only a
+durable per-record stamp separates them — and that is exactly what escalation
+(ii) parks and what the durability successor owns. Accepting the named residual
+is therefore not the cheap option; it is the one that keeps the product's
+strongest true sentence.
+
+`npm run lint` with the three revised documents: `Linting: 637 file(s)`,
+`0 error(s)`, `frontmatter check passed: 267 spec(s), 4 agent(s)` — 267 and
+not 268, because the rulings entry is a logbook record, not a spec. V1/V2/V5
+extracted from the spec's fenced block and run on the untouched tree:
+`V1/V2 RED`, `rc=1`.
+
+### 4.2 What round 4 did not change
+
+- **No product behaviour, no design, and no criterion.** The byte-exact pointer
+  sentence, Table C's six declarations, V5, the three Q-clauses, every acceptance
+  criterion and every verification step are byte-identical to round 3. Table L
+  gained one clause, in row **L0**, pointing at the parked owner item; row L7 did
+  not move.
+- **No new machinery.** The plugin's proposed upgrade fixture was not added: it
+  is machinery proposed to guard a rendering that §4.1 has already measured and
+  that no implementation choice can vary.
+- **The Deliverables table is unchanged** — no file entered or left the
+  permission boundary. That is what makes finding 1 a park rather than a fix:
+  every honest fix for it either adds a Deliverables row (the ledger schema) or
+  re-derives the user-facing sentence and its pins.
+- **The first two owner items stand untouched.** The third joins them, and the
+  dispatch gate reads "all THREE".
+
+### Closure
+
+**The loop is closed under the pinned stop criterion.** The criterion asks that
+an external round return no material design finding on either channel. The
+shadow returned exactly that on `0b76f0af` — approve, zero findings, R3-A and
+R3-C confirmed closed, the round-2 assets byte-identical. The plugin's one
+material finding is not a design finding the loop can absorb: its every honest
+fix is a contract change, so the pinned escalation (ii) routes it to the owner,
+and a parked owner item is a closed loop's output, not an open loop's.
+
+**Two things are nevertheless owed.** First, **the plugin channel is owed a
+VALID run** — its round-4 verdict was voided by the orchestrator's own write
+into the reviewed worktree, and a channel's verdict cannot be inferred from its
+findings. Second, the round-4 edits are themselves unreviewed. So **round 5 runs
+BOTH channels on the next tip as the closing confirmation**, with the round-4
+findings listed for verification in the usual way and the third owner item
+declared out of scope for the verdict, as the other two already are. The
+orchestrator runs it; the architect does not. If round 5 is clean on both
+channels, the spec's remaining gate is the owner's — three parked items, all
+three with recommendations, and the standing 2026-09-05 instruction recorded in
+`2026-09-05-owner-rulings-banner-queue.md`.
