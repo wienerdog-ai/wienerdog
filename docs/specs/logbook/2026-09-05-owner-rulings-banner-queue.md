@@ -103,10 +103,15 @@ owner-authorized by the same message.
 ## What this unblocks
 
 All three Dispatch-precondition items of `WP-quarantine-banner-location` are
-answered, so nothing in that spec's precondition blocks it any longer. **Two
-gates remain and neither is the owner's:** the design loop's round 5, which runs
-both channels on the next tip (the gate channel is owed a valid verdict — see
-2b — and the round-4 edits are themselves unreviewed), and then dispatch-time
-re-verification per `docs/runbooks/codex-review.md`. Only the architect or the
-owner moves the spec to `Ready`. `WP-dream-git-env-pinning` stays Draft: this
-record settles its PROCESS, not its product decision.
+answered, so nothing in that spec's precondition blocks it. **The design loop is
+now closed as well:** round 5 ran both channels on `005eed52`, both runs were
+valid, both converged on one wording finding and nothing else, and the gate
+channel's round-4 verdict — voided by an orchestrator write into the reviewed
+worktree, see 2b — is thereby made good. The spec is **`Ready`**.
+
+**One gate remains and it is not the owner's:** dispatch-time re-verification
+(`docs/runbooks/codex-review.md`), which the orchestrator runs immediately
+before it writes the dispatch message, recording each claim re-run and the
+revision it ran against. `WP-quarantine-preserve-durability` follows, per the
+2026-09-02 chain, and inherits the third item's durable half. `WP-dream-git-env-pinning` stays Draft: this record settles its PROCESS, not
+its product decision.

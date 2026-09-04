@@ -393,6 +393,7 @@ at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
 | 2 (`44aa930d`) | needs-attention / needs-attention | `…round2-codex-plugin.txt`, `…round2-herdr-shadow.txt` (both `903dbe90`) | **Both channels verified R1-A/B/D hold** (the four arms coherent; both derivation proofs sound; six inlined mutations each match once and parse); four scope objections routed. **Converged (A):** V5 accepted a same-line reauthoring inside an amended row — numstat counts lines, not bytes → FIX by deleting the step that had to be right: each candidate row must EQUAL `git show main:` base row + its clause, byte for byte; seven rehearsed states. **Shadow (B):** Out of scope still forbade the doctor RED proof Deliverables now require; "three identities" stale → FIX. **Shadow (A) — the pointer-truth family for the SECOND consecutive round → escalation (i), a design question:** dream.js persists the ledger, prints the pointer-bearing summary, regenerates the digest and refreshes warnings BEFORE it prints the undelivered `report.record`, so a crash in that window leaves a durable pointer whose destination never completed. Measured, then settled as option (a) — DELETE THE WINDOW: two hunks relocating the undelivered-record print to step 17b (no line rewritten), full suite unchanged by the move (`2618/2600/6`, the same six wording pins), a failure-injection test discriminating both ways (reordered pass 1; shipped ordering fail 1 with "the record was delivered BEFORE the fault"); `src/cli/dream.js` and `tests/unit/dream-pipeline.test.js` enter Deliverables, Table L row L7, criterion 6 (old 6–11 renumbered with every reference swept). Escalation (ii) does not apply (no durable state). Trap recorded for the implementer: the atomic writer uses `openSync` on a random temp, so the injection seam is `fs.renameSync` on the destination. All FIX in `b7e34215`. HEAVY → round 3 runs as the closing confirmation. |
 | 3 (`f198263a`) | needs-attention / needs-attention | `…round3-codex-plugin.txt`, `…round3-herdr-shadow.txt` (both `9671821c`) | **Both channels verified R2-A/B/C genuinely closed** (V5's byte compare RED on the untouched tree; the doctor contradiction gone; the reorder coherent — no durable pointer-bearing write precedes delivery at step 17b on either output arm, one print site, no duplicate or dropped delivery, G11 pins delivery but not output order) and **size M / one atomic WP honest**; five scope objections routed and not counted. **Converged (A):** criterion 6's detector faulted at the DIGEST rename, a whole step downstream of the first durable claim, so a placement just after `writeLedger` passed it while keeping a real window (`writeLedger` renames, then chmods) → FIX: the detector moves to the LEDGER boundary — `fs.renameSync` on `transcript-ledger.json` delegated, then thrown — and criterion 6 becomes explicitly THREE-state (shipped RED, after-`writeLedger` RED, step 17b GREEN); the round-2 seam is measured passing the wrong placement (`pass 1`), which is why it was replaced. **Shadow (C):** criterion 10's idempotence rationale still described a text-only package → FIX, verdict kept. **Dropped, with the decision recorded:** the shadow's *prefer splitting L7 into a sequenced S package* — kept atomic, because the pointer sentence is only true under the ordering, so the prerequisite and its consumer land together; the plugin independently called the atomic package honest for the same reason. **Named residual (process, not spec):** V5 compares against the LOCAL `main` ref, so the orchestrator fetches before running it at dispatch and in the PR gate — the runbook's dispatch-time re-verification owns this and no line is added to V5. All FIX in `fc088b3c`. Both findings are LIGHT under weighted closure, but the pinned stop criterion names *an acceptance criterion a wrong implementation passes* as material and finding 1 is one → round 4 runs as the closing confirmation. |
 | 4 (`0b76f0af`) | **invalid (contaminated) / approve** | `…round4-codex-plugin.txt`, `…round4-herdr-shadow.txt` (both `cce28212`) | **The shadow APPROVED with ZERO findings** — the first clean external verdict in this loop: R3-A and R3-C confirmed genuinely closed, the round-2 assets byte-identical by sha256 (declarations `e937eed4…`, V5 `1235d787…`, the three Q-clauses `b7d269e0…`), the two declaration files parsed (2 files, 6 proofs), porcelain empty before and after, four scope objections routed and uncounted. **The plugin run is INVALID AS A VERDICT**: its read-only porcelain check saw an untracked file appear mid-run — the ORCHESTRATOR wrote `2026-09-05-owner-rulings-banner-queue.md` into the reviewed worktree while the review was in flight; the reviewer performed no writes. Per the runbook the findings are still adjudicated and **the channel is owed a valid run on the next tip**. **Parked (escalation (ii)) → THIRD owner item [A, plugin]:** the new unconditional pointer sentence is false for a `secret-revert-exhausted` record left by a PRE-UPGRADE run that died inside the window L7 closes; criterion 6 only tests new step-17b runs. Premise verified by MEASUREMENT (§4.1): L1, L3 and L4 render it for a hand-built ledger no run wrote (banner, warnings document, a real doctor spawn), the record shape carries no provenance field, and **L2 is not affected** (three integers the current run computed). Three corrections to the finding and to the orchestrator's draft: L2 excluded, `refreshWarnings` cannot throw (measured), four conjuncts not one. Recommendation: **accept as a named residual and dispatch** — no wording removes the fruitless look, because no surface can tell the two record classes apart; only a durable per-record stamp can, and escalation (ii) parks that with `WP-quarantine-preserve-durability`. Decided in Table L row **L0**, registered under Out of scope, the dispatch gate now reads "all THREE". **FIXED (C, plugin):** §3.2 had claimed Table L was byte-identical to round 2 while L7's evidence cell had changed → corrected with the cell-level diff. **Not added:** the plugin's proposed upgrade fixture (machinery for a rendering §4.1 has measured; frozen-surface rule). Applied in this commit. **Closure:** the shadow's approve plus a parked owner item closes the loop under the pinned criterion; round 5 runs BOTH channels on the next tip as the closing confirmation, because the plugin is owed a valid verdict and the round-4 edits are themselves unreviewed. |
+| 5 (`005eed52`) | needs-attention / needs-attention — **both VALID** (porcelain empty before and after on both channels) | `…round5-codex-plugin.txt`, `…round5-herdr-shadow.txt` (both `329a5798`) | **ONE finding, CONVERGED, and nothing else.** **[B, both channels] The Dispatch precondition's heading and opening still described a ONE-item gate** — `(one owner confirmation; changes no Deliverables row)` and *"it is the only one"* — over a section that has carried three owner items and an "all THREE" gate since round 4. The shadow named the real hazard: a dispatcher reading the section summary could solicit the L1–L4 wording confirmation and silently omit the other two. The parenthetical was conditional too: overruling item 2 or 3 adds files. → **FIXED**: the heading states three items, the opening says only the FIRST is a product-text question and that dispatch is blocked on all three, and the no-Deliverables-row claim is qualified as holding when the recommendations are accepted. The heading and opening are now REGISTERED in the Mirrored Surface Checklist as mirrors of the item count. **Everything else confirmed by both channels:** R3-A's detector genuinely three-state at the delegated ledger rename; the no-watermarks precondition explicit and mirrored in the Definition of done; no stale digest-seam operative text (the surviving references are labelled false-green history); the step-18 ledger rename really is the first durable claim (step-4 migration, 5b, the commit and the registry write make no claim about the current run's new record); both undelivered arms preserved by the block move; the fixtures isolated and `finally` restoration leak-free; a weak test cannot satisfy criterion 6 as written; and the third owner item accurate — L1/L3/L4 not L2, four conjuncts, routed not absorbed. **All four byte-exact surfaces sha256-identical to `f198263a` on BOTH channels** (pointer section `2b2c2f12…`, Table C `9f4cd1cb…`, V5 `3ec9392e…`, Q-clauses `275467e8…`); both declaration files parse, six proofs. **Applied (scope objection, by agreement):** the third item's *the copies are still on disk* is not universally durable on the bounded `redacted/` shelf — qualified with the cap this spec already measures, and the eviction routed to `WP-quarantine-only-copy-shelf` rather than re-argued. **LOOP CLOSED** on this commit; `status:` flipped to `Ready`. |
 
 ### Round 1 fixes — architect, 2026-09-05, on top of `7f4fc5d0`
 
@@ -837,3 +838,83 @@ orchestrator runs it; the architect does not. If round 5 is clean on both
 channels, the spec's remaining gate is the owner's — three parked items, all
 three with recommendations, and the standing 2026-09-05 instruction recorded in
 `2026-09-05-owner-rulings-banner-queue.md`.
+
+### Round 5 fixes — architect, 2026-09-05, on top of `329a5798`
+
+**Both channels were VALID this time** — `git status --porcelain` empty before
+and after on each, which is what round 4's plugin run could not say. Both
+returned `needs-attention` for **one converged finding and nothing else**, and
+the finding is about this document family's own prose, not about the product.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [B, CONVERGED on both channels] | **The Dispatch precondition's heading and opening sentence still described a ONE-item gate.** The heading read `(one owner confirmation; changes no Deliverables row)` and the opening *"The question is a product-text question, and it is the only one"*, while the same section has carried three owner items and a *"Do not dispatch until all THREE are answered"* paragraph since round 4. The shadow stated the hazard precisely: a dispatcher who reads the section summary can solicit the L1–L4 wording confirmation and **silently omit the L5 disposition and the legacy-record decision**. Both channels also flagged the parenthetical as conditional — overruling item 2 adds `src/core/digest.js` and a pin, overruling item 3 can add a ledger-schema row | **FIXED, inside the frozen surface.** The heading now names three owner items and qualifies the claim as *accepting all three recommendations changes no Deliverables row*; a new opening paragraph states that only the FIRST is a product-text question, that the other two are dispositions, and that **dispatch is blocked on all three, not on the first**. Each item already stated its own overrule cost and none of that text moved. **And the mirror is now registered:** the Mirrored Surface Checklist's owner-items entry records that the section's heading and opening carry the item COUNT and the Deliverables claim, and go stale the moment an item is added — which is exactly how this survived a round |
+
+**One routed scope objection, APPLIED as a precision fix rather than argued
+back.** The shadow observed that the third item's *the copies are still on disk*
+is not universally durable for a copy on the bounded `redacted/` shelf, and
+cited this spec's own measurement against it: `pruneRedactedOriginals` keeps
+that folder to `REDACTED_RETENTION_CAP = 50`, oldest-first, excluding only
+basenames the current run created — so a later run can evict an earlier
+fall-through copy. The sentence is now qualified with that cap, and the
+consequence stated honestly: where an eviction has happened the look is
+fruitless because the bytes are already gone, and **the eviction, not this
+sentence, is what lost them**. It is routed to `WP-quarantine-only-copy-shelf`
+under Out of scope, which already owns it. **The parked item itself was not
+re-argued and its recommendation is unchanged** — the objection was about one
+clause's precision, and that is what was fixed.
+
+### Closure — the loop is CLOSED on this commit
+
+**Under weighted closure, this round did not extend the loop.** The runbook's
+rule: *a finding about the spec's own verification machinery — tests, gates,
+mutation rows, wording — is LIGHT*, and *LIGHT: fixes land and are verified
+mechanically; the loop closes without another external round.* Round 5's single
+finding is wording. It changed no criterion, no verification step, no
+Deliverables row, no byte-exact surface, and nothing a user or a consuming model
+observes — the four extracted surfaces are sha256-identical to `f198263a` on
+both channels before the fix and were not touched by it.
+
+**Under the pinned stop criterion, the round returned no material design
+finding on either channel.** The criterion enumerates what counts as material —
+a surface still naming a folder, a second author V2 cannot see, a RED proof
+whose mutation reddens the wrong identity, a criterion a wrong implementation
+passes, a scope leak into the durability successor. Round 5 found none of them,
+and both channels affirmatively verified the first four. What it found was a
+stale heading over a correct gate.
+
+**The prior invalid run is made good.** Round 4's plugin verdict was voided by
+an orchestrator write into the reviewed worktree; the channel was owed a valid
+run and has now delivered one, on `005eed52`, with its read-only check clean.
+Its round-4 findings were adjudicated at the time and its round-5 report
+independently confirms the results of that adjudication — including that the
+third owner item is stated accurately, is routed rather than absorbed, and left
+every byte-exact surface untouched.
+
+**Verification for this closing pass** (the mechanical half of LIGHT closure):
+`npm run lint` — `Linting: 637 file(s)`, `0 error(s)`,
+`frontmatter check passed: 267 spec(s), 4 agent(s)`. A grep for the retired
+phrasing (`one owner confirmation`, `it is the only one`) returns nothing in the
+spec. V1/V2/V5 extracted from the spec's fenced block and run on the untouched
+tree: `V1/V2 RED`, `rc=1`.
+
+**`status:` is flipped `Draft` → `Ready` in this commit.** All three owner items
+are ruled in `2026-09-05-owner-rulings-banner-queue.md` under the owner's
+standing 2026-09-05 instruction. **The one gate that remains is not the design
+loop's:** dispatch-time re-verification, which the orchestrator runs immediately
+before it writes the dispatch message, against current `main` and with the
+revision recorded (`docs/runbooks/codex-review.md`). Note for that run: **V5
+compares against the LOCAL `main` ref**, so fetch before running it — the named
+process residual from round 3, still live.
+
+### The loop in one line, five rounds
+
+Round zero found 3; rounds 1–2 found the two design defects that mattered (the
+sentence promised a file the refused arm never writes; the delivery happened
+after the claim) and each was settled by deleting a thing rather than adding
+one — a truer sentence, then a reorder. Round 3 moved a detector to the boundary
+where the first durable claim is made. Round 4 surfaced the one class of record
+no ordering can fix and parked it as the owner's. Round 5 found a stale heading.
+**The finding size fell monotonically, and the verification surface never grew
+after round 2** — which is the runbook's convergence condition, observed rather
+than asserted.

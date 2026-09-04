@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-banner-location
 title: Stop the ledger-derived banners naming a quarantine shelf they cannot observe
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening]
@@ -14,9 +14,19 @@ epic: dream-promotion
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-## Dispatch precondition (one owner confirmation; changes no Deliverables row)
+## Dispatch precondition (THREE owner items; accepting all three recommendations changes no Deliverables row)
 
-**The question is a product-text question, and it is the only one.** Four
+**This gate holds THREE owner items, and only the FIRST is a question about
+the product's wording.** The second and third are dispositions: where a false
+sentence this package does not own gets fixed, and whether an inherited class
+of record is accepted as a named residual. Each is stated below with a
+recommendation, and **accepting all three recommendations changes no
+Deliverables row** — the paragraph that closes this section states, per item,
+exactly what overruling it would add. **Dispatch is blocked on all three, not
+on the first**: a dispatcher who solicits only the wording confirmation has
+not run this gate.
+
+**The first item — and it is the product-text question.** Four
 user-facing surfaces today end a sentence with *the withheld copies are in
 `state/quarantine/`*, and one of them adds a disposal instruction — *restore
 what you meant to keep and delete the rest of the files there (not the
@@ -102,12 +112,20 @@ did not propagate.
 shape is `{fingerprint, outcome, reason?, deferrals?, updated_at, harness}`
 (`src/core/dream/ledger.js:77-84`): no per-record version, no delivery mark.
 
-**Bounded, and stated so the owner can weigh it:** the copies are still on disk
-on whichever shelf the gate wrote them to, so the false sentence costs a
-fruitless look, not bytes; the sentence it replaces was false about the same
-records in a worse direction — it named a folder the copy may not be in and
-instructed a delete; and the class cannot grow, because every run from this
-package on closes the window behind it.
+**Bounded, and stated so the owner can weigh it:** the copies sit on whichever
+shelf the gate wrote them to and this sentence neither moves nor deletes one,
+so what it costs is a fruitless look, not bytes. **One qualification, which
+this spec's own Current state supplies:** a copy on the bounded `redacted/`
+shelf is not durable — `pruneRedactedOriginals` keeps that folder to
+`REDACTED_RETENTION_CAP = 50`, evicting oldest-first and excluding only
+basenames the CURRENT run created, so a later run can evict an earlier
+fall-through copy. Where that has happened the look is fruitless because the
+bytes are already gone, and **the eviction, not this sentence, is what lost
+them** — it is routed to `WP-quarantine-only-copy-shelf` under Out of scope
+and is not re-argued here. Beyond that: the sentence this one replaces was
+false about the same records in a worse direction — it named a folder the copy
+may not be in and instructed a delete; and the class cannot grow, because every
+run from this package on closes the window behind it.
 
 **The three honest fixes, each with its cost, and none of them saves the look.**
 **(a)** A durable per-record delivery stamp, so the surfaces assert for stamped
@@ -776,6 +794,11 @@ added here on the spot.
       **L0**. Their mirrors are the Dispatch precondition's three blocks and
       the Out-of-scope bullets that route the second and third to their
       successors. An owner ruling on any of them updates the row first.
+      **The section's HEADING and its opening paragraph are mirrors too** —
+      they carry the item COUNT and the "changes no Deliverables row" claim,
+      and both go stale the moment an item is added. Round 5 found exactly
+      that: a heading still reading *one owner confirmation* over a section
+      that had said "all THREE" since round 4.
 - [ ] **Operative prose, second entry** — the amendment-placement rule under
       Implementation notes and its per-row target table, which V5 and
       acceptance criterion 9 both mirror.
