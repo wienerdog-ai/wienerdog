@@ -1,0 +1,202 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 2, detached worktree at 0eb96a96 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 0eb96a962e200b430987f4bdaf0c42286c2fdfd5 vs main: docs/specs/WP-instruction-basename-currency.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: V3 can certify an undated or malformed inventory, and V4 can certify a release step that explicitly negates the maintenance obligation. Both are wrong implementations that pass their designated acceptance checks.",
+  "materiality_bands": {
+    "A": "A criterion permits a wrong implementation to pass, or permits silent wrong behavior.",
+    "B": "The defect is caught downstream.",
+    "C": "Hygiene only."
+  },
+  "findings": [
+    {
+      "materiality": "A",
+      "file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 542,
+      "line_end": 593,
+      "confidence": 0.99,
+      "title": "V3 does not prove the required dated inventory skeleton",
+      "body": "Criterion 1 at lines 445-459 says V3 proves the complete skeleton, including the opening Current-as date. V3 reads only the regions beneath the Table A/B/C headings. It never examines the H1 or opening paragraphs. Its Fetched normalization at line 570 also replaces any final cell content, not specifically a YYYY-MM-DD date. The corrected in-memory execution of the exact fenced body returned exit 0 both when the entire opening was absent and when every Fetched cell contained NOT-A-DATE. V1, V2, and the planned unit tests consume the DENY rows and do not close this gap. An inventory can therefore ship without its dated provenance, or with malformed dates, while criterion 1 is reported satisfied.",
+      "impact": "The supposedly dated canonical inventory can be stale or provenance-free without any required verification failing, recreating the maintenance failure this work package is intended to prevent.",
+      "recommendation": "Extend V3 to compare the complete fixed skeleton, normalizing only explicit date placeholders. Require the Current-as sentence to exist and validate both it and every Table A Fetched cell against a strict YYYY-MM-DD form. Prefer checking that the dates agree when all citations are re-fetched in one pass."
+    },
+    {
+      "materiality": "A",
+      "file": "docs/specs/WP-instruction-basename-currency.md",
+      "line_start": 595,
+      "line_end": 623,
+      "confidence": 1,
+      "title": "V4 accepts a step that expressly cancels the obligation",
+      "body": "V4 checks only substring presence. The exact extracted body returned exit 0 for: \"On a MINOR release, the release maintainer need not re-fetch docs/instruction-file-inventory.md; updating code and tests in the same pull request is unnecessary.\" That step contains all five tokens but contradicts Table C's affirmative obligation at line 338. Thus an implementer can satisfy criterion 4 while instructing the maintainer to do nothing.",
+      "impact": "Future minor releases can follow a runbook that leaves the inventory, deny-list, and tests stale even though the acceptance gate reports the maintenance obligation present.",
+      "recommendation": "Specify a fixed affirmative sentence or tightly constrained paragraph in Table C and require that literal contract in V4. Do not treat an unordered bag of words as evidence of an obligation."
+    }
+  ],
+  "challenge_results": {
+    "criterion_7_literal_set": {
+      "result": "Nine is the correct current count.",
+      "measured_names": [
+        "CLAUDE.md",
+        "CLAUDE.local.md",
+        "AGENTS.md",
+        "AGENTS.override.md",
+        "AGENT.md",
+        "GEMINI.md",
+        "QWEN.md",
+        "WARP.md",
+        "replit.md"
+      ],
+      "assessment": "The test file is edited elsewhere in this work package, but the spec explicitly requires a hand-written, non-derived literal. A document/source/fixture/literal omission is caught by V3 while the canonical spec table remains intact. A repo-wide deletion that also edits the spec table could still make every mirror agree, but that requires changing the canonical contract contrary to lines 403-405; I did not count that contract-tampering case as a separate material finding."
+    },
+    "v3_region_compare": {
+      "execution_note": "The sandbox denied both shell here-document creation and Node mkdtemp. I therefore executed the exact extracted JavaScript body in a VM with an in-memory fs, applying the shell's required backslash-dollar unescaping.",
+      "states": {
+        "compliant": 0,
+        "dropped_QWEN_row": 1,
+        "reworded_Table_B_cell": 1,
+        "removed_Table_C_heading": 1,
+        "duplicate_QWEN_row": 1,
+        "Fetched_changed_to_2027_01_15": 0,
+        "Fetched_changed_to_NOT_A_DATE": 0,
+        "missing_entire_opening": 0,
+        "CRLF_document": 1,
+        "trailing_blank_lines": 0
+      },
+      "boundary_assessment": "The advertised row/cell/heading/duplicate mutants discriminate correctly. Trailing blanks are ignored. CRLF is rejected because Fetched normalization occurs before trailing carriage returns are stripped. A later pipe-prefixed paragraph before the next heading would be treated as part of the copied region; the current canonical regions contain no such paragraph. Escaped pipes outside the final Fetched cell are compared byte-for-byte."
+    },
+    "red_proof_semantics": {
+      "result": "The retargeting is coherent, subject to the implementation following Table D.",
+      "assessment": "scripts/red-proofs.js lines 1549-1609 require the named criterion-7 identity to pass as a terminal test at BASELINE. Lines 1633-1677 require the mutation to produce exactly the declared own-body testCodeFailure with ERR_ASSERTION and its signal. Lines 1688-1705 rerun a fresh green CONTROL. On a correct nine-name tree, reverting the Set to four names reaches criterion 7 half (b) and can produce PROVEN. On an eight-name tree where the hand-written literal remains nine, half (a) is already red at BASELINE, so the proof cannot be PROVEN. A synchronized subset that also shrinks the hand-written literal and canonical spec could still be PROVEN, matching the contract-tampering residual described above."
+    },
+    "v4_existing_runbook": {
+      "result": "The exactly-one logic is not fragile against the current runbook.",
+      "assessment": "The existing release runbook has nine numbered steps and zero inventory-path matches; the exact fenced V4 command reports exit 1. Adding one conforming step would give one match, while the simulated two-match case returned exit 1. The blocking defect is semantic negation, not match counting."
+    },
+    "table_B_predicate_spot_check": {
+      "result": "The sampled fifth-column claims agree with production makeAdmit(defaultLayout()).",
+      "observations": [
+        "01-Projects/example/.github/copilot-instructions.md => ADMITTED",
+        "01-Projects/example/.cursor/rules/x.mdc => refused by the .md-only extension rule",
+        "01-Projects/example/.claude/rules/x.md => refused by DENIED_SEGMENTS member .claude",
+        "01-Projects/example/.junie/AGENTS.md => refused by basename agents.md",
+        "01-Projects/example/.windsurf/rules/x.md => ADMITTED"
+      ]
+    }
+  },
+  "routed_scope_objections": [
+    {
+      "scope": "Dispatch-precondition rulings for replit.md, AGENT.md, and the role-based owner",
+      "disposition": "Not reopened and not counted toward the verdict."
+    },
+    {
+      "scope": "The 2026-08-05 name-list-with-residual ruling and user-configurable names",
+      "disposition": "Not reopened and not counted toward the verdict."
+    },
+    {
+      "scope": "The dot-prefixed segment class owned by WP-dot-segment-denial",
+      "disposition": "Not reviewed as this work package's implementation and not counted toward the verdict."
+    },
+    {
+      "scope": "Source and test implementation changes",
+      "disposition": "No such changes exist in this design revision; implementation behavior was inspected only to validate the spec's claims."
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-bn2.txt",
+      "exit_status": 0,
+      "result": "Loaded the vendored operating instructions and complete user focus."
+    },
+    {
+      "command": "git status --porcelain=v1 && git diff --no-ext-diff --unified=80 main -- <two in-scope files> && sed the complete spec and logbook",
+      "exit_status": 0,
+      "result": "Initial porcelain was empty. The large captured output was truncated, so subsequent line-scoped reads were used."
+    },
+    {
+      "command": "rg headings/table rows in the spec; nl -ba ... | sed -n '150,560p'; nl -ba ... | sed -n '560,720p'",
+      "exit_status": 0,
+      "result": "Located contracts, criteria, verification blocks, and line anchors."
+    },
+    {
+      "command": "Read spec lines 238-442, red-proofs.js lines 1980-2195, promote.js predicate regions, release.md, changed paths, HEAD, and main",
+      "exit_status": 0,
+      "result": "Confirmed HEAD 0eb96a962e200b430987f4bdaf0c42286c2fdfd5, local main dab3c3e437d7d591b36264318d155de5ce95741c, and the design-only diff."
+    },
+    {
+      "command": "rg BASELINE/CONTROL/expectRed semantics; read red-proofs.js lines 1390-1745; enumerate existing proof declarations",
+      "exit_status": 0,
+      "result": "Established identity, assertion-kind, equality, and control semantics."
+    },
+    {
+      "command": "Read red-proofs.js lines 1738-1885 and spec lines 330-428",
+      "exit_status": 0,
+      "result": "Confirmed fresh phase copies and Table C/Table D contracts."
+    },
+    {
+      "command": "node <<'NODE' ... exact V3/V4 temp-fixture harness ... NODE",
+      "exit_status": 1,
+      "result": "zsh could not create its here-document temp file: operation not permitted. No fixture or worktree file was created."
+    },
+    {
+      "command": "node -e '<inline exact V3/V4 harness using fs.mkdtempSync(os.tmpdir())>'",
+      "exit_status": 1,
+      "result": "EPERM creating /var/folders/.../wienerdog-shadow-v3-XXXXXX. No worktree write occurred."
+    },
+    {
+      "command": "Read dream-promote test imports/defaultLayout references and execute makeAdmit(defaultLayout()) over five Table B sample paths",
+      "exit_status": 0,
+      "result": "All five production-predicate results matched Table B."
+    },
+    {
+      "command": "node -e '<first in-memory V3/V4 VM simulation>'",
+      "exit_status": 0,
+      "result": "Superseded diagnostic run: it exposed that raw extraction retained shell-only backslash-dollar escapes."
+    },
+    {
+      "command": "node -e '<second attempted shell-unescape VM simulation>'",
+      "exit_status": 0,
+      "result": "Superseded diagnostic run: the replacement expression still retained the shell escape."
+    },
+    {
+      "command": "node -e '<corrected in-memory execution of exact V3/V4 bodies with virtual fs>'",
+      "exit_status": 0,
+      "result": "Produced the definitive mutant matrix reported above, including green malformed dates, green missing opening, and green negated V4 obligation."
+    },
+    {
+      "command": "Extract the exact fenced V3 shell command and execute it through zsh against the untouched worktree",
+      "exit_status": 1,
+      "result": "FAIL: missing input docs/instruction-file-inventory.md, as expected for the design-only tree."
+    },
+    {
+      "command": "Extract the exact fenced V4 shell command and execute it through zsh against the untouched worktree",
+      "exit_status": 1,
+      "result": "FAIL: 0 numbered steps name the inventory path, expected exactly 1 of 9, as expected."
+    },
+    {
+      "command": "Initial Table A count probe followed by git diff --check",
+      "exit_status": 0,
+      "subcommand_statuses": {
+        "node_count_probe": 1,
+        "git_diff_check": 0
+      },
+      "result": "The first Node probe was malformed because shell command substitution consumed backticks; it still printed count 9 and unique 9 before ReferenceError. The following diff check was clean."
+    },
+    {
+      "command": "Corrected single-quoted Node Table A count/name/folding probe",
+      "exit_status": 0,
+      "result": "DENY count 9, nine unique names, every Stored spelling NFC-lowercased."
+    },
+    {
+      "command": "git status --porcelain=v1; git diff --check main -- <two in-scope files>",
+      "exit_status": 0,
+      "result": "Final porcelain was empty and diff check passed. Initial and final worktree status were identical. Git emitted sandbox cache warnings only."
+    }
+  ],
+  "worktree_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "worktree_writes": "none"
+  }
+}
