@@ -1,0 +1,7 @@
+# Raw gate output — Codex plugin review (native rubric), PR #211 round 2, head ad347624 (base main = 1f44371d). Committed BEFORE adjudication.
+
+# Codex Review
+
+Target: branch diff against main
+
+The runtime denial set matches the canonical inventory, the release obligation is sequenced before validation and publication, and the new tests pin the specified invariants. No actionable regressions were identified.
