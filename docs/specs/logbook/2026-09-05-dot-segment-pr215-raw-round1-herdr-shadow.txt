@@ -1,0 +1,35 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, pr-rubric), PR #215 round 1, detached worktree at a1bd795f. Committed BEFORE adjudication.
+
+{
+  "findings": [
+    {
+      "title": "[P1][A] Assert the persisted layout block is nonempty",
+      "body": "**Materiality A:** If `adopt` omits `vault_layout` or renders a shape this regex does not match, `persisted` is empty and both comparison loops pass vacuously. The final assertions also pass against the default layout because `.projects` is outside its writable tiers even without the new class rule, so this test can report green while no layout was persisted, contrary to [acceptance criterion 4](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr215-wt-shadow/docs/specs/WP-dot-segment-denial.md:765). Assert the expected persisted keys before iterating, including `daily_filename`.",
+      "confidence_score": 0.98,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr215-wt-shadow/tests/integration/adopt-e2e.test.js",
+        "line_range": {
+          "start": 603,
+          "end": 604
+        }
+      }
+    },
+    {
+      "title": "[P3][C] Update the validator range in the row-Z2 citation",
+      "body": "**Materiality C:** The changed comment attributes all three guarantees, including dot-segment rejection, to `layout.js:65-71`, but the newly added dot clause is line 72, so the cited range no longer supports the claim. Point at `isSafeRelativePath` by name or update the range; the WP explicitly requires this row-Z2 comment to be corrected in the [deliverable contract](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr215-wt-shadow/docs/specs/WP-dot-segment-denial.md:221).",
+      "confidence_score": 0.96,
+      "priority": 3,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr215-wt-shadow/src/core/dream/promote.js",
+        "line_range": {
+          "start": 1064,
+          "end": 1064
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The production predicate changes match the WP, but the required adoption round-trip test is vacuous when no layout block is captured, so acceptance criterion 4 is not reliably enforced. Executed: initial inspection/status, spec/diff review, `git diff --check`, static declaration checks, and final status all exited 0; V1 `npm test` exited 1 before tests because `mkdtemp` was denied; V2 acceptance mode used unchosen seed 1788540907837, validated 112/112 first code points with 0.502 dot share, then exited 1 at denied `mkdtemp`; its `WD_HELD_OUT_N=999` guard exited 1 as required; V4 exited 1 because markdownlint's registry lookup was blocked, while frontmatter passed; the read-only B1 subset exited 0, and the in-memory C1 mutant exited 1 with exactly T1-T3 failing. V3 was deliberately not run as instructed: inspection of `scripts/red-proofs.js` and the declarations showed five total declarations, both new mutations validate and target exactly one occurrence, C1's declared partition was confirmed in memory, and C2 plus the single two-id roll-up follow from the shared-clause mutation and `evaluateRed` equality; an attempted heredoc probe was separately refused by the shell, and `git status --porcelain` remained empty and identical before and after.",
+  "overall_confidence_score": 0.97
+}
