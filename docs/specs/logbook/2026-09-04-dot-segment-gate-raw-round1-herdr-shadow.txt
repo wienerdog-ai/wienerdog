@@ -1,0 +1,196 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 1, detached worktree at 4f02c5f3 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 4f02c5f3febc44c3d88c5295ec3a4f66bb4ab042 vs main: docs/specs/WP-dot-segment-denial.md",
+  "summary": "NO-SHIP: the verification families do not pin the exact U+002E boundary. A plausible wrong predicate passes every specified oracle while admitting `.` and over-denying legal whitespace-prefixed and Unicode-dot segments.",
+  "verdict": "needs-attention",
+  "findings": [
+    {
+      "affected_file": "docs/specs/WP-dot-segment-denial.md",
+      "line_start": 643,
+      "line_end": 706,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "title": "The generated and handoff oracles share a boundary gap that accepts a wrong predicate",
+      "body": "V2 generates only segments shaped as ASCII `.` followed by letters, and all 29 Table D paths have the same relevant boundary. Its positive set contains no exact `.`, leading-whitespace segment, trailing-dot segment, or Unicode dot look-alike. Consequently, `s.length > 1 && s.trimStart().normalize('NFKC').startsWith('.')` caught 78/78 generated negatives and 29/29 Table D dot segments and rejected 0/12 specified positives, yet returned false for `.` and true for legal ` .hidden`, U+2024 and U+FF0E forms. With the check placed last, it also preserves Table D's twelve existing refusal reasons. It rejects `.projects`, so criterion 4 can pass; deleting it still reddens C1/C2's held-out assertions, so both RED proofs can report PROVEN. The stated family-shape residual is therefore not bounded by criterion 3: Table D shares the same missing first-character boundary. Manual review is the only remaining detector.",
+      "impact": "A wrong implementation can pass the prescribed class, handoff, adoption, over-denial and mutation evidence while silently honoring `reports_dir: .` and admitting promotion paths containing an exact `.` segment. Other overbroad variants can reject legal leading-whitespace, trailing-dot or compatibility-dot names.",
+      "recommendation": "Add a fixed boundary matrix beside the seeded family in both V2 and `tests/unit/dot-segment-denial.test.js`. It should assert refusal/fallback for `.`, `..`, `./reports`, `reports/./dreams`, and `a//.b` at applicable enforcement points, including an explicit fallback assertion for the three values removed from the report test. Add positive assertions for interior leading whitespace such as `a/ .hidden`, a trailing-dot segment, U+2024/U+FF0E dot look-alikes, and an NFD spelling whose NFC form remains non-dot. Keep this matrix independent of the generated family and require the exact `startsWith('.')` boundary."
+    }
+  ],
+  "review_results": {
+    "edge_semantics": {
+      "result": "The prescribed implementation itself is correct for the stated class.",
+      "details": [
+        "Promotion uses NFC-lowercased slash-delimited segments; layout validation uses raw cleaned slash-delimited segments.",
+        "The intended `startsWith('.')` check covers exact `.`, `..`, leading `./`, a dot-prefixed last component, and `a//.b`.",
+        "Absolute paths and backslashes remain covered by existing layout clauses.",
+        "Trailing dots, leading whitespace before a dot, Unicode dot look-alikes, and NFD-leading non-dot characters remain legal under the U+002E-first-character definition.",
+        "NFC does not turn the tested U+2024 or U+FF0E forms into U+002E; NFKC does, demonstrating why over-normalization must be tested."
+      ]
+    },
+    "table_d": {
+      "result": "Correct.",
+      "details": [
+        "The shipped inventory has 17 HANDOFF rows and Table D has 29 concrete paths.",
+        "The rows map exactly after concretizing directory/glob entries with representative files.",
+        "The loop-last partition is correct: 17 previously admitted paths acquire the dot reason; seven retain the extension reason, one retains the instruction-basename reason, and four retain the `.claude`/`.codex` root reason.",
+        "Five production spot checks matched the stated current reasons."
+      ]
+    },
+    "red_proofs": {
+      "result": "Structurally viable, but they do not close the finding.",
+      "details": [
+        "`validateProof` permits source mutations targeting `promote.js` and `layout.js` while protecting the future suite.",
+        "`evaluateRed` requires exact failing identity equality, own-body `testCodeFailure`, `ERR_ASSERTION`, and the declared signal.",
+        "C1 can delete only the final promotion loop; C2 can delete only the shared layout clause without causing module-load failure.",
+        "Literal declarations cannot yet be run because the suite and declaration file are deliverables not present on this design branch.",
+        "The demonstrated wrong predicate still passes both proof designs because each deletion makes the same incomplete held-out family red."
+      ]
+    },
+    "adopt_round_trip": {
+      "result": "The three-part conjunction is logically adequate if implemented literally.",
+      "details": [
+        "No persisted dot-prefixed value plus exact persisted/read-back equality prevents a reader-only fix from silently discarding what adopt wrote.",
+        "The promotion assertions connect the persisted tier to enforcement.",
+        "A fixture whose selectable candidate is `.projects` makes the untouched tree red.",
+        "This test does not distinguish the boundary-near wrong predicate because `.projects` belongs to the same ASCII-letter family."
+      ]
+    },
+    "deliverables": {
+      "result": "Complete.",
+      "details": [
+        "No change to `src/cli/adopt.js` is required because adopt already consumes `inferLayout`.",
+        "The inventory, glossary, package scripts and CI need no modification.",
+        "The report-fallback test edit remains truthful after removing `.`, `./reports`, and `reports/./dreams`, although its `admits` branch becomes constant-true as the spec already records."
+      ]
+    },
+    "adr_and_size": {
+      "result": "Honest.",
+      "details": [
+        "The WP introduces no daemon, service, telemetry or surviving process and is consistent with ADR-0004.",
+        "Three small source edits plus class, integration and RED-proof coverage reasonably fit size M."
+      ]
+    }
+  },
+  "routed_scope_objections": [
+    {
+      "objection": "The per-key fallback remains silent even when an existing dot-prefixed layout is replaced by a default.",
+      "route": "Dispatch precondition / owner ruling",
+      "counted_in_verdict": false
+    },
+    {
+      "objection": "A legitimate dotfile basename such as `.hidden.md` is denied.",
+      "route": "The 2026-08-05 class-shape ruling; a basename is explicitly a segment under Table A",
+      "counted_in_verdict": false
+    },
+    {
+      "objection": "The finite instruction-basename deny-list remains incomplete.",
+      "route": "WP-instruction-basename-currency and its accepted residual",
+      "counted_in_verdict": false
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-ds1.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1 && git diff main...HEAD --stat && nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '1,900p'",
+      "exit_status": 0,
+      "notable_output": "Only the spec and design-gate logbook differ from main: 1295 insertions, 77 deletions."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '200,570p'; nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '827,930p'; nl -ba docs/specs/logbook/2026-09-04-dot-segment-denial-design-gate-rounds.md | sed -n '1,560p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '330,570p'; nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '827,930p'; nl -ba docs/specs/logbook/2026-09-04-dot-segment-denial-design-gate-rounds.md | sed -n '1,253p'; nl -ba docs/specs/logbook/2026-09-04-dot-segment-denial-design-gate-rounds.md | sed -n '473,560p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/layout.js | sed -n '1,260p'; nl -ba src/core/layout-infer.js | sed -n '1,280p'; nl -ba src/core/dream/promote.js | sed -n '80,280p'; nl -ba src/core/dream/promote.js | sed -n '1010,1080p'; nl -ba tests/unit/dream-promote.test.js | sed -n '1900,1980p'; nl -ba tests/integration/adopt-e2e.test.js | sed -n '1,280p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '180,275p'; nl -ba src/core/dream/promote.js | sed -n '1035,1065p'; nl -ba src/cli/adopt.js | sed -n '300,410p'; nl -ba scripts/red-proofs.js | sed -n '1,420p'; for f in tests/red-proofs/*.proofs.json; do echo \"FILE $f\"; nl -ba \"$f\"; done",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"function (validateProof|evaluateRed)|validateProof|evaluateRed|expectRed|testNamePattern|ERR_ASSERTION\" scripts/red-proofs.js; nl -ba scripts/red-proofs.js | sed -n '430,760p'; nl -ba scripts/red-proofs.js | sed -n '760,1120p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1510,1715p'; nl -ba scripts/red-proofs.js | sed -n '2050,2280p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"Table B|HANDOFF|GitHub Copilot|Aider|OpenHands|Qwen\" docs/instruction-file-inventory.md; nl -ba docs/instruction-file-inventory.md | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '660,736p' docs/specs/WP-dot-segment-denial.md | bash",
+      "exit_status": 1,
+      "notable_output": "Literal V2 printed seed 1788534551841, then the sandbox denied its first mkdtempSync with EPERM."
+    },
+    {
+      "command": "node <<'NODE' [in-memory V2 filesystem shim and extracted V2 body] NODE",
+      "exit_status": 1,
+      "notable_output": "zsh could not create the temporary file used for the here-document."
+    },
+    {
+      "command": "node <<'NODE' [same in-memory V2 filesystem shim, invoked through /bin/bash] NODE",
+      "exit_status": 1,
+      "notable_output": "bash could not create the temporary file used for the here-document."
+    },
+    {
+      "command": "printf '%s' '<base64-encoded in-memory filesystem shim>' | base64 -d | node",
+      "exit_status": 1,
+      "notable_output": "Executed the exact extracted V2 body with only OS-temp operations virtualized in memory: admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 36/87; FAIL 603/652."
+    },
+    {
+      "command": "node -e \"[makeAdmit(defaultLayout()) spot-check of five Table D paths]\"",
+      "exit_status": 0,
+      "notable_output": "`.github` admitted; `.cursor/*.mdc` retained extension refusal; `.junie/AGENTS.md` retained basename refusal; `.claude` and `.codex` retained discovery-root refusals."
+    },
+    {
+      "command": "rg -n \"function renderLayoutBlock|function scaffoldMappedDirs|function printLayout|module.exports\" src/cli/adopt.js; nl -ba src/cli/adopt.js | sed -n '1,170p'; nl -ba src/cli/adopt.js | sed -n '410,470p'; rg -n \"makeAdmit\\(|readVaultLayout\\(|inferLayout\\(\" src/cli src/core tests/integration/adopt-e2e.test.js | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e \"[first automated wrong-predicate audit, parsing V2 HANDOFF literal]\"",
+      "exit_status": 1,
+      "notable_output": "Probe setup error: DOT was not supplied to the evaluated HANDOFF literal."
+    },
+    {
+      "command": "node -e \"[corrected automated wrong-predicate audit with DOT/ROOT/EXT/BASE supplied]\"",
+      "exit_status": 0,
+      "notable_output": "Wrong predicate caught 78/78 generated negatives and 29/29 Table D segments, over-denied 0/12 specified positives, admitted `.`, and rejected ` .hidden` and U+FF0E."
+    },
+    {
+      "command": "node -e \"[NFC/NFKC edge probe]\"; printf 'inventory HANDOFF rows='; rg -c '^\\| HANDOFF \\|' docs/instruction-file-inventory.md; printf 'Table D path rows='; sed -n '382,412p' docs/specs/WP-dot-segment-denial.md | rg -c '^\\| [0-9]+ \\|'",
+      "exit_status": 0,
+      "notable_output": "NFC preserved U+2024/U+FF0E as non-dot while NFKC folded them to dot; inventory count 17, Table D count 29."
+    },
+    {
+      "command": "rg -n \"fullwidth|dot leader|FF0E|2024|leading whitespace|trimStart|NFKC|NFC|reports/\\./dreams|projects_dir: \\.|identity_dir: \\.|\\.hidden\" tests/unit/layout.test.js tests/unit/layout-infer.test.js tests/unit/dream-promote.test.js tests/integration/adopt-e2e.test.js",
+      "exit_status": 0,
+      "notable_output": "No existing test covers the missing leading-whitespace or compatibility-dot positives; the report test is the existing exact-dot coverage scheduled for removal."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "notable_output": "Empty porcelain output. Worktree status was identical before and after; only sandbox-related xcrun cache warnings were emitted."
+    }
+  ],
+  "non_command_tool_failures": [
+    "An orchestration attempt to base64-encode the in-memory shim failed before launching a subprocess because the tool isolate exposed no `btoa`.",
+    "A second orchestration attempt failed before launching a subprocess because the tool isolate exposed no `TextEncoder`."
+  ],
+  "hermeticity": {
+    "worktree_writes": "none",
+    "os_temp_writes": "attempted only by the literal V2 command and denied with EPERM",
+    "successful_probes": "read-only or in-memory",
+    "status_before": "",
+    "status_after": ""
+  }
+}
