@@ -430,9 +430,11 @@ does not.** On the two output-bearing arms the record is printed at step 20,
 *after* `writeLedger` (step 18), the summary line, `regenerateDigest()` and the
 vault warnings refresh. Every one of those persists or prints a sentence saying
 the run named each copy and its folder, so a throw in that window leaves the
-claim durable and the record dead in memory. **Measured**, with a fault injected
-at the digest write on the refused-report arm: the run aborts with the ledger
-already written and the output carrying no record at all. **Row L7 closes the
+claim durable and the record dead in memory. **Measured**, with the run aborted
+immediately after `transcript-ledger.json`'s atomic rename on the refused-report
+arm: the final ledger is on disk and the output carries no record at all — and a
+placement just after `writeLedger` fares no better, which is why the evidence is
+three-state (criterion 6). **Row L7 closes the
 window by moving the delivery to step 17b** — one relocated block, no rewritten
 line — so the sentence is true by construction rather than true on the success
 path. The alternative, narrowing the sentence to a directive to look rather than
