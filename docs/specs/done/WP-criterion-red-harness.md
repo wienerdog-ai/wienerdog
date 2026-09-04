@@ -446,7 +446,57 @@ on the spot.
       row 2b's `OVERRIDE_VARS`-derived provided set is mirrored by Table D's
       write-boundaries and seam rows, the security checklist and criteria 7/8b —
       all of which CITE row 2b rather than restating the names, so a variable
-      added to `paths.js` changes exactly one cell plus criterion 8b's check.** Added in
+      added to `paths.js` changes exactly one cell plus criterion 8b's check.**
+      **CORRECTION 2026-09-04 — the round-5 sentence above is LEFT STANDING as the
+      record of what round 5 asserted; TWO of its claims are superseded and one
+      stands. An earlier revision of this pass DELETED that sentence and put its
+      opposite in its place under a CORRECTED label; the gate caught it, and this
+      is the additive form B3b and C3 already use.**
+      **SUPERSEDED (1) — "row 2b's `OVERRIDE_VARS`-derived provided set"
+      conflates row 2b's TWO name sets.** Row 2b REDIRECTS the provided set and
+      REMOVES the `OVERRIDE_VARS` names, so the `OVERRIDE_VARS`-derived set is the
+      REMOVED one and never the provided one. Registration (ii) below, added at
+      PR #204 round 1, states the removal rule correctly and is the one to read.
+      **SUPERSEDED (2) — the mirror list is no longer complete**, because PR
+      #204's fourteen review rounds extended the shipped phase environment after
+      round 5 was written and none of the extensions reached row 2b: `PWD` is SET
+      to the phase copy and `OLDPWD` deleted; npm's checkout-naming variables
+      (`INIT_CWD`, `npm_config_local_prefix`, `npm_package_json`) are removed and
+      `PATH` is stripped of the source tree's `node_modules/.bin`; `NODE_PATH` and
+      `NODE_OPTIONS` are removed whole; and Node's own `NODE_TEST_CONTEXT` /
+      `NODE_TEST_WORKER_ID` marks are stripped. **STANDS — the deference
+      pattern:** Table D's write-boundaries and seam rows, the security checklist
+      and criteria 7/8b all CITE row 2b rather than restating the names.
+      **AND THE AUTHORITY MAP, MEASURED FROM THE CODE RATHER THAN INFERRED FROM
+      THE CONSTANT NAMES — a first draft of this correction inferred it and was
+      wrong, which is the second thing the gate caught.** In
+      `scripts/red-proofs.js`: **FOUR constants are CONSUMED by `phaseEnv()`** —
+      `NPM_CWD_VARS` (which also feeds the `PATH` barrier collection),
+      `INHERITED_NODE_VARS`, `REDIRECTED_ENV_VARS` and `NODE_TEST_RUNNER_VARS`,
+      each in a `for (const name of …) delete env[name];` removal loop.
+      **`XDG_VARS` IS NOT ONE OF THEM:** `phaseEnv()` never references it and
+      assigns the four XDG roots by explicit statement; the constant is declared,
+      exported, and consumed only by the runner's OWN SUITE, which iterates it to
+      assert each root lands inside the phase copy. **So `XDG_VARS` MIRRORS those
+      hardcoded assignments for the test — a name removed from it shrinks the
+      test iteration and changes NO runtime behaviour**, which is exactly why it
+      may not be presented as deciding anything. **The names that are SET are
+      explicit statements inside `phaseEnv()` and appear in NO constant:**
+      `TMPDIR`, `TMP`, `TEMP`, `HOME`, the four XDG roots and `PWD`; `OLDPWD` is
+      deleted there; `PATH` is SANITISED by the barrier filter rather than
+      removed. **And criterion 8b covers exactly ONE of the five** —
+      `REDIRECTED_ENV_VARS`, against `paths.js`'s `OVERRIDE_VARS`; the other four
+      carry no drift check. **READ `phaseEnv()` ITSELF for the complete name set;
+      the constants alone do not decide it.** *(Cited by construct rather than by
+      line, on the same discipline this branch applied to the pinned-set
+      registry: `scripts/red-proofs.js` is a live file and a line number into it
+      rots.)*
+      **RESIDUAL, NAMED RATHER THAN FIXED HERE (2026-09-04):** this leaves the
+      phase-environment contract with no canonical TABLE, which is an ADR-0031
+      gap. Closing it means re-deciding the substance of a merged contract row,
+      and a contract change is the owner's act, not a wording pass's — see
+      `docs/runbooks/codex-review.md`, *"Diff size does not measure contract
+      impact"*. Added in
       round 4: 5 also asserts **Table E1**'s mode and empty-directory facts; 6a
       asserts **Table E2**'s `FILTERED` exit class; 7(b2) asserts row 2b's full
       provided set (parent, `HOME`); 10 asserts the REACH footer's LANE LIMIT**
