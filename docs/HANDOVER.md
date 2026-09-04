@@ -24,7 +24,7 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 |-------|---------|--------|
 | A | Interpolation neutralizer for code-owned markdown control planes | **Done** — `WP-sanitize-project-display-names`, `WP-daily-summary-per-line-framing`, `WP-neutralize-alert-callout-rendering` in `done/` |
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
-| C | Dream write fence (machinery-controlling files) | **Open — three residuals** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
+| C | Dream write fence (machinery-controlling files) | **Open — one residual** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
 | D | Code-derived draft recipients (no verb accepts a model-named address) | **Not started** — full harvested basis in `WP-audit-d-code-derived-recipients` |
 | E | Ledger-parser correctness + hostile corpus | **Not started** — full harvested basis in `WP-audit-e-ledger-parser-corpus` |
 
@@ -37,6 +37,23 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-05 (overnight continuation of the 09-04 session,
+> owner-authorized merges).** Measured on `main`:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 4→ | `WP-dot-segment-denial` | **Done** | design loop #214 (round zero + 3 double-channel rounds; circuit breaker at round 2 — two hand-shaped sample families replaced by EQUALITY with a one-line reference predicate over a seeded full-alphabet generator; round 3 hardened the grading's inputs), implementation #215 (three-round triple-channel PR gate: PATH stub for the adopt round-trip test, `readdirSync`-derived B3 spelling, a non-vacuous seven-key round-trip oracle), filed in this pass | The class rule is enforced at `makeAdmit` (loop placed LAST), `isSafeRelativePath` (shared by `layout.js` and `layout-infer.js`) and thereby `adopt --yes`; two RED proofs over six named test identities. Dispatched under the architect's recommendation (the reader's per-key silent fallback stays silent) — the owner may reverse by dated amendment |
+> | 3b, 6–9 | unchanged | Draft | — | next: `WP-quarantine-banner-location` → `WP-quarantine-preserve-durability` (owner-sequenced), `WP-audit-d-…`, `WP-audit-e-…`, `WP-process-runbook-sweeps`; `WP-dream-git-env-pinning` still needs the owner's product decision |
+>
+> **Residuals routed to wd-architect, not dispatched:** the dot-segment spec's
+> own V2 B3 loop grades against the pre-filesystem spelling (state the B3
+> pre-step once — `topLevelDirs`' `readdirSync`, then `pick`'s trim, then the
+> `reports_dir` join — with V2 and the test file as registered mirrors); the
+> adopt-e2e Deliverables cell's setup enumeration omits the PATH stub; the
+> basename WP's Table C position clause; the phase-environment contract table
+> for `scripts/red-proofs.js`; ADR-0010's "adopt requires the user to confirm"
+> sentence vs `--yes`. Audit group C is down to ONE residual (row below).
+>
 > **Status pass, 2026-09-04 (owner-authorized merges; rulings given at
 > ~12:50).** Measured on `main` at the time of writing, not from memory:
 >
