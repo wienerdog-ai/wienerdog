@@ -1,0 +1,21 @@
+# Closing verification — orchestrator, 2026-09-05, WP-dot-segment-denial at e2ea9ae3. V2 extracted from the spec's fenced block (awk from '# V2 —' to '# V3 —', fences stripped) and run as written.
+
+## untouched tree, acceptance mode (WD_HELD_OUT_SEED unset) — rc=1
+seed 1788538902686  samples 1000 per enforcement point  (reproduce with WD_HELD_OUT_REPLAY=1 WD_HELD_OUT_SEED=1788538902686)
+generator: 112 distinct first code points of 112, leading-dot share 0.492
+ref1 986/2000 | ref2 974/2000 | ref3 485/1000 | over 12/12 | handoff 36/87 | boundary 16/39
+FAIL: 2629 of 5138 graded cases disagree with the reference; the first five:
+
+## guards
+WD_HELD_OUT_N=999            → rc=1  FAIL: WD_HELD_OUT_N must be a safe integer >= 1000 (the Table F row F3 floor), got "999"
+WD_HELD_OUT_SEED=78          → rc=1  FAIL: WD_HELD_OUT_SEED is set. An acceptance run must draw its own seed …
+WD_HELD_OUT_REPLAY=1 (no seed) → rc=1  FAIL: WD_HELD_OUT_REPLAY=1 needs WD_HELD_OUT_SEED=<seed> …
+WD_HELD_OUT_REPLAY=1 WD_HELD_OUT_SEED=78 → run line reads 'REPLAY (NOT acceptance evidence) seed 78 …'
+
+## scratch copy (git archive HEAD) carrying exactly the Exact-contracts edits (the loop LAST in makeAdmit; the clause in isSafeRelativePath + export; layout-infer.js's copy deleted and the shared one required) — rc=0
+ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | over 12/12 | handoff 87/87 | boundary 39/39
+V2 OK: the implementation EQUALS the reference predicate at all three enforcement points over 5000 full-alphabet samples, Table D is closed, Table E holds, and nothing dot-free is over-denied
+
+## same copy, mutant 'length > 1' at both sites — rc=1 (reference grading 5000/5000; caught by Table E alone, as Table F row F7 states)
+ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | over 12/12 | handoff 87/87 | boundary 35/39
+FAIL: 4 of 5138 graded cases disagree with the reference; the first five:
