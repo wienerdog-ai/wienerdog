@@ -23,6 +23,13 @@ body left to carry the disposition. This is the disposition.
 had not landed in this worktree. Every edit below was made at the path that
 existed, and no `status:` was changed.
 
+**Rebase note (orchestrator, 2026-09-04).** The flip landed as PR #207 and this
+branch was rebased onto `705ae286` before its PR opened; git carried the item-7
+edit across the rename, so on `main` that hunk lives at
+`docs/specs/done/WP-criterion-red-harness.md` (same line region). The
+`docs/specs/WP-criterion-red-harness.md` paths quoted below are the pre-rebase
+paths the commands were actually run against and are left as recorded.
+
 ---
 
 ## Dispositions, one line each
