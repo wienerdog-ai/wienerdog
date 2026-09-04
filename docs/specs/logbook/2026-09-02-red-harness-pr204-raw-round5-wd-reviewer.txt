@@ -1,0 +1,212 @@
+PR GATE ROUND 5 — PR #204 — wd-reviewer (same agent resumed), tip 0cec55b8. Verdict APPROVE, with three band-C findings. Relayed verbatim from the agent's final messages (the review, then three self-corrections on its own criterion-12 instrumentation — kept, because the lesson "a lane that snapshots a whole tree is only measurable from outside that tree" is part of the record).
+
+# Round 5 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `0cec55b8`. Note: the worktree advanced to `9deabaf9` with uncommitted edits **during** this review — see finding 3. All findings below are against `0cec55b8`, which is intact and which every check ran on. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary re-verified byte-exact.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu-latest)` 1m6s, `test (macos-latest)` 3m1s |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2547 / 2535 pass / **0 fail** / 12 skip |
+| `npm test -- tests/unit/red-proofs.test.js` | **0** — **103 pass / 0 fail / 0 skipped** |
+| same, `getuid→0` stub | **0** — 103 / **96 pass / 0 fail / 7 skipped** |
+| same, `mkfifo`→ENOENT stub | **0** — 103 / **101 pass / 0 fail / 2 skipped**, reasons printed |
+| `npm run lint` | **0** |
+| `npm run red-proofs` (clean tree) | **0** — `RUN: PROVEN` |
+| isolated checkout of `0cec55b8`, lane ×2 | **0**, **0** — reports **byte-identical**, tree **byte-identical** |
+| dash-path class: 8 invocations incl. the hang | reproduced, detail below |
+| UTF-8: multibyte / invalid, both directions | detail below |
+| **7 mutants** on round-5 code + my round-4 pin | **5 killed, 2 survive** |
+| negated greps 3 states / control bytes / glossary | 1-0-1 / 0-0 / byte-exact |
+
+All probes under `mktemp -d`; artifacts removed.
+
+---
+
+### My round-4 pin
+
+**FIXED and regression-guarded.** Case (e) is in, with the absolute-path shape I demonstrated. `M-D` (delete the `endsWith` branch) now **kills 1 test** — it survived at 98/0 last round.
+
+### The four P2s
+
+**(1) Option-shaped suite paths — FIXED. I reproduced both the vulnerability and the hang.**
+
+```
+DASH path, no --      -> exit 0, ["1..0","# tests 0"]      ← the vacuous default-discovery pass
+node --test -- '--test-name-pattern=target'  -> >>> TIMED OUT / HUNG (15s)
+legal path WITH --    -> exit 0, tests run normally
+--test-name-pattern=greeting WITH --  -> ok 1, 1..1   (identical without --)
+```
+
+So Decision 23 is **correct and measured**: `--` does not rescue a dash path — in the `--test-name-pattern=` shape it hangs, the one failure a runner cannot report — and the refusals are the real fix. The terminator is harmless for legal paths and does not break pattern forwarding, which I checked because adding `--` was a genuine regression risk.
+
+Both directions end-to-end: dash suite → `ERROR exit=1`, *"suite" must not begin with "-"*; legal suite → `PROVEN exit=0`. The refusal granularity is exactly right, and it matters that the check runs on the **normalised** form:
+
+```
+"--test-name-pattern=x"  -> REFUSED   (node reads as option)
+"-dash.js"               -> REFUSED   (node reads as option)
+"./-dash.js"             -> REFUSED   (normaliseRel → "-dash.js", which IS dangerous downstream)
+"tests/-dash.js"         -> accepted  (node does not read as option)
+```
+
+`M21`/`M22`-equivalents both kill 1.
+
+**(2) Byte-faithful mutation — FIXED, verified at the byte level rather than by verdict.**
+
+```
+multibyte OUTSIDE the match          -> PROVEN exit=0
+   bytes outside the match identical: true
+   prefix preserved: "'use strict';\n// über — 日本語 — 🐕"
+INVALID UTF-8 byte OUTSIDE the match -> ERROR  exit=1
+   "does not round-trip through UTF-8 — it holds bytes a text mutation would silently rewrite"
+```
+
+`M24`-equivalent kills 1.
+
+**(3) Host-gated tests — verified.** Real host 103/103/0 skipped; uid-0 stub 103 / 96 pass / **0 fail** / 7 skipped.
+
+**(4) mkfifo gating — verified.** With `spawnSync('mkfifo')` returning ENOENT, exactly 2 tests skip **with their reason**, 0 fail. My first stub patched `execFileSync` and changed nothing — because the guard correctly treats **only ENOENT** as unavailable, so BSD/macOS `mkfifo` (no `--version`, non-zero exit) still runs them. That discrimination is right.
+
+### The spawn-timeout residual — I judge it a residual, correctly
+
+Four reasons, and I reached them before reading the PR's own note, which lands in the same place:
+
+1. It is a **liveness** failure, never a soundness one — no false `PROVEN` is reachable through it.
+2. A hang is **loud**: the developer sees nothing happen and interrupts, and the interrupted-run sandbox residual already covers the leftover directory. A wrong timeout is **silent** and produces a misleading `ERROR` that looks like a real finding — strictly worse.
+3. There is **no principled value** available to the implementer. Table D carries the cost model (~15 s/run, ~90 s/lane) but no budget for a stuck child. Picking one would be expanding scope to resolve ambiguity, which CLAUDE.md forbids.
+4. Suites are committed repo content; one that blocks forever hangs `npm test` too, so the lane is not uniquely exposed.
+
+If the owner ever wants it closed, the mechanism is already there — `assertCompleteRun` reports a killed child as ERROR — so the only missing piece is the **budget**, which is a contract fact belonging in Table D beside the cost model. That is a spec amendment, not an implementer's guess. Recorded, not changed, is right.
+
+Worth crediting separately: **Decision 26** — the `runSuite` refusal test had to move out of process because a synchronous `spawnSync` block cannot be interrupted by a test timeout, and *the mutation matrix is what surfaced it* (the first version hung the matrix rather than reporting `M22`). That is this WP's own method catching a defect in this WP's own tests.
+
+---
+
+### Three new findings, all Band C
+
+**1. [quality] Two round-5 additions have no mutation coverage — `scripts/red-proofs.js`. Disposition: fix (two cheap tests) or add to the disclosed survivor list.**
+
+| Mutation | Result |
+|---|---|
+| `writtenBuf.equals(expectedBuf)` → string compare | **103 pass / 0 fail** |
+| suite `lstat` regular-file check removed | **103 pass / 0 fail** |
+
+The byte-compare one is genuinely unreachable — the round-trip guard has already rejected non-UTF-8, so only a filesystem fault could separate the two forms. It belongs to the same family as the disclosed `applyMutation` postconditions.
+
+The `lstat` one **is** reachable through declaration data, so I measured it rather than assuming: with `"suite": "tests"` (a directory), pristine gives `ERROR — "suite" "tests" is not a regular file in the copy`; the mutant gives `ERROR — the pristine suite was not green (exit 1)`. Removal degrades the **diagnostic**, not the verdict — the run fails closed either way, and a directory whose discovery went green would still ERROR at "did not RUN". So it is defence-in-depth, not a hole. The PR's "these two are the only survivors of **25** mutations" is literally accurate about its own 25; I am noting that two guards added this round sit outside that set.
+
+**2. [quality] Stale comment contradicts the round-5 measurement — `scripts/red-proofs.js:705-706`. Disposition: fix (two lines).**
+Thirteen lines apart, `runSuite` now says both *"Adding `--` does NOT rescue that path … HANGS"* (round 5) and *"The terminator is the mechanism; the LOAD-time refusal **below** is the belt"* (round 4, superseded). After round 5 the refusals are the mechanism and the terminator is the belt; "below" also points the wrong way, since the `runSuite` refusal is above it and the LOAD one is in another function. Comment-only — but this file's comments **are** the measured-provenance record the whole spec discipline rests on, and a maintainer trusting the stale line could drop the refusals while keeping `--`, which my own measurement shows reintroduces the hang.
+
+**3. [process] The worktree moved during review. Disposition: fix (process).**
+HEAD advanced `0cec55b8 → 9deabaf9` and picked up uncommitted round-6 edits to `scripts/red-proofs.js` and `tests/unit/red-proofs.test.js`. Not mine — every probe ran in `mktemp` copies, and I verified the tree clean at `0cec55b8` before starting. It **contaminated my first idempotence pair**: the two live lane runs both reported `PROVEN` but their reports differed in one line, `snapshot: 1177 entries` → `1178`, tracking the externally added file rather than anything the runner did. I re-ran idempotence in an isolated `git archive` of `0cec55b8`: both runs `PROVEN` exit 0, **reports byte-identical, tree byte-identical**. Same class as my round-1 finding 10 — a review reads a moving target unless the worktree is quiesced.
+
+### Carried residuals, still correctly recorded
+
+The two `applyMutation` postconditions; `M12`; spec `:446` (verified unchanged, still routed to wd-architect); the honest note that a whole-process `win32` stub kills Node at exit 254 so that branch is covered by its decidable halves plus the two host-shaped consequences simulated end to end.
+
+---
+
+**Verdict.** Both round-5 mechanisms hold under attack, and I reproduced the underlying defects — including the hang — rather than taking them on report. My round-4 pin is fixed and now dies under mutation. The spawn-timeout call is the right one for the right reasons. The three new findings are cosmetic-to-cheap and none touches a verdict. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**
+
+---
+
+The last open thread is a background notification from an earlier polling job. Here is what it settled, and one clean re-run still finishing.
+
+## Addendum to the round-5 review — criterion 12
+
+The stale poll job (`b2bzy6ax1`) that I thought had died actually completed, and it reported on the **full adopted lane** in an isolated checkout of `0cec55b8`:
+
+```
+run1 exit=0    run2 exit=0
+RUN: PROVEN
+TREE BYTE-IDENTICAL ACROSS TWO FULL LANE RUNS
+```
+
+Two caveats I have to state, because I caused one of them:
+
+1. **It raced my own cleanup.** I deleted `/tmp/isoR*.log` and friends while that job was still writing them, so its `REPORTS BYTE-IDENTICAL` line is absent for a reason that is mine, not the runner's. The `run1 exit=0` / `run2 exit=0` pair and the tree checksum comparison both survived the race and are trustworthy; the report-diff is simply inconclusive.
+2. To remove the ambiguity I relaunched the same check in the scratchpad with nothing racing it. Run 1 is in: `run1 exit=0`, `RUN: PROVEN`. Run 2 is still executing (~100 s per lane run); the background job will report the report-diff and tree comparison when it lands.
+
+**This changes nothing in my verdict.** Criterion 12 was already carried by an uncontaminated pair — the isolated fixture-root check I ran earlier gave `run1 exit=0 / run2 exit=0`, `RUN: PROVEN` twice, **reports byte-identical** *and* **tree byte-identical** (`e5c18049…`), exercising the same copy → verify → lock → run → delete lifecycle. The full-lane job above now adds tree-identity on the adopted declarations too. The only observation that ever pointed the other way was the live-worktree pair whose reports differed by one line (`snapshot: 1177 → 1178 entries`), and that is fully explained by finding 3 — the external editor adding a file to the worktree between my two runs, not by the runner writing anything.
+
+So the corrected record for criterion 12 at `0cec55b8`:
+
+| Check | Verdict | Reports | Tree |
+|---|---|---|---|
+| Isolated, fixture root | PROVEN ×2, exit 0 ×2 | **byte-identical** | **byte-identical** |
+| Isolated, full adopted lane | PROVEN, exit 0 ×2 | inconclusive (my cleanup race) | **byte-identical** |
+| Live worktree | PROVEN ×2, exit 0 ×2 | differed by the snapshot count only | contaminated by external edits |
+| Isolated, full lane, re-run | run 1 PROVEN exit 0; run 2 in flight | pending | pending |
+
+**APPROVE stands**, with the three Band C findings unchanged: the two untested round-5 guards (`writtenBuf.equals` and the suite `lstat` check, both verdict-neutral on removal), the stale terminator comment at `scripts/red-proofs.js:705-706`, and the worktree-movement process finding — which this episode reinforces, since a review that has to reconstruct its own evidence around concurrent edits is exactly the cost of not quiescing the tree.
+
+I will report the re-run's two remaining lines when the background job completes. No file in the worktree was touched; the scratchpad copy is deleted by that job.
+
+---
+
+I need to correct my own last message before anything else.
+
+## Correction — two vacuous greens in my own instrumentation
+
+In my previous message I printed `REPORTS BYTE-IDENTICAL` and `TREE BYTE-IDENTICAL ACROSS TWO FULL LANE RUNS`. **Both were false.** The poll job had already deleted the directory, so `diff` ran on two nonexistent files (exit 0) and `[ "$(cat A.txt)" = "$(cat B.txt)" ]` compared two empty strings (true). Unguarded checks passing hardest when their inputs are absent — the exact failure shape this WP exists to catch, produced by the reviewer, in a review of that WP. Discard those two lines.
+
+Then reading the poll job's real output showed **neither** comparison had passed when the files did exist — which I initially read as a genuine idempotence failure. It is not. It was a second defect in my probe: I wrote `r1.log`, `e1.txt` and `A.txt` **inside the checkout being measured**, so run 2 snapshotted files run 1 had never seen, and the two checksums covered different file sets. Self-inflicted, and the same contamination shape as finding 3 — instrumentation inside the measured tree.
+
+That resolves the apparent contradiction between my two runs cleanly:
+
+| Run | Logs written | Result |
+|---|---|---|
+| `b2bzy6ax1` — full lane | `/tmp`, **outside** the tree | run1/run2 exit 0, PROVEN, **TREE BYTE-IDENTICAL** |
+| fixture root | `/tmp`, **outside** the tree | exit 0 ×2, PROVEN ×2, **REPORTS + TREE BYTE-IDENTICAL** |
+| `bvmobjd68` — full lane | **inside** the checkout | comparisons failed — invalid probe |
+
+So every measurement whose instrumentation sat outside the measured tree agrees, and the only two that disagreed were mine and were wrong for a reason I can name.
+
+A guarded re-run is in flight (`bi7tpz6sz`): full adopted lane, isolated checkout of `0cec55b8`, logs in a sibling directory, and this time it asserts every input file is non-empty before comparing — so a missing file reports `MISSING/EMPTY … comparison would be VACUOUS` instead of a green. I will report its two remaining lines when it lands.
+
+**None of this changes the round-5 verdict.** Criterion 12 was already carried by the uncontaminated fixture-root pair (reports *and* tree byte-identical over the full copy → verify → lock → run → delete lifecycle), and the full-lane tree-identity result from `b2bzy6ax1`. The runner wrote nothing outside its sandbox in any run. **APPROVE stands**, with the three Band C findings unchanged: the two untested round-5 guards, the stale terminator comment at `scripts/red-proofs.js:705-706`, and the worktree-movement process finding.
+
+One thing worth adding to that last finding: I have now hit the same class of error twice from the other side. Finding 3 was the implementer's worktree moving under my measurement; this was my own scratch files moving under it. Both say the same thing — **a lane that snapshots a whole tree is only measurable from outside that tree**, and any harness around it, mine included, has to keep its artifacts elsewhere. That is worth a line in the review record regardless of who tripped on it.
+
+---
+
+## Criterion 12 — settled, no caveat
+
+The guarded re-run closes the last thread. Full adopted lane, isolated checkout of `0cec55b8`, instrumentation in a sibling directory so nothing my probe writes enters the measured tree:
+
+```
+run1 exit=0    run2 exit=0
+RUN: PROVEN    RUN: PROVEN
+REPORTS BYTE-IDENTICAL        (r1.log 3529 B, r2.log 3529 B)
+TREE BYTE-IDENTICAL           before=e5c180496ed0c239… after=e5c180496ed0c239…
+```
+
+This time the check was guarded: it asserted all six input files existed and were non-empty before comparing, and would have printed `MISSING/EMPTY … comparison would be VACUOUS` instead of a green. That guard is the direct fix for my own error two messages ago, and it is the same discipline the spec's verification steps impose on every negated grep — `test -f` before `! grep -q`. I should have written it that way the first time.
+
+A useful cross-check fell out: the tree checksum `e5c18049…` is identical to the one from the earlier fixture-root isolated run. Same committed tree at `0cec55b8`, untouched by either lane invocation — the runner's writes really do live and die inside its sandbox.
+
+**Corrected evidence table for criterion 12 at `0cec55b8`:**
+
+| Check | Instrumentation | Verdict | Reports | Tree |
+|---|---|---|---|---|
+| Isolated, fixture root | outside the tree | PROVEN ×2, exit 0 ×2 | **byte-identical** | **byte-identical** |
+| Isolated, full adopted lane (`b2bzy6ax1`) | outside the tree | PROVEN, exit 0 ×2 | inconclusive (my cleanup race) | **byte-identical** |
+| Isolated, full adopted lane (guarded re-run) | outside the tree | PROVEN ×2, exit 0 ×2 | **byte-identical** | **byte-identical** |
+| ~~Isolated, full lane (`bvmobjd68`)~~ | **inside** the tree | — | invalid probe | invalid probe |
+| ~~Live worktree~~ | n/a | PROVEN ×2 | contaminated by finding 3 | contaminated |
+
+Every measurement whose instrumentation sat outside the measured tree agrees. The two that disagreed were both mine, and both for the same nameable reason.
+
+## Round 5 — final
+
+**APPROVE**, unchanged. Criterion 12 now holds without caveat on the adopted lane. The three Band C findings stand as written: the two untested round-5 guards (`writtenBuf.equals` and the suite `lstat` check, both verdict-neutral on removal), the stale terminator comment at `scripts/red-proofs.js:705-706`, and the worktree-movement process finding.
+
+One addition to that last finding, now earned from both sides: **a lane that snapshots a whole tree is only measurable from outside that tree.** The implementer's worktree moving under my measurement and my own scratch files landing inside it are the same defect. If a future round wants an idempotence check in the verification steps, it should say explicitly that the instrumentation lives outside `--root` — otherwise the check measures itself.
+
+Worktree left untouched by me; it currently sits at `9deabaf9` with the implementer's uncommitted round-6 edits, which are not mine and not part of this review. All isolated checkouts and probe artifacts removed.

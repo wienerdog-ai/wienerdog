@@ -21,6 +21,7 @@
   "scripts": {
     "//": "Any script that runs tests must go through tests/with-temp-root.js — it scopes and deletes the run's temp directory (WP-temp-root-wrapper).",
     "test": "node tests/with-temp-root.js tests/run.js",
+    "red-proofs": "node tests/with-temp-root.js scripts/red-proofs.js",
     "lint": "node scripts/lint.js",
     "gen:agents": "node scripts/gen-agents-md.js",
     "scenarios": "node tests/with-temp-root.js tests/scenarios/run-scenarios.js",

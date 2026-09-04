@@ -1,0 +1,50 @@
+PR GATE ROUND 1 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch, run from the wp/criterion-red-harness worktree), tip 6e45c88a. Second launch: the first run's broker was killed by the orchestrator's cleanup of a finished sibling job (it had printed only 'Reviewer started'); this is the complete re-run. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a06201-911b-76c1-858a-555fb4700098).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- DIFF STAT ---\\n' && git diff --stat d8e4a... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-criterion-red-harness.md && printf '\\n--- PACKAGE DIFF ---\\... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n '"'^###'"\\|"'^## Acceptance'"\\|"'^| [0-9V]'"' docs/specs/WP-criterion...
+[codex] Command completed: /bin/zsh -lc "grep -n '"'^###'"\\|"'^## Acceptance'"\\|"'^| [0-9V]'"' docs/specs/WP-criterion... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '800,1140p' scripts/red-proofs.js && printf '\\n--- SPEC 328-430 ---\\n'...
+[codex] Command completed: /bin/zsh -lc "sed -n '800,1140p' scripts/red-proofs.js && printf '\\n--- SPEC 328-430 ---\\n'... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/red-proofs/dream-pipeline.proofs.json && printf '\\n--- UNIT TEST NAM...
+[codex] Command completed: /bin/zsh -lc "cat tests/red-proofs/dream-pipeline.proofs.json && printf '\\n--- UNIT TEST NAM... (exit 0)
+[codex] Running command: /bin/zsh -lc "node tests/fixtures/red-proofs/base/tests/run.js --test-reporter=tap tests/suit...
+[codex] Command failed: /bin/zsh -lc "node tests/fixtures/red-proofs/base/tests/run.js --test-reporter=tap tests/suit... (exit 1)
+[codex] Running command: /bin/zsh -lc "for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba...
+[codex] Command completed: /bin/zsh -lc "for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '225,255p;775,790p;884,900p' && printf '\...
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '225,255p;775,790p;884,900p' && printf '\... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && node -c scripts/re...
+[codex] Command completed: /bin/zsh -lc "git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && node -c scripts/re... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner can currently report false `PROVEN` results through protected-path aliases, shared...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner can currently report false `PROVEN` results through protected-path aliases, shared writable ancestor state, and incomplete RED subprocess output. It also misclassifies or fails to report several filesystem errors required by the work-package contract.
+
+Full review comments:
+
+- [P1] Canonicalize paths before enforcing protected targets — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:313-319
+  A declaration can use an alias such as `tests/../tests/suite-basic.js`; `normaliseRel()` leaves `..` intact, so this check does not recognize that `file` resolves to `suite`. APPLY later checks only containment and writes the canonical target, allowing a proof to edit its own assertion and obtain a pass→fail→pass `PROVEN` result without changing product behavior. Enforce the protected-target rules against canonical paths in the fresh copy, including runner-required files, as required by `docs/specs/WP-criterion-red-harness.md:187`.
+
+- [P1] Prevent writes through ancestors above the phase parent — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:890-890
+  Mode `0500` prevents creating `../sentinel`, but retains execute permission, so a suite can traverse through this directory and write `../../counter` into the still-writable `ctx.sandbox`. That file is shared by BASELINE, RED, and CONTROL; a stateful suite can use successive counter values to pass, fail with the declared signal, then pass again independently of the mutation, producing a false `PROVEN`. The isolation contract explicitly forbids runner-provided writable paths shared across phases (`docs/specs/WP-criterion-red-harness.md:260`).
+
+- [P1] Verify the RED subprocess completed before accepting TAP — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:781-783
+  If the RED child is killed or exceeds `maxBuffer` after emitting the expected `not ok`, `spawnSync` can return partial stdout with `status: null`; this phase discards the status, signal, stderr, and spawn error and evaluates only the observed fragment. The declared failures can therefore appear exact and allow CONTROL to finish with `PROVEN`, even though the full failing set was never observed. Require successful reporter completion and a complete TAP plan before applying the equality rule mandated by `docs/specs/WP-criterion-red-harness.md:263`.
+
+- [P2] Convert snapshot copy failures into ERROR verdicts — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:1006-1007
+  When the source contains a FIFO, socket, or unreadable file, `fs.cpSync` may throw before `buildManifest()` can classify the entry. This catch rethrows native errors, so the CLI terminates with an uncaught stack trace and omits both the structured `ERROR` verdict and REACH footer. Snapshot copy and unsupported-entry failures are required to become named errors by `docs/specs/WP-criterion-red-harness.md:356-367`.
+
+- [P2] Distinguish unreadable declaration directories from empty ones — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:230-233
+  Every `readdirSync` failure—including `EACCES`, `ENOTDIR`, or an invalid root—is converted into an empty declaration list and reported as `VACUOUS`. In those cases the runner could not obtain a trustworthy result, so the taxonomy requires `ERROR`; V1 is reserved for a successfully scanned directory containing zero declarations (`docs/specs/WP-criterion-red-harness.md:367-370`). Preserve the filesystem error instead of treating all failures as an empty scan.
+rc=0

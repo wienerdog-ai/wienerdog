@@ -1,0 +1,81 @@
+PR GATE ROUND 2 — PR #204 — wd-reviewer (same agent resumed with the round-1 findings), tip 961401df. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+# Round 2 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `961401df` (local worktree, remote `wp/criterion-red-harness`, and PR head all agree — the round-1 divergence is gone). Runner/test content is `8b4fdc14`; spec amendment `2cb60297`.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu-latest)` **pass** 56s, `test (macos-latest)` **pass** 2m59s, boundary/lint/pr-title/smoke pass |
+| `boundary-check` on `origin/main...HEAD` (25 files) | **0** clean; three `docs/specs/logbook/*.txt` are always-allowed |
+| `npm test` (local Node 25.9.0) | **0** — 2527 tests / 2515 pass / 12 skip / **0 fail** |
+| `npm test -- tests/unit/red-proofs.test.js` | **0** — 83 pass / 0 fail (was 68) |
+| `npm run lint` | **0** |
+| `npm run red-proofs` ×2 | **0**, **0** — `RUN: PROVEN`; reports **byte-identical**, `git status --porcelain` **byte-identical** (criterion 12) |
+| `--proof no-such-proof-exists` | **1**, `VACUOUS: V2` |
+| empty declaration dir | **1**, `VACUOUS: V1` |
+| fixture root unfiltered / `--proof fixture-greeting` | **0** `RUN: PROVEN` / **1** criterion `FILTERED` (criterion 6a both directions) |
+| adopted lane `--proof dream-private-index-dropped` | **1** — proof `PROVEN`, other criterion `FILTERED`; tracked checkout byte-identical across the non-zero run (criterion 7c) |
+| criterion 8 grep, 3 states | absent **1** / compliant **0** / violating **1** |
+| criterion 11 grep, 3 states | absent **1** / compliant **0** / violating **1** |
+| 7(a) escapes: `..`-nonexistent, `..`-to-existing-outside, absolute, symlink-in-tree | all **ERROR before any write**, outside target byte-intact |
+| **12 mutants** × the runner's own suite | **10 killed, 2 survive** (detail below) |
+| **7-way traversal probe** against the new lifetime | detail below |
+| `phaseEnv` + `getPaths` | all 5 override names removed, `NODE_TEST_CONTEXT` removed, all 5 roots **INSIDE** the copy |
+| `buildManifest(<worktree root>)` | 1168 entries, **`.git` excluded** (was 1163 *including* it) |
+
+Worktree clean and unmodified throughout; every probe under `mktemp -d`, all artifacts removed.
+
+---
+
+### The ten round-1 findings
+
+**1. [criteria] Node 20 — FIXED, verified independently.** CI's `test` legs are green on **both** ubuntu and macOS. Criterion 4b's test (`tests/unit/red-proofs.test.js:414-419`) now asserts exactly the three invariants the amended criterion names and no fourth: `none.status === 0`, no `/^ *not ok\b/m` in the stream, and `rp.ranNodes(noneNodes)` deep-equal `[]`. No deep-equal against a parse tree survives. Mutating the SKIP filter out of `ranNodes` (`M8`) kills 2 tests; neutering `assertTestsRan` (`M9`) kills 3 — so the tolerance is load-bearing, not decorative. The implementer additionally fetched a real **v20.20.2** and ran the runner's suite, the full `npm test` surface and the adopted lane on it; I did not have Node 20 locally, so CI's two independent green legs are my evidence, and they are the evidence the amended criterion 4b designates.
+
+**2. [contract] Sibling-copy / traversal channel — FIXED, and more strongly than I asked.** My round-1 probe replayed against the new lifetime:
+
+```
+A sibling red copy        => refused(ENOENT)     ← the copy does not exist yet
+B sibling control copy    => refused(ENOENT)
+C parent ../sentinel      => refused(EACCES)
+D sandbox ../../counter   => refused(EACCES)     ← the architect's new case
+E snapshot file           => refused(EACCES)     ← neither of us named this one
+G mkdir ../evil           => refused(EACCES)
+F above sandbox ../../../ => WROTE               ← declared lane bottom
+```
+
+Closed by construction rather than by permission: `runProof` (`scripts/red-proofs.js:1106-1152`) now runs unlock → copy → verify → prepare → [APPLY] → lock → run → unlock → **delete**, one copy alive at a time, with `lockSandbox` holding the parent *and* the sandbox at 0500 and the snapshot read-only. Both reverts are caught by the suite: leaving the copy behind (`M14`) → 1 fail; recreating the round-1 all-up-front shape (`M15`) → 1 fail. Removing any single lock is caught too — parent chmod (`M5`) 4 fails, sandbox chmod (`M6`) 1 fail, snapshot read-only (`M7`) 1 fail. **F** is the ambient temp root above the sandbox, named verbatim in the REACH footer as unsupported by the lane; stopping there is right — chmod'ing a directory the runner did not create would be a hostile side effect on shared state.
+
+**3. [quality] The three surviving clauses — 3a FIXED, 3b/3c honestly recorded.** Deleting the `verifyCopy(dir, ctx.manifest)` call site now kills **2** tests (round 1: 0), via the `onPhaseCopy` corruption hook. `written !== expected` and the post-write marker check still survive — exactly as I graded them Band C/residual, and the PR body records them as residual *citing that grading*, with the correct reason (no validated input reaches either; `replace` must contain `marker` is enforced at LOAD). The `fs.cpSync` wrapper survivor (`M12`) is disclosed the same way rather than quietly dropped. Disclosing an unreachable fail-safe as untested is the honest disposition, not a gap.
+
+**4. [contract] Row 2b mirror drift — FIXED in lockstep.** Row 2b now states the removal rule outright and carries both my measurement and the round-1 traversal demonstration. Every registered mirror moved with it: Table D write-boundaries and seam rows, the adopted-suite paragraph, the security checklist, criteria 7(b2)/8b/10, the implementation note (retitled "How the **name list** tracks `OVERRIDE_VARS`"), and the REACH footer's required text. The Mirrored Surface Checklist gained three explicit registrations (unmatched-pattern class, removal rule, copy lifetime). Table A's unmatched-pattern class is pinned on **two** Nodes with provenance, and both parked owner options carry the 2026-09-02 ruling. This is a clean canonical-extraction pass.
+
+**5. [quality] REACH footer — FIXED.** `scripts/red-proofs.js:181-201` now says the override names are "REMOVED from the phase environment rather than set, so their roots land inside that copy through the redirected HOME they all default under", and names the copy lifetime, the locks and the ambient temp root. It matches what the runner does, verified against my probe.
+
+**6. [quality] Control-byte assertion — FIXED.** `tests/unit/red-proofs.test.js:934-939` now loops over `['scripts/red-proofs.js', 'package.json']` — both files the guarded greps read.
+
+**7. [quality] `.git` type asymmetry — FIXED.** The basename exclusion moved ahead of the type branch (`scripts/red-proofs.js:430`), with a comment naming the linked-worktree case. Confirmed by measurement: `.git` is now absent from the manifest. It sits *after* the unsupported-entry-type check, so a FIFO named `.git` still errors rather than being silently skipped — the right order.
+
+**8. [contract] `tests/run.js` unprotected — FIXED.** `SUITE_ENTRY_REL` is now a protected target in `assertNotProtected`, which compares **canonical** paths on both sides. This also closes the plugin's P1 alias defect; the PR reproduces the pre-fix exploit reaching `PROVEN, exit 0` and shows the same declaration now ERRORing.
+
+**9. [quality] `main()`'s argv-error path skips REACH — unchanged.** I dispositioned this "drop" in round 1; not acting on it is consistent.
+
+**10. [boundary] Unpushed commit — RESOLVED.** Local HEAD, remote and PR head all agree at `961401df`.
+
+---
+
+### Attacks on the new mechanisms
+
+All held. Beyond the lifetime and lock mutants above: `assertCompleteRun` covers **all three** phases (`:947`, `:1011`, `:1077`); removing the plan-vs-emitted truncation check (`M10`), the killed-by-signal check (`M11`) or the file-level `exitCode` cut-short gate (`M12'`) each kills 1-2 tests; reverting `assertNotProtected` to a literal compare (`M13`) kills 1. The snapshot ordering is now classify-first-copy-second with `verifyCopy(snapshot, manifest)` on the snapshot itself, so a `--root` that changes under the copy is an ERROR in the report rather than a bare stack trace. `assertTestsRan`'s asymmetry is deliberate and correct: an all-SKIP tree is ERROR in every phase, while *zero records* stays permitted at RED so criterion 4's load-failure mutation still reaches the equality rule and its `FAILED` verdict.
+
+### One non-blocking item for wd-architect
+
+**[contract] Stale round-5 line in the Mirrored Surface Checklist — `docs/specs/WP-criterion-red-harness.md:446`. Band C. Disposition: residual.** It still reads "row 2b's `OVERRIDE_VARS`-derived **provided set** is mirrored by …", language the amendment corrected everywhere else (the implementation note was retitled to "name list" for exactly this reason). The new round-1 registration (ii) at `:460` supersedes it, so no reader is misled about the current rule — but the round-5 entry now describes a mechanism that no longer exists. Fold into the next amendment; not worth a round.
+
+---
+
+**Verdict.** Every finding is fixed or honestly recorded, the fixes are proven live by deletion rather than asserted, the two spec-side items came back as a proper canonical amendment with its mirrors moved together, and the one class I could not test locally is carried by the CI legs the contract designates. The residuals that remain are disclosed in the PR body in the terms I graded them. Definition of done items 1-4 are met; item 5 (both gates clean or dispositioned) is the coordinator's to close. **APPROVE.**

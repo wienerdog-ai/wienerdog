@@ -1,0 +1,29 @@
+PR GATE ROUND 3 (shadow) / PR round 5 — PR #204 — herdr-spawned hermetic Codex shadow #3 (clean CODEX_HOME, -s read-only, detached worktree @ 0cec55b8, fresh thread, pr-rubric.md + round-3 note). Captured via an approved scratch-file write. Worktree porcelain empty before and after (re-checked: 0 entries). Two P1s: the nested-namesake wrapper shape (CONVERGED with the plugin's round-6 P1) and a NEW symlinked --root outward write (band A) — both fixed at 503d7b38 before this raw landed.
+
+{
+  "findings": [
+    {
+      "title": "[P1] Refuse a symlink supplied as --root",
+      "body": "When `--root` itself is a symlink, `path.resolve` leaves the link intact, so `buildManifest` walks its target and `cpSync` reproduces the link as the snapshot and phase copies. In a committed-code mkdtemp reproduction with the phase scratch directories precreated, the runner wrote `RP_MUT_GREETING` into the real root's `subject/subject.js`; CONTROL only detected the changed digest afterward, and the before/after SHA-256 changed from `5e155...` to `4983e1...`. This is the outward-write class that [Table B rows 2/2a](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:287) requires the copy step to refuse, so classify the root itself before LOAD/copy rather than allowing the sandbox paths to alias it. Materiality A: silent wrong-tree mutation with a direct data-loss consequence.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 1420, "end": 1420}
+      }
+    },
+    {
+      "title": "[P1] Keep namesake parent tests in the failure set",
+      "body": "On Node 25, a legitimate top-level test named like its suite and containing a child satisfies this wrapper predicate and is replaced by its children. In an end-to-end mkdtemp reproduction, that parent's own assertion failed with `failureType: testCodeFailure` and `code: ERR_ASSERTION` alongside two declared failures, but the parser dropped the parent and the runner returned `PROVEN` with exit 0; the direct TAP run showed all three own-body failures. That violates [Table B row 5's equality requirement](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:292), so wrapper recognition must distinguish a reporter file record from a real namesake parent rather than treating `children.length > 0` as sufficient. Materiality A: a silent false-PROVEN can certify a vacuous data-integrity/security guard.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 882, "end": 883}
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "EXECUTED — rubric/spec/deliverable reads and `git diff 22f30298..HEAD`/`main...HEAD` inspection: exit 0; `npm test -- tests/unit/red-proofs.test.js`: exit 0, 103/103 pass, reproducing alias, excluded `node_modules` symlink, FIFO, zero-run CONTROL, childless namesake, added declaration, dash-prefixed suite, and non-UTF-8 target fixes; `npm test`: exit 0; `npm run red-proofs`: exit 0 with 2/2 PROVEN; unmatched-proof vacuity invocation: expected exit 1/VACUOUS; root-symlink runner probe: exit 1 after mutating the real temp root; namesake-parent runner probe: incorrect exit 0/PROVEN, with direct suite confirmation exit 1 and three own-body failures; boundary check, both `git diff --check` invocations, and temp cleanup: exit 0. `npm run lint`: NOT RUN per user instruction because the orchestrator owns lint; no network or install was attempted; `git status --porcelain=v1` was empty before and after, while the attempted process-list diagnostic was denied by the sandbox (`ps: operation not permitted`); the two material false-containment/false-PROVEN defects make the patch incorrect.",
+  "overall_confidence_score": 0.99
+}

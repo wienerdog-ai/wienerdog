@@ -1,0 +1,60 @@
+PR GATE ROUND 10 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip b46eb7a1. Captured verbatim from stdout. NOTE: git status --porcelain differed after the run only because the implementer's uncommitted round-10 edits were present in the worktree at the end (the reviewer runs read-only; the diff is the implementer's files). Its one P1 CONVERGED with the shadow's round-4 finding; fixed at 824472fb before this raw landed.
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a063e6-db7e-7923-ad3b-d240115c32c2).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ... (exit 0)
+[codex] Running command: /bin/zsh -lc "find .. -name AGENTS.md -o -name AGENTS.override.md | sort; printf '\\n--- spec...
+[codex] Command completed: /bin/zsh -lc "find .. -name AGENTS.md -o -name AGENTS.override.md | sort; printf '\\n--- spec... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,240p' scripts/red-proofs.js; sed -n '241,480p' scripts/red-proofs.js;...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,240p' scripts/red-proofs.js; sed -n '241,480p' scripts/red-proofs.js;... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '721,1040p' scripts/red-proofs.js; sed -n '1041,1360p' scripts/red-proof...
+[codex] Command completed: /bin/zsh -lc "sed -n '721,1040p' scripts/red-proofs.js; sed -n '1041,1360p' scripts/red-proof... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '830,1450p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '830,1450p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '110,220p' docs/specs/WP-criterion-red-harness.md; sed -n '669,896p' doc...
+[codex] Command completed: /bin/zsh -lc "sed -n '110,220p' docs/specs/WP-criterion-red-harness.md; sed -n '669,896p' doc... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --version; cat tests/fixtures/red-proofs/base/tests/run.js; cat tests/fixt...
+[codex] Command completed: /bin/zsh -lc "node --version; cat tests/fixtures/red-proofs/base/tests/run.js; cat tests/fixt... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round9-wd-reviewer.txt'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round9-wd-reviewer.txt' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round9-codex-plugin.txt'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round9-codex-plugin.txt' (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate --max-count=15'
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate --max-count=15' (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R -n -C 5 'M12\\|M29\\|spawn timeout' docs/specs/logbook/*red-harness* | ...
+[codex] Command completed: /bin/zsh -lc "grep -R -n -C 5 'M12\\|M29\\|spawn timeout' docs/specs/logbook/*red-harness* | ... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -i 'timeout\\|hang' docs/specs/WP-criterion-red-harness.md scripts/red-...
+[codex] Command completed: /bin/zsh -lc "grep -n -i 'timeout\\|hang' docs/specs/WP-criterion-red-harness.md scripts/red-... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --check scripts/red-proofs.js && node --check tests/unit/red-proofs.test.j...
+[codex] Command completed: /bin/zsh -lc 'node --check scripts/red-proofs.js && node --check tests/unit/red-proofs.test.j... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '377,415p' docs/specs/WP-criterion-red-harness.md; grep -n -A90 -B5 'V3'...
+[codex] Command completed: /bin/zsh -lc "sed -n '377,415p' docs/specs/WP-criterion-red-harness.md; grep -n -A90 -B5 'V3'... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show --stat --oneline HEAD && git show --format=fuller --find-renames HEAD ...
+[codex] Command completed: /bin/zsh -lc 'git show --stat --oneline HEAD && git show --format=fuller --find-renames HEAD ... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git rev-parse HEAD; git log --oneline --decorate --max-count=8; git status --sh...
+[codex] Command completed: /bin/zsh -lc 'git rev-parse HEAD; git log --oneline --decorate --max-count=8; git status --sh... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round7-herdr-shadow.txt'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round7-herdr-shadow.txt' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '205,279p' docs/specs/WP-criterion-red-harness.md; grep -n -C 4 'ERR_ASS...
+[codex] Command completed: /bin/zsh -lc "sed -n '205,279p' docs/specs/WP-criterion-red-harness.md; grep -n -C 4 'ERR_ASS... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -A8 -B3 'FORCE_COLOR' docs/specs/logbook/2026-09-02-red-harness-pr204-r...
+[codex] Command completed: /bin/zsh -lc "grep -n -A8 -B3 'FORCE_COLOR' docs/specs/logbook/2026-09-02-red-harness-pr204-r... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n -i 'uid 0\\|win32\\|mode bits\\|host' docs/specs/WP-criterion-red-harne...
+[codex] Command completed: /bin/zsh -lc "grep -n -i 'uid 0\\|win32\\|mode bits\\|host' docs/specs/WP-criterion-red-harne... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The TAP wrapper ambiguity permits a silent false `PROVEN` result when test registration chang...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The TAP wrapper ambiguity permits a silent false `PROVEN` result when test registration changes under the mutation. This violates the runner's core requirement that declared assertions actually run in both pristine phases.
+
+Review comment:
+
+- [P1] Reject ambiguous childless suite records — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:991-995
+  On Node ≥25, a pristine suite that registers zero tests emits a sole childless `ok` record named after the suite without an inner zero plan, and this predicate retains it as a real test. A declaration using that name can therefore pass BASELINE and CONTROL on reporter wrappers while its mutation conditionally registers and fails a real same-named test in RED, producing `PROVEN` even though no pristine assertion ran. Refuse this ambiguous shape rather than treating it as a terminal pass, as required by [Table B row 3](docs/specs/WP-criterion-red-harness.md#L290).
+rc=0

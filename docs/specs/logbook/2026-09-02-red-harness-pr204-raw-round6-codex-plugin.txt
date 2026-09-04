@@ -1,0 +1,62 @@
+PR GATE ROUND 6 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 6d86ac23. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0630b-ecdf-7ca0-9417-a44d594ae16e).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ... (exit 0)
+[codex] Running command: /bin/zsh -lc "find . -name AGENTS.md -o -name AGENTS.override.md; sed -n '1,420p' docs/specs/...
+[codex] Command completed: /bin/zsh -lc "find . -name AGENTS.md -o -name AGENTS.override.md; sed -n '1,420p' docs/specs/... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n '"'^##'"\\|"'^###'"\\|"'^| [0-9V]'"' docs/specs/WP-criterion-red-harnes...
+[codex] Command completed: /bin/zsh -lc "grep -n '"'^##'"\\|"'^###'"\\|"'^| [0-9V]'"' docs/specs/WP-criterion-red-harnes... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '420,840p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '420,840p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '840,1260p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '840,1260p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1260,1695p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1260,1695p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --version; node tests/fixtures/red-proofs/base/tests/run.js --test-reporte...
+[codex] Command failed: /bin/zsh -lc 'node --version; node tests/fixtures/red-proofs/base/tests/run.js --test-reporte... (exit 1)
+[codex] Running command: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-kinds.js'
+[codex] Command completed: /bin/zsh -lc 'node tests/run.js --test-reporter=tap -- tests/suite-kinds.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat package.json; cat tests/red-proofs/dream-pipeline.proofs.json; sed -n '669,...
+[codex] Command completed: /bin/zsh -lc "cat package.json; cat tests/red-proofs/dream-pipeline.proofs.json; sed -n '669,... (exit 0)
+[codex] Running command: /bin/zsh -lc 'grep -n "''^test(" tests/unit/red-proofs.test.js'
+[codex] Command completed: /bin/zsh -lc 'grep -n "''^test(" tests/unit/red-proofs.test.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,250p'; nl -ba tests/unit/red-p...
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,250p'; nl -ba tests/unit/red-p... (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*round5*; do echo ===$f; cat "$f"; done'
+[codex] Command failed: /bin/zsh -lc 'for f in docs/specs/logbook/*red-harness*round5*; do echo ===$f; cat "$f"; done' (exit 1)
+[codex] Running command: /bin/zsh -lc 'ls -1 docs/specs/logbook/*red-harness* | tail -20'
+[codex] Command completed: /bin/zsh -lc 'ls -1 docs/specs/logbook/*red-harness* | tail -20' (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round5-*; do echo ...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round5-*; do echo ... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate d8e4afb69e809f2c6e450dba857e83029d4a42ac..HEAD'
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate d8e4afb69e809f2c6e450dba857e83029d4a42ac..HEAD' (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba...
+[codex] Command failed: /bin/zsh -lc 'for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba... (exit 1)
+[codex] Running command: /bin/zsh -lc "for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba...
+[codex] Command completed: /bin/zsh -lc "for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '190,225p'; git diff --u...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '190,225p'; git diff --u... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '410,535p'; nl -ba docs/specs/WP-...
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '410,535p'; nl -ba docs/specs/WP-... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '850,875p'; git status -...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '850,875p'; git status -... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The TAP wrapper heuristic can omit a real own-body failure and consequently produce a false `...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The TAP wrapper heuristic can omit a real own-body failure and consequently produce a false `PROVEN` result. That undermines the runner's central equality guarantee.
+
+Review comment:
+
+- [P1] Preserve nested namesake tests when unwrapping TAP — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:912-913
+  When a legal top-level test is named like the suite path or basename and contains subtests, `isFileNode` unconditionally treats it as a file wrapper and discards the parent node. If a mutation reddens that test's own body alongside the declared failures, the undeclared failure disappears and the proof can report `PROVEN`, violating [Table A's own-body equality rule](docs/specs/WP-criterion-red-harness.md#L193-L204). Preserve or explicitly refuse this ambiguous nested-namesake shape instead of unwrapping it.
+rc=0

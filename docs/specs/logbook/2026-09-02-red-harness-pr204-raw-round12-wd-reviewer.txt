@@ -1,0 +1,67 @@
+PR GATE ROUND 12 — PR #204 — wd-reviewer (same agent resumed), tip 85a79fba. Verdict APPROVE, no new findings. Relayed verbatim from the agent's final message.
+
+# Round 12 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `85a79fba`. Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2573 / 2561 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **129 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`e5cba0e9…`) |
+| `proofDirName` bounds + distinctness | detail below |
+| 300-byte id end to end | **PROVEN exit=0**, footer present |
+| forced `ENAMETOOLONG` via `--require` stub | detail below |
+| forced throw deep inside `runAll` | detail below |
+| **4 mutants** | **3 killed, 1 survives (the disclosed catch-all)** |
+
+### The bounded proof directory
+
+```
+short id (16 B)   -> 16 B, verbatim
+exactly 200 B     -> 200 B, verbatim
+201 B             -> 200 B
+300 B             -> 200 B
+```
+
+Kept verbatim while it fits, so diagnostics stay readable, and bounded past that. **The distinctness property — the one the digest exists for — holds:** two 300-byte ids sharing their first 299 characters and differing only at index 299, well past the truncation point at 183, map to different directories (`…zzzzzzz-4b6d54ef0137a48c` vs `…zzzzzzz-030b9c8f8d36728c`). Stable across calls. The `slice()` is on code units while the cap is on bytes, which is safe here because `validateProof`'s kebab regex admits only ASCII — worth knowing, not worth changing.
+
+A schema-valid 300-byte id runs **PROVEN, exit 0** end to end with the footer intact. `R12-a` (bypass `proofDirName`) and `R12-b` (truncate without the digest) each kill 1, so both halves are load-bearing.
+
+### The two belts
+
+```
+forced ENAMETOOLONG on the proofs directory:
+  exit=1   stderr empty (no raw stack)   raw stack lines in stdout: 0
+  "tests/red-proofs/base.proofs.json [fixture-greeting]: the proof's working directory
+   could not be created (ENAMETOOLONG)"   ... and the same for [fixture-arity]
+  RUN: ERROR   ends with REACH: true
+
+forced throw deep inside runAll (stubbed crypto.createHash):
+  exit=1   "ERROR: the run failed unexpectedly — Error: BOOM: …"
+  ends with REACH: true   stderr empty
+```
+
+Both produce a verdict and the footer rather than a bare stack. Criterion 10 now holds on every path I could force, including one nobody anticipated — which is the point of the catch-all being the durable half while the specific fix is the correct one. `R12-c` (drop the mkdir guard) kills 1.
+
+**`R12-d` (drop the catch-all) survives at 129/0** — matching the PR's own disclosure of it as `M50`. That is the honest classification: reaching it requires an unforeseen throw, so testing it means injecting one, and adding a production hook purely to exercise a catch-all would be worse than disclosing it. Same family as `M12` and `M29`, and disclosed the same way.
+
+### My round-11 finding — fixed, and better than I asked
+
+I asked for a cross-reference. What landed is the full provenance: `parseTap`'s comment now says *"ONE SHAPE STAYS AMBIGUOUS, AND THIS FUNCTION DOES NOT DECIDE IT … `assertNotAmbiguousSuiteShape` REFUSES the run"*, followed by *"READ THAT FUNCTION BEFORE CHANGING ANYTHING HERE"*, the explicit retraction, the measurement, and the warning that *"deleting that refusal on the strength of this paragraph would restore the false PROVEN"*. The old claim now survives only as a quotation inside its own retraction — which is the right way to keep a superseded belief on the record rather than erasing it. `assertNotAmbiguousSuiteShape` is referenced six times across the file.
+
+### Carried residuals
+
+Three disclosed survivors of the PR's matrix — `M12` (the `fs.cpSync` wrapper), `M29` (`writtenBuf.equals`), and now `M50` (the catch-all) — all unreachable fail-safes, all listed rather than dropped. Plus the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note; and last round's observation that `PATH` sanitisation is scoped to `--root`.
+
+---
+
+**Verdict.** Both items are correct on evidence I produced rather than read: the directory bound is exact, the digest genuinely separates ids that differ only past the truncation point, and both belts turn a would-be raw stack into a verdict with a footer. My round-11 finding is closed with the reasoning's history preserved. Nothing survived this round's matrix except the one survivor the PR already discloses, and my independent run reproduced that classification exactly. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**

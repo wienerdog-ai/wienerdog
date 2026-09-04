@@ -1,0 +1,39 @@
+PR GATE ROUND 1 — PR #204 — herdr-spawned hermetic Codex shadow #3 (CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 6e45c88a, fresh thread, pr-rubric.md applied). Captured via an approved scratch-file write. Approvals granted: npm run red-proofs, the V5 vacuity-guard run, and mkdtemp probes (alias, excluded-symlink, FIFO). Worktree porcelain empty before and after (re-checked: 0 entries).
+
+{
+  "findings": [
+    {
+      "title": "[P1][B] Canonicalize targets before checking protected paths",
+      "body": "Materiality B. A declaration using `file: tests/../tests/suite-basic.js` bypasses these literal comparisons because `normaliseRel` does not collapse `..`; an isolated fixture then mutated the assertion host itself and returned `PROVEN` with exit 0. The same block also omits `tests/run.js`, although that is a path the runner needs to operate. This violates [the Table A mutation-target rule](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:187) and allows a direct self-mutation to certify a test as non-vacuous; canonicalize repository-relative targets before comparing every protected path.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 313, "end": 318}
+      }
+    },
+    {
+      "title": "[P2][B] Reject excluded symlinks before filtering them",
+      "body": "Materiality B. When `node_modules` itself is a symlink, this basename filter drops it before any `lstat`-based validation can see it; the isolated source-tree probe returned `PROVEN` with exit 0. The governing COPY rule requires any source-tree symlink, specifically including dependency links, to be an `ERROR` naming its path ([WP spec](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:259)), so validate entry types before applying exclusions.",
+      "confidence_score": 0.97,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 435, "end": 435}
+      }
+    },
+    {
+      "title": "[P2][B] Convert source-copy failures into named ERROR reports",
+      "body": "Materiality B. The runner copies the source before classifying unsupported entries, and this catch rethrows every non-`RedProofError`; with an isolated FIFO in the root, `fs.cpSync` threw `ERR_INTERNAL_ASSERTION`, `runAll` did not return a verdict, and no REACH footer was printed. The spec requires each FIFO to produce an `ERROR` naming the path ([Table E1](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:356)) and every run to end with the footer ([criterion 10](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:773)); preflight the source or translate copy failures into the required report.",
+      "confidence_score": 0.99,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 1004, "end": 1007}
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The patch passes its declared happy-path tests but can silently certify a forbidden self-mutation and does not satisfy the source-entry refusal/reporting contract. EXECUTED (exit statuses): all 13 rubric/spec/diff/deliverable/line-number inspection commands 0; focused runner suite 0 (68 passed); full `npm test` 0 (2500 passed, 12 skipped, 0 failed); adopted `npm run red-proofs` 0 (`PROVEN`); guarded unmatched-selector assertion 0 with the inner runner non-zero (`VACUOUS`); first malformed one-line probe 1 (syntax, superseded); corrected isolated probes 0 (alias=`PROVEN`, excluded symlink=`PROVEN`, FIFO uncaught); guarded source greps 0; boundary checks 0; initial and final `git status --porcelain=v1` 0 with identical empty output. `npm run lint` was NOT RUN by reviewer instruction (no exit status); no network, install, or git-state-changing command ran, and the before/after worktree status was identical.",
+  "overall_confidence_score": 0.99
+}

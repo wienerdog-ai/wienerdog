@@ -1,0 +1,116 @@
+PR GATE ROUND 3 — PR #204 — wd-reviewer (same agent resumed), tip 50f7d3ab. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+# Round 3 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `50f7d3ab` — local worktree, remote and PR head all agree. Spec, `docs/GLOSSARY.md` and `package.json` are **untouched** since round 2 (verified empty diff), so the round-2 contract stands as amended.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — `test (ubuntu-latest)` 1m12s, `test (macos-latest)` 2m47s, boundary/lint/pr-title/smoke |
+| `boundary-check` on `origin/main...HEAD` | **0** clean |
+| `npm test` | **0** — 2525 pass / **0 fail** / 12 skip |
+| `npm test -- tests/unit/red-proofs.test.js` | **0** — **93 pass / 0 fail** (was 83) |
+| `npm run lint` | **0** |
+| `npm run red-proofs` ×2 | **0**, **0** — `RUN: PROVEN`; reports and `git status --porcelain` **byte-identical** |
+| **6 mutants**, one per plugin item | **6/6 killed** (detail below) |
+| CONTROL-drift fixture, 4 modes | detail below |
+| LOAD→SNAPSHOT tie: modify / delete / **add** | detail below |
+| FIFO + symlink `*.proofs.json`, with a watchdog | both **ERROR exit 1, no hang** |
+| host matrix, 7 combinations + real host | detail below |
+| exit code on argv-error / LOAD-error / VACUOUS paths | **1**, **1**, **1**; REACH intact through a pipe |
+| criteria 8 & 11 negated greps, 3 states each | absent **1** / compliant **0** / violating **1** |
+| control bytes in both grep targets | 0 / 0 |
+| strict kebab rule vs **266** real WP spec ids | 0 non-matching; caps/trailing/double/bare `WP-` all rejected |
+
+Worktree clean and unmodified throughout; every probe under `mktemp -d`, all artifacts removed.
+
+---
+
+### The six items
+
+**(1) CONTROL identities — FIXED, non-vacuous both directions.** I built a root declaring against `suite-drift.js` and ran all four cases myself. The drift threshold lands on run 3, which is exactly the post-RED CONTROL:
+
+```
+no drift (control)  -> PROVEN  exit=0
+drift mode=skip     -> ERROR   exit=1   "observed as SKIP, not as a terminal PASS"
+drift mode=omit     -> ERROR   exit=1   "did not RUN — renamed, deleted, or excluded"
+drift mode=none     -> ERROR   exit=1   "ZERO TESTS RAN"
+```
+
+Three distinct diagnostics, not one collapsed message — the companion test in the fixture is what keeps `skip` and `omit` from both degenerating into "zero ran". Deleting the `evaluateBaseline` call from `phaseControl` kills **3** tests, so the check is load-bearing rather than decorative.
+
+**Coordinator's attack — does CONTROL reject a passing declared identity with a failing peer?** Yes. I built that case (peer fails only on run 3): `verdict: ERROR, exit 1`, *"the post-RED pristine copy was NOT green (exit 1) — the red was ambient, not the mutation's"*. It is caught by the pre-existing status gate, which runs *before* the new evaluator. The two are complementary and neither is redundant: status catches failures that exit 1; the evaluator catches **absences** that exit 0.
+
+**(2) Host refusal — FIXED, cannot fire on CI.**
+
+```
+darwin uid=501  ok     linux uid=1001 ok     darwin uid=null ok
+darwin uid=0    REFUSE linux uid=0    REFUSE
+win32  uid=1001 REFUSE win32 uid=0    REFUSE
+real host (this machine): ok
+```
+
+GitHub runners are non-root Linux/macOS, so the refusal is unreachable there — corroborated by both CI legs being green. `opts.host` is reachable only through `runAll({host})`; `parseArgs` accepts exactly `--root`, `--wp`, `--proof`, so the injection is **test-only** and cannot be set from the CLI. Neutering the call site kills 1 test — and the PR's Decision 18 records that the *first* form of this test stubbed a helper and left `M14` alive, which is why it was moved onto the real call site. That is the right lesson to have drawn and the right place to record it.
+
+**(3) LOAD→SNAPSHOT digest tie — FIXED for modification and deletion; see the finding below for addition.**
+
+```
+MODIFY a declaration after LOAD -> ERROR  exit=1  "changed between LOAD and SNAPSHOT (sha256 786b490d… -> 48e18bc0…)"
+DELETE a declaration after LOAD -> ERROR  exit=1  "present at LOAD but not readable in the snapshot (ENOENT)"
+```
+
+Removing `assertDeclarationsMatchSnapshot` kills 1 test.
+
+**(4) Declaration entry classification — FIXED.** With a watchdog, a FIFO named `*.proofs.json` returns **exit 1 with no hang**: *"unsupported entry type: FIFO — a declaration must be a regular file, and is never opened before it is classified"*; a symlink likewise. Removing the `lstat` gate kills 1 test. (My first batch run timed out at this mutant, but that was my own 2-minute budget across four ~50 s suite runs — re-running it alone completed in 53 s. Not a hang; correcting my own intermediate reading.)
+
+**(5) Stdout drain — FIXED.** `process.exitCode` is set **before** `process.stdout.write(r.report)`, so an `EPIPE` on the write cannot lose the status. Exit 1 on the argv-error, LOAD-error and VACUOUS paths; the REACH footer's final lines survive a pipe. Reverting to no exit code kills 1 test.
+
+**(6) Strict kebab WP slug — FIXED and safe.** All **266** `WP-` ids across `docs/specs/` and `docs/specs/done/` match; `WP-Bad-Caps`, `WP-trailing-`, `WP--double` and bare `WP-` are rejected. Relaxing the regex kills 4 tests.
+
+**My mutant matrix, run independently of the PR's:**
+
+| Item | Mutation | Result |
+|---|---|---|
+| control | none | 93 pass / 0 fail |
+| 1 | CONTROL `evaluateBaseline` call removed | **3 fail** |
+| 2 | host refusal removed | **1 fail** |
+| 3 | `assertDeclarationsMatchSnapshot` call removed | **1 fail** |
+| 4 | declaration `lstat` classification removed | **1 fail** |
+| 5 | `process.exitCode` assignment removed | **1 fail** |
+| 6 | strict kebab slug relaxed | **4 fail** |
+
+---
+
+### One new finding
+
+**[contract] The declaration digest tie does not cover **addition** — `scripts/red-proofs.js:372-386`. Band C. Disposition: fix (3 lines) or record as residual. Non-blocking.**
+
+`assertDeclarationsMatchSnapshot` iterates the **LOAD-time** digest map, so it sees a file that changed or vanished but not one that appeared. Demonstrated with the `afterLoad` hook, adding a third proof for the *same* `(wp, criterion)` the fixture already declares, unfiltered:
+
+```
+verdict: PROVEN  exit: 0
+2 declared proof(s), 2 selected
+snapshot: 22 entries          ← the added declaration IS in the snapshot
+PROVEN  WP-red-proofs-fixture criterion 1 — fixture-greeting=PROVEN; fixture-arity=PROVEN
+RUN: PROVEN
+declaration files on disk at end: base.proofs.json, zz-extra.proofs.json
+```
+
+A criterion reports **PROVEN, exit 0** on 2 of the 3 declarations the snapshotted tree holds — the partial-evidence shape Table B row 7 and `FILTERED` exist to prevent, and row 2's rules-out column names "a concurrent edit to `--root` mid-run".
+
+Why it is Band C and not blocking: the uncaught window is narrow and specific — LOAD → `buildManifest(root)`. An addition landing between `buildManifest` and `copyTree` is already caught by `verifyCopy`'s `extra:` check. Declarations are committed repo content, not adversary input (the spec's own security checklist says so), so this needs the developer to write into their own checkout during a sub-millisecond window. And it cannot manufacture a false proof: every proof that ran was genuinely proven; only the roll-up is incomplete. The fix is small — require the snapshot's `*.proofs.json` name set to equal LOAD's — and I'd take it because the guard is new and the fix is shorter than the disclosure would be, but I would not hold the PR for it.
+
+### Two carried residuals
+
+- **[quality] Diagnostic prefix leak — `scripts/red-proofs.js:1075-1092`. Band C. Disposition: drop.** Reusing `evaluateBaseline` from `phaseControl` produces messages reading `CONTROL(post-RED) BASELINE: …`. Cosmetic; the phase is unambiguous from the first label.
+- **[contract] Spec `:446` stale round-5 "provided set" line. Band C. Still recorded** — I re-checked the line is unchanged, and the PR's Discovered issues carries it verbatim as "wd-reviewer's one round-2 residual, routed to wd-architect", correctly noting the spec is not this WP's to amend beyond `status:`. Right disposition.
+
+The PR also continues to disclose the two `applyMutation` defensive postconditions and the `fs.cpSync` wrapper as untested fail-safes rather than claiming coverage.
+
+---
+
+**Verdict.** All six items are genuinely fixed and each dies under its own mutant, verified by my execution rather than the pasted matrix. The new mechanisms hold under the three attacks asked for — the CONTROL evaluator rejects a failing peer, the digest tie covers modification and deletion, and the exit code survives every path including the pipe. The one gap I found is a narrow, non-adversarial incompleteness in a guard that did not exist a round ago, and it fails toward an incomplete roll-up rather than a false proof. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**

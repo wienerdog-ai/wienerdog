@@ -1,0 +1,90 @@
+PR GATE ROUND 3 — PR #204 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 50f7d3ab. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a06277-45ad-74e1-ad54-55515dc07d0c).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "git status --short && printf '\\n--- changed files ---\\n' && git diff --name-s...
+[codex] Command completed: /bin/zsh -lc "git status --short && printf '\\n--- changed files ---\\n' && git diff --name-s... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-criterion-red-harness.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-criterion-red-harness.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -nE '"'^### Table|''^## Contract|''^## Acceptance|''^### Exact|''^## Verif...
+[codex] Command completed: /bin/zsh -lc "grep -nE '"'^### Table|''^## Contract|''^## Acceptance|''^### Exact|''^## Verif... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '160,460p' docs/specs/WP-criterion-red-harness.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '160,460p' docs/specs/WP-criterion-red-harness.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '460,895p' docs/specs/WP-criterion-red-harness.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '460,895p' docs/specs/WP-criterion-red-harness.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1,420p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '395,800p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '395,800p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '750,1160p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '750,1160p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1120,1575p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/red-proofs.js | sed -n '1120,1575p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba...
+[codex] Command completed: /bin/zsh -lc 'for f in tests/fixtures/red-proofs/base/tests/*.js tests/fixtures/red-proofs/ba... (exit 0)
+[codex] Running command: /bin/zsh -lc 'grep -n "''^test'"\\|"'^ await t.test'"\\|"'^test'"\\.\" tests/unit/red-proofs....
+[codex] Command completed: /bin/zsh -lc 'grep -n "''^test'"\\|"'^ await t.test'"\\|"'^test'"\\.\" tests/unit/red-proofs.... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js'
+[codex] Command failed: /bin/zsh -lc 'npm test -- tests/unit/red-proofs.test.js' (exit 1)
+[codex] Running command: /bin/zsh -lc "grep -RIn \"TAP version\\|# SKIP test name\\|failureType\" docs/specs/logbook/*...
+[codex] Command completed: /bin/zsh -lc "grep -RIn \"TAP version\\|# SKIP test name\\|failureType\" docs/specs/logbook/*... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,180p;180,480p;480,760p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '1,180p;180,480p;480,760p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '760,1190p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba tests/unit/red-proofs.test.js | sed -n '760,1190p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round2-*.txt; do e...
+[codex] Command completed: /bin/zsh -lc 'for f in docs/specs/logbook/2026-09-02-red-harness-pr204-raw-round2-*.txt; do e... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"const {spawnSync}=require('child_process'); const r=spawnSync(process...
+[codex] Command completed: /bin/zsh -lc "node -e \"const {spawnSync}=require('child_process'); const r=spawnSync(process... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"for (const k of Object.keys(process.env).sort()) if (/PWD|INIT_CWD|np...
+[codex] Command completed: /bin/zsh -lc "node -e \"for (const k of Object.keys(process.env).sort()) if (/PWD|INIT_CWD|np... (exit 0)
+[codex] Running command: /bin/zsh -lc "npm exec -- node -e \"for(const k of Object.keys(process.env).sort()) if(/PWD|I...
+[codex] Command completed: /bin/zsh -lc "npm exec -- node -e \"for(const k of Object.keys(process.env).sort()) if(/PWD|I... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '286,302p;630,650p' && n...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '286,302p;630,650p' && n... (exit 0)
+[codex] Running command: /bin/zsh -lc "node tests/run.js --test-reporter=tap tests/fixtures/red-proofs/base/tests/suit...
+[codex] Command completed: /bin/zsh -lc "node tests/run.js --test-reporter=tap tests/fixtures/red-proofs/base/tests/suit... (exit 0)
+[codex] Running command: /bin/zsh -lc "node tests/run.js --test-reporter=tap --test-name-pattern=zzz tests/fixtures/re...
+[codex] Command completed: /bin/zsh -lc "node tests/run.js --test-reporter=tap --test-name-pattern=zzz tests/fixtures/re... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"const ANY\\|ANY\" tests/unit/dream-pipeline.known-calls.js | head -20...
+[codex] Command completed: /bin/zsh -lc "grep -n \"const ANY\\|ANY\" tests/unit/dream-pipeline.known-calls.js | head -20... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && node --check scrip...
+[codex] Command completed: /bin/zsh -lc "git diff --check d8e4afb69e809f2c6e450dba857e83029d4a42ac && node --check scrip... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"env\\|TMPDIR\\|TEST_TMP\" tests/with-temp-root.js | sed -n '1,120p' &...
+[codex] Command completed: /bin/zsh -lc "grep -n \"env\\|TMPDIR\\|TEST_TMP\" tests/with-temp-root.js | sed -n '1,120p' &... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -RIn \"Windows\\|win32\\|darwin\\|linux\" README.md docs package.json .git...
+[codex] Command completed: /bin/zsh -lc "grep -RIn \"Windows\\|win32\\|darwin\\|linux\" README.md docs package.json .git... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -RIn \"process.platform.*win32\\|win32.*skip\\|skip.*win32\" tests/unit te...
+[codex] Command completed: /bin/zsh -lc "grep -RIn \"process.platform.*win32\\|win32.*skip\\|skip.*win32\" tests/unit te... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '885,900p'; nl -ba READM...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '885,900p'; nl -ba READM... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '190,205p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-criterion-red-harness.md | sed -n '190,205p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -R \"test(['\\\"]"'$(basename tests/fixtures/red-proofs/base/tests/suite-b...
+[codex] Command completed: /bin/zsh -lc "grep -R \"test(['\\\"]"'$(basename tests/fixtures/red-proofs/base/tests/suite-b... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"uid 0\\|win32\\|Windows\\|mode bits cannot\" docs/specs/WP-criterion-...
+[codex] Command completed: /bin/zsh -lc "grep -n \"uid 0\\|win32\\|Windows\\|mode bits cannot\" docs/specs/WP-criterion-... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba AGENTS.md | sed -n '38,55p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba AGENTS.md | sed -n '38,55p'" (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The runner can omit legitimate failures and report a false PROVEN result, and it can ignore d...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The runner can omit legitimate failures and report a false PROVEN result, and it can ignore declarations added during its LOAD-to-SNAPSHOT window. The new unit suite also breaks `npm test` on hosts the lane deliberately marks unsupported.
+
+Full review comments:
+
+- [P1] Preserve real tests whose names resemble suite paths — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:813-817
+  When a valid top-level test is named like the suite basename or path, `isFileNode` classifies that real test as a reporter wrapper solely by name and removes it. During RED, an undeclared own-body failure in such a test disappears from the equality set and can produce a false `PROVEN`, despite [Table A requiring every own-body failure to be accounted for](docs/specs/WP-criterion-red-harness.md#L193). Distinguish wrappers using structural reporter evidence rather than the test name alone.
+
+- [P2] Detect declarations added before SNAPSHOT — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/scripts/red-proofs.js:372-374
+  If a new `*.proofs.json` file is added between LOAD and SNAPSHOT, this loop checks only the files present in the original digest map. The new declaration is copied and manifest-verified but omitted from `all` and the roll-up, allowing `PROVEN` while the snapshotted declaration set contains unrun evidence, contrary to the concurrent-edit guarantee in [Table B row 2](docs/specs/WP-criterion-red-harness.md#L287). Compare the complete declaration filename set as well as the existing digests.
+
+- [P2] Keep the unit suite green on unsupported lane hosts — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/criterion-red-harness/tests/unit/red-proofs.test.js:997-997
+  On Windows or when tests run as uid 0, `unsupportedHostReason()` is intentionally non-null, so this assertion fails; additionally, every earlier `run(BASE)` call short-circuits to `UNSUPPORTED` instead of producing the verdict those tests expect. Thus `npm test` fails wholesale in Windows development or root-based containers, rather than merely confirming that the lane refuses execution, conflicting with [criterion 13](docs/specs/WP-criterion-red-harness.md#L894). Skip permission-dependent cases or inject a supported host for functional runner tests while retaining dedicated refusal tests.
+rc=0

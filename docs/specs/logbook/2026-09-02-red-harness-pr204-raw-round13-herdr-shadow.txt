@@ -1,0 +1,39 @@
+PR GATE ROUND 6 (shadow) / PR round 13 — PR #204 — herdr-spawned hermetic Codex shadow #3 (clean CODEX_HOME, -s read-only, detached worktree @ 26d4800d, fresh thread, pr-rubric.md + round-6 note). Captured from the pane transcript (the reviewer printed its report to stdout; lines are soft-wrapped by the terminal). Worktree porcelain empty before and after (re-checked: 0 entries). Its one P1 (the enforcement probe treating any write failure as enforcement — reproduced with chmod stubbed inert and the probe write returning EIO) CONVERGED with wd-reviewer round 13's C-1 and was fixed at f729ba04 before this raw landed.
+
+{
+"findings": [
+{
+"title": "[P1] Reject unrelated failures in the mode-enforcement probe",
+"body": "Materiality A: when the sandbox filesystem ignores \`chmod\` but the one-byte probe create fails for an unrelated reason such as \`EIO\`, \`ENOSPC\`, or
+\`EDQUOT\`, this catch treats that exception as proof that mode bits are enforced. In an OS-temp reproduction with \`chmodSync\` stubbed inert and only the probe write
+returning \`EIO\`, the CLI skipped \`UNSUPPORTED\`; a counter in the writable common parent then made only RED fail while BASELINE and CONTROL passed, and the runner
+silently reported the irrelevant mutation and run \`PROVEN\` with exit 0. This violates [Table B row 2b](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-
+Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:289); accept only the expected permission-denial
+error codes as evidence of enforcement and refuse or error on every other probe failure.",
+"confidence_score": 0.99,
+"priority": 1,
+"code_location": {
+"absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-
+a5/scripts/red-proofs.js",
+"line_range": {
+"start": 166,
+"end": 167
+}
+}
+}
+],
+"overall_correctness": "patch is incorrect",
+"overall_explanation": "EXECUTED: initial and pre-report final \`git status --porcelain=v1\` each exited 0 with zero entries and were byte-identical; rubric/spec/
+deliverable reads, full \`main...HEAD\` inventory, and \`git diff d9ba3261..HEAD\` attack exited 0; focused \`npm test -- tests/unit/red-proofs.test.js\` exited 0
+(135/135); full \`npm test\` exited 0 (2,579 tests, 2,567 pass, 12 skip, 0 fail); \`npm run red-proofs\` exited 0 twice with both adopted proofs and both criteria
+PROVEN; unmatched-selector invocation exited 1/VACUOUS as required; both guarded source greps, boundary check, and \`git diff --check main...HEAD\` exited 0. Independent
+mkdtemp verification first exited 1 only because my outer script expected three dumps although the copied two-proof fixture correctly ran six phases; corrected rerun
+exited 0 with six dumps, zero PATH entries under either the separate npm checkout or custom root, \`NODE_PATH\`/\`NODE_OPTIONS\` absent, no checkout binary/dependency/
+preload execution, and a no-op-chmod stub refused UNSUPPORTED with zero proof verdict lines; the adversarial non-permission-error probe exited 2 after observing the bug
+(runner exit 0/PROVEN instead of UNSUPPORTED), and the follow-up shared-counter exploit exited 0 while confirming the silent false PROVEN. \`npm run lint\` was NOT RUN
+per explicit user instruction because the orchestrator owns lint; no install or network action ran; all temporary fixtures were deleted, and the mandated report artifact
+was written only after the final porcelain comparison.",
+"overall_confidence_score": 0.99
+}
+
+

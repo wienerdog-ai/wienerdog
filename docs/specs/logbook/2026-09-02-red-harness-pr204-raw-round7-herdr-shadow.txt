@@ -1,0 +1,19 @@
+PR GATE ROUND 4 (shadow) / PR round 7 — PR #204 — herdr-spawned hermetic Codex shadow #3 (clean CODEX_HOME, -s read-only, detached worktree @ 29590681, fresh thread, pr-rubric.md + round-4 note). Captured via an approved scratch-file write. Worktree porcelain empty before and after (re-checked: 0 entries).
+
+{
+  "findings": [
+    {
+      "title": "[P1][A] Refuse the no-test suite-name ambiguity",
+      "body": "When a pristine suite registers no tests, Node 25 emits a sole childless record named for the suite, and this branch deliberately keeps that reporter wrapper as if it were a real test. In an OS-temp reproduction, the suite conditionally registered `test(\"tests/suite-conditional.js\", ...)` only after the declared mutation: BASELINE and CONTROL registered zero tests, RED registered and failed the real namesake test, yet the committed runner reported `RUN: PROVEN` with exit 0. This violates [Table B row 3](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/docs/specs/WP-criterion-red-harness.md:290), because the declared identity never ran in either pristine phase; the ambiguous childless suite-name shape must be refused rather than counted as a terminal PASS. Materiality A: this is a silent false proof that can certify a vacuous data-integrity or security assertion.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a5/scripts/red-proofs.js",
+        "line_range": {"start": 912, "end": 918}
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The supplied round-4 fixes reproduce correctly, but the revised wrapper rule still admits a distinct zero-real-test path to false `PROVEN`, so the patch is not yet correct. EXECUTED: rubric/spec reads exit 0; `git diff main...HEAD` and `git diff 0cec55b8..HEAD` inspections exit 0; both `git diff --check` commands exit 0; boundary check exit 0; initial/final `git status --porcelain=v1` exit 0 with identical empty output; first sandboxed runner-unit attempt exit 1 at blocked `mkdtemp`, then the authorized PTY rerun exit 0 with 112/112 passing; focused committed regressions exit 0 with nested namesake undeclared → FAILED, declared solo → PROVEN, and symlinked root → ERROR; independent symlink-root probe process exit 0 with runner result ERROR/1 and `TREE_UNCHANGED=true`; adopted `npm run red-proofs` run twice, each exit 0 with 2/2 PROVEN; vacuity runner exit 1 as required and its guarded shell assertion exit 0; no-production-seam grep exit 0; npm-test-isolation grep exit 0; direct Node-25 unmatched-pattern TAP probe exit 0; conditional-registration exploit probe process exit 0 and reproduced runner result PROVEN/0; full `npm test` was executed but did not complete, was interrupted after an extended no-output stall in unchanged `tests/unit/uninstall.test.js`, and exited 1 on SIGINT; its exact leftover disposable temp tree was removed after an initial permission-denied cleanup exit 1 and an owner-permission cleanup exit 0. NOT RUN per user direction: `npm run lint`; no network access or install was attempted, and no git state change was made.",
+  "overall_confidence_score": 0.99
+}

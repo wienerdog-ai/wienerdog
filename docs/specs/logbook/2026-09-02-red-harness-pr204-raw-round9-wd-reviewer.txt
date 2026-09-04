@@ -1,0 +1,103 @@
+PR GATE ROUND 9 — PR #204 — wd-reviewer (same agent resumed), tip 0f3f157f. Verdict APPROVE, no new findings, 3/3 mutants killed. Relayed verbatim from the agent's final message.
+
+# Round 9 — PR #204
+
+## APPROVE
+
+**Reviewed tip:** `0f3f157f`. Worktree, remote and PR head agree; tree clean and unmodified by me. Spec, `docs/GLOSSARY.md` and `package.json` untouched since round 2; glossary byte-exact; boundary clean.
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** — both `test` legs incl. Node 20 |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2563 / 2551 pass / **0 fail** / 12 skip |
+| runner suite (mutation control) | **119 pass / 0 fail** |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| guarded isolated idempotence, instrumentation outside the tree | `exit=0`×2, `PROVEN`×2, **REPORTS BYTE-IDENTICAL**, **TREE BYTE-IDENTICAL** (`c248f824…`) |
+| **3 mutants** | **3 killed, 0 survive** |
+| reporter whitespace/directive measurement | detail below |
+| three declaration shapes | detail below |
+| CRLF parse + completeness | detail below |
+
+### The reporter, measured rather than accepted
+
+Raw bytes on Node v25.9.0 (`|` marks line start, `$` line end):
+
+```
+|ok 1 - case $
+|ok 2 - case$
+|ok 3 -   padded  $
+|ok 4 - skipped  # SKIP why$
+|ok 5 - has  \#hash inside$
+|ok 6 - trap  \# SKIP not-a-directive$
+```
+
+And the identities `parseTap` derives, JSON-quoted so whitespace is visible:
+
+```
+["case "]                          directive=null
+["case"]                           directive=null      ← distinct, not collapsed
+["  padded  "]                     directive=null
+["skipped "]                       directive="SKIP"    ← name's space kept, separator consumed
+["has  #hash inside"]              directive=null
+["trap  # SKIP not-a-directive"]   directive=null      ← the greedy trap does NOT fire
+```
+
+Every claim holds: names keep their own leading and trailing whitespace, and TAP puts exactly **one** space before a directive.
+
+**The greedy-separator attack the coordinator named comes back clean, and I checked why rather than just that.** A `#` inside a name is escaped by the reporter (`\#`), so the character before `#` is a backslash, not a space — `/ #\s+(SKIP|TODO)/` cannot match there. Even the deliberately adversarial name `trap  # SKIP not-a-directive` survives intact with `directive=null`.
+
+The old regex's failure mode, isolated:
+
+```
+OLD  /\s+#\s+/   "skipped  # SKIP why"  ->  name "skipped"    ← eats the name's own space
+NEW  / #\s+/                            ->  name "skipped "   ← correct
+```
+
+### The three declaration shapes
+
+```
+(a) all three EXACT                        -> PROVEN  exit=0
+(b) only ['case']                          -> FAILED  exit=1
+      RED: ["case "] failed in its OWN BODY but is not declared
+(c) ['  padded'] (trailing spaces trimmed) -> ERROR   exit=1
+      BASELINE: the declared identity ["  padded"] did not RUN
+```
+
+Matching the PR's per-shape table exactly. `R9-a` (restore `trimEnd()`) kills **3**.
+
+### The latent CRLF defect
+
+```
+LF   -> ["alpha","beta"]
+CRLF -> ["alpha","beta"]        (before the fix: zero nodes — JS `.` excludes CR)
+```
+
+The risk in a fix like this is that "now CRLF parses" quietly weakens the completeness gate, so I probed that specifically:
+
+```
+complete CRLF stream              -> accepted
+killed-child CRLF (SIGKILL)       -> refused: "was KILLED by SIGKILL — its TAP is partial"
+truncated CRLF (plan 2, emitted 1) -> refused: "the TAP plan announces 2 … but 1 were emitted"
+```
+
+It does not. And `tapLines` is used at **both** `:796` (`assertCompleteRun`) and `:861` (`parseTap`) — a one-sided strip would have been the real gap here, and it isn't one. `R9-b` kills 1, `R9-c` kills 1.
+
+### One observation, not a finding
+
+`tail()` at `:1370` still splits on `\n` without stripping `\r`. It builds the human-readable diagnostic excerpt only — never an identity — so on a CRLF stream the quoted lines would carry a trailing CR. Cosmetic, no verdict depends on it, and I would not spend a round on it.
+
+### A note on my own method
+
+My first three mutation attempts reported `DID NOT APPLY` — my shell escaping of the regex literals was wrong, not the anchors. I re-ran them from script files and verified each anchor resolved **before** trusting the result. Worth recording because a mutation that silently fails to apply reads exactly like a survivor, which is the same vacuity shape this WP exists to catch; the `DID NOT APPLY` guard in my harness is what stopped me reporting three false survivors.
+
+### Carried residuals
+
+`M12` and `M29`, still disclosed in the PR's own matrix; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446` routed to wd-architect; the `win32` stub note.
+
+---
+
+**Verdict.** The identity fix is correct on measurement I repeated independently, including the adversarial name the coordinator asked about; the CRLF repair is shared by both parsers and does not weaken the completeness gate; all three mutants die. Nothing survived this round. Definition of done 1-4 met; item 5 is the coordinator's to close. **APPROVE.**

@@ -1,0 +1,96 @@
+PR GATE ROUND 10 — PR #204 — wd-reviewer (same agent resumed), tip b46eb7a1. Verdict REQUEST-CHANGES (npm cwd-naming variables). Relayed verbatim from the agent's final message.
+
+# Round 10 — PR #204
+
+## REQUEST-CHANGES
+
+**Reviewed tip:** `b46eb7a1`, intact. (The worktree has since moved to `b4307048` — a shadow round-4 raws commit — plus uncommitted work on `scripts/red-proofs.js`, `tests/unit/red-proofs.test.js` and a new `suite-conditional.js`. Not mine; every probe ran in `mktemp`. Flagging only so the reviewed tip is unambiguous.)
+
+### What I executed (exit codes)
+
+| Command | Result |
+|---|---|
+| `gh pr checks 204` | **all 7 pass** |
+| `boundary-check` | **0** |
+| `npm test` | **0** — 2567 / 2555 pass / **0 fail** / 12 skip |
+| `npm run red-proofs` | **0** — `RUN: PROVEN` |
+| `npm run lint` | **0** |
+| reporter escape bytes via `od` | detail below |
+| LOAD refusal, 8 identity shapes | detail below |
+| both-spellings collision | ERROR exit 1, ambiguity refusal |
+| PWD fixture, both directions | detail below |
+| **env audit for cwd-naming variables** | **the finding** |
+
+### The two items are correct — and item 1 is incomplete
+
+**(1) `PWD` — verified both directions.**
+
+```
+WITH the redirect     -> PROVEN exit=0   source tree byte-identical
+WITHOUT it (mutant)   -> ERROR  exit=1   source tree >>> LEAKED: pwd-sentinel
+```
+
+The reasoning is right: `cwd:` moves the process, not the environment's idea of where it is.
+
+**(2) TAP escapes — the measurement holds and the honest conclusion is the right one.** I measured the raw bytes myself:
+
+```
+test('nl\na')   -> ok 1 - nl\\na    6e 6c 5c 5c 6e 61
+test('nl\\na')  -> ok 2 - nl\\na    6e 6c 5c 5c 6e 61   ← IDENTICAL
+test('hash\#x') -> hash\#x          5c 23
+test('back\\slash') -> back\\slash  5c 5c
+```
+
+Byte-for-byte identical, so the two REDs the finding asked for really are mutually unsatisfiable and no decoder can invert them. Refusing rather than guessing is correct. The LOAD gate behaves exactly as it should:
+
+```
+REFUSED: real newline U+000A · real tab U+0009 · BELL U+0007 · DEL U+007F   (code point named)
+ACCEPTED: literal backslash+n · a plain # · a literal backslash · an ordinary name
+both spellings in one suite -> ERROR exit=1
+   "the declared identity ["nl\\na"] matches 2 observed tests — ambiguous; the runner refuses rather than picking one"
+```
+
+(My first attempt at that last fixture was malformed — a literal newline inside a JS string is a syntax error, so the file never loaded and I got the wrong ERROR. I caught it because the message didn't match, and rebuilt it with a heredoc where I controlled the bytes.)
+
+---
+
+### The blocking finding
+
+**[contract] `phaseEnv` redirects `PWD` but leaves three more variables naming the real checkout — `scripts/red-proofs.js`, `phaseEnv`. Band A. Disposition: fix.**
+
+The coordinator asked whether `INIT_CWD` is inherited and names the real checkout. It is, and so do two others. Under `npm run red-proofs` — **the documented entry point** (Table D) — four variables name the checkout, and the round-10 fix addresses one:
+
+```
+PWD                     INSIDE the copy      ← fixed this round
+OLDPWD                  <removed>            ← fixed this round
+INIT_CWD                >>> NAMES THE REAL CHECKOUT <<<
+npm_config_local_prefix >>> NAMES THE REAL CHECKOUT <<<
+npm_package_json        >>> NAMES THE REAL CHECKOUT <<<
+```
+
+The runner mentions none of the three. This is exploitable, and I demonstrated it rather than inferring it — a fixture whose suite writes `${VAR}/SENTINEL-${VAR}` for each of the three, with `INIT_CWD`/`npm_config_local_prefix` set as npm sets them:
+
+```
+verdict=PROVEN  exit=0
+SOURCE TREE before: bin,subject,tests
+SOURCE TREE after : SENTINEL-INIT_CWD,SENTINEL-npm_config_local_prefix,bin,subject,tests
+>>> LEAKED into the source tree
+```
+
+Note the clean A/B inside one run: `SENTINEL-PWD` is **absent** because PWD is now redirected; the two unfixed variables leaked. And the run reported **PROVEN, exit 0** — a silent containment breach, where the PWD version at least reddens its fixture.
+
+This is the same class the round graded A, on the same invariants: Table B rows 2/2a (the runner's only write into any tree is the declared mutation, into a copy) and row 2b (no two phases share a writable path the runner provides — all three variables hold an identical value in BASELINE, RED and CONTROL). It also makes the shipped REACH footer overstate: *"Each phase's **working directory**, TMPDIR/TMP/TEMP, HOME and the four XDG roots live INSIDE that phase's own copy"* — three variables that name a working directory do not.
+
+**No current proof is affected**: the adopted suite reads none of these, the lane is PROVEN, and the checkout is byte-identical across real runs. This is a latent hole in the provided set, not an active corruption.
+
+**Recommended fix, mirroring the precedent this spec already set.** Treat the npm-provided cwd-naming names the way row 2b treats `OVERRIDE_VARS`: a named constant in the runner, removed from (or redirected into) each phase environment, with the runner's own suite asserting the constant still covers what `npm run` actually sets — the criterion-8b drift-check shape. Removal is the simpler option and matches Decision 1's precedent. The `suite-pwd.js` fixture extends to cover them with a few lines.
+
+**One spec-side note for wd-architect (Band C, non-blocking):** row 2b enumerates the provided set by name, and "the working directory" has now twice turned out to have members nobody had enumerated (`PWD` this round, these three now). The cell would be more durable stated as a *property* — no environment variable handed to a phase may name a path outside that phase's copy — with the enumeration as the current instance. That is the same move round 2 made when it withdrew the universal containment claim in favour of a checkable one.
+
+### Carried residuals
+
+`M12`, `M29`; the two `applyMutation` postconditions; the `runSuite` spawn timeout; spec `:446`; the `win32` stub note.
+
+---
+
+**Verdict.** Both round-10 items are individually correct and well-measured, and item 2's refusal-over-guessing is the right call on evidence I reproduced at the byte level. But item 1 fixes one member of a class and leaves three, and the exact grep the coordinator asked for finds them in the documented entry path, with a PROVEN run leaking into the source tree. That is the defect this round set out to close, so it belongs in this round rather than the next. **REQUEST-CHANGES.**
