@@ -807,4 +807,3 @@ comparisons.
 - **Named residual, unchanged from the 2026-08-05 ruling:** an undocumented tool's
   instruction file still passes; the list is current as of its date, never
   complete.
-
