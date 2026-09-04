@@ -324,4 +324,36 @@ missing file it is also `rc=1`, which is what the `test -f &&` guard buys.
 
 ## External rounds
 
-None yet. The orchestrator appends each external round here, newest last.
+Round zero closed at `79cfcae9` (architect self-check `14195491` → the
+orchestrator's two clean-context executors, template conformance and coherence,
+7 findings — 2 A, 2 B, 3 C — all FIX in `79cfcae9`; their record is §0.7 above).
+
+**STOP CRITERION (pinned before round 1):** the loop closes when an external
+round returns no material design finding on either channel — a Table A row
+whose denial the implementer cannot reach through the shipped predicate (stored
+spelling vs the fold at the Set lookup); a copy-boundary ambiguity that lets the
+shipped inventory and the spec's canonical tables diverge; an acceptance
+criterion or verification step that cannot discriminate (its RED not red, its
+GREEN not green, its mutant not the shipped enumeration); a documented bare-path
+instruction-file convention that Table A neither denies nor Table B records; or a
+scope leak into the dot-segment class `WP-dot-segment-denial` owns — and
+machinery/wording findings at that point are fixed within the frozen surface or
+accepted as named residuals. **Escalations:** (i) two consecutive rounds landing
+findings of the same kind → a design question per ADR-0031, never a third
+patch; (ii) a finding whose only honest fix turns the enumeration into a class
+rule, adds anything that watches, polls or runs (ADR-0004), or widens the
+inventory into the dot-prefixed surface is PARKED — to the owner or to
+`WP-dot-segment-denial`; (iii) the two Dispatch-precondition items are the
+owner's, so a finding that only re-argues them is routed as a scope objection
+and does not count toward the verdict.
+
+**Channels:** gate = Codex plugin (`codex-companion.mjs adversarial-review
+--base main`, run from the branch worktree); shadow = herdr-spawned hermetic
+Codex (`CODEX_HOME=~/.codex-review-home`, `-s read-only`, detached worktree at
+the round's tip, fresh thread per round). Raw outputs committed BEFORE
+adjudication as `2026-09-04-basename-currency-gate-raw-round<N>-<channel>.txt`.
+
+### Rounds
+
+| Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
+|-------|--------------------------|--------------------------|--------------------------|
