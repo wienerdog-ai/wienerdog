@@ -330,9 +330,13 @@ test('dot-segment-denial B2/B3: readVaultLayout and inferLayout equal the refere
         // pre-step is "each segment of the picked directory name after
         // pick's trim", and the picked name comes from `topLevelDirs`'
         // `fs.readdirSync`, never from the string used to create it.
-        const fsEntry = fs.readdirSync(bvault, { withFileTypes: true }).find((e) => e.isDirectory());
-        assert.ok(fsEntry, `B2/B3 reference: B3 expected exactly one directory under ${bvault}`);
-        const trimmed = fsEntry.name.trim();
+        const fsDirs = fs.readdirSync(bvault, { withFileTypes: true }).filter((e) => e.isDirectory());
+        assert.equal(
+          fsDirs.length,
+          1,
+          `B2/B3 reference: B3 expected exactly one directory under ${bvault}, found ${fsDirs.length}`
+        );
+        const trimmed = fsDirs[0].name.trim();
         const expected = kw === 'reports' ? `${trimmed}/dreams` : trimmed;
         const impl = inferLayout(bvault)[`${kw}_dir`] !== expected;
         const ref = refValue(expected);

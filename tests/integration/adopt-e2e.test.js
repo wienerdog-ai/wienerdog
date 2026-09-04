@@ -584,7 +584,7 @@ test('adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through d
     fs.mkdirSync(home, { recursive: true });
     fs.mkdirSync(core, { recursive: true });
 
-    // adopt's A5 pin preflight (src/cli/adopt.js:~245) needs a resolvable,
+    // adopt's A5 pin preflight (the dry createPins block in adopt.run) needs a resolvable,
     // verified `claude` on PATH before its first mutation — CI runners carry no
     // real `claude`. Stub it exactly as the file's first test does: the fake
     // brain fixture installed at <home>/.local/bin/claude, that dir prepended to
@@ -612,16 +612,32 @@ test('adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through d
     await adopt.run([vault, '--yes']);
 
     const cfg = fs.readFileSync(configPath, 'utf8');
+    // Parse the vault_layout: block the same way readVaultLayout itself does —
+    // find the block header, then every subsequently-indented `key: value` line
+    // — rather than a `_dir`-suffix regex, which would silently skip
+    // `daily_filename` (round-2 plugin P2: `renderLayoutBlock` persists SEVEN
+    // values, `daily_filename` among them, and it is itself a relative path
+    // that can carry a dot-prefixed segment — `isSafeRelativePath` validates it
+    // identically to the six `_dir` keys).
+    const cfgLines = cfg.split('\n');
+    const blockStart = cfgLines.findIndex((l) => /^vault_layout:[ \t]*(#.*)?$/.test(l));
+    assert.ok(blockStart >= 0, 'config.yaml must carry a vault_layout: block');
     const persisted = {};
-    for (const m of cfg.matchAll(/^  (\w+_dir):\s*(.*)$/gm)) persisted[m[1]] = m[2].trim();
+    for (let i = blockStart + 1; i < cfgLines.length; i++) {
+      const line = cfgLines[i];
+      if (!/^\s/.test(line)) break;
+      const m = line.trim().match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+      if (m) persisted[m[1]] = m[2].trim();
+    }
 
     // NON-VACUITY GUARD: `adopt.js`'s renderLayoutBlock always writes exactly
-    // these six `_dir` keys (plus `daily_filename`, not a path and not matched
-    // by the regex above). If `adopt` omitted the block, or rendered a shape
-    // the regex above does not match, `persisted` would be `{}` and both
-    // comparison loops below would vacuously pass. Fail loud instead.
-    const EXPECTED_DIR_KEYS = ['identity_dir', 'daily_dir', 'projects_dir', 'skills_dir', 'reports_dir', 'inbox_dir'];
-    for (const key of EXPECTED_DIR_KEYS) {
+    // these SEVEN keys. If `adopt` omitted the block, or rendered a shape the
+    // parser above does not match, `persisted` would be `{}` and every
+    // comparison loop below would vacuously pass. Fail loud instead.
+    const EXPECTED_LAYOUT_KEYS = [
+      'identity_dir', 'daily_dir', 'daily_filename', 'projects_dir', 'skills_dir', 'reports_dir', 'inbox_dir',
+    ];
+    for (const key of EXPECTED_LAYOUT_KEYS) {
       assert.ok(
         Object.prototype.hasOwnProperty.call(persisted, key),
         `the written vault_layout: block must carry ${key} — got keys ${JSON.stringify(Object.keys(persisted))}`
