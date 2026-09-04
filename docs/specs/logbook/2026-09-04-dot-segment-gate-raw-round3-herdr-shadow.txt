@@ -1,0 +1,281 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 3, detached worktree at 2eba621f (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch yet. The reference-predicate redesign catches all six requested mutants, and the class boundary, RED-proof partition, handoff table, and implementation shape are sound. However, V2 does not enforce its 1000-draw floor and permits caller-selected seeds to count as acceptance evidence. Together those controls let a wrong implementation pass criterion 1. Two stale pre-redesign measurements also remain in the canonical spec.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../focus-ds3.txt",
+      "exit_status": 0,
+      "result": "Loaded the vendored instructions and complete round-3 focus."
+    },
+    {
+      "command": "git status --porcelain=v1; git diff --stat main...HEAD; git diff --unified=80 main...HEAD -- <two in-scope files>",
+      "exit_status": 0,
+      "result": "Initial porcelain status was empty. Diff output was large and truncated; the stat showed the WP rewrite and logbook additions."
+    },
+    {
+      "command": "rg -n \"...backtick-containing pattern...\" docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 1,
+      "result": "Shell rejected the malformed quoting with 'unmatched quote'; no repository access or write occurred."
+    },
+    {
+      "command": "rg -n '<headings, contracts, tables, seed, predicate and verification patterns>' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0,
+      "result": "Located the deliverables, Tables A-F, acceptance criteria, V1-V4, implementation notes and out-of-scope section."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '205,460p'",
+      "exit_status": 0,
+      "result": "Read deliverables, exact contracts and Tables A-D."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '461,707p'",
+      "exit_status": 0,
+      "result": "Read Tables E-F, mirrored surfaces, implementation notes and security checklist."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '707,1076p'",
+      "exit_status": 0,
+      "result": "Read all acceptance criteria, verification commands, out-of-scope rules and definition of done."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '340,545p'",
+      "exit_status": 0,
+      "result": "Re-read Tables B-F with stable line numbers."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-dot-segment-denial.md | sed -n '545,827p'",
+      "exit_status": 0,
+      "result": "Re-read mirrored surfaces through the start of V2."
+    },
+    {
+      "command": "sed -n '827,976p' docs/specs/WP-dot-segment-denial.md | /bin/bash",
+      "exit_status": 1,
+      "result": "The exact V2 block parsed and started. It printed a valid 1000-draw distribution, then the sandbox denied its first OS-temp mkdtemp with EPERM."
+    },
+    {
+      "command": "nl -ba src/core/layout.js; nl -ba src/core/layout-infer.js; nl -ba src/core/frontmatter.js",
+      "exit_status": 0,
+      "result": "Verified isSafeRelativePath, coerceScalar, pick, inferLayout selection, reports_dir joining and hygiene behavior."
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '85,285p'; nl -ba src/core/dream/promote.js | sed -n '1025,1070p'",
+      "exit_status": 0,
+      "result": "Verified fold/foldedSegments, existing refusal order, makeAdmit and the row-Z2 comment."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1,360p'",
+      "exit_status": 0,
+      "result": "Read RED-runner invariants and declaration behavior."
+    },
+    {
+      "command": "rg -n '<evaluateRed/rollUp patterns>' scripts/red-proofs.js; nl -ba scripts/red-proofs.js | sed -n '960,1155p'; nl -ba scripts/red-proofs.js | sed -n '1480,1595p'",
+      "exit_status": 0,
+      "result": "Located the exact RED equality and roll-up implementations."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1590,1685p'; nl -ba scripts/red-proofs.js | sed -n '2110,2170p'",
+      "exit_status": 0,
+      "result": "Confirmed evaluateRed requires equality with expectRed, assertion-kind failures and matching signals; rollUp groups by (wp, criterion) and joins both ids into one line."
+    },
+    {
+      "command": "git rev-parse HEAD main; git log --oneline --decorate --max-count=12 --all -- docs/specs/WP-dot-segment-denial.md; git diff --name-status main...HEAD",
+      "exit_status": 0,
+      "result": "Confirmed HEAD 2eba621f0252a5719f9909513b53a7ce8433af37 and main 29c61d0311256c658369f341f53b52766e993f5f."
+    },
+    {
+      "command": "node - <<'NODE' <distribution probe>",
+      "exit_status": 1,
+      "result": "The shell could not create its heredoc temporary file under the read-only profile; no write occurred."
+    },
+    {
+      "command": "node -e '<in-memory distribution-floor search>'",
+      "exit_status": 0,
+      "result": "Found seed 0 passes V2's distribution precondition at N=250 with 70 first code points and dot share 0.528. N=999 and N=1000 also passed."
+    },
+    {
+      "command": "rg -n '<guard/backtick/extraction patterns>' <two in-scope files>",
+      "exit_status": 0,
+      "result": "Located the shell-embedding claim and V2 guard-related text."
+    },
+    {
+      "command": "git log --oneline --max-count=8 HEAD; git diff --stat a3985def..HEAD; git diff --unified=20 a3985def..HEAD -- docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0,
+      "result": "Compared the circuit-breaker revision against the round-1 tip; output was partially truncated but showed the generator/reference redesign and pruned notes."
+    },
+    {
+      "command": "rg -n -C 8 '<18-name/fitted patterns>' <round raw files and logbook>",
+      "exit_status": 0,
+      "result": "Recovered the prior fitted-matcher context and round measurements."
+    },
+    {
+      "command": "rg -n '<fitted matcher implementation patterns>' <round raw files>",
+      "exit_status": 0,
+      "result": "Found the prior z-family plus Table-D attack description."
+    },
+    {
+      "command": "nl -ba src/core/frontmatter.js | sed -n '72,112p'; git show a3985def:docs/specs/WP-dot-segment-denial.md | rg -n '<implementation-note patterns>'",
+      "exit_status": 0,
+      "result": "Confirmed scalar coercion semantics and that pruning retained the producer-keyword, reports_dir, trim, NFKC, RED-lane and ambiguity contracts."
+    },
+    {
+      "command": "node -e '<first combined in-memory V2 harness attempt>'",
+      "exit_status": 1,
+      "result": "SyntaxError: missing closing brace; no filesystem writes."
+    },
+    {
+      "command": "node -e '<second combined in-memory V2 harness attempt>'",
+      "exit_status": 1,
+      "result": "SyntaxError: extra closing brace; no filesystem writes."
+    },
+    {
+      "command": "node -e '<initial reference-family mutant scorer>'",
+      "exit_status": 0,
+      "result": "Produced preliminary scores; superseded because B2 did not yet emulate coerceScalar."
+    },
+    {
+      "command": "node -e '<corrected in-memory V2 reference-family scorer using coerceScalar, seed round3-shadow-2eba621f>'",
+      "exit_status": 0,
+      "result": "Correct 5000/5000; ASCII-only 2707/5000; length<=16 2853/5000; length>1 5000/5000; trimStart+NFKC 4950/5000; z union Table D 2531/5000; fitted 18-name predicate 2527/5000. Generator precheck: 109/112 first code points, dot share 0.523."
+    },
+    {
+      "command": "node -e '<in-memory V2 no-over-denial, Table-D and Table-E scorer>'",
+      "exit_status": 0,
+      "result": "Correct: 12/12, 87/87, 38/38. ASCII-only: boundary 35/38. length<=16: 36/38. length>1: 34/38. NFKC: 30/38. z union Table D: 16/38. fitted 18-name B1 mutant: 29/38. All mutants failed somewhere; all retained 12/12 no-over-denial and 87/87 handoff."
+    },
+    {
+      "command": "node -e '<scan extracted V2 JavaScript interior for shell-sensitive characters>'",
+      "exit_status": 0,
+      "result": "No dollar sign, backtick or literal double quote occurred inside the outer double-quoted JavaScript body."
+    },
+    {
+      "command": "WD_HELD_OUT_N=250 WD_HELD_OUT_SEED=0 sed ... | /bin/bash",
+      "exit_status": 1,
+      "result": "Environment variables applied only to sed, not bash; V2 consequently used its default clock seed and N=1000, then hit EPERM at mkdtemp."
+    },
+    {
+      "command": "sed -n '827,976p' ... | env WD_HELD_OUT_N=250 WD_HELD_OUT_SEED=0 /bin/bash",
+      "exit_status": 1,
+      "result": "Exact V2 accepted seed 0 and N=250 through its distribution gate, printing 70/112 first code points and dot share 0.528; it then hit the expected sandbox EPERM at mkdtemp."
+    },
+    {
+      "command": "node -e '<seed-control search for an omitted .AB family>'",
+      "exit_status": 0,
+      "result": "For a wrong B2/B3 predicate that exempts uppercase .AB, seed 0 avoided the defect while seed 26 exercised it once."
+    },
+    {
+      "command": "nl -ba docs/adr/0004-files-only-architecture.md; nl -ba docs/runbooks/spec-authoring.md",
+      "exit_status": 0,
+      "result": "The first subcommand reported the guessed ADR path did not exist; the second successfully read spec-authoring.md. The compound shell status was 0."
+    },
+    {
+      "command": "nl -ba scripts/boundary-check.js; git diff --check main...HEAD -- <two in-scope files>",
+      "exit_status": 0,
+      "result": "Read the boundary checker and found no whitespace errors in the in-scope diff."
+    },
+    {
+      "command": "rg --files docs/adr | rg '0004|ADR-0004|files-only'",
+      "exit_status": 0,
+      "result": "Located docs/adr/0004-no-daemon-invariant.md."
+    },
+    {
+      "command": "nl -ba docs/adr/0004-no-daemon-invariant.md; node scripts/boundary-check.js <spec and all seven deliverables plus logbook>",
+      "exit_status": 0,
+      "result": "The proposed work adds no resident process and satisfies ADR-0004. Every declared deliverable and the logbook path passed the boundary checker."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "Could not complete markdownlint because the restricted network prevented fetching markdownlint-cli2 from npm. Shellcheck, PSScriptAnalyzer and frontmatter stages ran; frontmatter passed 267 specs and 4 agents. This is an environment limitation, not an in-scope finding."
+    },
+    {
+      "command": "sed -n '792,793p' docs/specs/WP-dot-segment-denial.md | /bin/bash",
+      "exit_status": 1,
+      "result": "V1 correctly failed on the untouched tree with MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js."
+    },
+    {
+      "command": "git status --porcelain=v1; wc -l <two in-scope files>; git diff --check main...HEAD -- <two in-scope files>",
+      "exit_status": 0,
+      "result": "Final status remained empty; line counts were 1076 and 733; diff check remained clean."
+    },
+    {
+      "command": "rg -n '<old-oracle count patterns>' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0,
+      "result": "Found stale boundary 27/34 and 23/34 measurements."
+    },
+    {
+      "command": "sed -n '736,746p' docs/specs/WP-dot-segment-denial.md | cat -vet",
+      "exit_status": 0,
+      "result": "Confirmed criterion 3 still says the fitted matcher scores 0 of 312 under the now-replaced grading."
+    },
+    {
+      "command": "rg -n '<0 of 312 and old boundary denominators>' docs/specs/WP-dot-segment-denial.md",
+      "exit_status": 0,
+      "result": "Confirmed stale measurements at lines 383-384 and 743."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "No porcelain entries. Final worktree state is byte-for-byte as clean as the initial status. Git emitted only sandbox-related xcrun cache warnings."
+    }
+  ],
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "V2 lets the submitter shrink and choose the supposedly held-out sample",
+      "affected_file": "docs/specs/WP-dot-segment-denial.md",
+      "line_start": 840,
+      "line_end": 858,
+      "confidence": 1.0,
+      "body": "Table F and criterion 1 require at least 1000 draws per point and describe a clock-derived per-run seed, but V2 uses Number(WD_HELD_OUT_N || 1000) without a lower-bound check and accepts WD_HELD_OUT_SEED as acceptance input. The exact extracted block accepted N=250, seed 0 through its distribution precondition: 70 distinct first code points and dot share 0.528. Separately, using V2's exact generator sequence, a wrong B2/B3 predicate that matches the reference except that it permits uppercase '.AB...' is not exercised under seed 0 but is exercised under seed 26. Table D is B1-only and Table E contains no uppercase '.AB' layout row, so supplying the avoiding seed permits this wrong implementation to score perfectly across V2. This is distinct from the honestly documented probabilistic residual: the submitter can deliberately select the random sample that becomes acceptance evidence.",
+      "impact": "Criterion 1 can pass with one quarter of its specified sample floor or with a cherry-picked seed that avoids a known defect, allowing a wrong layout validator to ship with a green verification transcript.",
+      "recommendation": "Validate WD_HELD_OUT_N as a safe integer and fail when it is below 1000. Require the acceptance/PR run to execute with WD_HELD_OUT_SEED unset. Preserve reproducibility as an explicitly labelled replay/debug mode whose output cannot satisfy the acceptance criterion, or require both an unset-seed acceptance run and any optional replay run."
+    },
+    {
+      "materiality_band": "C",
+      "title": "Canonical RED and acceptance text still carries superseded oracle measurements",
+      "affected_file": "docs/specs/WP-dot-segment-denial.md",
+      "line_start": 383,
+      "line_end": 384,
+      "confidence": 1.0,
+      "body": "The identity-partition explanation still reports C1 boundary 27/34 and C2 boundary 23/34, while the redesigned Table E has 38 outcomes and the current canonical C1/C2 rows and V2 comments report 29/38 and 25/38. A second stale statement at line 743 says the fitted matcher scores 0 of 312 on criterion 1, although criterion 1 is now the 5000-verdict reference grading and the spec's own round-2 measurement is ref1 1014/2000. These are pre-circuit-breaker measurements left in surfaces that present themselves as current contract rationale.",
+      "impact": "The executable V2 and newer measurements catch the discrepancy, so this does not let a wrong implementation pass, but implementers and reviewers receive contradictory canonical evidence about the exact RED failure sets and oracle strength.",
+      "recommendation": "Replace lines 383-384 with 29/38 and 25/38. Rewrite line 743 using the current reference-grading measurement and denominator, then sweep the non-historical WP text for all pre-redesign 312/234/34 denominators."
+    }
+  ],
+  "confirmed_closures": [
+    "The reference predicate [...seg][0] === '.' exactly represents a U+002E-leading segment after each documented pre-step. Empty segments remain legal with respect to this class alone; empty whole values and '..' retain their existing independent handling.",
+    "B1's NFC/lowercase fold, B2's coerceScalar result and B3's pick/hygiene trim align with what the production predicate receives. No correct implementation is forced to NFKC-normalize or trim an interior path segment.",
+    "All ten Table E rows have the correct expected outcome under the production pre-steps and the proposed predicate. The legal whitespace, U+2024/U+FF0E, trailing-dot, interior-dot and NFD cases are not over-denied.",
+    "The requested mutants were genuinely closed: ASCII-only, length<=16, NFKC, z-union-Table-D and the fitted 18-name matcher all fail. The length>1 mutant alone scores 5000/5000 on reference sampling and is caught only by four Table E outcomes, exactly as Table F row F7 states.",
+    "scripts/red-proofs.js makes C1's exact set T1/T2/T3 and C2's exact set T4/T5 the correct declarations. T6 remains green because both reversions only admit more. Assertion band markers are matchable through diagnostic raw text. Both declarations using criterion 1 produce one roll-up line naming both ids.",
+    "The V2 JavaScript body contains no dollar sign, backtick or literal double quote inside its outer double-quoted shell string. It parses and begins execution as written; only the sandbox's EPERM on mkdtemp prevented the filesystem-backed portion.",
+    "Comparison with a3985def found no behavioral contract deleted by the Implementation-notes pruning. The producer-keyword requirement, reports_dir special case, trim behavior, NFKC decision, RED-lane constraint and ambiguity rule remain represented.",
+    "The seven deliverables pass scripts/boundary-check.js. The source changes form one coupled product rule across producer, reader and enforcement seams; splitting at B1/B2-B3 would weaken the required round-trip invariant. No daemon, listener, polling loop or persistent process is introduced, so ADR-0004 remains satisfied.",
+    "The 1076-line size is unusually large for size M, but the previously adjudicated spec-authoring objection is process scope rather than a new product/design defect and was not counted toward the verdict."
+  ],
+  "routed_scope_objections": [
+    {
+      "topic": "Silent per-key fallback for rejected layout values",
+      "routing": "Owner decision in the Dispatch precondition; explicitly excluded from this verdict.",
+      "status": "Still unresolved before dispatch. The review did not reopen or count it."
+    },
+    {
+      "topic": "Spec-authoring boundary and 1076-line size-M classification",
+      "routing": "Prior round-2 process adjudication.",
+      "status": "Not counted. The prior category-error disposition stands; no deleted contract was found in the pruning."
+    },
+    {
+      "topic": "Class shape, basename inventory, NFKC normalization, code changes and other files",
+      "routing": "Existing ruling or separate work-package ownership.",
+      "status": "Not reopened and not counted."
+    }
+  ],
+  "read_only_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "worktree_writes": "None. The exact V2 and heredoc probes were denied before creating temporary files; all successful mutant scoring ran in memory."
+  }
+}
