@@ -1,0 +1,202 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 3, detached worktree at f198263a (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision f198263aeee14b0ae525c79c900b6444ed019dc7 vs main: docs/specs/WP-quarantine-banner-location.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP pending one Band A evidence defect. The prescribed digest-write fault does not discriminate the required placement before ledger persistence: an incorrect placement immediately after writeLedger would pass while retaining a real post-rename failure window. The actual reorder design is otherwise coherent, and the round-2 V5 and declaration fixes withstand static review.",
+  "findings": [
+    {
+      "materiality": "A",
+      "title": "The failure-injection test cannot prove that record delivery precedes ledger persistence",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 939,
+      "line_end": 945,
+      "confidence": 0.99,
+      "body": "Criterion 6 requires the print before anything can durably claim delivery, but the specified rehearsal faults only at the later digest rename (also documented at lines 1129-1137). An implementation that moves the block to immediately after writeLedger and before regenerateDigest would still print before that digest fault and pass the new test. It nevertheless retains a dangerous window: writeLedger renames transcript-ledger.json at src/core/dream/ledger.js:133 and then performs chmodSync at line 134. A chmod failure, process termination, or crash after the rename but before an after-ledger print leaves the final ledger durable without the only complete record being delivered. This is exactly the failure family L7 claims to close.",
+      "recommendation": "Make the test discriminate the ledger boundary itself. Patch fs.renameSync for the final transcript-ledger.json destination, delegate the rename so the ledger is durably present, then throw immediately; assert that the announcing line and every report.record line were already captured and that the targeted ledger rename actually fired. Alternatively use one ordered event log that records console delivery, ledger rename, and digest rename and assert delivery < ledger < digest. Explicitly rehearse a deliberately wrong step-18a placement and require it to fail."
+    },
+    {
+      "materiality": "C",
+      "title": "The idempotence criterion still describes the pre-L7 text-only package",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 966,
+      "line_end": 967,
+      "confidence": 1,
+      "body": "Criterion 10 says the package ships no command, writes nothing outside the repository, and only changes four rendered sentences. L7 now changes execution order in the dream command around writes to the ledger, digest, and vault warnings. The intended idempotence conclusion may remain N/A, but its stated justification is factually stale.",
+      "recommendation": "Replace the rationale with the actual invariant: L7 adds no write, persistent state, or retry behavior; it only moves an existing output block before the existing writes, while the four other changes are text substitutions."
+    }
+  ],
+  "round_2_closure_assessment": {
+    "R2-A_V5": "Genuinely closed. V5 reconstructs each candidate row as the current local main row plus the exact clause and compares byte-for-byte. The untouched tree failed for Q1, Q2, and Q9 plus the expected empty numstat. Pipes and backticks contained in a clause are ordinary command-substitution output and are not reparsed by the shell. A refreshed/rebased main causes legitimate drift to turn red. The spec does not explicitly require refreshing the local main ref immediately before dispatch-time rerunning V5; that is a process residual, but same-row upstream edits are also expected to conflict downstream.",
+    "R2-B_doctor_contradiction": "Closed. The obsolete prohibition is absent, and the operative text consistently names four identities and two declaration files.",
+    "R2-C_reorder": "The design move itself is coherent, but its required test is not discriminating enough, which is the Band A finding. If implemented exactly before step 18, no current-record pointer-bearing write precedes delivery on the refused or promoted-unpublished arms. Published and fallback arms already persist the record in the report. The pre-step-18 warnings reconciliation uses the old ledger and therefore does not claim delivery of the current run's newly withheld copies. The undelivered predicate has exactly two arms and one print site, so the move neither duplicates nor drops delivery. Existing Done-spec G11 contracts require delivery but do not pin its relative output order. Exhausted-only and published/fallback flows remain unaffected."
+  },
+  "failure_injection_assessment": {
+    "seam": "The digest seam is real: regenerateDigest selects state/digest.md at src/cli/dream.js:645 and calls writeFilePrivate at line 646; writeFilePrivate performs the destination rename at src/core/private-fs.js:360. Patching fs.writeFileSync would not reach this path.",
+    "presence_assertion": "The specified assertion shape requires both the announcement and record lines in captured output before the fault, which is appropriate.",
+    "wrong_reorder_result": "A print after writeLedger but before regenerateDigest would pass the prescribed digest-fault test. Therefore the current evidence does not establish L7's exact safety boundary."
+  },
+  "red_proof_assessment": {
+    "static_result": "Both inlined JSON declarations parsed. On an in-memory candidate carrying the five exact source forms, all six find strings occurred exactly once; every marker was absent before mutation and present in its replacement; all six mutated JavaScript sources parsed. Expected identity counts were 1,1,1,3 for the ledger suite and 1,1 for the doctor suite.",
+    "runtime_result": "Not independently executable in this sandbox. mktemp -d under /tmp failed with EPERM, and a shell heredoc also failed because the shell could not create its temporary file. No worktree or home-directory write was attempted.",
+    "new_pipeline_test_interaction": "Neither declaration runs tests/unit/dream-pipeline.test.js; their suites are ledger.test.js and doctor.test.js. Therefore the new L7 test cannot become an undeclared failure during either L0 derivation mutation. Its assertions should remain focused on record presence/order rather than pinning the pointer sentence."
+  },
+  "package_structure_assessment": {
+    "for_splitting": "L7 plus its injection test is an independently useful G11 correctness fix. Landing it as an S package first would isolate the crash-window contract and let the banner package depend on a proven delivery order.",
+    "against_splitting": "The new pointer sentence depends on that ordering, so keeping both in one atomic package guarantees the prerequisite and its consumer land together and avoids another complete WP/review cycle.",
+    "recommendation": "The current size M is honest. Prefer splitting L7 into a sequenced S package if review-cycle cost is acceptable; it is independently shippable and would make the ordering proof harder to blur into the larger text/mirror change. Keeping it atomic is still defensible after the Band A test is strengthened."
+  },
+  "routed_scope_objections": [
+    {
+      "route": "Owner dispatch decision",
+      "issue": "Confirm that L1-L4 stop naming a folder and stop instructing deletion.",
+      "recommendation": "Confirm, as the existing shelf claim is false on the measured fall-through arm."
+    },
+    {
+      "route": "WP-quarantine-only-copy-shelf successor",
+      "issue": "L5 says its notice clears when no withheld copies remain, but it can clear while a redacted-shelf only-copy remains.",
+      "recommendation": "Route rather than absorb because the correct wording depends on the successor's shelf/durable-listing decision."
+    },
+    {
+      "route": "Owner and PR Discovered issues",
+      "issue": "The owner-ruled remediation value remains delete even for a refused path whose preserved artifact may be the only copy.",
+      "recommendation": "Record the tension; do not change it in this WP."
+    },
+    {
+      "route": "WP-quarantine-only-copy-shelf successor",
+      "issue": "A fall-through only-copy can remain on the bounded redacted shelf and become retention-eligible.",
+      "recommendation": "Keep shelf placement and retention policy out of this WP."
+    },
+    {
+      "route": "WP-quarantine-preserve-durability",
+      "issue": "Crash durability of preservation remains unresolved.",
+      "recommendation": "Keep it in the already-sequenced durability successor."
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && printf '\\nFOCUS_FILE_BOUNDARY\\n' && sed -n '1,260p' ../focus-qb3.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1; sed -n '1,1300p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0,
+      "note": "Initial porcelain output was empty."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '280,620p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '621,920p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD main && git diff --name-status main...HEAD && git diff -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md && nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0,
+      "note": "Resolved HEAD=f198263aeee14b0ae525c79c900b6444ed019dc7 and main=8302ce8e0ddc6d9e383e739c116272e805207444."
+    },
+    {
+      "command": "sed -n '200,430p' docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md; wc -l docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "wc -l <all existing deliverable files>; ls -l tests/red-proofs/quarantine-banner-location.proofs.json tests/red-proofs/quarantine-banner-location-doctor.proofs.json",
+      "exit_status": 1,
+      "note": "The two create-deliverables are correctly absent from this design-only revision."
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '820,1209p'; rg -n 'report.record|undelivered|writeLedger|regenerateDigest|refreshWarnings|composeWarnings|console.log|commit|writeFilePrivate|renameSync' <relevant source and test files>",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '580,750p'; nl -ba src/cli/dream.js | sed -n '1070,1188p'; nl -ba src/core/dream/ledger.js | sed -n '100,150p'; nl -ba src/core/private-fs.js | sed -n '270,370p'; nl -ba src/core/digest.js | sed -n '780,880p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -i 'G11|step (17|18|19|20)|before .*record|record .*before|after .*record|record .*after|undelivered|complete record|report.record' docs/specs/done",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -l -i 'row g11' docs/specs/done; rg -n -i '<ordering terms>' docs/specs/done/WP-dream-promote-module.md docs/specs/done/WP-dream-promotion-inversion.md",
+      "exit_status": 2,
+      "note": "The second guessed path did not exist; the relevant files returned by the first search were inspected next."
+    },
+    {
+      "command": "rg -n -i -C 4 '<G11 and ordering terms>' docs/specs/done/WP-dream-promote-report.md docs/specs/done/WP-quarantine-warnings-file.md docs/specs/done/WP-dream-promote-in-workspace.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -C 3 '\\*\\*G11\\*\\*|\\| G11 \\|' docs/specs/done/WP-dream-promote-in-workspace.md; rg -n -i '<step/order terms>' docs/specs/done/WP-dream-promote-in-workspace.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1015,1049p' docs/specs/WP-quarantine-banner-location.md | bash",
+      "exit_status": 1,
+      "note": "Expected untouched-tree RED: Q1, Q2, and Q9 each failed base-plus-clause equality; numstat was empty rather than 3/3."
+    },
+    {
+      "command": "rg -n -i 'dispatch|main moves|main moved|drift|rebase|git show main' docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/dream-pipeline.test.js | sed -n '320,435p;1210,1425p;800,860p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba <ledger, warnings, doctor relevant ranges>; rg -n '<pointer carrier constructs>' src/core/dream/ledger.js src/core/dream/warnings.js src/cli/doctor.js",
+      "exit_status": 0
+    },
+    {
+      "command": "mktemp -d /tmp/qb3-review.XXXXXX",
+      "exit_status": 1,
+      "note": "EPERM from the read-only sandbox; no fixture was created."
+    },
+    {
+      "command": "node <<'NODE' ... in-memory declaration validator ... NODE",
+      "exit_status": 1,
+      "note": "The shell could not create its heredoc temporary file under the read-only sandbox; the script did not run."
+    },
+    {
+      "command": "node -",
+      "exit_status": 0,
+      "note": "Diagnostic REPL opened and was exited without mutation."
+    },
+    {
+      "command": "node -e \"eval(require('node:fs').readFileSync(0,'utf8'))\"",
+      "exit_status": 0,
+      "note": "The validator was supplied over stdin. It parsed both declarations, synthesized the five exact source forms in memory, and validated all six find/marker/parse contracts."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1460,1685p'; rg -n '<suite/evaluateRed terms>' scripts/red-proofs.js | tail -80",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'record:' src/core/dream/promote.js; rg -n '<report outcome terms>' src/core/dream/promote.js | tail -120; nl -ba src/core/dream/promote.js | sed -n '1020,1210p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '1520,1680p'; rg -n 'function compose|const record|record =' src/core/dream/promote.js | tail -30",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '780,970p;1118,1140p'; nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md | sed -n '520,570p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md; git status --porcelain=v1",
+      "exit_status": 0,
+      "note": "Final porcelain output was empty, byte-for-byte identical to the initial empty status. Git emitted repeated Darwin cache warnings because the sandbox denied xcrun cache creation; these did not alter command results or the worktree."
+    }
+  ],
+  "worktree_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "worktree_writes": 0
+  }
+}
