@@ -584,12 +584,24 @@ test('adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through d
     fs.mkdirSync(home, { recursive: true });
     fs.mkdirSync(core, { recursive: true });
 
+    // adopt's A5 pin preflight (src/cli/adopt.js:~245) needs a resolvable,
+    // verified `claude` on PATH before its first mutation — CI runners carry no
+    // real `claude`. Stub it exactly as the file's first test does: the fake
+    // brain fixture installed at <home>/.local/bin/claude, that dir prepended to
+    // PATH (WP-155's clean-PATH shape). This test never runs the dream, so the
+    // fixture is reached only for its `--version` probe.
+    const localBin = path.join(home, '.local', 'bin');
+    fs.mkdirSync(localBin, { recursive: true });
+    fs.copyFileSync(FAKE_BRAIN, path.join(localBin, 'claude'));
+    fs.chmodSync(path.join(localBin, 'claude'), 0o755);
+
     Object.assign(process.env, {
       HOME: home,
       WIENERDOG_HOME: core,
       WIENERDOG_VAULT: defaultVault,
       CLAUDE_CONFIG_DIR: claude,
       CODEX_HOME: codex,
+      PATH: localBin + path.delimiter + process.env.PATH,
       WIENERDOG_LOADER_NOOP: '1',
     });
 
