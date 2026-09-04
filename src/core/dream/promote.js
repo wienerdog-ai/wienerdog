@@ -217,16 +217,21 @@ function admittedDirs(layout) {
  *       `02-Areas/` or `03-Resources/`, or under the layout's `reports_dir`;
  *   (b) its final component ends in `.md`;
  *   (c) its basename is not a current harness instruction-file shape at any
- *       depth, no segment is `.claude` or `.codex`, and the basename is not
- *       `.mcp.json`.
+ *       depth, no segment is `.claude` or `.codex`, the basename is not
+ *       `.mcp.json`, and no segment — at any position, the basename included —
+ *       begins with a dot.
  *
  * (a) and (b) are the positive allowlist and close the class M7's remediation
  * asks for: a vault-root `CLAUDE.md`, a `.gitignore`, a `.claude/settings.json`
  * and an Obsidian plugin binary are all outside it without anyone enumerating
- * them. (c) is the named deny-list of CURRENT conventions.
+ * them. (c) is the named deny-list of CURRENT conventions, plus the class rule.
  *
- * Deliberately NOT a dot-rule: audit finding C3 owns the layout dot-rule and
- * its notice, and a directory-and-extension rule does not step on it.
+ * Discharges audit finding M7 (2026-08-05 ruling, item 1): every dot-prefixed
+ * path segment is denied as a class, so a future control directory needs no
+ * addition to `DENIED_SEGMENTS` to be refused here. Finding C3's layout
+ * dot-rule (item 3, `isSafeRelativePath`) is the same ruling's other half and
+ * is what makes this class rule unconditional; it is discharged in
+ * `src/core/layout.js`, not here.
  * @param {import('../layout').VaultLayout} layout
  * @returns {(rel: string) => string|null}
  */
@@ -260,6 +265,15 @@ function makeAdmit(layout) {
     // (a)
     if (!dirs.some((d) => isUnder(segments, d))) {
       return 'not admitted: not under a writable vault tier directory';
+    }
+    // The class rule (row A5): LAST, after every enumerated check, so no path
+    // refused above changes the reason it is refused with — only a path every
+    // other clause admits can reach it, and the sole observable change is that
+    // a previously admitted dot path is now refused.
+    for (const seg of segments) {
+      if (seg.startsWith('.')) {
+        return `not admitted: path segment \`${seg}\` begins with a dot`;
+      }
     }
     return null;
   };
@@ -1047,14 +1061,18 @@ function promote(o) {
   // four shapes absent from a `rel` — no segment empty, none `.`, none `..`,
   // none containing a separator — and a violation THROWS rather than refusing,
   // so it cannot be reported, dispositioned or survived. `isSafeRelativePath`
-  // (`layout.js:65-71`) already guarantees TWO of the four: no `..`, and
-  // nothing absolute or backslashed. THE CALLER THEREFORE CLOSES EXACTLY THE
-  // OTHER TWO — empty and `.` — and the other two need no handling here.
-  // Stating that absence matters: a reader who re-adds a `..` check writes the
-  // duplicated containment rule the spec forbids, and a reader who assumes the
-  // layout closes everything writes the defect this row exists to end.
-  // Measured, each returned UNCHANGED by `readVaultLayout`: `reports/dreams/`,
-  // `reports//dreams`, `.`, `./reports`, `reports/./dreams`.
+  // (in `src/core/layout.js`) already guarantees THREE of the four: no `..`, nothing
+  // absolute or backslashed, and — since WP-dot-segment-denial's class rule —
+  // no segment that IS `.`, a `.` segment being a dot-prefixed one like any
+  // other. THE CALLER THEREFORE CLOSES EXACTLY THE REMAINING ONE — empty — and
+  // needs no handling for the other three. Stating that absence matters: a
+  // reader who re-adds a `..` check writes the duplicated containment rule the
+  // spec forbids, and a reader who assumes the layout closes everything writes
+  // the defect this row exists to end.
+  // Measured, only TWO of the five now returned UNCHANGED by `readVaultLayout`:
+  // `reports/dreams/`, `reports//dreams`. The other three — `.`, `./reports`,
+  // `reports/./dreams` — each carry a dot-prefixed segment and now fall back to
+  // the built-in default (WP-dot-segment-denial).
   //
   // DROPPING, not throwing and not defaulting: a throw would crash every run on
   // a legitimate config and take the whole run's enforcement record with it,

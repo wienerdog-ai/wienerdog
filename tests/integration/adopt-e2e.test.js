@@ -12,6 +12,7 @@ const adopt = require('../../src/cli/adopt');
 const sync = require('../../src/cli/sync');
 const dream = require('../../src/cli/dream');
 const { readVaultLayout } = require('../../src/core/layout');
+const { makeAdmit } = require('../../src/core/dream/promote');
 const idApprovals = require('../../src/core/identity-approvals');
 
 // A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
@@ -558,3 +559,139 @@ test(
     }
   }
 );
+
+test('adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through denial (WP-dot-segment-denial, acceptance criterion 4)', async () => {
+  // Its own temp vault, per the Deliverables cell — the shared POWERUSER_FIXTURE
+  // is not touched. The only project-tier candidate is dot-prefixed, the
+  // Dispatch precondition's own example (`projects_dir: .projects`), which the
+  // untouched tree persists and round-trips on the WRONG value.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-dotseg-'));
+  const vault = path.join(root, 'vault');
+  const home = path.join(root, 'home');
+  const core = path.join(root, 'core');
+  const defaultVault = path.join(root, 'default-vault');
+  const claude = path.join(root, 'claude-absent');
+  const codex = path.join(root, 'codex-absent');
+
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  const origLog = console.log;
+  console.log = () => {};
+
+  try {
+    fs.mkdirSync(path.join(vault, '.projects', 'example'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '.projects', 'example', 'note.md'), '# a note\n');
+    fs.mkdirSync(home, { recursive: true });
+    fs.mkdirSync(core, { recursive: true });
+
+    // adopt's A5 pin preflight (the dry createPins block in adopt.run) needs a resolvable,
+    // verified `claude` on PATH before its first mutation — CI runners carry no
+    // real `claude`. Stub it exactly as the file's first test does: the fake
+    // brain fixture installed at <home>/.local/bin/claude, that dir prepended to
+    // PATH (WP-155's clean-PATH shape). This test never runs the dream, so the
+    // fixture is reached only for its `--version` probe.
+    const localBin = path.join(home, '.local', 'bin');
+    fs.mkdirSync(localBin, { recursive: true });
+    fs.copyFileSync(FAKE_BRAIN, path.join(localBin, 'claude'));
+    fs.chmodSync(path.join(localBin, 'claude'), 0o755);
+
+    Object.assign(process.env, {
+      HOME: home,
+      WIENERDOG_HOME: core,
+      WIENERDOG_VAULT: defaultVault,
+      CLAUDE_CONFIG_DIR: claude,
+      CODEX_HOME: codex,
+      PATH: localBin + path.delimiter + process.env.PATH,
+      WIENERDOG_LOADER_NOOP: '1',
+    });
+
+    const configPath = path.join(core, 'config.yaml');
+    await init.run(['--yes']);
+    assert.ok(fs.existsSync(configPath), 'config.yaml written by init');
+
+    await adopt.run([vault, '--yes']);
+
+    const cfg = fs.readFileSync(configPath, 'utf8');
+    // Parse the vault_layout: block the same way readVaultLayout itself does —
+    // find the block header, then every subsequently-indented `key: value` line
+    // — rather than a `_dir`-suffix regex, which would silently skip
+    // `daily_filename` (round-2 plugin P2: `renderLayoutBlock` persists SEVEN
+    // values, `daily_filename` among them, and it is itself a relative path
+    // that can carry a dot-prefixed segment — `isSafeRelativePath` validates it
+    // identically to the six `_dir` keys).
+    const cfgLines = cfg.split('\n');
+    const blockStart = cfgLines.findIndex((l) => /^vault_layout:[ \t]*(#.*)?$/.test(l));
+    assert.ok(blockStart >= 0, 'config.yaml must carry a vault_layout: block');
+    const persisted = {};
+    for (let i = blockStart + 1; i < cfgLines.length; i++) {
+      const line = cfgLines[i];
+      if (!/^\s/.test(line)) break;
+      const m = line.trim().match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+      if (m) persisted[m[1]] = m[2].trim();
+    }
+
+    // NON-VACUITY GUARD: `adopt.js`'s renderLayoutBlock always writes exactly
+    // these SEVEN keys. If `adopt` omitted the block, or rendered a shape the
+    // parser above does not match, `persisted` would be `{}` and every
+    // comparison loop below would vacuously pass. Fail loud instead.
+    const EXPECTED_LAYOUT_KEYS = [
+      'identity_dir', 'daily_dir', 'daily_filename', 'projects_dir', 'skills_dir', 'reports_dir', 'inbox_dir',
+    ];
+    for (const key of EXPECTED_LAYOUT_KEYS) {
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(persisted, key),
+        `the written vault_layout: block must carry ${key} — got keys ${JSON.stringify(Object.keys(persisted))}`
+      );
+    }
+
+    // Conjunct 1 — the discriminating one, RED on the untouched tree: the
+    // `vault_layout:` block written into config.yaml carries no value with a
+    // dot-prefixed segment. A concrete non-dot value is pinned for the one key
+    // this vault's fixture actually exercises (`.projects` is this vault's
+    // only project-tier candidate, and it fails isSafeRelativePath, so the
+    // producer's hygiene loop must fall back to the built-in default) — this
+    // is what makes the assertion discriminating rather than merely "no dot
+    // segment", which the untouched tree's own class-unaware validator could
+    // still satisfy by accident on a different fixture.
+    assert.equal(
+      persisted.projects_dir,
+      '01-Projects',
+      `persisted projects_dir must fall back to the built-in default, got ${JSON.stringify(persisted.projects_dir)}`
+    );
+    for (const [key, value] of Object.entries(persisted)) {
+      assert.ok(
+        !value.split('/').some((seg) => seg.startsWith('.')),
+        `persisted ${key}: ${JSON.stringify(value)} must carry no dot-prefixed segment`
+      );
+    }
+
+    // Conjunct 2 — readVaultLayout of that same config.yaml returns EXACTLY the
+    // values the block carries: nothing the writer persisted is discarded on read.
+    const layout = readVaultLayout(configPath);
+    for (const [key, value] of Object.entries(persisted)) {
+      assert.equal(layout[key], value, `readVaultLayout(${key}) must equal the persisted value`);
+    }
+
+    // Conjunct 3 — makeAdmit built on the read-back layout admits a `.md` note
+    // under the persisted projects tier and refuses one under the dot-prefixed
+    // directory the vault actually contains.
+    const admit = makeAdmit(layout);
+    assert.equal(
+      admit(`${layout.projects_dir}/example/note.md`),
+      null,
+      'a note under the persisted (non-dot) projects tier is admitted'
+    );
+    const refusal = admit('.projects/example/note.md');
+    assert.ok(
+      refusal !== null,
+      'a note under the dot-prefixed directory the vault actually contains is refused'
+    );
+  } finally {
+    console.log = origLog;
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

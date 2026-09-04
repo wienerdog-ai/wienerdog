@@ -1,0 +1,61 @@
+{
+  "suite": "tests/unit/dot-segment-denial.test.js",
+  "proofs": [
+    {
+      "id": "dot-segment-admit-reverted",
+      "wp": "WP-dot-segment-denial",
+      "criterion": "1",
+      "why": "the class rule's own loop is independently revertible from the layout clause (Table B's preamble measured each point's isolation): deleting it leaves DENIED_SEGMENTS — byte-for-byte the shipped production enumeration — as the module's only segment rule, which must disagree with the reference predicate on about half of B1's full-alphabet sample, fail Table E's boundary rows reached through makeAdmit, and re-admit the 17 formerly-admitted Table D paths at all three tier depths, while both layout points (B2, B3) and the no-over-denial test stay green",
+      "file": "src/core/dream/promote.js",
+      "find": "    // The class rule (row A5): LAST, after every enumerated check, so no path\n    // refused above changes the reason it is refused with — only a path every\n    // other clause admits can reach it, and the sole observable change is that\n    // a previously admitted dot path is now refused.\n    for (const seg of segments) {\n      if (seg.startsWith('.')) {\n        return `not admitted: path segment \\`${seg}\\` begins with a dot`;\n      }\n    }",
+      "replace": "    /* RP_MUT_DOT_SEGMENT_ADMIT_REVERTED: the class rule's segment loop deleted, leaving DENIED_SEGMENTS as the module's only segment rule */",
+      "marker": "RP_MUT_DOT_SEGMENT_ADMIT_REVERTED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "dot-segment-denial B1: makeAdmit equals the reference predicate over a full-alphabet sample"
+          ],
+          "signal": "B1 reference"
+        },
+        {
+          "test": [
+            "dot-segment-denial B1: the boundary matrix — the U+002E first-character rule at makeAdmit"
+          ],
+          "signal": "B1 boundary"
+        },
+        {
+          "test": [
+            "dot-segment-denial B1: the handoff oracle — Table D's 29 paths, hand-written"
+          ],
+          "signal": "B1 handoff"
+        }
+      ]
+    },
+    {
+      "id": "dot-segment-layout-reverted",
+      "wp": "WP-dot-segment-denial",
+      "criterion": "1",
+      "why": "independently revertible from the promotion-allowlist loop: deleting isSafeRelativePath's dot clause leaves the shipped validator's segment enumeration as the empty set, which must disagree with the reference predicate on about half of B2 and B3's full-alphabet samples and fail Table E's boundary rows reached through readVaultLayout and inferLayout — including row E5's three fallback assertions, the values removed from the report-fallback test's case list — while B1 and the no-over-denial test stay green",
+      "file": "src/core/layout.js",
+      "find": "  if (value.split('/').some((seg) => seg.startsWith('.'))) return false;",
+      "replace": "  /* RP_MUT_DOT_SEGMENT_LAYOUT_REVERTED: the dot clause deleted, leaving the shipped validator's segment enumeration empty */",
+      "marker": "RP_MUT_DOT_SEGMENT_LAYOUT_REVERTED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": [
+            "dot-segment-denial B2/B3: readVaultLayout and inferLayout equal the reference predicate over a full-alphabet sample"
+          ],
+          "signal": "B2/B3 reference"
+        },
+        {
+          "test": [
+            "dot-segment-denial B2/B3: the boundary matrix — the U+002E first-character rule at both layout validators"
+          ],
+          "signal": "B2/B3 boundary"
+        }
+      ]
+    }
+  ]
+}

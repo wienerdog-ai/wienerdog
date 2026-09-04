@@ -1,0 +1,12 @@
+# Raw gate output — Codex plugin review (native rubric), PR #215 round 1, head a1bd795f (base main = 5fa23ea5). Committed BEFORE adjudication.
+
+# Codex Review
+
+Target: branch diff against main
+
+The production changes implement the specified denial rule, but the new randomized B3 test compares filesystem-derived output with a pre-filesystem Unicode spelling. This can break the repository's macOS test job independently of product correctness.
+
+Review comment:
+
+- [P1] Compare B3 against the filesystem-returned spelling — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/dot-segment-denial/tests/unit/dot-segment-denial.test.js:325-328
+  On the macOS CI leg, directory enumeration can return decomposed Unicode filenames, so a generated name containing composed characters such as `é`, `ñ`, `å`, or `ç` may be emitted by `inferLayout` in NFD form. Because `expected` is built from the pre-filesystem `name`, this treats that normalization difference as validator rejection (`impl === true`) while `ref` remains false, making the randomized test fail despite correct behavior. Derive the expected spelling from the directory entry returned by the filesystem or normalize both spellings before comparison.

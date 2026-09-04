@@ -1,0 +1,12 @@
+# Raw gate output — Codex plugin review (native rubric), PR #215 round 2, head 0cbf1b48 (base main = 5fa23ea5). Committed BEFORE adjudication.
+
+# Codex Review
+
+Target: branch diff against main
+
+The production predicate changes appear correct, but the required adoption round-trip test omits `daily_filename` and can pass without proving the complete persisted layout block round-trips.
+
+Review comment:
+
+- [P2] Include `daily_filename` in the round-trip oracle — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/dot-segment-denial/tests/integration/adopt-e2e.test.js:615-616
+  If `adopt` omits or changes only `daily_filename`, this regex still captures all six `_dir` keys, so the presence, no-dot, and read-back checks all pass without comparing the seventh persisted layout value. Since `daily_filename` can itself be a nested relative path, this does not establish the required no-dot and value-for-value block contract (`docs/specs/WP-dot-segment-denial.md:289-293`); capture and assert all seven layout keys.
