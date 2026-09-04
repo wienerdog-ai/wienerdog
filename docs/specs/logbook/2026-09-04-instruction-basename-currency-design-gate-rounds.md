@@ -17,7 +17,13 @@ their exit statuses are pasted verbatim. **The tree was left clean**: the
 fixture inventory used for the three-state rehearsal was deleted and
 `git status --short` printed nothing.
 
-### 0.1 Citation liveness — all 20 Table A / Table B URLs, HTTP status
+### 0.1 Citation liveness — URLs fetched, HTTP status
+
+**Header corrected.** This section originally read *"all 20 Table A / Table B
+URLs"* and listed 22 fetches, one of which (`opencode.ai/docs/rules/`)
+corresponded to no citation in either table. The count and the coverage are
+reconciled in "Round zero — orchestrator's executors", item 5; the block below
+is left exactly as it was run.
 
 Every URL fetched 2026-09-04 with `curl -sSL -o /dev/null -w '%{http_code}'`:
 
@@ -237,6 +243,84 @@ PSScriptAnalyzer clean, `frontmatter check passed: 267 spec(s), 4 agent(s)`.
 | Z8 | Table B named the `.md`-only extension rule on some rows and not others, which reads as an inconsistency | FIXED by a note under the table: it is an additional independent reason, and its absence means the dot reason sufficed |
 | Z9 | `code.claude.com/docs/en/memory` shows `.claude/rules/` and a `/init` that reads Cursor and Copilot rule files — more dot paths than the draft listed | ACCEPTED as-is: `.claude` is already a `DENIED_SEGMENTS` member, and the row says so |
 | Z10 | The existing NFD assertion at `dream-promote.test.js:325-326` is vacuous | NOT FIXED HERE — routed to the pull request's "Discovered issues", and the spec's new test avoids repeating the shape |
+
+## Round zero — orchestrator's executors, 2026-09-04, branch rebased onto `705ae286`
+
+The clean-context template-conformance executor and the coherence executor
+returned **seven** items, proposed disposition FIX on all seven. All seven were
+fixed. Everything else was reported CONFORMANT: the template's `Contract
+table(s)` scaffold split into Tables A–D and the per-table Mirrored Surface
+Checklist were accepted as covering the template's categories, and the extra
+`## Dispatch precondition` section is the established convention.
+
+**The branch was rebased, not amended:** the architect's first commit is
+`14195491` on top of `705ae286`; these fixes land as a second commit above it.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** | Current state said `WP-criterion-red-harness` is "still `In-Review`". Re-measured: `docs/specs/done/WP-criterion-red-harness.md:3` reads `status: Done` (PR #207, merged before the architect's commit) | **FIXED.** The sentence now states Done and PR #207. `depends_on` stays empty and the reasoning is now the simpler one — there is no open work package to depend on. Measured to justify keeping the drafted-against claims: `git diff --stat 4b06afa0 705ae286 -- src tests scripts package.json` is **empty**, so `scripts/red-proofs.js` and `tests/red-proofs/` are byte-identical across the rebase. Every Current-state claim was re-run on `705ae286` (0.7 below) and the base SHA re-pinned there and in the Current-state preamble |
+| **2** | Cross-references baked into the verbatim copy: Table B's column header *"Reason it is not in Table A"*, three rows saying *"already Table A"*, and Table C's *"Table A and Table B of the inventory"* would all dangle once the skeleton renamed the sections; Table B's trailer pointed at *"Current state"*, a section the shipped document lacks | **FIXED, by the skeleton side.** The shipped document now carries `## Table A — denied basenames`, `## Table B — accepted omissions and handoffs`, `## Table C — how this stays current`, so every in-cell label resolves in both homes. **Why this and not eight cell rewrites:** rewriting cells removes one class of reference and leaves the next added cross-reference free to re-create it; keeping the labels closes the class. Additionally an explicit **copy boundary** was introduced — the copied region is each table's *preamble plus the table itself*, so spec-side commentary after a table is provably outside it — and Table B's preamble and trailer were rewritten to be self-contained (the `.md`-only extension reason now sits in the preamble rather than pointing at Current state). The boundary is registered as a mirrored surface in its own right |
+| **3** | Table A's trailing *"Nine rows. Four of them are already in `INSTRUCTION_BASENAMES`; five are the change"* is transitional and becomes permanently false in the shipped inventory | **FIXED by moving it out**, into the Current-state bullet on `promote.js:96`, dated to `705ae286`. Table A's trailing paragraph now states the copy boundary instead and says the row count is *checked* (`grep -c '^\| DENY \|'`, V1's first output) rather than asserted. Table A's preamble also lost its hard `2026-09-04` and now defers to each row's own `Fetched` cell — which removes a third exception from criterion 1's verbatim rule |
+| **4** | The Security checklist attributed Table H row H1 to `WP-dream-promote-in-workspace` | **FIXED.** Re-measured: `docs/specs/done/WP-dream-vault-write-primitive.md:209` is `### Table H — the vault-write primitive` and `:213` is row H1 (*"Decide on the RESOLVED path, not the given one"*); `docs/specs/done/WP-dream-promote-in-workspace.md:83` only cites it (*"…, rows H1 and H2"*). Both line numbers were resolved with `sed -n` |
+| **5** | 0.1's header claimed "all 20 Table A / Table B URLs" while listing 22 fetches, one of which (`opencode.ai/docs/rules/`) matched no citation | **FIXED, by citing it rather than dropping it.** opencode documents `AGENTS.md` (with `CLAUDE.md` as a migration fallback), which is exactly what Table A's `AGENTS.md` row claims of it, so the URL joined that row's citation cell. Measured after the edit: the tables carry **22 distinct citation URLs** across 33 rows. One of the 22 — `https://aider.chat/docs/config/aider_conf.html`, the `.aider.conf.yml` row's citation — had been cited without being fetched; fetched now, **HTTP 200**. So the true statement is **22 cited URLs, 22 × HTTP 200**, plus one deliberate non-citation (`.goosehints`, whose vendor page 404s to a plain fetch and whose disposition rests on two structural facts instead). 0.1's header carries the correction and its pasted block is unchanged |
+| **6** | V2 threw an uncaught ENOENT stack trace on the untouched tree — a third failure mode its own comment did not anticipate, and one that reads as infrastructure breakage rather than as a verdict | **FIXED.** V2 now checks both inputs with `fs.existsSync` first and its comment names **four** discriminating modes. All four observed (0.7 below) |
+| **7** | The template's line under the title (*"Authoring rules live in `docs/runbooks/spec-authoring.md` …"*) was silently absent | **FIXED** — restored verbatim under the H1 |
+
+### 0.7 Re-runs on the rebased tree (`705ae286`), after the fixes
+
+`git diff --stat 4b06afa0 705ae286 -- src tests scripts package.json` is empty,
+so every measurement below is expected to reproduce — and did, byte for byte.
+
+**Current state, re-run.** `01-Projects/example/{GEMINI,QWEN,WARP,AGENT,replit}.md`
+and every case spelling of `GEMINI.md` are **ADMITTED**; `AGENTS.md`,
+`CLAUDE.md`, `ClAuDe.md`, `CLAUDE.MD`, `claude.MD`, `AGENTS.OVERRIDE.MD` and
+NFD-`CLAUDE.md` are refused as harness instruction files; `.rules`,
+`.goosehints`, `.clinerules`, `.cursorrules`, `.windsurfrules`,
+`.aider.conf.yml` and `x.mdc` are refused with *only `.md` content files are
+promoted*. Exports remain `promote, makeAdmit, spawnGitForMerge`.
+`docs/runbooks/release.md` is still 13 lines with nine numbered steps.
+
+**Every line anchor re-resolved with `sed -n` at both ends** on `705ae286`:
+`promote.js:84`/`:95`, `:96`, `:99`, `:102`, `:111-116`, `:136-138`,
+`:149-151`, `:237`, `:238`; `dream-promote.test.js:293`, `:295`/`:315`,
+`:317`/`:327`, `:325-326`; `red-proofs.js:2127`/`:2167`. All unchanged. The two
+new anchors from item 4 — `WP-dream-vault-write-primitive.md:209` and `:213` —
+resolve to the Table H header and row H1.
+
+**V1, three states** (the assertion body rehearsed against a fixture inventory
+at the real path, then deleted):
+
+```text
+absent      : test -f rc=1  -> the step prints MISSING DELIVERABLE and exits 1
+compliant   : grep -c '^| DENY |' = 4
+              V1 OK: 4 inventoried basenames, 52 depth x spelling cases, all denied   rc=0
+violating   : NOT DENIED (57 of 114):
+                06-Identity/AGENT.md -> ADMITTED
+                06-Identity/agent.md -> ADMITTED
+                06-Identity/AGENT.MD -> ADMITTED                                      rc=1
+```
+
+**V2, all four modes** — the point of item 6 is that each one now names itself:
+
+```text
+absent input     : FAIL: missing input docs/instruction-file-inventory.md              rc=1
+literal missing  : FAIL: the INSTRUCTION_BASENAMES literal was not found in its expected form   rc=1
+not pre-folded   : FAIL: not pre-folded, so unreachable: GEMINI.md                     rc=1
+count mismatch   : FAIL: INSTRUCTION_BASENAMES has 4 names, the inventory has 9 DENY rows       rc=1
+compliant        : V2 OK: 4 names in INSTRUCTION_BASENAMES = 4 DENY rows, all pre-folded        rc=0
+```
+
+The *literal missing* mode was produced by rewriting `new Set([` to
+`new Set(Array.of(` in a scratch copy; the *not pre-folded* mode by inserting
+`'GEMINI.md'` in vendor spelling into a scratch copy's Set. Neither touched the
+repository tree.
+
+**V3** — `test -f docs/runbooks/release.md && grep -n 'instruction-file-inventory\.md' docs/runbooks/release.md`
+→ `rc=1`, correct: the obligation step is not yet in the runbook. Pointed at a
+missing file it is also `rc=1`, which is what the `test -f &&` guard buys.
+
+**Tree left clean.** The fixture inventory was removed;
+`git status --short` shows only the two edited documents.
 
 ## External rounds
 

@@ -11,6 +11,9 @@ epic: audit-close
 
 # WP-instruction-basename-currency: a dated inventory, with an obligation, for the instruction-basename denial list
 
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
 ## Dispatch precondition
 
 Two items need an owner ruling before dispatch. Both carry a recommendation;
@@ -81,8 +84,11 @@ work package.
 
 ## Current state
 
-Every claim below was measured on this tree at commit `4b06afa0`. Re-run them
-rather than trusting the sentence; the round-zero record
+Every claim below was re-measured on this branch's base, commit `705ae286`
+(`origin/main` after PR #208). The docs-only commits above it touch no file
+under `src/`, `tests/` or `scripts/`, so the tree an implementer will find is
+the one measured here. Re-run them rather than trusting the sentence; the
+round-zero record
 (`docs/specs/logbook/2026-09-04-instruction-basename-currency-design-gate-rounds.md`)
 carries the commands and their output.
 
@@ -90,7 +96,12 @@ carries the commands and their output.
   `const INSTRUCTION_BASENAMES = new Set(['claude.md', 'claude.local.md', 'agents.md', 'agents.override.md']);`
   — **four names**, each already NFC-lowercased. Its JSDoc is `:84-95` and says,
   correctly, that this is a deny-list "stated as one that will NOT cover the next
-  convention".
+  convention". **The size of this work package, stated here rather than inside
+  Table A:** as of `705ae286`, four of Table A's nine basenames are already
+  members (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`) and
+  five are the change. That sentence lives in Current state and not in the table
+  because the table is copied verbatim into a document that outlives this work
+  package, where "five are the change" would be permanently false.
 - `src/core/dream/promote.js:99` is `DENIED_SEGMENTS` (two names) and `:102` is
   `DENIED_BASENAME` (`.mcp.json`). **Neither is this work package's** — see
   Out of scope.
@@ -121,12 +132,14 @@ carries the commands and their output.
 - `scripts/red-proofs.js` and `npm run red-proofs` exist (merged in PR #204).
   On this tree the run reports `2 declared proof(s), 2 selected` and `RUN:
   PROVEN`, exit 0, in about 100 s. `npm run red-proofs` is **not** wired into CI.
-  **`depends_on` is deliberately empty**: `WP-criterion-red-harness` is still
-  `In-Review`, but this work package depends on the runner *on main*, which is
-  already there and measured green — not on that spec's status flip. If its
-  review round changes the runner or the declaration schema, dispatch-time
-  re-verification is what catches it, and Table D is the one place this spec
-  would change.
+  **`depends_on` is deliberately empty, and the reason is now the simple one:**
+  `docs/specs/done/WP-criterion-red-harness.md:3` reads `status: Done` (flipped
+  by PR #207), so there is no open work package to depend on. Measured:
+  `scripts/red-proofs.js` and `tests/red-proofs/` are byte-identical between
+  `4b06afa0` and `705ae286`, so the runner this spec was drafted against is the
+  runner an implementer gets. If a later change moves the declaration schema,
+  dispatch-time re-verification is what catches it, and Table D is the one place
+  this spec would change.
 - `docs/runbooks/release.md` is 13 lines, nine numbered steps, and carries **no**
   re-inventory step. `docs/instruction-file-inventory.md` does not exist.
 - `npm test` on this tree: 2608 tests, 0 fail, exit 0. `npm run lint`: clean.
@@ -139,7 +152,7 @@ carries the commands and their output.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/instruction-file-inventory.md | The dated inventory. Its skeleton is fixed under "Exact contracts"; its three tables are **Table A**, **Table B** and **Table C**, copied verbatim. **The row shape is load-bearing**: a DENY row starts with `\| DENY \|` and its **second cell** is the basename in backticks — acceptance criterion 2's test parses exactly that. **On this work package's flip to Done this file becomes the canonical inventory** and Tables A, B and C here become its record |
+| create | docs/instruction-file-inventory.md | The dated inventory. Its skeleton is fixed under "Exact contracts"; its three tables are **Table A**, **Table B** and **Table C**, copied verbatim, **under section headings that keep those labels** so the cells' cross-references resolve in the copy. **The copied region is each table's preamble plus the table itself**; spec-side commentary after a table is not copied. **The row shape is load-bearing**: a DENY row starts with `\| DENY \|` and its **second cell** is the basename in backticks — acceptance criterion 2's test parses exactly that. **On this work package's flip to Done this file becomes the canonical inventory** and Tables A, B and C here become its record |
 | modify | src/core/dream/promote.js | **ONE executable line and one comment block, nothing else.** `:96` — `INSTRUCTION_BASENAMES` gains the Table A names it lacks, each written **NFC-lowercased** (Table A, "Stored spelling"). **The literal's shape is what criterion 3's check parses**, so it stays a `const INSTRUCTION_BASENAMES = new Set([ … ])` whose members are single-quoted strings; line breaks inside the brackets are fine, a different construction is not. `:84-95` — its JSDoc gains one sentence pointing at `docs/instruction-file-inventory.md` as the canonical inventory and keeps its existing "will NOT cover the next convention" sentence. **This cell owns what stays unchanged in this file:** `DENIED_SEGMENTS` (`:99`), `DENIED_BASENAME` (`:102`), `EXTRA_TIER_DIRS`, `fold` (`:136-138`), `foldedSegments`, `isUnder`, `admittedDirs`, `makeAdmit`'s clause order and every one of its refusal strings, and the module's exports |
 | modify | tests/unit/dream-promote.test.js | **THREE sites, all under the row-C9 section header at `:293`.** (a) `:295-315` — the `hostile` fixture gains one tier-local path per newly denied Table A name, so the existing end-to-end test covers them; (b) `:317-327` — the RED-side case list gains one mixed-case spelling of a newly denied name; (c) **one NEW test** implementing acceptance criteria 2 and 3, which **derives its subject list from `docs/instruction-file-inventory.md`** and fails when zero DENY rows parse. **This cell owns what stays unchanged:** every other test, every existing title, and the `scenario`/`run`/`refusalFor`/`get` helpers |
 | create | tests/red-proofs/instruction-basenames.proofs.json | The RED-proof declaration for criterion 2, per **Table D**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dream-promote.test.js`; `file` is `src/core/dream/promote.js` |
@@ -152,9 +165,26 @@ out of CI (Out of scope), so no workflow file changes.
 
 ### Exact contracts
 
-**`docs/instruction-file-inventory.md` — the literal skeleton.** Tables A and B
-of this spec supply the rows; nothing else in the file is the implementer's to
+**`docs/instruction-file-inventory.md` — the literal skeleton.** Tables A, B and
+C of this spec supply the rows; nothing else in the file is the implementer's to
 invent. `<DATE>` is the date the implementer re-fetched the citations.
+
+**The shipped document keeps the `Table A` / `Table B` / `Table C` labels as
+section headings, and that is deliberate.** Cells inside those tables refer to
+each other by label — Table B's fourth column is *"Reason it is not in Table A"*,
+three of its rows say *"already Table A"*, and Table C's obligation names *"Table
+A and Table B of the inventory"*. Renaming the sections in the copy would leave
+every one of those references dangling in the document that outlives this work
+package. The alternative — rewriting each cell to name a prose heading — was
+weighed and rejected: it edits five cells (Table B's fourth-column header, its
+three *"already Table A"* rows, and Table C's obligation cell) to remove one
+class of reference, and leaves the next added cross-reference free to re-create
+it.
+
+**The copy boundary, as it applies here:** each `<…, verbatim>` placeholder below
+takes that table's **preamble plus the table itself**, header row through last
+row. Paragraphs that follow a table in this spec are commentary and are not
+copied.
 
 ```markdown
 # Instruction-file inventory
@@ -169,17 +199,19 @@ This inventory is the canonical source for `INSTRUCTION_BASENAMES` in
 `src/core/dream/promote.js`: every DENY row below is a name the dream run
 refuses to promote into the vault, at any depth and in any case.
 
-<Table A's inclusion-rule preamble, verbatim>
+## Table A — denied basenames
 
-## Denied basenames
+<Table A's inclusion-rule preamble, verbatim>
 
 <Table A of WP-instruction-basename-currency, verbatim, header included>
 
-## Accepted omissions and handoffs
+## Table B — accepted omissions and handoffs
+
+<Table B's preamble, verbatim>
 
 <Table B of WP-instruction-basename-currency, verbatim, header included>
 
-## How this stays current
+## Table C — how this stays current
 
 <Table C of WP-instruction-basename-currency, verbatim, header included>
 ```
@@ -209,16 +241,19 @@ the release runbook — six mirrored surfaces.
 current vendor documentation establishes it as an instruction-file discovery
 path at a **plain, dot-free, project-relative location**. That rule and nothing
 else — no per-name judgement about how ordinary the name looks, because that
-judgement is what goes stale. Every citation below was fetched and read on
-**2026-09-04**, and every URL returned HTTP 200 on that date (round-zero record).
-**Stored spelling** is what goes into `INSTRUCTION_BASENAMES`: NFC-lowercased,
-because `fold` is applied to the candidate before the lookup.
+judgement is what goes stale. **Every citation below was fetched and read on the
+date its own `Fetched` cell carries, and returned HTTP 200 on that date** — the
+cell is the claim's provenance, so the preamble needs no date of its own.
+**Stored spelling** is what goes into `INSTRUCTION_BASENAMES` in
+`src/core/dream/promote.js`: NFC-lowercased, because that module folds a
+candidate's basename before looking it up, so a member in vendor spelling would
+be unreachable.
 
 | Disposition | Basename | Stored spelling | Convention it is | Citation | Fetched |
 |---|---|---|---|---|---|
 | DENY | `CLAUDE.md` | `claude.md` | Claude Code project instructions, `./CLAUDE.md` | https://code.claude.com/docs/en/memory | 2026-09-04 |
 | DENY | `CLAUDE.local.md` | `claude.local.md` | Claude Code local instructions, `./CLAUDE.local.md`; documented, not deprecated | https://code.claude.com/docs/en/memory | 2026-09-04 |
-| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md | 2026-09-04 |
+| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://opencode.ai/docs/rules/ | 2026-09-04 |
 | DENY | `AGENTS.override.md` | `agents.override.md` | Codex CLI's per-directory override, checked ahead of `AGENTS.md` in each directory from the project root down | https://learn.chatgpt.com/docs/agent-configuration/agents-md | 2026-09-04 |
 | DENY | `AGENT.md` | `agent.md` | Zed's project-instruction list, position 6; Roo Code's workspace-root fallback when `AGENTS.md` is absent | https://zed.dev/docs/ai/instructions · https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ | 2026-09-04 |
 | DENY | `GEMINI.md` | `gemini.md` | Gemini CLI's default context file, searched from the working directory up to the project root; Zed's list, position 9 | https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md | 2026-09-04 |
@@ -226,15 +261,25 @@ because `fold` is applied to the candidate before the lookup.
 | DENY | `WARP.md` | `warp.md` | Warp project rules; still fully supported and takes priority over `AGENTS.md` in the same directory | https://docs.warp.dev/knowledge-and-collaboration/rules | 2026-09-04 |
 | DENY | `replit.md` | `replit.md` | Replit Agent's project context file, which must sit at the project root | https://docs.replit.com/features/project-setup/replit-dot-md | 2026-09-04 |
 
-**Nine rows. Four of them (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`,
-`AGENTS.override.md`) are already in `INSTRUCTION_BASENAMES`; five are the
-change.**
+**THE COPY BOUNDARY, stated once and applying to Tables A, B and C alike: the
+copied region is the inclusion-rule preamble plus the table itself, from its
+header row through its last row. Any paragraph AFTER a table — including this
+one — is this spec's own commentary and is NOT copied into the inventory
+document.** That boundary is why no transitional sentence sits inside a table:
+how many of these rows are new *today* is a fact about this work package, not
+about the inventory, and is stated in Current state instead. The row count is
+checked rather than asserted — `grep -c '^| DENY |'` is verification step V1's
+first output, and criterion 3 requires it to equal the size of
+`INSTRUCTION_BASENAMES`.
 
 ### Table B — accepted omissions and handoffs (canonical)
 
-Everything found in the same sweep and deliberately **not** denied by this work
-package, with the reason. A `HANDOFF` row belongs to `WP-dot-segment-denial`; an
-`OMIT` row belongs to nobody and is a stated non-denial.
+Everything found in the same sweep as Table A and deliberately **not** denied by
+basename, with the reason. A `HANDOFF` row is denied instead by the rule against
+dot-prefixed path segments, and belongs to that rule's owner; an `OMIT` row is
+denied by nothing and is a stated non-denial. Rows that also note the
+`.md`-only extension rule carry a second, independent reason: a name with no
+`.md` extension is outside the promotion allowlist whatever the dot rule does.
 
 | Disposition | Path(s) as documented | Tool | Reason it is not in Table A | Citation |
 |---|---|---|---|---|
@@ -250,8 +295,8 @@ package, with the reason. A `HANDOFF` row belongs to `WP-dot-segment-denial`; an
 | HANDOFF | `.trae/rules/` | Trae | dot-prefixed; file names inside it are arbitrary | https://docs.trae.ai/ide/rules |
 | HANDOFF | `.openhands/microagents/`, `.openhands/skills/`, `.agents/skills/NAME/SKILL.md` | OpenHands | dot-prefixed; its current bare form is `AGENTS.md`, already Table A | https://docs.openhands.dev/overview/skills/repo |
 | HANDOFF | `.qwen/QWEN.local.md` | Qwen Code | dot-prefixed | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md |
-| HANDOFF | `.claude/CLAUDE.md`, `.claude/rules/` | Claude Code | dot-prefixed — **and already refused today** by `DENIED_SEGMENTS`'s `.claude` | https://code.claude.com/docs/en/memory |
-| HANDOFF | `.codex/AGENTS.md`, `.codex/AGENTS.override.md` | Codex CLI | dot-prefixed — **and already refused today** by `DENIED_SEGMENTS`'s `.codex` | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
+| HANDOFF | `.claude/CLAUDE.md`, `.claude/rules/` | Claude Code | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.claude` | https://code.claude.com/docs/en/memory |
+| HANDOFF | `.codex/AGENTS.md`, `.codex/AGENTS.override.md` | Codex CLI | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.codex` | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
 | HANDOFF | `.rules` | Zed | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule | https://zed.dev/docs/ai/instructions |
 | HANDOFF | `.goosehints` | Goose | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule. **Its disposition does not rest on a citation:** the vendor page is a client-rendered SPA that returned HTTP 404 to a plain fetch on 2026-09-04, and the two structural reasons hold regardless | — (no live citation; see reason) |
 | HANDOFF | `.aider.conf.yml` | Aider | dot-prefixed; also fails the `.md`-only extension rule | https://aider.chat/docs/config/aider_conf.html |
@@ -263,10 +308,11 @@ package, with the reason. A `HANDOFF` row belongs to `WP-dot-segment-denial`; an
 | OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and `promote.js:111-116` names them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | `src/core/dream/promote.js:111-116` |
 | OMIT | user-configured names — Gemini CLI and Qwen Code `context.fileName`; Codex CLI `project_doc_fallback_filenames` (documented example: `TEAM_GUIDE.md`); Goose `CONTEXT_FILE_NAMES` | several | **THIS IS THE NAMED RESIDUAL.** The name space is unbounded and user-chosen, so no inventory can cover it. This is the residual the 2026-08-05 ruling accepted, restated rather than reopened | https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md |
 
-**Twenty-four rows: seventeen HANDOFF, seven OMIT.** Where a row also names the
-`.md`-only extension rule, that is an **additional, independent** reason measured
-in Current state; its absence on another row means only that the dot reason was
-sufficient there, never that the extension rule fails to apply.
+**Twenty-four rows: seventeen HANDOFF, seven OMIT** — a spec-side count, outside
+the copy boundary. The `.md`-only extension reason the preamble defines was
+measured on the tree (Current state); where a row omits it, the dot reason was
+sufficient there, never that the extension rule fails to apply. `WP-dot-segment-denial`
+is the owner every `HANDOFF` row is handed to.
 
 ### Table C — the standing maintenance obligation (canonical)
 
@@ -291,6 +337,13 @@ author against the finished file; this row decides what the mutation **is**.
 
 ### Mirrored Surface Checklist
 
+**The copy boundary is itself a registered surface, and it governs all three
+tables.** It is stated in the paragraph after Table A, in the Deliverables cell
+for `docs/instruction-file-inventory.md`, in the skeleton under "Exact
+contracts" and in acceptance criterion 1. A change to what is copied moves all
+four in one pass. Registered at round zero, after the conformance executors
+found cross-references inside cells that would dangle once copied.
+
 **Table A** (the denial set):
 
 - [ ] Deliverables cells for `docs/instruction-file-inventory.md` (the row shape), `src/core/dream/promote.js` (the stored spelling and the literal's shape) and `tests/unit/dream-promote.test.js` (all three sites)
@@ -303,7 +356,7 @@ author against the finished file; this row decides what the mutation **is**.
 **Table B** (the omissions):
 
 - [ ] The Out of scope section, which cites it for the dot-segment boundary
-- [ ] Current state's clause-(b) measurement (`.rules`, `.goosehints`, `.mdc`, …), which several HANDOFF rows cite
+- [ ] Current state's clause-(b) measurement (`.rules`, `.goosehints`, `.mdc`, …) — the evidence behind **Table B's preamble**, which is where the `.md`-only extension reason is now stated once for every row that names it
 - [ ] The inventory document's **opening paragraph**, which states the residual Table B's last row decides
 - [ ] `docs/specs/WP-dot-segment-denial.md` — **a NON-move.** That spec's own required verification owns the class predicate; this work package hands it rows and changes none of its text
 
@@ -364,20 +417,28 @@ author against the finished file; this row decides what the mutation **is**.
       against an already-folded path segment; `makeAdmit` builds no path, spawns
       nothing, and its inputs are the same `rel` values it receives today. The
       untrusted input on this path — the brain-authored relative path — is
-      validated by the vault-write primitive (Table H row H1 of
-      `WP-dream-promote-in-workspace`), and this work package neither weakens nor
-      duplicates that. The change can only ever **refuse** more, never admit
-      more.
+      validated by the vault-write primitive, whose **Table H row H1** is owned
+      by `docs/specs/done/WP-dream-vault-write-primitive.md:213` (Table H's
+      header is at `:209`; `WP-dream-promote-in-workspace.md:83` only cites it).
+      That row segment-validates `rel` and then calls `admit` with the RESOLVED
+      path. This work package neither weakens nor duplicates it, and the change
+      can only ever **refuse** more, never admit more.
 
 ## Acceptance criteria
 
-- [ ] **1.** `docs/instruction-file-inventory.md` exists, follows the skeleton
-      under "Exact contracts", and its three tables are Table A, Table B and
-      Table C **verbatim except** each Table A row's `Fetched` cell and the
-      document's `Current as of` date, which carry the date the implementer
-      re-fetched. (Table B carries no per-row date; the document's
-      `Current as of` date covers its citations.) Every DENY row starts with
-      `| DENY |` and holds its basename in backticks in the **second** cell.
+- [ ] **1.** `docs/instruction-file-inventory.md` exists and follows the skeleton
+      under "Exact contracts", **including its three section headings, which keep
+      the `Table A` / `Table B` / `Table C` labels** so the cross-references
+      inside the cells resolve in the shipped document. The **copied region is
+      each table's preamble plus the table itself**, header row through last row
+      — commentary after a table is this spec's and is not copied. Inside that
+      region the copy is verbatim **with exactly two exceptions**: each Table A
+      row's `Fetched` cell, and the document's `Current as of` date, which carry
+      the date the implementer re-fetched. (Table B has no per-row date; the
+      `Current as of` date covers its citations, and Table A's preamble carries
+      no date of its own — it defers to the `Fetched` cells.) Every DENY row
+      starts with `| DENY |` and holds its basename in backticks in the **second**
+      cell.
 - [ ] **2.** Every basename the inventory marks `DENY` is refused with a reason
       containing `is a harness instruction file` at each of the three tier-local
       depths `06-Identity/`, `01-Projects/example/`, `02-Areas/x/y/`, in every
@@ -409,10 +470,15 @@ grep -c '^| DENY |' docs/instruction-file-inventory.md
 npm test
 
 # V2 — criterion 3's mechanical half, run outside the suite so a reviewer can
-# re-derive it without reading test code. Both arms were observed at round zero:
-# it fails on a name that is not pre-folded, and on a count mismatch.
+# re-derive it without reading test code. FOUR failure modes, all discriminating
+# and all observed at round zero: an ABSENT input file, a literal that is not
+# where the parser looks, a name that is not pre-folded, and a count mismatch.
+# The existence checks are what stop mode 1 from arriving as an uncaught ENOENT
+# stack trace, which reads as infrastructure breakage rather than as a verdict.
 node -e "
 const fs=require('fs');
+for(const f of ['src/core/dream/promote.js','docs/instruction-file-inventory.md'])
+  if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
 const src=fs.readFileSync('src/core/dream/promote.js','utf8');
 const m=src.match(/const INSTRUCTION_BASENAMES = new Set\(\[([\s\S]*?)\]\)/);
 if(!m){console.error('FAIL: the INSTRUCTION_BASENAMES literal was not found in its expected form');process.exit(1);}
