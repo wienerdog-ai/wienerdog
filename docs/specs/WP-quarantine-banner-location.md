@@ -38,9 +38,33 @@ the digest's own pending-review banner changes** — that banner reads the folde
 it names, so its sentence and its parenthetical stay exactly as they are (Table L
 row **L5**).
 
-**Do not dispatch until that is answered.** A "keep an instruction" answer
-changes Table L rows **L1**–**L4** and the byte-exact sentence under
-Implementation notes; it changes no path in the Deliverables table.
+**The second owner item, raised by both round-1 review channels and parked
+here rather than absorbed.** Row **L5** — the digest's pending-review banner,
+which this package does not change — closes with *"this notice clears when no
+withheld copies are left."* **That sentence is false in one measured state:**
+`listSecretQuarantine` lists direct file entries of `state/quarantine/` only, so
+in a mixed state — one ordinary withheld copy on that shelf, one fall-through
+only-copy under `redacted/` — deleting the direct file clears the notice while a
+withheld copy is still there. The parenthetical is unaffected and stays correct.
+
+**Recommendation: route the wording to the successor, not to this package — and
+the reason is that the wording is DOWNSTREAM of a decision nobody has made.**
+If `WP-quarantine-only-copy-shelf` (Out of scope) decides a fall-through
+only-copy is moved to the withheld shelf, or recorded durably and listed, then
+`listSecretQuarantine` sees it and the shipped sentence becomes true again — and
+a narrowing landed now would have to be reverted. Only the "leave it where it
+is, unannounced" branch makes the narrowing permanent. **The cost of overruling
+this is small and is stated so the owner can:** scoping the clause to what the
+banner observed — *clears when none of the copies listed here are left* — is one
+more Table L row, `src/core/digest.js` entering the boundary, and one updated
+full-string pin in `tests/unit/digest.test.js`, which is already a Deliverables
+row for its comment. Nothing else moves.
+
+**Do not dispatch until BOTH are answered.** A "keep an instruction" answer to
+the first changes Table L rows **L1**–**L4** and the byte-exact sentence under
+Implementation notes; an "absorb it" answer to the second adds the row and the
+two files named above. Neither changes any other path in the Deliverables
+table.
 
 **One disclosure that is not a question.** The dream report tells the user to
 *delete that copy* for every preserved copy on a refused path, including the
@@ -290,10 +314,11 @@ row for row.
 | modify | src/cli/doctor.js | Table L row **L4** — the same import inside `quarantineReport`, the same substitution. No other line of this file changes |
 | modify | tests/unit/ledger.test.js | the two updated full-string pins, and the three new named tests **T1**, **T2**, **T3** of Table C |
 | modify | tests/unit/dream-warnings.test.js | the updated document equality and the updated marker |
-| modify | tests/unit/doctor.test.js | the one updated CLI line equality |
+| modify | tests/unit/doctor.test.js | the one updated CLI line equality, and the new named test **T4** of Table C |
 | modify | tests/integration/dream.test.js | the one updated substring assertion |
 | modify | tests/unit/digest.test.js | **comment only** — the two-line comment claiming byte-identity with the exhausted-transcript banner's parenthetical. That banner no longer has one. The assertion below it is unchanged and still passes |
-| create | tests/red-proofs/quarantine-banner-location.proofs.json | Table C's three declarations |
+| create | tests/red-proofs/quarantine-banner-location.proofs.json | Table C's **File A**, inlined there in full: the four proofs whose suite is `tests/unit/ledger.test.js` |
+| create | tests/red-proofs/quarantine-banner-location-doctor.proofs.json | Table C's **File B**, inlined there in full: the two proofs whose suite is `tests/unit/doctor.test.js`. A separate file because `suite` is a top-level field and one declaration names one suite |
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | rows **Q1**, **Q2** and **Q9** only, each gaining its byte-exact clause under Implementation notes. Nothing else in the file — no other row, no assertion, no mutation entry. Q1's TEXT is not changed by this package; its clause scopes one sentence of its reasoning |
 
 **Explicitly NOT in the boundary**, each for a stated reason:
@@ -340,27 +365,29 @@ Nothing else changes shape. `quarantineBannerLine(ledger, opts)`,
 types, their gating conditions and their decay behaviour. **No control flow in
 any file changes.**
 
-**The rendered results, measured on the rehearsal tree, not predicted:**
+**The rendered results, measured on the rehearsal tree, not predicted** (the
+line wrapping is this document's; the rendered strings carry none):
 
 ```text
 > [!warning] Wienerdog: 2 session transcript(s) are no longer being dreamed over — the
 notes made from them were withheld by the secret check too many times in a row:
-sess-a.jsonl, sess-b.jsonl. Copies of the withheld notes are kept outside your vault;
-each dream report names its own copies and the folder each one is in. The session files
-themselves are untouched.
+sess-a.jsonl, sess-b.jsonl. Copies of the withheld notes are kept outside your vault; the
+dream run that withheld them names each copy and its folder, in its dream report or in
+the output it printed. The session files themselves are untouched.
 ```
 
 ```text
 wienerdog: dream — the secret check withheld 2 note(s); 3 session transcript(s) will be
 retried on the next run and 0 were skipped after too many withheld runs in a row. Copies
-of the withheld notes are kept outside your vault; each dream report names its own copies
-and the folder each one is in.
+of the withheld notes are kept outside your vault; the dream run that withheld them names
+each copy and its folder, in its dream report or in the output it printed.
 ```
 
 ```text
 [warn] 1 session transcript(s) are being skipped: the notes made from them were withheld
 by the secret check too many times in a row. Copies of the withheld notes are kept
-outside your vault; each dream report names its own copies and the folder each one is in.
+outside your vault; the dream run that withheld them names each copy and its folder, in
+its dream report or in the output it printed.
 ```
 
 and in `reports/warnings.md`, under its existing heading:
@@ -368,17 +395,29 @@ and in `reports/warnings.md`, under its existing heading:
 ```text
 ### The notes made from these sessions were withheld by the secret check too many times in a row — 1
 
-Copies of the withheld notes are kept outside your vault; each dream report names its own copies and the folder each one is in.
+Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.
 
 - spent.jsonl
 ```
 
-**Why the pointer's target is not a hope.** `src/cli/dream.js` step 20, row
-**G11**, states and enforces that *every record this run produced reaches the
-user*: when the report is refused, or its body is published without its
-enforcement section, the complete record — the preserved-copy lines included —
-is printed to the run's own output instead. So the sentence points at a surface
-that exists on every arm, whether or not the report reached the vault.
+**WHY THE SENTENCE NAMES TWO CHANNELS AND NOT ONE — measured, and it is what the
+first draft got wrong.** An earlier form of this sentence said *"each dream
+report names its own copies and the folder each one is in"*, which is false on
+two of the report's four outcome arms. `promote()` returns one of:
+
+| `report.outcome` | where the enforcement record ends up | measured in |
+|---|---|---|
+| `promoted`, `accounting.published === true` | the dream report in the vault, section included | the ordinary arm |
+| `promoted`, `accounting.published === false` | body in the vault, **section printed to the run's output** | `src/cli/dream.js`'s `undelivered` branch |
+| `fallback` | published to the vault — the section alone, or appended to what was there | `promote.js`'s Table R preserve-and-extend arm |
+| `refused` | **nothing in the vault; the record printed to the run's output only** | `src/cli/dream.js`: *"the complete record of this run follows and is not stored anywhere else"*, and the shipped test `dream-pipeline: … row G11` asserts the report path is **not** in the commit |
+
+A durable banner is read weeks after its run. Promising a file that the refused
+arm never created would be the same class of false pointer this package exists
+to remove — a sentence that is right most of the time and wrong exactly when the
+user needs it. **What row G11 actually guarantees is the disjunction**: *every
+record this run produced reaches the user*, in the report or in that run's own
+output. The sentence says exactly that and no more.
 
 ## Contract reference
 
@@ -402,7 +441,7 @@ this spec cites it. The governing rule is **L0**; L1–L6 apply it per surface.
 | **L2** | `ledger.js` `secretRevertSummaryLine`, its closing sentence | three integers | states `The withheld notes are in state/quarantine/.` | replaced by `PRESERVED_COPIES_POINTER`. The three counts and their fail-closed integer coercion are byte-unchanged |
 | **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment claiming byte-identity with *"the sentence the digest banner uses for the same class"* — **which names the wrong surface**: it is byte-identical to L1, `ledger.js`'s exhausted banner, and not to L5, `digest.js`'s | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
 | **L4** | `doctor.js` `quarantineReport`, the `secret-revert-exhausted` row | the transcript ledger. **No copy** | states `The withheld copies are in state/quarantine/.` | the same import, the same substitution. The row's count, its position in the Table A order, and the four other rows are byte-unchanged |
-| **L5** | `digest.js` `secretQuarantineWarn` | **the folder**: `listSecretQuarantine` lists direct file entries of `state/quarantine/` | names `state/quarantine/`, lists the basenames it observed, and keeps the `(not the redacted/ folder inside it)` parenthetical | **UNCHANGED, and this row is why.** It satisfies L0 for every copy it announces. What it cannot announce is a copy on the other shelf — measured, `listSecretQuarantine` returns `[]` in that state — and closing that needs durable state the product does not have. Out of scope owns it; nothing here weakens or widens this banner |
+| **L5** | `digest.js` `secretQuarantineWarn` | **the folder**: `listSecretQuarantine` lists direct file entries of `state/quarantine/` | names `state/quarantine/`, lists the basenames it observed, and keeps the `(not the redacted/ folder inside it)` parenthetical | **UNCHANGED, and this row is why.** It satisfies L0 for every copy it announces. What it cannot announce is a copy on the other shelf — measured, `listSecretQuarantine` returns `[]` in that state — and closing that needs durable state the product does not have. Out of scope owns it; nothing here weakens or widens this banner. **One sentence of this banner IS false and is PARKED, not overlooked:** *this notice clears when no withheld copies are left* — see the Dispatch precondition's second owner item, which states the measured state, the recommendation and the cost of overruling it |
 | **L6** | `promote.js` `copyClause` | the record entry: `artifact`, `location`, `remediation` | renders `` unredacted copy at state/<location>/<artifact> `` | **UNCHANGED — the canonical renderer.** It is the surface L1–L4's pointer points at. Its `remediation` VALUE is a separate, owner-ruled contract (`WP-dream-promote-module` Table Q row Q9) and is not touched; Out of scope records the tension it leaves |
 
 Two things this table does **not** change, stated so no one infers them.
@@ -414,44 +453,188 @@ whenever a `secret-revert-exhausted` record exists and still never decays; the
 informational sentence still decays on its seven-day window; the summary line is
 still printed on exactly the runs it is printed on today.
 
-### Table C — canonical: the machine-run RED proofs, their mutations and their test identities
+### Table C — canonical: the machine-run RED proofs — their declarations, their mutations and their test identities
 
 `scripts/red-proofs.js`'s `evaluateRed` requires the observed **own-body**
 failing set to EQUAL the declaration's `expectRed`, so the suite's test
 identities are contract and are decided here (ADR-0042; settled practice — the
 Done `WP-instruction-basename-currency` and `WP-dot-segment-denial` carry the
-same shape). Each proof additionally carries a `testNamePattern` selecting only
-its own identity, so an unrelated red in the same file cannot enter the set.
+same shape). **The declarations are INLINED IN FULL below**, because neither
+`scripts/red-proofs.js` nor any shipped declaration is in the implementer's
+reading set (CLAUDE.md: this spec plus the Deliverables files), so a semantic
+description of a mutation is not something an implementer can turn into a valid
+declaration. Copy the objects; do not re-derive them.
 
-The three identities are **disjoint by carrier**, deliberately: one identity per
-mutated carrier means each mutation's failure set is attributable. Every
-assertion inside an identity carries the fixed marker in its message, so the
-declaration's `signal` is a string the author writes rather than a guess about a
-diagnostic nobody has produced yet.
+**Four identities, one per carrier, and each is a FULL-STRING equality against a
+HAND-WRITTEN expected literal — never against the imported constant.** That is
+the load-bearing decision in this table and it is the opposite of the obvious
+one. A test that builds its expectation as `` `… ${PRESERVED_COPIES_POINTER} …` ``
+moves with the constant, so the derivation mutation below would leave it GREEN
+and prove nothing. Against a hand-written literal the mutation reddens every
+carrier that actually derives from the constant — and leaves a carrier that
+composed its own copy GREEN, which `evaluateRed` reports as
+*"the declared identity … did not fail under the mutation"*. **That failure IS
+the detection**: the derivation proof cannot be PROVEN while any carrier has a
+second author. Measured — see the Verification-steps commentary.
 
-**A proof's `criterion` field is the acceptance criterion it proves**, by
-number: proof criterion `1` is acceptance criterion **1** (row L1), `2` is
-acceptance criterion **2** (row L2), `3` is acceptance criterion **3** (row L3).
-Each proof carries its own value, so `rollUp` emits **three** lines rather than
-one — which is what acceptance criterion 7 asserts.
+Every assertion inside an identity carries that identity's **band marker** in
+its assertion MESSAGE, so each declaration's `signal` is a short string the
+author writes rather than a guess about a diagnostic nobody has produced yet —
+and short deliberately, because a 390-character banner inside a diagnostic is
+not something to depend on.
 
-| # | Test identity (top-level, `tests/unit/ledger.test.js`) | Marker | What it asserts | Proof that reddens it | Mutation (`find` → `replace`) |
-|---|---|---|---|---|---|
-| **T1** | `ledger: [QBL-1] the exhausted banner carries the preserved-copies pointer and names no quarantine folder` | `[QBL-1]` | the rendered exhausted sentence CONTAINS `PRESERVED_COPIES_POINTER` and contains neither `state/quarantine` nor `redacted/`; the rest of the banner is unchanged | `banner-shelf-claim-restored` (criterion **1**) | in `src/core/dream/ledger.js`, the banner's use of the constant → the shipped shelf-and-delete literal |
-| **T2** | `ledger: [QBL-2] the secret-revert summary line carries the preserved-copies pointer and names no quarantine folder` | `[QBL-2]` | the rendered summary line CONTAINS the pointer and contains neither `state/quarantine` nor `redacted/`; the three counts are unchanged | `summary-shelf-claim-restored` (criterion **2**) | in `src/core/dream/ledger.js`, the summary line's use of the constant → `` 'row. The withheld notes are in state/quarantine/.' `` |
-| **T3** | `ledger: [QBL-3] the vault warnings document carries the preserved-copies pointer and names no quarantine folder` | `[QBL-3]` | `composeWarnings` output CONTAINS the pointer and contains neither `state/quarantine` nor `redacted/`; the remediation line still rides the secret-exhausted group and no other | `warnings-shelf-claim-restored` (criterion **3**) | in `src/core/dream/warnings.js`, `SECRET_EXHAUSTED_REMEDIATION` → the shipped retyped literal |
+| # | Test identity — the exact top-level test name | Suite | Band marker | What it asserts |
+|---|---|---|---|---|
+| **T1** | `ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim` | `tests/unit/ledger.test.js` | `[QBL-1]` | `quarantineBannerLine` over two `secret-revert-exhausted` records equals the FULL hand-written banner string of "Exact contracts", and contains neither `state/quarantine` nor `redacted/` |
+| **T2** | `ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim` | `tests/unit/ledger.test.js` | `[QBL-2]` | `secretRevertSummaryLine({withheld:2, deferred:3, quarantined:0})` equals the FULL hand-written line of "Exact contracts", and contains neither `state/quarantine` nor `redacted/` |
+| **T3** | `ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim` | `tests/unit/ledger.test.js` | `[QBL-3]` | `composeWarnings` over one `secret-revert-exhausted` record carries the FULL hand-written pointer sentence as its own line, and the document contains neither `state/quarantine` nor `redacted/` |
+| **T4** | `doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim` | `tests/unit/doctor.test.js` | `[QBL-4]` | the `[warn]` line `wienerdog doctor` prints for one `secret-revert-exhausted` record equals the FULL hand-written line of "Exact contracts" |
 
-**What Table C does NOT cover, stated rather than implied.** `doctor.js`'s row
-**L4** carries **no** RED proof: `quarantineReport` is not exported and
-`tests/unit/doctor.test.js` drives the CLI by spawn, so a proof for it would need
-its own declaration file and a spawn-per-phase run. It is guarded instead by
-**V1** and **V2** (lexical, both directions observed) and by its own updated
-full-line CLI equality. **That is a named residual, not a claim of coverage.**
+T3 lives in `ledger.test.js` and drives `warnings.js` in-process, which keeps
+three of the four identities in one suite; T4 cannot join them because
+`quarantineReport` is not exported and its evidence is a CLI spawn.
 
-**And a residual inside the proofs themselves.** No RED proof can catch a
-consumer that RETYPES the pointer byte-identically instead of importing it — two
-equal strings are indistinguishable at runtime. V2 is the only check that
-reaches that, it is lexical, and it is stated as lexical.
+**Six proofs in two declaration files** — one file per suite, which is what
+`suite` being a top-level field means. A proof's `criterion` field is the
+acceptance criterion it proves, so `rollUp` emits **five** lines for this WP:
+one each for criteria 1-4, and one for criterion **5** naming BOTH derivation
+proofs, which share the `(wp, criterion)` pair.
+
+#### File A — `tests/red-proofs/quarantine-banner-location.proofs.json`
+
+```json
+{
+  "suite": "tests/unit/ledger.test.js",
+  "proofs": [
+    {
+      "id": "banner-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "1",
+      "why": "reverting the exhausted banner's use of the constant to the shipped shelf-and-delete literal must redden the banner's own full-string pin and nothing else in this suite",
+      "file": "src/core/dream/ledger.js",
+      "find": "        `${PRESERVED_COPIES_POINTER} ` +\n        'The session files themselves are untouched.'",
+      "replace": "        'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest ' +\n        'of the files there (not the redacted/ folder inside it). ' + /* RP_MUT_QBL_BANNER_SHELF */\n        'The session files themselves are untouched.'",
+      "marker": "RP_MUT_QBL_BANNER_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-1\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim"], "signal": "[QBL-1]" }
+      ]
+    },
+    {
+      "id": "summary-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "2",
+      "why": "reverting the summary line's use of the constant to the shipped shelf sentence must redden the summary line's own full-string pin; the three counts are untouched, so a pin that only checked the integers would stay green here",
+      "file": "src/core/dream/ledger.js",
+      "find": "    `row. ${PRESERVED_COPIES_POINTER}`",
+      "replace": "    'row. The withheld notes are in state/quarantine/.' /* RP_MUT_QBL_SUMMARY_SHELF */",
+      "marker": "RP_MUT_QBL_SUMMARY_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-2\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim"], "signal": "[QBL-2]" }
+      ]
+    },
+    {
+      "id": "warnings-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "3",
+      "why": "restoring warnings.js's own retyped shelf literal must redden the warnings document's pin — that carrier is the one this WP converts from a retyped copy into an import",
+      "file": "src/core/dream/warnings.js",
+      "find": "const SECRET_EXHAUSTED_REMEDIATION = PRESERVED_COPIES_POINTER;",
+      "replace": "const SECRET_EXHAUSTED_REMEDIATION = /* RP_MUT_QBL_WARNINGS_SHELF */\n  'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest of the files there (not the redacted/ folder inside it).';",
+      "marker": "RP_MUT_QBL_WARNINGS_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-3\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim"], "signal": "[QBL-3]" }
+      ]
+    },
+    {
+      "id": "pointer-derivation-ledger-suite",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "5",
+      "why": "THE DERIVATION PROOF. Appending a marker inside the canonical constant's own literal must move EVERY carrier that derives from it, so all three identities in this suite go red together. A carrier that imported the constant and then composed a byte-identical copy of its own does not move, its identity stays green, and this proof cannot be PROVEN — which is the only observable difference between one author and two",
+      "file": "src/core/dream/ledger.js",
+      "find": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';",
+      "replace": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed. RP_MUT_QBL_DERIVATION_LEDGER';",
+      "marker": "RP_MUT_QBL_DERIVATION_LEDGER",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-[123]\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim"], "signal": "[QBL-1]" },
+        { "test": ["ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim"], "signal": "[QBL-2]" },
+        { "test": ["ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim"], "signal": "[QBL-3]" }
+      ]
+    }
+  ]
+}
+```
+
+#### File B — `tests/red-proofs/quarantine-banner-location-doctor.proofs.json`
+
+```json
+{
+  "suite": "tests/unit/doctor.test.js",
+  "proofs": [
+    {
+      "id": "doctor-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "4",
+      "why": "reverting doctor's interpolation to the shipped shelf sentence must redden the doctor line's own full-line pin; the four other Table A rows are untouched, so a pin that only checked row order would stay green here",
+      "file": "src/cli/doctor.js",
+      "find": "too many times in a row. ${PRESERVED_COPIES_POINTER}`,",
+      "replace": "too many times in a row. The withheld copies are in state/quarantine/.`, /* RP_MUT_QBL_DOCTOR_SHELF */",
+      "marker": "RP_MUT_QBL_DOCTOR_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-4\\]",
+      "expectRed": [
+        { "test": ["doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim"], "signal": "[QBL-4]" }
+      ]
+    },
+    {
+      "id": "pointer-derivation-doctor",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "5",
+      "why": "the derivation proof for the FOURTH carrier, which cannot join File A because its evidence is a CLI spawn and a declaration names one suite. Same mutation, different marker, different suite: the doctor line must move with the constant, or doctor has a second author",
+      "file": "src/core/dream/ledger.js",
+      "find": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';",
+      "replace": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed. RP_MUT_QBL_DERIVATION_DOCTOR';",
+      "marker": "RP_MUT_QBL_DERIVATION_DOCTOR",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-4\\]",
+      "expectRed": [
+        { "test": ["doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim"], "signal": "[QBL-4]" }
+      ]
+    }
+  ]
+}
+```
+
+**Every `find` above is a substring of the byte-exact source forms under
+Implementation notes, and all six were measured on the rehearsal tree**: each
+`find` occurs exactly once in its file, each `marker` is in its own `replace`
+and absent from the pristine file, and each mutated file passes `node --check`
+— a mutation that does not parse is a proof that can never run. If a `find` does
+not match, the source form was not written as prescribed: fix the source, never
+the declaration.
+
+**What the derivation proof does NOT establish, stated rather than implied.**
+It catches a carrier whose rendered value does not move with the constant — a
+composed duplicate, a retyped literal, a dead import. It does not catch a FIFTH
+carrier nobody added to Table L, and it does not catch a carrier that derives
+from the constant and then post-processes it. Those are Table L's job and the
+review gates'.
+
+**V2 shrinks to what it can honestly claim.** After this table V2 no longer
+carries criterion 5. It is a cheap lexical guard that catches a **contiguous**
+retyped copy of the sentence and a carrier that never names the identifier at
+all. It cannot see a copy composed from split literals — measured: the exact
+state both round-1 channels built (`warnings.js` imports the constant, never
+uses it, and rebuilds the sentence from `'Copies of the withheld ' +` and the
+rest) scores `V1 OK / V2 OK`, `rc=0`. V2 is kept because it is free and fires at
+review time; **the derivation proof is what establishes criterion 5.**
 
 ### Mirrored Surface Checklist
 
@@ -460,16 +643,21 @@ updates the table and all of these in one pass; a new mirror found in review is
 added here on the spot.
 
 - [ ] **Deliverables cells** — the three `src/` rows (L0–L4), the five test
-      rows, the declaration row (Table C), and the `docs/specs/done/` row
-      (`WP-secret-fence-ep2-redact-arm` rows Q1, Q2, Q9), plus the four
-      "explicitly NOT in the boundary" bullets, which
-      each state a row's disposition (L5, L6).
+      rows, the **two** declaration rows (Table C, Files A and B), and the
+      `docs/specs/done/` row (`WP-secret-fence-ep2-redact-arm` rows Q1, Q2, Q9),
+      plus the four "explicitly NOT in the boundary" bullets, which each state a
+      row's disposition (L5, L6).
 - [ ] **Acceptance criteria** — every criterion naming a carrier, the pointer
-      sentence, the single-author rule, or a Table C identity.
+      sentence, the single-author rule, a Table C identity, or the roll-up
+      line count.
 - [ ] **Verification commands** — V1 (the shelf claim is gone from the three
-      carriers), V2 (one author, every carrier wired), V5 (each clause in its
-      row's `why` cell), V3 (`npm run red-proofs` and its three roll-up lines),
-      V4 (`npm test`, `npm run lint`).
+      carriers), V2 (the contiguous-retype guard, and no longer criterion 5's
+      evidence), V5 (each clause present in full, in its row's `why` cell, and
+      the Done-spec diff shape), V3 (`npm run red-proofs` and its five roll-up
+      lines), V4 (`npm test`, `npm run lint`).
+- [ ] **The five byte-exact source forms** under Implementation notes, which
+      Table C's six `find` strings quote: a change to any of them changes the
+      declaration that quotes it, in the same pass.
 - [ ] **Current state** — the five-carrier census table, the driven
       fall-through measurement, the `listSecretQuarantine` result, the
       `pruneRedactedOriginals` cap claim, the three-falsified-mirrors
@@ -501,7 +689,7 @@ added here on the spot.
   and because V2 compares it. Byte-exact, one line, no trailing space:
 
   ```text
-  Copies of the withheld notes are kept outside your vault; each dream report names its own copies and the folder each one is in.
+  Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.
   ```
 
   It is joined into each carrier with a single space where the shipped literal
@@ -576,6 +764,54 @@ added here on the spot.
   because the change has **no control flow**: three source files, one exported
   constant, four substitutions.
 
+- **THE FIVE SOURCE FORMS TABLE C's `find` STRINGS QUOTE, and they are contract
+  only for that reason.** Everything else about code structure is the
+  implementer's; these five are byte-exact because a RED-proof declaration
+  cannot be written against a shape nobody fixed. Write them exactly, and if a
+  `find` then fails to match, the source form is what is wrong.
+
+  **(a) `src/core/dream/ledger.js`, immediately after the
+  `QUARANTINE_BANNER_WINDOW_MS` declaration** (the JSDoc wording is yours; the
+  two code lines are not):
+
+  ```js
+  const PRESERVED_COPIES_POINTER =
+    'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';
+  ```
+
+  plus `PRESERVED_COPIES_POINTER,` in that file's `module.exports`.
+
+  **(b) the exhausted banner's last two lines**, replacing the three shipped
+  ones, at their existing eight-space indent:
+
+  ```js
+        `${PRESERVED_COPIES_POINTER} ` +
+        'The session files themselves are untouched.'
+  ```
+
+  **(c) `secretRevertSummaryLine`'s closing expression**, at its existing
+  four-space indent:
+
+  ```js
+      `row. ${PRESERVED_COPIES_POINTER}`
+  ```
+
+  **(d) `src/core/dream/warnings.js`** — one line, and
+  `PRESERVED_COPIES_POINTER` added to the existing `require('./ledger')`
+  destructuring:
+
+  ```js
+  const SECRET_EXHAUSTED_REMEDIATION = PRESERVED_COPIES_POINTER;
+  ```
+
+  **(e) `src/cli/doctor.js`**, inside `quarantineReport`, the tail of the
+  `secret-revert-exhausted` row's `msg` template — the rest of the template is
+  byte-unchanged:
+
+  ```js
+  too many times in a row. ${PRESERVED_COPIES_POINTER}`,
+  ```
+
 - **`doctor.js` requires its ledger names inside `quarantineReport`**, not at
   module top level (`const { readLedger, SECRET_REVERT_EXHAUSTED_REASON } =
   require('../core/dream/ledger');`). Add the constant to that same
@@ -636,21 +872,26 @@ added here on the spot.
       renders the pointer, contains neither `state/quarantine` nor `redacted/`,
       and its position in the Table A row order and the four other rows'
       exact text are unchanged.
-- [ ] **5.** **One author.** The pointer sentence occurs exactly once in `src/`,
-      and each of the three carriers reaches it by importing or referencing
-      `PRESERVED_COPIES_POINTER` rather than retyping it. This criterion's
-      evidence is **V2 and V2 alone, and it is lexical**: no runtime assertion
-      can distinguish a retyped byte-identical copy from the constant.
+- [ ] **5.** **One author, established at RUNTIME.** Appending a marker inside
+      `PRESERVED_COPIES_POINTER`'s own literal moves **every** carrier's rendered
+      output — the exhausted banner, the summary line, the warnings document and
+      the doctor line — so all four hand-written pins go red together. This
+      criterion's evidence is **Table C's two derivation proofs**, not V2: a
+      carrier that imported the constant and then composed a byte-identical copy
+      of its own does not move, its declared identity stays green, and
+      `evaluateRed` refuses the proof. V2 remains as a cheap lexical guard over
+      the **contiguous** retyped case and claims nothing more.
 - [ ] **6.** **L5 and L6 did not move.** `src/core/digest.js` and
       `src/core/dream/promote.js` are absent from
       `git diff --name-only main...HEAD`, and the digest banner's full-string
       pin in `tests/unit/digest.test.js` — parenthetical included — still passes
       with only its comment changed.
 - [ ] **7.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
-      `RUN: PROVEN` and its Criteria roll-up carries three lines reading
-      `WP-quarantine-banner-location criterion 1`, `… criterion 2` and
-      `… criterion 3`, each `PROVEN` and each naming its Table C proof id.
-      Three lines and not one, because each proof carries its own `criterion`.
+      `RUN: PROVEN` and its Criteria roll-up carries **five** lines for this WP —
+      `criterion 1`, `2`, `3`, `4` and `5` — each `PROVEN` and each naming its
+      Table C proof id(s). Five and not six, because the two derivation proofs
+      share the `(wp, criterion)` pair and `rollUp` emits one line per pair,
+      naming both ids.
 - [ ] **8.** `WP-secret-fence-ep2-redact-arm` rows **Q1**, **Q2** and **Q9**
       each carry their byte-exact dated clause and no other edit; `git diff`
       shows one changed line per row and no other line in that file; **and each
@@ -678,10 +919,12 @@ for f in $CARRIERS; do
 done
 [ "$v1" = 0 ] && echo "V1 OK"
 
-# V2 — the pointer sentence has exactly ONE author in src/, and every carrier
-#      reaches it by name rather than retyping it. `grep -o | wc -l` counts
-#      OCCURRENCES; `grep -c` counts matching LINES and would accept two copies
-#      on one line.
+# V2 — a CHEAP LEXICAL GUARD, and no more than that (Table C): no CONTIGUOUS
+#      second copy of the sentence in src/, and every carrier names the
+#      identifier. It does NOT establish criterion 5 — a copy composed from
+#      split literals passes it, measured — and criterion 5's evidence is the
+#      derivation proofs. `grep -o | wc -l` counts OCCURRENCES; `grep -c` counts
+#      matching LINES and would accept two copies on one line.
 v2=0
 lit=$(grep -rhoF 'Copies of the withheld notes are kept outside your vault' src/ | wc -l | tr -d ' ')
 if [ "$lit" != 1 ]; then echo "V2 SENTENCE HAS $lit AUTHOR(S) IN src/, expected 1"; v2=1; fi
@@ -696,39 +939,55 @@ done
 # not by reading it.
 [ "$v1" = 0 ] && [ "$v2" = 0 ] || { echo "V1/V2 RED"; exit 1; }
 
-# V5 — each amendment clause lands in the cell that carries the claim it scopes:
-#      Table Q's FOURTH cell, the `why` column, measured per row under
-#      Implementation notes. This is the ONLY check that can see it: a Table Q
-#      row is ONE line, so a clause in the wrong cell is still "one changed
-#      line" and acceptance criterion 8 passes on it. Each row id matches
-#      exactly one line in that file (measured), and a row whose cell count is
-#      not 4 fails loud rather than being read with a shifted index.
+# V5 — each amendment clause is present IN FULL and lands in the cell that
+#      carries the claim it scopes: Table Q's FOURTH cell, the `why` column
+#      (per-row targets under Implementation notes). A MARKER-ONLY or truncated
+#      clause is RED, because the clause text is EXTRACTED FROM THIS SPEC by a
+#      structural key and compared as the cell's SUFFIX — never retyped here.
+#      And the Done spec's whole diff must be those three lines and nothing
+#      else. This is the ONLY check that can see any of it: a Table Q row is ONE
+#      line, so a wrong cell, a truncated clause and an unrelated edit on the
+#      same line are all still "one changed line" to criterion 8.
 Q=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
-CLAUSE='Amended 2026-09-05 (`WP-quarantine-banner-location`)'
+SPEC=docs/specs/WP-quarantine-banner-location.md
 v5=0
-if [ ! -f "$Q" ]; then
-  echo "V5 MISSING DELIVERABLE: $Q"; v5=1
+if [ ! -f "$Q" ] || [ ! -f "$SPEC" ]; then
+  echo "V5 MISSING DELIVERABLE: $Q or $SPEC"; v5=1
 else
-  for r in Q1 Q2 Q9; do
+  # Rows keyed STRUCTURALLY, by the claim each clause scopes — never by the
+  # order the clauses appear in this spec.
+  for pair in "Q1|this row's TEXT is UNCHANGED" "Q2|this row's sentence is RETIRED" "Q9|this row's disposition is WITHDRAWN"; do
+    r=${pair%%|*}
+    key=${pair#*|}
+    clause=$(grep -F "$key" "$SPEC" | grep -F 'Amended 2026-09-05 (`WP-quarantine-banner-location`)' | sed 's/^ *//')
+    if [ "$(printf '%s\n' "$clause" | grep -c .)" != 1 ]; then
+      echo "V5 THIS SPEC DOES NOT CARRY EXACTLY ONE CLAUSE FOR $r"; v5=1; continue
+    fi
     hits=$(grep -cF "| **$r** |" "$Q")
     if [ "$hits" != 1 ]; then echo "V5 ROW $r MATCHES $hits LINE(S), expected 1"; v5=1; continue; fi
     row=$(grep -F "| **$r** |" "$Q")
     n=$(printf '%s\n' "$row" | awk -F' \\| ' '{print NF}')
     if [ "$n" != 4 ]; then echo "V5 ROW $r HAS $n CELL(S), expected 4"; v5=1; continue; fi
-    if ! printf '%s\n' "$row" | awk -F' \\| ' '{print $4}' | grep -qF "$CLAUSE"; then
-      echo "V5 CLAUSE NOT IN THE why CELL OF ROW $r"; v5=1
-    fi
+    cell4=$(printf '%s\n' "$row" | awk -F' \\| ' '{print $4}')
+    case "$cell4" in
+      *" $clause |") ;;
+      *) echo "V5 ROW $r why CELL DOES NOT END WITH ITS FULL CLAUSE"; v5=1 ;;
+    esac
   done
+  # Nothing else in that file moved: exactly three lines changed, three added.
+  ns=$(git diff --numstat main -- "$Q" | awk '{print $1"/"$2}')
+  if [ "$ns" != "3/3" ]; then echo "V5 DONE-SPEC DIFF IS ${ns:-empty}, expected 3/3"; v5=1; fi
 fi
 [ "$v5" = 0 ] && echo "V5 OK"
 [ "$v5" = 0 ] || { echo "V5 RED"; exit 1; }
 
-# V3 — the machine-run RED lane (criterion 7). REGRESSION-kind on the untouched
-#      tree: it exits 0 there with the five already-declared proofs PROVEN. What
-#      discriminates is the CONTENT — the three roll-up lines naming this WP,
-#      which cannot appear until the declarations and the three identities exist.
-#      Run it where `node_modules` is a real directory: the lane refuses a
-#      symlinked one by design (Implementation notes).
+# V3 — the machine-run RED lane (criteria 5 and 7). REGRESSION-kind on the
+#      untouched tree: it exits 0 there with the five already-declared proofs
+#      PROVEN. What discriminates is the CONTENT — the FIVE roll-up lines naming
+#      this WP, which cannot appear until the two declaration files and the four
+#      identities exist, and which cannot all read PROVEN while any carrier has
+#      a second author. Run it where `node_modules` is a real directory: the
+#      lane refuses a symlinked one by design (Implementation notes).
 npm run red-proofs
 
 # V4
@@ -738,30 +997,50 @@ npm run lint
 
 - **V1 and V2 are lexical guards, and that is all they are.** Neither can
   establish that a sentence is *rendered* rather than merely present; that is
-  what criteria 1–4 and the review gates are for. Observe and paste all three
-  states for each: **deliverable absent** (a carrier renamed away → red),
-  **compliant** (→ green), **violating** (the sentence retyped in a second place
-  → V1 green, V2 red). Each was produced by extracting this fenced block from
-  this file and piping it to a shell, so the shipped escaping is exercised
-  rather than described. Measured, four trees: **untouched `8302ce8e`** → three
-  `V1 SHELF CLAIM SURVIVES` lines, `V2 SENTENCE HAS 0 AUTHOR(S)`, three
-  `V2 NOT WIRED`, `V1/V2 RED`, `rc=1`; **rehearsal tree carrying the fix** →
-  `V1 OK`, `V2 OK`, `rc=0`; **`src/core/dream/warnings.js` removed** → two
-  `MISSING DELIVERABLE` lines, `rc=1`; **the sentence retyped once more under
-  `src/cli/`** → `V1 OK`, `V2 SENTENCE HAS 2 AUTHOR(S) IN src/, expected 1`,
-  `rc=1`.
-- **V5 is a PLACEMENT check and nothing else.** It cannot judge whether a clause
-  is correct, only that it sits in the cell whose claim it talks about. Extracted
-  from this block and run in four trees built from `8302ce8e`: **clause absent**
-  → three `V5 CLAUSE NOT IN THE why CELL OF ROW …` lines, `V5 RED`, `rc=1`;
-  **each clause appended to its row's cell 4** → `V5 OK`, `rc=0`; **each clause
-  appended to its row's cell 2 instead** — the literal reading of the Q18
-  precedent, and the exact mistake this step exists to catch — the same three
-  lines, `V5 RED`, `rc=1`; **the file renamed away** →
-  `V5 MISSING DELIVERABLE: docs/specs/done/WP-secret-fence-ep2-redact-arm.md`,
-  `V5 RED`, `rc=1`. On the cell-4 tree `npm run lint` also stays at
-  `Linting: 636 file(s)`, `0 error(s)` — appending inside a table cell adds no
-  line and trips no rule.
+  what criteria 1–4 and the review gates are for, and **V2 does not establish
+  criterion 5** — the derivation proofs do (Table C). Observe and paste all
+  three states for each: **deliverable absent** (a carrier renamed away → red),
+  **compliant** (→ green), **violating** (the sentence retyped contiguously in a
+  second place → V1 green, V2 red). Each was produced by extracting this fenced
+  block from this file and piping it to a shell, so the shipped escaping is
+  exercised rather than described. Measured, five trees: **untouched
+  `8302ce8e`** → three `V1 SHELF CLAIM SURVIVES` lines, `V2 SENTENCE HAS 0
+  AUTHOR(S)`, three `V2 NOT WIRED`, `V1/V2 RED`, `rc=1`; **rehearsal tree
+  carrying the fix** → `V1 OK`, `V2 OK`, `rc=0`; **`src/core/dream/warnings.js`
+  removed** → two `MISSING DELIVERABLE` lines, `rc=1`; **the sentence retyped
+  contiguously once more under `src/cli/`** → `V1 OK`, `V2 SENTENCE HAS 2
+  AUTHOR(S) IN src/, expected 1`, `rc=1`; and — **the state this step does NOT
+  catch, run and recorded rather than reasoned about** — `warnings.js` importing
+  the constant, never using it, and rebuilding the sentence from
+  `'Copies of the withheld ' +` and the rest → `V1 OK`, `V2 OK`, `rc=0`.
+- **The derivation proof catches exactly that state, and it was measured on both
+  trees.** Appending a space and `RP_MUT_QBL_DERIVATION_LEDGER` inside the constant's own
+  literal and re-rendering every carrier: on the **correct** tree the banner,
+  the summary line and the warnings document all carry the marker
+  (`MOVED / MOVED / MOVED`); on the **composed-defeat** tree the banner and the
+  summary line move and the warnings document does **not**
+  (`MOVED / MOVED / unmoved`). A full-string pin against a hand-written literal
+  therefore goes red for every deriving carrier and stays green for the composed
+  one — which is the failure `evaluateRed` reports as *the declared identity did
+  not fail under the mutation*, and it is why criterion 5 has runtime evidence
+  at all. The **doctor** carrier was measured the same way, through a real CLI
+  spawn: under the mutation its `[warn]` line comes back carrying the marker.
+- **V5 checks PRESENCE-IN-FULL, PLACEMENT and DIFF SHAPE, and nothing else.**
+  It cannot judge whether a clause is correct, only that the whole of it sits at
+  the end of the cell whose claim it talks about and that no other line of that
+  file moved. Extracted from this block and run in **five** trees, each a scratch
+  git repo whose `main` is the pristine `8302ce8e` so the `numstat` half is
+  exercisable: **clause absent** → three `… DOES NOT END WITH ITS FULL CLAUSE`
+  lines plus `V5 DONE-SPEC DIFF IS empty, expected 3/3`, `V5 RED`, `rc=1`;
+  **each clause in its row's cell 4** → `V5 OK`, `rc=0`; **marker-only**, the
+  round-1 finding — just `` Amended 2026-09-05 (`WP-quarantine-banner-location`) ``
+  appended, no clause — → the same three lines, `V5 RED`, `rc=1`; **each clause
+  in cell 2 instead**, the literal reading of the Q18 precedent → the same three
+  lines, `V5 RED`, `rc=1`; **compliant plus one unrelated edited line in the same
+  file** → `V5 DONE-SPEC DIFF IS 4/4, expected 3/3`, `V5 RED`, `rc=1`. Four RED
+  states, each failing for its own discriminating reason. On the compliant tree
+  `npm run lint` also stays at `0 error(s)` — appending inside a table cell adds
+  no line and trips no rule.
 - **The six existing tests that break are the work, not a surprise.** Rehearsed
   on a `git archive` copy of `8302ce8e`: `tests 2618 / pass 2600 / fail 6`, the
   six being the two `ledger.test.js` full-string pins, the two
@@ -778,7 +1057,11 @@ npm run lint
   knows that file is an only-copy. **Proposed successor, not yet filed:**
   `WP-quarantine-only-copy-shelf`, which would decide whether such a copy is
   moved to the withheld shelf, recorded durably, or exempted from the retention
-  cap. It needs a product decision and it is not this package's.
+  cap. It needs a product decision and it is not this package's. **Its closing
+  sentence — *this notice clears when no withheld copies are left* — is false in
+  one measured state and is an OWNER item, not an oversight:** Dispatch
+  precondition, second item, with the recommendation and the cost of overruling
+  it.
 - **The `remediation` value on a refused path — a tension between two ratified
   surfaces, not a defect this package may call one.** `promote.js`'s
   `withRemediation(d.preserved, 'delete')` on the refusal arms gives every
@@ -812,7 +1095,9 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body,
-   including V1's and V2's three states each and V3's three roll-up lines.
+   including V1's and V2's four states each (the composed-duplicate state
+   included, where they are green), V5's five states, and V3's five roll-up
+   lines.
 2. Conventional commits; PR titled
    `fix(dream): stop the ledger-derived banners naming a quarantine shelf (WP-quarantine-banner-location)`.
 3. PR template filled, including "Decisions made" (or "none"), "Discovered

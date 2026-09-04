@@ -389,3 +389,120 @@ at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+
+### Round 1 fixes — architect, 2026-09-05, on top of `7f4fc5d0`
+
+Both channels returned **needs-attention** with **two CONVERGED A findings**, one
+B each, and four scope objections routed and uncounted. All four counted findings
+are **FIXED**. Both channels independently confirmed the census (13 hits, 7 files,
+no template or skill carrier), the six existing pins, the L1–L4 / L5 split and
+the Q1/Q2/Q9 cell placement — none of that moved.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A, CONVERGED] | The byte-exact pointer promised that *"each dream report names its own copies and the folder each one is in"*, which is false on two of the report's four outcome arms: on `refused` no report is written and `report.record` goes to command output only (*"not stored anywhere else"*, and `dream-pipeline`'s shipped test asserts the report path is **not** in the commit); on `promoted` with `accounting.published === false` the report exists without its enforcement section. A durable banner read weeks later would point at a file that was never created — the same class of false pointer this package exists to remove | **FIXED by naming what row G11 actually guarantees, which is a DISJUNCTION.** The sentence is now *"…the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed."* A new four-row table under "Exact contracts" states where the record lands on each of `promoted`-published, `promoted`-unpublished, `fallback` and `refused` — **measured, and `fallback` is a fourth arm neither channel named**: it publishes the enforcement section to the vault, so it belongs on the report side of the disjunction. All four rendered strings, the four hand-written pins and Table C's `find` literals were re-derived from the new sentence and re-measured on the rehearsal tree. The sentence also lost its apostrophes on purpose, so the JS literal needs no escaping and the declarations' `find` strings stay readable |
+| **2** [A, CONVERGED] | V2 is lexical: it counts contiguous occurrences of the sentence prefix and checks each carrier CONTAINS the identifier. Both channels built the defeat — import the constant, never use it, rebuild the byte-identical sentence from two literals split INSIDE the prefix — and measured V1/V2 green with every runtime pin green. Criterion 5's single-author guarantee was unproven | **FIXED with a DERIVATION PROOF, and V2 shrunk to what it can claim.** Reproduced here first: the split-inside-the-prefix form scores `V1 OK / V2 OK`, `rc=0` (my own first attempt split *after* the prefix and V2 caught it — recorded because it is the difference between a defeat that works and one that does not). **The runbook's fixed point was respected: no stronger source parser.** Instead the derivation is made observable at runtime — appending a marker inside `PRESERVED_COPIES_POINTER`'s own literal must move every carrier's rendered output. **Measured on two trees:** correct → banner/summary/warnings all `MOVED`; composed defeat → `MOVED / MOVED / unmoved`. The doctor carrier was measured the same way through a real CLI spawn and comes back carrying the marker. **And the mechanism is the OPPOSITE of the one the finding suggested, deliberately:** pinning a carrier against the IMPORTED constant moves both sides together and stays green under the mutation, proving nothing. The identities are therefore full-string equalities against **hand-written** literals; the mutation reddens every deriving carrier, and a composed carrier stays green — which `evaluateRed` reports as *the declared identity did not fail under the mutation*. That refusal IS the detection. Criterion 5 now cites the proofs; V2 keeps only the contiguous-retype case and says so |
+| **3** [B, plugin] | V5 accepted marker-only amendments: appending just the dated marker to Q1/Q2/Q9's cell 4 passed while none of the three byte-exact clauses existed, and an unrelated edit on the same line was invisible | **FIXED, three ways.** V5 now (a) EXTRACTS each clause from this spec by a **structural key** — the claim it scopes (`this row's TEXT is UNCHANGED`, `… sentence is RETIRED`, `… disposition is WITHDRAWN`), never by the order they appear — and requires the row's cell-4 SUFFIX to be that whole clause; and (b) requires `git diff --numstat main` on the Done spec to be exactly `3/3`. Rehearsed in **five** scratch git repos whose `main` is the pristine tree: absent → RED, cell 4 → `V5 OK`, marker-only → RED, cell 2 → RED, compliant-plus-one-unrelated-line → `V5 DONE-SPEC DIFF IS 4/4, expected 3/3` → RED. Four RED states, each failing for its own reason |
+| **4** [B, shadow] | The declaration file was a `create` deliverable described only semantically, while `validateProof` requires `suite`, `wp`, `criterion`, `why`, `file`, exact `find`, `replace` containing `marker`, `testNamePattern` and structured `expectRed` — and neither the runner nor a shipped declaration is in the implementer's reading set | **FIXED by INLINING, as the finding preferred.** Table C now carries **two complete declaration files** verbatim (one per suite — `suite` is top-level, and the doctor carrier's evidence is a CLI spawn in its own suite), **six proofs**, and a companion block of **five byte-exact source forms** the `find` strings quote. Validated mechanically against the rehearsal tree: both JSON blocks parse, each `find` occurs exactly once in its file, each `marker` is in its own `replace` and absent from the pristine file, and **every mutated file passes `node --check`** — a mutation that does not parse is a proof that can never run, which nothing in the runner would have told the implementer |
+
+**The doctor carrier is now PROVEN rather than a residual.** Round zero named it
+an uncoverable gap; measuring the cost showed otherwise —
+`node tests/with-temp-root.js --test --test-name-pattern … tests/unit/doctor.test.js`
+is **385 ms**, so a second declaration file with its own suite is affordable, and
+File B carries both a shelf proof (criterion 4) and a derivation proof
+(criterion 5) for it. The named residual it replaces is gone, and criterion 7
+now expects **five** roll-up lines rather than three.
+
+**PARKED, and put to the owner rather than absorbed** (escalation (ii)): both
+channels observed that row **L5**'s closing sentence — *this notice clears when
+no withheld copies are left* — is false in a mixed state, because
+`listSecretQuarantine` excludes `redacted/`, so removing the last direct file
+clears the notice while a fall-through only-copy remains. It is now the Dispatch
+precondition's **second owner item**, with the measured state, the exact cost of
+absorbing it (one Table L row, `src/core/digest.js` entering the boundary, one
+updated pin in a file already in the boundary) and a recommendation.
+**Recommendation: route it to the successor, because the wording is DOWNSTREAM
+of a decision nobody has made** — if `WP-quarantine-only-copy-shelf` moves such a
+copy to the withheld shelf, or records it durably and lists it, the shipped
+sentence becomes true again and a narrowing landed now would have to be
+reverted. Only the "leave it unannounced" branch makes the narrowing permanent.
+
+### 1.1 Round-1 measurements
+
+**The four report arms, measured** (finding 1's evidence, and the reason the
+sentence names two channels):
+
+| `report.outcome` | where the enforcement record lands |
+|---|---|
+| `promoted`, `published === true` | the dream report in the vault |
+| `promoted`, `published === false` | body in the vault; **section printed to the run's output** |
+| `fallback` | published to the vault — the section alone, or appended |
+| `refused` | **nothing in the vault; printed to the run's output only** |
+
+**The derivation, measured on two trees** (finding 2's evidence):
+
+```text
+CORRECT TREE + marker appended inside the constant's literal
+  L1 banner : MOVED     L2 summary: MOVED     L3 warnings: MOVED
+COMPOSED-DEFEAT TREE + the same mutation
+  L1 banner : MOVED     L2 summary: MOVED     L3 warnings: unmoved
+DOCTOR, through a real CLI spawn on the mutated correct tree
+  actual: '[warn] 1 session transcript(s) … in the output it printed. RP_MUT_POINTER_TEXT_MOVED'
+```
+
+**The lexical steps on the composed defeat** — green on every one, which is the
+whole point of the proof:
+
+```text
+V1 OK
+V2 OK
+V5 OK                                                                     rc=0
+```
+
+**V5 in five states**, each a scratch git repo whose `main` is the pristine
+`8302ce8e`:
+
+```text
+UNTOUCHED          3 × "… DOES NOT END WITH ITS FULL CLAUSE" + "DIFF IS empty, expected 3/3"   rc=1
+CELL 4 (compliant) V5 OK                                                                        rc=0
+MARKER-ONLY        3 × "… DOES NOT END WITH ITS FULL CLAUSE"                                    rc=1
+CELL 2             3 × "… DOES NOT END WITH ITS FULL CLAUSE"                                    rc=1
+CELL 4 + 1 EXTRA   "V5 DONE-SPEC DIFF IS 4/4, expected 3/3"                                     rc=1
+```
+
+**The six declarations, validated mechanically** against the rehearsal tree:
+
+```text
+suite tests/unit/ledger.test.js — 4 proof(s)
+  banner-shelf-claim-restored      crit=1 find x1 marker_in_replace=True marker_absent_from_src=True OK
+  summary-shelf-claim-restored     crit=2 find x1 marker_in_replace=True marker_absent_from_src=True OK
+  warnings-shelf-claim-restored    crit=3 find x1 marker_in_replace=True marker_absent_from_src=True OK
+  pointer-derivation-ledger-suite  crit=5 find x1 marker_in_replace=True marker_absent_from_src=True OK
+suite tests/unit/doctor.test.js — 2 proof(s)
+  doctor-shelf-claim-restored      crit=4 find x1 marker_in_replace=True marker_absent_from_src=True OK
+  pointer-derivation-doctor        crit=5 find x1 marker_in_replace=True marker_absent_from_src=True OK
+ALL OK — and all six mutated files pass `node --check`
+```
+
+**Unchanged by the whole round:** the blast radius. `npm test` on a rehearsal
+copy carrying the revised sentence is again `tests 2618 / pass 2600 / fail 6`,
+the same six assertions in the same four files. The pointer's wording moved; what
+it breaks did not. `npm run lint` on the worktree with both revised documents:
+`Linting: 636 file(s)`, `0 error(s)`, `frontmatter check passed: 267 spec(s)`.
+
+### 1.2 What round 1 did not change
+
+- **No acceptance criterion was weakened.** Criterion 5 moved from a lexical
+  claim to a runtime one; criterion 7 went from three roll-up lines to five;
+  criterion 4 gained a proof. Nothing lost evidence.
+- **No verification step was added beyond the frozen surface.** V1, V2, V5, V3
+  and V4 are the same five steps; V2 shrank its claim, V5 grew two checks inside
+  its existing body to guard a product surface (the Done spec's canonical rows),
+  and V3's expected content changed. The growth is Table C's — two declaration
+  files instead of one — and it buys the fourth carrier's proof, which was a
+  named residual before.
+- **The boundary did not widen into `src/core/digest.js` or
+  `src/core/dream/promote.js`.** Both stayed out; L5's false sentence is an owner
+  item and L6 is unchanged.
+- **The Q1/Q2/Q9 clause texts are byte-identical to round zero's**, apart from
+  nothing at all: finding 3 changed how V5 checks them, not what they say.
