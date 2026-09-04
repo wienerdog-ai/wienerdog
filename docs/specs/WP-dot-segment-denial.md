@@ -221,7 +221,7 @@ and both of its ends were resolved mechanically at round zero.
 | modify | src/core/dream/promote.js | **ONE new loop inside `makeAdmit`, plus THREE comment edits, nothing else.** The loop applies **Table A** to every segment of the candidate path and returns **Table A row A6's refusal string verbatim**; it sits where **row A5** puts it. **(i)** The JSDoc's clause-(c) sentence gains the class rule — clause (c) is where it belongs in a conjunction the JSDoc states unordered, even though row **A5** puts the check itself last — and the loop carries a one-line comment saying why it is last. **(ii)** The *"Deliberately NOT a dot-rule"* paragraph (`:228-229`) is **replaced** by one recording that this work package discharged it — a dangling deferral to a finding this diff closes is a defect, not a leftover. **(iii)** The **row-Z2 comment above the `reportRel` derivation** (`:1045-1057`) states a split of obligations this work package moves and a measurement it falsifies — see Implementation notes; correct both, and **do not touch the `reportRel` derivation itself**, whose `.`-and-empty filter is row Z1's and stays. **This cell owns what stays unchanged in this file:** `INSTRUCTION_BASENAMES`, `DENIED_SEGMENTS`, `DENIED_BASENAME`, `EXTRA_TIER_DIRS`, `fold`, `foldedSegments`, `isUnder`, `admittedDirs`, the order of the existing clause-(c) checks, **every existing refusal string**, and the module's exports (**Table A row A9**) |
 | modify | src/core/layout.js | **ONE new clause inside `isSafeRelativePath`, one JSDoc sentence, one export.** The clause applies **Table A**; the export adds `isSafeRelativePath` to the existing `module.exports` object and changes no other name in it (**Table A row A8**). **This cell owns what stays unchanged:** `LAYOUT_KEYS`, `defaultLayout`, `cleanValue`, `readVaultLayout`'s parser **and its per-key silent fallback** (**Table A row A7**), `resolveDailyPath`, `layoutPromptLines` |
 | modify | src/core/layout-infer.js | **DELETE the copied `isSafeRelativePath` — its JSDoc and its body, `:33-46` — and require the shared one** from `./layout` alongside `defaultLayout` (**Table A row A8**). The hygiene loop's call site is **unchanged**: it already calls `isSafeRelativePath` on every emitted value. **This cell owns what stays unchanged:** `dirExists`, `topLevelDirs`, `pick`, `probeDailyFilename`, `inferLayout`'s selection logic and its `reports_dir` special case, and the module's exports |
-| create | tests/unit/dot-segment-denial.test.js | **The class proof, and the only new test file.** It carries acceptance criteria **1, 2, 3 and 6** as **exactly the six top-level tests Table C names, with those titles** — the titles are part of the contract because the RED proofs declare failing identities by name and `expectRed` is an equality. Its three oracles: the seeded held-out family, **Table D's 29 paths as a hand-written literal array**, and **Table E's boundary matrix as a second hand-written literal**. Every assertion carries its test's band marker (Table C) so each declaration's `signal` is a fixed string. It reads no document under `docs/` and derives no expected value from one |
+| create | tests/unit/dot-segment-denial.test.js | **The class proof, and the only new test file.** It carries acceptance criteria **1, 2, 3 and 6** as **exactly the six top-level tests Table C names, with those titles** — the titles are part of the contract because the RED proofs declare failing identities by name and `expectRed` is an equality. Its three oracles: **equality with the reference predicate** (row **A11**) over Table F's seeded full-alphabet sample, **Table D's 29 paths as a hand-written literal array**, and **Table E's boundary rows as a second hand-written literal**. Every assertion carries its test's band marker (Table C) so each declaration's `signal` is a fixed string. It reads no document under `docs/` and derives no expected value from one |
 | modify | tests/unit/dream-promote.test.js | **ONE site: the case list of the test at `:1923-1960`.** Remove exactly the three values `readVaultLayout` can no longer return unchanged — `.`, `./reports`, `reports/./dreams` — leaving `reports/dreams/` and `reports//dreams`. **Change nothing else in this file**, including that test's title, its `admits` branch and the comment explaining row Z3's residual: the branch's condition becomes constant-true, which is a fact to report under "Discovered issues", not to refactor. **The three removed values do not lose their reader-side coverage** — they return as **Table E row E5**, asserted as a FALLBACK in the new suite |
 | modify | tests/integration/adopt-e2e.test.js | **ONE new test: the `adopt --yes` round trip** (acceptance criterion **4**), built on the setup the existing test in this file already performs (temp `HOME`/`WIENERDOG_HOME`, `WIENERDOG_LOADER_NOOP=1` to neutralise the OS scheduler, `init.run(['--yes'])`, then `adopt.run([vault, '--yes'])`). Its vault is its own temp directory containing a dot-prefixed tier candidate; the shared `POWERUSER_FIXTURE` is **not** modified. **This cell owns what stays unchanged:** the existing test, its assertions and the file's fixtures and helpers |
 | create | tests/red-proofs/dot-segment-denial.proofs.json | The RED-proof declarations, per **Table C** — **two proofs, one per independently revertible source change**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dot-segment-denial.test.js` |
@@ -319,26 +319,28 @@ cites this table rather than restating it.
 | **A1** | **What a segment is** | the substrings produced by splitting the value on `/`. For the promotion allowlist that is `foldedSegments(rel)` — the already-NFC-lowercased segments of the **resolved** relative path. For a layout value it is `value.split('/')`. Nothing else is split on; `\` is separately rejected by `isSafeRelativePath` today and that clause stays |
 | **A2** | **What DOT-PREFIXED means** | the segment's **first character** is `.` (U+002E). **Begins with, never contains.** Dot-prefixed: `.git`, `.github`, `.a`, `.`, `..`, `.hidden.md`, `.aider.conf.yml`. **NOT** dot-prefixed: `a.b`, `My.Notes`, `2026-09-04.md`, `x.mdc`, `YYYY-MM-DD.md` |
 | **A3** | **Which positions** | **every** segment — first, interior and **last**. The basename is a segment, so `01-Projects/x/.hidden.md` is refused by this rule and not by the extension rule. At **any depth**, with no bound on the number of segments |
-| **A4** | **Case** | the rule is **case-insensitive by construction and adds no folding anywhere**: the discriminating character is `.`, which has no case, so `.GiThUb` and `.GITHUB` are refused by the same expression that refuses `.github`. Measured — this is why the proof grades mixed-case held-out segments while no `fold` call is added to `src/core/layout.js` |
+| **A4** | **Case** | the rule is **case-insensitive by construction and adds no folding anywhere**: the discriminating character is `.`, which has no case, so `.GiThUb` and `.GITHUB` are refused by the same expression that refuses `.github`. Measured — this is why Table F's alphabet carries case variants and look-alikes while no `fold` call is added to `src/core/layout.js` |
 | **A5** | **Where the check sits in `makeAdmit`: LAST** | **after every existing check**, including clause (b)'s `.md` extension rule and clause (a)'s tier rule — the final gate before `return null`. **The consequence is the reason for the position, and it is exact: NO path refused today changes the reason it is refused with.** Only a path every other clause admits can reach the loop, so the sole observable change is that a previously **ADMITTED** dot path is now refused, with row **A6**'s string. **The alternative was measured and rejected.** Placing the loop first (before clause (b)) followed the module's *"(c) first"* comment but changed the observed reason for two further classes: 7 of Table D's paths moved off the extension complaint, and — the case that decided it — a dot path **out of any tier** (`.github/copilot-instructions.md` at the vault root, a live input because `writeIntoVault` calls `admit` with the RESOLVED path) moved off *"not under a writable vault tier directory"*. The module's *"(c) first"* rule is about the ENUMERATED checks preferring a specific reason to an extension complaint; it does not reach a class rule whose whole job is to refuse what the other clauses admit. Last is also the simplest thing to state and to prove |
 | **A6** | **The refusal string** | exactly `` not admitted: path segment `<seg>` begins with a dot ``, where `<seg>` is the **folded** segment (measured: `.GiThUb` prints `.github`, the same way the `INSTRUCTION_BASENAMES` branch prints its folded basename). **One string for every position**, the basename included — a second message for the basename case would be a second fact to keep in step. No other refusal string, no change to `makeAdmit`'s return type |
 | **A7** | **What a violating LAYOUT value produces** | the **existing per-key silent fallback**: that key takes its built-in default, the rest of the block still applies, nothing is printed. Inherited unchanged from the reader's current contract for absolute / `..` / backslash values. **Deliberate, not absorbed** — the Dispatch precondition puts the alternative to the owner |
 | **A8** | **ONE validation authority for the layout, and why not three** | `isSafeRelativePath` is **exported** from `src/core/layout.js` and **required** by `src/core/layout-infer.js`; the copy is deleted. The reason is this work package's own finding: the copy is exactly why one gap became two (disposition row D5, *"the **copied** `layout-infer.js` validator has the same gap"*), and the 2026-08-05 ruling names that function as the site. **`makeAdmit` keeps its own expression** and does not import one: it validates a different domain — the folded segments of a candidate **path** — while `isSafeRelativePath` validates a config **value**, and a shared helper for a one-line predicate over two domains is an abstraction this repo's conventions decline. **Sharing the predicate does NOT merge the proofs:** the defect class includes *a caller that never consults the predicate*, which is precisely `makeAdmit` today, so each enforcement point is graded separately (Table B) |
 | **A9** | **What is NOT deleted, though the class rule subsumes it** | `DENIED_SEGMENTS`, `DENIED_BASENAME` and `INSTRUCTION_BASENAMES` stay **exactly as shipped**. Every path they refuse begins with a dot or is an instruction basename, so the class rule would cover the first two — and deleting them would (i) change the refusal reason for `.claude` / `.codex` / `.mcp.json` paths, which the shipped `docs/instruction-file-inventory.md` names as the mechanism refusing two of its Table B rows, and (ii) remove the very enumeration Table C's RED mutant must revert to. Keeping them costs two `Set` lookups and buys a mutant that is the production code |
+| **A11** | **THE REFERENCE PREDICATE — this row is the contract, and the verification grades against it rather than against a list of examples** | ```const refSeg = (seg) => [...seg][0] === '.';``` — the segment's **first code point** is U+002E. Applied **after the fold or trim the enforcement point documents**: at **B1** to `seg.normalize('NFC').toLowerCase()` (promote.js's `fold`); at **B2** to each `/`-separated segment of `coerceScalar(raw).value` (the reader's own coercion — trim, one layer of quotes, an inline `<sp>#` comment); at **B3** to each segment of the picked directory name after `pick`'s `trim()`. **`[...seg][0]` and not `seg[0]`**: the first *code point*, so an astral first character (an emoji) is read as one character rather than as a lone surrogate. **This is the whole rule.** Every other clause in `makeAdmit` and `isSafeRelativePath` is out of its scope, which is why V2's samples carry a fixed ASCII suffix — no draw can collide with `DENIED_SEGMENTS`, an instruction basename, or the empty-value clause, and a suffix cannot change a first code point |
 | **A10** | **The bound, both ways** | the rule may **only refuse more**. Nothing admitted today may become refused unless it carries a dot-prefixed segment, and nothing refused today may become admitted. The **no-over-denial** half is a graded expectation, not a hope: acceptance criterion 2 names the dot-free paths and layout values that must stay admitted and honoured |
 
 ### Table B — canonical: the three enforcement points, each proved separately
 
-One passing implies nothing about the others. **Measured:** with the promotion
-clause reverted and the layout clause in place, the held-out grading scored
-`makeAdmit 0/312` while `readVaultLayout 234/234` and `inferLayout 7/7` stayed
-green; with the layout clause reverted and the promotion clause in place, the
-scores inverted (`makeAdmit 312/312`, `readVaultLayout 0/234`,
-`inferLayout 1/7`). That is the whole argument for three separate gradings.
+One passing implies nothing about the others. **Measured under the
+reference-equality grading (Table F):** with the promotion clause reverted and
+the layout clause in place, B1 scored `ref1 998/2000` while B2 and B3 stayed
+green (`2000/2000`, `1000/1000`); with the layout clause reverted and the
+promotion clause in place, the scores inverted (`ref1 2000/2000`,
+`ref2 928/2000`, `ref3 483/1000`). That is the whole argument for three separate
+gradings, and it survived the round-2 redesign unchanged.
 
 | # | Enforcement point | Where the rule sits | What a violation produces | Measured on the untouched tree | Proved by |
 |---|---|---|---|---|---|
-| **B1** | **The promotion allowlist** — `makeAdmit`'s clause (c), applied by `writeIntoVault` to the **resolved** path | the segment loop of "Exact contracts", positioned by row **A5** | the refusal string of row **A6**; the path appears in the dream run's refusals and nothing is written | 17 of Table D's 29 paths **ADMITTED**; `.GiThUb/…` admitted; the real `writeIntoVault` **wrote** `01-Projects/example/.github/copilot-instructions.md` | criteria **1, 2, 3, 6**; V1, V2; RED proofs **C1** (identities T1-T3) |
+| **B1** | **The promotion allowlist** — `makeAdmit`'s clause (c), applied by `writeIntoVault` to the **resolved** path | the segment loop of "Exact contracts", positioned by row **A5** | the refusal string of row **A6**; the path appears in the dream run's refusals and nothing is written | 17 of Table D's 29 paths **ADMITTED**; `.GiThUb/…` admitted; the real `writeIntoVault` **wrote** `01-Projects/example/.github/copilot-instructions.md` | criteria **1, 2, 3, 6**; V1, V2 (Tables A11, F); RED proof **C1** (identities T1-T3) |
 | **B2** | **The reader** — `readVaultLayout` via `isSafeRelativePath` | the clause of "Exact contracts", after the existing `..` clause | row **A7**'s per-key silent fallback | `projects_dir: .git`, `identity_dir: .GiThUb`, `skills_dir: .`, `inbox_dir: a/.b` all returned **unchanged**, and `makeAdmit` on that layout admitted `.git/hooks/note.md` | criteria **1, 2, 4, 6**; V1, V2; RED proof **C2** (identities T4-T5) |
 | **B3** | **The producer** — `inferLayout`, reached by `wienerdog adopt --yes` | the **same** function as B2, through the hygiene loop's existing call site (row **A8**) | the emitted key falls back to its built-in default **before** `adopt` renders the block, so nothing dot-prefixed is ever persisted | `inferLayout` on a vault holding `.projects/` emitted `projects_dir: ".projects"`, and the rendered block round-tripped that value through `readVaultLayout` unchanged | criteria **1, 4, 6**; V1, V2; RED proof **C2** (identities T4-T5) |
 
@@ -364,10 +366,10 @@ failure set is exactly determined:
 
 | # | test identity (the `test` value in `expectRed`) | carries | reddened by |
 |---|---|---|---|
-| **T1** | `dot-segment-denial B1: held-out segments are refused by makeAdmit at every position and depth` | criterion 1, point B1 | **C1** |
+| **T1** | `dot-segment-denial B1: makeAdmit equals the reference predicate over a full-alphabet sample` | criterion 1, point B1 (Tables A11 + F) | **C1** |
 | **T2** | `dot-segment-denial B1: the boundary matrix — the U+002E first-character rule at makeAdmit` | criterion 6, rows E1–E4 | **C1** |
 | **T3** | `dot-segment-denial B1: the handoff oracle — Table D's 29 paths, hand-written` | criterion 3 | **C1** |
-| **T4** | `dot-segment-denial B2/B3: held-out segments are refused by readVaultLayout and never emitted by inferLayout` | criterion 1, points B2 and B3 | **C2** |
+| **T4** | `dot-segment-denial B2/B3: readVaultLayout and inferLayout equal the reference predicate over a full-alphabet sample` | criterion 1, points B2 and B3 (Tables A11 + F) | **C2** |
 | **T5** | `dot-segment-denial B2/B3: the boundary matrix — the U+002E first-character rule at both layout validators` | criterion 6, rows E5–E10 | **C2** |
 | **T6** | `dot-segment-denial: no over-denial — dot-free paths and layout values stay admitted and honoured` | criterion 2 | **neither** |
 
@@ -383,14 +385,14 @@ C2's scored `boundary 23/34` (the eleven B2/B3 rows) with B1 green.
 
 **The `signal` for each identity** is a stable substring of that test's own
 assertion messages, so every assertion in a test carries its identity's band
-marker verbatim: `B1 held-out`, `B1 boundary`, `B1 handoff`, `B2/B3 held-out`,
+marker verbatim: `B1 reference`, `B1 boundary`, `B1 handoff`, `B2/B3 reference`,
 `B2/B3 boundary`, `no over-denial`. Without a fixed marker the declaration's
 `signal` is a guess about a message the implementer has not written yet.
 
 | id | criterion | mechanism — TRIGGER and PATCH | what must redden, and why this mutant |
 |---|---|---|---|
-| **C1** `dot-segment-admit-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `makeAdmit` directly, so nothing must be injected to reach the segment loop; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: delete the segment loop from `makeAdmit`, leaving `DENIED_SEGMENTS` as the module's only segment rule** — which is **byte-for-byte the shipped production enumeration**. The seam is named structurally, by the loop inside the `makeAdmit` declaration, never by a line number (ADR-0036 A2) | **`expectRed` MUST list T1, T2 and T3 — all three, and nothing else.** Deleting the loop reddens the held-out B1 assertions, the B1 boundary rows AND all 17 formerly admitted Table D paths at three depths; declaring only the held-out test makes a CORRECT implementation fail the proof on an undeclared own-body failure. Measured under this mutation: `admit 0/312`, `handoff 36/87`, `boundary 27/34`, both layout points green — three reddened identities, T6 green. Beyond that: **Measured on this base:** the shipped enumeration **scores 0 of 312** graded held-out cases at B1 — it admits every one of them — while B2 and B3 stay green, so the mutant fails the class grading in exactly one point. **An enumeration of the segments the proof itself names would NOT be a valid mutant**: it agrees with the predicate on every value it is graded against. Measured, and this is the row's whole point — an **18-name matcher fitted to the dot segments of Table D's paths** satisfies the hand-written oracle **87 of 87** and still scores **0 of 312** on the held-out grading |
-| **C2** `dot-segment-layout-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `readVaultLayout` and `inferLayout` directly. **PATCH: delete the dot clause from `isSafeRelativePath`**, leaving the shipped validator — whose segment enumeration is the **empty set**. Structurally named by the clause inside that function's declaration | **`expectRed` MUST list T4 and T5, and nothing else.** Deleting the clause reddens the B2/B3 held-out assertions and the B2/B3 boundary rows — including E5's three fallback assertions, which are the report-fallback test's removed values. Measured: `reader 0/234`, `producer 1/7`, `boundary 23/34`, B1 and T6 green. Beyond that: **Measured:** with this clause absent the grading scores `readVaultLayout 0/234` and `inferLayout 1/7` while `makeAdmit` stays `312/312`. One mutation, one independently revertible change: deleting this clause neither requires nor implies the C1 edit |
+| **C1** `dot-segment-admit-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `makeAdmit` directly, so nothing must be injected to reach the segment loop; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: delete the segment loop from `makeAdmit`, leaving `DENIED_SEGMENTS` as the module's only segment rule** — which is **byte-for-byte the shipped production enumeration**. The seam is named structurally, by the loop inside the `makeAdmit` declaration, never by a line number (ADR-0036 A2) | **`expectRed` MUST list T1, T2 and T3 — all three, and nothing else.** Deleting the loop reddens B1 reference-equality assertions, the B1 boundary rows AND all 17 formerly admitted Table D paths at three depths; declaring only the reference-equality test makes a CORRECT implementation fail the proof on an undeclared own-body failure. Measured under this mutation: `ref1 998/2000`, `handoff 36/87`, `boundary 29/38`, both layout points green — three reddened identities, T6 green. Beyond that: **Measured on this base:** the shipped enumeration disagrees with the reference on **about half** of B1's 2000 graded verdicts (`ref1 998/2000`) — every dot-prefixed draw — while B2 and B3 stay green. **An enumeration of the segments the proof itself names would NOT be a valid mutant**: it agrees on every value it is graded against. Measured — an **18-name matcher fitted to Table D's dot segments** satisfies the handoff oracle **87 of 87** and scores `ref1 1014/2000`; so do the ASCII-only and length-capped predicates round 2 executed (Table F) |
+| **C2** `dot-segment-layout-reverted` | `1` | **TRIGGER: none — the patched code is on the ordinary path.** The suite calls `readVaultLayout` and `inferLayout` directly. **PATCH: delete the dot clause from `isSafeRelativePath`**, leaving the shipped validator — whose segment enumeration is the **empty set**. Structurally named by the clause inside that function's declaration | **`expectRed` MUST list T4 and T5, and nothing else.** Deleting the clause reddens the B2/B3 reference-equality assertions and the B2/B3 boundary rows — including E5's three fallback assertions, which are the report-fallback test's removed values. Measured: `ref2 928/2000`, `ref3 483/1000`, `boundary 25/38`, B1 and T6 green. Beyond that: **Measured:** with this clause absent the grading scores `ref2 928/2000` and `ref3 483/1000` while B1 stays `2000/2000`. One mutation, one independently revertible change: deleting this clause neither requires nor implies the C1 edit |
 
 ### Table D — canonical: the handoff closure oracle, hand-transcribed
 
@@ -458,19 +460,14 @@ already match their expected reason at all three depths, and the 17 admitted one
 
 ### Table E — canonical: the fixed boundary matrix (hand-written, never generated)
 
-**Why it exists, measured rather than argued.** Round 1 executed two wrong
-predicates against the previous verification and both scored **perfectly** on the
-seeded family, on Table D, on the no-over-denial set and on both RED proofs:
-
-| wrong predicate | what it does wrong | which oracle catches it |
-|---|---|---|
-| `seg.length > 1 && seg.startsWith('.')` | still honours `reports_dir: .`, still admits `01-Projects/x/./y.md` | **only Table E** — it scored `boundary 30/34` and everything else green |
-| `seg.trimStart().normalize('NFKC').startsWith('.')` | over-denies legal `<sp>.hi`, `\u2024hidden`, `\uFF0Ehidden` | **only Table E** — `boundary 26/34`, everything else green |
-
-Both the seeded family and Table D consist entirely of `.` + ASCII letters, so
-neither can see the **first-character** boundary. Table E is the third oracle and
-the only one that pins it. **It is hand-written, never generated, for the same
-reason Table D is:** a generator bug cannot shrink a set that was typed out.
+**Why it exists once the grading is reference-equality (Table F).** A generator
+cannot be relied on to draw a *specific* string, and two of these rows are
+specific: the bare `.` and the dot look-alikes. **Measured:** the
+`seg.length > 1` predicate scores a perfect 5000/5000 against the reference
+grading — every graded segment carries a fixed suffix, so the generator never
+draws a bare `.` — and only these rows catch it. Table E is hand-written, never
+generated, for the same reason Table D is: a generator bug cannot shrink a set
+that was typed out.
 
 **The three trims, each measured, because they decide which rows are legal.**
 `foldedSegments` and `isSafeRelativePath` **do not trim** — so an *interior*
@@ -496,14 +493,14 @@ and is stripped by some renderers.
 | # | Point | Input | Required outcome |
 |---|---|---|---|
 | **E1** | B1 | `01-Projects/x/./y.md`, `01-Projects/x/../y.md`, `01-Projects//.b/x.md` | refused, reason **A6** — the exact `.`, the exact `..`, and a dot segment after an empty one |
-| **E2** | B1 | `01-Projects/x/.a/y.md`, `.vscode/y.md`, `.ordinary/y.md` (each under `01-Projects/x/`) | refused, reason **A6** — short and ordinary names outside every generated family and outside Table D |
+| **E2** | B1 | `01-Projects/x/.a/y.md`, `.vscode/y.md`, `.ordinary/y.md`, `.\u00E9clair/y.md`, `.abcdefghijklmnopqrstuvwxyz0123456789/y.md` (each under `01-Projects/x/`) | refused, reason **A6** — short, ordinary, **non-ASCII-tailed** and **36 characters long**: the last two are round 2's two executed attacks, pinned as rows so they cannot regress even outside a draw. Short and ordinary names outside every generated family and outside Table D |
 | **E3** | B1 | `01-Projects/x/.note.md` | refused, reason **A6** — a dot-prefixed **basename**, not a directory |
 | **E4** | B1 | `01-Projects/x/<sp>.hi/b.md`, `\u2024hidden/b.md`, `\uFF0Ehidden/b.md`, `ab./b.md`, `a.b/c.md`, `e\u0301clair/note.md`, `\u2024note.md`, and `07-Daily/2026-09-04.md` | **ADMITTED** — interior leading whitespace, both dot look-alikes, a trailing dot, an interior dot, an NFD leading character, a look-alike basename, and a date basename |
 | **E5** | B2 | `reports_dir` = `.`, `./reports`, `reports/./dreams` | falls back to `reports/dreams`. **These are the three values removed from the report-fallback test's case list** — this row is where their reader-side coverage returns, and it returns as an assertion about the FALLBACK rather than about the honoured value |
-| **E6** | B2 | `reports_dir` = `a//.b`, `.a`, `.vscode`, `.ordinary` | falls back. (`..` also falls back, and already does today, so it is evidence of nothing this work package changes and is not a required row) |
+| **E6** | B2 | `reports_dir` = `a//.b`, `.a`, `.vscode`, `.ordinary`, `.\u00E9clair`, `.abcdefghijklmnopqrstuvwxyz0123456789` | falls back. (`..` also falls back, and already does today, so it is evidence of nothing this work package changes and is not a required row) |
 | **E7** | B2 | `reports_dir` = `<sp><sp>.hidden` | falls back — the reader trims the whole value first, so this is a dot value and not a whitespace one |
 | **E8** | B2 | `projects_dir` = `a/<sp>.hi/b`, `\u2024hidden`, `\uFF0Ehidden`, `ab.`, `a.b`, `My.Notes`, `e\u0301clair` | returned **UNCHANGED** |
-| **E9** | B3 | a vault whose top-level directories are `.projects/`, `<sp>.inbox/`, `.daily/` | emits the built-in defaults for all three — the second is the `pick`-trim case |
+| **E9** | B3 | a vault whose top-level directories are `.projects/`, `<sp>.inbox/`, `.\u00E9daily/` | emits the built-in defaults for all three — the second is the `pick`-trim case, the third the non-ASCII tail |
 | **E10** | B3 | a vault whose only directory is `\u2024projects/` | emits `\u2024projects` **unchanged** |
 
 **THE RESIDUAL AFTER ALL THREE ORACLES, stated plainly rather than implied
@@ -517,6 +514,34 @@ fit must be built deliberately against all four at once and is not reachable by
 any of the accidents these gates exist to catch. Beyond that, review is the
 detector, and this paragraph is what tells a reviewer to look.
 
+### Table F — canonical: the reference-equality grading, its sample, and its residual
+
+**The circuit breaker fired at round 2, and this table is the design move.**
+Rounds 1 and 2 landed three `[A]` findings of one kind: every oracle was a
+hand-picked or family-shaped **sample of the refusal set**, so each round found a
+dimension the sample did not vary and a one-conjunct predicate that exploited it —
+
+| round | the predicate that passed everything | the dimension the sample never varied |
+|---|---|---|
+| 1 | `seg.length > 1 && seg.startsWith('.')` | the **bare `.`** |
+| 1 | `seg.trimStart().normalize('NFKC').startsWith('.')` | **leading whitespace and dot look-alikes** |
+| 2 | `seg.startsWith('.') && /^[\x00-\x7F]+$/.test(seg)` | the **tail alphabet** — every refusing example was ASCII |
+| 2 | `seg.startsWith('.') && seg.length <= 16` | the **length** — no refusing row exceeded 16 |
+
+Adding a row per attack is the treadmill (`docs/runbooks/codex-review.md`, "The
+loop converges by freezing surface"). The fixed point is to **stop sampling the
+refusal set by hand and grade against the property itself.**
+
+| # | Fact | Value |
+|---|---|---|
+| **F1** | **What is graded** | the implementation's verdict must **EQUAL** the reference predicate's verdict (row **A11**) on every sample, at each of B1, B2 and B3. Not "the sample is refused" — *equal*, so an over-denial fails exactly as an under-denial does, and criterion 2's separate list is no longer the only thing standing between the rule and "refuse everything" |
+| **F2** | **The alphabet** | ASCII printable minus `/` and `\` (they are separators, not segment characters), space and tab, Latin letters with diacritics (`é ß ñ ø å ç`), CJK (`漢 字 日 本`), combining marks (U+0301, U+0308), astral emoji (U+1F600, U+1F415), and four dot look-alikes (U+2024, U+FF0E, U+00B7, U+3002) — **112 code points**. Lengths **1–65**, drawn per sample; a leading `.` is prepended on **about half** the draws, and the alphabet's own `.` supplies more |
+| **F3** | **The sample size** | **at least 1000 draws per enforcement point** (B1 grades two positions per draw, B2 two value shapes, B3 one directory), so a default run grades **5000** verdicts. `WD_HELD_OUT_N` raises it; nothing lowers it below the floor |
+| **F4** | **The seed** | drawn per run from the clock, **printed as the first line**, and re-suppliable through `WD_HELD_OUT_SEED` — so a failing draw is reproducible and a passing run is not a fixed set anyone could have hardcoded. **The anti-leakage substring check of the earlier drafts is DELETED**: under reference equality, reimplementing the generator inside production code buys nothing, because the attacker must still agree with the reference on whatever it draws |
+| **F5** | **The generator is checked before it is trusted** | the run asserts **≥ 60 distinct first code points** and a leading-dot share in **0.35–0.65**, and prints both. **Measured, and this is why the check exists:** the first draft's LCG (`x*1103515245+12345`, taking `x>>>8`) produced **922 of 1000 draws starting with `.` and only 30 of the 112 code points ever first** — a generator that claimed a full alphabet and sampled a thirtieth of it, invisible in the tally. It was replaced with splitmix32, measured at 108–112 distinct firsts and ~0.49 |
+| **F6** | **What the B3 alphabet drops, and why** | the eight characters Win32 forbids in a filename (`< > : " \ \| ? *`) and the tab, because B3's sample must become a real directory. **Residual:** B3 grades a 104-code-point alphabet where B1 and B2 grade 112 |
+| **F7** | **THE RESIDUAL, and it is probabilistic — say so** | agreement on **unsampled** points is **not proven**. A predicate that differs from the reference anywhere in the sampled distribution fails with probability rising in the sample size; one that differs only outside it passes. Two consequences are stated rather than implied: **(i)** a predicate differing only on inputs the generator cannot produce is invisible here — measured, `seg.length > 1` scores a perfect 5000/5000 because every graded segment carries a suffix and is therefore never the bare `.`; **that is why Table E stays**, and it is the one attack of the four that only Table E catches. **(ii)** the reference borrows each point's documented pre-step (`fold`, `coerceScalar`, `pick`'s trim); a defect in one of those is not a defect this grading can see |
+
 ### Mirrored Surface Checklist
 
 **Table A** (the class predicate):
@@ -528,6 +553,7 @@ detector, and this paragraph is what tells a reviewer to look.
 - [ ] `src/core/dream/promote.js`'s clause-(c) JSDoc and the replaced *"Deliberately NOT a dot-rule"* paragraph; `isSafeRelativePath`'s JSDoc
 - [ ] **Table D's "After" column** — every `DOT` cell is row A6's string, so a change to A6 rewrites 17 cells and the test literal in the same pass
 - [ ] **Table C's PATCH cells**, which name what the mutation reverts to
+- [ ] **Row A11 is the reference predicate V2 grades against**, so a change to A2's definition of *dot-prefixed* changes A11's one-liner, V2's `refSeg`, and Table F's residual in the same pass
 - [ ] **Row A5's position, and the claim it makes** — *no path refused today changes its reason*. It is mirrored by Table D's twelve **unchanged** cells, by the count paragraph under Table D, by the three UNCHANGED example pairs under "Exact contracts", by V2's `HANDOFF` expected-reason map, and by the Security checklist's first bullet. Moving the loop moves all five, and the vault-root case is the one that catches a move nobody re-measured
 - [ ] **Row A7 is mirrored by the Dispatch precondition**, which is where its alternative is put to the owner — a ruling that changes A7 changes both
 - [ ] **REGISTERED AT ROUND ZERO, and it is in a SOURCE file rather than in this spec:** `src/core/dream/promote.js`'s **row-Z2 comment** (`:1045-1057`) states how the four `rel` shapes the vault-write primitive forbids are split between `isSafeRelativePath` and this module's caller, and closes with a measured list of five values *"returned UNCHANGED by `readVaultLayout`"*. Row **A7** and row **A2** together move that split and falsify three of those five. It is registered here because a mirror this checklist cannot see is exactly the R11-2 shape ADR-0031 exists to stop, and because the round-zero sweep found it by grepping the CLAIM (`readVaultLayout` + "unchanged") rather than any wording of it
@@ -554,6 +580,15 @@ detector, and this paragraph is what tells a reviewer to look.
 - [ ] The Out-of-scope NFKC entry, and Table A row **A2**'s U+002E definition — Table E is A2 made executable
 - [ ] **The residual paragraph under Table E**, which is the only place this spec bounds what three oracles do NOT buy
 
+**Table F** (the reference-equality grading):
+
+- [ ] Acceptance criterion **1** and verification **V2** — F1's *equality* is what criterion 1 asserts
+- [ ] Row **A11**, which F1 grades against; the two move together or the grading stops being the contract
+- [ ] **Table E's preamble and criterion 6**, which state what the sample cannot reach and therefore why the hand-written rows remain
+- [ ] **Table C's C1/C2 measured cells**, whose numbers are this grading's output
+- [ ] The Implementation-notes bullet on the producer keyword and `reports_dir`, which are the two traps F2's alphabet does not remove
+- [ ] **F7 is the only place the probabilistic residual is stated** — no other surface may imply the grading is exhaustive
+
 **Table D** (the handoff closure oracle):
 
 - [ ] Acceptance criterion **3** and verification **V2**
@@ -566,38 +601,18 @@ detector, and this paragraph is what tells a reviewer to look.
 
 - **No new npm dependencies.** Plain Node ≥ 18, no TypeScript, no build step,
   nothing that watches or runs (ADR-0004).
-- **The held-out set must be GENERATED, SEEDED PER RUN, and proved held out.**
-  Acceptance criterion 1's segments are constructed in the test, not listed in
-  it; the generator is seeded from a source that varies between runs; the seed is
-  **printed** and re-supplying it (`WD_HELD_OUT_SEED`) reproduces the run; and
-  the test asserts that **none of the drawn segments occurs as a substring of the
-  three shipped source files** it grades. Each part earns its place: the
-  anti-leakage assertion is not decorative — at round zero the first generator
-  produced `.has`, which occurs in `DENIED_SEGMENTS.has(`, and the check caught
-  it against its own author — while the **seed** is what stops a *fixed* set from
-  being defeated by an obfuscated reimplementation of the generator inside
-  production code, which no substring check can see.
-  **The residual, stated in one line:** seeding varies the values, not the family
-  shape (a `z`-led lowercase run of 4-7 characters, its case variants, and its
-  keyword-bearing form), so a matcher fitted to the *shape* still passes; that is
-  what criterion 3's independent oracle and the review gates are for.
-  The `z` lead is not decoration either — it is what keeps a drawn segment from
-  colliding with an ordinary method name (`.some`, `.map`, `.filter`) and turning
-  the anti-leakage assertion into a flaky failure.
-- **The producer needs keyword-bearing held-out segments.** `inferLayout` picks
-  a top-level directory whose lowercased name **contains** a layout keyword
-  (`identity`, `projects`, `skills`, `inbox`, `daily`, `reports`), so an opaque
-  `.zabc` is never selected and grading B3 with one proves nothing. Measured at
-  round zero: a second generated family of the shape `.<generated><keyword>` is
-  what makes `inferLayout` emit dot-prefixed values at all.
-- **`reports_dir` has its own producer path.** `inferLayout` joins
-  `<top-level dir containing "reports">/dreams`, so the value it emits is
-  two-segment and the dot lands in the **first** of them while the key's
-  fallback must still replace the **whole** value. Measured on a vault whose only
-  directory is `.myreports/`: untouched `reports_dir = ".myreports/dreams"`, with
-  the clause `reports_dir = "reports/dreams"`. Grade this key; the hygiene loop
-  covers it only because it validates the joined value rather than the picked
-  directory name.
+- **The grading is reference EQUALITY, and the reference is row A11 — do not
+  re-derive it.** Table F owns the sample, the alphabet, the 1000-per-point
+  floor, the seed and the residual; this bullet adds only the traps. **The
+  producer is reached through a keyword**: `inferLayout` picks a top-level
+  directory whose lowercased name *contains* `identity`, `projects`, `skills`,
+  `inbox`, `daily` or `reports`, so a B3 sample must carry one — the fixed
+  suffix is what makes the point reachable at all, not a family the grading
+  depends on. **`reports_dir` is joined, not picked**: `inferLayout` emits
+  `<top-level dir containing "reports">/dreams`, so the dot can land in the
+  first of two segments and the fallback must replace the whole value —
+  measured, `.myreports/` produced `.myreports/dreams` untouched and
+  `reports/dreams` with the clause.
 - **`makeAdmit` receives ALREADY-FOLDED segments.** `foldedSegments` runs
   before any check, so the loop needs no `normalize`/`toLowerCase` of its own,
   and the refusal string necessarily prints the folded spelling (Table A row
@@ -691,20 +706,19 @@ detector, and this paragraph is what tells a reviewer to look.
 
 ## Acceptance criteria
 
-- [ ] **1. THE CLASS PROPERTY, GRADED ON HELD-OUT SEGMENTS, AT ALL THREE
-      ENFORCEMENT POINTS.** *No path segment and no layout segment beginning
-      with `.` is admitted or emitted, at any depth, in any case* — Table A.
-      Graded on segments **generated by the test, never listed in it**, none of
-      which occurs in the three shipped source files (the anti-fit assertion of
-      Implementation notes). The grading covers, separately and with its own
-      count: **(B1)** `makeAdmit`, with the segment at the first, an interior
-      and the **last** position and at three or more depths; **(B2)**
-      `readVaultLayout`, over more than one layout key including a value whose
-      dot segment is **not** the first; **(B3)** `inferLayout`, over **every**
-      key it emits, driven by a vault whose directory names are generated,
-      dot-prefixed and keyword-bearing. **Three counts, not one** — a single
-      aggregate number is satisfied by a fix at one point, which is the exact
-      shape Table B measured.
+- [ ] **1. THE IMPLEMENTATION EQUALS THE REFERENCE PREDICATE, on a
+      full-alphabet seeded sample, at all three enforcement points.** The
+      reference is row **A11**; the sample, its alphabet, its floor and its
+      residual are **Table F**. **Equality, not refusal** — an over-denial fails
+      the same way an under-denial does. Graded **separately, with its own
+      count**, at **(B1)** `makeAdmit`, **(B2)** `readVaultLayout` and **(B3)**
+      `inferLayout` — three counts, not one, because a single aggregate is
+      satisfied by a fix at one point, which is the exact shape Table B measured.
+      At least **1000 draws per point** (F3), the seed printed and re-suppliable
+      (F4), and the generator's own distribution asserted before it is trusted
+      (F5). **The residual is probabilistic and F7 states it**: agreement on
+      unsampled points is not proven, and a predicate that differs only outside
+      the sampled distribution passes — which is what Table E is for.
 - [ ] **2. NO OVER-DENIAL.** A hand-written set of dot-free paths stays
       **admitted** — at least a tier-local note, a daily note (`2026-09-04.md`,
       whose basename carries an interior dot), a `SKILL.md` under the skills
@@ -752,9 +766,15 @@ detector, and this paragraph is what tells a reviewer to look.
       `seg.length > 1 && seg.startsWith('.')`, which still honours
       `reports_dir: .`, and `seg.trimStart().normalize('NFKC').startsWith('.')`,
       which refuses legal `<sp>.hi` and the U+2024 / U+FF0E look-alikes. Both the
-      seeded family and Table D are `.` + ASCII letters throughout, so neither
-      can see the boundary. **Its assertions must redden under the Table C
-      mutation that reaches them** — T2 under C1, T5 under C2.
+      previous oracles were `.` + ASCII letters throughout, so none could see the
+      boundary. **Under the round-2 grading (Table F) its job narrows and stays
+      load-bearing:** the reference sample cannot be relied on to draw a
+      *specific* string, and two rows are specific — the bare `.`, which the
+      suffix means the generator never produces, and the look-alikes.
+      **Measured: `seg.length > 1 && seg.startsWith('.')` scores a perfect
+      5000/5000 against the reference grading and is caught by these rows
+      alone.** **Its assertions must redden under the Table C mutation that
+      reaches them** — T2 under C1, T5 under C2.
 - [ ] **7.** Idempotence — `N/A` — this work package ships no command and writes
       nothing outside the repository. It adds one loop, one clause, one export,
       deletes one duplicated function, and adds their tests.
@@ -772,84 +792,122 @@ detector, and this paragraph is what tells a reviewer to look.
 test -f tests/unit/dot-segment-denial.test.js || { echo "MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js"; exit 1; }
 npm test
 
-# V2 — criteria 1, 2, 3 and 6, run OUTSIDE the suite so a reviewer can re-derive
-# the verdict without reading test code. It carries ALL THREE oracles — the
-# seeded held-out family, Table D's hand-written handoff paths, and Table E's
-# fixed boundary matrix — plus the no-over-denial set, and prints a
-# per-enforcement-point tally so a partial fix names itself.
+# V2 — criteria 1, 2, 3 and 6. It grades the implementation against the
+# REFERENCE PREDICATE (Table A row A11) over a full-alphabet seeded sample, then
+# runs the two hand-written oracles that a sample cannot replace: Table D (the
+# handoff obligation) and Table E (the exact boundary).
 #
-# THE HELD-OUT SEGMENTS ARE SEEDED PER RUN, not fixed. The seed is printed first
-# and re-supplying it in WD_HELD_OUT_SEED reproduces the run exactly. A fixed set
-# would let an obfuscated reimplementation of the generator inside production
-# code pass the anti-leakage check; a per-run seed defeats that.
+# WHY THE SHAPE CHANGED AT ROUND 2. Rounds 1 and 2 landed three [A] findings of
+# ONE kind: every oracle was a hand-picked or family-shaped SAMPLE of the refusal
+# set, so each round found a dimension the sample did not vary — first character,
+# then tail alphabet, then length — and a one-conjunct predicate that exploited
+# it. Adding a row per attack is the treadmill. The fixed point is to stop
+# sampling the refusal set and grade against the PROPERTY: the reference is the
+# class rule as Table A states it, the implementation must AGREE with it on every
+# draw, and a predicate that differs anywhere in the sampled distribution fails
+# with probability rising in the sample size.
 #
-# TABLE E IS WHY THIS STEP GREW, and it grew to guard a product behaviour rather
-# than itself. Round 1 EXECUTED two wrong predicates that scored a PERFECT
-# 312/234/7/12/87 against the previous version of this step:
-#   seg.length > 1 && seg.startsWith('.')          <- still honours reports_dir: .
-#   seg.trimStart().normalize('NFKC').startsWith('.')  <- refuses legal ' .hi',
-#                                                        U+2024 and U+FF0E names
-# Neither is caught by a generated family whose every member is ASCII '.' plus
-# letters, nor by Table D, whose every path has the same shape. Table E is the
-# only oracle that pins the exact U+002E FIRST-CHARACTER rule, and it is
-# hand-written for the same reason Table D is.
+# THE SEED IS PRINTED. A failing draw is reproduced with WD_HELD_OUT_SEED, and
+# WD_HELD_OUT_N raises the sample above its 1000-per-point floor.
 #
-# Rehearsed at round zero and round 1 in eight states, all as written:
-#   UNTOUCHED tree   admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 |
-#                    handoff 36/87 | boundary 16/34   (621 of 686 wrong)  rc=1
-#   FULL FIX         312/312 | 234/234 | 7/7 | 12/12 | 87/87 | 34/34      rc=0
-#   MUTANT C1        admit 0/312, handoff 36/87, boundary 27/34, layout green rc=1
-#   MUTANT C2        reader 0/234, producer 1/7, boundary 23/34, B1 green    rc=1
-#   FITTED MATCHER   an 18-name list fitted to Table D: handoff 87/87 and
-#                    admit 0/312                                            rc=1
-#   WRONG length>1   everything green EXCEPT boundary 30/34                 rc=1
-#   WRONG NFKC       everything green EXCEPT boundary 26/34 (over-denial)   rc=1
-#   WRONG z-family + Table D names   admit 234/312, producer 1/7, boundary 16/34 rc=1
-# The last three are round 1's own attacks, and each is caught by exactly one
-# oracle — which is the argument for keeping all three.
+# Measured over ten trees at round 2 (ref1 = B1, 2 positions x N):
+#   UNTOUCHED        ref1 1014/2000  handoff 36/87  boundary 16/38          rc=1
+#   FULL FIX         2000/2000 | 2000/2000 | 1000/1000 | 12/12 | 87/87 | 38/38  rc=0
+#   MUTANT C1        ref1 998/2000, layout green, boundary 29/38            rc=1
+#   MUTANT C2        ref2 928/2000, ref3 483/1000, B1 green, boundary 25/38  rc=1
+#   fitted 18-name   ref1 1014/2000 while handoff 87/87                     rc=1
+#   length > 1       EVERYTHING green except boundary 34/38 (4 cases)       rc=1
+#   trimStart+NFKC   ref 1966/1988/995 and boundary 30/38                   rc=1
+#   z-family + D     ref1 982/2000                                          rc=1
+#   ASCII-only       ref1 1060/2000 while handoff 87/87 (round 2's [A])     rc=1
+#   length <= 16     ref1 1166/2000 while handoff 87/87 (round 2's [A])     rc=1
+# THE `length > 1` ROW IS WHY TABLE E STAYS: the generator never draws a bare `.`
+# (every graded segment carries a fixed suffix), so the reference grading cannot
+# see that predicate at all and only the hand-written boundary rows catch it.
 node -e "
 const fs=require('fs'), os=require('os'), path=require('path');
 const {makeAdmit}=require(path.resolve('src/core/dream/promote.js'));
 const {defaultLayout,readVaultLayout}=require(path.resolve('src/core/layout.js'));
 const {inferLayout}=require(path.resolve('src/core/layout-infer.js'));
-// HELD-OUT SEGMENTS: generated per run from a SEED, never listed. The seed is
-// printed so a run is reproducible by re-supplying it in WD_HELD_OUT_SEED.
+const {coerceScalar}=require(path.resolve('src/core/frontmatter.js'));
+// ---------------------------------------------------------------- REFERENCE
+// THE CLASS RULE, AS THE SPEC STATES IT, AND NOTHING ELSE. Table A rows A1-A4.
+const fold=(s)=>s.normalize('NFC').toLowerCase();            // promote.js's fold
+const refSeg=(seg)=>[...seg][0]==='.';                       // FIRST CODE POINT is U+002E
+const refPath=(rel)=>rel.split('/').map(fold).some(refSeg);  // B1: after the fold
+const refValue=(v)=>v.split('/').some(refSeg);               // B2/B3: after the documented trims
+// ---------------------------------------------------------------- GENERATOR
 const seed=process.env.WD_HELD_OUT_SEED||String(Date.now());
 let x=2166136261;
 for(const ch of String(seed)) x=((x^ch.charCodeAt(0))*16777619)>>>0;
-const rnd=()=>{x=(x*1103515245+12345)>>>0;return x>>>8;};
-const A='abcdefghijklmnopqrstuvwxyz';
-const opaque=[], keyed=[], KEYS=['identity','projects','skills','inbox','daily','reports'];
-for(let i=0;i<26;i++){
-  let t='z'; const n=3+(rnd()%4);
-  for(let j=0;j<n;j++) t+=A[rnd()%26];
-  opaque.push('.'+t,'.'+t.toUpperCase(),'.'+t[0].toUpperCase()+t.slice(1,-1)+t[t.length-1].toUpperCase());
-  keyed.push('.'+t+KEYS[i%KEYS.length]);
-}
-console.log('seed '+seed+' (re-run with WD_HELD_OUT_SEED='+seed+')');
-const src=['src/core/dream/promote.js','src/core/layout.js','src/core/layout-infer.js']
-  .map((f)=>fs.readFileSync(path.resolve(f),'utf8')).join('\n').toLowerCase();
-const leaked=opaque.concat(keyed).filter((s)=>src.indexOf(s.toLowerCase())>=0);
-if(leaked.length){console.error('FAIL: '+leaked.length+' graded segment(s) occur in the shipped sources, so the set is not held out: '+leaked.slice(0,5).join(', '));process.exit(1);}
-const DOT='begins with a dot', ROOT='is a harness instruction-discovery root';
-const EXT='content files are promoted', BASE='is a harness instruction file';
-const bad={admit:[],reader:[],producer:[],over:[],handoff:[],boundary:[]};
+// splitmix32, NOT a plain LCG. MEASURED at round 2: with x=(x*1103515245+12345)
+// and x>>>8, 922 of 1000 draws began with '.' and only 30 of the 112 code points
+// ever appeared first — a generator that claims a full alphabet and samples a
+// thirtieth of it. The mix below covers all 112 and lands at ~50% leading dots.
+const rnd=()=>{x=(x+0x9E3779B9)>>>0;let z=x;z=Math.imul(z^(z>>>16),0x21F0AAAD);
+  z=Math.imul(z^(z>>>15),0x735A2D97);return (z^(z>>>15))>>>0;};
+const CP=[];
+for(let c=0x21;c<=0x7E;c++){if(c===0x2F||c===0x5C)continue;CP.push(String.fromCodePoint(c));}
+CP.push(' ','\t');
+for(const c of ['é','ß','ñ','ø','å','ç','漢','字','日','本',
+  '́','̈','․','．','·','。','\u{1F600}','\u{1F415}']) CP.push(c);
+const WINBAD=new Set(['<','>',':',String.fromCharCode(34),'|','?','*','\t']);
+const CPFS=CP.filter((c)=>!WINBAD.has(c));
+const draw=(alpha)=>{const n=1+rnd()%64;let s='';for(let i=0;i<n;i++)s+=alpha[rnd()%alpha.length];
+  return (rnd()%2===0)?'.'+s:s;};
+const N=Number(process.env.WD_HELD_OUT_N||1000);
+console.log('seed '+seed+'  samples '+N+' per enforcement point  (re-run with WD_HELD_OUT_SEED='+seed+')');
+// THE GENERATOR IS CHECKED BEFORE IT IS TRUSTED. A distribution that collapses
+// onto a few first characters grades nothing, and it is invisible in the tally.
+{const firsts=new Set();let dots=0;
+ for(let i=0;i<N;i++){const s=draw(CP);firsts.add([...s][0]);if([...s][0]==='.')dots++;}
+ const share=dots/N;
+ if(firsts.size<Math.min(60,CP.length)||share<0.35||share>0.65){
+   console.error('FAIL: the generator is degenerate - '+firsts.size+' distinct first code points of '+CP.length+', leading-dot share '+share.toFixed(3)+' (want >=60 distinct and 0.35..0.65)');process.exit(1);}
+ console.log('generator: '+firsts.size+' distinct first code points of '+CP.length+', leading-dot share '+share.toFixed(3));}
+const bad={ref1:[],ref2:[],ref3:[],over:[],handoff:[],boundary:[]};
+const show=(s)=>JSON.stringify(s)+' [cp '+[...s].slice(0,4).map((c)=>c.codePointAt(0).toString(16)).join(',')+'…]';
+// ------------------------------------------------- B1: reference equality
+// The sample is a MIDDLE segment and a BASENAME. A fixed ASCII suffix is appended
+// so no draw can collide with another clause of makeAdmit (a DENIED_SEGMENTS name,
+// an instruction basename, the empty segment); the suffix cannot change the FIRST
+// code point, which is the only thing the reference reads.
 const admit=makeAdmit(defaultLayout());
-for(const s of opaque)
-  for(const rel of ['01-Projects/example/'+s+'/x.md','06-Identity/'+s+'/y/z.md','02-Areas/a/b/'+s+'/x.md','01-Projects/example/'+s+'.md'])
-    if(admit(rel)===null) bad.admit.push('ADMITTED '+rel);
-const cfgdir=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-r-')), cfg=path.join(cfgdir,'config.yaml');
-for(const s of opaque){
-  fs.writeFileSync(cfg,'vault_layout:\n  projects_dir: '+s+'\n  identity_dir: '+s+'/deep\n  reports_dir: a/'+s+'/b\n');
-  const l=readVaultLayout(cfg);
-  for(const k of ['projects_dir','identity_dir','reports_dir'])
-    if(String(l[k]).split('/').some((g)=>g.startsWith('.'))) bad.reader.push('HONOURED '+k+'='+l[k]);
+for(let i=0;i<N;i++){
+  const s=draw(CP);
+  for(const rel of ['01-Projects/example/'+s+'-dir/x.md','01-Projects/example/'+s+'-note.md']){
+    const impl=admit(rel)!==null, ref=refPath(rel);
+    if(impl!==ref) bad.ref1.push('B1 impl='+impl+' ref='+ref+' seg='+show(s));
+  }
 }
-const vault=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-i-'));
-for(const s of keyed) fs.mkdirSync(path.join(vault,s),{recursive:true});
-const inferred=inferLayout(vault);
-for(const k of Object.keys(inferred))
-  if(String(inferred[k]).split('/').some((g)=>g.startsWith('.'))) bad.producer.push('EMITTED '+k+'='+inferred[k]);
+// ------------------------------------------------- B2: reference equality
+// The reference is applied to the value AFTER the documented coercion (trim, one
+// layer of quotes, an inline ' #' comment) — coerceScalar, the same function the
+// reader uses. The class rule is what is under test; its documented pre-steps are not.
+const cfgdir=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-r-')), cfg=path.join(cfgdir,'config.yaml');
+for(let i=0;i<N;i++){
+  const s=draw(CP);
+  for(const raw of [s+'-dir','a/'+s+'-dir']){
+    fs.writeFileSync(cfg,'vault_layout:\n  projects_dir: '+raw+'\n');
+    const coerced=coerceScalar(raw).value;
+    const impl=readVaultLayout(cfg).projects_dir!==coerced, ref=refValue(coerced);
+    if(impl!==ref) bad.ref2.push('B2 impl='+impl+' ref='+ref+' value='+show(coerced));
+  }
+}
+// ------------------------------------------------- B3: reference equality
+// The sample becomes a real directory name, so the alphabet drops the eight
+// characters Win32 forbids in a filename; the residual is stated in Table F.
+// pick() TRIMS the name it selects, so the reference reads the trimmed form.
+const bvault=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-i-'));
+for(let i=0;i<N;i++){
+  const name=draw(CPFS)+'-projects', abs=path.join(bvault,name);
+  fs.mkdirSync(abs);
+  const trimmed=name.trim();
+  const impl=inferLayout(bvault).projects_dir!==trimmed, ref=refValue(trimmed);
+  if(impl!==ref) bad.ref3.push('B3 impl='+impl+' ref='+ref+' dir='+show(trimmed));
+  fs.rmSync(abs,{recursive:true,force:true});
+}
+// ------------------------------------------------- no over-denial (product paths)
 const keep=['01-Projects/example/note.md','07-Daily/2026-09-04.md','05-Skills/x/SKILL.md','06-Identity/profile.md','reports/dreams/2026-08-29.md','02-Areas/a/b.c.md','03-Resources/x/y.md'];
 for(const rel of keep) if(admit(rel)!==null) bad.over.push('makeAdmit refused '+rel+': '+admit(rel));
 const values=['01-Projects','reports/dreams','My.Notes','a.b/c.d','YYYY/MM/YYYY-MM-DD.md'];
@@ -857,6 +915,9 @@ for(const v of values){
   fs.writeFileSync(cfg,'vault_layout:\n  projects_dir: '+v+'\n');
   if(readVaultLayout(cfg).projects_dir!==v) bad.over.push('readVaultLayout dropped '+v);
 }
+// ------------------------------------------------- Table D: the handoff oracle
+const DOT='begins with a dot', ROOT='is a harness instruction-discovery root';
+const EXT='content files are promoted', BASE='is a harness instruction file';
 const HANDOFF=[['.github/copilot-instructions.md',DOT],['.github/instructions/NAME.instructions.md',DOT],
 ['.cursor/rules/x.mdc',EXT],['.cursorrules',EXT],['.windsurfrules',EXT],['.windsurf/rules/x.md',DOT],
 ['.devin/rules/x.md',DOT],['.clinerules/x.md',DOT],['.roo/rules/x.md',DOT],['.roorules',EXT],
@@ -873,12 +934,10 @@ for(const pair of HANDOFF)
     if(got===null) bad.handoff.push('ADMITTED '+rel);
     else if(got.indexOf(pair[1])<0) bad.handoff.push('WRONG REASON '+rel+' -> '+got+'  (wanted: '+pair[1]+')');
   }
-// TABLE E - THE FIXED BOUNDARY MATRIX. Hand-written, never generated, and the
-// only oracle that pins the exact U+002E first-character rule. DOT is the same
-// substring the handoff oracle uses.
+// ------------------------------------------------- Table E: the exact boundary
 const B1X=['01-Projects/x/./y.md','01-Projects/x/../y.md','01-Projects/x/.a/y.md',
   '01-Projects/x/.vscode/y.md','01-Projects/x/.ordinary/y.md','01-Projects/x/.note.md',
-  '01-Projects//.b/x.md'];
+  '01-Projects//.b/x.md','01-Projects/x/.éclair/y.md','01-Projects/x/.abcdefghijklmnopqrstuvwxyz0123456789/y.md'];
 for(const rel of B1X){const g=admit(rel);
   if(g===null) bad.boundary.push('B1 ADMITTED '+JSON.stringify(rel));
   else if(g.indexOf(DOT)<0) bad.boundary.push('B1 WRONG REASON '+JSON.stringify(rel)+' -> '+g);}
@@ -887,32 +946,33 @@ const B1L=['01-Projects/x/ .hi/b.md','01-Projects/x/․hidden/b.md','01-Projects
   '01-Projects/x/․note.md','07-Daily/2026-09-04.md'];
 for(const rel of B1L) if(admit(rel)!==null) bad.boundary.push('B1 OVER-DENIED '+JSON.stringify(rel)+': '+admit(rel));
 const rd=(k,v)=>{fs.writeFileSync(cfg,'vault_layout:\n  '+k+': '+v+'\n');return readVaultLayout(cfg)[k];};
-const B2X=['.','./reports','reports/./dreams','a//.b','.a','.vscode','.ordinary','  .hidden'];
+const B2X=['.','./reports','reports/./dreams','a//.b','.a','.vscode','.ordinary','  .hidden',
+  '.éclair','.abcdefghijklmnopqrstuvwxyz0123456789'];
 for(const v of B2X){const got=rd('reports_dir',v);
   if(got!=='reports/dreams') bad.boundary.push('B2 HONOURED reports_dir '+JSON.stringify(v)+' -> '+JSON.stringify(got));}
 const B2L=['a/ .hi/b','․hidden','．hidden','ab.','a.b','My.Notes','éclair'];
 for(const v of B2L){const got=rd('projects_dir',v);
   if(got!==v) bad.boundary.push('B2 OVER-DENIED projects_dir '+JSON.stringify(v)+' -> '+JSON.stringify(got));}
 const bv=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-b-'));
-for(const d of ['.projects',' .inbox','.daily']) fs.mkdirSync(path.join(bv,d),{recursive:true});
+for(const d of ['.projects',' .inbox','.édaily']) fs.mkdirSync(path.join(bv,d),{recursive:true});
 const bi=inferLayout(bv);
 for(const kv of [['projects_dir','01-Projects'],['inbox_dir','00-Inbox'],['daily_dir','07-Daily']])
   if(bi[kv[0]]!==kv[1]) bad.boundary.push('B3 EMITTED '+kv[0]+'='+JSON.stringify(bi[kv[0]]));
 const bv2=fs.mkdtempSync(path.join(os.tmpdir(),'wd-v2-b2-'));
 fs.mkdirSync(path.join(bv2,'․projects'),{recursive:true});
-const bi2=inferLayout(bv2);
-if(bi2.projects_dir!=='․projects') bad.boundary.push('B3 OVER-DENIED projects_dir -> '+JSON.stringify(bi2.projects_dir));
+if(inferLayout(bv2).projects_dir!=='․projects') bad.boundary.push('B3 OVER-DENIED the U+2024 look-alike');
+fs.rmSync(cfgdir,{recursive:true,force:true}); fs.rmSync(bvault,{recursive:true,force:true});
 fs.rmSync(bv,{recursive:true,force:true}); fs.rmSync(bv2,{recursive:true,force:true});
-fs.rmSync(cfgdir,{recursive:true,force:true}); fs.rmSync(vault,{recursive:true,force:true});
-const total={admit:opaque.length*4,reader:opaque.length*3,producer:Object.keys(inferred).length,over:keep.length+values.length,handoff:HANDOFF.length*3,boundary:B1X.length+B1L.length+B2X.length+B2L.length+4};
+// ------------------------------------------------- report
+const total={ref1:N*2,ref2:N*2,ref3:N,over:keep.length+values.length,handoff:HANDOFF.length*3,
+  boundary:B1X.length+B1L.length+B2X.length+B2L.length+4};
 const line=(k)=>k+' '+(total[k]-bad[k].length)+'/'+total[k];
-console.log('held out: '+opaque.length+' opaque + '+keyed.length+' keyword-bearing segments, generated, none present in the sources');
-console.log(line('admit')+' | '+line('reader')+' | '+line('producer')+' | '+line('over')+' | '+line('handoff')+' | '+line('boundary'));
-const all=[].concat(bad.admit,bad.reader,bad.producer,bad.over,bad.handoff,bad.boundary);
-if(all.length){console.error('FAIL: '+all.length+' of '+(total.admit+total.reader+total.producer+total.over+total.handoff+total.boundary)+' graded cases wrong; the first five:');
+console.log(line('ref1')+' | '+line('ref2')+' | '+line('ref3')+' | '+line('over')+' | '+line('handoff')+' | '+line('boundary'));
+const all=[].concat(bad.ref1,bad.ref2,bad.ref3,bad.over,bad.handoff,bad.boundary);
+if(all.length){console.error('FAIL: '+all.length+' of '+Object.values(total).reduce((a,b)=>a+b,0)+' graded cases disagree with the reference; the first five:');
   for(const b of all.slice(0,5)) console.error('  '+b);
   process.exit(1);}
-console.log('V2 OK: the class is refused at all three enforcement points, Table D is closed, the U+002E boundary is pinned, and nothing dot-free is over-denied');
+console.log('V2 OK: the implementation EQUALS the reference predicate at all three enforcement points over '+(N*5)+' full-alphabet samples, Table D is closed, Table E holds, and nothing dot-free is over-denied');
 "
 
 # V3 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other
@@ -922,9 +982,11 @@ console.log('V2 OK: the class is refused at all three enforcement points, Table 
 # THIS STEP'S EXIT STATUS IS NOT THE EVIDENCE, and saying so is the point: on the
 # untouched tree it is ALREADY GREEN (3 declared, 3 selected, three PROVEN
 # roll-ups, RUN: PROVEN, exit 0 — measured on a pristine copy). What
-# discriminates is criterion 5's content: the two roll-up lines naming this work
-# package's declarations, which cannot appear unless each mutation actually
-# reddened the assertions it names. Read the roll-up, not the exit code.
+# discriminates is criterion 5's content: ONE roll-up line for the pair
+# `WP-dot-segment-denial criterion 1`, naming BOTH declaration ids — both proofs
+# share that pair, so `rollUp` emits one line and joins their verdicts. It cannot
+# appear unless each mutation actually reddened the identities it declares. Read
+# the roll-up, not the exit code.
 npm run red-proofs
 
 # V4 — the repo gates.
@@ -948,8 +1010,8 @@ Paste, for each: the command, its output, and its exit status.
   rule needs no inventory maintenance, which is exactly what distinguishes it
   from the basename list, so a row-count tripwire would import the maintenance
   obligation the class rule exists to remove and would give a generated document
-  a second consumer without adding anything the held-out grading does not
-  already establish.
+  a second consumer without adding anything the reference-equality grading
+  does not already establish.
 - **Deleting `DENIED_SEGMENTS`, `DENIED_BASENAME` or any of their refusal
   strings as subsumed by the class rule** — Table A row **A9** has the reasons,
   including that Table C's mutant depends on the enumeration still being there.

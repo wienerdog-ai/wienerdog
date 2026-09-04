@@ -579,3 +579,154 @@ the shipped test file, and two more declared RED identities — and it changes w
 the finished predicate must do at inputs the previous draft never named. R1-B
 changes the declaration contract the implementer writes. Neither is a wording
 fix. The orchestrator owns the call; this is the input to it.
+
+### Round 2 fixes — architect, 2026-09-04, on top of `5036163b`
+
+**THE CIRCUIT BREAKER FIRED.** Round 1's `[A]` and round 2's two `[A]`s are **one
+kind**: *every oracle was a hand-picked or family-shaped SAMPLE of the refusal
+set, so each round found a dimension the sample did not vary and a one-conjunct
+predicate that exploited it.* The runbook's rule — two consecutive rounds landing
+findings of the same kind is a design question, never another textual patch —
+applies, and the fixed point this repository has now reached five times is
+**delete the step that has to be right**.
+
+| round | predicate that passed EVERYTHING | dimension never varied |
+|---|---|---|
+| 1 | `seg.length > 1 && seg.startsWith('.')` | the bare `.` |
+| 1 | `seg.trimStart().normalize('NFKC').startsWith('.')` | leading whitespace, dot look-alikes |
+| 2 | `seg.startsWith('.') && /^[\x00-\x7F]+$/.test(seg)` | the tail alphabet |
+| 2 | `seg.startsWith('.') && seg.length <= 16` | the length |
+
+Both channels verified R1-A and R1-B genuinely fixed — all ten Table E outcomes
+correct per enforcement point, whitespace consistent with how `makeAdmit` is
+called and with the vault-write primitive, E5 replacing the removed reader
+coverage, C1 → exactly T1–T3, C2 → exactly T4–T5, T6 green, adopt-e2e outside
+the declared suite, one atomic work package rather than a split. **None of that
+was widened.** Zero scope objections counted.
+
+**THE DESIGN MOVE: stop sampling the refusal set, grade against the property.**
+
+1. **A REFERENCE PREDICATE is now the contract** (new Table A row **A11**):
+   `const refSeg = (seg) => [...seg][0] === '.';` — the segment's first **code
+   point** is U+002E — applied after each point's documented pre-step (`fold` at
+   B1; `coerceScalar` at B2; `pick`'s `trim` at B3). `[...seg][0]`, not
+   `seg[0]`, so an astral first character is one character and not a surrogate.
+2. **V2's first oracle is EQUALITY with that reference** over a seeded
+   **full-alphabet** sample (new Table **F**): 112 code points — ASCII printable
+   minus the two separators, space and tab, Latin diacritics, CJK, combining
+   marks, astral emoji, four dot look-alikes — lengths 1–65, a leading `.` on
+   about half the draws, **≥ 1000 draws per enforcement point** (5000 verdicts by
+   default). Equality, not refusal: an over-denial fails exactly as an
+   under-denial does.
+3. **The two hand-shaped families are DELETED** — the `z`-led opaque family and
+   the keyword-bearing producer family. They are what all four attacks fitted.
+4. **The anti-leakage substring check is DELETED**, and the reason is the design
+   change rather than a judgement call: under reference equality, reimplementing
+   the generator inside production code buys nothing, because the attacker must
+   still agree with the reference on whatever it draws.
+5. **Table D and Table E stay.** Table D is the product obligation (the 17
+   handed-off `HANDOFF` rows), not a sample of the class. Table E is the exact
+   boundary — and **the measurement below is why it stays**, not an argument.
+
+**THE MACHINERY SHRANK, which is the point.** Before: two hand-shaped generators
+plus an anti-leakage check plus a boundary table plus a handoff table, four
+things that had to be right about *which examples were chosen*. After: **one
+reference predicate and one full-alphabet generator**, plus the two tables that
+encode obligations rather than samples. What the deleted machinery enforced —
+"did we pick enough examples?" — is now enforced by the fact that the grading is
+against the rule itself.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **R2-A** [A, plugin] | An ASCII-only predicate scores 686/686 on V2 while admitting `.éclair`, `.éprojects`: every refusing segment in all three oracles had an ASCII tail | **FIXED by the design move.** Reproduced here: on the round-1 verification it scored a perfect run; against the reference grading it scores `ref1 1060/2000` — and still `handoff 87/87`, which is precisely why Table D could never have caught it. The shape is additionally pinned as a fixed row (Table E rows E2, E6, E9 gained a non-ASCII-tailed name) so it cannot regress even outside a draw |
+| **R2-B** [A, shadow] | A length-capped predicate (`seg.length <= 16`) scores 686/686 while admitting `.abcdefghijklmnop`: the generator's segments were 5–8 characters and no refusing row in D or E exceeded 16 | **FIXED by the design move.** Reproduced: `ref1 1166/2000` against the reference grading, `handoff 87/87` unchanged. Lengths are now drawn 1–65 per sample, and a 36-character name is pinned in Table E rows E2 and E6 |
+| **R2-C** [C, plugin] | V3's commentary still said "the two roll-up lines" while criterion 5 (fixed at round 1) says one line naming both ids | **FIXED.** V3's comment now states the single roll-up line for the pair `WP-dot-segment-denial criterion 1` and why `rollUp` emits one |
+| **R2-D** [process objection, shadow] | The 1014-line spec prescribes exact test titles, fixture arrays, assertion markers and mutation structure, which `docs/runbooks/spec-authoring.md` says a spec never does | **DROPPED as a category error, with the reason recorded — and its honest half TAKEN.** ADR-0036 makes the mutation contract (Table C) a spec surface, and `scripts/red-proofs.js`'s `evaluateRed` is an **equality** over failing identities, so the test identities are contract too — settled repo practice, and the sibling `WP-instruction-basename-currency` (Done) carries exactly this shape. Deleting Table C or the identity table would make the RED proofs unwritable. **The honest half:** three Implementation-notes bullets restated machinery that Tables A11 and F now own (the generator's construction, its anti-leakage argument, the producer family) and were collapsed into **one** bullet keeping only the two traps a reader cannot derive — the producer's keyword requirement and `reports_dir`'s joined value. Table E's preamble likewise lost the two-predicate table it duplicated with Table F. **No contract was deleted.** The objection is recorded here because the boundary it names is real even where its conclusion does not follow: everything this spec prescribes about test structure must be traceable to Table C, the oracles or an acceptance criterion, and anything else is prose to prune |
+
+### 2.1 A generator defect this pass caught in its own work, before shipping it
+
+The first draft of the full-alphabet generator kept the round-1 LCG
+(`x = (x*1103515245+12345) >>> 0`, sampling `x >>> 8`). Measured over 1000 draws:
+
+```text
+leading dot 922/1000   distinct first code points 30 of 112
+```
+
+**A generator that claimed a full alphabet and sampled a thirtieth of it**, and
+nothing in the tally would have shown it — every count would have read 2000/2000.
+Replaced with splitmix32 and re-measured: **111 of 112 distinct first code
+points, leading-dot share 0.486**. The lesson is now a checked precondition, not
+a memory: **Table F row F5** requires the run to assert ≥ 60 distinct first code
+points and a leading-dot share in 0.35–0.65, and to print both — so a future
+weakening of the draw fails loudly instead of grading nothing.
+
+*(This is the same shape as round 3 of the sibling's loop: a byte comparison is
+only as good as the two artifacts handed to it; a distribution grading is only as
+good as the distribution.)*
+
+### 2.2 Round-2 measurements — ten trees, V2 extracted from the spec and run as written
+
+`ref1` = B1 (two positions × N), `ref2` = B2 (two value shapes × N), `ref3` = B3.
+N = 1000. Every wrong tree fails; only the fix passes.
+
+```text
+UNTOUCHED 29c61d03   ref1  960/2000 | ref2 1014/2000 | ref3  538/1000 | over 12/12 | handoff 36/87 | boundary 16/38   rc=1
+FULL FIX             ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | over 12/12 | handoff 87/87 | boundary 38/38   rc=0
+MUTANT C1            ref1  998/2000 | ref2 2000/2000 | ref3 1000/1000 | over 12/12 | handoff 36/87 | boundary 29/38   rc=1
+MUTANT C2            ref1 2000/2000 | ref2  928/2000 | ref3  483/1000 | over 12/12 | handoff 87/87 | boundary 25/38   rc=1
+FITTED 18-name list  ref1 1014/2000 |      green     |     green      | over 12/12 | handoff 87/87 | boundary 29/38   rc=1
+WRONG length>1       ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | over 12/12 | handoff 87/87 | boundary 34/38   rc=1
+WRONG trimStart+NFKC ref1 1966/2000 | ref2 1988/2000 | ref3  995/1000 | over 12/12 | handoff 87/87 | boundary 30/38   rc=1
+WRONG z-family + D   ref1  982/2000 | ref2 1012/2000 | ref3  468/1000 | over 12/12 | handoff 87/87 | boundary 16/38   rc=1
+WRONG ASCII-only     ref1 1060/2000 | ref2 1044/2000 | ref3  494/1000 | over 12/12 | handoff 87/87 | boundary 35/38   rc=1
+WRONG length<=16     ref1 1166/2000 | ref2 1172/2000 | ref3  536/1000 | over 12/12 | handoff 87/87 | boundary 36/38   rc=1
+```
+
+**Four things this table establishes.**
+
+1. **Both round-2 attacks now fail massively** — 2405 and 2128 disagreements —
+   and both still score `handoff 87/87`, which is the direct evidence that Table
+   D can never bound the class and was never meant to.
+2. **The C1/C2 partition survives the redesign**, so Table C's identity table is
+   unchanged in shape: C1 reddens B1's three surfaces with the layout points
+   green; C2 reddens B2/B3's two with B1 green; `over 12/12` under both, so T6
+   stays out of every `expectRed`.
+3. **`length > 1` scores a PERFECT 5000/5000 on the reference grading** and is
+   caught by four boundary cases alone. **That is why Table E stays**, stated as
+   a measurement rather than as a preference: the generator appends a fixed
+   suffix to every draw, so it can never produce the bare `.`, and a predicate
+   that differs from the reference only there is invisible to the sample. Table F
+   row F7 carries this as the residual it is.
+4. **`trimStart+NFKC`, which round 1's family could not see at all, now
+   disagrees 59 times** across all three points — the full alphabet reaches what
+   a `z`-led ASCII family could not.
+
+**V1**, extracted and run on the untouched tree:
+`MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js`, rc=1.
+**`npm run lint`** with both revised documents: `0 error(s)`, rc=0.
+**Wall time:** V2 completes in about 0.4 s at N = 1000, so the 5000-verdict floor
+costs nothing.
+
+**A shell-embedding defect caught by extraction, not by reading.** The first
+version of the new V2 carried `new Set(['<','>',':','"','|','?','*'])` — a
+literal double quote inside the `node -e "…"` string, which closed it and made
+the extracted step a syntax error. The character is now built with
+`String.fromCharCode(34)`, and the guard on the block is widened to `$`, backtick
+**and** `"`. Round zero's lesson repeated one level down: a fenced command is not
+verified until it is extracted and run.
+
+### 2.3 What round 2 did not change
+
+- **The ordering decision, the adopt round trip, Table D's 29 rows, the
+  Deliverables boundary, ADR-0004 and size M** — all confirmed by both channels
+  and none widened.
+- **The Dispatch precondition** is untouched and still the owner's.
+- **`status:` stays `Draft`.**
+
+**Weighted closure, the architect's read: HEAVY.** The grading the implementer
+must satisfy changed shape — a reference predicate they must match rather than a
+list of examples they must refuse — and criterion 1, Table C's identity titles
+and two Table E rows moved with it. No `src/` behaviour, no ADR contract and no
+user-observable product change: the shipped predicate is the same one-line rule
+in all four drafts. The orchestrator owns the call; round 3 as the closing
+confirmation is the shape this loop has taken before.
