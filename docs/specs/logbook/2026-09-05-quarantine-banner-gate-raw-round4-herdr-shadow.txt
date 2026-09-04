@@ -1,0 +1,161 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 4, detached worktree at 0b76f0af (base main). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 0b76f0afab9115b9dff49225b0545f273fa2cedc vs main: docs/specs/WP-quarantine-banner-location.md",
+  "verdict": "approve",
+  "summary": "No substantive adversarial finding remains. R3-A is genuinely closed: criterion 6, Table L, verification prose, Definition of done, and the round-3 record consistently require the ledger rename to complete before the injected throw and explicitly discriminate shipped ordering RED, after-writeLedger RED, and step-17b GREEN. The no-watermarks fixture precondition is present in the implementer's spec. Earlier migration/quarantine writes cannot falsely certify the test: the stated precondition excludes migration, and the complete-record assertions plus the single observed ledger boundary prevent an earlier 5b rename from becoming a vacuous green. The pre-step-17b report-body write, vault commit, and skill-registry write do not carry the current run's L1-L4 pointer claim; the current transcript-ledger update is the first durable state from which that claim can be derived. Moving the unchanged undelivered block preserves both the refused and promoted-but-unpublished arms. The delegated rename removes its temp file, and the test fixture is unique, so restoration of fs.renameSync in finally leaves no shared ledger state for later tests. R3-C is also closed by the corrected idempotence rationale. Digest-rename and 'both directions' wording survives only in clearly labelled historical false-green evidence, not as the operative detector.",
+  "findings": [],
+  "routed_scope_objections": [
+    {
+      "id": "SO-1",
+      "location": "docs/specs/WP-quarantine-banner-location.md:17",
+      "routing": "Owner confirmation required before dispatch.",
+      "objection": "Confirm that L1-L4 stop naming a quarantine folder and stop instructing the user to delete files.",
+      "recommendation": "Confirm the proposed folder-free pointer wording.",
+      "counted_toward_verdict": false
+    },
+    {
+      "id": "SO-2",
+      "location": "docs/specs/WP-quarantine-banner-location.md:41",
+      "routing": "Route to the proposed WP-quarantine-only-copy-shelf successor unless the owner elects to absorb it here.",
+      "objection": "L5's statement that the notice clears when no withheld copies remain is false when the final direct quarantine file is removed while a fall-through only-copy remains under redacted/.",
+      "recommendation": "Route to the successor because the correct wording depends on the unresolved shelf/durable-state decision.",
+      "counted_toward_verdict": false
+    },
+    {
+      "id": "SO-3",
+      "location": "docs/specs/WP-quarantine-banner-location.md:69",
+      "routing": "Owner-ratified WP-dream-promote-module Table Q row Q9; retain as a PR-body Discovered issue.",
+      "objection": "The refused-path remediation value remains 'delete' even when the preserved artifact can be the note's only copy.",
+      "recommendation": "Do not change it in this work package.",
+      "counted_toward_verdict": false
+    },
+    {
+      "id": "SO-4",
+      "location": "docs/specs/WP-quarantine-banner-location.md:1172",
+      "routing": "Successor work packages.",
+      "objection": "Only-copy shelf selection, redacted-shelf retention, and preservation crash durability remain outside this package.",
+      "recommendation": "Keep these routed to WP-quarantine-only-copy-shelf and WP-quarantine-preserve-durability.",
+      "counted_toward_verdict": false
+    }
+  ],
+  "fixed_point_checks": {
+    "R3-A": {
+      "status": "closed",
+      "grounding": [
+        "docs/specs/WP-quarantine-banner-location.md:428",
+        "docs/specs/WP-quarantine-banner-location.md:470",
+        "docs/specs/WP-quarantine-banner-location.md:941",
+        "docs/specs/WP-quarantine-banner-location.md:1144",
+        "docs/specs/WP-quarantine-banner-location.md:1214",
+        "docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md:624"
+      ]
+    },
+    "R3-C": {
+      "status": "closed",
+      "grounding": [
+        "docs/specs/WP-quarantine-banner-location.md:980",
+        "docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md:625"
+      ]
+    },
+    "round_2_assets": {
+      "declarations_sha256_round2": "e937eed43bd62251668e26914f745cf39b603a75d7615d55cddcd65f83621136",
+      "declarations_sha256_current": "e937eed43bd62251668e26914f745cf39b603a75d7615d55cddcd65f83621136",
+      "v5_sha256_round2": "1235d787554ae4ab7e4e5ea338f6fdc3f057a120f917f20e9819fed29882dfb7",
+      "v5_sha256_current": "1235d787554ae4ab7e4e5ea338f6fdc3f057a120f917f20e9819fed29882dfb7",
+      "clauses_sha256_round2": "b7d269e02f236ba5606c3e3a67aa96f352cd182e13874327a03152d4481e9717",
+      "clauses_sha256_current": "b7d269e02f236ba5606c3e3a67aa96f352cd182e13874327a03152d4481e9717",
+      "parsed_declarations": "2 files, 6 proofs"
+    }
+  },
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-qb4.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain && git diff --name-status main...HEAD && git diff --stat main...HEAD && git diff --unified=80 main...HEAD -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0,
+      "note": "Initial git status was empty."
+    },
+    {
+      "command": "sed -n '1,430p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '431,860p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '861,1300p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '360,760p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '250,390p' docs/specs/WP-quarantine-banner-location.md && sed -n '750,1000p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg ordering constructs in src/cli/dream.js, src/core/dream/ledger.js, and tests/unit/dream-pipeline.test.js; inspect dream.js:700-1185 and ledger.js:1-220",
+      "exit_status": 0
+    },
+    {
+      "command": "inspect src/cli/dream.js:580-720 and :925-1085; locate report outcome code in src/core/dream/promote.js",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate -12 --all && git diff --unified=25 f198263a..HEAD -- the two in-scope documents; inspect dream-pipeline and promote report sections",
+      "exit_status": 0
+    },
+    {
+      "command": "locate and inspect G11 refused and partially-published fixtures plus setup/runDream helpers in tests/unit/dream-pipeline.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "rg detector/mirror terminology and SHA-256 compare declarations, V5, and amendment clauses between f198263a and HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,360p' and '361,760p' docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "node heredoc declaration parser followed by the extracted V5 check",
+      "exit_status": 1,
+      "note": "The shell could not create its heredoc temp file in the sandbox. V5 still ran read-only and returned its expected untouched-tree RED: Q1/Q2/Q9 absent and Done-spec diff empty."
+    },
+    {
+      "command": "first node -e declaration parser attempt",
+      "exit_status": 1,
+      "note": "Reviewer-command escaping error produced zero regex matches; superseded by the corrected parser."
+    },
+    {
+      "command": "corrected node -e parser for the two inlined JSON declaration blocks",
+      "exit_status": 0,
+      "output_summary": "Parsed 2 declaration files and 6 proofs."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "output_summary": "Frontmatter passed for 267 specs and 4 agents. Markdownlint could not be fetched because network access is unavailable (ENOTFOUND registry.npmjs.org); npm also could not write its home-directory log. This is an environment limitation, not a content failure."
+    },
+    {
+      "command": "git rev-parse HEAD; git rev-parse main; git diff --check main...HEAD -- the two in-scope documents; git status --porcelain",
+      "exit_status": 0,
+      "output_summary": "HEAD=0b76f0afab9115b9dff49225b0545f273fa2cedc; main=8302ce8e0ddc6d9e383e739c116272e805207444; diff check passed; final status empty."
+    },
+    {
+      "command": "nl -ba inspections of operative spec and logbook line ranges",
+      "exit_status": 0
+    }
+  ],
+  "read_only_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "worktree_writes": "none"
+  }
+}
