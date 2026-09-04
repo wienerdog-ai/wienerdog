@@ -1,0 +1,55 @@
+PR GATE ROUND 2 — PR #202 — wd-reviewer (spec-fidelity gate, claude subagent, same agent as round 1 resumed with the round-1 findings listed), tip 0c3f3d9a. Verdict REQUEST-CHANGES. Relayed verbatim from the agent's final message.
+
+# Round 2 — REQUEST-CHANGES
+
+Worktree untouched: clean, `wp/audit-c-close-disposition` @ `0c3f3d9a`. All probes in `mktemp -d` fixtures or a throwaway `--shared` clone, since deleted.
+
+## What I EXECUTED (exit codes)
+
+| # | Command / probe | Exit | Result |
+|---|---|---|---|
+| 1 | `git diff --numstat origin/main...HEAD` | 0 | 11 files; `docs/HANDOVER.md` still `1 1` |
+| 2 | `node scripts/boundary-check.js <spec> $CHANGED` (bash) | **0** | no offenders; the 3 new `…pr202-raw-round1-*.txt` are under the boundary-free `docs/specs/logbook/` prefix |
+| 3 | **V1** re-run at `0c3f3d9a` | 0 | `(a) 16 … (b) 5/5 … (c) OPEN: 5/5 …` — byte-identical to the logbook's re-run line |
+| 4 | **V2 (a)+(b)** | 0 | `9 shapes …` / SHA `47d05ff6403c8e6c3cf635ea6eb9263738432773` — unchanged, so the logbook's "not re-run" note is true |
+| 5 | **V3, V4** | 0 | unchanged |
+| 6 | **V5** | 0 | unchanged |
+| 7 | **V6 compliant**, `RULING=E1`, committed bytes | **0** | `V6 OK (ruling E1)` |
+| 8 | **V6 + stray `src/STRAY.js`** (round-1 finding 2 regression) | **1** | `Files outside the spec's Deliverables table: src/STRAY.js` → `FAIL: boundary-check` |
+| 9 | **V6 + `title:` removed from a stub** (isolates the frontmatter guard) | **1** | `missing required field "title"` → `FAIL: check-frontmatter` |
+| 10 | **V6 + markdownlint break in a Deliverable** | **1** | `lint failed` → `FAIL: npm run lint` |
+| 11 | **V6 + `status: Bogus`** | 1 | `FAIL: … is absent or not Draft` |
+| 12 | Byte-compare Table D (header + D1–D5) spec ↔ logbook | — | **all 5 rows + header IDENTICAL** |
+| 13 | Byte-compare the amended contract sentence spec ↔ logbook | — | **present verbatim in both** |
+| 14 | Byte-compare Table E retired-mechanism paragraph | — | **still verbatim** |
+| 15 | Stale-mirror greps `advanced the other` / `were **written**` / `not a patch` | — | **zero hits** anywhere |
+| 16 | `6/6` grep | — | only the logbook's explicit "superseded by this line" note (`:79-80`) — correct |
+| 17 | **Independent probe:** `commit-tree`+`update-ref` under inherited `GIT_DIR` | 0 | other repo HEAD `166a5854`→`cfbefd9a` (**moved=yes**); vault HEAD unmoved — **the claim is TRUE** |
+| 18 | **Independent probe:** `GIT_OBJECT_DIRECTORY` alone, `GIT_DIR` unset | 0 | object `409b46da` in other repo, **not** in vault — **the claim is TRUE** |
+
+## Round-1 findings: status
+
+1. **[criteria] band B — GENUINELY FIXED.** PR body now carries V6 in all three states: absent (`FAIL: expected exactly 1 disposition logbook entry, found 0`, rc=1), violating (throwaway clone, HANDOVER cell mutated → `FAIL: Table E row E1 occurs 0 times in HANDOVER`, rc=1), compliant (rc=0). Verified not committed to the branch. I independently exercised three further violating states (rows 8–11 above), all rc=1.
+2. **[contract] band B — GENUINELY FIXED at the spec level** (`4c1ffc24`), and I isolated each guard separately rather than trusting one probe: `docs/specs/WP-audit-c-close-disposition.md:695`, `:717-718`, `:719` now carry `|| { echo "FAIL: …"; exit 1; }` for check-frontmatter, boundary-check and lint respectively, with a comment explaining why `set -e` is *not* used (it would change the `[ … ] ||` lines' semantics — correct reasoning). AC6 (`:514-517`) and the Mirrored Surface Checklist's AC6 bullet (`:419-420`) were updated in lockstep, and both record the measured false-green. No mirror left behind.
+3. **[quality] band C — FIXED.** PR body now reads "Full V1–V5 **output** … lives in the logbook entry".
+4. **[quality] band C — CORRECTLY RECORDED AS RESIDUAL.** "Discovered issues" names the #201 ordering dependency and the remedy ("Merge #201 before or with #202").
+
+The disposition table in the PR comment is accurate on all four, including correctly attributing finding 2 to wd-architect.
+
+## New findings against `git diff eb5a682d..HEAD`
+
+5. **[contract] band B — fix.** `docs/specs/WP-audit-c-close-disposition.md:351` and its mirror `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md:37` (D2 (b) Measured cell), plus the logbook's scope note at `:96-105`: the round-2 fix moved the `commit-tree`+`update-ref` HEAD-advance claim off V2 (b) — correct — but re-attached it to sources that do not carry it. The cell says the HEAD advance "**was measured at the round-1 design gate** … raw `docs/specs/logbook/2026-09-02-audit-c-gate-raw-round1-herdr-shadow.txt`, round record `…design-gate-rounds.md` **row 1**". Checked against the bytes:
+   - the cited **herdr-shadow raw**, `:20`, says only *"The same environment **reaches** the remaining write shapes, including `update-ref`"* — reachability, no HEAD advance;
+   - the cited **row 1** of the round record (`:55`) likewise says *"the same env **reaches** `commit-tree`/`update-ref`"*;
+   - the HEAD-advance wording lives in that record's **Outcome section (`:78`)**, not row 1, and its actual basis is the **uncited** `2026-09-02-audit-c-gate-raw-round1-codex-plugin.txt:12`, which ran `rev-parse --git-path objects` and `symbolic-ref HEAD` and then **inferred** *"Thus a dream run **can** build a commit and advance another repository's HEAD."*
+   So both named coordinates are wrong, and "measured" overstates every round-1 artifact: nobody ran `commit-tree`/`update-ref` until probe 17 above. This is the same over-claim family the PR-202 round-1 gate raised (`…pr202-raw-round1-codex-plugin.txt:75`, which offered *"Add and paste those probes **or** narrow the measured claims"*) — the round-2 fix narrowed the attribution while keeping the claim, so the defect relocated rather than closed. It matters because the logbook becomes Table D's authority on the flip to Done, and because the contract sentence was amended *this round* to carve a named exception for precisely this sentence. **Band B, not A: I measured the claim and it is true** (probe 17), the verdict, owner and downstream all stand. **Recommended fix — and it deletes the exception rather than documenting it:** append the two commands to V2 (b) and paste their output. It is ~5 lines against the existing `$V`/`$O` fixtures, and I have shown it goes green. Falling back to a wording fix ("the same env reaches `commit-tree`/`update-ref`", citing the codex-plugin raw) is acceptable but strictly weaker.
+
+6. **[contract] band B — fix (same edit closes it).** `docs/specs/WP-audit-c-close-disposition.md:342` / `docs/specs/logbook/…:28`: the contract sentence now reads "and of nothing else — with **one named exception**". There are **two**. The same D2 (b) row's Cause/owner column (`:351`) carries *"**Measured, and this is why the enumeration is the requirement:** with `GIT_DIR` unset, an inherited `GIT_OBJECT_DIRECTORY` alone redirected the pinned `hash-object -w --stdin` write out of the vault"* — self-labelled measured, and **not** V2 (b)'s output (V2 (b) sets only `GIT_DIR`). A sentence that was just tightened to enumerate its exceptions is false while a second, unnamed one stands. Again the fact is **true** (probe 18). Adding that one-line probe to V2 (b) alongside finding 5's restores the original, stronger contract sentence with no exception clause at all — I ran both probes in a single shell block.
+
+7. **[criteria] band C — fix or drop.** `docs/specs/WP-audit-c-close-disposition.md:479-480`: AC2 gained a new obligation — the currency stub must name "the source change to `INSTRUCTION_BASENAMES` its matured Deliverables must carry". The stub honours it (`docs/specs/WP-instruction-basename-currency.md:77-81`), but V6 (c)'s currency presence-floor grep list (`:661`) was **not** extended, so the new clause is the only AC2/AC2b obligation with no mechanical floor — exactly the gap AC2b was introduced to close ("Without it a frontmatter-only stub passes (measured)"). Adding `'INSTRUCTION_BASENAMES'` to that `for pat in …` list is a one-token fix; alternatively state deliberately that this clause is reviewer-checked only.
+
+## Contract-density / closed-contract drift check (ADR-0031)
+
+The round-2 changes are a clean canonical-first pass: every fact was edited in the spec's Table D (`4c1ffc24`) and only then mirrored (`0c3f3d9a`), and the mirrors hold — Table D's header and all five rows are byte-identical between spec and logbook, the amended contract sentence and the retired-mechanism paragraph are verbatim in both, and each narrowed claim propagated to every registered surface: the Dispatch precondition prose (`:26-31`), AC2 (`:476-481`), V1's `unenum` array and its new comment (`:565-568`), the currency stub's items 1/2/3/5, the logbook's §6 two-WPs paragraph (`:182-191`), and the V1 output line with an explicit "superseded, not appended" note. The three stale-mirror phrases are gone repo-wide. No settled contract was silently reinterpreted and no mirror was promoted to primary. The **one** genuine drift is findings 5–6: the contract sentence's "one named exception" no longer agrees with the row it governs — in the count (two exceptions exist) and in the citation (the named raw and row do not hold the cited measurement). That is a canonical-table defect, so the edit belongs to wd-architect in the spec's Table D and V2 (b), with the implementer mirroring into the logbook afterwards — the same two-step this round executed correctly. Finding 7 is the smaller mirror: an AC gained a clause its verification step did not.
+
+This is round 2. Findings 5 and 6 are the same contract family as round 1's finding on this cell, which under the two-round rule means the **cell, not the implementer, is the bug** — the fix is a spec edit (extend V2 (b), delete the exception clause), not another mirror pass. Route to **wd-architect**. Finding 7 rides along in the same spec edit. Nothing here requires re-implementing any deliverable; the disposition (group C **Open — four residuals**, E1, three owners) is correct and every verdict is independently reproduced.

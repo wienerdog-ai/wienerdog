@@ -24,7 +24,7 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 |-------|---------|--------|
 | A | Interpolation neutralizer for code-owned markdown control planes | **Done** — `WP-sanitize-project-display-names`, `WP-daily-summary-per-line-framing`, `WP-neutralize-alert-callout-rendering` in `done/` |
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
-| C | Dream write fence (machinery-controlling files) | **Structurally closed** by the promote-in family: the brain writes a workspace; only promoted content enters the vault through `writeIntoVault`. Five WPs Done (`WP-dream-workspace-retarget`, `WP-dream-vault-write-primitive`, `WP-dream-promote-module`, `WP-dream-promote-report`, `WP-dream-promote-in-workspace`). Remaining: formal C2/C3 disposition — see `WP-audit-c-close-disposition` |
+| C | Dream write fence (machinery-controlling files) | **Open — four residuals** — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
 | D | Code-derived draft recipients (no verb accepts a model-named address) | **Not started** — full harvested basis in `WP-audit-d-code-derived-recipients` |
 | E | Ledger-parser correctness + hostile corpus | **Not started** — full harvested basis in `WP-audit-e-ledger-parser-corpus` |
 

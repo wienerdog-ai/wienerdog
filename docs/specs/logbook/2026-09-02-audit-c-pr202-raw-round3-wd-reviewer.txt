@@ -1,0 +1,54 @@
+PR GATE ROUND 3 — PR #202 — wd-reviewer (spec-fidelity gate, claude subagent, same agent resumed), tip a84b6a2d. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+# Round 3 — APPROVE
+
+Worktree untouched: porcelain empty, still `wp/audit-c-close-disposition` @ `a84b6a2d`. All probes in `mktemp -d` fixtures or a throwaway `--shared` clone, since deleted.
+
+## What I EXECUTED (exit codes)
+
+| # | Command / probe | Exit | Result |
+|---|---|---|---|
+| 1 | `git diff --numstat origin/main...HEAD` | 0 | 14 files; `docs/HANDOVER.md` still `1 1` |
+| 2 | `node scripts/boundary-check.js <spec> $CHANGED` (bash) | **0** | no offenders; 3 new `…pr202-raw-round2-*.txt` under the boundary-free `docs/specs/logbook/` prefix |
+| 3 | **V1** | 0 | `16 … 5/5 … (c) OPEN: 5/5 …` — byte-identical to the logbook |
+| 4 | **V2 (a)** | 0 | `9 shapes, none of: add commit clean reset status stash` |
+| 5 | **V2 (b), new three-probe form** | **0** | all three lines emitted; deterministic SHAs `47d05ff6…` and `409b46da…` match the logbook byte-for-byte (the commit SHAs differ only because commit objects carry timestamps) |
+| 6 | **V3, V4, V5** | 0, 0, 0 | unchanged, match the logbook |
+| 7 | **V6 compliant**, `RULING=E1`, committed bytes @ `a84b6a2d` | **0** | `V6 OK (ruling E1)` |
+| 8 | **RED — strip `INSTRUCTION_BASENAMES` from the currency stub** | **1** | `FAIL: currency stub's required verification is missing INSTRUCTION_BASENAMES` |
+| 9 | **RED — stray `src/STRAY.js`** | 1 | `FAIL: boundary-check` (round-1 hardening still live) |
+| 10 | **RED — HANDOVER cell mutated** | 1 | `FAIL: Table E row E1 occurs 0 times in HANDOVER` |
+| 11 | **RED — V2 (b) probe (ii) isolated**: `update-ref` retargeted to `refs/heads/probeonly`, everything else intact | **1** | `FAIL: the HEAD advance did not reproduce (other 33d8ea09->33d8ea09, vault ae20e442->ae20e442)` |
+| 12 | **RED — V2 (b) probe (iii) isolated**: `GIT_OBJECT_DIRECTORY` dropped from the third call | **1** | `FAIL: GIT_OBJECT_DIRECTORY did not redirect` — probes (i) and (ii) still green above it |
+| 13 | **RED — `GIT_DIR` unset for commit-tree/update-ref** | 1 | `FAIL: the pinned update-ref did not run` |
+| 14 | Byte-compare Table D header + D1–D5, spec ↔ logbook | — | **all IDENTICAL** |
+| 15 | Byte-compare the contract sentence (exception clause deleted) | — | **present verbatim in both** |
+| 16 | Byte-compare Table E retired-mechanism paragraph | — | **still verbatim** |
+| 17 | Greps `named exception`, `round-1 design gate` | — | **zero hits** across spec, logbook, both stubs |
+| 18 | Grep `advanced the other` | — | only V2 (b)'s own `echo` string (`:618`), its pasted output, and the D2 cell restating that output — i.e. no surviving citation form |
+| 19 | Grep `Scope of this output`, stale SHAs `5c90419c` / `4c1ffc24` / `not re-run` | — | **zero hits**; the logbook now names exactly one measurement SHA, `6d900762` |
+
+Probes 11–13 matter most: they establish that V2 (b)'s two new probes are not vacuous. Each reddens under an isolated mutation of its own mechanism, and probe (ii)'s failure message prints the unmoved old→new pair, so a future silent pass is not available to it.
+
+## My round-2 findings: status
+
+5. **[contract] band B — GENUINELY FIXED.** The over-claim is gone, not relocated. `docs/specs/WP-audit-c-close-disposition.md:596-621` extends V2 (b) to three probes; `:349` (and its byte-identical mirror `docs/specs/logbook/…:39`) now opens *"**V2 (b)'s three probes, and nothing wider — every clause here is that step's own recorded output**"* and enumerates (i)/(ii)/(iii). No citation to any gate raw survives in the cell. I re-ran the step and reproduced all three lines (row 5), and confirmed the HEAD advance really is asserted rather than narrated (row 11). The Mirrored Surface Checklist gained the rule that prevents recurrence: `:422-424`, *"a claim added to that cell must arrive as a probe in that step, never as a citation to a gate raw"* — that is the structural fix, not just the instance fix.
+6. **[contract] band B — GENUINELY FIXED.** The exception clause is deleted from both the spec (`:339-341`) and the logbook (`:28-30`); the contract sentence is back to its unqualified form and byte-identical across both. The `GIT_OBJECT_DIRECTORY` sentence in the Cause column is now *"**Measured by V2 (b)'s third probe**"* — and probe (iii) exists and has teeth (row 12). Both exceptions closed by making the step prove them, which is the stronger of the two remedies I offered.
+7. **[criteria] band C — GENUINELY FIXED, with teeth.** `INSTRUCTION_BASENAMES` added to V6 (c)'s currency floor (`:697-698`) with a comment naming why (*"without it a docs-only currency stub passes, and D1 (c) would stay open after its WP lands"*), and the AC-mirror bullet at `:411-413` registers the floor entry as that clause's mirror so the two move together. Row 8 confirms it reddens.
+
+## Plugin round-2 findings 2 and 3: honestly closed
+
+- **Finding 2 (per-step provenance)** — closed by re-measuring rather than by re-describing. §3's heading is now *"V1 through V5, all re-run together on `6d900762`"*, §1 states the single SHA, and the paragraph names its own prior defect out loud (*"plugin round-2 finding 2 flagged the previous version of this paragraph for claiming one SHA while section 3 showed several"*). I verified the file contains exactly one measurement SHA and no surviving "not re-run" note (row 19). `6d900762` is a descendant of the architect's `fdd3a089`, so the three-probe V2 (b) genuinely existed in the tree at the claimed commit — the claim checks out rather than merely reading well.
+- **Finding 3 (stub citation)** — closed by the plugin's *second* offered remedy, which is the better one: both stubs now cite the in-patch record first (`WP-dot-segment-denial.md:18-21`, `WP-instruction-basename-currency.md:18-22` → the disposition logbook's §4, where the ruling is quoted verbatim and which ships in this PR), with PR #201's path retained and explicitly labelled *"lands with PR #201"*. So no citation resolves to nothing on a `main` that lacks #201, and the merge-ordering line survives in Discovered issues for the residual that genuinely remains.
+
+## Attack on `git diff 0c3f3d9a..HEAD` — no material findings
+
+I went after the new V2 (b) specifically, since it is the round's only executable addition. It is hermetic (identity passed via `-c` on `commit-tree`, so no dependence on the runner's git config for authorship), it touches only `mktemp -d` scratch repos (worktree porcelain empty after every run of mine), it runs correctly from a fresh clone as well as the worktree, `env -u` is portable to both BSD and GNU `env`, and probe (ii)'s tree comes from `write-tree` over a private `GIT_INDEX_FILE` — which mirrors `commitNamedSet`'s actual shape rather than inventing a convenient one, so the probe measures the production seam's own pattern. Its three failure branches all exit 1 with a distinguishing message. The one thing I'd have flagged — that V2 (b) can't distinguish "residual closed" from "probe broken" — is already handled by the spec's standing rule that V-steps measure today's state and are never closure triggers (`:456-462`), and each failure message says *"re-measure D2 (b)"* rather than asserting closure.
+
+One band-C observation, **disposition: drop**: the PR body's V6 three-state evidence is labelled `ca592e9e`, one commit behind the tip `a84b6a2d`. The delta is a single 15-line logbook raw under the boundary-free prefix, and I re-ran V6 plus all three violating states at `a84b6a2d` myself (rows 7–10), so the evidence is materially current. This lag is structural — a round's gate raw is necessarily committed after the round's evidence run — and it was accepted the same way in rounds 1 and 2.
+
+## Contract-density / closed-contract drift check (ADR-0031)
+
+This round is the cleanest of the three on the ADR-0031 axis, and it moved a contract in the right direction rather than merely repairing a mirror. The canonical Table D is byte-identical between spec and logbook across all five rows and the header; the contract sentence, having lost its exception clause, is again unqualified and identical in both; the retired-mechanism paragraph is still verbatim. Every downstream mirror of the two edits moved in the same pass: the D2 (b) Measured and Cause cells, V2 (b) itself, the logbook's §3 note, §1's provenance paragraph, the AC-mirror bullet for `INSTRUCTION_BASENAMES`, and the Verification-commands checklist bullet. Nothing settled was silently reinterpreted — D1's enumeration wording, D3/D4/D5, E1/E2-as-pointer, the 2026-08-31 hook non-reopening and Table E's retirement lesson all survive untouched and verbatim. **The round's real contribution is that a contract got stronger, not weaker, under pressure**: rounds 1–2 answered an evidence gap by adding a documented exception to the "every measured cell is its step's output" rule; round 3 deleted the exception and moved the evidence into the step, and then wrote the general rule into the Mirrored Surface Checklist so the next such claim cannot arrive as a citation. That is the correct direction for a canonical table under ADR-0031, and it closes the two-round pattern I escalated rather than papering it.
+
+No open findings. The disposition — group C **Open — four residuals**, Table E row E1, owners `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` — is correct, and every verdict in Table D is now backed by a step I re-ran myself at the reviewed tip.

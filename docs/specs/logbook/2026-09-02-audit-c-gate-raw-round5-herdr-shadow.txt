@@ -1,0 +1,154 @@
+SHADOW ROUND 5 (dispatch-time reconciliation confirmation; herdr-spawned hermetic Codex, CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ aa82ec13, fresh thread via /new). Captured via an approved scratch-file write (tee). Worktree porcelain empty before and after (re-checked by the orchestrator: 0 entries).
+
+{
+  "target": "spec revision aa82ec13c4d9d25f19046d45874a7969ee43d74f vs main: docs/specs/WP-audit-c-close-disposition.md",
+  "verdict": "approve",
+  "summary": "SHIP: the reconciliation removes WP-dream-git-env-pinning from the implementation boundary consistently, retains a live presence floor for its already-landed amendment, preserves V6's negative guards, and corrects the adopt citation without introducing a material contradiction.",
+  "findings": [],
+  "scope_objections": [],
+  "challenge_results": {
+    "env_pinning_surfaces": "PASS. Every env-pinning hit in the target spec was read. The Deliverables table omits it; the new note explicitly says it is not a deliverable; D2, the E2 explanation, the Mirrored Surface Checklist, AC4, V6, and Out of scope consistently treat it as the owner/pre-existing required file rather than implementation work. No old deliverable-status assertion remains.",
+    "v6_negative_and_presence_guards": "PASS. The full V6 script shape exits 1 on this pre-implementation tree because the logbook is absent. Its isolated logbook guard exits 1, each isolated stub guard exits 1 for the absent stub, and the Table E row guard exits 1 while HANDOVER is unedited. The exact 2026-09-02 plus GIT_OBJECT_DIRECTORY amendment floor exits 0 against the tree.",
+    "boundary_both_directions": "PASS. boundary-check exits 0 for the spec plus the four revised deliverables and exits 1 when WP-dream-git-env-pinning.md is added, naming it as outside the Deliverables table. Removing the row narrows acceptance exactly as claimed.",
+    "citations": "PASS. src/cli/adopt.js:347 calls inferLayout, line 349 is the !dryRun && !yes confirmation gate (so --yes skips it), and line 381 appends renderLayoutBlock(layout).",
+    "cross_surface_consistency": "PASS. The Deliverables table, Table D row D2, Table E/E2 prose, Mirrored Surface Checklist, AC6's four-deliverable count, and V6's changed-file loop agree. Commit 93072b1d is an ancestor of main, added the cited amendment, and the env-pinning file has no diff from main."
+  },
+  "worktree_integrity": {
+    "before": "clean; git status --porcelain=v1 produced no porcelain entries (exit 0)",
+    "after": "clean; git status --porcelain=v1 with stderr suppressed produced no porcelain entries (exit 0)",
+    "identical": true,
+    "note": "The initial unsuppressed invocation emitted macOS xcrun cache warnings on stderr, but no porcelain entries; those warnings do not represent worktree state."
+  },
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-a4r5.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored instructions and user focus."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "No porcelain entries; stderr contained non-fatal xcrun cache warnings."
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=80 main...HEAD -- docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Inspected the scoped diff with surrounding context."
+    },
+    {
+      "command": "rg -n -C 3 'env-pinning|2026-09-02|GIT_OBJECT_DIRECTORY|src/cli/adopt\\.js:(347|348|349|381)|V6|AC6|D2|E2' docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Located all reconciliation mirrors and citations."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Read the target spec with line numbers."
+    },
+    {
+      "command": "rg -n -C 2 'env-pinning' docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Read every env-pinning hit; none retained the old deliverable status."
+    },
+    {
+      "command": "sed -n '330,455p' docs/specs/WP-audit-c-close-disposition.md && sed -n '480,510p' docs/specs/WP-audit-c-close-disposition.md && sed -n '611,689p' docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Read Table D/E, mirrors, AC4-AC6, and the complete V6 block."
+    },
+    {
+      "command": "nl -ba src/cli/adopt.js | sed -n '338,390p'",
+      "exit_status": 0,
+      "result": "Confirmed lines 347, 349, and 381."
+    },
+    {
+      "command": "rg -n -C 3 '2026-09-02|GIT_OBJECT_DIRECTORY|What done means|channel set' docs/specs/WP-dream-git-env-pinning.md",
+      "exit_status": 0,
+      "result": "Confirmed the dated amendment and channel-set obligation are present."
+    },
+    {
+      "command": "git diff --name-only main...HEAD",
+      "exit_status": 0,
+      "result": "Only docs/specs/WP-audit-c-close-disposition.md differs."
+    },
+    {
+      "command": "for f in docs/specs/logbook/*-audit-group-c-disposition.md docs/specs/WP-dot-segment-denial.md docs/specs/WP-instruction-basename-currency.md docs/HANDOVER.md; do if test -e \"$f\"; then printf 'PRESENT %s\\n' \"$f\"; else printf 'ABSENT %s\\n' \"$f\"; fi; done",
+      "exit_status": 1,
+      "result": "Exploratory zsh glob check stopped with 'no matches found' because the disposition logbook is absent; this is expected on the pre-implementation tree and was rechecked with V6's bash shape."
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=3 main...HEAD -- docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "Confirmed the concise scoped patch contains only the stated reconciliation edits."
+    },
+    {
+      "command": "sed -n '1,260p' scripts/boundary-check.js",
+      "exit_status": 0,
+      "result": "Verified how the Deliverables table is parsed and how fixed exceptions are handled."
+    },
+    {
+      "command": "git merge-base --is-ancestor 93072b1d main",
+      "exit_status": 0,
+      "result": "Confirmed the cited amendment commit is on main."
+    },
+    {
+      "command": "git show --no-ext-diff --format=fuller --stat 93072b1d -- docs/specs/WP-dream-git-env-pinning.md && git show --no-ext-diff --format= --unified=3 93072b1d -- docs/specs/WP-dream-git-env-pinning.md",
+      "exit_status": 0,
+      "result": "Confirmed commit 93072b1d added the dated amendment described by the revised spec."
+    },
+    {
+      "command": "git diff --no-ext-diff --exit-code main -- docs/specs/WP-dream-git-env-pinning.md",
+      "exit_status": 0,
+      "result": "Confirmed the env-pinning spec is unchanged from main."
+    },
+    {
+      "command": "sed -n '612,688p' docs/specs/WP-audit-c-close-disposition.md | bash",
+      "exit_status": 1,
+      "result": "Expected RED: full V6 stopped with 'expected exactly 1 disposition logbook entry, found 0'."
+    },
+    {
+      "command": "bash -c 'n=$(ls docs/specs/logbook/*-audit-group-c-disposition.md 2>/dev/null | wc -l | tr -d \" \"); [ \"$n\" = 1 ] || { echo \"FAIL: expected exactly 1 disposition logbook entry, found $n\"; exit 1; }'",
+      "exit_status": 1,
+      "result": "Expected RED for missing logbook."
+    },
+    {
+      "command": "bash -c 'stub=docs/specs/WP-dot-segment-denial.md; grep -q \"^status: Draft\" \"$stub\" || { echo \"FAIL: $stub is absent or not Draft\"; exit 1; }; grep -q \"REQUIRED VERIFICATION\" \"$stub\" || { echo \"FAIL: $stub carries no REQUIRED VERIFICATION section\"; exit 1; }'",
+      "exit_status": 1,
+      "result": "Expected RED for missing dot-segment stub."
+    },
+    {
+      "command": "bash -c 'stub=docs/specs/WP-instruction-basename-currency.md; grep -q \"^status: Draft\" \"$stub\" || { echo \"FAIL: $stub is absent or not Draft\"; exit 1; }; grep -q \"REQUIRED VERIFICATION\" \"$stub\" || { echo \"FAIL: $stub carries no REQUIRED VERIFICATION section\"; exit 1; }'",
+      "exit_status": 1,
+      "result": "Expected RED for missing instruction-basename stub."
+    },
+    {
+      "command": "bash -c 'grep -q \"2026-09-02\" docs/specs/WP-dream-git-env-pinning.md && grep -q \"GIT_OBJECT_DIRECTORY\" docs/specs/WP-dream-git-env-pinning.md || { echo \"FAIL: the env stub amended channel-set requirement is absent\"; exit 1; }'",
+      "exit_status": 0,
+      "result": "The amended env-pinning presence floor holds."
+    },
+    {
+      "command": "bash -c '<V6 section (d) E1 CELL/ROW/CNT check with the expected logbook path>'",
+      "exit_status": 1,
+      "result": "Expected RED: unchanged HANDOVER contains zero exact E1 rows."
+    },
+    {
+      "command": "node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/specs/WP-audit-c-close-disposition.md docs/specs/logbook/2026-09-02-audit-group-c-disposition.md docs/specs/WP-dot-segment-denial.md docs/specs/WP-instruction-basename-currency.md docs/HANDOVER.md",
+      "exit_status": 0,
+      "result": "Revised spec plus four deliverables accepted."
+    },
+    {
+      "command": "node scripts/boundary-check.js docs/specs/WP-audit-c-close-disposition.md docs/specs/WP-audit-c-close-disposition.md docs/specs/logbook/2026-09-02-audit-group-c-disposition.md docs/specs/WP-dot-segment-denial.md docs/specs/WP-instruction-basename-currency.md docs/HANDOVER.md docs/specs/WP-dream-git-env-pinning.md",
+      "exit_status": 1,
+      "result": "Expected RED: env-pinning edit rejected as outside the Deliverables table."
+    },
+    {
+      "command": "git diff --check main...HEAD -- docs/specs/WP-audit-c-close-disposition.md",
+      "exit_status": 0,
+      "result": "No whitespace errors in the scoped diff."
+    },
+    {
+      "command": "git status --porcelain=v1 2>/dev/null",
+      "exit_status": 0,
+      "result": "No porcelain entries after review; identical worktree state."
+    }
+  ]
+}
