@@ -154,8 +154,8 @@ carries the commands and their output.
 |--------|------|-------|
 | create | docs/instruction-file-inventory.md | The dated inventory. Its skeleton is fixed under "Exact contracts"; its three tables are **Table A**, **Table B** and **Table C**, copied verbatim, **under section headings that keep those labels** so the cells' cross-references resolve in the copy. **The copied region is each table's preamble plus the table itself**; spec-side commentary after a table is not copied. **The row shape is load-bearing**: a DENY row starts with `\| DENY \|` and its **second cell** is the basename in backticks — acceptance criterion 2's test parses exactly that. **On this work package's flip to Done this file becomes the canonical inventory** and Tables A, B and C here become its record |
 | modify | src/core/dream/promote.js | **ONE executable line and one comment block, nothing else.** `:96` — `INSTRUCTION_BASENAMES` gains the Table A names it lacks, each written **NFC-lowercased** (Table A, "Stored spelling"). **The literal's shape is what criterion 3's check parses**, so it stays a `const INSTRUCTION_BASENAMES = new Set([ … ])` whose members are single-quoted strings; line breaks inside the brackets are fine, a different construction is not. `:84-95` — its JSDoc gains one sentence pointing at `docs/instruction-file-inventory.md` as the canonical inventory and keeps its existing "will NOT cover the next convention" sentence. **This cell owns what stays unchanged in this file:** `DENIED_SEGMENTS` (`:99`), `DENIED_BASENAME` (`:102`), `EXTRA_TIER_DIRS`, `fold` (`:136-138`), `foldedSegments`, `isUnder`, `admittedDirs`, `makeAdmit`'s clause order and every one of its refusal strings, and the module's exports |
-| modify | tests/unit/dream-promote.test.js | **THREE sites, all under the row-C9 section header at `:293`.** (a) `:295-315` — the `hostile` fixture gains one tier-local path per newly denied Table A name, so the existing end-to-end test covers them; (b) `:317-327` — the RED-side case list gains one mixed-case spelling of a newly denied name; (c) **one NEW test** implementing acceptance criteria 2 and 3, which **derives its subject list from `docs/instruction-file-inventory.md`** and fails when zero DENY rows parse. **This cell owns what stays unchanged:** every other test, every existing title, and the `scenario`/`run`/`refusalFor`/`get` helpers |
-| create | tests/red-proofs/instruction-basenames.proofs.json | The RED-proof declaration for criterion 2, per **Table D**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dream-promote.test.js`; `file` is `src/core/dream/promote.js` |
+| modify | tests/unit/dream-promote.test.js | **THREE sites, all under the row-C9 section header at `:293`.** (a) `:295-315` — the `hostile` fixture gains one tier-local path per newly denied Table A name, so the existing end-to-end test covers them; (b) `:317-327` — the RED-side case list gains one mixed-case spelling of a newly denied name; (c) **NEW tests** implementing acceptance criteria 2, 3 and **7** — criterion 2's derives its subject list from `docs/instruction-file-inventory.md` and fails when zero DENY rows parse, while **criterion 7's carries its expected basenames as a hand-written literal array and asserts set equality against the parse**. One test or two is the implementer's call, but the two expectations may not share an oracle, and the RED-proof declaration names criterion 7's. **This cell owns what stays unchanged:** every other test, every existing title, and the `scenario`/`run`/`refusalFor`/`get` helpers |
+| create | tests/red-proofs/instruction-basenames.proofs.json | The RED-proof declaration for **criterion 7**, per **Table D**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dream-promote.test.js`; `file` is `src/core/dream/promote.js` |
 | modify | docs/runbooks/release.md | **ONE new numbered step**, inserted so the existing steps renumber consistently, carrying **Table C**'s obligation: owner, trigger, and the literal path `docs/instruction-file-inventory.md`. No other step is reworded |
 
 **NOT a deliverable, stated because it is the trap:** `src/core/layout.js`,
@@ -275,44 +275,57 @@ first output, and criterion 3 requires it to equal the size of
 ### Table B — accepted omissions and handoffs (canonical)
 
 Everything found in the same sweep as Table A and deliberately **not** denied by
-basename, with the reason. A `HANDOFF` row is denied instead by the rule against
-dot-prefixed path segments, and belongs to that rule's owner; an `OMIT` row is
-denied by nothing and is a stated non-denial. Rows that also note the
-`.md`-only extension rule carry a second, independent reason: a name with no
-`.md` extension is outside the promotion allowlist whatever the dot rule does.
+basename, with the reason.
 
-| Disposition | Path(s) as documented | Tool | Reason it is not in Table A | Citation |
-|---|---|---|---|---|
-| HANDOFF | `.github/copilot-instructions.md`, `.github/instructions/NAME.instructions.md` | GitHub Copilot | dot-prefixed segment | https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions |
-| HANDOFF | `.cursor/rules/*.mdc`, `.cursorrules` | Cursor | dot-prefixed; `.mdc` also fails the `.md`-only extension rule | https://cursor.com/docs/rules |
-| HANDOFF | `.windsurfrules`, `.windsurf/rules/`, `.devin/rules/` | Windsurf (now Devin Desktop) | dot-prefixed; `.windsurfrules` also fails the `.md`-only extension rule | https://docs.devin.ai/desktop/cascade/agents-md |
-| HANDOFF | `.clinerules/` | Cline | dot-prefixed | https://docs.cline.bot/customization/cline-rules |
-| HANDOFF | `.roo/rules/`, `.roorules` | Roo Code | dot-prefixed | https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ |
-| HANDOFF | `.continue/rules/` | Continue | dot-prefixed | https://docs.continue.dev/customize/deep-dives/rules |
-| HANDOFF | `.junie/AGENTS.md`, `.junie/playbook.md`, `.junie/rules/`, `.junie/guidelines.md` | JetBrains Junie | dot-prefixed; its bare form is `AGENTS.md`, already Table A | https://junie.jetbrains.com/docs/guidelines-and-memory.html |
-| HANDOFF | `.kiro/steering/` | AWS Kiro | dot-prefixed; its bare form is `AGENTS.md`, already Table A | https://kiro.dev/docs/steering/ |
-| HANDOFF | `.amazonq/rules/**/*.md` | Amazon Q Developer | dot-prefixed | https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/context-project-rules.html |
-| HANDOFF | `.trae/rules/` | Trae | dot-prefixed; file names inside it are arbitrary | https://docs.trae.ai/ide/rules |
-| HANDOFF | `.openhands/microagents/`, `.openhands/skills/`, `.agents/skills/NAME/SKILL.md` | OpenHands | dot-prefixed; its current bare form is `AGENTS.md`, already Table A | https://docs.openhands.dev/overview/skills/repo |
-| HANDOFF | `.qwen/QWEN.local.md` | Qwen Code | dot-prefixed | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md |
-| HANDOFF | `.claude/CLAUDE.md`, `.claude/rules/` | Claude Code | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.claude` | https://code.claude.com/docs/en/memory |
-| HANDOFF | `.codex/AGENTS.md`, `.codex/AGENTS.override.md` | Codex CLI | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.codex` | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
-| HANDOFF | `.rules` | Zed | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule | https://zed.dev/docs/ai/instructions |
-| HANDOFF | `.goosehints` | Goose | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule. **Its disposition does not rest on a citation:** the vendor page is a client-rendered SPA that returned HTTP 404 to a plain fetch on 2026-09-04, and the two structural reasons hold regardless | — (no live citation; see reason) |
-| HANDOFF | `.aider.conf.yml` | Aider | dot-prefixed; also fails the `.md`-only extension rule | https://aider.chat/docs/config/aider_conf.html |
-| OMIT | `copilot-instructions.md` (bare) | GitHub Copilot | **not a documented discovery path.** GitHub documents the file only under `.github/`; a bare tier-local one is an ordinary note, and denying it would deny legitimate notes | https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions |
-| OMIT | `rules.md` (bare) | Cursor | merely the basename of a path inside `.cursor/`; not a convention on its own | https://cursor.com/docs/rules |
-| OMIT | `CONVENTIONS.md` | Aider | **Aider documents no fixed filename.** `CONVENTIONS.md` appears as a documentation *example*; the real mechanism is `.aider.conf.yml`'s `read:` key, which takes any user-chosen path | https://aider.chat/docs/usage/conventions.html |
-| OMIT | `project_rules.md` | Trae | not documented. Trae's current docs establish the `.trae/rules/` directory with arbitrarily named `*.md` files inside it | https://docs.trae.ai/ide/rules |
-| OMIT | `AmazonQ.md` | Amazon Q Developer | not documented. The AWS page establishes `.amazonq/rules/` only | https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/context-project-rules.html |
-| OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and `promote.js:111-116` names them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | `src/core/dream/promote.js:111-116` |
-| OMIT | user-configured names — Gemini CLI and Qwen Code `context.fileName`; Codex CLI `project_doc_fallback_filenames` (documented example: `TEAM_GUIDE.md`); Goose `CONTEXT_FILE_NAMES` | several | **THIS IS THE NAMED RESIDUAL.** The name space is unbounded and user-chosen, so no inventory can cover it. This is the residual the 2026-08-05 ruling accepted, restated rather than reopened | https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md |
+**A `HANDOFF` row is ASSIGNED to `WP-dot-segment-denial`, the work package that
+owns the class rule against dot-prefixed path segments. It is not protected by
+that rule until that work package lands** — assignment is not coverage, and this
+inventory claims none. The fifth column says what refuses the row **independently
+of that class rule**: the `.claude` / `.codex` members of the promotion
+allowlist's `DENIED_SEGMENTS`, the allowlist's `.md`-only extension rule, or a
+basename that is already in Table A. Where that column reads `none`, every
+documented path in the row is **admitted** by the promotion allowlist and stays
+so until the class rule lands.
+
+An `OMIT` row is assigned to nobody and is a stated non-denial.
+
+| Disposition | Path(s) as documented | Tool | Reason it is not in Table A | Refused independently of the dot-segment rule | Citation |
+|---|---|---|---|---|---|
+| HANDOFF | `.github/copilot-instructions.md`, `.github/instructions/NAME.instructions.md` | GitHub Copilot | dot-prefixed segment | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions |
+| HANDOFF | `.cursor/rules/*.mdc`, `.cursorrules` | Cursor | dot-prefixed; `.mdc` also fails the `.md`-only extension rule | all paths — the `.md`-only extension rule | https://cursor.com/docs/rules |
+| HANDOFF | `.windsurfrules`, `.windsurf/rules/`, `.devin/rules/` | Windsurf (now Devin Desktop) | dot-prefixed; `.windsurfrules` also fails the `.md`-only extension rule | `.windsurfrules` only — the `.md`-only extension rule; the two directory paths are assigned to `WP-dot-segment-denial` | https://docs.devin.ai/desktop/cascade/agents-md |
+| HANDOFF | `.clinerules/` | Cline | dot-prefixed | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.cline.bot/customization/cline-rules |
+| HANDOFF | `.roo/rules/`, `.roorules` | Roo Code | dot-prefixed | `.roorules` only — the `.md`-only extension rule; `.roo/rules/` is assigned to `WP-dot-segment-denial` | https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ |
+| HANDOFF | `.continue/rules/` | Continue | dot-prefixed | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.continue.dev/customize/deep-dives/rules |
+| HANDOFF | `.junie/AGENTS.md`, `.junie/playbook.md`, `.junie/rules/`, `.junie/guidelines.md` | JetBrains Junie | dot-prefixed; its bare form is `AGENTS.md`, already Table A | `.junie/AGENTS.md` only — its basename is already a Table A row; the other three paths are assigned to `WP-dot-segment-denial` | https://junie.jetbrains.com/docs/guidelines-and-memory.html |
+| HANDOFF | `.kiro/steering/` | AWS Kiro | dot-prefixed; its bare form is `AGENTS.md`, already Table A | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://kiro.dev/docs/steering/ |
+| HANDOFF | `.amazonq/rules/**/*.md` | Amazon Q Developer | dot-prefixed | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/context-project-rules.html |
+| HANDOFF | `.trae/rules/` | Trae | dot-prefixed; file names inside it are arbitrary | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.trae.ai/ide/rules |
+| HANDOFF | `.openhands/microagents/`, `.openhands/skills/`, `.agents/skills/NAME/SKILL.md` | OpenHands | dot-prefixed; its current bare form is `AGENTS.md`, already Table A | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://docs.openhands.dev/overview/skills/repo |
+| HANDOFF | `.qwen/QWEN.local.md` | Qwen Code | dot-prefixed | none — every documented path is admitted; assigned wholly to `WP-dot-segment-denial` | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md |
+| HANDOFF | `.claude/CLAUDE.md`, `.claude/rules/` | Claude Code | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.claude` | all paths — the `.claude` member of `DENIED_SEGMENTS` | https://code.claude.com/docs/en/memory |
+| HANDOFF | `.codex/AGENTS.md`, `.codex/AGENTS.override.md` | Codex CLI | dot-prefixed — **and already refused independently** by `promote.js`'s `DENIED_SEGMENTS` member `.codex` | all paths — the `.codex` member of `DENIED_SEGMENTS` | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
+| HANDOFF | `.rules` | Zed | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule | the `.md`-only extension rule | https://zed.dev/docs/ai/instructions |
+| HANDOFF | `.goosehints` | Goose | dot-prefixed leading-dot filename; also fails the `.md`-only extension rule. **Its disposition does not rest on a citation:** the vendor page is a client-rendered SPA that returned HTTP 404 to a plain fetch on 2026-09-04, and the two structural reasons hold regardless | the `.md`-only extension rule | — (no live citation; see reason) |
+| HANDOFF | `.aider.conf.yml` | Aider | dot-prefixed; also fails the `.md`-only extension rule | the `.md`-only extension rule | https://aider.chat/docs/config/aider_conf.html |
+| OMIT | `copilot-instructions.md` (bare) | GitHub Copilot | **not a documented discovery path.** GitHub documents the file only under `.github/`; a bare tier-local one is an ordinary note, and denying it would deny legitimate notes | none — an ordinary note, deliberately admitted | https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions |
+| OMIT | `rules.md` (bare) | Cursor | merely the basename of a path inside `.cursor/`; not a convention on its own | none — an ordinary note, deliberately admitted | https://cursor.com/docs/rules |
+| OMIT | `CONVENTIONS.md` | Aider | **Aider documents no fixed filename.** `CONVENTIONS.md` appears as a documentation *example*; the real mechanism is `.aider.conf.yml`'s `read:` key, which takes any user-chosen path | none — an ordinary note, deliberately admitted | https://aider.chat/docs/usage/conventions.html |
+| OMIT | `project_rules.md` | Trae | not documented. Trae's current docs establish the `.trae/rules/` directory with arbitrarily named `*.md` files inside it | none — an ordinary note, deliberately admitted | https://docs.trae.ai/ide/rules |
+| OMIT | `AmazonQ.md` | Amazon Q Developer | not documented. The AWS page establishes `.amazonq/rules/` only | none — an ordinary note, deliberately admitted | https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/context-project-rules.html |
+| OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and `promote.js:111-116` names them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | none — deliberately admitted; the shipped skill-plus-ledger promotion depends on it | `src/core/dream/promote.js:111-116` |
+| OMIT | user-configured names — Gemini CLI and Qwen Code `context.fileName`; Codex CLI `project_doc_fallback_filenames` (documented example: `TEAM_GUIDE.md`); Goose `CONTEXT_FILE_NAMES` | several | **THIS IS THE NAMED RESIDUAL.** The name space is unbounded and user-chosen, so no inventory can cover it. This is the residual the 2026-08-05 ruling accepted, restated rather than reopened | none — unbounded and user-chosen; the named residual | https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md |
 
 **Twenty-four rows: seventeen HANDOFF, seven OMIT** — a spec-side count, outside
-the copy boundary. The `.md`-only extension reason the preamble defines was
-measured on the tree (Current state); where a row omits it, the dot reason was
-sufficient there, never that the extension rule fails to apply. `WP-dot-segment-denial`
-is the owner every `HANDOFF` row is handed to.
+the copy boundary. **Every value in the fifth column was measured through the
+production predicate**, path by path, not inferred from the row's shape; the run
+is in the round-1 record. It is a column of *mechanisms*, not of states, so it
+stays true after `WP-dot-segment-denial` lands: what changes then is that the
+`none` rows acquire a second refusing rule, not that any cell becomes false.
+**Measured: eight of the seventeen HANDOFF rows read `none`, three more are only
+partly covered (`.windsurfrules`, `.roorules`, `.junie/AGENTS.md` alone), and six
+are fully refused already.** That eleven-row gap is the residual this work package
+hands on and does not close.
 
 ### Table C — the standing maintenance obligation (canonical)
 
@@ -320,7 +333,8 @@ is the owner every `HANDOFF` row is handed to.
 |---|---|
 | Owner | **the release maintainer** — whoever executes `docs/runbooks/release.md`. Deliberately a role, not a person: a name in a checked-in runbook goes stale on the first handover. If a person is wanted instead, this cell is the one place that changes |
 | Trigger | **every MINOR version bump** — a `package.json` version going `0.x.y` → `0.(x+1).0`. Objective and observable in the diff; patch releases are not triggered |
-| Where the obligation is recorded | one numbered step in `docs/runbooks/release.md`, naming the literal path `docs/instruction-file-inventory.md` |
+| Where the obligation is recorded | **exactly one numbered step** in `docs/runbooks/release.md`. Exactly one, because the check that enforces this row locates the step by the inventory path and refuses zero matches and two |
+| The five tokens that step's text MUST carry | the single place these literals are decided, and the only thing the check asserts on the step's text: **(1)** `docs/instruction-file-inventory.md` — the literal path; **(2)** `MINOR` — the trigger; **(3)** `release maintainer` — the owner role; **(4)** `re-fetch` — the citation-and-date refresh; **(5)** `same pull request` — the source-and-test synchronisation. Case-sensitive as written. Prose around them is the implementer's; a step that merely *links* the inventory carries one token and fails |
 | What the step obliges | re-fetch every citation in Table A and Table B of the inventory; add any newly documented plain-path convention; update the `Current as of` date and each row's `Fetched` cell. **If the DENY set changed, `INSTRUCTION_BASENAMES` and its tests change in the same pull request** — a docs-only refresh would recreate exactly the defect this work package closes |
 | What it is NOT | nothing scheduled, nothing that watches, polls or runs; no CI step, no hook, no job. **ADR-0004** — it is a line in a runbook a human follows |
 | The failure it accepts, stated | a release cut without performing the step leaves the inventory stale and nothing detects it. That is the cost of a human obligation, and it is chosen over machinery on ADR-0004 |
@@ -333,21 +347,21 @@ author against the finished file; this row decides what the mutation **is**.
 
 | id | wp / criterion | mechanism — TRIGGER and PATCH | what must redden, and how the row is verified |
 |---|---|---|---|
-| `instruction-basenames-reverted` | `WP-instruction-basename-currency` / criterion `2` | **TRIGGER: none — the patched constant is on the ordinary path.** The new test calls `makeAdmit` directly, so nothing has to be injected to reach the Set lookup at `promote.js:237`; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: the `const INSTRUCTION_BASENAMES = new Set([...])` declaration is reverted to the four names shipped at `4b06afa0`** — `claude.md`, `claude.local.md`, `agents.md`, `agents.override.md`. The seam is named structurally, by that declaration, never by a line number (ADR-0036 A2) | Every own-body terminal failure the revert causes must appear in `expectRed`, or the proof is `FAILED` — **and the revert reddens the two extended existing tests as well as the new one**, so either all of them are declared or the declaration carries a `testNamePattern` scoping the run to the new test. Both are legal; the choice goes in the pull request under "Decisions made". **One mutation, one independently revertible change** (ADR-0036 A3): reverting the Set neither requires nor implies any other edit |
+| `instruction-basenames-reverted` | `WP-instruction-basename-currency` / criterion `7` | **TRIGGER: none — the patched constant is on the ordinary path.** The new test calls `makeAdmit` directly, so nothing has to be injected to reach the Set lookup at `promote.js:237`; the exemption's measurement is the APPLY-phase run itself, which must show the marker present and the named assertions failing. **PATCH: the `const INSTRUCTION_BASENAMES = new Set([...])` declaration is reverted to the four names shipped at `705ae286`** — `claude.md`, `claude.local.md`, `agents.md`, `agents.override.md`. The seam is named structurally, by that declaration, never by a line number (ADR-0036 A2). **Which assertion the patch reddens: criterion 7's half (b)**, the reachability half — each literal name must reach denial through `makeAdmit`, and five of them stop doing so. Half (a), the set-equality half, is untouched by the patch and is the half that fails at BASELINE on a shrunken tree | **`expectRed` MUST name the criterion-7 test — the one whose expected basenames are a literal in the test file — and not only the criterion-2 test that parses the inventory.** The reason is the round-1 [A] finding: on a tree where the shipped inventory, the constant and the fixtures were all shrunk together, a proof aimed at the parse-derived test still goes red (eight names against four) and reports `PROVEN` while the defect stands; a proof aimed at the literal set instead fails at **BASELINE**, because that test is already red on the unmutated shrunken tree — so `npm run red-proofs` reports non-`PROVEN` and the subset is caught by the RED machinery rather than hidden by it. Beyond that: every own-body terminal failure the revert causes must appear in `expectRed`, or the proof is `FAILED` — **and the revert reddens the two extended existing tests as well as the new ones**, so either all of them are declared or the declaration carries a `testNamePattern` scoping the run. Both are legal; the choice goes in the pull request under "Decisions made". **One mutation, one independently revertible change** (ADR-0036 A3): reverting the Set neither requires nor implies any other edit |
 
 ### Mirrored Surface Checklist
 
 **The copy boundary is itself a registered surface, and it governs all three
 tables.** It is stated in the paragraph after Table A, in the Deliverables cell
 for `docs/instruction-file-inventory.md`, in the skeleton under "Exact
-contracts" and in acceptance criterion 1. A change to what is copied moves all
-four in one pass. Registered at round zero, after the conformance executors
+contracts", in acceptance criterion 1 and in **verification V3**, which is the only
+thing that enforces it. A change to what is copied moves all five in one pass. Registered at round zero, after the conformance executors
 found cross-references inside cells that would dangle once copied.
 
 **Table A** (the denial set):
 
 - [ ] Deliverables cells for `docs/instruction-file-inventory.md` (the row shape), `src/core/dream/promote.js` (the stored spelling and the literal's shape) and `tests/unit/dream-promote.test.js` (all three sites)
-- [ ] Acceptance criteria **1, 2, 3** and verification **V1** and **V2**
+- [ ] Acceptance criteria **1, 2, 3, 7** and verification **V1**, **V2** and **V3**. **Criterion 7 is the independent oracle and V3 is the fidelity oracle**; criteria 2 and 3 take the shipped document as theirs, so all four move together and a change to Table A must reach criterion 7's hand-written literal in the same pass
 - [ ] Current state — the measured admits and the `fold` paragraph
 - [ ] `src/core/dream/promote.js:84-95` — the JSDoc, which after this work package points at the inventory rather than restating the list
 - [ ] Table D's PATCH cell, which names the four-name baseline
@@ -358,18 +372,20 @@ found cross-references inside cells that would dangle once copied.
 - [ ] The Out of scope section, which cites it for the dot-segment boundary
 - [ ] Current state's clause-(b) measurement (`.rules`, `.goosehints`, `.mdc`, …) — the evidence behind **Table B's preamble**, which is where the `.md`-only extension reason is now stated once for every row that names it
 - [ ] The inventory document's **opening paragraph**, which states the residual Table B's last row decides
+- [ ] **The fifth column, `Refused independently of the dot-segment rule`** — measured per row through the production predicate, and the surface that stops the preamble from overstating coverage. It moves with Table B's preamble and with Table B's trailing count of `none` rows
+- [ ] Acceptance criterion **1** and verification **V3**, which compare this table cell by cell against the shipped copy
 - [ ] `docs/specs/WP-dot-segment-denial.md` — **a NON-move.** That spec's own required verification owns the class predicate; this work package hands it rows and changes none of its text
 
 **Table C** (the obligation):
 
 - [ ] The Deliverables cell for `docs/runbooks/release.md`
-- [ ] Acceptance criterion **4** and verification **V3**
-- [ ] The inventory document's "How this stays current" section, which is Table C copied
+- [ ] Acceptance criterion **4** and verification **V4**, plus **Table C's five-token row**, which is what V4 asserts
+- [ ] The inventory document's `## Table C — how this stays current` section, which is Table C copied and which **V3** compares
 
 **Table D** (the RED proof):
 
 - [ ] The Deliverables cell for `tests/red-proofs/instruction-basenames.proofs.json`
-- [ ] Acceptance criterion **5** and verification **V4**
+- [ ] Acceptance criterion **5** and verification **V5**
 
 ## Implementation notes & constraints
 
@@ -438,7 +454,9 @@ found cross-references inside cells that would dangle once copied.
       `Current as of` date covers its citations, and Table A's preamble carries
       no date of its own — it defers to the `Fetched` cells.) Every DENY row
       starts with `| DENY |` and holds its basename in backticks in the **second**
-      cell.
+      cell. **This criterion is PROVED BY V3, the region compare** — it was
+      unchecked prose until round 1, which is how a silently shrunken Table B or
+      C could have shipped green.
 - [ ] **2.** Every basename the inventory marks `DENY` is refused with a reason
       containing `is a harness instruction file` at each of the three tier-local
       depths `06-Identity/`, `01-Projects/example/`, `02-Areas/x/y/`, in every
@@ -447,24 +465,53 @@ found cross-references inside cells that would dangle once copied.
       `replit.md` yields three, not four; and is refused by *something* at the
       vault root, which is clause (a)'s job. The assertion **derives its name
       list from the inventory document** and fails when zero DENY rows parse.
+      **This criterion's oracle is the shipped document, which is why it cannot
+      stand alone — criterion 7 is its independent half.**
 - [ ] **3.** `INSTRUCTION_BASENAMES` holds exactly as many names as the inventory
       has DENY rows, and every member equals its own `NFC`-lowercased form.
-- [ ] **4.** `docs/runbooks/release.md` carries a numbered step naming the
-      literal path `docs/instruction-file-inventory.md`, its owner and its
-      minor-release trigger, per Table C.
+      **Same oracle as criterion 2, therefore the same limitation** — the two
+      shrink together, and criterion 7 is what does not.
+- [ ] **4.** `docs/runbooks/release.md` carries **exactly one** numbered step
+      whose text contains the inventory path, and that step's text carries **all
+      five tokens Table C decides** — the literal path, `MINOR`, `release
+      maintainer`, `re-fetch` and `same pull request`. Zero matching steps and
+      two matching steps both fail. A step that merely links the inventory
+      carries one token and fails.
 - [ ] **5.** `npm run red-proofs`, unfiltered, reports `3 declared proof(s), 3
       selected`, a `PROVEN` roll-up line for
-      `WP-instruction-basename-currency criterion 2`, `RUN: PROVEN`, and exits 0.
+      `WP-instruction-basename-currency criterion 7`, `RUN: PROVEN`, and exits 0.
+      **Criterion 7 and not criterion 2, deliberately** — Table D's last cell
+      gives the reason: aimed at criterion 2's parse-derived test the proof goes
+      green on a consistently shrunken tree, aimed at criterion 7's literal set
+      it fails at BASELINE there instead.
 - [ ] **6.** Idempotence — `N/A` — this work package ships no command and writes
       nothing outside the repository; it changes one constant, one JSDoc block,
       one runbook step, one new document and their tests.
+- [ ] **7. THE INDEPENDENT ORACLE — the one assertion that does not read the
+      shipped inventory.** A test in `tests/unit/dream-promote.test.js` carries
+      the expected DENY basenames as a **literal array written by hand in the
+      test file**, and asserts (a) that the set parsed out of
+      `docs/instruction-file-inventory.md` is exactly equal to it — same members,
+      no duplicates, no extras, no omissions — and (b) that each of those names
+      reaches denial through `makeAdmit`. **As of 2026-09-04 that literal holds
+      the nine names of Table A**; if a re-fetch legitimately adds one, this
+      literal, the spec's Table A and the shipped document move together in one
+      pass and the pull request says so under "Decisions made". **Why it is
+      written by hand and not derived:** criteria 2 and 3 both take the shipped
+      document as their oracle, so an omission propagated to the document, the
+      constant and the fixtures passes all of them; a hand-written expected set
+      is the only surface in this work package a consistent omission does not
+      also shrink. Round 1's [A] finding, both channels.
 
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# V1 — criteria 1, 2 and 3. The new test carries all three. The guard names the
-# DELIVERABLE-ABSENT state directly instead of surfacing it as a readFileSync
-# throw from inside the suite, and the count is the number V2 must agree with.
+# V1 — criteria 2, 3 and 7. The new tests carry all three, and criterion 7 is
+# the one whose expected set is a hand-written literal rather than a parse of
+# the shipped document. The guard names the DELIVERABLE-ABSENT state directly
+# instead of surfacing it as a readFileSync throw from inside the suite, and the
+# count is the number V2 must agree with. Criterion 1 is NOT carried here — it
+# is V3's, and round 1 found that gap.
 test -f docs/instruction-file-inventory.md || { echo "MISSING DELIVERABLE: docs/instruction-file-inventory.md"; exit 1; }
 grep -c '^| DENY |' docs/instruction-file-inventory.md
 npm test
@@ -492,15 +539,94 @@ if(code.length!==inv.length){console.error('FAIL: INSTRUCTION_BASENAMES has '+co
 console.log('V2 OK: '+code.length+' names in INSTRUCTION_BASENAMES = '+inv.length+' DENY rows, all pre-folded');
 "
 
-# V3 — criterion 4. The `test -f &&` guard is required: a bare negated grep on a
-# missing file exits 2, and the negation would turn that into a pass.
-test -f docs/runbooks/release.md && grep -n 'instruction-file-inventory\.md' docs/runbooks/release.md
+# V3 — criterion 1: THE COPY IS REALLY A COPY. Compares the shipped document's
+# three copied regions against this spec's canonical ones, allowing only the
+# permitted Fetched-cell substitution, and rejects duplicate DENY basenames.
+# This is the step that closes round 1's [A] finding on the documentation side:
+# without it, Tables B and C, their preambles and every citation were unchecked.
+# Region = everything under the heading down to the LAST line beginning with a
+# pipe, which is exactly the copy boundary, so commentary after a table is
+# excluded by construction. Observed at round 1 in six states: absent document
+# (red), compliant (green), one DENY row dropped (red, naming it), one Table B
+# cell reworded (red, naming it), Table C's heading removed (red), a duplicated
+# DENY row (red), and Fetched dates moved to 2027-01-15 (GREEN — the permitted
+# substitution). The spec path below is where this spec lives during
+# implementation; it moves under docs/specs/done/ only after the WP is Done.
+node -e "
+const fs=require('fs');
+const SPEC='docs/specs/WP-instruction-basename-currency.md';
+const DOC='docs/instruction-file-inventory.md';
+for(const f of [SPEC,DOC]) if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
+function region(text,prefix){
+  const lines=text.split('\n');
+  const hits=[];
+  for(let i=0;i<lines.length;i++) if(lines[i].startsWith(prefix)) hits.push(i);
+  if(hits.length!==1) return {err:hits.length+' headings start with '+JSON.stringify(prefix)+', expected 1'};
+  const out=[];
+  for(let j=hits[0]+1;j<lines.length;j++){ if(/^#{1,6} /.test(lines[j])) break; out.push(lines[j]); }
+  while(out.length && !out[out.length-1].startsWith('|')) out.pop();
+  while(out.length && out[0].trim()==='') out.shift();
+  if(out.length===0) return {err:'empty region under '+JSON.stringify(prefix)};
+  return {text:out.map((l)=>l.startsWith('| DENY |')?l.replace(/\|[^|]*\|\$/,'| <FETCHED> |'):l).map((l)=>l.replace(/\s+\$/,'')).join('\n')};
+}
+const spec=fs.readFileSync(SPEC,'utf8'), doc=fs.readFileSync(DOC,'utf8');
+let bad=0;
+for(const t of ['A','B','C']){
+  const a=region(spec,'### Table '+t+' — '), b=region(doc,'## Table '+t+' — ');
+  if(a.err){console.error('FAIL: spec Table '+t+': '+a.err);bad++;continue;}
+  if(b.err){console.error('FAIL: document Table '+t+': '+b.err);bad++;continue;}
+  if(a.text===b.text){console.log('Table '+t+': identical ('+a.text.split('\n').length+' lines)');continue;}
+  bad++;
+  const A=a.text.split('\n'), B=b.text.split('\n');
+  for(let i=0;i<Math.max(A.length,B.length);i++) if(A[i]!==B[i]){
+    console.error('FAIL: Table '+t+' diverges at region line '+(i+1));
+    console.error('  spec: '+(A[i]===undefined?'<missing>':A[i].slice(0,110)));
+    console.error('  doc : '+(B[i]===undefined?'<missing>':B[i].slice(0,110)));
+    break;
+  }
+}
+const deny=doc.split('\n').filter((l)=>l.startsWith('| DENY |')).map((l)=>l.split('|')[2].trim());
+const dup=deny.filter((x,i)=>deny.indexOf(x)!==i);
+if(dup.length){console.error('FAIL: duplicate DENY basenames: '+[...new Set(dup)].join(', '));bad++;}
+if(bad){process.exit(1);}
+console.log('V3 OK: all three copied regions are byte-identical modulo the Fetched cells; '+deny.length+' unique DENY rows');
+"
 
-# V4 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other
+# V4 — criterion 4. NOT a pathname grep: round 1 found that a step reading
+# "Read docs/instruction-file-inventory.md" passed the old check while the whole
+# obligation was missing. This isolates ONE numbered step by the inventory path,
+# refuses zero matches and two, and asserts Table C's five tokens on that step's
+# own text. It takes an optional path argument so the same code can be rehearsed
+# against a temp copy; with no argument it reads the real runbook. Observed at
+# round 1 in five states: absent file (red), no matching step (red — the
+# untouched tree), a link-only step (red, naming the four missing tokens), two
+# matching steps (red), a step with all five tokens (green).
+node -e "
+const fs=require('fs');
+const f=process.argv[1]||'docs/runbooks/release.md';   // node -e puts the first extra arg at argv[1], not argv[2] — measured
+if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
+const lines=fs.readFileSync(f,'utf8').split('\n');
+const steps=[]; let cur=null;
+for(const l of lines){
+  if(/^\d+\. /.test(l)){ if(cur) steps.push(cur); cur={n:l.match(/^(\d+)\./)[1],text:[l]}; }
+  else if(cur) cur.text.push(l);
+}
+if(cur) steps.push(cur);
+const P='docs/instruction-file-inventory.md';
+const hits=steps.filter((x)=>x.text.join('\n').includes(P));
+if(hits.length!==1){console.error('FAIL: '+hits.length+' numbered step(s) name '+P+', expected exactly 1 (of '+steps.length+' steps)');process.exit(1);}
+const step=hits[0], text=step.text.join('\n');
+const TOKENS=[P,'MINOR','release maintainer','re-fetch','same pull request'];
+const missing=TOKENS.filter((t)=>!text.includes(t));
+if(missing.length){console.error('FAIL: step '+step.n+' is missing '+missing.length+' of the five Table C tokens: '+missing.map((t)=>JSON.stringify(t)).join(', '));process.exit(1);}
+console.log('V4 OK: step '+step.n+' of '+steps.length+' carries all five Table C tokens');
+"
+
+# V5 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other
 # criterion FILTERED and exits non-zero. Takes about two minutes.
 npm run red-proofs
 
-# V5 — the repo gates.
+# V6 — the repo gates.
 npm run lint
 ```
 

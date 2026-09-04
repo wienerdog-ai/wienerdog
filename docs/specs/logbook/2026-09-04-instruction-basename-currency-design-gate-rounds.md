@@ -357,3 +357,114 @@ adjudication as `2026-09-04-basename-currency-gate-raw-round<N>-<channel>.txt`.
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+
+### Round 1 fixes — architect, 2026-09-04, on top of `42345398`
+
+Three findings, two of them converged across both channels, proposed disposition
+FIX on all three. All three fixed. Both channels reported zero scope objections
+against the verdict, and PASSED: reachability of all nine Table A rows, the
+copy-boundary prose, the RED-proof design, Table B completeness, the Deliverables
+boundary, ADR-0004 and size S. **None of those was widened.**
+
+**Verification steps were renumbered** by this pass — V3 is new (the region
+compare), the old V3 became V4 and was rewritten, red-proofs moved V4 → V5 and
+lint V5 → V6. Section 0.5 above says "V1–V5" and is left as the record of what
+was run under the old numbering.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A, both channels] | A consistently omitted deny row passes every automated gate: the shipped inventory is both the test oracle and the source-count oracle, so dropping a row from the document, the constant and the fixtures together keeps criteria 2–3, V1, V2 and the RED proof green while criterion 1's verbatim copy is violated and Tables B and C go unchecked | **FIXED with TWO oracles, and they guard different things.** **(i) Acceptance criterion 7 — the one that cannot be shrunk:** a test carries the expected DENY basenames as a **hand-written literal array in the test file** and asserts set equality against the parse. It is the only surface in this work package whose expected value is not derived from the shipped document, so the consistent-omission accident does not also shrink it. **(ii) Verification V3 — the fidelity oracle:** compares the shipped document's three copied regions against this spec's canonical regions, allowing only the permitted `Fetched`-cell substitution, and rejects duplicate DENY basenames. It is the one with the wider blast radius — Tables B and C, their preambles, headings, cells and citations were entirely unchecked before it. **And the RED proof was retargeted**: Table D's `expectRed` must now name criterion 7's test, and the declaration's `criterion` field moved `2` → `7`. The reason is stated in Table D's last cell and re-derived here: aimed at the parse-derived test, the proof still goes red on a shrunken tree (eight names against four) and reports `PROVEN` while the defect stands; aimed at the literal set it fails at **BASELINE** there instead, so `npm run red-proofs` reports non-`PROVEN` and the RED machinery catches the subset rather than hiding it. No other machinery grew: V1's body is unchanged, V2 is unchanged, and nothing was added to `scripts/red-proofs.js`, CI or `package.json` |
+| **2** [B, plugin] | Table B's verbatim preamble said every HANDOFF row "is denied instead" by the dot-segment rule, which does not exist yet — so the shipped canonical inventory would overstate coverage on day one | **FIXED, and measured rather than reworded.** The preamble now says a HANDOFF row is **ASSIGNED** to `WP-dot-segment-denial` and **is not protected by that rule until that work package lands** — assignment is not coverage. A **fifth column, `Refused independently of the dot-segment rule`**, was added to every Table B row and each value was measured path by path through the production predicate (0.8 below). It is a column of *mechanisms*, not states, so it stays true after the class rule lands. Measured totals: **8 of 17 HANDOFF rows read `none`** (every documented path admitted), **3 are partly covered** (`.windsurfrules`, `.roorules`, `.junie/AGENTS.md` alone), **6 are fully refused** already |
+| **3** [B, both channels] | V3 greps only for the inventory pathname, so a step reading "Read docs/instruction-file-inventory.md" passes while the owner, trigger, refresh and same-PR synchronisation are all absent | **FIXED.** The step (now **V4**) isolates **exactly one** numbered runbook step by the inventory path — zero matches and two matches both fail — and asserts **Table C's five tokens** on that step's own text. The five literals are decided in one new Table C row: `docs/instruction-file-inventory.md`, `MINOR`, `release maintainer`, `re-fetch`, `same pull request`. Criterion 4 was rewritten to the same contract |
+
+### 0.8 Round-1 measurements and rehearsals
+
+Every value below was produced on the untouched tree at branch tip `42345398`
+(`src/`, `tests/` and `scripts/` unchanged since `705ae286`). The fixture
+inventory used for the rehearsals was generated from the spec, then deleted;
+`git status --short` shows only the two edited documents.
+
+**Table B's fifth column, measured through `makeAdmit(defaultLayout())`** on
+tier-local paths under `01-Projects/example/`:
+
+```text
+ADMITTED  .github/copilot-instructions.md   .github/instructions/x.instructions.md
+ADMITTED  .windsurf/rules/x.md   .devin/rules/x.md   .clinerules/x.md   .roo/rules/x.md
+ADMITTED  .continue/rules/x.md   .junie/playbook.md   .junie/rules/x.md   .junie/guidelines.md
+ADMITTED  .kiro/steering/x.md   .amazonq/rules/x.md   .trae/rules/x.md
+ADMITTED  .openhands/microagents/x.md   .openhands/skills/x.md   .agents/skills/n/SKILL.md
+ADMITTED  .qwen/QWEN.local.md
+refused   .cursor/rules/x.mdc  .cursorrules  .windsurfrules  .roorules  .rules  .goosehints  .aider.conf.yml
+              <- only `.md` content files are promoted
+refused   .junie/AGENTS.md     <- `agents.md` is a harness instruction file
+refused   .claude/CLAUDE.md  .claude/rules/x.md   <- path segment `.claude` is a harness instruction-discovery root
+refused   .codex/AGENTS.md  .codex/AGENTS.override.md   <- path segment `.codex` is a harness instruction-discovery root
+```
+
+**V3, run exactly as the spec writes it** (extracted from the fenced block and
+executed through a shell, so the `\$` escaping is exercised too), in six states:
+
+```text
+absent document                : FAIL: missing input docs/instruction-file-inventory.md            rc=1
+compliant (generated from spec): Table A: identical (23 lines)
+                                 Table B: identical (41 lines)
+                                 Table C: identical (9 lines)
+                                 V3 OK: all three copied regions are byte-identical
+                                 modulo the Fetched cells; 9 unique DENY rows                      rc=0
+Fetched dates -> 2027-01-15    : same green output                                                 rc=0
+QWEN.md DENY row dropped       : FAIL: Table A diverges at region line 21
+                                   spec: | DENY | `QWEN.md` | `qwen.md` | Qwen Code's default ...
+                                   doc : | DENY | `WARP.md` | `warp.md` | Warp project rules ...   rc=1
+one Table B cell reworded      : FAIL: Table B diverges at region line 21
+                                   spec: ... | Cline | dot-prefixed | ...
+                                   doc : ... | Cline | fine, ignore | ...                          rc=1
+Table C heading removed        : FAIL: document Table C: 0 headings start with
+                                 "## Table C — ", expected 1                                       rc=1
+WARP.md DENY row duplicated    : FAIL: duplicate DENY basenames: `WARP.md`                         rc=1
+```
+
+The fourth line is **the finding's exact attack**, and V3 names the missing row.
+
+**V4, run exactly as the spec writes it**, in five states:
+
+```text
+untouched tree (default path)  : FAIL: 0 numbered step(s) name docs/instruction-file-inventory.md,
+                                 expected exactly 1 (of 9 steps)                                   rc=1
+absent file                    : FAIL: missing input <temp>/nope-release.md                        rc=1
+a link-only step               : FAIL: step 3 is missing 4 of the five Table C tokens:
+                                 "MINOR", "release maintainer", "re-fetch", "same pull request"    rc=1
+two matching steps             : FAIL: 2 numbered step(s) name docs/instruction-file-inventory.md,
+                                 expected exactly 1 (of 11 steps)                                  rc=1
+a step carrying all five       : V4 OK: step 3 of 10 carries all five Table C tokens               rc=0
+```
+
+**A real defect the rehearsal caught, recorded because reading would not have
+found it.** The first draft of V4 read its optional path from
+`process.argv[2]`. Measured — `node -e "console.log(JSON.stringify(process.argv))" FOO BAR`
+prints `["…/node","FOO","BAR"]` — **`node -e` puts the first extra argument at
+`argv[1]`, not `argv[2]`**, so all four rehearsal states silently fell back to
+the default path and returned the *same* message. The index is fixed and the
+reason is a comment on that line.
+
+**V1 and V2, verbatim on the untouched tree:**
+
+```text
+V1: MISSING DELIVERABLE: docs/instruction-file-inventory.md              rc=1
+V2: FAIL: missing input docs/instruction-file-inventory.md               rc=1
+```
+
+**Citations touched this round:** none. No Table A or Table B citation URL was
+added, removed or changed; the only Table B change is the new fifth column,
+whose values are measurements of this repository's own code and carry no URL.
+The `promote.js` anchors the new column's reasoning rests on — `:96`, `:99`,
+`:102`, `:237`, `:238` — were re-resolved at both ends in 0.7 and are unchanged.
+
+**Weighted closure, the architect's read:** finding 1's fix is **LIGHT** under
+`docs/runbooks/codex-review.md`'s test. It changes no `src/` behaviour, no ADR
+contract and nothing a user or a consuming model observes — the shipped deny-list
+is the same nine names either way; what changed is the evidence that the nine
+really shipped. Findings 2 and 3 are also LIGHT by that test, with one honest
+caveat on finding 2: it edits a canonical table that *ships as a product
+document*, so a reader of `docs/instruction-file-inventory.md` observes the
+difference. The orchestrator owns the HEAVY/LIGHT call; this is the input to it,
+not the decision.
