@@ -96,3 +96,18 @@ re-verification"), then implementation, for: `WP-index-guard-residuals`,
 `WP-quarantine-banner-location`, `WP-quarantine-preserve-durability`,
 `WP-instruction-basename-currency` and `WP-dot-segment-denial` (the last two are
 filed by `WP-audit-c-close-disposition` itself).
+
+## Landing note — the ADR-0042 signature (2026-09-04)
+
+The owner edited `docs/adr/0042-machine-run-red-proofs.md` himself, in his own
+working checkout, on 2026-09-04 (file mtime 12:54 CEST): `Status: Proposed —
+awaiting owner signature` / `Date: 2026-09-02` became `Status: Accepted` /
+`OWNER-SIGNED 2026-09-02`, and the header blockquote's "Proposed by the
+architect, unsigned" sentence was removed. The session committed that edit on
+his behalf **byte-identical** — no agent wrote, moved or reformatted either line
+(ADR-0035's discipline). Two dates, both correct: the signature carries
+2026-09-02, the date of ruling 4 above; the landing is 2026-09-04. The one
+mirror, `docs/adr/README.md`'s index row, reads `Accepted — OWNER-SIGNED
+2026-09-02` in the same commit. The three successors the signature unblocks
+(`WP-red-proofs-ci-lane`, `WP-red-proofs-doctrine`,
+`WP-red-proofs-adopt-index-guard`) remain proposed ids, not yet filed.

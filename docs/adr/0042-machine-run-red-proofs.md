@@ -1,10 +1,9 @@
 # ADR-0042: RED evidence for an acceptance criterion is machine-run from a committed declaration, in its own lane, against a disposable copy
 
-Status: Proposed — awaiting owner signature
-Date: 2026-09-02
+Status: Accepted
+OWNER-SIGNED 2026-09-02
 
-> **Proposed by the architect, unsigned.** Nothing in this ADR is in force until
-> the owner signs it. `WP-criterion-red-harness` ships the runner as an opt-in
+> `WP-criterion-red-harness` ships the runner as an opt-in
 > `npm run` tool and does **not** depend on this signature; what the signature
 > unlocks is the doctrine — a spec being allowed to *require* that a criterion's
 > RED evidence be machine-run, and a CI job that fails a PR when a declared proof
