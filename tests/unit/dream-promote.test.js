@@ -299,6 +299,11 @@ test('dream-promote: M7\'s mechanism — the current instruction-file convention
     '01-Projects/x/AGENTS.md': 'nested steer\n',
     '01-Projects/x/CLAUDE.local.md': 'nested steer\n',
     '01-Projects/x/AGENTS.override.md': 'nested steer\n',
+    '01-Projects/x/AGENT.md': 'nested steer\n',
+    '01-Projects/x/GEMINI.md': 'nested steer\n',
+    '01-Projects/x/QWEN.md': 'nested steer\n',
+    '01-Projects/x/WARP.md': 'nested steer\n',
+    '01-Projects/x/replit.md': 'nested steer\n',
     '.gitignore': '*\n',
     '01-Projects/x/.claude/rules/evil.md': 'nested steer\n',
     '01-Projects/x/.claude/settings.json': '{}\n',
@@ -320,10 +325,93 @@ test('dream-promote: spelling does not decide admission — RED side', () => {
   // would admit these while the harness still loads them as instruction files.
   assert.ok(admit('01-Projects/x/agents.override.md'), 'lowercased AGENTS.override.md is refused');
   assert.ok(admit('01-Projects/x/claude.local.md'), 'lowercased CLAUDE.local.md is refused');
+  assert.ok(admit('01-Projects/x/GeMiNi.Md'), 'mixed-case GEMINI.md is refused');
   assert.ok(admit('01-Projects/x/.CLAUDE/rules/evil.md'), 'an uppercased .CLAUDE segment is refused');
   // Normal form: the same basename spelled decomposed is the same file.
   const nfd = 'AGENTS.override.md'.normalize('NFD');
   assert.ok(admit(`01-Projects/x/${nfd}`), 'a decomposed instruction basename is refused');
+});
+
+test('dream-promote C9 criterion 2: every DENY basename in the inventory is refused at tier-local depths, across spellings', () => {
+  // The oracle is the SHIPPED DOCUMENT, deliberately — criterion 7 is this
+  // test's independent half and does not share it.
+  const doc = fs.readFileSync(path.join(__dirname, '../../docs/instruction-file-inventory.md'), 'utf8');
+  const names = doc.split('\n').filter((l) => l.startsWith('| DENY |'))
+    .map((l) => l.split('|')[2].trim().replace(/[^A-Za-z0-9._-]/g, ''));
+  assert.ok(names.length > 0, 'the inventory must have at least one DENY row for this assertion to mean anything');
+
+  const admit = makeAdmit(defaultLayout());
+  const depths = ['06-Identity', '01-Projects/example', '02-Areas/x/y'];
+  const altCase = (s) => s.split('').map((c, i) => (i % 2 === 0 ? c.toLowerCase() : c.toUpperCase())).join('');
+
+  for (const name of names) {
+    // Distinct spellings only: an all-lowercase name such as `replit.md`
+    // yields three, not four, because "as written" and "lowercased" collide.
+    const spellings = new Set([name, name.toLowerCase(), name.toUpperCase(), altCase(name)]);
+    for (const spelling of spellings) {
+      for (const dir of depths) {
+        const rel = `${dir}/${spelling}`;
+        assert.match(admit(rel) || '', /is a harness instruction file/, `${rel} must be refused as an instruction file`);
+      }
+    }
+    // The vault root: refused by SOMETHING — clause (a)'s job, since a bare
+    // basename there is never under a writable tier directory.
+    assert.ok(admit(name), `${name} at the vault root must be refused`);
+  }
+});
+
+test('dream-promote C9 criterion 3: INSTRUCTION_BASENAMES has exactly as many members as the inventory has DENY rows, each pre-folded', () => {
+  // Same oracle as criterion 2 (the shipped document), and the same
+  // limitation — this bounds the Set from ABOVE, which criterion 2's
+  // per-name checks alone do not: a stray extra member would still pass
+  // every assertion in that test.
+  const src = fs.readFileSync(path.join(__dirname, '../../src/core/dream/promote.js'), 'utf8');
+  const m = src.match(/const INSTRUCTION_BASENAMES = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(m, 'the INSTRUCTION_BASENAMES literal was not found in its expected form');
+  const code = (m[1].match(/'[^']+'/g) || []).map((s) => s.slice(1, -1));
+
+  for (const name of code) {
+    assert.equal(name, name.normalize('NFC').toLowerCase(), `${name} must be pre-folded, or it is unreachable at the Set lookup`);
+  }
+
+  const doc = fs.readFileSync(path.join(__dirname, '../../docs/instruction-file-inventory.md'), 'utf8');
+  const denyCount = doc.split('\n').filter((l) => l.startsWith('| DENY |')).length;
+  assert.ok(denyCount > 0, 'the inventory must have at least one DENY row for this assertion to mean anything');
+  assert.equal(code.length, denyCount, `INSTRUCTION_BASENAMES has ${code.length} names, the inventory has ${denyCount} DENY rows`);
+});
+
+test('dream-promote C9 criterion 7: the independent oracle — a hand-written literal, not derived from the inventory', () => {
+  // As of 2026-09-04, Table A's nine names in their STORED (NFC-lowercased)
+  // spelling. Written by hand: criteria 2 and 3 both take the shipped
+  // document as their oracle, so a consistent omission propagated to the
+  // document, the constant and the fixtures would pass both of them — this
+  // literal is the one surface that does not also shrink with it.
+  const expected = [
+    'claude.md',
+    'claude.local.md',
+    'agents.md',
+    'agents.override.md',
+    'agent.md',
+    'gemini.md',
+    'qwen.md',
+    'warp.md',
+    'replit.md',
+  ];
+
+  // (a) set equality against the DENY basenames parsed out of the shipped
+  // inventory — same members, no duplicates, no extras, no omissions.
+  const doc = fs.readFileSync(path.join(__dirname, '../../docs/instruction-file-inventory.md'), 'utf8');
+  const parsed = doc.split('\n').filter((l) => l.startsWith('| DENY |'))
+    .map((l) => l.split('|')[2].trim().replace(/[^A-Za-z0-9._-]/g, '').normalize('NFC').toLowerCase());
+  assert.equal(new Set(parsed).size, parsed.length, 'the parsed inventory basenames must carry no duplicates');
+  assert.deepEqual([...parsed].sort(), [...expected].sort(), 'the inventory DENY basenames must equal the hand-written literal, exactly');
+
+  // (b) each of the hand-written names reaches denial through makeAdmit.
+  const admit = makeAdmit(defaultLayout());
+  for (const name of expected) {
+    const rel = `01-Projects/example/${name}`;
+    assert.match(admit(rel) || '', /is a harness instruction file/, `${rel} must reach denial through makeAdmit`);
+  }
 });
 
 test('dream-promote: spelling does not decide admission — GREEN side, one directory not two', () => {

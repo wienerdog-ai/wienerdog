@@ -1,0 +1,23 @@
+{
+  "suite": "tests/unit/dream-promote.test.js",
+  "proofs": [
+    {
+      "id": "instruction-basenames-reverted",
+      "wp": "WP-instruction-basename-currency",
+      "criterion": "7",
+      "why": "criterion 7's set-equality half is untouched by this revert and is red at BASELINE on a shrunken tree; the reachability half is what this proof measures, and it must fail here — a proof aimed at criterion 2's parse-derived test would instead go green on a consistently shrunken tree",
+      "file": "src/core/dream/promote.js",
+      "find": "const INSTRUCTION_BASENAMES = new Set([\n  'claude.md',\n  'claude.local.md',\n  'agents.md',\n  'agents.override.md',\n  'agent.md',\n  'gemini.md',\n  'qwen.md',\n  'warp.md',\n  'replit.md',\n]);",
+      "replace": "const INSTRUCTION_BASENAMES = new Set(['claude.md', 'claude.local.md', 'agents.md', 'agents.override.md']); /* RP_MUT_INSTRUCTION_BASENAMES_REVERTED */",
+      "marker": "RP_MUT_INSTRUCTION_BASENAMES_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "criterion 7: the independent oracle",
+      "expectRed": [
+        {
+          "test": ["dream-promote C9 criterion 7: the independent oracle — a hand-written literal, not derived from the inventory"],
+          "signal": "must reach denial through makeAdmit"
+        }
+      ]
+    }
+  ]
+}

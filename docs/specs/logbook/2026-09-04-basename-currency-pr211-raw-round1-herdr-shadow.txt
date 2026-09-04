@@ -1,0 +1,22 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, pr-rubric), PR #211 round 1, detached worktree at deeba7a4. Committed BEFORE adjudication.
+
+{
+  "findings": [
+    {
+      "title": "[P1] [A] Move re-inventory before publishing the release",
+      "body": "On a MINOR release where re-fetching discovers a new instruction basename, this step is reached only after `npm publish`, tag/release creation, and the post-release smoke step. Its required outcome is to update `INSTRUCTION_BASENAMES` and its tests in the same pull request, but the current release has already shipped by then, silently leaving the M7 instruction-file path admissible; place this obligation before validation, commit, and publication. Materiality A: silent wrong behavior with a security consequence. This conflicts with the spec-driven rule in [AGENTS.md](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr211-wt-shadow/AGENTS.md:14) and the [work-package obligation](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr211-wt-shadow/docs/specs/WP-instruction-basename-currency.md:306).",
+      "confidence_score": 0.98,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/pr211-wt-shadow/docs/runbooks/release.md",
+        "line_range": {
+          "start": 14,
+          "end": 14
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "The maintenance obligation is sequenced after publication, making its same-release source and test updates impossible when a MINOR-release re-fetch discovers a new basename. Executed: initial/final `git status --porcelain` (0/0, identical and clean; sandbox cache warnings only), changed-path diff (0, exactly the six permitted paths), `git diff --check` (0), V1 file guard (0), DENY-row count (0, 9), `npm test` (1, sandbox `mkdtemp` EPERM before tests), focused in-memory criteria 2/7 tests (0, 2/2), V2 (0), V3 without `--write` (0, byte-identical: 13,895 bytes and 10 placeholder sites), V4 (0, exactly one canonical step), V6 `npm run lint` (1, network ENOTFOUND while fetching markdownlint; frontmatter passed), and the final static RED-proof probe (0). V5 was intentionally not executed; inspection of `scripts/red-proofs.js` and the declaration established three total declarations, valid criterion-7 metadata, one exact mutation match, the required marker transition, and one matching scoped test title and diagnostic signal.",
+  "overall_confidence_score": 0.98
+}

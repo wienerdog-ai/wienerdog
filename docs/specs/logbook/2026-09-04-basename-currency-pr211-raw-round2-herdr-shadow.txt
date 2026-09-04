@@ -1,0 +1,8 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, pr-rubric), PR #211 round 2, detached worktree at ad347624. Committed BEFORE adjudication.
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No materiality A, B, or C findings remain: the Round 1 issues are fixed, with re-inventory at step 2 before the bump, criterion 3 bounding the constant from above and rejecting non-folded members, and the byte-identical inventory citing LEDGER_BASENAME and SKILL_BASENAME structurally. Executed: boundary check (0), git diff --check (0), V1 guard (0), DENY count (0; 9), npm test (1; sandbox EPERM at mkdtemp before tests ran), focused in-memory V1 probe (0; 105 spelling/depth cases plus root and criterion-7 checks), V2 (0; 9=9 and pre-folded), V3 without --write (0; byte-identical, 13,996 bytes, 10 placeholders), V4 (0; one canonical step), release-order and criterion-3 mutant probes (0), citation probes (0), and V6 lint (1; markdownlint dependency fetch blocked by ENOTFOUND, while frontmatter passed); three discarded auxiliary wrapper attempts exited 1 because of shell quoting or denied heredoc temporary-file creation, and their corrected read-only equivalents exited 0. V5 was deliberately not run: inspection of scripts/red-proofs.js and the declaration plus an in-memory mutation probe (0) established three declarations, one exact find, a valid marker transition, the scoped criterion-7 identity and signal, and loss of denial for exactly the five added basenames; initial and final git status --porcelain both exited 0 and were identically empty.",
+  "overall_confidence_score": 0.97
+}

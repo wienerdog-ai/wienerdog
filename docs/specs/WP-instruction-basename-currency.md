@@ -1,7 +1,7 @@
 ---
 id: WP-instruction-basename-currency
 title: Bring the instruction-basename denial current and give the list a maintenance obligation
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -292,7 +292,7 @@ An `OMIT` row is assigned to nobody and is a stated non-denial.
 | OMIT | `CONVENTIONS.md` | Aider | **Aider documents no fixed filename.** `CONVENTIONS.md` appears as a documentation *example*; the real mechanism is `.aider.conf.yml`'s `read:` key, which takes any user-chosen path | none — an ordinary note, deliberately admitted | https://aider.chat/docs/usage/conventions.html |
 | OMIT | `project_rules.md` | Trae | not documented. Trae's current docs establish the `.trae/rules/` directory with arbitrarily named `*.md` files inside it | none — an ordinary note, deliberately admitted | https://docs.trae.ai/ide/rules |
 | OMIT | `AmazonQ.md` | Amazon Q Developer | not documented. The AWS page establishes `.amazonq/rules/` only | none — an ordinary note, deliberately admitted | https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/context-project-rules.html |
-| OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and `promote.js:111-116` names them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | none — deliberately admitted; the shipped skill-plus-ledger promotion depends on it | `src/core/dream/promote.js:111-116` |
+| OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and the `LEDGER_BASENAME` and `SKILL_BASENAME` declarations in `promote.js` name them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | none — deliberately admitted; the shipped skill-plus-ledger promotion depends on it | the `LEDGER_BASENAME` and `SKILL_BASENAME` declarations in `src/core/dream/promote.js` |
 | OMIT | user-configured names — Gemini CLI and Qwen Code `context.fileName`; Codex CLI `project_doc_fallback_filenames` (documented example: `TEAM_GUIDE.md`); Goose `CONTEXT_FILE_NAMES` | several | **THIS IS THE NAMED RESIDUAL.** The name space is unbounded and user-chosen, so no inventory can cover it. This is the residual the 2026-08-05 ruling accepted, restated rather than reopened | none — unbounded and user-chosen; the named residual | https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md |
 
 ## Table C — how this stays current
@@ -446,6 +446,21 @@ artifact, so the boundary was deleted rather than described again.
 - [ ] **The fifth column, `Refused independently of the dot-segment rule`** — measured per row through the production predicate, and the surface that stops the preamble from overstating coverage. It moves with Table B's preamble and with Table B's trailing count of `none` rows
 - [ ] Acceptance criterion **1** and verification **V3**, which compare the whole shipped file against this block
 - [ ] `docs/specs/WP-dot-segment-denial.md` — **a NON-move.** That spec's own required verification owns the class predicate; this work package hands it rows and changes none of its text
+- [ ] **THE CITATION RULE FOR THE WHOLE RENDERING BLOCK, registered at PR-gate
+      round 1** (it binds Tables A, B and C alike, and is listed here because
+      Table B is the only table that cites a file in this repository): **the
+      rendering block carries no positional citation into a live file** — no
+      `file:LINE`, no `file:START-END`, no ordinal — and **any citation it
+      carries into a live file names a DECLARATION** (ADR-0036, principle A2:
+      seams are named structurally, never by position). The reason is specific
+      to this document: it is generated and shipped, it outlives the commit that
+      renders it, and a line number in it rots on the next edit to the cited
+      file — the round-1 finding was exactly that, the Table B `OMIT` row for
+      `SKILL.md`, `LEARNINGS.md` cited `promote.js:111-116` while this work
+      package's own commit moved those constants to other lines. The row now
+      names `LEDGER_BASENAME` and `SKILL_BASENAME`. **A new or edited row of the
+      block is checked against this rule in the same pass:** `grep -n ':[0-9]'`
+      and `grep -n '\.js:'` over the block must return nothing
 
 **Table C** (the obligation):
 
