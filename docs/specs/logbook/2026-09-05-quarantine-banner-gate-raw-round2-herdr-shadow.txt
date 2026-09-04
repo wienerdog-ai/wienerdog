@@ -1,0 +1,267 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 2, detached worktree at 44aa930d (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 44aa930d0c6ed6584c1757a8f5c92c2fac10dc00 vs main: docs/specs/WP-quarantine-banner-location.md",
+  "summary": "NO-SHIP. The revised pointer remains false under a real partial-failure window, and V5 still accepts unauthorized same-line changes to the Done specification. The specification also retains a contradictory instruction forbidding the doctor RED proof it now requires.",
+  "verdict": "needs-attention",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; printf focus separator; sed -n '1,260p' ../focus-qb2.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "No porcelain entries; git emitted sandbox warnings about an unavailable temporary xcrun cache."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --stat main...HEAD; git diff --numstat main...HEAD; git diff --unified=40 main...HEAD for the two in-scope documents",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '250,600p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '600,900p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '900,1160p' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD; git rev-parse main; git diff --name-status main...HEAD; git diff --unified=8 main...HEAD -- docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0,
+      "result": "HEAD 44aa930d0c6ed6584c1757a8f5c92c2fac10dc00; main 8302ce8e0ddc6d9e383e739c116272e805207444."
+    },
+    {
+      "command": "wc -l and sed -n '1,500p' on the design-gate logbook",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for evaluateRed, validateProof, testNamePattern and related terms; sed -n '1,280p' scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for report outcomes and record rendering; sed relevant portions of src/core/dream/promote.js and src/cli/dream.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1,360p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n for validateProof, evaluateRed, testNamePattern, expectRed and failure messages in scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js over validation, suite-spawn, baseline, RED, control and verdict ranges",
+      "exit_status": 0,
+      "result": "Confirmed an unmoved declared identity throws a FAILED verdict at lines 1641-1642, not ERROR."
+    },
+    {
+      "command": "rg for promote return shapes, report outcomes, publication and record fields",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js over report construction and outcome ranges",
+      "exit_status": 0
+    },
+    {
+      "command": "rg and nl -ba src/cli/dream.js over undelivered-report and G11 ranges",
+      "exit_status": 0
+    },
+    {
+      "command": "nl and rg around Table C and the doctor residual in the specification",
+      "exit_status": 0,
+      "note": "A backtick in the rg pattern was mistakenly interpreted by zsh. The unintended doctor.js command substitution returned command-not-found (127); the final rg command returned 0. No write was attempted."
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '1440,1680p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '1120,1175p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for row G11, report.record, enforcement, fallback and publication across tests and source",
+      "exit_status": 0
+    },
+    {
+      "command": "rg and nl around the ledger constant location, banner, summary and exports",
+      "exit_status": 0
+    },
+    {
+      "command": "nl and rg around warnings.js imports and SECRET_EXHAUSTED_REMEDIATION",
+      "exit_status": 0
+    },
+    {
+      "command": "rg and nl around doctor.js quarantineReport and its secret-exhausted line",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for QBL identities and existing shelf-string pins in the four affected test files",
+      "exit_status": 0,
+      "result": "No existing QBL test names; the six old pins have names outside the declaration patterns."
+    },
+    {
+      "command": "nl -ba src/cli/doctor.js | sed -n '490,570p'",
+      "exit_status": 0
+    },
+    {
+      "command": "Attempt to create /tmp/qb2-v5-review.XXXXXX, initialize an isolated git fixture, apply the three clauses plus unauthorized Q1 reauthoring, and run extracted V5",
+      "exit_status": 1,
+      "result": "The sandbox denied mktemp in /tmp. Subsequent setup writes also failed. Because the empty temporary variable caused later commands to resolve outside the intended fixture, those operations were denied as well. No repository write succeeded."
+    },
+    {
+      "command": "awk-extract the V5 block from the specification and pipe it to bash on the untouched worktree",
+      "exit_status": 1,
+      "result": "Expected RED: all three clauses absent and Done-spec numstat empty."
+    },
+    {
+      "command": "node heredoc for in-memory declaration validation",
+      "exit_status": 1,
+      "result": "zsh could not create its temporary heredoc file because the sandbox is read-only."
+    },
+    {
+      "command": "node -e in-memory exact-contract/declaration validator, first construction",
+      "exit_status": 1,
+      "result": "Four shelf proofs passed; two derivation finds were zero because the probe initially modeled L0 with double quotes instead of the specification's required single-quoted source form."
+    },
+    {
+      "command": "node -e corrected in-memory exact-contract/declaration validator",
+      "exit_status": 0,
+      "result": "All six proofs: find=1, marker in replacement=true, marker absent from target=true, mutated source parses=true."
+    },
+    {
+      "command": "node -e in-memory V5-equivalent evaluation against main's Done-spec text, with all three full clauses plus unauthorized Q1 same-line reauthoring",
+      "exit_status": 0,
+      "result": "All rows had one hit, four cells and the full clause suffix; equivalent numstat was 3/3; unauthorized Q1 content was present; result V5_EQUIVALENT OK."
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '670,760p'",
+      "exit_status": 0,
+      "result": "Confirmed composeRecord renders every preserved copy and feeds all report destinations."
+    },
+    {
+      "command": "rg and nl around promote(), recordSecretDeferred, recordSecretExhausted and writeLedger sequencing in src/cli/dream.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl the specification's four-arm and acceptance-criteria ranges; nl dream.js sequencing; rg and nl regenerateDigest and refreshWarnings",
+      "exit_status": 0,
+      "result": "Confirmed ledger persistence and pointer rendering precede undelivered report.record output; regenerateDigest can throw, while refreshWarnings converts its own failures to return values."
+    },
+    {
+      "command": "wc -l docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "509 lines."
+    },
+    {
+      "command": "nl -ba design-gate logbook | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba design-gate logbook | sed -n '261,540p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba specification | sed -n '403,425p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for three-identities and residual-paragraph wording in the specification",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba specification | sed -n '818,833p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "No porcelain entries; identical to the initial status. Only the same temporary xcrun-cache warnings were emitted."
+    }
+  ],
+  "findings": [
+    {
+      "title": "The output-side pointer becomes durable before the record is printed",
+      "affected_file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 411,
+      "line_end": 420,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "The four-arm table treats promoted/unpublished and refused as if report.record has already reached printed output. The implementation does not establish that ordering. After promote() returns, src/cli/dream.js writes the withheld ledger at line 1107, prints the new pointer-bearing summary at 1110-1116, regenerates the durable digest at 1125, and refreshes reports/warnings.md at 1130. It does not print the undelivered report.record until lines 1152-1163. A process crash after the ledger write, or an exception from regenerateDigest(), therefore leaves durable ledger state—and potentially pointer-bearing output or files—claiming that the run printed each copy and folder even though the only complete record remained in memory and was never printed. On the refused/redacted-only-copy case, that loses the user's only practical route to a bounded-shelf copy. The table is true only for successfully completed runs, while the sentence is unconditional.",
+      "recommendation": "Revise the design so undelivered report.record is emitted before writeLedger and before any pointer-bearing summary, digest, warnings refresh or doctor-visible state can be committed. Add src/cli/dream.js and a failure-injection test to Deliverables, proving that a throw immediately after ledger persistence cannot leave a pointer whose report/output destination was never completed. Alternatively choose wording that remains true after this partial failure, but do not claim row G11's eventual delivery as an already-established destination."
+    },
+    {
+      "title": "V5 still accepts unauthorized edits earlier on the three amended rows",
+      "affected_file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 942,
+      "line_end": 979,
+      "materiality_band": "A",
+      "confidence": 1.0,
+      "body": "Acceptance criterion 8 requires each Q1/Q2/Q9 row to gain its clause and no other edit. V5 checks only that cell 4 ends with the extracted clause and that the file's line-level numstat is 3/3. Arbitrary reauthoring earlier on any of those same three lines preserves both conditions. The in-memory probe inserted the full correct clause into every row, added MATERIAL UNAUTHORIZED REAUTHORING to Q1 before the clause, produced an equivalent 3/3 diff, and all V5 predicates returned OK. This directly contradicts the comment at lines 947-950 and the claimed fix in the logbook at line 406. A wrong implementation can therefore alter Q1's supposedly unchanged text or other canonical row content and pass the specified gate.",
+      "recommendation": "For each row, remove the exact appended clause from the candidate row and byte-compare the remaining row with git show main:$Q. Require equality for all three reconstructed rows in addition to the suffix, placement and changed-row checks. Rehearse a same-line prefix or middle-cell mutation; it must return RED."
+    },
+    {
+      "title": "The specification still forbids the doctor RED proof that its deliverables require",
+      "affected_file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 1091,
+      "line_end": 1093,
+      "materiality_band": "B",
+      "confidence": 1.0,
+      "body": "The Out-of-scope section explicitly says a doctor.js RED proof must not be added and describes the second declaration and spawn as disallowed. That is the exact work required by Deliverables, File B at lines 575-612, criterion 4, criterion 5 and the five-line V3 roll-up. The referenced Table C residual paragraph no longer exists; the logbook says the residual was removed. A literal implementer cannot satisfy both instructions. V3 should catch the omission downstream, so this is band B rather than A. The stale statement at lines 828-829 that Table C fixes three identities, despite T1-T4, reinforces the contradiction.",
+      "recommendation": "Delete the obsolete Out-of-scope bullet at lines 1091-1093 and change 'the three identities' at lines 828-829 to 'the four identities'. Keep the historical round-zero decision in the logbook as history because the later round clearly supersedes it."
+    }
+  ],
+  "validated_round_1_fixes": [
+    "The four normal report outcomes are exhaustively represented: promoted/published and fallback persist the complete record; promoted/unpublished and refused return it for output. composeRecord includes the copy lines on fallback.",
+    "An exception before promote() returns does not advance the transcript ledger, so it does not itself create a new pointer-bearing banner. The counted failure is the later window after promote() returns but before report.record is printed.",
+    "evaluateRed reports an unmoved declared identity as FAILED, not ERROR.",
+    "The patterns [QBL-1] through [QBL-4] select the intended new identities; the six existing pins have different names and are skipped during these proof runs.",
+    "A simple expectation derived from the imported constant stays green under L0 mutation and therefore makes the proof fail. The hand-written expectation requirement is enforced indirectly by the required RED behavior.",
+    "All six inlined declarations have exactly one find occurrence on the specified fixed source forms, include their markers only in replacements, start with markers absent from their target source, and produce syntactically valid mutated JavaScript.",
+    "The new pointer does not contradict L5's unchanged parenthetical. The separately false mixed-shelf clearing sentence remains routed."
+  ],
+  "routed_scope_objections": [
+    {
+      "issue": "Whether L1-L4 should stop naming a folder and stop instructing deletion",
+      "route": "Owner Dispatch precondition",
+      "recommendation": "Confirm the proposed removal.",
+      "counted_toward_verdict": false
+    },
+    {
+      "issue": "L5 says its notice clears when no withheld copies remain, which is false in the measured mixed-shelf state",
+      "route": "WP-quarantine-preserve-durability successor",
+      "recommendation": "Resolve after the durable shelf/listing decision; do not change digest.js in this package without owner direction.",
+      "counted_toward_verdict": false
+    },
+    {
+      "issue": "The owner-ruled remediation value 'delete' conflicts with the only-copy case",
+      "route": "Owner and the governing WP-dream-promote-module Q9 contract",
+      "counted_toward_verdict": false
+    },
+    {
+      "issue": "Shelf selection, retention-cap eviction and crash-durable preservation",
+      "route": "Durability/shelf successor work",
+      "counted_toward_verdict": false
+    }
+  ],
+  "read_only_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "temporary_fixture_note": "The sandbox denied OS-temp creation despite the requested fixture policy. No probe wrote to the worktree, home directory, a real vault or any other location."
+  }
+}
