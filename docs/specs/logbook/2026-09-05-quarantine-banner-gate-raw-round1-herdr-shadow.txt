@@ -1,0 +1,281 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 1, detached worktree at 007858a7 (base main). Committed BEFORE adjudication. Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 007858a7db68223631d966d87ee48798fa92a0ae vs main: docs/specs/WP-quarantine-banner-location.md",
+  "summary": "NO-SHIP: the specified pointer is false when the dream report is refused, V2 admits a second byte-identical author assembled from split literals, and the RED-proof declaration format is not self-contained for the constrained implementer.",
+  "verdict": "needs-attention",
+  "materiality_bands": {
+    "A": "A criterion a wrong implementation passes, silent wrong behavior, or a user-facing sentence left false.",
+    "B": "Caught by downstream verification.",
+    "C": "Hygiene."
+  },
+  "findings": [
+    {
+      "title": "The pointer names a dream report that does not always exist",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 498,
+      "line_end": 505,
+      "confidence": 0.99,
+      "body": "The byte-exact sentence says that each dream report names its copies and folders. The canonical glossary defines a dream report as reports/dreams/YYYY-MM-DD.md. However, src/core/dream/promote.js:1630-1662 has a supported report.outcome === 'refused' arm, and src/cli/dream.js:1132-1163 then prints report.record only to transient command output. The shipped test at tests/unit/dream-pipeline.test.js:1255-1265 explicitly proves that no report is staged or committed on this arm. copyClause does correctly render state/<location>/<artifact> for every record entry, including quarantine/redacted, but on the refused arm those lines are not in a dream report. A later durable ledger banner therefore points users at a file that was never created.",
+      "impact": "The replacement can remain user-visible long after the originating command output is gone, while directing the user to a nonexistent recovery surface. That preserves the original practical data-loss problem in a different form.",
+      "recommendation": "Change the exact sentence and its rationale to distinguish the two real destinations, for example that the originating dream run names each copy in its report or terminal output. Update the exact renderings and pins accordingly. Do not claim that report.record printed after a refused write is a dream report."
+    },
+    {
+      "title": "V2 accepts a second author assembled from split literals",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 681,
+      "line_end": 692,
+      "confidence": 0.99,
+      "body": "V2 counts only contiguous occurrences of the sentence prefix and merely checks that each carrier file contains the identifier PRESERVED_COPIES_POINTER somewhere. A consumer can import the identifier but leave it unused, then rebuild the byte-identical sentence as 'Copies of the withheld ' + 'notes are kept outside your vault; ...'. The in-memory probe returned {\"v1\":true,\"authors\":1,\"v2\":true,\"rebuiltEqualsPointer\":true}. Runtime full-string assertions also pass because the rendered value is identical. This directly violates criterion 5 while all named evidence remains green.",
+      "impact": "The single-author invariant is unenforced, allowing the same source drift this WP exists to eliminate.",
+      "recommendation": "Make V2 validate the carrier expressions, not identifier presence: pin the warnings assignment to PRESERVED_COPIES_POINTER, pin the two ledger substitutions and doctor interpolation to that identifier, and reject alternate string fragments in consumers. Add an observed violating state using a split/template-literal reauthor plus an unused import; it must make V2 red."
+    },
+    {
+      "title": "The new RED-proof declaration is not self-contained for the permitted reading set",
+      "materiality_band": "B",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 590,
+      "line_end": 593,
+      "confidence": 0.95,
+      "body": "The Deliverables require creating quarantine-banner-location.proofs.json, but the spec supplies only semantic mutation descriptions. It does not inline the declaration structure or all required data fields. scripts/red-proofs.js:633-723 requires suite, wp, criterion, why, file, exact find, replace, marker, testNamePattern, and structured expectRed entries, including the rule that replace contains marker. CLAUDE.md:15-17 limits the implementer to the spec and Deliverables files; neither the runner nor an existing declaration is in that reading set. The Table C 'Marker' is described as an assertion diagnostic signal, leaving the runner's mutation marker particularly ambiguous.",
+      "impact": "A correct production/test implementation can still fail V3 because the implementer must guess an undocumented JSON contract. The runner catches the error downstream, so this is band B rather than a silent false green.",
+      "recommendation": "Inline one complete declaration object per T1-T3, including exact source-form find/replace values after the prescribed implementation, mutation marker, escaped testNamePattern, and expectRed identity/signal. Alternatively, explicitly add the runner schema and one canonical declaration as required read-only references without expanding the writable boundary."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "title": "L5's lifecycle sentence is false in a mixed-shelf state",
+      "materiality_if_in_scope": "A",
+      "counted_toward_verdict": false,
+      "route": "Owner, because the frozen design explicitly parks any change to L5",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 400,
+      "line_end": 405,
+      "confidence": 0.98,
+      "body": "The folder and parenthetical portions of L5 remain accurate: listSecretQuarantine filters with e.isFile(), and the parenthetical protects redacted/. But src/core/digest.js:818-822 also says 'this notice clears when no withheld copies are left.' In a mixed state with one direct withheld file and one fall-through only-copy under redacted/, removing the direct file clears the notice even though a withheld copy remains. The related comments at src/core/digest.js:811-813 and tests/unit/digest.test.js:739-740 also incorrectly say redacted/ contains only notes that were committed. A truthful narrow wording would scope clearing to the listed/direct-shelf copies, but the stop criterion routes any L5 change to the owner."
+    },
+    {
+      "title": "Dispatch confirmation remains an owner decision",
+      "counted_toward_verdict": false,
+      "route": "Owner",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 17,
+      "line_end": 43,
+      "body": "The owner must confirm that L1-L4 stop naming a folder and stop instructing deletion before dispatch. This review does not re-argue that product choice."
+    },
+    {
+      "title": "The refused-path remediation value remains contradictory",
+      "counted_toward_verdict": false,
+      "route": "Owner of WP-dream-promote-module Table Q row Q9",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 782,
+      "line_end": 796,
+      "body": "The report still says 'delete that copy' for a refused path even when it is the only preserved copy. The focus explicitly classifies this as owner-ruled and out of scope."
+    },
+    {
+      "title": "Only-copy shelf durability and retention remain unresolved",
+      "counted_toward_verdict": false,
+      "route": "WP-quarantine-preserve-durability / proposed quarantine-only-copy successor",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 774,
+      "line_end": 800,
+      "body": "The redacted shelf remains disposable and capped at fifty. No durability, retention, or shelf-routing change is requested here."
+    }
+  ],
+  "verified_points": [
+    "The census is accurate: grep found 13 state/quarantine hits across 7 src files, comprising 8 comments and 5 user-facing carriers. No state/quarantine or quarantine/ carrier was found in templates/ or skills/.",
+    "The four intended ledger-derived carriers are complete: ledger exhausted banner, ledger summary, warnings remediation, and doctor exhausted row. The digest is the fifth user-facing carrier.",
+    "copyClause renders state/${location}/${artifact}; composeRecord traverses preserved entries for ordinary refused paths, redacted paths, and the report body's union arms.",
+    "The L5 parenthetical itself remains protective and correct because it excludes redacted/ from the deletion instruction.",
+    "The six existing affected assertions are exactly two ledger assertions, two warnings assertions, one doctor equality, and one integration substring. The spec preserves full-string/full-document/full-line equality where it already existed; only the pre-existing integration assertion remains a substring.",
+    "Table C's three conceptual mutations are carrier-disjoint. T3 living in ledger.test.js does not itself create attribution ambiguity because testNamePattern can select its unique identity and evaluateRed compares the own-body failing set exactly.",
+    "Rows Q1, Q2, and Q9 each have four cells and the scoped claims reside in cell 4. V5 returned the intended RED on the untouched tree.",
+    "The planned writable boundary covers the stated implementation and tests; digest.js, promote.js, templates, glossary, and other documentation are not required for the four-carrier implementation. Size M is credible.",
+    "HEAD is 007858a7db68223631d966d87ee48798fa92a0ae, main and merge-base are 8302ce8e0ddc6d9e383e739c116272e805207444, and only the two scoped documents differ.",
+    "Initial and final git status --porcelain output were both empty. No worktree, vault, or home-directory write was performed."
+  ],
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' scratchpad/focus-qb1.txt",
+      "exit_status": 1,
+      "result": "Reviewer prompt read; second path was wrong and reported No such file or directory."
+    },
+    {
+      "command": "sed -n '1,320p' /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/3e5c378a-1a05-422d-8c04-cca4b53f5c78/scratchpad/focus-qb1.txt",
+      "exit_status": 0,
+      "result": "Focus instructions read."
+    },
+    {
+      "command": "git status --porcelain=v1 && git diff --stat main...HEAD && git diff --name-only main...HEAD && git diff --unified=80 main...HEAD -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Initial status clean; two scoped files changed; diff inspected. Git emitted harmless denied xcrun cache warnings."
+    },
+    {
+      "command": "rg -n '^## |^### |^\\| L[0-9]|^\\| T[0-9]|^\\| Q[0-9]|^\\| V[0-9]|Deliverables|Implementation notes|Acceptance|Exact contracts|Verification' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0,
+      "result": "Spec structure indexed."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '240,455p'",
+      "exit_status": 0,
+      "result": "Deliverables, exact contracts, Table L, and Table C read."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '456,824p'",
+      "exit_status": 0,
+      "result": "Mirrors, implementation constraints, acceptance, verification, scope, and definition of done read."
+    },
+    {
+      "command": "rg -n --no-heading 'state/quarantine|quarantine/' src templates skills || true",
+      "exit_status": 0,
+      "result": "Folder-literal census gathered."
+    },
+    {
+      "command": "rg -n -i --no-heading 'quarantin|withheld cop|withheld note|preserved cop|redacted/' src templates skills",
+      "exit_status": 0,
+      "result": "Broad carrier census gathered."
+    },
+    {
+      "command": "grep -rn 'state/quarantine' src/; grep -rn 'state/quarantine' src/ | wc -l; grep -rl 'state/quarantine' src/ | wc -l; rg -l 'state/quarantine|quarantine/' templates skills | sort",
+      "exit_status": 0,
+      "result": "Confirmed 13 hits, 7 files, and no template/skill path literals."
+    },
+    {
+      "command": "nl -ba src/core/digest.js | sed -n '800,865p'; nl -ba tests/unit/digest.test.js | sed -n '790,875p'; rg -n 'listSecretQuarantine: the redacted|not the redacted|Review the copies in state/quarantine' tests/unit/digest.test.js",
+      "exit_status": 0,
+      "result": "Digest rendering and direct-file filter inspected."
+    },
+    {
+      "command": "nl -ba tests/unit/digest.test.js | sed -n '700,775p'",
+      "exit_status": 0,
+      "result": "L5 tests and stale comments inspected."
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '520,720p'; nl -ba src/core/dream/promote.js | sed -n '1080,1305p'; nl -ba src/cli/dream.js | sed -n '1160,1370p'; rg -n 'preserved|report|G11|enforcement' src/cli/dream.js | tail -80",
+      "exit_status": 0,
+      "result": "Preservation record and report delivery paths traced."
+    },
+    {
+      "command": "nl -ba src/core/dream/promote.js | sed -n '706,825p'; nl -ba src/core/dream/promote.js | sed -n '1360,1570p'; nl -ba src/cli/dream.js | sed -n '1120,1170p'",
+      "exit_status": 0,
+      "result": "Every-copy composition and CLI fallback inspected."
+    },
+    {
+      "command": "node - <<'NODE' ... split-literal V2 counterexample ... NODE",
+      "exit_status": 1,
+      "result": "zsh could not create the here-document temporary file; no fixture or repository write occurred."
+    },
+    {
+      "command": "node -e '... in-memory split-literal V2 counterexample ...'",
+      "exit_status": 0,
+      "result": "Printed {\"v1\":true,\"authors\":1,\"v2\":true,\"rebuiltEqualsPointer\":true}."
+    },
+    {
+      "command": "rg -n 'function validateProof|function evaluateRed|testNamePattern|expectRed|signal|find' scripts/red-proofs.js; nl -ba scripts/red-proofs.js | sed -n '1,300p'; find tests/red-proofs -maxdepth 1 -type f -name '*.json' -print | sort",
+      "exit_status": 0,
+      "result": "RED-proof runner schema and existing declarations located."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '620,735p'; nl -ba scripts/red-proofs.js | sed -n '1435,1668p'; sed -n '1,240p' tests/red-proofs/dream-pipeline.proofs.json",
+      "exit_status": 0,
+      "result": "validateProof, mutation application, evaluateRed, and declaration shape inspected."
+    },
+    {
+      "command": "rg -n -C 5 'QBL-1|banner-shelf-claim-restored|quarantine-banner-location.proofs|testNamePattern|find strings|warnings-shelf' docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Table C and prior rehearsal claims cross-checked."
+    },
+    {
+      "command": "rg -n '^\\| \\*\\*(Q1|Q2|Q9)\\*\\* \\|' docs/specs/done/WP-secret-fence-ep2-redact-arm.md; nl -ba docs/specs/done/WP-secret-fence-ep2-redact-arm.md | sed -n '1618,1645p'",
+      "exit_status": 0,
+      "result": "Done-spec rows and target cells inspected."
+    },
+    {
+      "command": "V5 block from spec lines 706-724, executed under zsh",
+      "exit_status": 1,
+      "result": "Expected untouched-tree RED for Q1, Q2, and Q9."
+    },
+    {
+      "command": "rg -n -C 4 'The withheld copies are in state/quarantine|The withheld notes are in state/quarantine|not the redacted/ folder|withheld by the secret check too many times' tests/unit/ledger.test.js tests/unit/dream-warnings.test.js tests/unit/doctor.test.js tests/integration/dream.test.js",
+      "exit_status": 0,
+      "result": "Six affected assertions and their assertion strengths inspected."
+    },
+    {
+      "command": "git rev-parse HEAD main '$(git merge-base main HEAD)' 2>/dev/null || true; git merge-base main HEAD; git log -1 --oneline HEAD; git log -1 --oneline main; git diff --name-only main...HEAD -- src tests scripts templates skills docs/specs/done",
+      "exit_status": 0,
+      "result": "Confirmed target/base hashes and no implementation-tree changes. The quoted command substitution printed literally; the following merge-base command supplied the correct value."
+    },
+    {
+      "command": "rg -n -C 5 'report could not be written|complete record of this run follows|outcome.*refused|accounting.*published.*false|not stored anywhere else|Preserved copies' tests/unit/dream-promote.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js",
+      "exit_status": 0,
+      "result": "Shipped refused-report behavior located."
+    },
+    {
+      "command": "nl -ba tests/unit/dream-promote.test.js | sed -n '1680,1765p'; nl -ba tests/unit/dream-pipeline.test.js | sed -n '1238,1275p'",
+      "exit_status": 0,
+      "result": "Every report arm and no-committed-report assertions inspected."
+    },
+    {
+      "command": "nl -ba src/core/paths.js | sed -n '1,150p'; rg -n 'WIENERDOG_HOME|vault.*core|core.*vault|outside your vault' docs src tests | head -120",
+      "exit_status": 0,
+      "result": "Core/vault location claim checked."
+    },
+    {
+      "command": "nl -ba src/cli/adopt.js | sed -n '145,180p'; rg -n 'vault must never|core.*inside|inside.*vault|pathsOverlap|contains.*core|core.*vault' src/cli/init.js src/cli/adopt.js src/core -g '*.js' | head -100",
+      "exit_status": 0,
+      "result": "Vault-inside-core guard inspected."
+    },
+    {
+      "command": "nl -ba src/core/dream/workspace.js | sed -n '590,720p'; rg -n 'move the Wienerdog core outside|core configured inside' tests/unit tests/integration",
+      "exit_status": 1,
+      "result": "Workspace mutual-containment guard read successfully; final rg found no matching test text."
+    },
+    {
+      "command": "rg -n '^[-*] \\*\\*dream report|dream report' docs/GLOSSARY.md docs/specs/done/WP-dream-promote-module.md | head -80",
+      "exit_status": 0,
+      "result": "Confirmed canonical dream report means reports/dreams/YYYY-MM-DD.md."
+    },
+    {
+      "command": "nl -ba src/cli/doctor.js | sed -n '480,570p'; nl -ba src/core/dream/warnings.js | sed -n '50,100p'; nl -ba src/core/dream/ledger.js | sed -n '420,505p'",
+      "exit_status": 0,
+      "result": "Four planned substitutions and import locations inspected."
+    },
+    {
+      "command": "V1/V2 block from spec lines 672-697, executed under zsh",
+      "exit_status": 1,
+      "result": "zsh treated CARRIERS as one word, producing a shell-mismatch missing-deliverable result; not treated as spec evidence."
+    },
+    {
+      "command": "V1/V2 block from spec lines 672-697, executed under /bin/bash",
+      "exit_status": 1,
+      "result": "Expected untouched-tree RED: 2 ledger, 1 warnings, and 1 doctor shelf claims; zero pointer authors; all three carriers unwired."
+    },
+    {
+      "command": "V5 block from spec lines 706-724, executed under /bin/bash",
+      "exit_status": 1,
+      "result": "Expected untouched-tree RED for all three absent clauses."
+    },
+    {
+      "command": "rg -n 'red-proof|red proof|Deliverables|Read, in order|Nothing else is required' CLAUDE.md; sed -n '1,180p' CLAUDE.md",
+      "exit_status": 0,
+      "result": "Confirmed implementer may read only CLAUDE.md, the spec, and Deliverables files."
+    },
+    {
+      "command": "git status --porcelain=v1; git diff --stat main...HEAD; git diff --name-only main...HEAD",
+      "exit_status": 0,
+      "result": "Status remained clean; two scoped document changes confirmed."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '1,239p'; nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md | sed -n '1,391p'",
+      "exit_status": 0,
+      "result": "Remaining spec prefix and complete logbook reviewed."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "Final status output empty and identical to baseline. Git's denied xcrun cache warnings were non-fatal."
+    }
+  ]
+}

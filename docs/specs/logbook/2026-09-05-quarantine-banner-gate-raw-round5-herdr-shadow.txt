@@ -1,0 +1,246 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 5, detached worktree at 005eed52 (base main). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch yet. The ordering detector, three-state criterion, routed legacy residual, V5, Q-clauses, and six RED-proof declarations are coherent and unchanged as required. However, the Dispatch precondition still says there is only one owner question even though the same section now requires all three owner items to be answered.",
+  "findings": [
+    {
+      "title": "Dispatch heading can cause two mandatory owner decisions to be skipped",
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 17,
+      "line_end": 19,
+      "materiality_band": "B",
+      "confidence": 0.99,
+      "body": "The section heading says \"one owner confirmation\" and the opening says the first product-text question \"is the only one.\" That directly contradicts lines 41-138, which define second and third owner items and forbid dispatch until all three are answered. A dispatcher following the section summary can solicit only the L1-L4 wording confirmation and silently omit the L5 wording disposition and the legacy-record residual decision. The later checklist may catch this, but the precondition itself is internally inconsistent.",
+      "recommendation": "Rewrite the heading and opening to say that the dispatch gate contains three owner items. Clarify that accepting the recommendations changes no Deliverables row, while overruling an item has the scoped costs already stated below."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 105,
+      "line_end": 110,
+      "issue": "The legacy-residual discussion says the copies are still on disk. That is not universally durable for a copy on the bounded redacted shelf: the same spec records that a later run may evict an earlier copy under the retention cap.",
+      "route": "WP-quarantine-only-copy-shelf and the third Dispatch-precondition owner decision",
+      "verdict_effect": "None. Retention and re-argument of the parked legacy recommendation are explicitly out of scope."
+    },
+    {
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 146,
+      "line_end": 152,
+      "issue": "The owner-ruled remediation value remains in tension with the only-copy arm.",
+      "route": "WP-dream-promote-module Table Q row Q9 / PR Discovered issues",
+      "verdict_effect": "None; explicitly out of scope."
+    },
+    {
+      "file": "docs/specs/WP-quarantine-banner-location.md",
+      "line_start": 41,
+      "line_end": 136,
+      "issue": "The L5 clearing sentence and legacy pre-upgrade record are owner decisions, not implementation findings.",
+      "route": "WP-quarantine-only-copy-shelf and WP-quarantine-preserve-durability respectively",
+      "verdict_effect": "None; both are expressly parked."
+    },
+    {
+      "file": "repository diff",
+      "line_start": 1,
+      "line_end": 1,
+      "issue": "The revision also contains owner-queue and raw-review logbook files beyond the two review-scope documents.",
+      "route": "Excluded by USER_FOCUS",
+      "verdict_effect": "None."
+    }
+  ],
+  "verified_points": [
+    "R3-A is genuinely closed in the operative spec: criterion 6 requires the ledger destination rename to be delegated before the injected throw, requires the announcing line and record lines to precede the fault, and requires shipped-ordering RED, after-writeLedger RED, and step-17b GREEN.",
+    "The no-state/watermarks.json fixture precondition is explicit at lines 1250-1253 and is mirrored by the three-state Definition of done at lines 1306-1311.",
+    "No stale operative two-state or digest-boundary detector survives. References to the digest seam at lines 1038-1039 and 1239-1243 describe its demonstrated false green and explain why it was retired.",
+    "The shipped flow has no earlier durable claim about the current run's new secret-revert-exhausted record. Step 4 can persist only migration state; step 5b handles collection-time quarantines; the step-16 warnings member is rendered from the pre-advance ledger; and the promoted-unpublished report member contains the published body bytes, not the missing enforcement record. The step-18 ledger rename is therefore the first durable claim for the new record.",
+    "Both undelivered report arms currently share one block and one condition at src/cli/dream.js:1152-1164. The spec requires moving that whole block unchanged, preserving both arms.",
+    "A delegated ledger rename leaves a valid final ledger. Each dream-pipeline setup uses a distinct os.tmpdir() fixture, so the abandoned ledger cannot be read by the next test. The specified finally restoration prevents the global fs.renameSync patch from escaping the test.",
+    "A weak test that merely observes a fault, faults before the rename, or checks only the final implementation does not satisfy the written criterion: the required output content, delegated rename, and all three implementation placements are explicit.",
+    "The pointer-sentence section, complete Table C section, V5 block, and three amendment clauses have identical extracted SHA-256 values at f198263a and HEAD.",
+    "Both inlined declaration files parse as JSON and contain exactly six proofs across the ledger and doctor suites.",
+    "The third owner item identifies L1, L3, and L4; explicitly excludes L2; gives four conjunctive preconditions; prices three possible resolutions; routes durable provenance to WP-quarantine-preserve-durability; and does not alter the byte-exact sentence or criteria."
+  ],
+  "asset_hash_comparison": {
+    "f198263a": {
+      "pointer_sentence_section": "2b2c2f12448b574eb635d9199f5b1b9428ba1d795dae4f99d7b322c2c294f70a",
+      "table_c_section": "9f4cd1cbedfa5931b3a0b45a4d04b85ad334816b75150f741993597ff1d1467e",
+      "v5_block": "3ec9392e4b75cc8cfbcc21d19f684bf2939f81a713d555b967fa5d3ebff4f8f2",
+      "q_clauses": "275467e870d7cef0509ddfddeb405be881f37b5ca7770c2f1418392245b96cf6"
+    },
+    "HEAD": {
+      "pointer_sentence_section": "2b2c2f12448b574eb635d9199f5b1b9428ba1d795dae4f99d7b322c2c294f70a",
+      "table_c_section": "9f4cd1cbedfa5931b3a0b45a4d04b85ad334816b75150f741993597ff1d1467e",
+      "v5_block": "3ec9392e4b75cc8cfbcc21d19f684bf2939f81a713d555b967fa5d3ebff4f8f2",
+      "q_clauses": "275467e870d7cef0509ddfddeb405be881f37b5ca7770c2f1418392245b96cf6"
+    },
+    "result": "All four extracted surfaces are byte-identical."
+  },
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-qb5.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Empty before review."
+    },
+    {
+      "command": "git rev-parse HEAD main",
+      "exit_status": 0,
+      "result": "HEAD=005eed52cc97dfdbed79c5ee51b29f8e045529f6; main=8302ce8e0ddc6d9e383e739c116272e805207444"
+    },
+    {
+      "command": "git diff --name-status main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --stat main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '1,460p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '461,920p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '921,1400p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '240,520p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '521,800p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-banner-location.md | sed -n '796,1070p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md | sed -n '1,300p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md | sed -n '301,600p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md | sed -n '601,900p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --name-status f198263a..HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --stat f198263a..HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate f198263a..HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=80 f198263a..HEAD -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "Extract and SHA-256 hash the pointer section, Table C, V5, and Q-clauses from git show f198263a:docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "Extract and SHA-256 hash the pointer section, Table C, V5, and Q-clauses from git show HEAD:docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=0 f198263a..HEAD -- docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"^[[:space:]]*// (4\\.|5b\\.|17b\\.|18\\.|19\\.|20\\.)|undelivered|writeLedger\\(|regenerateDigest\\(|refreshWarnings\\(|reportWarningsRefresh|report\\.record|accounting\\.published\" src/cli/dream.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '880,1190p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/ledger.js | sed -n '60,155p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"ROW G11|undelivered|watermarks\\.json|renameSync|transcript-ledger|record was delivered|announcing line|report\\.record\" tests/unit/dream-pipeline.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '560,765p'; nl -ba tests/unit/dream-pipeline.test.js | sed -n '1320,1485p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/ledger.js | sed -n '137,190p'; rg -n \"function commitNamedSet|function recordSkills|writeRegistry|fs\\.(renameSync|writeFileSync|chmodSync)\" src/cli/dream.js src/core/dream -g '*.js'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/dream.js | sed -n '190,270p'; nl -ba src/core/dream/skill-registry.js | sed -n '1,75p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -i \"digest write|digest rename|both directions|two-state|two state|fault injected|failure-injection|three-state|ledger boundary|watermarks\\.json\" docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"L7|criterion 6|shipped ordering|after `?writeLedger|step 17b|FIRST thing|LEDGER BOUNDARY\" docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 1,
+      "result": "Reviewer command quoting error: zsh reported an unmatched double quote. No repository conclusion was drawn from this invocation."
+    },
+    {
+      "command": "rg -n \"third owner|all THREE|legacy|pre-upgrade|per-record delivery stamp|WP-quarantine-preserve-durability|PARKED|L1.*,.*L3.*,.*L4|L2 does not|L2 is NOT\" docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'L7|criterion 6|shipped ordering|after .*writeLedger|step 17b|FIRST thing|LEDGER BOUNDARY' docs/specs/WP-quarantine-banner-location.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"report:|report\\.bytes|record:|copyClause|Refused by policy|accounting|published\" src/core/dream/promote.js | sed -n '1,220p'; nl -ba src/core/dream/promote.js | sed -n '790,1030p'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<parse the two inlined Table C JSON declarations and require 2 files / 6 proofs>'",
+      "exit_status": 0,
+      "result": "Parsed two files and six proofs."
+    },
+    {
+      "command": "rg -n -i 'one owner|only one|only one\\.|BOTH are answered|both owner items|first two owner items|all THREE|three parked owner' docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check f198263a..HEAD -- docs/specs/WP-quarantine-banner-location.md docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Empty after review; identical to the initial status."
+    }
+  ],
+  "hermeticity": {
+    "worktree_writes": "None",
+    "temporary_fixtures_created": "None",
+    "status_before": "",
+    "status_after": "",
+    "status_identical": true,
+    "environment_note": "Git emitted sandbox warnings because macOS tooling attempted and failed to create xcrun cache files under /tmp; the Git commands still returned status 0 and the worktree remained unchanged."
+  }
+}
