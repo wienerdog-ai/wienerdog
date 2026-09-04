@@ -142,6 +142,17 @@ carries the commands and their output.
   this spec would change.
 - `docs/runbooks/release.md` is 13 lines, nine numbered steps, and carries **no**
   re-inventory step. `docs/instruction-file-inventory.md` does not exist.
+- **This spec's own path, and why both V3 and V4 accept two of them.** Today the
+  live path is the DRAFT one, `docs/specs/WP-instruction-basename-currency.md`;
+  `docs/specs/done/WP-instruction-basename-currency.md` does not exist. On the
+  flip to `Done` the file moves and the draft path stops existing. Both
+  verification steps therefore resolve the spec at **exactly one** of the two and
+  fail on zero or both, and the *rendered document* names the `done/` path as its
+  regeneration source — that is the one the release maintainer will still find
+  when Table C's obligation fires, which is after the flip by construction.
+  Round 3 measured the alternative: with only the `done/` file present, the
+  previous hardcoded-draft-path form failed `missing input`, and the shipped
+  inventory carried a path that had already rotted.
 - `npm test` on this tree: 2608 tests, 0 fail, exit 0. `npm run lint`: clean.
 
 ## Deliverables (permission boundary — touch ONLY these)
@@ -209,8 +220,9 @@ This inventory is the canonical source for `INSTRUCTION_BASENAMES` in
 refuses to promote into the vault, at any depth and in any case.
 
 **This file is GENERATED and is never edited by hand.** It is the canonical
-rendering block of `docs/specs/WP-instruction-basename-currency.md` with one
-date substituted for `@DATE@`. To change it, change that block and re-render.
+rendering block of `docs/specs/done/WP-instruction-basename-currency.md` with a
+single date substituted into its date placeholders. To change it, change that
+block and re-render — never this file.
 
 ## Table A — denied basenames
 
@@ -481,6 +493,14 @@ artifact, so the boundary was deleted rather than described again.
   declaration's `(wp, criterion)` pair unselected, which the roll-up reports as
   `FILTERED` and the run exits non-zero. A filtered run is not evidence of
   failure — it is evidence of a filter.
+- **`--write` silently overwrites an existing, different `docs/instruction-file-inventory.md`,
+  and that is ACCEPTED, not an oversight.** The plugin channel executed it in
+  round 3 and did not count it as a finding, for the reason recorded here so no
+  later reviewer re-raises it: the file's contract is *generated, never edited by
+  hand*, so there is no hand-authored state for an overwrite to destroy, and a
+  refuse-if-exists flag would only add a step between the implementer and the
+  one correct byte sequence. If the file on disk differs from the rendering, the
+  right outcome is to replace it, which is exactly what happens.
 - **Ambiguity → choose the simpler option** and record it under "Decisions made".
   Do not expand scope to resolve it.
 
@@ -512,6 +532,16 @@ artifact, so the boundary was deleted rather than described again.
       structure a wrong document can satisfy: rounds 1 and 2 each defeated a
       check that had to find the right part of it, and the third repair deletes
       the finding rather than improving it.
+      **The comparison's INPUTS are validated too, which is what round 3 added.**
+      Exactly one non-flag argument; the date is a real calendar date (UTC
+      round-trip, so `2026-99-99` fails); the payload carries **no fence
+      delimiter line**; and every `@DATE@` site is structurally accounted for —
+      **one `Current as of` line plus one per DENY row, ten today, and no
+      other** — so a block with its dates hardcoded, or with one `Fetched` cell
+      left at an older date, fails before anything is rendered. The spec is
+      resolved at **exactly one** of `docs/specs/WP-instruction-basename-currency.md`
+      and `docs/specs/done/WP-instruction-basename-currency.md`; zero or both is
+      a failure, so the command survives this spec's own status flip.
 - [ ] **2.** Every basename the inventory marks `DENY` is refused with a reason
       containing `is a harness instruction file` at each of the three tier-local
       depths `06-Identity/`, `01-Projects/example/`, `02-Areas/x/y/`, in every
@@ -531,9 +561,14 @@ artifact, so the boundary was deleted rather than described again.
       everything after its its number and the space after it — equals the canonical release step pinned
       between this spec's `BEGIN-CANONICAL-RELEASE-STEP` and
       `END-CANONICAL-RELEASE-STEP` sentinels. Zero and two both fail, and an
-      unnumbered occurrence does not count. **Nothing else about the runbook is
-      checked or constrained.** Round 2 executed the previous token check against
-      a step that carried every required token and negated every one of them, and
+      unnumbered occurrence does not count, and **neither does an occurrence
+      inside a fenced code block** — round 3 passed a runbook that was nothing
+      but a ```` ```text ```` example containing `7. <the sentence>`, so fence
+      state is tracked and lines inside a fence are never candidates. **Nothing
+      else about the runbook is checked or constrained**, and deliberately so: a
+      whole-runbook base-plus-insertion pin would rot the moment any other
+      release step changes. Round 2 executed the previous token check against a
+      step that carried every required token and negated every one of them, and
       it passed; a negation of these bytes is not constructible.
 - [ ] **5.** `npm run red-proofs`, unfiltered, reports `3 declared proof(s), 3
       selected`, a `PROVEN` roll-up line for
@@ -611,7 +646,7 @@ console.log('V2 OK: '+code.length+' names in INSTRUCTION_BASENAMES = '+inv.lengt
 "
 
 # V3 — criterion 1. THE WHOLE FILE, NOT A REGION. Extracts the canonical
-# rendering block from this spec between its two sentinels, substitutes the one
+# rendering block from the spec between its two sentinels, substitutes the one
 # @DATE@ placeholder, and compares EVERY BYTE against the shipped document.
 # Nothing is located inside the document, so nothing about the document can be
 # located wrongly: no headings, no regions, no final cells, no duplicate scan.
@@ -620,69 +655,117 @@ console.log('V2 OK: '+code.length+' names in INSTRUCTION_BASENAMES = '+inv.lengt
 # Fetched cell — and got exit 0. This form cannot: a missing opening paragraph is
 # a byte difference like any other.
 #
+# ROUND 3 added the INPUT validation this had none of, because a byte compare is
+# only as good as the two things it compares. Four gates, each one a mutant both
+# channels executed green: exactly ONE non-flag argument (two dates silently
+# ignored the second); a REAL CALENDAR DATE by UTC round-trip (2026-99-99 passed
+# the shape test); the payload carries NO fence delimiter (an interior ``` line
+# rendered and was approved, producing malformed markdown); and the placeholder
+# sites are STRUCTURALLY ACCOUNTED FOR — one Current-as-of line plus one per DENY
+# row, ten today, and no other site — which is what a block with its dates
+# hardcoded (zero placeholders) and a block with one Fetched cell left at an old
+# date both failed to satisfy. The spec is resolved at exactly one of its draft
+# and done/ paths, so the command keeps working after the status flip.
+#
 # The SAME command with --write is how the implementer PRODUCES the file. Run it
 # once with --write, then once without, and paste both. Never retype the block.
 #   node -e "<the script below>" 2026-09-15 --write
 node -e "
 const fs=require('fs');
-const SPEC='docs/specs/WP-instruction-basename-currency.md';
 const DOC='docs/instruction-file-inventory.md';
+const CAND=['docs/specs/WP-instruction-basename-currency.md','docs/specs/done/WP-instruction-basename-currency.md'];
 const BEGIN='<!-- BEGIN-CANONICAL-INVENTORY -->', END='<!-- END-CANONICAL-INVENTORY -->';
 const args=process.argv.slice(1);
 const write=args.indexOf('--write')>=0;
-const date=args.filter((a)=>a!=='--write')[0]||'';
-if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}\$/.test(date)){console.error('FAIL: pass exactly one date as YYYY-MM-DD');process.exit(1);}
+const dates=args.filter((a)=>a!=='--write');
+if(dates.length!==1){console.error('FAIL: pass exactly one date argument, got '+dates.length+': '+JSON.stringify(dates));process.exit(1);}
+const date=dates[0];
+if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}\$/.test(date)){console.error('FAIL: '+JSON.stringify(date)+' is not shaped YYYY-MM-DD');process.exit(1);}
+const d=new Date(date+'T00:00:00Z');
+if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==date){console.error('FAIL: '+date+' is not a real calendar date');process.exit(1);}
 if(date<'2026-09-04'){console.error('FAIL: '+date+' is earlier than 2026-09-04, the date this spec read its citations');process.exit(1);}
-if(!fs.existsSync(SPEC)){console.error('FAIL: missing input '+SPEC);process.exit(1);}
+const found=CAND.filter((f)=>fs.existsSync(f));
+if(found.length!==1){console.error('FAIL: exactly one of the draft and done spec paths must exist; found '+found.length+(found.length?': '+found.join(', '):''));process.exit(1);}
+const SPEC=found[0];
 const L=fs.readFileSync(SPEC,'utf8').split('\n');
 function at(m){const h=[];for(let i=0;i<L.length;i++) if(L[i]===m) h.push(i);
-  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times, expected 1');process.exit(1);} return h[0];}
+  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times in '+SPEC+', expected 1');process.exit(1);} return h[0];}
 const b=at(BEGIN), e=at(END);
 if(!(b<e)||L[b+1]!=='\`\`\`markdown'||L[e-1]!=='\`\`\`'){console.error('FAIL: the sentinels do not wrap a markdown fence');process.exit(1);}
-const rendered=L.slice(b+2,e-1).join('\n').split('@DATE@').join(date)+'\n';
-if(rendered.indexOf('@DATE@')>=0){console.error('FAIL: a placeholder survived substitution');process.exit(1);}
-if(write){fs.writeFileSync(DOC,rendered);console.log('V3 --write: rendered '+DOC+' at '+date+', '+rendered.split('\n').length+' lines, '+rendered.length+' bytes');process.exit(0);}
+const payload=L.slice(b+2,e-1);
+const fences=payload.filter((l)=>/^[ \t]*(\`\`\`|~~~)/.test(l));
+if(fences.length){console.error('FAIL: the payload carries '+fences.length+' fence delimiter line(s); the first is '+JSON.stringify(fences[0]));process.exit(1);}
+const deny=payload.filter((l)=>l.indexOf('| DENY |')===0);
+if(deny.length===0){console.error('FAIL: the payload has no DENY rows');process.exit(1);}
+const bad=deny.filter((l)=>!/\| @DATE@ \|\$/.test(l));
+if(bad.length){console.error('FAIL: '+bad.length+' DENY row(s) do not end in a @DATE@ Fetched cell; the first ends '+JSON.stringify(bad[0].slice(-40)));process.exit(1);}
+const hdr=payload.filter((l)=>l.indexOf('**Current as of @DATE@.')===0);
+if(hdr.length!==1){console.error('FAIL: '+hdr.length+' Current-as-of placeholder line(s), expected exactly 1');process.exit(1);}
+const body=payload.join('\n');
+const sites=body.split('@DATE@').length-1;
+if(sites!==deny.length+1){console.error('FAIL: '+sites+' @DATE@ site(s) in the payload, but '+(deny.length+1)+' are accounted for (1 Current-as-of + '+deny.length+' DENY rows); every site must be one of those');process.exit(1);}
+const rendered=Buffer.from(body.split('@DATE@').join(date)+'\n','utf8');
+if(write){fs.writeFileSync(DOC,rendered);console.log('V3 --write: rendered '+DOC+' from '+SPEC+' at '+date+' — '+(payload.length+1)+' lines, '+rendered.length+' bytes utf8, '+sites+' placeholder sites');process.exit(0);}
 if(!fs.existsSync(DOC)){console.error('FAIL: missing input '+DOC);process.exit(1);}
-const actual=fs.readFileSync(DOC,'utf8');
-if(actual===rendered){console.log('V3 OK: '+DOC+' is byte-identical to the canonical rendering at '+date+' ('+rendered.length+' bytes)');process.exit(0);}
-const A=actual.split('\n'), R=rendered.split('\n');
+const actual=fs.readFileSync(DOC);
+if(Buffer.compare(actual,rendered)===0){console.log('V3 OK: '+DOC+' is byte-identical to the canonical rendering of '+SPEC+' at '+date+' ('+rendered.length+' bytes utf8, '+sites+' placeholder sites)');process.exit(0);}
+const A=actual.toString('utf8').split('\n'), R=rendered.toString('utf8').split('\n');
 for(let i=0;i<Math.max(A.length,R.length);i++) if(A[i]!==R[i]){
   const ai=A[i]===undefined?'<end of file>':A[i], ri=R[i]===undefined?'<end of file>':R[i];
   let c=0; while(c<ai.length&&c<ri.length&&ai[c]===ri[c]) c++;
   const w=(x)=>JSON.stringify(x.slice(Math.max(0,c-30),c+70));
-  console.error('FAIL: first byte difference at line '+(i+1)+', column '+(c+1));
+  console.error('FAIL: first difference at line '+(i+1)+', column '+(c+1));
   console.error('  expected: '+w(ri));
   console.error('  actual  : '+w(ai));
   break;
 }
-console.error('FAIL: '+DOC+' is not the canonical rendering ('+A.length+' lines vs '+R.length+')');
+console.error('FAIL: '+DOC+' is not the canonical rendering ('+actual.length+' bytes vs '+rendered.length+')');
 process.exit(1);
 " 2026-09-04
 
 # V4 — criterion 4. THE OBLIGATION IS A SENTENCE, NOT A BAG OF TOKENS. Extracts
-# the canonical step body from this spec between its two sentinels and requires
+# the canonical step body from the spec between its two sentinels and requires
 # exactly one numbered line of the runbook whose body equals it BYTE FOR BYTE.
 # Round 2 executed the old token check against "On a MINOR release, the release
 # maintainer need not re-fetch docs/instruction-file-inventory.md; updating code
 # and tests in the same pull request is unnecessary" and got V4 OK. A negation
 # is unconstructible here: it would have to be byte-identical to the affirmative.
+#
+# ROUND 3: a runbook consisting only of a fenced ```text example containing
+# "7. <the sentence>" passed — an obligation that exists only inside a code
+# sample. Fence state is now tracked and lines inside a fence are never
+# candidates. The match must also be a TOP-LEVEL numbered line: the anchored
+# /^[0-9]+\. / already rejects any indentation, which is why an indented
+# continuation line was red in every round. Deliberately NOT a whole-runbook
+# base+insertion compare — release.md's other steps move independently and such
+# a pin would rot the moment anything else in the release process changes.
+#
 # Takes an optional runbook path so the same code can be rehearsed on a temp
 # copy; with none it reads the real runbook.
 node -e "
 const fs=require('fs');
-const SPEC='docs/specs/WP-instruction-basename-currency.md';
+const CAND=['docs/specs/WP-instruction-basename-currency.md','docs/specs/done/WP-instruction-basename-currency.md'];
 const BEGIN='<!-- BEGIN-CANONICAL-RELEASE-STEP -->', END='<!-- END-CANONICAL-RELEASE-STEP -->';
 const RB=process.argv.slice(1)[0]||'docs/runbooks/release.md';
-for(const f of [SPEC,RB]) if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
+const found=CAND.filter((f)=>fs.existsSync(f));
+if(found.length!==1){console.error('FAIL: exactly one of the draft and done spec paths must exist; found '+found.length+(found.length?': '+found.join(', '):''));process.exit(1);}
+const SPEC=found[0];
+if(!fs.existsSync(RB)){console.error('FAIL: missing input '+RB);process.exit(1);}
 const L=fs.readFileSync(SPEC,'utf8').split('\n');
 function at(m){const h=[];for(let i=0;i<L.length;i++) if(L[i]===m) h.push(i);
-  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times, expected 1');process.exit(1);} return h[0];}
+  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times in '+SPEC+', expected 1');process.exit(1);} return h[0];}
 const b=at(BEGIN), e=at(END);
 if(!(b<e)||L[b+1]!=='\`\`\`text'||L[e-1]!=='\`\`\`'||e-1!==b+3){console.error('FAIL: the sentinels do not wrap a one-line text fence');process.exit(1);}
 const want=L[b+2];
-const hits=fs.readFileSync(RB,'utf8').split('\n').filter((l)=>/^[0-9]+\. /.test(l)&&l.replace(/^[0-9]+\. /,'')===want);
-if(hits.length!==1){console.error('FAIL: '+hits.length+' numbered line(s) of '+RB+' carry the canonical step body, expected exactly 1');process.exit(1);}
-console.log('V4 OK: '+RB+' carries the canonical step body exactly once ('+want.length+' bytes)');
+let inFence=false; const hits=[];
+for(const l of fs.readFileSync(RB,'utf8').split('\n')){
+  if(/^[ \t]*(\`\`\`|~~~)/.test(l)){inFence=!inFence;continue;}
+  if(inFence) continue;
+  if(/^[0-9]+\. /.test(l)&&l.replace(/^[0-9]+\. /,'')===want) hits.push(l);
+}
+if(inFence){console.error('FAIL: '+RB+' ends inside an unclosed fence');process.exit(1);}
+if(hits.length!==1){console.error('FAIL: '+hits.length+' top-level numbered line(s) of '+RB+' carry the canonical step body, expected exactly 1');process.exit(1);}
+console.log('V4 OK: '+RB+' carries the canonical step body exactly once, outside any fence ('+Buffer.byteLength(want,'utf8')+' bytes utf8)');
 "
 
 # V5 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other

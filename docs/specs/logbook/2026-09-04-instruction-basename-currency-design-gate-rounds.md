@@ -511,7 +511,7 @@ unconstructible."*
    changes the rendering block.
 2. **The release-runbook step is now one pinned sentence.** It sits between
    `<!-- BEGIN-CANONICAL-RELEASE-STEP -->` / `<!-- END-CANONICAL-RELEASE-STEP -->`
-   in a one-line `text` fence, 523 bytes. V4 requires **exactly one** numbered
+   in a one-line `text` fence, **525 UTF-8 bytes** (round 2 recorded 523, which was `String.length` in UTF-16 code units — corrected by round 3's [C] finding). V4 requires **exactly one** numbered
    line of the runbook whose body equals it byte for byte, and asserts nothing
    else. Table C's five-token row was replaced by `The step's canonical text`,
    which names the pinned bytes. The obligation is the sentence; a negation would
@@ -562,9 +562,9 @@ next two are the exact wrong documents the round-2 channels used.
 
 ```text
 --write (production)        : V3 --write: rendered docs/instruction-file-inventory.md at
-                              2026-09-04, 99 lines, 13779 bytes                        rc=0
+                              2026-09-04, 99 lines, 13779 bytes — as printed then; 13,855 UTF-8                        rc=0
 compare, same date          : V3 OK: byte-identical to the canonical rendering at
-                              2026-09-04 (13779 bytes)                                 rc=0
+                              2026-09-04 (13779 bytes — as printed then; 13,855 UTF-8)                                 rc=0
 entire opening removed      : FAIL: first byte difference at line 1
                                 expected: "# Instruction-file inventory"
                                 actual  : "## Table A — denied basenames"
@@ -581,7 +581,7 @@ heading suffix added        : FAIL: first byte difference at line 17, column 30
 CRLF line endings           : FAIL: first byte difference at line 1, column 29
                                 expected: "# Instruction-file inventory"
                                 actual  : "# Instruction-file inventory\r"              rc=1
-2027-01-15 render + compare : V3 OK: byte-identical … at 2027-01-15 (13779 bytes)      rc=0
+2027-01-15 render + compare : V3 OK: byte-identical … at 2027-01-15 (13779 bytes — as printed then; 13,855 UTF-8)      rc=0
 2027-01-15 file, 2026 arg   : FAIL: first byte difference at line 3, column 20
                                 expected: "**Current as of 2026-09-04. …"
                                 actual  : "**Current as of 2027-01-15. …"               rc=1
@@ -590,13 +590,13 @@ NOT-A-DATE argument         : FAIL: pass exactly one date as YYYY-MM-DD         
                               this spec read its citations                             rc=1
 ```
 
-**V4, six states.** The canonical step body is **523 bytes**.
+**V4, six states.** The canonical step body is **525 UTF-8 bytes** (recorded as 523 at the time; that was `String.length`, corrected in round 3).
 
 ```text
 untouched runbook           : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
 absent runbook              : FAIL: missing input <temp>/rb-missing.md                 rc=1
 compliant                   : V4 OK: … carries the canonical step body exactly once
-                              (523 bytes)                                              rc=0
+                              (523 bytes — as printed then; 525 UTF-8)                                              rc=0
 ROUND 2'S NEGATED STEP      : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
 two copies                  : FAIL: 2 numbered line(s) … expected exactly 1            rc=1
 MUST -> should (one word)   : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
@@ -618,9 +618,18 @@ above as `line 34, column 129`.
 
 **Sentinel integrity, measured:** each of the four sentinels occurs **exactly
 once as a standalone line** in the spec (`grep -cx` = 1 for each). V3 and V4 both
-assert this themselves and fail loudly otherwise, and neither extraction is
-load-bearing in the round-1 sense: a mis-extraction makes the byte compare fail,
-never pass.
+assert this themselves and fail loudly otherwise.
+
+**CORRECTION, entered by round 3 and left here where the wrong claim was made.**
+This paragraph continued *"neither extraction is load-bearing in the round-1
+sense: a mis-extraction makes the byte compare fail, never pass."* **That was
+false as stated.** Both channels demonstrated a mis-extraction that passes: an
+interior standalone ``` line inside the payload was extracted, rendered, written
+and approved with rc=0, producing a malformed shipped document. The claim is
+withdrawn and replaced by the narrower true one: *an extraction that returns the
+WRONG SPAN fails the byte compare, but an extraction that returns a span whose
+CONTENT is invalid markdown was not detected at all until round 3 made the
+payload's own well-formedness a checked precondition.*
 
 **Citations touched this round:** none. No Table A or Table B row, cell or URL
 changed; the rows moved into the rendering block byte-identically. Table A's
@@ -634,3 +643,144 @@ same nine names and the shipped inventory is the same content. What changed is
 how the artifacts are produced and proved. The one caveat from round 1 stands:
 the inventory ships as a product document, so its Table C rows and Table A
 preamble sentence are reader-visible. The orchestrator owns the call.
+
+### Round 3 fixes — architect, 2026-09-04, on top of `332e7e4c`
+
+Both channels confirmed **R2-A and R2-B genuinely closed** — the skeleton-less
+document, the all-`NOT-A-DATE` document and the negated release step are all red
+against the byte-compare design — and confirmed the anchoring chain, Table D,
+the Deliverables boundary, ADR-0004 and size S coherent. Zero scope objections
+counted on either channel.
+
+**Neither channel found anything about the PRODUCT.** The deny list, the
+reachability of all nine names, and the obligation's *content* were not
+questioned by either channel in this round. Every finding is about the
+verification machinery's own **input validation** — the byte compare was sound,
+but it compared two things it had not checked. Under the runbook's weighted
+closure that is **LIGHT**: fixed inside the frozen surface, no new mechanism, no
+further external round.
+
+**The shape of all five, in one sentence:** *a byte comparison is only as good as
+the two artifacts handed to it, and rounds 1 and 2 had spent all their attention
+on the comparison.* Nothing here re-opens the fixed point; it hardens its inputs.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **R3-1** [A, converged] | V3's date/placeholder contract was unenforced: `2026-99-99` rendered; a second date argument was silently ignored; a block with every `@DATE@` hardcoded rendered under a *different* pass date; a 2027 render kept one `Fetched` cell at `2026-09-04`. The post-substitution placeholder check was tautological | **FIXED, four gates before any substitution.** Exactly **one** non-flag argument. A **real calendar date**, by UTC construction and `toISOString` round-trip. The lower bound `≥ 2026-09-04` kept. And the placeholder sites are **structurally accounted for**: exactly one `**Current as of @DATE@.` line, every `\| DENY \|` row ending in `\| @DATE@ \|`, and the total `@DATE@` count equal to `1 + DENY rows` — **no unaccounted site permitted**. The tautological post-check was deleted. **The prose site was removed rather than whitelisted:** the rendering's own "GENERATED" sentence used to contain a literal `@DATE@` (which the renderer then substituted, producing a sentence that named a date instead of the placeholder). It now says *"a single date substituted into its date placeholders"*, so the count is **10 = 1 + 9** and every site is one the structure explains. The magic number in the check is not a number at all — it is `deny.length + 1` |
+| **R3-2** [A, converged] | An interior standalone ``` line inside the payload was extracted, rendered, written and **approved**, producing malformed markdown. The wrapper check validated only the lines adjacent to the sentinels | **FIXED.** Any payload line matching `/^[ \t]*(```\|~~~)/` is rejected before `--write` and before compare. **The logbook sentence this falsified has been corrected in place** (round-2 §0.9, "Sentinel integrity"): the claim *"a mis-extraction makes the byte compare fail, never pass"* is **withdrawn** and replaced by the narrower true statement — a wrong *span* fails the compare, but a span whose *content* was invalid markdown went undetected until the payload's own well-formedness became a checked precondition |
+| **R3-3** [A, shadow] | V3/V4 hardcoded the **draft** spec path while Table C and the pinned release sentence direct the maintainer to `docs/specs/done/…`. Executed with only the `done/` file present, V3 failed `missing input`; and the shipped inventory embedded the path that rots at the flip | **FIXED on both sides.** V3 and V4 now resolve the spec at **exactly one** of `docs/specs/WP-instruction-basename-currency.md` and `docs/specs/done/WP-instruction-basename-currency.md`, failing on **zero or both**. The *rendered document's* canonical-source sentence now names the **`done/`** path — the one the release maintainer will still find, because Table C's trigger fires after the flip by construction. Current state gained a bullet saying the draft path is the live one until the flip, with the measurement that produced the finding |
+| **R3-4** [A, plugin] | A runbook consisting solely of a fenced ```` ```text ```` example containing `7. <sentence>` passed V4 — an obligation existing only inside a code sample | **FIXED in the smallest form asked for.** V4 tracks fence state (a line starting ``` or `~~~` toggles it) and lines inside a fence are never candidates; an unclosed fence at EOF is itself a failure. The match must be a **top-level** numbered line, which the anchored `/^[0-9]+\. /` already required. **Deliberately NOT** a whole-runbook base-plus-insertion compare: `release.md`'s other steps move independently and that pin would rot under dispatch — recorded in V4's own comment so it is not re-proposed |
+| **R3-5** [C, converged] | "523 bytes" was `String.length` in UTF-16 code units; the sentence is **525** UTF-8 bytes and the rendering **13,855** as measured at f070c888 | **FIXED.** V3 now compares **Buffers** (`Buffer.compare`) and reports `Buffer.length`; V4 reports `Buffer.byteLength(want,'utf8')`. Round 2's recorded numbers are corrected in place with the reason. **The current numbers differ from the review's** because R3-1 and R3-3 changed the block: the rendering is now **13,895 UTF-8 bytes over 100 lines**, and the step body is **523 code units / 525 UTF-8 bytes** (unchanged) |
+
+**Recorded as ACCEPTED, not a finding, so it is not re-raised:** `--write`
+silently overwrites an existing different `docs/instruction-file-inventory.md`.
+The plugin executed it and did not count it, and the reason is now in
+Implementation notes — the file's contract is *generated, never edited by hand*,
+so there is no hand-authored state an overwrite could destroy, and a
+refuse-if-exists flag would only stand between the implementer and the one
+correct byte sequence.
+
+### 0.10 Round-3 re-runs, all as written, extracted from the fenced blocks
+
+Every command below is the spec's own text run through a shell. Mutants that
+required a different repository layout were driven with a Python runner that only
+sets `cwd`; the shell text is untouched. The repository tree was left clean.
+
+**V1–V4 on the untouched tree — all RED for their intended reasons:**
+
+```text
+V1: MISSING DELIVERABLE: docs/instruction-file-inventory.md                             rc=1
+V2: FAIL: missing input docs/instruction-file-inventory.md                              rc=1
+V3: FAIL: missing input docs/instruction-file-inventory.md                              rc=1
+V4: FAIL: 0 top-level numbered line(s) of docs/runbooks/release.md carry the
+    canonical step body, expected exactly 1                                             rc=1
+```
+
+**V3 — the round-3 argument mutants (R3-1):**
+
+```text
+--write (production)   : V3 --write: rendered docs/instruction-file-inventory.md from
+                         docs/specs/WP-instruction-basename-currency.md at 2026-09-04 —
+                         100 lines, 13895 bytes utf8, 10 placeholder sites               rc=0
+compare, same date     : V3 OK: byte-identical … (13895 bytes utf8, 10 placeholder sites) rc=0
+2026-99-99             : FAIL: 2026-99-99 is not a real calendar date                    rc=1
+two date arguments     : FAIL: pass exactly one date argument, got 2:
+                         ["2026-09-04","2026-09-05"]                                     rc=1
+no date argument       : FAIL: pass exactly one date argument, got 0: []                 rc=1
+NOT-A-DATE             : FAIL: "NOT-A-DATE" is not shaped YYYY-MM-DD                     rc=1
+2020-01-01             : FAIL: 2020-01-01 is earlier than 2026-09-04, the date this
+                         spec read its citations                                         rc=1
+2027-01-15 round trip  : V3 OK: byte-identical … at 2027-01-15                           rc=0
+2027 file, 2026 arg    : FAIL: first difference at line 3, column 20
+                           expected: "**Current as of 2026-09-04. …"
+                           actual  : "**Current as of 2027-01-15. …"                     rc=1
+```
+
+**V3 — the round-3 payload mutants (R3-1, R3-2), each a mutated copy of this
+spec in its own temporary repository root:**
+
+```text
+interior ``` fence in the payload   : FAIL: the payload carries 1 fence delimiter
+                                      line(s); the first is "```"                        rc=1
+zero placeholders (dates hardcoded) : FAIL: 9 DENY row(s) do not end in a @DATE@ Fetched
+                                      cell; the first ends "…memory | 2026-09-04 |"      rc=1
+one Fetched cell left at 2026-09-04,
+  rendered at 2027-01-15            : FAIL: 1 DENY row(s) do not end in a @DATE@ Fetched
+                                      cell; the first ends "…memory | 2026-09-04 |"      rc=1
+an extra @DATE@ site in prose       : FAIL: 11 @DATE@ site(s) in the payload, but 10 are
+                                      accounted for (1 Current-as-of + 9 DENY rows);
+                                      every site must be one of those                    rc=1
+```
+
+**V3 and V4 — the lifecycle-path layouts (R3-3):**
+
+```text
+only docs/specs/done/ — write   : V3 --write: rendered … from
+                                  docs/specs/done/WP-instruction-basename-currency.md
+                                  at 2026-09-04 — 100 lines, 13895 bytes utf8            rc=0
+only docs/specs/done/ — compare : V3 OK: byte-identical to the canonical rendering of
+                                  docs/specs/done/WP-instruction-basename-currency.md    rc=0
+both paths exist — V3           : FAIL: exactly one of the draft and done spec paths must
+                                  exist; found 2: …                                      rc=1
+both paths exist — V4           : same                                                   rc=1
+neither path exists — V3        : FAIL: exactly one … found 0                            rc=1
+neither path exists — V4        : same                                                   rc=1
+```
+
+The `done/`-only run is the future state Table C's obligation fires in, and it is
+now green where round 3 measured it red.
+
+**V4 — ten states, including round 3's exact attack (R3-4):**
+
+```text
+untouched runbook (no argument)          : FAIL: 0 top-level numbered line(s) …          rc=1
+absent runbook                           : FAIL: missing input <temp>/rb-missing.md      rc=1
+COMPLIANT                                : V4 OK: … exactly once, outside any fence
+                                           (525 bytes utf8)                              rc=0
+ROUND 2's NEGATED STEP                   : FAIL: 0 top-level numbered line(s) …          rc=1
+two copies                               : FAIL: 2 top-level numbered line(s) …          rc=1
+MUST -> should (one word)                : FAIL: 0 top-level numbered line(s) …          rc=1
+present but not numbered                 : FAIL: 0 top-level numbered line(s) …          rc=1
+ROUND 3's ATTACK — only a fenced ```text
+  example containing "7. <sentence>"     : FAIL: 0 top-level numbered line(s) …          rc=1
+a real step PLUS a fenced example
+  quoting it                             : V4 OK: … exactly once, outside any fence      rc=0
+an indented numbered copy                : FAIL: 0 top-level numbered line(s) …          rc=1
+```
+
+The last-but-one row is the case the fence rule must **not** break: quoting the
+step in an example alongside a real step stays green, because only the fenced
+copy is skipped.
+
+**Byte accounting, measured (R3-5):** the canonical step body is **523 UTF-16
+code units / 525 UTF-8 bytes**; the rendering is **13,895 UTF-8 bytes over 100
+lines** at this revision. V3 compares `Buffer`s and reports `Buffer.length`; V4
+reports `Buffer.byteLength(want,'utf8')`.
+
+**Weighted closure, the architect's read: LIGHT, and the loop should close here.**
+No `src/` behaviour, no ADR contract, no user-observable product change — the
+nine names, their citations and the obligation's content are byte-identical to
+round 2 apart from the two sentences R3-1 and R3-3 required. Both channels
+returned zero product findings. The machinery did not grow a mechanism: V3 gained
+input gates and V4 gained fence state, both inside the existing two byte
+comparisons.
