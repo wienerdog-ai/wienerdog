@@ -164,17 +164,23 @@ function shapeMatches(shape, args, computed) {
 /**
  * ROW W1'S ENFORCEMENT: THE RUN'S CALLS ARE PINNED, AND ANYTHING ELSE FAILS.
  *
- * W1(a) is a total over the package's OWN acts. Every git invocation the run
- * makes must match one of KNOWN_CALLS exactly; an unrecognised shape is a
- * violation by default rather than something to be understood. There is no
- * question here about which repository a call reaches or which index it would
- * write — those questions were the retired direction, and both were refuted by
- * measurement (see KNOWN_CALLS).
+ * W1(a) is a total over the package's OWN acts. Every git invocation THE SEAM
+ * OBSERVES must match one of KNOWN_CALLS exactly; an unrecognised shape is a
+ * violation by default rather than something to be understood. The seam is
+ * total over `src/cli/dream.js` and NOT over the dream path — row W1(c)'s
+ * COVERAGE clause (`docs/specs/done/WP-dream-promote-in-workspace.md:541`)
+ * states that limit, names the spawn points outside it, and owns the list; it
+ * is cited here and never restated. There is no question here about which
+ * repository a call reaches or which index it would write — those questions
+ * were the retired direction, and both were refuted by measurement (see
+ * KNOWN_CALLS).
  *
  * A call declaring `env: 'private'` must additionally carry a `GIT_INDEX_FILE`
  * that is NEITHER the user's index NOR inside their working tree. Both clauses
  * are enforced: a private index placed inside the user's tree is a violation,
- * which the previous single-clause form silently permitted.
+ * which the previous single-clause form silently permitted. Both clauses apply
+ * only to an ABSOLUTE value; a non-absolute one is REFUSED UNJUDGED and raises
+ * — see `UNJUDGED` below.
  */
 function watchIndexWrites(vault) {
   const { spawnPinnedSync } = require('../../src/core/exec-identity');
@@ -192,6 +198,19 @@ function watchIndexWrites(vault) {
    * object name it passes was computed by an earlier pinned read.
    */
   const computed = new Set();
+  /**
+   * REFUSED, NOT JUDGED — and a Symbol precisely so it can never be read as a
+   * fifth verdict string. A `private` shape's `GIT_INDEX_FILE` is judged ONLY
+   * when it is absolute: where git places a RELATIVE one is a question about
+   * git's frame, and `realish` answers in the NODE process's frame, which is a
+   * different frame. Two candidate frames — the `-C` directory and the worktree
+   * top — were each measured FALSE, and a third measurement showed the answer
+   * also depends on the invocation's whole environment. So no frame is modelled
+   * here: the guard declines to decide rather than deciding in a frame it
+   * cannot ground. Row W1(c) carries the rule; the seam wrapper below raises on
+   * this state.
+   */
+  const UNJUDGED = Symbol('UNJUDGED — non-absolute private GIT_INDEX_FILE, refused rather than judged');
   /** The decision, exposed so the vacuity guard can prove it still REJECTS. */
   const classify = (args, env) => {
     const gif = env && env.GIT_INDEX_FILE;
@@ -199,6 +218,7 @@ function watchIndexWrites(vault) {
       if (!shapeMatches(k.args, args, computed)) continue;
       if (k.env === 'unset') return gif ? 'known shape carrying an unexpected GIT_INDEX_FILE' : null;
       if (!gif) return 'known shape missing its private GIT_INDEX_FILE';
+      if (!path.isAbsolute(gif)) return UNJUDGED;
       const priv = realish(gif);
       if (priv === userIndex) return "private index IS the user's index";
       if (under(priv, vaultReal)) return "private index lies inside the user's working tree";
@@ -210,6 +230,17 @@ function watchIndexWrites(vault) {
     const args = o.args || [];
     seen.push(args.join(' '));
     const why = classify(args, o.env);
+    if (why === UNJUDGED) {
+      // THE REFUSAL RAISES, AND IT IS NOT A VERDICT. A harness ERROR, so it
+      // cannot be mistaken for one of the four failure modes and cannot be
+      // absorbed by `violations`. It carries the invocation the way a verdict
+      // red does — MINUS the resolved path, because nothing resolved it: that
+      // absence is the outcome, not an omission.
+      throw new Error(
+        `${String(UNJUDGED.description)}:\n    git ${args.join(' ')}\n    [cwd=${o.cwd}, `
+          + `GIT_INDEX_FILE=${o.env.GIT_INDEX_FILE} (RAW; no resolved path — none was computed)]`
+      );
+    }
     if (why !== null) {
       // THE RED CARRIES ITS INVOCATION, AND WHERE THE ENV RESOLVED — both
       // private-arm clauses test `realish(gif)`, so printing only the raw
@@ -433,7 +464,7 @@ test('dream-pipeline: claim-1-pipeline behaviourally — a brain that attempts a
 
 // ── CLAIM 2b, product-wide ───────────────────────────────────────────────────
 
-test('dream-pipeline: claim-2b-pipeline — no product code invokes git with a cwd at or beneath the workspace root, over a whole run', async () => {
+test('dream-pipeline: claim-2b-pipeline — no git call the seam OBSERVES runs with a cwd at or beneath the workspace root, over a whole run', async () => {
   const ctx = setup();
   const ws = workspaceOf(ctx);
   /** @type {string[]} */
@@ -443,6 +474,10 @@ test('dream-pipeline: claim-2b-pipeline — no product code invokes git with a c
   // THE SEAM, NOT A GREP. A source grep for a workspace-rooted cwd cannot
   // discriminate: it is green today, green on a correct implementation, and
   // green on a broken one that passes the path through a variable.
+  // WHAT THIS EVIDENCE REACHES: the calls that arrive through the injected
+  // `opts.spawnGit`, and no others — row W1(c)'s COVERAGE clause
+  // (`docs/specs/done/WP-dream-promote-in-workspace.md:541`) states that limit
+  // and owns it, and it is cited rather than restated here.
   const spawnGit = (o) => {
     cwds.push(o.cwd);
     return spawnPinnedSync('git', getPaths(), {
@@ -1629,6 +1664,62 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
       watch.classify(['rev-parse', 'HEAD'], {}), null,
       'the classifier still ACCEPTS: a pinned shape must not be rejected, or the '
         + 'guard above would pass by rejecting everything'
+    );
+    // THE REFUSAL — a `private` shape's GIT_INDEX_FILE is judged ONLY when it is
+    // ABSOLUTE (row W1(c), the absoluteness sentence). A relative one is REFUSED
+    // UNJUDGED: neither clause is applied and no verdict is returned, because
+    // git would place it in ITS frame while `realish` answers in this process's.
+    // Measured: `GIT_INDEX_FILE=rel.idx git -C <repo> read-tree HEAD` from an
+    // unrelated cwd writes `<repo>/rel.idx` — a relative override git places
+    // inside the vault, which the resolving form ADMITTED.
+    const refused = watch.classify(['write-tree'], { GIT_INDEX_FILE: 'rel.idx' });
+    assert.equal(typeof refused, 'symbol',
+      'a non-absolute private GIT_INDEX_FILE is REFUSED, not judged: the decision '
+        + 'returns a distinguishable UNJUDGED state, never a verdict string — the '
+        + 'four failure modes gain no fifth member');
+    assert.match(String(refused.description), /^UNJUDGED — /,
+      'the UNJUDGED state names itself in its own diagnostic');
+    // AND THE REFUSAL RAISES — a harness ERROR carrying the invocation the way a
+    // verdict red does, MINUS the resolved path, because none is computed.
+    assert.throws(
+      () => watch.spawnGit({ args: ['write-tree'], cwd: ctx.vault, env: { GIT_INDEX_FILE: 'rel.idx' } }),
+      (e) => {
+        assert.match(e.message, /^UNJUDGED — /);
+        assert.match(e.message, /git write-tree/);
+        assert.ok(e.message.includes(`cwd=${ctx.vault}`), 'the raise carries the cwd');
+        assert.match(e.message, /GIT_INDEX_FILE=rel\.idx \(RAW/);
+        assert.ok(e.message.includes('no resolved path'), 'the raise states the absence');
+        assert.doesNotMatch(e.message, /-> resolved/,
+          'nothing was resolved, so no resolved path is reported');
+        return true;
+      },
+      'the seam wrapper raises on the UNJUDGED state rather than recording a violation'
+    );
+    // THE ACCEPT SIDE OF THE SAME ARM STAYS ALIVE. An ABSOLUTE value is judged
+    // exactly as before — BOTH private-index verdicts are still reachable and
+    // the legitimate one is still admitted — or the refusal above would be
+    // satisfied by a guard that refuses everything.
+    assert.equal(
+      watch.classify(['write-tree'], { GIT_INDEX_FILE: indexFile }),
+      "private index IS the user's index",
+      'an absolute value equal to the user\'s index is still JUDGED, not refused'
+    );
+    assert.equal(
+      watch.classify(['write-tree'], { GIT_INDEX_FILE: path.join(ctx.vault, 'scratch-index') }),
+      "private index lies inside the user's working tree",
+      'an absolute value inside the working tree is still JUDGED, not refused'
+    );
+    assert.equal(
+      watch.classify(['write-tree'], { GIT_INDEX_FILE: '/tmp/legit-private.idx' }), null,
+      'an absolute private index outside the vault is still ADMITTED'
+    );
+    // SCOPE OF THE REFUSAL — `private` ONLY. An `unset` shape arriving with a
+    // non-absolute value keeps its EXISTING verdict, so no verdict becomes
+    // unreachable for a subclass.
+    assert.equal(
+      watch.classify(['rev-parse', 'HEAD'], { GIT_INDEX_FILE: 'rel.idx' }),
+      'known shape carrying an unexpected GIT_INDEX_FILE',
+      "the refusal does not reach the `unset` arm"
     );
     assert.deepEqual(watch.violations, [],
       "a git call was not one of the run's pinned shapes (Table W row W1)\n" + watch.violations.join('\n'));

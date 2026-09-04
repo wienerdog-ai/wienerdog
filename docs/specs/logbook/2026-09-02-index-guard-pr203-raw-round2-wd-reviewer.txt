@@ -1,0 +1,55 @@
+PR GATE ROUND 2 — PR #203 — wd-reviewer (spec-fidelity gate, claude subagent, same agent as round 1 resumed with the round-1 findings listed), tip 2bb3305a (re-verified at 08978533). Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+# APPROVE
+
+PR #203 · branch `wp/index-guard-residuals` · **the tip moved during this review**: I verified `2bb3305a` as briefed, then re-verified at the current tip **`08978533`**. `2bb3305a..08978533` is one commit adding one file, `docs/specs/logbook/2026-09-02-index-guard-pr203-raw-round2-codex-plugin.txt` — an always-allowed logbook raw; `src/`, `tests/`, `docs/specs/done/` and the spec are byte-identical to `2bb3305a`, so every check below stands at the current tip. Worktree left clean, HEAD and branch untouched, all probes in `mktemp -d /tmp/…` fixtures since removed.
+
+## What I EXECUTED
+
+| Check | Result |
+|---|---|
+| `git diff --name-status 5a4a79bd..HEAD` | 4 files: the done spec + 3 new `docs/specs/logbook/*.txt` raws. `src/cli/dream.js` and `tests/unit/dream-pipeline.test.js` **untouched since round 1** (`git diff --stat 5a4a79bd..HEAD -- src/ tests/` = empty) |
+| Done-spec diff vs `origin/main` | **one hunk, `@@ -541 +541 @@`**, 1 insertion / 1 deletion; file 1720 lines on both sides |
+| `diff` of everything after line 541, main vs HEAD | **identical** — `:548-1017` (the Mirrored Surface Checklist) provably untouched |
+| Line 541, round 1 vs round 2, segment by segment | **exactly one segment differs**, and within it exactly one clause: `— the pair is registered in the Mirrored Surface Checklist exactly as «own …» ↔ RUN_VALUE is.` → `— the pair moves together exactly as «own …» ↔ RUN_VALUE does.` Nothing else moved; markers still on (2)(5)(7)(8) |
+| `grep -oF 'Mirrored Surface Checklist'` on line 541 | **1** — the pre-existing `RUN_VALUE` registration at the preamble, which is true. The false claim is gone |
+| **My independent verifier re-run on committed round-2 bytes** (side A `require()`s the module, side B parses `:541`, no expected mapping) | **GREEN, exit 0** — 9 entries, labels 1..9 in module order, no decoy, every marker between citation and terminating period, PRODUCING = module `produces: true` on `hash-object`, `rev-parse HEAD`, `write-tree`, `commit-tree` |
+| **RED — module-side `produces` flip** (`write-tree` in a scratch module, row untouched; mutation proven applied) | **exit 1**, position 7 flagged — the mirror is still genuinely derived from the module |
+| `node scripts/boundary-check.js …` at both `2bb3305a` and `08978533` | **exit 0** |
+| `git diff --quiet origin/main -- tests/unit/dream-pipeline.known-calls.js` | **exit 0** — byte-identical, no re-pin owed |
+| `src/cli/dream.js` line count main vs HEAD | **1206 / 1206** |
+| 5-pattern sweep | **exit 0** — the same two registered non-moves and nothing else |
+| `npm test` at `2bb3305a` | **exit 0** — 2444 tests, 2432 pass, 0 fail, 12 skipped |
+| `npm run lint` at `2bb3305a` and at `08978533` | **exit 0** both |
+| `npm test -- tests/unit/dream-pipeline.test.js` at `08978533` | **exit 0** — 44/44 |
+
+**Round-1 finding 1 is genuinely fixed.** The replacement clause is not merely inoffensive — it byte-echoes the ground Table B's "Executable mirror" row actually gives the pair (*"The pair moves together, as `«own …»` ↔ `RUN_VALUE` already does"*). Findings 2, 3 and 4 are recorded accurately as Discovered issues 3, 5 and 4 with the exact file:line lists I gave, and the criterion-4a paragraph now carries an explicit correction naming `WP-show-slot-own-value-kind.md:690` instead of asserting 4a clean. The disposition table in the PR comment matches the tree.
+
+## Findings
+
+No blocking findings. Three notes.
+
+### 1. `[contract]` Codex P2 (raised round 1, **re-raised verbatim round 2** at `docs/specs/done/WP-dream-promote-in-workspace.md:541`) — **materiality C — disposition: RESIDUAL, concur; route to wd-architect**
+
+I adjudicated it independently rather than accepting the recorded reason. The implementer's disposition is **correct**, and the reason can be sharpened so wd-architect does not re-derive it:
+
+- (c)(ii)'s exact text is *"It is outside this row's SCOPE by construction rather than by any classification of the call: its one invocation is `merge-file` on three absolute temp paths, with `cwd` a fresh `mkdtemp` root … which lies outside any repository, under a constructed env — **so (a) never reaches it**."* The exclusion is **grounded in vacuity**, not in a domain carve-out.
+- **The (c)(i) ↔ (c)(ii) disagreement is pre-existing on `main`, not created here.** (c)(i) says of the other un-seamed spawn point: *"**THIS SPAWN POINT IS IN SCOPE UNDER (a)** — it is OUR act."* (c)(ii) says its call is outside scope. The WP's own Current state flagged exactly this (*"clause (c)(i) names one of those invocations as IN SCOPE, which falsifies clause (a)'s parenthetical"*), and row 0 aligned (a) with **(c)(i)** — the side that agrees with (a)'s own AUTHORSHIP ruling.
+- Codex's proposed fix — defer (a)'s *scope* to (c)'s classifications — is what Table C row 0 forbids: row 0 requires *"the scope stays a total over the run's own acts"* while only the SEAM stops being claimed total, and (c)'s COVERAGE clause governs the **seam's reach**, not (a)'s domain. Following Codex would reinstate visibility as the boundary.
+- Editing (c)(ii) is an **eighth edit** outside the Deliverables cell's enumerated SEVEN.
+
+What wd-architect should settle: whether (c)(ii) should read *"vacuously satisfies (a)"* rather than *"outside this row's SCOPE"*, so (c)(i) and (c)(ii) stop framing the same class two ways. That is a canonical-cell ruling, not an implementer's call.
+
+### 2. `[quality]` `docs/specs/logbook/2026-09-02-index-guard-pr203-raw-round1-*.txt` — the sweep's glob does not reach the new raws — **materiality C — disposition: DROP (note only)**
+
+The three round-1 raws contain, between them, **6 hits of the sweep's own five patterns** (`codex-plugin` ×2 `Every git invocation this pipeline makes`, ×2 `The run's ONE git seam`; the other two ×1 each of `product code invokes git` and `values THIS RUN PRODUCED`). They score zero because the sweep globs `git ls-files '*.md' '*.js'` and they are `.txt`. This is **not a defect** — they are dated, tip-pinned, verbatim gate records, the exempt provenance class, and the Mirrored Surface Checklist already registers the sweep as unable to certify the concept. Noting it only because the sweep's residual table is now silent about a file class that would otherwise report hits; if wd-architect ever promotes the sweep from floor to gate, the glob is the thing to revisit.
+
+### 3. `[boundary]` The four new `.txt` files — **clean**
+
+All under `docs/specs/logbook/`, which `scripts/boundary-check.js` admits without listing (I ran it, exit 0, at both tips). They are not picked up by markdownlint or the frontmatter check (still 265 specs / 4 agents, unchanged from round 1), so committing gate raws costs nothing in the lint pipeline.
+
+## Closed-Contract Drift Check (ADR-0031)
+
+W1(c) remains the sole canonical decision surface; the round-2 fix *removed* a claimed mirror registration rather than adding one, so the cell no longer asserts a registration that `:548-1017` does not carry — the settled checklist was neither edited nor misrepresented. The PRODUCING ↔ `produces: true` pair is now stated on exactly the ground Table B grants it: the row decides, the module mirrors, identity is established by independent shape-by-shape derivation (re-verified, with its RED), and no mirror was promoted to primary. The one standing drift family is the W1 wording cluster — Discovered issues 3–6 — and it now has a fourth member (the (c)(i)/(c)(ii) scope framing, finding 1 above). **Four findings across two rounds landing on the same contract family is the signal my mandate names**: the recommendation stands and should be treated as due, not optional — a single **wd-architect canonical-extraction pass on the pinned-set mirror registry**, covering (a) positional citations into live test files, (b) prose counts stranded in superseded Done specs, and (c) the (c)(i)/(c)(ii) scope framing. That is a spec-side pass; it is not a reason to hold this PR. The spec is not at fault for anything in this round — Table B's preamble row specified the required content precisely, and round 1's defect was a clause added beyond it, now removed.
+
+**Definition of done §5** is the only item outstanding, and it is procedural: both gates have run on the diff, the round-1 findings are fixed or dispositioned, and the sole open gate item is the twice-raised Codex P2, dispositioned as a residual I concur with. Merging is the maintainer's call.

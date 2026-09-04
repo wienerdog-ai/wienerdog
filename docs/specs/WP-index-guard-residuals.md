@@ -1,7 +1,7 @@
 ---
 id: WP-index-guard-residuals
 title: Refuse to judge a relative private index, give the PRODUCING attribute its slot, and narrow the seam's coverage claim
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-show-slot-own-value-kind]
