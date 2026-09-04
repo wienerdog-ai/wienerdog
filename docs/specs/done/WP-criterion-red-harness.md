@@ -1,7 +1,7 @@
 ---
 id: WP-criterion-red-harness
 title: Ship the RED-proof runner — a declared mutation, machine-applied, that must redden a named assertion
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
