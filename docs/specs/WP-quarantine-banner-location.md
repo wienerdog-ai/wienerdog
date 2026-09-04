@@ -145,7 +145,7 @@ selected`, four `PROVEN` criteria roll-ups, `RUN: PROVEN`, exit 0.
 |---|---|---|
 | `ledger.js` `quarantineBannerLine`, the `secret-revert-exhausted` sentence | `The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest of the files there (not the redacted/ folder inside it).` | the transcript ledger |
 | `ledger.js` `secretRevertSummaryLine`, its closing sentence | `The withheld notes are in state/quarantine/.` | three integers |
-| `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | byte-identical to the first, retyped; the constant's own comment says so | the transcript ledger |
+| `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | byte-identical to the first, retyped; its comment claims identity with *"the digest banner"*, which is the wrong surface — the identity is with the first row, not with `digest.js`'s | the transcript ledger |
 | `doctor.js` `quarantineReport`, the `secret-revert-exhausted` row | `… too many times in a row. The withheld copies are in state/quarantine/.` | the transcript ledger |
 | `digest.js` `secretQuarantineWarn` | `Review the copies in state/quarantine/: restore …` | `listSecretQuarantine`, a **directory listing** of `state/quarantine/` |
 
@@ -400,7 +400,7 @@ this spec cites it. The governing rule is **L0**; L1–L6 apply it per surface.
 | **L0** | — the rule | — | stated for the surfaces downstream of `promote()`'s return (`WP-dream-promote-module` Table Q row **Q9**: *none re-derives one, and none adds a carrier beside it*) and never applied to these four, which state a shelf while observing no copy | **A surface may name the folder a preserved copy is in ONLY IF it observes that copy — by reading the preservation record, or by listing the folder. A surface that observes neither states the CLASS and POINTS at one that does, and names no folder.** The class sentence has exactly one author: `ledger.js`'s exported `PRESERVED_COPIES_POINTER`, whose text is byte-exact under Implementation notes. It contains no path, no basename, no count and no command |
 | **L1** | `ledger.js` `quarantineBannerLine`, the `secret-revert-exhausted` sentence | the transcript ledger: which transcripts are quarantined and why. **No copy** | states `The withheld copies are in state/quarantine/` and instructs a delete, both false on the fall-through arm (Current state) | the shelf clause and the disposal instruction are replaced by `PRESERVED_COPIES_POINTER`. **Everything else in this banner is byte-unchanged**: the count, the sanitized basename list, the closing `The session files themselves are untouched.`, the informational sentence, the freshness gate, and the rule that it names no command |
 | **L2** | `ledger.js` `secretRevertSummaryLine`, its closing sentence | three integers | states `The withheld notes are in state/quarantine/.` | replaced by `PRESERVED_COPIES_POINTER`. The three counts and their fail-closed integer coercion are byte-unchanged |
-| **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment asserting byte-identity with it | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
+| **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment claiming byte-identity with *"the sentence the digest banner uses for the same class"* — **which names the wrong surface**: it is byte-identical to L1, `ledger.js`'s exhausted banner, and not to L5, `digest.js`'s | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
 | **L4** | `doctor.js` `quarantineReport`, the `secret-revert-exhausted` row | the transcript ledger. **No copy** | states `The withheld copies are in state/quarantine/.` | the same import, the same substitution. The row's count, its position in the Table A order, and the four other rows are byte-unchanged |
 | **L5** | `digest.js` `secretQuarantineWarn` | **the folder**: `listSecretQuarantine` lists direct file entries of `state/quarantine/` | names `state/quarantine/`, lists the basenames it observed, and keeps the `(not the redacted/ folder inside it)` parenthetical | **UNCHANGED, and this row is why.** It satisfies L0 for every copy it announces. What it cannot announce is a copy on the other shelf — measured, `listSecretQuarantine` returns `[]` in that state — and closing that needs durable state the product does not have. Out of scope owns it; nothing here weakens or widens this banner |
 | **L6** | `promote.js` `copyClause` | the record entry: `artifact`, `location`, `remediation` | renders `` unredacted copy at state/<location>/<artifact> `` | **UNCHANGED — the canonical renderer.** It is the surface L1–L4's pointer points at. Its `remediation` VALUE is a separate, owner-ruled contract (`WP-dream-promote-module` Table Q row Q9) and is not touched; Out of scope records the tension it leaves |
@@ -467,8 +467,9 @@ added here on the spot.
 - [ ] **Acceptance criteria** — every criterion naming a carrier, the pointer
       sentence, the single-author rule, or a Table C identity.
 - [ ] **Verification commands** — V1 (the shelf claim is gone from the three
-      carriers), V2 (one author, every carrier wired), V3 (`npm run red-proofs`
-      and its three roll-up lines), V4 (`npm test`, `npm run lint`).
+      carriers), V2 (one author, every carrier wired), V5 (each clause in its
+      row's `why` cell), V3 (`npm run red-proofs` and its three roll-up lines),
+      V4 (`npm test`, `npm run lint`).
 - [ ] **Current state** — the five-carrier census table, the driven
       fall-through measurement, the `listSecretQuarantine` result, the
       `pruneRedactedOriginals` cap claim, the three-falsified-mirrors
@@ -478,6 +479,9 @@ added here on the spot.
       changes and what does not; "Exact contracts" and its four measured
       renderings; the two "does not change" paragraphs under Table L; Table C's
       two residual paragraphs.
+- [ ] **Operative prose, second entry** — the amendment-placement rule under
+      Implementation notes and its per-row target table, which V5 and
+      acceptance criterion 8 both mirror.
 - [ ] **Mirrors outside this document** (all inside the Deliverables boundary) —
       `warnings.js`'s doc comment on `SECRET_EXHAUSTED_REMEDIATION` (L3), the
       two-line comment in `tests/unit/digest.test.js` claiming byte-identity
@@ -513,13 +517,38 @@ added here on the spot.
 
 - **Amending a `Done` spec's canonical row is an established move here, and it
   has a shape.** `WP-preservation-abort-widening` amended this same file's rows
-  Q18 and B3b the same way: the row keeps its original text and gains a
-  **bolded, dated, successor-naming clause**, appended at the end of the row's
-  first content cell. Append only. Do not re-author a row, do not restate Table
-  L's members inside one, and do not touch any other row or assertion in that
-  file. All three clauses carry universals an append would otherwise silently
-  leave standing, so all three are byte-exact. **Q1 first** — its decided TEXT
-  does not change and only one sentence of its reasoning is scoped:
+  Q18 and B3b: the row keeps its original text and gains a **bolded, dated,
+  successor-naming clause**, appended inside one cell. Append only. Do not
+  re-author a row, do not restate Table L's members inside one, and do not touch
+  any other row or assertion in that file.
+
+- **WHERE THE CLAUSE GOES — the rule is the CLAIM's cell, not a fixed column
+  number, and this is the one place a literal reading goes wrong.** A clause
+  whose own sentence says *"this cell's closing reason"* has to sit in the cell
+  that holds that reason, or it describes something it is not next to — and
+  **acceptance criterion 8 cannot catch it**, because a Table Q row is one line,
+  so a clause in the wrong cell is still "one changed line". So: **append each
+  clause to the cell that carries the claim it scopes**, measured, not assumed.
+  Measured for these three at `8302ce8e` by splitting each row on `' | '`:
+
+  | Row | cells | the claim being scoped | target cell |
+  |---|---|---|---|
+  | **Q1** | 4 | *"The parenthetical is byte-identical to Q2's, deliberately"* | **4** (the `why` column), at its end |
+  | **Q2** | 4 | *"The prefix … is byte-identical on purpose"* | **4** (the `why` column), at its end |
+  | **Q9** | 4 | *"…which stays true"* | **4** (the `why` column), at its end |
+
+  **V5 checks this mechanically**, and it is the only check that can.
+
+  **The Q18/B3b precedent is a precedent for the clause's SHAPE, not for its
+  placement, and saying so prevents the wrong inference.** Measured: Q18's row
+  has 4 cells and its 2026-09-02 clause sits in cell **2**, while the universals
+  it scopes live in cells 3 and 4; B3b's row has 3 cells and its clause sits in
+  cell **2** while its *"stays true"* claim is in cell 3. Copying that placement
+  here would put a clause about a `why` cell inside a `surface` cell.
+
+  All three clauses carry universals an append would otherwise silently leave
+  standing, so all three are byte-exact. **Q1 first** — its decided TEXT does
+  not change and only one sentence of its reasoning is scoped:
 
   ```text
   **Amended 2026-09-05 (`WP-quarantine-banner-location`): this row's TEXT is UNCHANGED — the digest banner keeps its sentence and its parenthetical, because it lists the folder it names. What is scoped is this cell's closing reason: the parenthetical is no longer byte-identical to row Q2's, because after that spec Q2's banner carries no parenthetical at all. There is no second phrasing left to disagree with, so the rule that sentence protected is satisfied by there being one banner that names the folder rather than by two agreeing. The same sentence is mirrored in a two-line comment in `tests/unit/digest.test.js`, which that spec corrects in the same pass. This clause changes no value in this row.**
@@ -530,7 +559,7 @@ added here on the spot.
   ```
 
   ```text
-  **Amended 2026-09-05 (`WP-quarantine-banner-location`): this row's disposition is WITHDRAWN and its sentence is RETIRED. The reason it gave — that the sentence "says only where the withheld notes are, which stays true" — is false, and was false when it was written, on an arm this very spec introduced: when the redact arm's copy survives and the withheld preserve fails, the note is REFUSED and its only preserved copy is on the `redacted/` shelf, which is what `tests/unit/dream-validate.test.js`'s R0b tests assert in both their tracked and untracked variants. `secretRevertSummaryLine` now carries the code-owned pointer that spec's Table L makes canonical, names no folder, and is still built from integers alone. Rows Q7 and Q8 are unaffected by that spec: Q7's dream-report line already names each copy's own folder, and Q8's reason suffix is not a surface it touches. This clause restates no sentence.**
+  **Amended 2026-09-05 (`WP-quarantine-banner-location`): this row's disposition is WITHDRAWN and its sentence is RETIRED. The reason it gave — that the sentence "says only where the withheld notes are — which stays true" — is false, and was false when it was written, on an arm this very spec introduced: when the redact arm's copy survives and the withheld preserve fails, the note is REFUSED and its only preserved copy is on the `redacted/` shelf, which is what `tests/unit/dream-validate.test.js`'s R0b tests assert in both their tracked and untracked variants. `secretRevertSummaryLine` now carries the code-owned pointer that spec's Table L makes canonical, names no folder, and is still built from integers alone. Rows Q7 and Q8 are unaffected by that spec: Q7's dream-report line already names each copy's own folder, and Q8's reason suffix is not a surface it touches. This clause restates no sentence.**
   ```
 
   Then re-read each amended cell WHOLE and report, in the PR body, any sentence
@@ -623,9 +652,12 @@ added here on the spot.
       `… criterion 3`, each `PROVEN` and each naming its Table C proof id.
       Three lines and not one, because each proof carries its own `criterion`.
 - [ ] **8.** `WP-secret-fence-ep2-redact-arm` rows **Q1**, **Q2** and **Q9**
-      each carry their byte-exact dated clause and
-      no other edit; `git diff` shows one changed line per row and no other line
-      in that file.
+      each carry their byte-exact dated clause and no other edit; `git diff`
+      shows one changed line per row and no other line in that file; **and each
+      clause sits in that row's FOURTH cell, the `why` column** — the cell that
+      carries the claim it scopes. The placement half is **V5's**, because a
+      Table Q row is one line and the one-changed-line half cannot see a clause
+      that landed in the wrong cell.
 - [ ] **9.** Idempotence: `N/A — this package ships no command and writes
       nothing outside the repo; it changes the text of four rendered sentences.`
 - [ ] **10.** `npm test` and `npm run lint` pass.
@@ -664,6 +696,33 @@ done
 # not by reading it.
 [ "$v1" = 0 ] && [ "$v2" = 0 ] || { echo "V1/V2 RED"; exit 1; }
 
+# V5 — each amendment clause lands in the cell that carries the claim it scopes:
+#      Table Q's FOURTH cell, the `why` column, measured per row under
+#      Implementation notes. This is the ONLY check that can see it: a Table Q
+#      row is ONE line, so a clause in the wrong cell is still "one changed
+#      line" and acceptance criterion 8 passes on it. Each row id matches
+#      exactly one line in that file (measured), and a row whose cell count is
+#      not 4 fails loud rather than being read with a shifted index.
+Q=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+CLAUSE='Amended 2026-09-05 (`WP-quarantine-banner-location`)'
+v5=0
+if [ ! -f "$Q" ]; then
+  echo "V5 MISSING DELIVERABLE: $Q"; v5=1
+else
+  for r in Q1 Q2 Q9; do
+    hits=$(grep -cF "| **$r** |" "$Q")
+    if [ "$hits" != 1 ]; then echo "V5 ROW $r MATCHES $hits LINE(S), expected 1"; v5=1; continue; fi
+    row=$(grep -F "| **$r** |" "$Q")
+    n=$(printf '%s\n' "$row" | awk -F' \\| ' '{print NF}')
+    if [ "$n" != 4 ]; then echo "V5 ROW $r HAS $n CELL(S), expected 4"; v5=1; continue; fi
+    if ! printf '%s\n' "$row" | awk -F' \\| ' '{print $4}' | grep -qF "$CLAUSE"; then
+      echo "V5 CLAUSE NOT IN THE why CELL OF ROW $r"; v5=1
+    fi
+  done
+fi
+[ "$v5" = 0 ] && echo "V5 OK"
+[ "$v5" = 0 ] || { echo "V5 RED"; exit 1; }
+
 # V3 — the machine-run RED lane (criterion 7). REGRESSION-kind on the untouched
 #      tree: it exits 0 there with the five already-declared proofs PROVEN. What
 #      discriminates is the CONTENT — the three roll-up lines naming this WP,
@@ -691,6 +750,18 @@ npm run lint
   `MISSING DELIVERABLE` lines, `rc=1`; **the sentence retyped once more under
   `src/cli/`** → `V1 OK`, `V2 SENTENCE HAS 2 AUTHOR(S) IN src/, expected 1`,
   `rc=1`.
+- **V5 is a PLACEMENT check and nothing else.** It cannot judge whether a clause
+  is correct, only that it sits in the cell whose claim it talks about. Extracted
+  from this block and run in four trees built from `8302ce8e`: **clause absent**
+  → three `V5 CLAUSE NOT IN THE why CELL OF ROW …` lines, `V5 RED`, `rc=1`;
+  **each clause appended to its row's cell 4** → `V5 OK`, `rc=0`; **each clause
+  appended to its row's cell 2 instead** — the literal reading of the Q18
+  precedent, and the exact mistake this step exists to catch — the same three
+  lines, `V5 RED`, `rc=1`; **the file renamed away** →
+  `V5 MISSING DELIVERABLE: docs/specs/done/WP-secret-fence-ep2-redact-arm.md`,
+  `V5 RED`, `rc=1`. On the cell-4 tree `npm run lint` also stays at
+  `Linting: 636 file(s)`, `0 error(s)` — appending inside a table cell adds no
+  line and trips no rule.
 - **The six existing tests that break are the work, not a surprise.** Rehearsed
   on a `git archive` copy of `8302ce8e`: `tests 2618 / pass 2600 / fail 6`, the
   six being the two `ledger.test.js` full-string pins, the two

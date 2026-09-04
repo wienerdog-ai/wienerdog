@@ -274,3 +274,77 @@ to exist at `8302ce8e`:
   (`WP-secret-fence-ep2-redact-arm` Table Q rows Q3 and Q4) and states no
   universal about where a withheld copy is; a reviewer who disagrees should say
   so, because that file would then join the boundary.
+
+## Round zero — orchestrator's executors, 2026-09-05, on `ef9be766`
+
+The clean-context **template-conformance** executor reported the spec
+CONFORMANT with nothing silently absent. The **coherence** executor reproduced
+everything else independently: all 13 `state/quarantine` hits across 7 files, the
+5 user-facing carriers, the 6 pinned assertions in 4 test files, the `fail 6`
+rehearsal down to the exact six test names, V1/V2 as extracted (RED with the
+verdict line, exit 1), the R0b path and `listSecretQuarantine(stateDir) === []`
+on an independent fixture, all four "Exact contracts" renderings byte for byte,
+and Table C's three mutations each reddening **exactly** its declared identity
+under `testNamePattern` — **and not without it**, which confirms the pattern is
+load-bearing rather than decorative, with all three `find` strings unique.
+
+**Three findings, FIX on all three.** No rebase: `ef9be766` already sits on
+`8302ce8e`. The fixes land as a second commit above it; `status:` stays `Draft`.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A] | Implementation notes stated the `Done`-spec amendment convention as *"appended at the end of the row's FIRST content cell"*, but Table Q rows are **four** columns and all three clauses self-describe content that lives in column 4 (`why`) — Q1's *"this cell's closing reason"*, Q9's *"the reason it gave"*. A literal implementer would produce a clause in column 2 whose own sentence does not describe column 2, and **acceptance criterion 8 cannot catch it**, because a Table Q row is one line so the wrong cell is still one changed line | **FIXED, three ways.** (a) The rule is restated as **append to the cell that carries the claim it scopes**, with a measured per-row target table (Q1 → 4, Q2 → 4, Q9 → 4), each verified by splitting the row on `' \| '`. (b) A new verification step **V5** checks placement mechanically and is the only check that can; acceptance criterion 8 now names V5 as the owner of its placement half, and the Mirrored Surface Checklist registers both. (c) **The finding's premise about the precedent was itself measured and corrected in place**: Q18's clause sits in cell **2** of a 4-cell row while the universals it scopes are in cells 3–4, and B3b's sits in cell **2** of a 3-cell row while its *"stays true"* claim is in cell 3 — so Q18/B3b are a precedent for the clause's SHAPE, not for its placement, and the spec now says so, because copying that placement is exactly the mistake |
+| **2** [C] | The Q9 byte-exact clause quoted the source as *"…are, which stays true"* (comma) where `:1640` reads *"…are — which stays true."* (em dash, U+2014) | **FIXED.** Byte-compared with `xxd`: the source is `65 20 e2 80 94 20 77` (`e — w`), the draft had `65 2c 20 77` (`e, w`). One character; the clause is now byte-faithful. Current state's own quotation of the same sentence already carried the em dash and was left alone |
+| **3** [C] | `src/core/dream/warnings.js`'s doc comment claims byte-identity with *"the sentence the digest banner uses for the same class"* — the wrong surface: the identity is with **L1**, `ledger.js`'s exhausted banner, not with **L5**, `digest.js`'s. Table L row L3 described the comment as asserting identity *"with it"* without noting the misnaming | **FIXED in one clause, in both mirrors.** Row L3's shipped-behaviour cell and Current state's carrier census now both say the comment names the wrong surface and which surface the identity actually holds with. L3 already replaces the comment, so no Deliverables row moves |
+
+**The observation was accepted and left alone:** the spec's only `file:LINE`
+into another document is `tests/integration/dream.test.js:1437`, and it appears
+only inside a verbatim quotation of the `Done` spec's Q2 cell. Quoting a stale
+citation faithfully is correct; silently modernising it to `:1640` would make the
+quotation false.
+
+### 0.11 V5 measured in four directions, extracted from the spec and run
+
+```text
+UNTOUCHED 8302ce8e (clause absent)
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q1
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q2
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q9
+  V5 RED                                                                   rc=1
+EACH CLAUSE IN ITS ROW'S CELL 4
+  V5 OK                                                                    rc=0
+EACH CLAUSE IN ITS ROW'S CELL 2 (the literal reading of the Q18 precedent)
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q1
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q2
+  V5 CLAUSE NOT IN THE why CELL OF ROW Q9
+  V5 RED                                                                   rc=1
+THE FILE RENAMED AWAY
+  V5 MISSING DELIVERABLE: docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+  V5 RED                                                                   rc=1
+```
+
+The cell-4 tree also keeps `npm run lint` at `Linting: 636 file(s)`,
+`0 error(s)` — appending inside a table cell adds no line and trips no rule.
+And the whole fenced block, extracted and run on a tree carrying **both** the
+source fix and the cell-4 clauses, gives `V1 OK / V2 OK / V5 OK`, `rc=0`; on the
+untouched tree it stops at `V1/V2 RED`, `rc=1`, which is the intended
+short-circuit.
+
+**Running V5 caught a defect in V5 that reading it had not — the second time
+this pass.** The first draft of the step embedded an apostrophe in an
+error message using the `'"'"'` idiom, which is the escape for a single quote
+inside SINGLE quotes and is unbalanced inside the double-quoted string it was
+written into: extracted and run, the block died with
+`unexpected EOF while looking for matching '"'`, `rc=2`. The message was
+rewritten without the apostrophe. Together with the missing V1/V2 verdict line
+(§0.6), that is two shipped-escaping defects in one spec, both invisible to
+reading and both found by `bash -n` plus one execution.
+
+### 0.12 What round zero still has NOT established
+
+Unchanged from §0.10, plus: **V5's own compliant state depends on a clause the
+implementer has not written yet.** The four runs above used the spec's three
+byte-exact clauses, extracted from the spec by pattern and appended
+programmatically — which proves the CHECK discriminates, not that the
+implementer's hand-placed clause will land in the same cell. That is precisely
+why V5 exists.
