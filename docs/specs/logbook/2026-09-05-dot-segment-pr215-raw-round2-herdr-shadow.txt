@@ -1,0 +1,8 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, pr-rubric), PR #215 round 2, detached worktree at 0cbf1b48. Committed BEFORE adjudication.
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "All four round-1 findings are fixed: the PATH stub matches the existing setup, B3 uses the filesystem-returned spelling, the round-trip asserts all six `_dir` keys and pins `projects_dir`, and row Z2 cites `isSafeRelativePath` by name. Executed: inspections, boundary check, declaration validation, syntax checks, JSON parsing, `git diff --check`, and in-memory B1/B2/B3 plus untouched-tree/NFD attacks exited 0; `npm test` exited 1 at sandbox-denied `mkdtemp`; V2 acceptance mode exited 1 at the same restriction after reporting seed 1788542113538, 112/112 first code points, and 0.492 dot share; the targeted suite exited 1 with T1-T3 passing and T4-T6 blocked by `mkdtemp`; V2's N=999 and supplied-seed guards exited 1 as required; V4 exited 1 because markdownlint could not reach npm, while frontmatter passed; one malformed `env` probe exited 127 and its corrected rerun exited 1 as required; one heredoc probe exited 1 because temporary-file creation was denied. V3 was deliberately not run: inspection showed five valid declarations, both new find strings occur exactly once with absent markers, `evaluateRed` requires exact failing-identity equality, and `rollUp` produces one two-id criterion row; initial and final `git status --porcelain` both exited 0 with no entries.",
+  "overall_confidence_score": 0.98
+}
