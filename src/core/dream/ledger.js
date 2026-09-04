@@ -48,6 +48,17 @@ const INFORMATIONAL_QUARANTINE_REASONS = Object.freeze(['over-ceiling', 'too-man
  *  file (ADR-0004). */
 const QUARANTINE_BANNER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** The class-and-pointer sentence a surface renders when it can name that a
+ *  copy was preserved but cannot observe WHICH shelf it landed on (Table L
+ *  row L0, `WP-quarantine-banner-location`). Which shelf a copy is on is
+ *  decided in exactly one place — the preservation record's `location` field
+ *  (`WP-dream-promote-module` Table Q row Q9) — and these surfaces are handed
+ *  a transcript ledger or three integers, never that record, so naming a
+ *  folder here would be a fact they cannot observe. Code-owned, no
+ *  interpolation, no path, no basename, no count. */
+const PRESERVED_COPIES_POINTER =
+  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';
+
 /** Case-folded absolute-path key (ADR-0021/0023: path identity folded, content exact).
  *  @param {string} absPath @returns {string} */
 function foldKey(absPath) {
@@ -446,8 +457,7 @@ function quarantineBannerLine(ledger, opts) {
     lines.push(
       `> [!warning] Wienerdog: ${spent.length} session transcript(s) are no longer being dreamed over — the notes made ` +
         `from them were withheld by the secret check too many times in a row: ${spent.map((e) => e.file).join(', ')}. ` +
-        'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest ' +
-        'of the files there (not the redacted/ folder inside it). ' +
+        `${PRESERVED_COPIES_POINTER} ` +
         'The session files themselves are untouched.'
     );
   }
@@ -469,7 +479,7 @@ function secretRevertSummaryLine(counts) {
   return (
     `wienerdog: dream — the secret check withheld ${withheld} note(s); ${deferred} session transcript(s) ` +
     `will be retried on the next run and ${quarantined} were skipped after too many withheld runs in a ` +
-    'row. The withheld notes are in state/quarantine/.'
+    `row. ${PRESERVED_COPIES_POINTER}`
   );
 }
 
@@ -480,6 +490,7 @@ module.exports = {
   SECRET_REVERT_MAX_DEFERRALS,
   INFORMATIONAL_QUARANTINE_REASONS,
   QUARANTINE_BANNER_WINDOW_MS,
+  PRESERVED_COPIES_POINTER,
   foldKey,
   fingerprint,
   displayName,

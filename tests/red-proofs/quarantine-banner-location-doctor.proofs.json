@@ -1,0 +1,35 @@
+{
+  "suite": "tests/unit/doctor.test.js",
+  "proofs": [
+    {
+      "id": "doctor-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "4",
+      "why": "reverting doctor's interpolation to the shipped shelf sentence must redden the doctor line's own full-line pin; the four other Table A rows are untouched, so a pin that only checked row order would stay green here",
+      "file": "src/cli/doctor.js",
+      "find": "too many times in a row. ${PRESERVED_COPIES_POINTER}`,",
+      "replace": "too many times in a row. The withheld copies are in state/quarantine/.`, /* RP_MUT_QBL_DOCTOR_SHELF */",
+      "marker": "RP_MUT_QBL_DOCTOR_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-4\\]",
+      "expectRed": [
+        { "test": ["doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim"], "signal": "[QBL-4]" }
+      ]
+    },
+    {
+      "id": "pointer-derivation-doctor",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "5",
+      "why": "the derivation proof for the FOURTH carrier, which cannot join File A because its evidence is a CLI spawn and a declaration names one suite. Same mutation, different marker, different suite: the doctor line must move with the constant, or doctor has a second author",
+      "file": "src/core/dream/ledger.js",
+      "find": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';",
+      "replace": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed. RP_MUT_QBL_DERIVATION_DOCTOR';",
+      "marker": "RP_MUT_QBL_DERIVATION_DOCTOR",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-4\\]",
+      "expectRed": [
+        { "test": ["doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim"], "signal": "[QBL-4]" }
+      ]
+    }
+  ]
+}

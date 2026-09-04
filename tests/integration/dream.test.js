@@ -1637,7 +1637,11 @@ test('dream-integration: the bounded episode — three deferrals, then an exhaus
   const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
   assert.ok(digest.includes('are no longer being dreamed over'), 'the durable banner is rendered by the dream');
   assert.ok(digest.includes('inj.jsonl'), 'it names the sanitized basename');
-  assert.ok(digest.includes('The withheld copies are in state/quarantine/'));
+  assert.ok(
+    digest.includes(
+      'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.'
+    )
+  );
   assert.ok(!digest.includes(ctx.claude), 'the banner carries no full path');
 
   // Stickiness: however much the file changes, an exhausted record is not reopened.

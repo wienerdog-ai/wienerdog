@@ -496,7 +496,7 @@ function warningsPointerStatus(vaultPath, warningsRel) {
  *    vault is configured yet, which the pointer probe treats as "not there"
  *  @returns {Array<{status:'ok'|'warn'|'info', msg:string}>} */
 function quarantineReport(stateDir, vaultPath) {
-  const { readLedger, SECRET_REVERT_EXHAUSTED_REASON } = require('../core/dream/ledger');
+  const { readLedger, SECRET_REVERT_EXHAUSTED_REASON, PRESERVED_COPIES_POINTER } = require('../core/dream/ledger');
   const { WARNINGS_REL } = require('../core/dream/warnings');
 
   const ledger = readLedger(stateDir);
@@ -556,7 +556,7 @@ function quarantineReport(stateDir, vaultPath) {
   if (secretExhausted > 0) {
     out.push({
       status: 'warn',
-      msg: `${secretExhausted} session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. The withheld copies are in state/quarantine/.`,
+      msg: `${secretExhausted} session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. ${PRESERVED_COPIES_POINTER}`,
     });
   }
   if (unrecognized > 0) {
