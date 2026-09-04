@@ -348,3 +348,44 @@ byte-exact clauses, extracted from the spec by pattern and appended
 programmatically — which proves the CHECK discriminates, not that the
 implementer's hand-placed clause will land in the same cell. That is precisely
 why V5 exists.
+
+## External rounds
+
+Round zero closed at `2f7ed9e0` (architect self-check `ef9be766` → the
+orchestrator's two clean-context executors, template CONFORMANT and coherence
+3 findings — 1 A, 2 C — all FIX in `2f7ed9e0`: the amendment-placement rule
+restated as "append to the cell that carries the claim", V5 checks it
+mechanically; the Q9 quotation byte-corrected; the `warnings.js` comment's
+wrong surface named).
+
+**STOP CRITERION (pinned before round 1):** the loop closes when an external
+round returns no material design finding on either channel — a user-facing
+surface that still names a folder a preserved copy may not be in, or still
+instructs a delete, after this package; a second author of the pointer sentence
+that V2 cannot see; a RED proof whose mutation reddens an identity outside its
+`expectRed` (or none) under the declared `testNamePattern`; an acceptance
+criterion a wrong implementation passes (the placement of the three Done-spec
+amendment clauses; the digest's own L5 banner being changed when it must not
+be); or a scope leak into `WP-quarantine-preserve-durability` (durable state,
+the retention cap, the shelf a fall-through copy lands on) — and machinery/
+wording findings at that point are fixed within the frozen surface or accepted
+as named residuals. **Escalations:** (i) two consecutive rounds landing findings
+of the same kind → a design question per ADR-0031; (ii) a finding whose only
+honest fix adds durable state, changes the owner-ruled `remediation: 'delete'`
+value (`WP-dream-promote-module` Table Q row Q9), or touches the digest's L5
+banner is PARKED — to the owner or to the durability successor; (iii) the
+Dispatch-precondition item (the four surfaces stop naming a folder and stop
+instructing a delete; recommended confirm) is the owner's, so a finding that
+only re-argues it is routed as a scope objection and does not count toward the
+verdict.
+
+**Channels:** gate = Codex plugin (`codex-companion.mjs adversarial-review
+--base main`, run from the branch worktree); shadow = hermetic Codex
+(`codex exec -s read-only`, `CODEX_HOME=~/.codex-review-home`, detached worktree
+at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
+`2026-09-05-quarantine-banner-gate-raw-round<N>-<channel>.txt`.
+
+### Rounds
+
+| Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
+|-------|--------------------------|--------------------------|--------------------------|
