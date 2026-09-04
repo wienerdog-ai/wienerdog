@@ -507,3 +507,100 @@ it breaks did not. `npm run lint` on the worktree with both revised documents:
   item and L6 is unchanged.
 - **The Q1/Q2/Q9 clause texts are byte-identical to round zero's**, apart from
   nothing at all: finding 3 changed how V5 checks them, not what they say.
+
+### Round 2 fixes — architect, 2026-09-05, on top of `903dbe90`
+
+Both channels returned **needs-attention** and both verified that round 1's
+fixes A/B/D genuinely hold: the four report arms are coherent, both derivation
+proofs are sound (the shadow confirmed at `red-proofs.js:1641-1642` that an
+unmoved declared identity throws **FAILED**, not ERROR — which is what makes the
+composed-carrier detection a real verdict), and the six inlined mutations each
+match exactly once and parse. **Three findings, all FIXED, one of them by a
+design move rather than a patch.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [A, CONVERGED] | V5 still accepted unauthorised edits INSIDE the three amended rows. It checked that cell 4 ends with the clause and that the file's numstat is `3/3` — but numstat counts LINES, so inserting the correct clause AND reauthoring Q1's earlier text keeps the diff at three changed lines and passes every predicate. Both channels built it (*"MATERIAL UNAUTHORIZED REAUTHORING"*) and got `V5 OK`. It contradicted V5's own comment and the round-1 record | **FIXED by deleting the step that had to be right and replacing it with one that cannot be wrong.** V5 now reads each row's base with `git show main:<file>`, extracts its clause from this spec by the same structural key, and requires the candidate row to equal `${base% \|} <clause> \|` **byte for byte**. That single comparison subsumes presence-in-full and placement, and it is the only thing that can see a same-line edit. The numstat check survives for what it alone covers — a FOURTH line moving. Rehearsed in **seven** trees (below): both same-line defeats are now RED and name the row |
+| **2** [B, shadow] | The spec contradicted itself on the doctor proof: an Out-of-scope bullet still forbade a `doctor.js` RED proof and called the second declaration and spawn disallowed, while Deliverables File B, criteria 4 and 5 and V3's roll-up require exactly that; the Table C residual it referenced no longer existed; and Implementation notes still said Table C fixes "the three identities" | **FIXED by deletion and a count.** The obsolete bullet is gone, "three identities" became "the four identities … and the two declaration files that carry them". The round-zero decision that named it a residual stays in this logbook as history, where a superseded decision belongs |
+| **3** [A, shadow — escalation (i)] | **The pointer-truth family for the SECOND consecutive round.** The four-arm table treats the two output-bearing arms as if `report.record` had already been printed, but `src/cli/dream.js` writes the ledger, prints the pointer-bearing summary, regenerates the digest and refreshes the vault warnings file BEFORE it prints the undelivered record. A throw in that window leaves durable state claiming the run named each copy and its folder while the only complete record died in memory — on the refused redacted-only-copy arm, the user's only route to a bounded-shelf copy. The sentence was true only on the success path | **SETTLED AS A DESIGN QUESTION, and option (a) was TAKEN: delete the window.** Measured first, as the escalation requires. The move is **two hunks** — one insertion, one deletion of the same block — with **no line rewritten** except an eleven-line comment header, and the block relocates to step **17b**, immediately before step 18, following this file's own `5b.` precedent so steps 18-20 keep their ids. **The full suite is unchanged by the move** (`2618 / 2600 / 6`, the same six wording pins), and **no test in the suite asserts the order of the run's output** — measured, not assumed. Row **L7** and acceptance criterion **6** are new; `src/cli/dream.js` and `tests/unit/dream-pipeline.test.js` join Deliverables. **Escalation (ii) does not apply: no durable state is added, nothing is started, ADR-0004 is untouched.** The road not taken — narrowing the sentence to a directive to look rather than a claim that the record was printed — is stated in the spec with its cost: it would leave the user a pointer and no destination on exactly the arm that costs them their bytes, in exchange for saving two hunks |
+
+**Why this is a design move and not a third wording patch.** Rounds 1 and 2 both
+landed an A finding on the same family — *is the pointer's destination real?* —
+which is ADR-0031's circuit-breaker condition. Round 1 answered it by narrowing
+the sentence to a disjunction. Round 2 showed the disjunction is itself
+conditional on an ORDERING the code does not provide. A third narrowing would
+have been the next sentence about the same defect; reordering removes the defect
+and makes the sentence unconditional. That is the extraction move applied to
+behaviour rather than to prose.
+
+### 2.1 Round-2 measurements
+
+**The reorder, measured on `git archive` copies of `8302ce8e`:**
+
+```text
+diff of src/cli/dream.js, four-carrier fix vs fix+reorder:
+  @@ -1073,6 +1073,48 @@      (the block, plus its 9 new comment lines, inserted)
+  @@ -1129,39 +1171,6 @@      (the same block deleted)
+  node --check src/cli/dream.js                                            rc=0
+
+full suite, four-carrier fix only            tests 2618 / pass 2600 / fail 6
+full suite, fix + reorder                    tests 2618 / pass 2600 / fail 6
+full suite, fix + reorder + injection test   tests 2619 / pass 2601 / fail 6
+  (the same six wording pins in the same four files, every time)
+```
+
+**The failure-injection evidence, both directions.** Refused-report arm (the
+shipped symlinked-report fixture), fault injected at the digest write:
+
+```text
+REORDERED (option a)      tests 1 / pass 1 / fail 0
+SHIPPED ORDERING          tests 1 / pass 0 / fail 1
+    AssertionError: the record was delivered BEFORE the fault:
+    (…the captured output carried no record at all)
+```
+
+**A trap worth recording, found by the seam failing silently.** The first
+injection patched `fs.writeFileSync` on a path containing `digest.md` and the
+run completed normally — `writeFilePrivate` writes through
+`openSync`/`writeSync` on a **randomly named** temp and only then renames, so no
+`writeFileSync` call ever carries the destination name. Patching `fs.renameSync`
+on the destination is what reaches it. Recorded in the spec so an implementer
+does not read the non-firing seam as evidence that the window is unreachable.
+
+**V5 in seven trees**, each a scratch git repo whose `main` is the pristine
+`8302ce8e`:
+
+```text
+UNTOUCHED             3 × "IS NOT ITS BASE ROW PLUS ITS CLAUSE" + "DIFF IS empty, expected 3/3"  rc=1
+CELL 4 (compliant)    V5 OK                                                                       rc=0
+MARKER-ONLY           3 × "IS NOT ITS BASE ROW PLUS ITS CLAUSE"                                   rc=1
+CELL 2                3 × "IS NOT ITS BASE ROW PLUS ITS CLAUSE"                                   rc=1
+CELL 4 + EXTRA LINE   "V5 DONE-SPEC DIFF IS 4/4, expected 3/3"                                    rc=1
+CELL 4 + Q1 PREFIX    "V5 ROW Q1 IS NOT ITS BASE ROW PLUS ITS CLAUSE"                              rc=1
+CELL 4 + Q1 MIDDLE    "V5 ROW Q1 IS NOT ITS BASE ROW PLUS ITS CLAUSE"                              rc=1
+```
+
+The last two are round 2's defeat and its sibling: both keep the file at three
+changed lines, and both passed the round-1 form of the step.
+
+**The whole fenced block, extracted and run:** untouched → `V1/V2 RED`, `rc=1`;
+a tree carrying the four-carrier fix, row L7's reorder and the cell-4 clauses →
+`V1 OK / V2 OK / V5 OK`, `rc=0`. `npm run lint` on the worktree with both revised
+documents: `Linting: 636 file(s)`, `0 error(s)`,
+`frontmatter check passed: 267 spec(s), 4 agent(s)`.
+
+### 2.2 What round 2 did not change
+
+- **No acceptance criterion was weakened**, and the renumbering is recorded so a
+  reviewer can follow it: the new L7 criterion is **6**, and the old 6-10 became
+  **7-11**. Every internal reference moved with them (V3's comment, V5's comment,
+  the Mirrored Surface Checklist, the placement rule).
+- **The pointer sentence did not change again.** Round 2's finding is about when
+  the destination is completed, not about what the sentence names; round 1's
+  wording stands and is now true on every arm rather than on the success path.
+- **The boundary did not widen into `src/core/digest.js` or
+  `src/core/dream/promote.js`.** L5's false clearing sentence remains the
+  Dispatch precondition's second owner item; L6 is unchanged.
+- **The Q1/Q2/Q9 clause texts are byte-identical to round zero's.** Findings 1
+  and 3 of round 1, and finding 1 of round 2, all changed how they are CHECKED,
+  never what they say.

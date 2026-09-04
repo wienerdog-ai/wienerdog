@@ -81,8 +81,10 @@ does not let the model write into the vault: the run clones the vault into a
 throwaway **workspace**, the model writes there, and only content that passes
 four gates is promoted into the real vault. **ADR-0004: Wienerdog is just
 files** — nothing here starts a process that outlives its call, and this work
-package adds none. This package changes **no control flow at all**: it changes
-what four sentences say and where their text is decided.
+package adds none. **No statement in this package computes anything new**: it
+changes what four sentences say, where their text is decided, and — row **L7**,
+one relocated block — WHEN one already-existing `console.log` runs relative to
+the durable writes that make a claim about it.
 
 One of the four gates is the **EP2 secret gate** (ADR-0034). On a refusing
 verdict it **preserves** first — it copies the exact bytes it is judging into
@@ -311,7 +313,9 @@ row for row.
 |--------|------|-------|
 | modify | src/core/dream/ledger.js | Table L rows **L0** (the canonical constant, exported), **L1**, **L2** |
 | modify | src/core/dream/warnings.js | Table L row **L3** — imports L0's constant; the retyped literal goes, and so does the byte-identity claim in its doc comment, which L3 replaces with the import fact |
+| modify | src/cli/dream.js | Table L row **L7** — ONE MOVE, no rewritten line: row G11's undelivered-record block is relocated to sit as step **17b**, immediately before step 18, and its comment header gains the byte-exact sentences under Implementation notes. Two hunks, one insertion and one deletion of the same block |
 | modify | src/cli/doctor.js | Table L row **L4** — the same import inside `quarantineReport`, the same substitution. No other line of this file changes |
+| modify | tests/unit/dream-pipeline.test.js | Table L row **L7**'s failure-injection evidence — one new test. No existing assertion in this file changes |
 | modify | tests/unit/ledger.test.js | the two updated full-string pins, and the three new named tests **T1**, **T2**, **T3** of Table C |
 | modify | tests/unit/dream-warnings.test.js | the updated document equality and the updated marker |
 | modify | tests/unit/doctor.test.js | the one updated CLI line equality, and the new named test **T4** of Table C |
@@ -362,8 +366,10 @@ runtime assertion can tell two equal strings apart.
 Nothing else changes shape. `quarantineBannerLine(ledger, opts)`,
 `secretRevertSummaryLine(counts)`, `composeWarnings(ledger)` and
 `quarantineReport(stateDir, vaultPath)` keep their signatures, their return
-types, their gating conditions and their decay behaviour. **No control flow in
-any file changes.**
+types, their gating conditions and their decay behaviour. **No branch, no
+condition and no computed value changes anywhere in this package.** The one
+change that is not textual is row **L7**: an existing block of statements runs
+earlier in the same function, unaltered.
 
 **The rendered results, measured on the rehearsal tree, not predicted** (the
 line wrapping is this document's; the rendered strings carry none):
@@ -419,6 +425,21 @@ user needs it. **What row G11 actually guarantees is the disjunction**: *every
 record this run produced reaches the user*, in the report or in that run's own
 output. The sentence says exactly that and no more.
 
+**AND THE DISJUNCTION IS ONLY TRUE IF THE OUTPUT HAPPENS FIRST — which today it
+does not.** On the two output-bearing arms the record is printed at step 20,
+*after* `writeLedger` (step 18), the summary line, `regenerateDigest()` and the
+vault warnings refresh. Every one of those persists or prints a sentence saying
+the run named each copy and its folder, so a throw in that window leaves the
+claim durable and the record dead in memory. **Measured**, with a fault injected
+at the digest write on the refused-report arm: the run aborts with the ledger
+already written and the output carrying no record at all. **Row L7 closes the
+window by moving the delivery to step 17b** — one relocated block, no rewritten
+line — so the sentence is true by construction rather than true on the success
+path. The alternative, narrowing the sentence to a directive to look rather than
+a claim that the record was printed, was rejected: it would leave the user with
+a pointer and no destination on exactly the arm that costs them their bytes, and
+the reorder is two hunks.
+
 ## Contract reference
 
 Activation trigger (ADR-0031, 2-of-7): **(v)** one component decides where a
@@ -432,7 +453,9 @@ canonical table. Three of seven.
 ### Table L — canonical: who may name a preserved copy's shelf, and from what
 
 This table is the single place these facts are decided. Every other surface in
-this spec cites it. The governing rule is **L0**; L1–L6 apply it per surface.
+this spec cites it. The governing rule is **L0**; **L1**–**L6** apply it per
+surface, and **L7** is the ordering that makes L1–L4's sentence true on every
+arm rather than only on the success path.
 
 | # | Surface (construct) | What it can OBSERVE | Shipped behaviour at `8302ce8e` | Required after this WP |
 |---|---|---|---|---|
@@ -442,6 +465,7 @@ this spec cites it. The governing rule is **L0**; L1–L6 apply it per surface.
 | **L3** | `warnings.js` `SECRET_EXHAUSTED_REMEDIATION` | the transcript ledger. **No copy** | a RETYPED copy of L1's literal, with a doc comment claiming byte-identity with *"the sentence the digest banner uses for the same class"* — **which names the wrong surface**: it is byte-identical to L1, `ledger.js`'s exhausted banner, and not to L5, `digest.js`'s | **imports** `PRESERVED_COPIES_POINTER` and is that constant. The doc comment states the import rather than a byte-identity a reader would have to check. Which group carries the line, and that no other group does, is unchanged |
 | **L4** | `doctor.js` `quarantineReport`, the `secret-revert-exhausted` row | the transcript ledger. **No copy** | states `The withheld copies are in state/quarantine/.` | the same import, the same substitution. The row's count, its position in the Table A order, and the four other rows are byte-unchanged |
 | **L5** | `digest.js` `secretQuarantineWarn` | **the folder**: `listSecretQuarantine` lists direct file entries of `state/quarantine/` | names `state/quarantine/`, lists the basenames it observed, and keeps the `(not the redacted/ folder inside it)` parenthetical | **UNCHANGED, and this row is why.** It satisfies L0 for every copy it announces. What it cannot announce is a copy on the other shelf — measured, `listSecretQuarantine` returns `[]` in that state — and closing that needs durable state the product does not have. Out of scope owns it; nothing here weakens or widens this banner. **One sentence of this banner IS false and is PARKED, not overlooked:** *this notice clears when no withheld copies are left* — see the Dispatch precondition's second owner item, which states the measured state, the recommendation and the cost of overruling it |
+| **L7** | `src/cli/dream.js`, row G11's undelivered-record delivery | — (it is the ORDER, not a claim) | the record is printed at step **20**, AFTER `writeLedger` (step 18), after the summary line, after `regenerateDigest()` and after the vault warnings refresh | **it runs as step 17b, BEFORE step 18.** Measured: a fault injected at the digest write — the first pointer-bearing durable surface after the ledger — aborts the run with the ledger already persisted and, in today's order, with the record never printed. L1-L4's sentence says the run named each copy and its folder; printed after those surfaces it is a promise about output a throw can still prevent, and on the refused redacted-only-copy arm that is the user's only route to a bounded-shelf copy. Moving it makes the sentence true by construction on every arm instead of wording around it. **This is a REORDER and nothing else**: no statement changes, no value changes, no durable state is added (so ADR-0004 and the durability successor are both untouched) |
 | **L6** | `promote.js` `copyClause` | the record entry: `artifact`, `location`, `remediation` | renders `` unredacted copy at state/<location>/<artifact> `` | **UNCHANGED — the canonical renderer.** It is the surface L1–L4's pointer points at. Its `remediation` VALUE is a separate, owner-ruled contract (`WP-dream-promote-module` Table Q row Q9) and is not touched; Out of scope records the tension it leaves |
 
 Two things this table does **not** change, stated so no one infers them.
@@ -642,7 +666,7 @@ Every surface in this spec that mirrors Table L or Table C. A review finding
 updates the table and all of these in one pass; a new mirror found in review is
 added here on the spot.
 
-- [ ] **Deliverables cells** — the three `src/` rows (L0–L4), the five test
+- [ ] **Deliverables cells** — the four `src/` rows (L0–L4 and L7), the six test
       rows, the **two** declaration rows (Table C, Files A and B), and the
       `docs/specs/done/` row (`WP-secret-fence-ep2-redact-arm` rows Q1, Q2, Q9),
       plus the four "explicitly NOT in the boundary" bullets, which each state a
@@ -669,8 +693,11 @@ added here on the spot.
       two residual paragraphs.
 - [ ] **Operative prose, second entry** — the amendment-placement rule under
       Implementation notes and its per-row target table, which V5 and
-      acceptance criterion 8 both mirror.
+      acceptance criterion 9 both mirror.
 - [ ] **Mirrors outside this document** (all inside the Deliverables boundary) —
+      row **L7**'s eleven-line comment header in `src/cli/dream.js`, byte-exact
+      under Implementation notes and the one place the ordering guarantee is
+      stated in the product;
       `warnings.js`'s doc comment on `SECRET_EXHAUSTED_REMEDIATION` (L3), the
       two-line comment in `tests/unit/digest.test.js` claiming byte-identity
       with the exhausted banner's parenthetical, and rows **Q1**, **Q2** and
@@ -714,7 +741,7 @@ added here on the spot.
   number, and this is the one place a literal reading goes wrong.** A clause
   whose own sentence says *"this cell's closing reason"* has to sit in the cell
   that holds that reason, or it describes something it is not next to — and
-  **acceptance criterion 8 cannot catch it**, because a Table Q row is one line,
+  **acceptance criterion 9 cannot catch it**, because a Table Q row is one line,
   so a clause in the wrong cell is still "one changed line". So: **append each
   clause to the cell that carries the claim it scopes**, measured, not assumed.
   Measured for these three at `8302ce8e` by splitting each row on `' | '`:
@@ -761,8 +788,8 @@ added here on the spot.
   every seam runs through the same sentence, so half a chain would leave one
   surface stating the corrected fact and another stating the false one — the
   drift ADR-0031 exists to prevent, deliberately created. The package stays one
-  because the change has **no control flow**: three source files, one exported
-  constant, four substitutions.
+  because the change computes nothing new: four source files, one exported
+  constant, four substitutions and one relocated block (row **L7**).
 
 - **THE FIVE SOURCE FORMS TABLE C's `find` STRINGS QUOTE, and they are contract
   only for that reason.** Everything else about code structure is the
@@ -812,6 +839,33 @@ added here on the spot.
   too many times in a row. ${PRESERVED_COPIES_POINTER}`,
   ```
 
+- **ROW L7's MOVE, EXACTLY — and the comment header is spec-owned prose.**
+  Relocate the whole `// 20. ROW G11 …` block — its comment and its
+  `const undelivered = …` / `if (undelivered) { … }` statements — so that it sits
+  immediately BEFORE the `// 18. ROW G4 …` comment. **Move it; do not retype
+  it.** Nothing inside the block changes except its two-line header, which
+  becomes these eleven lines, byte-exactly (the step id follows this file's own
+  `5b.` precedent, so the numbering stays monotonic and steps 18-20 keep their
+  ids):
+
+  ```text
+        // 17b. ROW G11 — EVERY RECORD THIS RUN PRODUCED REACHES THE USER.
+        //     Returning is not delivering, and this is the delivery.
+        //
+        //     IT RUNS BEFORE STEP 18, AND THE ORDER IS THE GUARANTEE. Every
+        //     durable surface this run writes from step 18 onwards — the
+        //     ledger, the digest banner it drives, the vault warnings file —
+        //     carries a sentence saying the run named each preserved copy and
+        //     its folder. Printed after them, that sentence would be a promise
+        //     about output a crash or a throw could still prevent. Printed
+        //     here it is a statement about output that has already happened.
+  ```
+
+  Measured on the rehearsal tree: the move is **two hunks** — one insertion, one
+  deletion of the same block — and **no line is rewritten** apart from that
+  header. `src/cli/dream.js` passes `node --check`, and the full suite is
+  unchanged by the move.
+
 - **`doctor.js` requires its ledger names inside `quarantineReport`**, not at
   module top level (`const { readLedger, SECRET_REVERT_EXHAUSTED_REASON } =
   require('../core/dream/ledger');`). Add the constant to that same
@@ -825,8 +879,9 @@ added here on the spot.
 
 - Test design, fixture shapes and the mechanics of each RED are the
   implementer's beyond what Table C fixes (`docs/runbooks/spec-authoring.md`).
-  Table C fixes only what `evaluateRed`'s equality makes contract: the three
-  identities, their markers and their mutations.
+  Table C fixes only what `evaluateRed`'s equality makes contract: the **four**
+  identities, their markers, their mutations and the two declaration files that
+  carry them.
 
 - No new npm dependencies; no `.ts` under `src/`; ADR-0004 — nothing started
   that outlives its call, and this package adds no call at all.
@@ -881,27 +936,36 @@ added here on the spot.
       of its own does not move, its declared identity stays green, and
       `evaluateRed` refuses the proof. V2 remains as a cheap lexical guard over
       the **contiguous** retyped case and claims nothing more.
-- [ ] **6.** **L5 and L6 did not move.** `src/core/digest.js` and
+- [ ] **6.** **L7 — the record is delivered before anything claims it was.**
+      On the refused-report arm, with a fault injected at the first
+      pointer-bearing durable surface after the ledger is persisted, the run
+      aborts AND its output already carries the complete enforcement record —
+      the announcing line and the record's own lines. The same evidence run
+      against the shipped ordering must FAIL: the seam, the fixture and the
+      assertion shape are the implementer's, the discrimination is not.
+      Nothing else about the block changes: same statements, same condition,
+      same two arms, same neutralisation.
+- [ ] **7.** **L5 and L6 did not move.** `src/core/digest.js` and
       `src/core/dream/promote.js` are absent from
       `git diff --name-only main...HEAD`, and the digest banner's full-string
       pin in `tests/unit/digest.test.js` — parenthetical included — still passes
       with only its comment changed.
-- [ ] **7.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
+- [ ] **8.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
       `RUN: PROVEN` and its Criteria roll-up carries **five** lines for this WP —
       `criterion 1`, `2`, `3`, `4` and `5` — each `PROVEN` and each naming its
       Table C proof id(s). Five and not six, because the two derivation proofs
       share the `(wp, criterion)` pair and `rollUp` emits one line per pair,
       naming both ids.
-- [ ] **8.** `WP-secret-fence-ep2-redact-arm` rows **Q1**, **Q2** and **Q9**
+- [ ] **9.** `WP-secret-fence-ep2-redact-arm` rows **Q1**, **Q2** and **Q9**
       each carry their byte-exact dated clause and no other edit; `git diff`
       shows one changed line per row and no other line in that file; **and each
       clause sits in that row's FOURTH cell, the `why` column** — the cell that
       carries the claim it scopes. The placement half is **V5's**, because a
       Table Q row is one line and the one-changed-line half cannot see a clause
       that landed in the wrong cell.
-- [ ] **9.** Idempotence: `N/A — this package ships no command and writes
+- [ ] **10.** Idempotence: `N/A — this package ships no command and writes
       nothing outside the repo; it changes the text of four rendered sentences.`
-- [ ] **10.** `npm test` and `npm run lint` pass.
+- [ ] **11.** `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -939,15 +1003,15 @@ done
 # not by reading it.
 [ "$v1" = 0 ] && [ "$v2" = 0 ] || { echo "V1/V2 RED"; exit 1; }
 
-# V5 — each amendment clause is present IN FULL and lands in the cell that
-#      carries the claim it scopes: Table Q's FOURTH cell, the `why` column
-#      (per-row targets under Implementation notes). A MARKER-ONLY or truncated
-#      clause is RED, because the clause text is EXTRACTED FROM THIS SPEC by a
-#      structural key and compared as the cell's SUFFIX — never retyped here.
-#      And the Done spec's whole diff must be those three lines and nothing
-#      else. This is the ONLY check that can see any of it: a Table Q row is ONE
-#      line, so a wrong cell, a truncated clause and an unrelated edit on the
-#      same line are all still "one changed line" to criterion 8.
+# V5 — each amended row must be its BASE row plus exactly its clause, and
+#      nothing else in that file may move. The base row is read with
+#      `git show main:<file>`, the clause is EXTRACTED FROM THIS SPEC by a
+#      structural key, and the candidate row is compared BYTE FOR BYTE against
+#      the reconstruction. That single comparison is the decision: it subsumes
+#      presence-in-full, placement at the end of cell 4, and — the thing a
+#      line-counting check cannot see — any edit ELSEWHERE ON THE SAME LINE.
+#      Criterion 9's "no other edit" has no other enforcement: a Table Q row is
+#      ONE line, so a reauthored cell is still "one changed line".
 Q=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
 SPEC=docs/specs/WP-quarantine-banner-location.md
 v5=0
@@ -963,25 +1027,28 @@ else
     if [ "$(printf '%s\n' "$clause" | grep -c .)" != 1 ]; then
       echo "V5 THIS SPEC DOES NOT CARRY EXACTLY ONE CLAUSE FOR $r"; v5=1; continue
     fi
-    hits=$(grep -cF "| **$r** |" "$Q")
-    if [ "$hits" != 1 ]; then echo "V5 ROW $r MATCHES $hits LINE(S), expected 1"; v5=1; continue; fi
-    row=$(grep -F "| **$r** |" "$Q")
-    n=$(printf '%s\n' "$row" | awk -F' \\| ' '{print NF}')
-    if [ "$n" != 4 ]; then echo "V5 ROW $r HAS $n CELL(S), expected 4"; v5=1; continue; fi
-    cell4=$(printf '%s\n' "$row" | awk -F' \\| ' '{print $4}')
-    case "$cell4" in
-      *" $clause |") ;;
-      *) echo "V5 ROW $r why CELL DOES NOT END WITH ITS FULL CLAUSE"; v5=1 ;;
+    base=$(git show "main:$Q" | grep -F "| **$r** |")
+    cand=$(grep -F "| **$r** |" "$Q")
+    if [ "$(printf '%s\n' "$base" | grep -c .)" != 1 ] || [ "$(printf '%s\n' "$cand" | grep -c .)" != 1 ]; then
+      echo "V5 ROW $r IS NOT EXACTLY ONE LINE AT BASE AND IN THE CANDIDATE"; v5=1; continue
+    fi
+    case "$base" in
+      *" |") ;;
+      *) echo "V5 ROW $r AT BASE DOES NOT END IN A CELL SEPARATOR"; v5=1; continue ;;
     esac
+    # THE DECISION.
+    if [ "$cand" != "${base% |} $clause |" ]; then
+      echo "V5 ROW $r IS NOT ITS BASE ROW PLUS ITS CLAUSE — the clause is missing, truncated, in another cell, or something else on that line changed"; v5=1
+    fi
   done
-  # Nothing else in that file moved: exactly three lines changed, three added.
+  # And no FOURTH line of that file moved.
   ns=$(git diff --numstat main -- "$Q" | awk '{print $1"/"$2}')
   if [ "$ns" != "3/3" ]; then echo "V5 DONE-SPEC DIFF IS ${ns:-empty}, expected 3/3"; v5=1; fi
 fi
 [ "$v5" = 0 ] && echo "V5 OK"
 [ "$v5" = 0 ] || { echo "V5 RED"; exit 1; }
 
-# V3 — the machine-run RED lane (criteria 5 and 7). REGRESSION-kind on the
+# V3 — the machine-run RED lane (criteria 5 and 8). REGRESSION-kind on the
 #      untouched tree: it exits 0 there with the five already-declared proofs
 #      PROVEN. What discriminates is the CONTENT — the FIVE roll-up lines naming
 #      this WP, which cannot appear until the two declaration files and the four
@@ -1025,28 +1092,50 @@ npm run lint
   not fail under the mutation*, and it is why criterion 5 has runtime evidence
   at all. The **doctor** carrier was measured the same way, through a real CLI
   spawn: under the mutation its `[warn]` line comes back carrying the marker.
-- **V5 checks PRESENCE-IN-FULL, PLACEMENT and DIFF SHAPE, and nothing else.**
-  It cannot judge whether a clause is correct, only that the whole of it sits at
-  the end of the cell whose claim it talks about and that no other line of that
-  file moved. Extracted from this block and run in **five** trees, each a scratch
-  git repo whose `main` is the pristine `8302ce8e` so the `numstat` half is
-  exercisable: **clause absent** → three `… DOES NOT END WITH ITS FULL CLAUSE`
-  lines plus `V5 DONE-SPEC DIFF IS empty, expected 3/3`, `V5 RED`, `rc=1`;
-  **each clause in its row's cell 4** → `V5 OK`, `rc=0`; **marker-only**, the
-  round-1 finding — just `` Amended 2026-09-05 (`WP-quarantine-banner-location`) ``
-  appended, no clause — → the same three lines, `V5 RED`, `rc=1`; **each clause
-  in cell 2 instead**, the literal reading of the Q18 precedent → the same three
-  lines, `V5 RED`, `rc=1`; **compliant plus one unrelated edited line in the same
-  file** → `V5 DONE-SPEC DIFF IS 4/4, expected 3/3`, `V5 RED`, `rc=1`. Four RED
-  states, each failing for its own discriminating reason. On the compliant tree
-  `npm run lint` also stays at `0 error(s)` — appending inside a table cell adds
-  no line and trips no rule.
-- **The six existing tests that break are the work, not a surprise.** Rehearsed
-  on a `git archive` copy of `8302ce8e`: `tests 2618 / pass 2600 / fail 6`, the
-  six being the two `ledger.test.js` full-string pins, the two
-  `dream-warnings.test.js` assertions, the one `doctor.test.js` CLI line and
-  the one `dream.test.js` integration substring. If a seventh breaks, something
-  outside Table L moved and it is a finding, not a fixture to update.
+- **V5 makes ONE decision: each amended row is its base row plus its clause.**
+  Everything it used to check separately — presence in full, placement at the
+  end of cell 4 — is a consequence of that byte comparison, and so is the thing
+  a line-counting check cannot see: an edit ELSEWHERE ON THE SAME LINE. It
+  cannot judge whether a clause is *correct*, only that nothing but the clause
+  moved. Extracted from this block and run in **seven** trees, each a scratch
+  git repo whose `main` is the pristine `8302ce8e`:
+
+  | tree | V5 says | rc |
+  |---|---|---|
+  | untouched | 3 × `IS NOT ITS BASE ROW PLUS ITS CLAUSE` + `DIFF IS empty, expected 3/3` | 1 |
+  | each clause at the end of cell 4 | `V5 OK` | 0 |
+  | marker-only (round 1's defeat) | 3 × `IS NOT ITS BASE ROW PLUS ITS CLAUSE` | 1 |
+  | each clause in cell 2 | 3 × `IS NOT ITS BASE ROW PLUS ITS CLAUSE` | 1 |
+  | compliant + one unrelated edited line | `DIFF IS 4/4, expected 3/3` | 1 |
+  | **compliant + Q1 reauthored BEFORE its clause** (round 2's defeat) | `V5 ROW Q1 IS NOT ITS BASE ROW PLUS ITS CLAUSE` | 1 |
+  | **compliant + Q1's middle cell reauthored** | `V5 ROW Q1 IS NOT ITS BASE ROW PLUS ITS CLAUSE` | 1 |
+
+  Six RED states, each failing for its own reason. **The last two are why the
+  numstat check alone was not enough:** both keep the file at three changed
+  lines, and both passed the round-1 form of this step. On the compliant tree
+  `npm run lint` also stays at `0 error(s)`.
+
+- **The six existing tests that break are the work, not a surprise, and row L7
+  adds none.** Rehearsed on `git archive` copies of `8302ce8e`: the four-carrier
+  fix alone gives `tests 2618 / pass 2600 / fail 6`; the same tree **with row
+  L7's move applied** gives the identical `2618 / 2600 / 6`; and with L7's
+  failure-injection test added, `tests 2619 / pass 2601 / fail 6`. The six are
+  the two `ledger.test.js` full-string pins, the two `dream-warnings.test.js`
+  assertions, the one `doctor.test.js` CLI line and the one `dream.test.js`
+  integration substring. **No test in the suite asserts the ORDER of the run's
+  output**, which is what makes L7's move free — measured, not assumed. If a
+  seventh breaks, something outside Table L moved and it is a finding, not a
+  fixture to update.
+- **Row L7's evidence, both directions, measured.** The failure-injection
+  rehearsal — refused-report arm, a fault at the digest write, which is the
+  first pointer-bearing durable surface after the ledger — **passes on the
+  reordered tree** (`tests 1 / pass 1`) and **fails on the shipped ordering**
+  (`tests 1 / pass 0 / fail 1`, diagnostic *"the record was delivered BEFORE the
+  fault:"* followed by an output carrying none). The seam used in the rehearsal
+  was `fs.renameSync` on the digest's atomic rename; `fs.writeFileSync` does
+  **not** work, because `writeFilePrivate` writes through `openSync`/`writeSync`
+  on a randomly named temp. That trap is recorded so the implementer does not
+  conclude the window is unreachable.
 
 ## Out of scope (do NOT do these)
 
@@ -1088,16 +1177,12 @@ npm run lint
   Q1, Q2 and Q9**, any change at all to `WP-dream-promote-module`'s Table Q,
   and any change to any other `done/` spec
   other than `WP-secret-fence-ep2-redact-arm`.
-- **A RED proof for `doctor.js`'s carrier** — see Table C's residual paragraph.
-  Adding one means a second declaration file and a spawn-per-phase run for a
-  one-line literal already covered by V1, V2 and its own CLI pin.
-
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body,
    including V1's and V2's four states each (the composed-duplicate state
-   included, where they are green), V5's five states, and V3's five roll-up
-   lines.
+   included, where they are green), V5's seven states, V3's five roll-up lines,
+   and row L7's failure-injection test run in both directions.
 2. Conventional commits; PR titled
    `fix(dream): stop the ledger-derived banners naming a quarantine shelf (WP-quarantine-banner-location)`.
 3. PR template filled, including "Decisions made" (or "none"), "Discovered
