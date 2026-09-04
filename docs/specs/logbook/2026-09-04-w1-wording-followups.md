@@ -39,10 +39,10 @@ paths the commands were actually run against and are left as recorded.
 | 1 | Nine positional citations into `tests/unit/dream-pipeline.test.js` rotted | **FIX** — canonical-extraction pass (ADR-0031 remedial move) | `docs/specs/done/WP-show-slot-own-value-kind.md`: a dated Current-state erratum, and a canonical-extraction note heading the Mirrored Surface Checklist that gives every cited construct a NON-POSITIONAL locator |
 | 2 | Row C3 states a bare count of FOUR and names the wrong owning surface | **FIX** — dated erratum on the cell, deferring to W1(c) | `docs/specs/done/WP-show-slot-own-value-kind.md`, row C3 |
 | 3 | `tests/unit/dream-pipeline.test.js`'s `computed` JSDoc is false twice over | **RESIDUAL, NAMED AND REGISTERED** — no Draft WP stub | `docs/specs/done/WP-dream-promote-in-workspace.md`, a new entry in W1(c)'s Mirrored Surface Checklist |
-| 4 | (c)(ii)'s "outside this row's SCOPE" reads as contradicting clause (a) | **FIX** — reframed as VACUITY, asserting the same facts | `docs/specs/done/WP-dream-promote-in-workspace.md`, row W1, clause (c)(ii) |
+| 4 | (c)(ii)'s "outside this row's SCOPE" reads as contradicting clause (a) | ~~**FIX** — reframed as VACUITY, asserting the same facts~~ **[SUPERSEDED at round 1, finding 1 — the reframe DID change what (c)(ii) asserted, and this cell claimed otherwise. Now: original restored verbatim, superseding amendment appended.]** | `docs/specs/done/WP-dream-promote-in-workspace.md`, row W1, clause (c)(ii) |
 | 5 | The registry still put the executable copy in `dream-pipeline.test.js` | **FIX** — corrected to `dream-pipeline.known-calls.js`, exemption (i) widened with it | `docs/specs/done/WP-dream-promote-in-workspace.md`, Mirrored Surface Checklist registrations (i) and (1) |
 | 6 | B3b's action cell instructs a `secretGateAbortMessage` pair-rule violation | **FIX** — dated amendment withdrawing the instruction only | `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`, row B3b |
-| 7 | A stale round-5 "provided set" line, plus the shipped runner outgrowing row 2b | **FIX + a named residual** — the line corrected; the missing canonical table recorded as the owner's call | `docs/specs/WP-criterion-red-harness.md:446` |
+| 7 | A stale round-5 "provided set" line, plus the shipped runner outgrowing row 2b | ~~**FIX + a named residual** — the line corrected~~ **[SUPERSEDED at round 1, findings 2 and 3 — the correction REPLACED the round-5 paragraph instead of appending to it, and its authority map was wrong for `XDG_VARS`, `PWD`, `OLDPWD` and `PATH`. Now: original restored verbatim, corrected amendment appended, map measured from `phaseEnv()`.]** The missing canonical table stays a named residual, the owner's call | `docs/specs/done/WP-criterion-red-harness.md` (moved to `done/` by #207) |
 
 ---
 
@@ -269,10 +269,16 @@ this package's own act, so (a)'s AUTHORSHIP boundary does range over it. The
 call is harmless because it runs outside any repository — a vacuous case, not an
 exclusion.
 
-**Disposition: FIX by reframing, asserting exactly what both clauses already
-asserted.** (c)(ii) now says the call IS this package's own act, that (a) ranges
-over it, and that it satisfies (a) **vacuously** — there is no index of the
-user's within its reach. The second half then names what genuinely *is* outside
+**Disposition as first written: FIX by reframing, asserting exactly what both
+clauses already asserted.** **[THAT SECOND HALF WAS FALSE. Superseded at round 1,
+finding 1 — see the Round 1 section below. The reframe withdrew (c)(ii)'s
+exclusion assertion and replaced it with a different one; the claim that nothing
+asserted had changed was contradicted by this logbook's own lesson bullet four
+sections down. What shipped instead: the original clause restored verbatim, with
+a dated amendment appended that names the withdrawn assertion.]** The substance
+of the reframe is unchanged and stands in that amendment: the call IS this
+package's own act, (a) ranges over it, and it satisfies (a) **vacuously** — there
+is no index of the user's within its reach. The second half then names what genuinely *is* outside
 something: the **seam**, not the scope. The pipeline forwards no `spawnGit` into
 `promote()`, so (c)'s enforcement does not observe the call — which is the LIMIT
 the COVERAGE clause already states and (a) already cites. The standing
@@ -388,14 +394,16 @@ fix to `:446` introduces those names. The claim being evidenced is about the
 tree BEFORE the fix, so the evidence has to come from `git show HEAD:`. A number
 from the wrong tree looks like evidence and is not.
 
-**Disposition: FIX the line, and NAME the residual it exposes.** `:446` now
-separates the two sets, points at registration (ii) for the removal rule,
-enumerates what the shipped runner actually does (`PWD` set / `OLDPWD` deleted;
-npm's checkout-naming variables removed and `PATH` stripped; `NODE_PATH` and
-`NODE_OPTIONS` removed whole; Node's own test-runner marks stripped), and names
-the surface that decides the phase environment today: the runner's five name
-constants plus `phaseEnv()`, with the REACH footer as their user-facing mirror
-and criterion 8b as the drift check against `paths.js`.
+**Disposition as first written: FIX the line, and NAME the residual it exposes.**
+**[SUPERSEDED at round 1, findings 2 and 3 — see the Round 1 section below. Two
+defects: the fix DELETED the round-5 paragraph and put its opposite in its place
+under a CORRECTED label, which is the rewrite this whole pass exists to avoid;
+and its authority map — "the five name constants … applied by `phaseEnv()`" — was
+INFERRED from the constant names rather than measured, and is false for
+`XDG_VARS` and silent on `PWD`, `OLDPWD` and `PATH`.]** What shipped instead:
+the round-5 paragraph restored verbatim, a dated correction appended marking
+which of its claims are superseded and which stands, and an authority map
+measured from `phaseEnv()` itself.
 
 **The residual, stated rather than fixed.** That leaves the phase-environment
 contract with **no canonical table**, which is an ADR-0031 gap. Closing it means
@@ -458,6 +466,172 @@ One markdownlint finding was hit and fixed on the way: **MD018** on this very
 file, where a sentence wrapped onto a line beginning `#203` and markdownlint read
 it as a malformed ATX heading. Reworded to `PR #203`.
 
+## Round 1 — the design gate on this branch
+
+Raw, committed before adjudication:
+`docs/specs/logbook/2026-09-04-w1-followups-raw-round1-codex-plugin.txt`
+(commit `e489393a`). Reviewed at `2af1bfc1`, base main `705ae286`. Verdict
+**needs-attention**, three findings, all materiality **C**, proposed disposition
+**FIX** on all three. **All three accepted as FIX; none dropped, none parked.**
+
+**Weighted closure.** All three are LIGHT under
+`docs/runbooks/codex-review.md` — every one is about this branch's own
+documentation wording, and none changes `src/`, an ADR contract, or anything a
+user or a consuming model observes. So the fixes land and are verified
+mechanically; the loop closes without another external round.
+
+**Stop criterion, stated here because the runbook requires it before the fixes
+rather than after:** the loop closes when (a) every assertion either Done spec
+made at `705ae286` is present VERBATIM in the branch, proved by a substring
+check and a sliding-window word check rather than by reading, and (b) the
+phase-environment authority map is re-derived from `phaseEnv()` by execution.
+It escalates to an owner question only if a fix would require re-deciding a
+merged contract row — which is exactly the residual item 7 already names, and
+none of the three fixes touches it.
+
+### Finding 1 — W1(c) changed a historical assertion while claiming it had not
+
+**Accepted, and it is the sharpest of the three because the contradiction was
+already written down in this file.** The first commit replaced (c)(ii)'s
+*"It is outside this row's SCOPE by construction … so (a) never reaches it"*
+with an in-scope/vacuous assertion, and the replacement's own parenthetical said
+*"nothing either clause asserts changes"*. That was false, and this logbook's
+lesson bullet says so in as many words — *"'Outside the SCOPE' and 'satisfies it
+vacuously' are the same fact and different assertions."* **A branch that carries
+its own refutation four sections from the claim is a branch whose
+internal-coherence pass did not run on its own prose.**
+
+**Fix.** The original (c)(ii) sentence is restored **verbatim**, and a dated
+amendment appended after it that (i) names the withdrawn assertion explicitly,
+(ii) states the replacing one, (iii) says in terms that these are two different
+claims rather than two wordings of one, and (iv) records that everything
+operative in the original — the no-`spawnGit` measurement, the `mkdtemp`-root
+assertion cited by literal, and the prohibition on forwarding the pipeline's
+seam into `promote()` — stands unchanged. The false "nothing asserted changes"
+claim is gone from the spec, and the two logbook surfaces that carried it are
+struck in place with a pointer here.
+
+### Finding 2 — the round-5 correction replaced rather than annotated
+
+**Accepted.** The first commit deleted the round-5 paragraph and substituted its
+opposite under a `CORRECTED` label. B3b and C3 in the same commit did the
+opposite — original standing, dated amendment appended — so the branch applied
+two different disciplines to the same kind of edit.
+
+**Fix.** The round-5 sentence is restored **verbatim** and the correction
+appended after it, marking each claim: **SUPERSEDED (1)** the provided/removed
+conflation, **SUPERSEDED (2)** the now-incomplete mirror list, **STANDS** the
+deference pattern.
+
+### Finding 3 — the phase-environment authority map was false for XDG and silent on three controls
+
+**Accepted, and this is the one that was a factual error rather than a
+discipline error.** The first commit wrote that the five named constants are
+*"applied by `phaseEnv()`"*. Measured:
+
+```console
+$ grep -n "XDG_VARS" scripts/red-proofs.js
+326:const XDG_VARS = ['XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME'];
+2222:  XDG_VARS,
+$ echo $?
+0
+```
+
+Two hits: the declaration and the module export. **`phaseEnv()` never references
+it.** It assigns the four XDG roots by explicit statement instead, and the
+constant's only consumer is the runner's own suite:
+
+```console
+$ grep -rn "XDG_VARS" tests/
+tests/unit/red-proofs.test.js:2102:    for (const name of ['TMPDIR', 'TMP', 'TEMP', 'HOME', ...rp.XDG_VARS]) {
+$ echo $?
+0
+```
+
+So the reviewer's consequence is exact: **a name removed from `XDG_VARS` shrinks
+the test iteration and changes no runtime behaviour** — the opposite of an
+authoritative surface. The same check shows `TMPDIR`, `TMP`, `TEMP` and `HOME`
+are literals in that test too, in no constant at all.
+
+Which constants `phaseEnv()` really consumes, and what owns the rest:
+
+```console
+$ grep -n "for (const name of \|env.PWD = \|delete env.OLDPWD\|env.PATH = env.PATH.split" scripts/red-proofs.js
+911:  env.PWD = copyDir;
+912:  delete env.OLDPWD;
+922:  for (const p of [root, ...NPM_CWD_VARS.map((n) => env[n])]) {
+930:  for (const name of NPM_CWD_VARS) delete env[name];
+947:    env.PATH = env.PATH.split(path.delimiter).filter((e) => e && !inside(e)).join(path.delimiter);
+949:  for (const name of INHERITED_NODE_VARS) delete env[name];
+950:  for (const name of REDIRECTED_ENV_VARS) delete env[name];
+951:  for (const name of NODE_TEST_RUNNER_VARS) delete env[name];
+$ echo $?
+0
+```
+
+**FOUR** constants are consumed — `NPM_CWD_VARS` (twice: the `PATH` barrier
+collection and the removal), `INHERITED_NODE_VARS`, `REDIRECTED_ENV_VARS`,
+`NODE_TEST_RUNNER_VARS`. `PWD`, `OLDPWD` and `PATH` are explicit statements in
+none of the five. And criterion 8b's drift check covers exactly one of them —
+`REDIRECTED_ENV_VARS`, against `paths.js`'s `OVERRIDE_VARS` — verified by reading
+the criterion, which says *"the names row 2b REMOVES from each phase
+environment"*, singular.
+
+**Fix.** The amendment now states that map, says explicitly that `XDG_VARS`
+mirrors hardcoded assignments for the test, and ends *"READ `phaseEnv()` ITSELF
+for the complete name set; the constants alone do not decide it."* Cited by
+construct, not by line — `scripts/red-proofs.js` is a live file, and citing it
+positionally is the defect item 1 of this same pass exists to close. The line
+numbers above live here, in a dated record, which is where they belong.
+
+### A fourth, self-found under the rule findings 1 and 2 established
+
+The sliding-window check below surfaced a **third** replace-in-place in the first
+commit that the gate did not flag: Mirrored Surface Checklist registration (1),
+whose file name was corrected inline with the old name preserved only inside the
+note. Having been told twice in one round that the discipline is *leave the
+original standing and append*, applying it to two of three instances would have
+been the same inconsistency finding 2 raised. Converted to restore-and-append in
+this commit: the original sentence is verbatim again, with the supersession
+after it. **Exemption (i) was checked and left as it is** — that edit only ADDED
+a file name and removed no assertion, which is already the additive form.
+
+### Verification that the fixes did what they claim
+
+The claim "the branch only ADDS to these Done specs" is not readable; it is
+measurable, so it was measured two independent ways.
+
+```console
+$ node scratchpad/verify.js
+PRESENT  x1  W1(c)(ii) opening assertion
+PRESENT  x1  W1(c)(ii) closing assertion
+PRESENT  x1  W1(c)(ii) whole original clause, end to end
+PRESENT  x1  round-5 paragraph, whole original sentence
+PRESENT  x1  the words that followed it ("Added in round 4")
+PRESENT  x1  exemption (i) original file name still present
+PRESENT  x1  registration (1) original sentence, restored verbatim
+```
+
+Then the window check: normalise whitespace, slide a 12-word window over
+`705ae286`'s version of each file, and require every window to appear in the
+branch's version. Of **6094** windows in `WP-dream-promote-in-workspace.md` and
+**2242** in `WP-criterion-red-harness.md`, **10** fail — and every one of the ten
+is an INSERTION SEAM, a window that spanned the exact join where new text was
+added, verified one by one:
+
+| seam | where |
+|---|---|
+| `…so (a) never reaches it. **Do` | the (c)(ii) amendment, inserted before `**Do NOT "fix" this…` |
+| `**(i)** \`…test.js\`, the executable code` | exemption (i)'s additive second file name |
+| `…under exemption (i). **No third copy` | registration (1)'s appended supersession |
+| `…as three false reds. - [ ] **TABLE` | the new ORDERING-mirror checklist bullet |
+| `…criterion 8b's check.** Added in round 4:` | the round-5 correction, inserted before `Added in round 4` |
+
+An insertion necessarily breaks any window spanning its join; a DELETION breaks
+windows that no insertion can explain. Ten seams, five insertion points, two
+windows per point at a stride of six — the arithmetic closes, and that is what
+makes this a proof rather than a spot-check.
+
 ## Lessons
 
 - **`W1-followups:` A citation into a live file rots silently, and the rot is
@@ -481,3 +655,34 @@ it as a malformed ATX heading. Reworded to `PR #203`.
   so in the mirror and stop.** Re-deciding the table is a contract change and
   therefore the owner's; a wording pass that "just updates the row" has taken a
   decision it was not given.
+
+Added after round 1:
+
+- **`W1-followups:` A pass that fixes rewrites can itself rewrite.** Three of my
+  seven edits replaced a Done spec's sentence instead of appending to it, and one
+  of the three announced that nothing had changed while changing an assertion.
+  The discipline is not "annotate where it feels historical" — it is that **an
+  edit to a Done spec adds bytes and removes none**, which is checkable rather
+  than judgeable.
+- **`W1-followups:` Make "only adds" a measurement, not a reading.** Slide a
+  12-word window over the pre-edit file and require every window to appear in the
+  post-edit file. Ten windows failed here and all ten were insertion seams, which
+  the arithmetic confirms — two windows per insertion point at a stride of six,
+  five insertion points. A deletion cannot hide in that check, and no amount of
+  re-reading the diff gives the same assurance.
+- **`W1-followups:` My own logbook refuted my own spec four sections apart, and I
+  shipped both.** The lesson bullet said *"the same fact and different
+  assertions"*; the spec cell said *"nothing either clause asserts changes"*. The
+  internal-coherence pass has to run over the RECORD as well as the artifact — a
+  contradiction between them is a finding, and here it was the reviewer's
+  strongest evidence.
+- **`W1-followups:` Do not infer a name set's authority from the constants'
+  names.** `XDG_VARS` looks exactly like the four constants `phaseEnv()` really
+  consumes, and is used by none of them: declared, exported, and read only by a
+  test. Grep every occurrence of a constant before claiming anything applies it —
+  two hits where you expected three is the whole finding.
+- **`W1-followups:` Having just condemned positional citations, I nearly wrote
+  more of them.** The corrected phase-environment map wanted
+  `scripts/red-proofs.js:911` and friends. Live file, same rot. Operative prose
+  cites constructs; line numbers go in the dated record, which is what earns them
+  the pin.
