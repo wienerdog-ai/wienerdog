@@ -360,6 +360,26 @@ test('dream-promote C9 criterion 2: every DENY basename in the inventory is refu
   }
 });
 
+test('dream-promote C9 criterion 3: INSTRUCTION_BASENAMES has exactly as many members as the inventory has DENY rows, each pre-folded', () => {
+  // Same oracle as criterion 2 (the shipped document), and the same
+  // limitation — this bounds the Set from ABOVE, which criterion 2's
+  // per-name checks alone do not: a stray extra member would still pass
+  // every assertion in that test.
+  const src = fs.readFileSync(path.join(__dirname, '../../src/core/dream/promote.js'), 'utf8');
+  const m = src.match(/const INSTRUCTION_BASENAMES = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(m, 'the INSTRUCTION_BASENAMES literal was not found in its expected form');
+  const code = (m[1].match(/'[^']+'/g) || []).map((s) => s.slice(1, -1));
+
+  for (const name of code) {
+    assert.equal(name, name.normalize('NFC').toLowerCase(), `${name} must be pre-folded, or it is unreachable at the Set lookup`);
+  }
+
+  const doc = fs.readFileSync(path.join(__dirname, '../../docs/instruction-file-inventory.md'), 'utf8');
+  const denyCount = doc.split('\n').filter((l) => l.startsWith('| DENY |')).length;
+  assert.ok(denyCount > 0, 'the inventory must have at least one DENY row for this assertion to mean anything');
+  assert.equal(code.length, denyCount, `INSTRUCTION_BASENAMES has ${code.length} names, the inventory has ${denyCount} DENY rows`);
+});
+
 test('dream-promote C9 criterion 7: the independent oracle — a hand-written literal, not derived from the inventory', () => {
   // As of 2026-09-04, Table A's nine names in their STORED (NFC-lowercased)
   // spelling. Written by hand: criteria 2 and 3 both take the shipped
