@@ -440,23 +440,37 @@ rc=0.
 
 ## External rounds
 
-**STOP CRITERION (pinned before round 1):** the loop closes when an external
-round returns no material design finding on either channel — an acceptance
-criterion that a wrong implementation satisfies (in particular one satisfiable
-by a finite matcher, which is band A here); a verification step whose RED is not
-red or whose GREEN is not green on this tree; an enforcement point in Table B
-whose grading a partial fix passes; a Table D row this work package leaves open
-without recording why; a mirror of Table A that the checklist does not register;
-or a scope leak into the instruction-basename list, into `isUnder`'s `.`
-handling, or into the generated inventory. Machinery and wording findings at
-that point are fixed within the frozen surface or accepted as named residuals.
+Round zero closed at `9356659d` (architect self-check `430deaa2` → the
+orchestrator's two clean-context executors, template conformance CONFORMANT and
+coherence 4 findings — 1 A/B, 1 B, 2 C — all FIX in `9356659d`; the loop moved
+LAST so no refusal string moves; the held-out generator is seeded per run).
 
-**Escalations:** (i) two consecutive rounds landing findings of the same kind →
-a design question per ADR-0031, never a third patch — and the fixed point this
-repository has reached four times is *delete the step that has to be right*;
-(ii) a finding whose only honest fix adds anything that watches, polls or runs
-(ADR-0004), reopens the instruction-basename list, or edits
-`docs/instruction-file-inventory.md` is PARKED — to the owner or to the work
-package that owns it; (iii) the Dispatch precondition is the owner's, so a
-finding that only re-argues the reader's silence is routed as a scope objection
-and does not count toward the verdict.
+**STOP CRITERION (pinned before round 1):** the loop closes when an external
+round returns no material design finding on either channel — a dot-prefixed
+segment or layout value that any of the three enforcement points (`makeAdmit`,
+`readVaultLayout`, `inferLayout`/`adopt --yes`) still admits or emits at some
+depth or case; an acceptance criterion or verification step a wrong
+implementation passes (held-out grading that a fitted matcher satisfies, a RED
+mutant that is not the shipped enumeration, an oracle the same accident can
+shrink); an over-denial of a legal path; the `adopt --yes` round trip persisting
+a mapping a later read discards; or a scope leak into the instruction-basename
+list `WP-instruction-basename-currency` closed — and machinery/wording findings
+at that point are fixed within the frozen surface or accepted as named
+residuals. **Escalations:** (i) two consecutive rounds landing findings of the
+same kind → a design question per ADR-0031, never a third patch; (ii) a finding
+whose only honest fix adds a notice, anything that watches or runs (ADR-0004),
+or reopens the basename list is PARKED — to the owner or to a successor; (iii)
+the Dispatch-precondition item (the reader's silent fallback stays silent) is the
+owner's, so a finding that only re-argues it is routed as a scope objection and
+does not count toward the verdict.
+
+**Channels:** gate = Codex plugin (`codex-companion.mjs adversarial-review
+--base main`, run from the branch worktree); shadow = hermetic Codex
+(`codex exec -s read-only`, `CODEX_HOME=~/.codex-review-home`, detached worktree
+at the round's tip, no approvals). Raw outputs committed BEFORE adjudication as
+`2026-09-04-dot-segment-gate-raw-round<N>-<channel>.txt`.
+
+### Rounds
+
+| Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
+|-------|--------------------------|--------------------------|--------------------------|
