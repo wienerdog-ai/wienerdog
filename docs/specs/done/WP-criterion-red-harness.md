@@ -442,11 +442,39 @@ on the spot.
       asserted by the runner's `UNSUPPORTED` refusal. Added in round 3: 4b
       asserts Table D's reporter-compatibility rule; 5 also asserts row 2's
       snapshot/manifest and row 6's `UNCONTROLLED` verdict; 7(b2) asserts row
-      2a's no-symlink/no-dependency rules and row 2b's per-phase temp. **Round 5:
-      row 2b's `OVERRIDE_VARS`-derived provided set is mirrored by Table D's
-      write-boundaries and seam rows, the security checklist and criteria 7/8b —
-      all of which CITE row 2b rather than restating the names, so a variable
-      added to `paths.js` changes exactly one cell plus criterion 8b's check.** Added in
+      2a's no-symlink/no-dependency rules and row 2b's per-phase temp.
+      **Round 5, CORRECTED 2026-09-04: this line conflated row 2b's TWO name
+      sets, and the shipped runner has since outgrown both. (a) THE
+      `OVERRIDE_VARS`-DERIVED SET IS THE REMOVED SET, NEVER THE PROVIDED SET: row 2b
+      REMOVES those names from each phase
+      environment, while the PROVIDED set is the REDIRECTED one — the working
+      directory, `TMPDIR`/`TMP`/`TEMP`, `HOME` and the four XDG roots.
+      Registration (ii) below, added at PR #204 round 1, states the removal rule
+      correctly and is the one to read; what this round-5 line got right is only
+      the deference pattern — Table D's write-boundaries and seam rows, the
+      security checklist and criteria 7/8b all CITE row 2b rather than restating
+      names, so a variable added to `paths.js` changes one cell plus criterion
+      8b's check. (b) THE SHIPPED PHASE ENVIRONMENT IS WIDER THAN ROW 2b
+      ENUMERATES, because PR #204's fourteen review rounds extended it after this
+      line was written: `PWD` is SET to the phase copy and `OLDPWD` deleted;
+      npm's checkout-naming variables (`INIT_CWD`, `npm_config_local_prefix`,
+      `npm_package_json`) are removed and `PATH` is stripped of the source tree's
+      `node_modules/.bin`; `NODE_PATH` and `NODE_OPTIONS` are removed whole; and
+      Node's own `NODE_TEST_CONTEXT` / `NODE_TEST_WORKER_ID` marks are stripped.
+      **THE SURFACE THAT DECIDES THE PHASE ENVIRONMENT TODAY IS THE RUNNER
+      ITSELF** — the constants `REDIRECTED_ENV_VARS`, `NPM_CWD_VARS`, `XDG_VARS`,
+      `NODE_TEST_RUNNER_VARS` and `INHERITED_NODE_VARS` in `scripts/red-proofs.js`,
+      applied by `phaseEnv()`, each carrying its own measurement — with the
+      runner's REACH footer as their user-facing mirror and criterion 8b as the
+      drift check against `paths.js`'s `OVERRIDE_VARS`. Row 2b and Table D's
+      write-boundaries cell state the round-5 subset and are registered mirrors
+      that DEFER to those constants; neither is the current authority for the
+      name lists. **RESIDUAL, NAMED RATHER THAN FIXED HERE (2026-09-04):** this
+      leaves the phase-environment contract with no canonical TABLE, which is an
+      ADR-0031 gap. Closing it means re-deciding the substance of a merged
+      contract row, and a contract change is the owner's act, not a wording
+      pass's — see `docs/runbooks/codex-review.md`, *"Diff size does not measure
+      contract impact"*. Until the owner rules, read the runner's constants.** Added in
       round 4: 5 also asserts **Table E1**'s mode and empty-directory facts; 6a
       asserts **Table E2**'s `FILTERED` exit class; 7(b2) asserts row 2b's full
       provided set (parent, `HOME`); 10 asserts the REACH footer's LANE LIMIT**
