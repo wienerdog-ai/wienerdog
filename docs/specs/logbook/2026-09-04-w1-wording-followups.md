@@ -686,3 +686,27 @@ Added after round 1:
   `scripts/red-proofs.js:911` and friends. Live file, same rot. Operative prose
   cites constructs; line numbers go in the dated record, which is what earns them
   the pin.
+
+## Loop closure (orchestrator, 2026-09-04)
+
+Round 1 = Codex plugin adversarial review on `2af1bfc1` (raw committed
+pre-adjudication in `e489393a` as
+`2026-09-04-w1-followups-raw-round1-codex-plugin.txt`): three findings, all
+materiality C, all LIGHT under the runbook's weighted closure (they concern the
+record's discipline, not any product behaviour), all FIX — applied in `e3cbfe12`.
+No shadow channel was run for this docs-only errata set; the plugin gate is the
+runbook's mandatory design channel and it ran. Closure was verified
+mechanically rather than by a further external round, per Weighted closure:
+
+- Word-level subsequence test, `origin/main` version against HEAD, per file:
+  `WP-criterion-red-harness.md` (13458 → 13987 words) SUBSEQUENCE OK;
+  `WP-show-slot-own-value-kind.md` (13721 → 14507) OK;
+  `WP-secret-fence-ep2-redact-arm.md` (94385 → 94579) OK;
+  `WP-dream-promote-in-workspace.md` (36571 → 37412) — one token differs:
+  exemption (i)'s `` `tests/unit/dream-pipeline.test.js`, `` lost its trailing
+  comma where the widening clause was inserted (`git diff --word-diff` shows
+  exactly that one removal). Accepted: a comma, not an assertion.
+- `npm run lint` exit 0 on `e3cbfe12`; `git status --porcelain` unchanged by
+  the review (`?? node_modules`, a local symlink, before and after).
+
+**LOOP CLOSED at round 1.**
