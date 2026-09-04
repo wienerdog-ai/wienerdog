@@ -1,0 +1,64 @@
+PR GATE ROUND 2 — PR #205 — wd-reviewer (same agent resumed with the round-1 findings), tip c7ff8f12. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+Round 2 verified independently — I re-executed rather than taking the coordinator's summary on trust.
+
+---
+
+## APPROVE
+
+### What I executed on tip `c7ff8f12` (with exit codes)
+
+| Command | Result |
+|---|---|
+| `node scripts/boundary-check.js docs/specs/WP-preservation-abort-widening.md $(git diff --name-only origin/main...HEAD)` | **exit 0** |
+| `npm test` | **exit 0** — `tests 2465 / pass 2453 / fail 0 / skipped 12` |
+| `npm run lint` | **exit 0** — markdownlint 0 issues, shellcheck clean, frontmatter 265 specs / 4 agents |
+| V2 (2 assertions) | **exit 0** both |
+| V3 (3 assertions) | **exit 0** all three |
+| V4 (`diff -u` against the 10-line spec literal) | **exit 0**, byte-identical |
+| D3-escapes-the-gate probe, re-run on the new tip | `WienerdogError: quarantinePreserve: could not remove "…/quarantine/2026-09-02-n.md" after a preservation failure: EPERM` |
+| P1/P2a/P2b/P3 gate probe, re-run | all four arms abort with the correct discriminant |
+| P0 property sweep (5 failure modes × 4 payloads × binary flag), re-run | 17 aborts, 11 refusals, 12 ok/redact, **0 violations** |
+| P4 message byte-compare vs spec literal; redact-arm message vs `origin/main` | exact match; unchanged |
+
+### Finding 1 — genuinely fixed
+
+`src/core/dream/validate.js:1046-1054`. The diff `fe5f01e2..c7ff8f12` touches **only** `validate.js`, `9+/2-`, and I confirmed it is comment-only by filtering the hunk for non-`*`/non-`//` `+`/`-` lines: none. Nothing else under `src/` or `tests/` moved (`git diff --name-only fe5f01e2..HEAD -- src/cli/dream.js src/core/dream/promote.js tests/` returns 0 paths).
+
+Read against the two throws I actually reproduced, the new text is accurate on all three counts I raised:
+
+- **(2) declares Table D row D3** — *"a preservation failure's cleanup (removing `tmp` or `dest`) could not be completed — this propagates out of `quarantinePreserve` and straight out of this function unchanged."* That is exactly the throw I reproduced above, verbatim in mechanism.
+- **"the one case" is gone**, replaced by *"the trigger is a CLASS (Table P rows P0-P3), not a single named case"*.
+- **the durability over-claim is gone**, replaced by *"only byte-identity is established (P0b); the durable conjunct stays deferred to `WP-quarantine-preserve-durability`"* — which matches B3b's own amended clause rather than contradicting it.
+
+I checked the **"TWO"** count adversarially. Every `throw new WienerdogError` in the file sits at `:75`, `:78`, `:91`, `:105` (git/`assertGitRepo` helpers, not called from `secret()`), `:629`/`:634` (D3), `:683` (`unknown kind`), `:951`/`:962` (pair rule, unknown `which`), `:1154` (P0). The gate body calls no git. So the caller-reachable set is exactly P0 and D3 — "TWO" is right — and the four remaining sites are contract-violation guards over code-supplied values, each already declared on its own function's `@throws` (`:623`, `:675`, `:946`). No missing declaration.
+
+### Finding 2 — report present, accurate, correctly placed
+
+The PR body gains an **"Amended-cell re-read report"** section between "Decisions made" and the verification block. It covers all three rows, and I checked each claim:
+
+- **G5 clean** — correct. The clause supersedes the one sentence it needed to; the V9 scratch/lock ordering and teardown sentences are orthogonal.
+- **Q18 clean** — correct, and it names the right two things the clause scopes: cell 2's *"whenever the `redacted/` copy survives, its basename"* and cell 3's R0/R0b-keyed holder list. That matches my own whole-cell read.
+- **B3b — one sentence left false.** The report quotes it exactly as I found it (*"The error message is the only surface that reaches the user on an abort, so it is the one that must carry the basename"*), locates it correctly in the **action** cell rather than the amended condition cell, and states the mechanism correctly: `secretGateAbortMessage` throws on any non-null `redactedName`, and every reachable abort's is `null` by construction. It also states correctly that the appended clause scopes only the trigger class and the two conjuncts. No overstatement, no understatement.
+
+The routing to wd-architect is under **Discovered issues** with the file:line and the reason it is out of boundary. Correct disposition — the implementer could not have fixed it.
+
+### Structural checks re-run
+
+- **Done-spec hunks still one changed line per row**: `git diff -U0 origin/main...HEAD -- docs/specs/done/` gives exactly `@@ -465 +465 @@`, `@@ -1565 +1565 @@`, `@@ -1647 +1647 @@`; `--numstat` is `1/1` and `2/2`. Both appended clauses re-verified **byte-exact** against the spec's `text` blocks and confirmed still at the **end of each row's first content cell**; G5's clause still dated, citing the WP and Table P.
+- **Boundary**: the changed-file list grew by two more `docs/specs/logbook/` raw-transcript files (`…-herdr-shadow.txt`, `…-wd-reviewer.txt`), which are in CLAUDE.md's never-needs-listing set; `boundary-check.js` is exit 0. The "Explicitly NOT in the boundary" four (`dream-pipeline.test.js`, `ledger.js`, `digest.js`, `THREAT-MODEL.md`) remain untouched.
+- **PR body is insert-only** since round 1 — the diff is four pure insertions (`148a`, `189a`, `196a`, `258a`), no deletions, so no prior evidence was quietly rewritten. The pasted V1 counts (`2465 / 2453 / 0 / 12`) still match the tree exactly, which a comment-only change guarantees and my run confirms.
+- **Finding 3** is recorded under Decisions as a deliberate retirement, with the `git grep` result and the note that the literal was already absent from `src/` on main. Accurate.
+
+### Attacked, found nothing
+
+- Whether the new JSDoc prose collides with any lexical guard — V2's `grep -oF` count on `validate.js` is still exactly 1, V3 and V4 unaffected.
+- Whether the comment introduces a lint failure — lint exit 0.
+- Whether the widened `@throws` now over-declares — no; the two guard-throw families are unreachable from callers and separately documented.
+- Whether the round-2 commit smuggled a behaviour change — no non-comment line in the diff, and the P0 sweep, the four-arm gate probe and the P4/redact message byte-compares all reproduce identically to round 1.
+
+### One residual carried forward (not blocking)
+
+`/Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/preservation-abort-widening/docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1565`, action cell — *"…it is the one that must carry the basename"* still instructs a pair-rule violation. Correctly reported and routed rather than fixed. **This needs wd-architect to amend that cell in a follow-up**, so Q4's cited condition owner stops contradicting Table P. It is the only mirror of this contract family still drifted, and at one occurrence across two rounds it does not warrant a canonical-extraction pass — but it should not merge into the backlog silently.
+
+Nothing else outstanding. The diff is contract-faithful, boundary-clean, fully evidenced, and both round-1 findings are closed on their merits.

@@ -1,0 +1,69 @@
+PR GATE ROUND 4 — PR #205 — wd-reviewer (same agent resumed), tip ac657f17. Verdict APPROVE. Relayed verbatim from the agent's final message.
+
+All clean. Final report.
+
+---
+
+## APPROVE
+
+Both round-3 findings are fixed in the shape I verified, and I re-derived every claim rather than taking the summary on trust. No new findings.
+
+### What I executed on tip `ac657f17` (`a7f24032` + one raws commit)
+
+| Command | Result |
+|---|---|
+| `node scripts/boundary-check.js …` | **exit 0** |
+| `npm test` | **exit 0** — `tests 2469 / pass 2457 / fail 0 / skipped 12` |
+| `npm run lint` | **exit 0** |
+| `git diff -U0 origin/main...HEAD -- docs/specs/done/` | still `@@ -465 @@`, `@@ -1565 @@`, `@@ -1647 @@` — one line per row |
+| "Explicitly NOT in the boundary" four | untouched |
+| V2 (2), V3 (3), V4 (byte-exact `diff -u`) | **exit 0** all six |
+| **Genuine `EFBIG` mid-write** (`ulimit -f 1`, `SIGXFSZ` ignored, zero `fs` patching) | `ret=null`, **`dir=[]`**, D1 satisfied — was `[".tmp-…", 512 bytes]` at `80059c0b` |
+| Foreign-leftover (crash + reused pid), committed code | `ret=null`, foreign **byte-identical**, no `dest`, nothing deleted |
+| Same + injected `EXDEV` | `ret=null`, foreign intact |
+| Patch-model create-then-`ENOSPC` (partial judged bytes) | `LEFT BEHIND = []`, absent |
+| `tmpOwned` ownership over pre-existing regular file / dir / symlink / **dangling symlink** | all four `ret=null`, same inode, untouched |
+| **RED: ownership reverted to "after a fully successful write"**, full suite | **exit 1, `fail 1`** — exactly `…round-3 review): a failure AFTER the exclusive create still removes this invocation's OWN partial tmp file` |
+| **RED: `Object.hasOwn` reverted to `=== undefined`**, full suite | **exit 1, `fail 1`** — exactly `…codex plugin P3): an Object.prototype-inherited which fails loud` |
+| Enum guard, 13 direct calls | `toString`, `__proto__`, `constructor`, `hasOwnProperty`, `valueOf`, `isPrototypeOf`, `propertyIsEnumerable`, `toLocaleString`, `undefined`, `null`, `0`, `""`, `Symbol.iterator` → **all fail loud**; both active members still compose (len 286 / 292) |
+| All round-1/2/3 probes re-run (D0–D4, P0b, P3, pair rule, P6, hostile `rel`, D3-escapes-gate, P4 message) | unchanged and correct |
+| P0 property sweep (5 modes × 4 payloads × binary) | 17 aborts / 11 refusals / 12 ok-redact, **0 violations** |
+
+### Finding 1 (Band A) — fixed, and the fix is sound at the OS level
+
+`src/core/dream/validate.js:730-737` is the exact seam-preserving shape I validated: the exclusive create in its own inner `try`, `tmpOwned = true` for every code but `EEXIST`, rethrow into the existing D0/D1 cleanup. The `writeFileSync(path, …)` seam the other fixtures patch is intact — which is why the suite is green rather than the 8 failures my first `openSync`-based candidate produced.
+
+**I attacked the one seam the fix depends on: can a non-`EEXIST` errno arrive while a foreign file sits at `tmp`, causing that foreign file to be deleted as "owned"?** Tested against the real OS, no patching:
+
+```
+existing file + non-writable dir  -> errno = EEXIST   ← carve-out holds
+NO file       + non-writable dir  -> errno = EACCES   ← nothing created
+```
+
+`O_CREAT|O_EXCL` returns `EEXIST` for an existing file *before* the directory permission check, so the carve-out cannot be bypassed by a permission error. And in the converse case — over-claiming ownership for a path the create never allocated — I confirmed it is a harmless no-op: `removeOwnedQuarantinePath` uses `force: true`, so `ret=null`, `dir=[]`, no spurious D3 throw. The fix is conservative in the safe direction and precise in the dangerous one.
+
+The **call-through RED** is honest: its wrapper runs `orig.call(this, p, data, opts)` first, so the real `O_CREAT|O_EXCL` genuinely allocates the entry on disk before the injected `ENOSPC` — not a simulated failure mode. I confirmed it is red on the pre-fix shape and green on the fix.
+
+**All three prose surfaces now describe ownership beginning at the successful exclusive create**, and each is accurate:
+- `:649-658` — *"OWNERSHIP BEGINS AT THE SUCCESSFUL EXCLUSIVE CREATE, NOT AT A FULLY SUCCESSFUL WRITE … a write failure AFTER the create … still leaves this invocation's own partial bytes on disk under that name, and Table D row D1 requires those be found and removed."*
+- `:721-729` — the create-site comment; the old *"or any other write failure"* clause that was the bug is gone.
+- `:735-743` — the catch comment now states the two-way rule correctly.
+- `@throws` at `:689-691` — *"the path this invocation owns (`tmp` before the rename, `dest` after it)"* is now consistent with what the code actually treats as owned.
+
+### Finding 2 (Band B) — fixed
+
+PR body pasted counts are `tests 2469 / pass 2457 / fail 0`, **matching my run exactly**. V5 is extended to seven items; #6 (`wx` removed → 2 failing) and #7 (ownership fix removed → 1 failing) match my own CF-A/CF-B measurements precisely, including #7's `actual: true where false expected`. Decisions records the full provenance across all three rounds, naming the shadow, the plugin and this reviewer, and the round-3 codex-plugin `hasOwn` finding.
+
+### Attacked, found nothing further
+
+- `git diff 80059c0b..HEAD` is exactly four files: `validate.js` (+38/−15), `dream-validate.test.js` (+47/−0, two new tests, **no existing test altered**), and two `docs/specs/logbook/` raws (always-allowed; boundary exit 0).
+- **Self-collision**: two same-stem notes in one run plus a redacted preserve → `2026-07-02-x.md`, `2026-07-02-x-1.md`, and `redacted/2026-07-02-x.md`. The tmp name is reused sequentially without clashing because each rename frees it; the `wx` create cannot now collide with this run's own in-flight temp.
+- **Enum guard scope**: `Object.hasOwn` is checked *before* the lookup, so no inherited value is ever read, and the two active members are unaffected. The pair rule still fires first, so a non-null `redactedName` is rejected regardless of `which`.
+- Contract-density: no new mirror introduced; both fixes cite Table D row D1 and the "Exact contracts" closed enum rather than restating them. Table P/D remain the single decision points.
+
+### Residuals carried forward (neither blocking)
+
+1. **`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:1565`, action cell** — still instructs *"it is the one that must carry the basename"*, a pair-rule violation. Correctly reported in the re-read section and **routed to wd-architect** under Discovered issues. This is the only drifted mirror left and it is out of this WP's boundary by construction.
+2. `[quality]` Band C — the `Object.hasOwn` fix has a RED test but no V5 list entry, while the other two review-driven fixes got items 6 and 7. The spec requires V5 entries only for its own five behaviours, the Decisions section records the fix's origin, and I proved the RED myself. *Disposition: drop.*
+
+Four rounds, three of them driven by defects in the preservation primitive's ownership rule — two found by the shadow and the plugin, one by me as the second-order consequence of the first fix. The primitive is now correct under a genuine kernel failure, under a crash-leftover with a reused pid, and under a prototype-key enum lookup, with a non-vacuous RED behind each. Boundary clean, suite green, PR body current.

@@ -13,6 +13,8 @@ const {
   parseFrontmatter,
   assertGitRepo,
   restoreVaultToHead,
+  quarantinePreserve,
+  secretGateAbortMessage,
 } = require('../../src/core/dream/validate');
 const { createPins } = require('../../src/core/exec-identity');
 const { getPaths } = require('../../src/core/paths');
@@ -1212,41 +1214,38 @@ test('dream-validate: EP2 quarantine name collision gets a numeric suffix', () =
   assert.ok(fs.existsSync(path.join(stateDir, 'quarantine', '2026-07-02-leak.md')));
   assert.ok(fs.existsSync(path.join(stateDir, 'quarantine', '2026-07-02-leak-1.md')));
 });
-test('dream-validate: EP2 fails closed when the quarantine copy cannot be written (still reverts, reason notes it)', () => {
+// SUPERSEDED (`WP-preservation-abort-widening`, Table P row P1). Both tests
+// below used to drive a hard secret whose ONLY preserve fails and assert an
+// ordinary refusal with an EMPTY preservation record — exactly the P1 gap
+// Current State measured: the run continued, committed, and teardown would
+// have destroyed the sole surviving copy. That is no longer the shipped
+// behaviour: P0 forbids a `{refuse:true}` verdict with an empty record, so
+// both cases now raise the Q18 abort instead. Rewritten to assert the abort.
+test('dream-validate: EP2 aborts (P1) when the quarantine copy cannot be written — a hard secret whose ONLY preserve fails', () => {
   const { root, vault, scratch } = tempVault();
   const stateDir = path.join(root, 'state');
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'quarantine'), 'a file where the dir must go');
-  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
+  const rel = '04-Atomic/leak.md';
+  writeVault(vault, rel, AWS_LEAK);
+  const f = { root, vault, scratch, stateDir, rel, abs: path.join(vault, rel) };
 
-  const res = gateFixture(vault, scratch, stateDir, [], { date: '2026-07-02' });
-
-  assert.equal(res.kept('04-Atomic/leak.md'), false);
-  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/leak.md']));
-  const entry = res.reverted.find((r) => r.path === '04-Atomic/leak.md');
-  // THE SUFFIX IS GONE (row G7): `promote()`'s refusal accounting replaces the
-  // reason suffixes the enforcement half composed, and "no copy exists for this
-  // path" is stated POSITIVELY by an empty preservation record rather than by
-  // prose appended to a reason.
-  assert.ok(entry, JSON.stringify(res.reverted));
-  assert.ok(!/quarantine copy failed/.test(entry.reason), 'the retired suffix is not re-added');
-  assert.deepEqual(res.preservedFor('04-Atomic/leak.md'), [], 'the empty record IS the statement');
-  assert.equal(res.secretDisposition.withheld, 1);
+  const before = fs.readFileSync(f.abs);
+  const err = driveAbort(require('../../src/core/dream/validate'), f);
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
 });
-test('dream-validate: EP2 without a stateDir still reverts (fail closed) and notes the missing quarantine', () => {
+test('dream-validate: EP2 aborts (P1) without a stateDir — a hard secret whose ONLY preserve fails', () => {
   const { vault, scratch } = tempVault();
-  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
-  const res = gateFixture(vault, scratch, undefined, [], { date: '2026-07-02' });
-  assert.equal(res.kept('04-Atomic/leak.md'), false);
-  const entry = res.reverted.find((r) => r.path === '04-Atomic/leak.md');
-  // THE SUFFIX IS GONE (row G7): `promote()`'s refusal accounting replaces the
-  // reason suffixes the enforcement half composed, and "no copy exists for this
-  // path" is stated POSITIVELY by an empty preservation record rather than by
-  // prose appended to a reason.
-  assert.ok(entry, JSON.stringify(res.reverted));
-  assert.ok(!/quarantine copy failed/.test(entry.reason), 'the retired suffix is not re-added');
-  assert.deepEqual(res.preservedFor('04-Atomic/leak.md'), [], 'the empty record IS the statement');
-  assert.equal(res.secretDisposition.withheld, 1);
+  const rel = '04-Atomic/leak.md';
+  writeVault(vault, rel, AWS_LEAK);
+  const f = { vault, scratch, stateDir: undefined, rel, abs: path.join(vault, rel) };
+  const before = fs.readFileSync(f.abs);
+  const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
 });
 test('dream-validate: EP2 a leaky NEW skill is reverted and NOT registered', () => {
   const { root, vault, scratch } = tempVault();
@@ -1840,11 +1839,20 @@ test('EP2 redact arm R6: helper level — false, and the target is byte-unchange
 // asserted, with values that DIFFER between the arms.
 
 const ABORT = {
+  // Table P's two ACTIVE values (`WP-preservation-abort-widening`).
   bothFailed: 'neither the redaction copy nor the withheld copy could be saved',
-  onlyWithheldFailed: 'the withheld copy could not be saved; the redaction copy was saved',
+  noRedactionAttempted: 'the withheld copy could not be saved; no redaction copy was attempted',
+  // Fixed on every reachable abort: `redactedName` is always `null` (Table P's
+  // pair rule), so this is the only identity disposition any reachable abort
+  // can carry.
   notPerformed: 'not performed, because there was no saved copy to compare against',
-  mismatched: 'performed, and the file on disk does NOT match the saved copy',
-  notPossible: 'attempted, but the file on disk could not be read at all',
+  // RETIRED (Table P row P6): unreachable in shipped code since the gate
+  // extraction. Kept ONLY so the pairwise-absence checks below keep guarding
+  // against these strings ever being produced again — never asserted as an
+  // expected `which` or `identity` value.
+  onlyWithheldFailedRetired: 'the withheld copy could not be saved; the redaction copy was saved',
+  mismatchedRetired: 'performed, and the file on disk does NOT match the saved copy',
+  notPossibleRetired: 'attempted, but the file on disk could not be read at all',
 };
 
 /** Assert the four fields of the abort message, and that nothing was destroyed. */
@@ -1857,12 +1865,16 @@ function assertAbort(f, err, expect) {
   assert.ok(!m.includes(String.fromCharCode(27)), 'a raw ESC would reposition or hide output');
   // (2) which preserves failed — discriminated between the arms.
   assert.ok(m.includes(expect.which), `which-preserve: ${m}`);
-  for (const other of [ABORT.bothFailed, ABORT.onlyWithheldFailed]) {
-    if (other !== expect.which) assert.ok(!m.includes(other), `the other arm's wording leaked: ${m}`);
+  // P6: pairwise non-substring across the two ACTIVE values, plus the RETIRED
+  // one, so this check still catches a regression that revives it.
+  for (const other of [ABORT.bothFailed, ABORT.noRedactionAttempted, ABORT.onlyWithheldFailedRetired]) {
+    if (other !== expect.which) assert.ok(!m.includes(other), `another arm's wording leaked: ${m}`);
   }
-  // (3) what the on-disk identity check could establish — a DIFFERENT value per arm.
+  // (3) what the on-disk identity check could establish — fixed to `notPerformed`
+  // on every reachable abort (Table P's pair rule: no reachable abort carries a
+  // non-null `redactedName`, so the other two dispositions are unreachable).
   assert.ok(m.includes(expect.identity), `identity disposition: ${m}`);
-  for (const other of [ABORT.notPerformed, ABORT.mismatched, ABORT.notPossible]) {
+  for (const other of [ABORT.notPerformed, ABORT.mismatchedRetired, ABORT.notPossibleRetired]) {
     if (other !== expect.identity) assert.ok(!m.includes(other), `a second disposition leaked: ${m}`);
   }
   // (4) the surviving basename — present on R0b, ABSENT on R0.
@@ -1970,12 +1982,20 @@ function failWithheldPreserveOnly(f) {
 // ── R0b RETIRED, AND THE RETIREMENT HAS A NAME (owner ruling, 2026-08-30) ────
 //
 // FI-17 / FI-18 drove "a durable copy exists but is of the WRONG bytes", and
-// FI-19 drove "the identity read cannot be performed". Both are UNREACHABLE
-// after the gate extraction, and the reason is the one that matters: the abort's
-// identity check used to RE-READ THE VAULT and compare that read against the
-// preserved copy. The extracted gate is HANDED the bytes it preserves, so the
-// copy holds them by construction — there is no second read to race, and no
-// read that can fail.
+// FI-19 drove "the identity read cannot be performed" — both against the
+// VAULT: the abort's identity check used to RE-READ THE VAULT and compare
+// that read against the preserved copy. The extracted gate is HANDED the
+// bytes it preserves, so a race against a SECOND WRITE TO THE TARGET is
+// retired together with that vault re-read — there is no vault read left to
+// race, and no vault read left that can fail.
+//
+// CORRECTED (`WP-preservation-abort-widening`): the sentence above used to
+// read "there is no second read to race, and no read that can fail" as a
+// claim about EVERY read this gate performs. That is false under P0b: P0b
+// adds a DIFFERENT read-back, of the ARTIFACT this call itself just wrote to
+// `state/quarantine/`, never of the target. That read CAN fail, and wrong
+// bytes on it ARE detectable — see the P0b tests below. What stays retired is
+// only the vault re-read FI-17/FI-18/FI-19 drove.
 //
 // SO A WHOLE TOCTOU CLASS RETIRED TOGETHER WITH ITS CAUSE, and its protection
 // did not vanish — IT MOVED. A user save landing between the judgment and the
@@ -2040,14 +2060,22 @@ for (const tracked of [false, true]) {
 // RETIRED with the TOCTOU class, WHICH RETIRED WITH ITS CAUSE — the vault
 // re-read (owner ruling, 2026-08-30; see
 // docs/specs/logbook/2026-08-30-toctou-class-retired-with-its-cause.md). The
-// extracted gate is HANDED the bytes it preserves, so a copy holds them by
-// construction: there is no second read to race and none that can fail, and the
-// arms below ("wrong bytes", "the identity read cannot be performed", "a mid-run
-// save is detected") are unreachable by construction rather than by weakening.
-// THE PROTECTION MOVED: a user save between the judgment and the publish is the
-// vault-write primitive's `expect` guard, Table H row H5, ASSERTED in
-// tests/unit/dream-vault-write.test.js. Cited here, never re-asserted.
-// The trigger that REMAINS is asserted in both directions above.
+// extracted gate is HANDED the bytes it preserves, so a race against a SECOND
+// WRITE TO THE TARGET is retired together with the vault re-read that would
+// have raced it, and the arms below AGAINST THE VAULT ("wrong bytes read back
+// from the vault", "the vault identity read cannot be performed", "a mid-run
+// save is detected") are unreachable by construction rather than by
+// weakening. THE PROTECTION MOVED: a user save between the judgment and the
+// publish is the vault-write primitive's `expect` guard, Table H row H5,
+// ASSERTED in tests/unit/dream-vault-write.test.js. Cited here, never
+// re-asserted. The trigger that REMAINS is asserted in both directions above.
+//
+// CORRECTED (`WP-preservation-abort-widening`): "there is no second read to
+// race and none that can fail" is no longer true of every read this gate
+// performs. P0b adds a read-back of the ARTIFACT this call itself just wrote
+// under `state/quarantine/`, never of the target — that read CAN fail, and
+// wrong bytes on it ARE detectable. Only the vault re-read above stays
+// retired.
 
 // RETIRED with the EP2 enforcement half (WP-dream-promote-in-workspace, row G7):
 // the retired Step-4/index ordering invariant. Under promotion this machinery has no subject. The content
@@ -2157,6 +2185,451 @@ test('EP2 redact arm: a NOT-lossless-UTF-8 note is withheld, and not one byte of
 // RETIRED with the EP2 enforcement half (WP-dream-promote-in-workspace, row G7):
 // the retired vault-writing scrub helper rejecting non-lossless bytes. Under promotion this machinery has no subject. The content
 // decision is asserted by pipeline-level binary admission in tests/unit/dream-pipeline.test.js.
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// `WP-preservation-abort-widening` — Table P's widened trigger (P0-P3), P0b's
+// artifact read-back, and Table D's disposal contract (D0-D4).
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── THE PAIR RULE — direct coverage. No reachable abort in the gate ever
+//    pairs an active enum member with a non-null `redactedName` (every
+//    reachable abort's `redactedName` is `null`, by construction — Table P's
+//    P3 note), so the contract-violation path can only be exercised by
+//    calling `secretGateAbortMessage` directly.
+test('secretGateAbortMessage (THE PAIR RULE): a non-null redactedName paired with either active value fails loud', () => {
+  for (const which of ['both-failed', 'no-redaction-attempted']) {
+    assert.throws(
+      () => secretGateAbortMessage('04-Atomic/x.md', 'some-copy.md', ABORT.notPerformed, which),
+      (err) => err instanceof WienerdogError && /contract violation/.test(err.message),
+      `expected a contract-violation throw for which=${which}`
+    );
+  }
+});
+test('secretGateAbortMessage: a null redactedName with either active value composes normally', () => {
+  for (const which of ['both-failed', 'no-redaction-attempted']) {
+    const m = secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, which);
+    assert.equal(typeof m, 'string');
+    assert.ok(m.includes(JSON.stringify('04-Atomic/x.md')));
+  }
+});
+test('secretGateAbortMessage: an unknown `which` value fails loud rather than composing a message', () => {
+  assert.throws(
+    () => secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, 'bogus'),
+    (err) => err instanceof WienerdogError && /unknown which/.test(err.message)
+  );
+});
+test("secretGateAbortMessage (round-3 review, codex plugin P3): an `Object.prototype`-inherited `which` fails loud, not a malformed message", () => {
+  // A bare `messages[which]` resolves 'toString'/'__proto__'/'constructor' to
+  // an INHERITED function or object rather than `undefined`, which would
+  // silently pass the old `=== undefined` check and interpolate that value
+  // into the message instead of failing loud — a closed-enum violation.
+  for (const which of ['toString', '__proto__', 'constructor', 'hasOwnProperty']) {
+    assert.throws(
+      () => secretGateAbortMessage('04-Atomic/x.md', null, ABORT.notPerformed, which),
+      (err) => err instanceof WienerdogError && /unknown which/.test(err.message),
+      `expected a fail-loud throw for which=${JSON.stringify(which)}`
+    );
+  }
+});
+
+// ── P1/P2 — the trigger widens from the redact fall-through alone to the
+//    CLASS: a hard-secret or unscannable withhold whose ONLY preserve fails
+//    now aborts too, exactly as the redact fall-through already did. Neither
+//    arm ever enters the redact branch, so `redactedName` is `null` and the
+//    message carries `no-redaction-attempted` — a value distinct from P3's.
+
+/** A vault holding one untracked note with a HARD (QUARANTINE-severity)
+ *  finding — never enters the redact arm at all. */
+function hardSecretFixture(rel = '04-Atomic/hard.md') {
+  return redactFixture(rel, 'plain note\nsk-ant-abcdefghijklmnopqrstuvwx0123 leaked here\n');
+}
+/** The tracked counterpart: one HARD-severity line added this run. */
+function trackedHardSecretFixture(rel = '01-Journal/2026-07-03.md') {
+  const head = '# journal\nan old clean line\n';
+  const { root, vault, scratch } = tempVault({ [rel]: head });
+  const stateDir = path.join(root, 'state');
+  const body = `${head}sk-ant-abcdefghijklmnopqrstuvwx0123 leaked here\n`;
+  writeVault(vault, rel, body);
+  return { root, vault, scratch, stateDir, rel, abs: path.join(vault, rel), head, body };
+}
+
+for (const tracked of [false, true]) {
+  test(`EP2 hard-secret withhold arm (P1, ${tracked ? 'tracked' : 'untracked'}): its ONLY preserve fails → abort, no redaction attempted`, () => {
+    const f = tracked ? trackedHardSecretFixture() : hardSecretFixture();
+    const before = fs.readFileSync(f.abs);
+    const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+    assertAbort(f, err, {
+      which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+    });
+  });
+}
+
+/** An untracked note whose content is NUL-prefixed — the delta's own `binary`
+ *  classification, P2's first cause. */
+function binaryFixture(rel = '04-Atomic/bin.md') {
+  return redactFixture(rel, Buffer.concat([Buffer.from([0]), Buffer.from('some content\n')]));
+}
+
+test('EP2 unscannable withhold arm (P2, binary cause): its ONLY preserve fails → abort, no redaction attempted', () => {
+  const f = binaryFixture();
+  const before = fs.readFileSync(f.abs);
+  // `gateFixture`'s adapter derives `record.binary` from git's own binary
+  // heuristic (a NUL in the first ~8KB), the same signal the real delta
+  // primitive supplies.
+  const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
+});
+
+test('EP2 unscannable withhold arm (P2, NOT-lossless-UTF-8 cause): its ONLY preserve fails → abort, no redaction attempted', () => {
+  // `LATIN1_HEAD` is defined below (git calls it TEXT — no NUL — so this drives
+  // the round-trip cause rather than the binary one).
+  const f = redactFixture('04-Atomic/l1-abort.md', LATIN1_HEAD);
+  assert.equal(isLosslessUtf8Bytes(LATIN1_HEAD), false, 'precondition: the fixture is not lossless UTF-8');
+  const before = fs.readFileSync(f.abs);
+  const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
+});
+
+// ── Security checklist: the path is ATTACKER-INFLUENCEABLE and this abort is
+//    the ONLY surface that reaches the user on P1/P2 — non-vacuous evidence
+//    that a raw newline and a raw ESC byte in `rel` never reach the rendered
+//    message, and the note is still identified (via its escaped JSON form).
+//    `!m.includes('\n')` on a rel with no newline in it proves nothing; this
+//    is the fixture that makes the assertion mean something.
+test('EP2 hard-secret withhold arm (P1): a HOSTILE rel (newline + ANSI escape) never reaches the abort message raw', () => {
+  const ESC = String.fromCharCode(27);
+  const hostileRel = '04-Atomic/hostile' + String.fromCharCode(10) + ESC + 'namepwn.md';
+  const f = hardSecretFixture(hostileRel);
+  const before = fs.readFileSync(f.abs);
+  const err = driveAbort(require('../../src/core/dream/validate'), f, { stateDir: undefined });
+  assertAbort(f, err, {
+    which: ABORT.noRedactionAttempted, identity: ABORT.notPerformed, basename: null, onDisk: before,
+  });
+  // assertAbort already asserts no raw newline / ESC and the JSON.stringify
+  // form is present; the non-vacuity is that THIS rel actually contains both.
+  assert.ok(
+    hostileRel.includes(String.fromCharCode(10)) && hostileRel.includes(ESC),
+    'precondition: the fixture is really hostile'
+  );
+});
+
+// ── The Current-State regression, closed: a CORRUPTED redacted/ artifact used
+//    to count as recovery (`Buffer.compare` raced the input alias against
+//    itself); P0b makes it a preservation FAILURE like any other, so — when
+//    the withheld copy also fails — the run now aborts instead of silently
+//    losing the only correct copy of the note.
+test('EP2 redact arm (P0b regression): a CORRUPTED redacted/ artifact is a preservation FAILURE, not a false recovery', () => {
+  const f = redactFixture();
+  const before = fs.readFileSync(f.abs);
+  const q = path.resolve(path.join(f.stateDir, 'quarantine')) + path.sep;
+  const r = path.resolve(path.join(f.stateDir, 'quarantine', 'redacted')) + path.sep;
+  // Corrupt the WRITE under `redacted/` (the write succeeds; the bytes are
+  // wrong), and fail every write under `quarantine/` that is NOT under
+  // `redacted/` (the withheld arm) — the cross-product this arm requires.
+  const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string') {
+      const abs = path.resolve(p);
+      if (abs.startsWith(r)) return orig.call(this, p, Buffer.from('CORRUPT\n'));
+      if (abs.startsWith(q)) { const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e; }
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let err;
+  try { err = driveAbort(require('../../src/core/dream/validate'), f); } finally { un(); }
+  assertAbort(f, err, { which: ABORT.bothFailed, identity: ABORT.notPerformed, basename: null, onDisk: before });
+  // Table D row D2: the corrupted artifact does not survive — it is removed,
+  // not left behind for a later run to trip over.
+  assert.deepEqual(lsRedacted(f), [], 'the corrupted artifact was removed, not left behind');
+  assert.deepEqual(listSecretQuarantine(f.stateDir), [], 'and no withheld artifact survives either');
+});
+
+// ── `quarantinePreserve` direct unit coverage — P0b's read-back verification
+//    and Table D's disposal states (D0-D4). These are precise, ownership-
+//    scoped filesystem behaviours far more directly tested against the
+//    primitive itself than indirectly through a gate fixture.
+
+/** A fresh, isolated `state/` dir. `quarantinePreserve` never touches git, so
+ *  no vault is needed for these tests. */
+function freshStateDir() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-qp-'));
+  return path.join(root, 'state');
+}
+
+test('quarantinePreserve (P0b): success reports the ARTIFACT bytes read back, not the input alias', () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  assert.ok(res, 'preservation succeeded');
+  const dest = path.join(stateDir, 'quarantine', res.name);
+  assert.deepEqual(fs.readFileSync(dest), content, 'the artifact on disk holds the judged bytes');
+  assert.deepEqual(res.bytes, content, 'the reported bytes equal the judged bytes');
+  assert.notEqual(res.bytes, content, 'and are a DIFFERENT Buffer object — read back, never the alias handed in');
+});
+
+test('quarantinePreserve (P0b, Table D row D2): a corrupted artifact is a FAILURE and is removed', () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+  const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) return Buffer.from('CORRUPT\n');
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+  assert.equal(res, null, 'a corrupted artifact is reported as a FAILURE, never a success');
+  assert.equal(fs.existsSync(dest), false, 'D2: the corrupted artifact is removed and confirmed absent');
+});
+
+test('quarantinePreserve (P0b, Table D row D2): an artifact that cannot be read back is a FAILURE and is removed', () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+  const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
+      const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+  assert.equal(res, null, 'an unreadable artifact is reported as a FAILURE');
+  assert.equal(fs.existsSync(dest), false, 'D2: the unreadable artifact is removed and confirmed absent');
+});
+
+test('quarantinePreserve (Table D row D1): the write fails before any rename — tmp is removed, a `dest` COLLISION CANDIDATE survives byte-unchanged', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true });
+  const collisionName = '2026-07-02-x.md';
+  const collisionPath = path.join(qdir, collisionName);
+  const collisionBytes = Buffer.from('an EARLIER run already holds this name\n');
+  fs.writeFileSync(collisionPath, collisionBytes);
+
+  const content = Buffer.from('the judged bytes\n');
+  const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
+      const e = new Error('ENOSPC: injected'); e.code = 'ENOSPC'; throw e;
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let res;
+  try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+  assert.equal(res, null);
+  assert.deepEqual(
+    fs.readdirSync(qdir).filter((n) => n.startsWith('.tmp-')), [],
+    'D1: the tmp file is removed and confirmed absent'
+  );
+  assert.deepEqual(
+    fs.readFileSync(collisionPath), collisionBytes,
+    'the collision candidate at the un-suffixed name was never touched'
+  );
+  assert.deepEqual(fs.readdirSync(qdir).sort(), [collisionName], 'no `-1` artifact was created either');
+});
+
+test('quarantinePreserve (Table D row D1): the rename fails after a successful write — tmp is removed, dest was never created', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  const content = Buffer.from('the judged bytes\n');
+  const un = patchFs('renameSync', () => function () {
+    const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
+  });
+  let res;
+  try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+  assert.equal(res, null);
+  assert.deepEqual(fs.readdirSync(qdir), [], 'both the tmp and the never-created dest are absent');
+});
+
+// ── herdr-shadow, PR #205 round 1, P1 (band A): `tmp`'s name is
+//    `.tmp-<pid>-<stem>`, and a crash can leave one behind. Pids are
+//    reused, so a LATER invocation with the same pid and stem must never
+//    open that path for writing — that would silently overwrite the
+//    foreign bytes, and any later failure would then delete them as
+//    "owned" (Table D row D1's own rule: this invocation removes only
+//    what IT created). `flag: 'wx'` is the fix; these two tests are its
+//    RED evidence.
+test('quarantinePreserve (Table D row D1, herdr-shadow round 1 P1): a FOREIGN file already at the tmp pathname (crash + reused pid) is never overwritten, and a later failure does not delete it', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const foreignBytes = Buffer.from('bytes a crashed EARLIER invocation left behind\n');
+  fs.writeFileSync(tmpPath, foreignBytes, { mode: 0o600 });
+
+  // Belt-and-suspenders: also inject a rename failure, reproducing the
+  // exact shape of the reported bug (write silently overwrites the
+  // foreign file, chmod succeeds, rename fails, cleanup deletes the
+  // "owned" tmp — destroying bytes this invocation never wrote). With the
+  // fix this injected failure is never even reached: the exclusive create
+  // fails first.
+  const un = patchFs('renameSync', () => function () {
+    const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
+  });
+  const content = Buffer.from('the judged bytes\n');
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { un(); }
+
+  assert.equal(res, null, 'a preservation failure, not a success');
+  assert.ok(fs.existsSync(tmpPath), 'the foreign file was never removed');
+  assert.deepEqual(
+    fs.readFileSync(tmpPath), foreignBytes,
+    'the foreign file is byte-identical — never opened for writing, never overwritten'
+  );
+});
+
+test('quarantinePreserve (Table D row D1, herdr-shadow round 1 P1): the EXCLUSIVE create alone fails the preservation over a foreign tmp, on an otherwise-happy path', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const foreignBytes = Buffer.from('bytes a crashed EARLIER invocation left behind\n');
+  fs.writeFileSync(tmpPath, foreignBytes, { mode: 0o600 });
+
+  // No other failure injected: write, chmod and rename would all succeed
+  // today if the write were allowed to proceed. It is not — `flag: 'wx'`
+  // alone is what fails this call, proving the fix rather than an
+  // incidental side effect of some other injected failure.
+  const content = Buffer.from('the judged bytes\n');
+  const res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+
+  assert.equal(res, null, 'the exclusive create alone reports a preservation FAILURE');
+  assert.deepEqual(
+    fs.readFileSync(tmpPath), foreignBytes,
+    'the foreign file at the tmp pathname is untouched'
+  );
+  const dest = path.join(qdir, '2026-07-02-x.md');
+  assert.equal(fs.existsSync(dest), false, 'no dest was ever created either');
+});
+
+// ── round-3 review (wd-reviewer, band A): `flag: 'wx'` (`O_CREAT|O_EXCL`)
+//    allocates the directory entry INSIDE the write call, so a failure
+//    AFTER that point (ENOSPC, a filesize limit, an I/O error) used to
+//    leave `tmpOwned` false — the whole write had to succeed first — and
+//    cleanup skipped a partial secret-bearing temp file THIS invocation
+//    created. The RED calls THROUGH to the real exclusive create (so the
+//    directory entry genuinely exists on disk, not merely simulated) and
+//    then throws, proving ownership is now established at the create, not
+//    at the write's full completion.
+test("quarantinePreserve (Table D row D1, round-3 review): a failure AFTER the exclusive create still removes this invocation's OWN partial tmp file", () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+  const un = patchFs('writeFileSync', (orig) => function (p, data, opts) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(tmpPath) && opts && opts.flag === 'wx') {
+      // Call THROUGH: the real O_CREAT|O_EXCL create runs and genuinely
+      // allocates `tmpPath` on disk before the injected failure fires —
+      // exactly the shape of a disk-full or filesize-limit error that
+      // strikes after the directory entry already exists.
+      orig.call(this, p, data, opts);
+      const e = new Error('ENOSPC: injected after the exclusive create'); e.code = 'ENOSPC';
+      throw e;
+    }
+    return orig.call(this, p, data, opts);
+  });
+  const content = Buffer.from('the judged bytes\n');
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { un(); }
+  assert.equal(res, null, 'a preservation failure, not a success');
+  assert.equal(fs.existsSync(tmpPath), false, "this invocation's own partial tmp file is removed and confirmed absent");
+});
+
+test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after a failed rename fails LOUD', () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const unRename = patchFs('renameSync', () => function () {
+    const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
+  });
+  const unRm = patchFs('rmSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
+      throw new Error('EACCES: cannot remove');
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let threw = null;
+  try {
+    quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } catch (e) { threw = e; } finally { unRename(); unRm(); }
+  assert.ok(threw instanceof WienerdogError, `expected a WienerdogError: ${String(threw)}`);
+  assert.match(threw.message, /\.tmp-/, threw.message);
+});
+
+test('quarantinePreserve (Table D row D3): a dest that cannot be removed after a failed verification fails LOUD', () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+  const unRead = patchFs('readFileSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) return Buffer.from('CORRUPT\n');
+    return orig.call(this, p, ...rest);
+  });
+  const unRm = patchFs('rmSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
+      throw new Error('EACCES: cannot remove');
+    }
+    return orig.call(this, p, ...rest);
+  });
+  let threw = null;
+  try {
+    quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } catch (e) { threw = e; } finally { unRead(); unRm(); }
+  assert.ok(threw instanceof WienerdogError, `expected a WienerdogError: ${String(threw)}`);
+  assert.match(threw.message, /2026-07-02-x\.md/, threw.message);
+});
+
+test('quarantinePreserve (Table D row D4): every failure leaves this invocation owning nothing, over a NON-EMPTY quarantine tree', () => {
+  const stateDir = freshStateDir();
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir, { recursive: true });
+  const seed = {
+    'earlier-run-1.md': Buffer.from('earlier run 1\n'),
+    'earlier-run-2.md': Buffer.from('earlier run 2\n'),
+    '2026-07-02-x.md': Buffer.from('a collision candidate from an earlier run\n'),
+  };
+  for (const [name, bytes] of Object.entries(seed)) fs.writeFileSync(path.join(qdir, name), bytes);
+  const content = Buffer.from('the judged bytes\n');
+
+  // D0: no stateDir at all.
+  assert.equal(quarantinePreserve(undefined, content, '04-Atomic/x.md', '2026-07-02', 'withheld'), null);
+
+  // D1: the write fails.
+  {
+    const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
+        const e = new Error('ENOSPC'); e.code = 'ENOSPC'; throw e;
+      }
+      return orig.call(this, p, ...rest);
+    });
+    try {
+      assert.equal(quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'), null);
+    } finally { un(); }
+  }
+
+  // D2: the rename succeeds (into the NEXT collision slot, `-1`, since the
+  // seeded name occupies the un-suffixed one), but verification fails.
+  {
+    const dest1 = path.join(qdir, '2026-07-02-x-1.md');
+    const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(dest1)) return Buffer.from('CORRUPT\n');
+      return orig.call(this, p, ...rest);
+    });
+    try {
+      assert.equal(quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'), null);
+    } finally { un(); }
+  }
+
+  const left = fs.readdirSync(qdir).sort();
+  assert.deepEqual(left, Object.keys(seed).sort(), 'only the pre-existing files remain — nothing this invocation owned survives');
+  for (const [name, bytes] of Object.entries(seed)) {
+    assert.deepEqual(fs.readFileSync(path.join(qdir, name)), bytes, `${name} is byte-identical to before the call`);
+  }
+});
 
 
 // ── AC-14 — the retention contract for state/quarantine/redacted/ ───────────

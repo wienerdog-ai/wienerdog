@@ -1,0 +1,61 @@
+PR GATE ROUND 3 — PR #205 — codex plugin review (codex-companion.mjs review --wait --base main --scope branch), tip 80059c0b. Captured verbatim from stdout. git status --porcelain identical before and after (both empty).
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a06225-66ec-7f72-9b48-e5cc6d07412a).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --stat d8e4afb69e809f2c6e450dba857e83029d4a42ac ... (exit 0)
+[codex] Running command: /bin/zsh -lc "find . -name AGENTS.md -o -name AGENTS.override.md; printf '\\n--- SPEC ---\\n'...
+[codex] Command completed: /bin/zsh -lc "find . -name AGENTS.md -o -name AGENTS.override.md; printf '\\n--- SPEC ---\\n'... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n '"'^##'"\\|"'^###'"\\|"'^| P'"\\|"'^| D'"\\|"'^| G'"\\|"'^| Q'"' docs/s...
+[codex] Command completed: /bin/zsh -lc "grep -n '"'^##'"\\|"'^###'"\\|"'^| P'"\\|"'^| D'"\\|"'^| G'"\\|"'^| Q'"' docs/s... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '285,760p' docs/specs/WP-preservation-abort-widening.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '285,760p' docs/specs/WP-preservation-abort-widening.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=40 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=40 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=50 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=50 d8e4afb69e809f2c6e450dba857e83029d4a42ac -- src/core/drea... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,100p' src/core/dream/validate.js; git diff --unified=15 d8e4afb69e809...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,100p' src/core/dream/validate.js; git diff --unified=15 d8e4afb69e809... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Running command: /bin/zsh -lc "grep -n \"function scrubAddedLines\" -A80 src/core/dream/validate.js; grep -R \...
+[codex] Command completed: /bin/zsh -lc "grep -n \"function scrubAddedLines\" -A80 src/core/dream/validate.js; grep -R \... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"function displayName\" -A45 src/core/dream/ledger.js; grep -R \"funct...
+[codex] Command completed: /bin/zsh -lc "grep -n \"function displayName\" -A45 src/core/dream/ledger.js; grep -R \"funct... (exit 0)
+[codex] Running command: /bin/zsh -lc 'for f in docs/specs/logbook/*preservation-abort-pr205-raw-round2*; do echo ===$...
+[codex] Command failed: /bin/zsh -lc 'for f in docs/specs/logbook/*preservation-abort-pr205-raw-round2*; do echo ===$... (exit 1)
+[codex] Running command: /bin/zsh -lc "for f in docs/specs/logbook/*preservation-abort-pr205-raw-round2*; do printf '\...
+[codex] Command completed: /bin/zsh -lc "for f in docs/specs/logbook/*preservation-abort-pr205-raw-round2*; do printf '\... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git log --oneline --decorate d8e4afb69e809f2c6e450dba857e83029d4a42ac..HEAD'
+[codex] Command completed: /bin/zsh -lc 'git log --oneline --decorate d8e4afb69e809f2c6e450dba857e83029d4a42ac..HEAD' (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show --stat --oneline 40225aff && git show --unified=80 --format=fuller 402...
+[codex] Command completed: /bin/zsh -lc 'git show --stat --oneline 40225aff && git show --unified=80 --format=fuller 402... (exit 0)
+[codex] Running command: /bin/zsh -lc 'grep -n "function readRecord" -A70 src/core/dream/promote.js; git diff --unifie...
+[codex] Command completed: /bin/zsh -lc 'grep -n "function readRecord" -A70 src/core/dream/promote.js; git diff --unifie... (exit 0)
+[codex] Running command: /bin/zsh -lc "git show --format= --unified=100 0dec6586 -- src/core/dream/validate.js src/cor...
+[codex] Command completed: /bin/zsh -lc "git show --format= --unified=100 0dec6586 -- src/core/dream/validate.js src/cor... (exit 0)
+[codex] Running command: /bin/zsh -lc "grep -n \"secretGateAbortMessage\" -A55 -B10 tests/unit/dream-validate.test.js;...
+[codex] Command completed: /bin/zsh -lc "grep -n \"secretGateAbortMessage\" -A55 -B10 tests/unit/dream-validate.test.js;... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '969,990p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '969,990p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"const f=require('./src/core/dream/validate').secretGateAbortMessage; ...
+[codex] Command completed: /bin/zsh -lc "node -e \"const f=require('./src/core/dream/validate').secretGateAbortMessage; ... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The widened abort behavior is mostly implemented, but partial write failures can leave untrac...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The widened abort behavior is mostly implemented, but partial write failures can leave untracked secret-bearing temp artifacts, violating the work package's core disposal contract. The closed message discriminant also accepts inherited object keys.
+
+Full review comments:
+
+- [P2] Clean up temp files after partial write failures — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/preservation-abort-widening/src/core/dream/validate.js:723-724
+  When `writeFileSync` creates the exclusive temp file and then throws while writing or closing it—for example, `ENOSPC` after a partial write—control reaches the catch before `tmpOwned` becomes true. The catch therefore returns `null` without removing the invocation-owned, potentially secret-bearing temp file, contrary to Table D's D1–D4 cleanup contract (`docs/specs/WP-preservation-abort-widening.md:414-417`). Establish ownership immediately after a separate exclusive create/open, before writing the contents.
+
+- [P3] Reject prototype keys in the message discriminant — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/preservation-abort-widening/src/core/dream/validate.js:980-982
+  When `which` is an out-of-enum value inherited from `Object.prototype`, such as `toString`, `constructor`, or `__proto__`, this lookup returns an inherited function/object rather than `undefined`, so the helper renders a malformed message instead of failing loud. That violates the closed two-member enum contract (`docs/specs/WP-preservation-abort-widening.md:326-328`); use an own-property check, null-prototype map, or explicit switch.
+rc=0

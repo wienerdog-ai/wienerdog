@@ -954,10 +954,13 @@ async function run(argv, opts = {}) {
         // ROW G5's SECOND teardown exception, and it is the only-copy invariant
         // (`WP-dream-promote-module`, Table Q row Q4). Under promotion the
         // destruction risk moved from the vault to the WORKSPACE rather than
-        // vanishing: when a note's redaction AND its withheld preservation both
-        // failed, the workspace holds the sole surviving copy of what the brain
-        // wrote, and removing it is the data loss the shipped abort exists to
-        // refuse. The run fails loud with the tree intact.
+        // vanishing: whenever a preservation step leaves no verified artifact
+        // holding the bytes the gate judged, the workspace holds the sole
+        // surviving copy of what the brain wrote, and removing it is the data
+        // loss the abort exists to refuse. The trigger class is Table P of
+        // `WP-preservation-abort-widening`; this catch names no member of it,
+        // and inspects no error, so it holds for every member. The run fails
+        // loud with the tree intact.
         retainWorkspace = true;
         throw err;
       }

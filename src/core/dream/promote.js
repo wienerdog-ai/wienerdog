@@ -1190,9 +1190,20 @@ function promote(o) {
     let redaction = null;
 
     if (verdict.refuse) {
-      // BOTH EP2 arms preserve (Table D), so the hard withhold reports a record
-      // too — the gap that made this contract's shape an owner question.
+      // BOTH EP2 arms preserve (Table D), so the hard withhold reports a
+      // record too. Q4, THE ONLY-COPY INVARIANT — this module's share of it,
+      // against a gate it does not own (the gate is INJECTED): an empty
+      // record on a refusal is the same unsatisfied invariant the redact arm
+      // below already refuses, and it is refused the same way — fail-loud
+      // rather than trust an obviously-unsatisfied record from a defective
+      // gate (`WP-preservation-abort-widening`, Table P row P4).
       preserved = readRecord(verdict.preserved, rel, 'refuse');
+      if (preserved.length === 0) {
+        throw new WienerdogError(
+          `promote: the secret gate's withhold arm reported no preserved copy for \`${rel}\` — ` +
+            'the only-copy invariant is unsatisfied and nothing is promoted'
+        );
+      }
       disposition.withheld += 1;
       refuse(`EP2: ${verdict.reason || 'secret withheld from promotion'}`);
       continue;

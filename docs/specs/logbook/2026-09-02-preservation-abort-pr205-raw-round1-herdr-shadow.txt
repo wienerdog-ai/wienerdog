@@ -1,0 +1,19 @@
+PR GATE ROUND 1 — PR #205 — herdr-spawned hermetic Codex shadow #2 (CODEX_HOME=~/.codex-review-home, codex v0.151.0, gpt-5.6-sol high, -s read-only, detached worktree @ 70a639c0, fresh thread, pr-rubric.md applied). Captured via an approved scratch-file write (this is the COMPLETE report; an earlier commit of this file carried the first chunk only, before the reviewer's second write was approved). Approvals granted: V4 comment probe, D4 probe and the V5 five-counterfactual probe, all in mktemp copies. Worktree porcelain empty before and after (re-checked: 0 entries).
+
+{
+  "findings": [
+    {
+      "title": "[P1] Allocate a temp path before treating it as owned",
+      "body": "**Materiality band A.** When a crash leaves `.tmp-${pid}-${stem}` and a later process reuses the same PID/stem, `writeFileSync` overwrites that pre-existing artifact; if write/chmod/rename then fails, this cleanup treats the reused pathname as invocation-owned and deletes it. That contradicts the [D4 acceptance criterion](</private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/docs/specs/WP-preservation-abort-widening.md:604>) that every pre-existing quarantine file remain byte-identical and the repo's [spec-driven rule](</private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/AGENTS.md:14>), and can silently destroy secret-bearing bytes; allocate the temp name collision-free or create it exclusively before ownership begins.",
+      "confidence_score": 0.99,
+      "priority": 1,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0e6bb112-aa99-4e11-af0b-6ac5f6e9964e/scratchpad/shadow-wt-a2/src/core/dream/validate.js",
+        "line_range": {"start": 714, "end": 714}
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "EXECUTED: rubric read exit 0; initial git status exit 0 and empty; diff name/boundary inspection, complete spec read, focused deliverable reads, and git diff --check all exit 0; npm test exit 0 (2465 tests, 2453 pass, 0 fail, 12 skipped); npm run lint NOT RUN because the user declined it and stated the orchestrator runs lint; V2/V3 lexical guards exit 0; V4 exact catch-comment comparison exit 0; Q18/B3b exact-clause check exit 0; D4 stale-temp mkdtemp probe exit 0 and reproduced deletion; final git status exit 0 and empty, identical to the initial status. V5 ran five full-suite counterfactuals in isolated mkdtemp archive copies: trigger, P4, P6, read-back, and disposal each exited 1 and each named failing assertions in this WP's changed dream-validate or dream-promote tests; the collector exited 0, and unrelated concurrency-sensitive reap/update checks also failed in those parallel mutation runs but were not used as evidence. The diff boundary exactly matches the seven Deliverables plus the governing spec and the exact mirrored prose is compliant, but the reproduced D4 pre-existing-temp deletion can silently lose quarantined bytes, so the patch is not correct.",
+  "overall_confidence_score": 0.99
+}
