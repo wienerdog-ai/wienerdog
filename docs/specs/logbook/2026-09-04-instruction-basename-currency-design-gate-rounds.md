@@ -469,3 +469,167 @@ caveat on finding 2: it edits a canonical table that *ships as a product
 document*, so a reader of `docs/instruction-file-inventory.md` observes the
 difference. The orchestrator owns the HEAVY/LIGHT call; this is the input to it,
 not the decision.
+
+### Round 2 fixes — architect, 2026-09-04, on top of `6b7a6080`
+
+Two findings, **both A, both converged across the plugin and the shadow**, both
+executed rather than reasoned: each channel ran the exact fenced V3 and V4 bodies
+against synthetic wrong artifacts and got exit 0. Zero scope objections counted
+on either channel.
+
+**THE CIRCUIT BREAKER FIRED.** Round 1's [A] and round 2's two [A]s are **one
+kind**: *a verification that parses or tokenises the shipped artifact, and can
+therefore be satisfied by a wrong one.* The runbook's rule — two consecutive
+rounds landing findings of the same kind is a design question, never another
+textual patch — applies, and the fixed point this repository has reached three
+times before is **delete the step that has to be right**. The closing move of
+`docs/specs/logbook/2026-09-01-show-slot-design-gate-rounds.md` states it in its
+own words: *"any checker that must find the set inside a JavaScript file
+enumerates the ways JS can hide it, an alien grammar that never closes… the
+checker hashes the ENTIRE file — nothing to locate, the whole evasion class
+unconstructible."*
+
+**The design change, applied.**
+
+1. **`docs/instruction-file-inventory.md` is now a WHOLE-FILE byte comparison.**
+   Tables A, B and C were **moved bodily into a single canonical rendering
+   block** in the spec, delimited by `<!-- BEGIN-CANONICAL-INVENTORY -->` /
+   `<!-- END-CANONICAL-INVENTORY -->`. They exist nowhere else; the three
+   `### Table …` subsections under `## Contract reference` became pointers that
+   decide nothing. The block is the whole file with **exactly one placeholder**,
+   `@DATE@`, validated by `^\d{4}-\d{2}-\d{2}$` and required to be ≥ `2026-09-04`.
+   V3 extracts the block, substitutes, and compares **every byte**. The
+   implementer **produces** the file with the same command and `--write`, and
+   never retypes it — the show-slot precedent, named in the spec.
+   **The agreement rule, chosen deliberately: ONE date, not two.** Table C
+   obliges one re-fetch pass, so every `Fetched` cell carries the `Current as of`
+   date and no other. There is nothing to reconcile between header and cells, no
+   second placeholder to validate, and no `max(Fetched)` rule to get wrong — the
+   whole document is a function of one value. A row whose citation could not be
+   confirmed in the pass is not silently refreshed; it is *changed*, which
+   changes the rendering block.
+2. **The release-runbook step is now one pinned sentence.** It sits between
+   `<!-- BEGIN-CANONICAL-RELEASE-STEP -->` / `<!-- END-CANONICAL-RELEASE-STEP -->`
+   in a one-line `text` fence, 523 bytes. V4 requires **exactly one** numbered
+   line of the runbook whose body equals it byte for byte, and asserts nothing
+   else. Table C's five-token row was replaced by `The step's canonical text`,
+   which names the pinned bytes. The obligation is the sentence; a negation would
+   have to be byte-identical to the affirmative.
+3. **Criterion 7's hand-written literal set stays**, unchanged, and Table D stays
+   targeted at it. What was added is the **anchoring chain, stated explicitly**
+   in criterion 7: the literal equals the shipped document's DENY basenames
+   (half (a)) → the shipped document equals the canonical rendering byte for byte
+   (criterion 1, proved by V3) → the rendering is spec text the Deliverables
+   table lets the implementer touch only to flip `status:`. Both channels reached
+   this conclusion independently and declined to count the contract-tampering
+   case as a separate finding.
+
+**THE MACHINERY SHRANK, which is the point.** Before: a region locator, a heading
+matcher, a final-cell normaliser, a duplicate scanner, and a five-token step
+parser — five things that had to be right about a document. After: **two byte
+comparisons and one hand-written literal set.** Everything the old checks
+enforced piecewise (headings, regions, cell contents, duplicates, the opening
+paragraph, the dates, the step's meaning) is enforced by the fact that the file
+*is* the rendering. The copy boundary was **deleted**, not restated: there is no
+boundary because there is no region.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **R2-A** [A, converged] | V3 compared only the regions under three headings, so a document with no H1, no `Current as of` sentence, no canonical-source statement and no residual opening passed; heading suffixes were accepted; the `Fetched` normalisation replaced any final cell, so `NOT-A-DATE` passed. Both channels executed V3's exact body and got exit 0 on those documents | **FIXED by deletion of the mechanism.** Whole-file byte compare against a one-placeholder rendering. Re-run below in **eight** states, including both of the exact documents the channels used |
+| **R2-B** [A, converged] | V4 accepted a step carrying all five tokens and negating every one of them. Both channels executed it and got `V4 OK` | **FIXED by deletion of the mechanism.** One pinned sentence, one byte-equal numbered line. The channels' own negated step is now rejected; re-run below in **six** states |
+
+### 0.9 Round-2 re-runs, all on the untouched tree at `6b7a6080`
+
+`src/`, `tests/` and `scripts/` are unchanged since `705ae286`. Every command
+below was **extracted from the spec's fenced block and executed through a shell**,
+so the escaping ships exercised. The rendering fixture was produced by the spec's
+own `--write` and deleted afterwards; `git status --short` shows only the two
+edited documents.
+
+**V1–V4 on the untouched tree — all RED for their intended reasons:**
+
+```text
+V1: MISSING DELIVERABLE: docs/instruction-file-inventory.md                            rc=1
+V2: FAIL: missing input docs/instruction-file-inventory.md                             rc=1
+V3: FAIL: missing input docs/instruction-file-inventory.md                             rc=1
+V4: FAIL: 0 numbered line(s) of docs/runbooks/release.md carry the canonical
+    step body, expected exactly 1                                                      rc=1
+```
+
+**V3, eight states.** The first two are the production step and its proof; the
+next two are the exact wrong documents the round-2 channels used.
+
+```text
+--write (production)        : V3 --write: rendered docs/instruction-file-inventory.md at
+                              2026-09-04, 99 lines, 13779 bytes                        rc=0
+compare, same date          : V3 OK: byte-identical to the canonical rendering at
+                              2026-09-04 (13779 bytes)                                 rc=0
+entire opening removed      : FAIL: first byte difference at line 1
+                                expected: "# Instruction-file inventory"
+                                actual  : "## Table A — denied basenames"
+                              FAIL: not the canonical rendering (83 lines vs 99)        rc=1
+every Fetched = NOT-A-DATE  : FAIL: first byte difference at line 34, column 129
+                                expected: "e.claude.com/docs/en/memory | 2026-09-04 |"
+                                actual  : "e.claude.com/docs/en/memory | NOT-A-DATE |"  rc=1
+QWEN.md DENY row dropped    : FAIL: first byte difference at line 40, column 11
+                                expected: "| DENY | `QWEN.md` | `qwen.md` | Qwen Code's…"
+                                actual  : "| DENY | `WARP.md` | `warp.md` | Warp project…" rc=1
+heading suffix added        : FAIL: first byte difference at line 17, column 30
+                                expected: "## Table A — denied basenames"
+                                actual  : "## Table A — denied basenames (current)"     rc=1
+CRLF line endings           : FAIL: first byte difference at line 1, column 29
+                                expected: "# Instruction-file inventory"
+                                actual  : "# Instruction-file inventory\r"              rc=1
+2027-01-15 render + compare : V3 OK: byte-identical … at 2027-01-15 (13779 bytes)      rc=0
+2027-01-15 file, 2026 arg   : FAIL: first byte difference at line 3, column 20
+                                expected: "**Current as of 2026-09-04. …"
+                                actual  : "**Current as of 2027-01-15. …"               rc=1
+NOT-A-DATE argument         : FAIL: pass exactly one date as YYYY-MM-DD                rc=1
+2020-01-01 argument         : FAIL: 2020-01-01 is earlier than 2026-09-04, the date
+                              this spec read its citations                             rc=1
+```
+
+**V4, six states.** The canonical step body is **523 bytes**.
+
+```text
+untouched runbook           : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
+absent runbook              : FAIL: missing input <temp>/rb-missing.md                 rc=1
+compliant                   : V4 OK: … carries the canonical step body exactly once
+                              (523 bytes)                                              rc=0
+ROUND 2'S NEGATED STEP      : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
+two copies                  : FAIL: 2 numbered line(s) … expected exactly 1            rc=1
+MUST -> should (one word)   : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
+present but not numbered    : FAIL: 0 numbered line(s) … expected exactly 1            rc=1
+```
+
+**The honest cross-check that the pair is not vacuous.** With the rendering
+written and the constant still at four names, V3 is **green** and V2 is **red**
+(`FAIL: INSTRUCTION_BASENAMES has 4 names, the inventory has 9 DENY rows`) — the
+documentation half satisfied, the source half not yet. The two halves are
+independent, which is what round 1 asked for and round 2 did not disturb.
+
+**One defect this pass caught in its own work**, recorded because it is the same
+lesson as round 1's `argv` index: V3's first diff report printed the first 100
+characters of each line, so the `NOT-A-DATE` mutant rendered as two *identical*
+preview lines with the difference past the cut. The report now computes the
+common-prefix column and prints a window around it — visible in the pasted output
+above as `line 34, column 129`.
+
+**Sentinel integrity, measured:** each of the four sentinels occurs **exactly
+once as a standalone line** in the spec (`grep -cx` = 1 for each). V3 and V4 both
+assert this themselves and fail loudly otherwise, and neither extraction is
+load-bearing in the round-1 sense: a mis-extraction makes the byte compare fail,
+never pass.
+
+**Citations touched this round:** none. No Table A or Table B row, cell or URL
+changed; the rows moved into the rendering block byte-identically. Table A's
+preamble gained the one-pass/one-date sentence, and Table C exchanged its
+`Where the obligation is recorded` and five-token rows for the canonical-text
+pair — those are the only content edits inside the rendered document.
+
+**Weighted closure, the architect's read:** **LIGHT.** No `src/` behaviour, no
+ADR contract, no user-observable product change — the shipped deny-list is the
+same nine names and the shipped inventory is the same content. What changed is
+how the artifacts are produced and proved. The one caveat from round 1 stands:
+the inventory ships as a product document, so its Table C rows and Table A
+preamble sentence are reader-visible. The orchestrator owns the call.

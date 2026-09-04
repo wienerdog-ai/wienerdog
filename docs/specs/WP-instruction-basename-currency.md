@@ -152,11 +152,11 @@ carries the commands and their output.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/instruction-file-inventory.md | The dated inventory. Its skeleton is fixed under "Exact contracts"; its three tables are **Table A**, **Table B** and **Table C**, copied verbatim, **under section headings that keep those labels** so the cells' cross-references resolve in the copy. **The copied region is each table's preamble plus the table itself**; spec-side commentary after a table is not copied. **The row shape is load-bearing**: a DENY row starts with `\| DENY \|` and its **second cell** is the basename in backticks — acceptance criterion 2's test parses exactly that. **On this work package's flip to Done this file becomes the canonical inventory** and Tables A, B and C here become its record |
+| create | docs/instruction-file-inventory.md | **GENERATED, never written by hand.** It is the canonical rendering block under "Exact contracts" with `@DATE@` substituted, produced by running verification step **V3 with `--write`**. Not one byte of it is the implementer's to compose. **The DENY row shape is load-bearing** — a row starts with `\| DENY \|` and its **second cell** is the basename in backticks — because acceptance criterion 2's test parses exactly that; the shape is fixed in the rendering, so honouring it takes no effort and breaking it is a byte difference V3 catches. **On this work package's flip to Done this file becomes the canonical inventory**, and the rendering block here becomes its record and its regeneration source |
 | modify | src/core/dream/promote.js | **ONE executable line and one comment block, nothing else.** `:96` — `INSTRUCTION_BASENAMES` gains the Table A names it lacks, each written **NFC-lowercased** (Table A, "Stored spelling"). **The literal's shape is what criterion 3's check parses**, so it stays a `const INSTRUCTION_BASENAMES = new Set([ … ])` whose members are single-quoted strings; line breaks inside the brackets are fine, a different construction is not. `:84-95` — its JSDoc gains one sentence pointing at `docs/instruction-file-inventory.md` as the canonical inventory and keeps its existing "will NOT cover the next convention" sentence. **This cell owns what stays unchanged in this file:** `DENIED_SEGMENTS` (`:99`), `DENIED_BASENAME` (`:102`), `EXTRA_TIER_DIRS`, `fold` (`:136-138`), `foldedSegments`, `isUnder`, `admittedDirs`, `makeAdmit`'s clause order and every one of its refusal strings, and the module's exports |
 | modify | tests/unit/dream-promote.test.js | **THREE sites, all under the row-C9 section header at `:293`.** (a) `:295-315` — the `hostile` fixture gains one tier-local path per newly denied Table A name, so the existing end-to-end test covers them; (b) `:317-327` — the RED-side case list gains one mixed-case spelling of a newly denied name; (c) **NEW tests** implementing acceptance criteria 2, 3 and **7** — criterion 2's derives its subject list from `docs/instruction-file-inventory.md` and fails when zero DENY rows parse, while **criterion 7's carries its expected basenames as a hand-written literal array and asserts set equality against the parse**. One test or two is the implementer's call, but the two expectations may not share an oracle, and the RED-proof declaration names criterion 7's. **This cell owns what stays unchanged:** every other test, every existing title, and the `scenario`/`run`/`refusalFor`/`get` helpers |
 | create | tests/red-proofs/instruction-basenames.proofs.json | The RED-proof declaration for **criterion 7**, per **Table D**. Inert JSON, parsed and never executed. `suite` is `tests/unit/dream-promote.test.js`; `file` is `src/core/dream/promote.js` |
-| modify | docs/runbooks/release.md | **ONE new numbered step**, inserted so the existing steps renumber consistently, carrying **Table C**'s obligation: owner, trigger, and the literal path `docs/instruction-file-inventory.md`. No other step is reworded |
+| modify | docs/runbooks/release.md | **ONE new numbered step**, inserted so the existing steps renumber consistently. Its body is the canonical sentence pinned between this spec's `BEGIN-CANONICAL-RELEASE-STEP` and `END-CANONICAL-RELEASE-STEP` sentinels, **copied byte for byte** — one line, exactly as that runbook's other steps are written. No other step is reworded |
 
 **NOT a deliverable, stated because it is the trap:** `src/core/layout.js`,
 `src/core/dream/vault-write.js`, `scripts/red-proofs.js`, `package.json` and
@@ -165,31 +165,40 @@ out of CI (Out of scope), so no workflow file changes.
 
 ### Exact contracts
 
-**`docs/instruction-file-inventory.md` — the literal skeleton.** Tables A, B and
-C of this spec supply the rows; nothing else in the file is the implementer's to
-invent. `<DATE>` is the date the implementer re-fetched the citations.
+**The canonical rendering of `docs/instruction-file-inventory.md`.** The block
+below is the WHOLE FILE, byte for byte, with exactly one placeholder: `@DATE@`.
+Tables A, B and C live here and nowhere else in this spec — the `## Contract
+reference` subsections below describe what each decides and point here for its
+text, so there is one authority and nothing to keep in step.
 
-**The shipped document keeps the `Table A` / `Table B` / `Table C` labels as
-section headings, and that is deliberate.** Cells inside those tables refer to
-each other by label — Table B's fourth column is *"Reason it is not in Table A"*,
-three of its rows say *"already Table A"*, and Table C's obligation names *"Table
-A and Table B of the inventory"*. Renaming the sections in the copy would leave
-every one of those references dangling in the document that outlives this work
-package. The alternative — rewriting each cell to name a prose heading — was
-weighed and rejected: it edits five cells (Table B's fourth-column header, its
-three *"already Table A"* rows, and Table C's obligation cell) to remove one
-class of reference, and leaves the next added cross-reference free to re-create
-it.
+**THE IMPLEMENTER RUNS THE EXTRACTION AND NEVER RETYPES THE BLOCK.** Verification
+step V3 carries the extraction verbatim; run it with `--write` to produce the
+file, then run it again without `--write` to prove the file is byte-identical to
+the rendering. Retyping is how a copy drifts, and the precedent is
+`docs/specs/done/WP-show-slot-own-value-kind.md`, whose design gate spent four
+rounds on a checker that had to locate a block inside a file before it settled on
+extracting the block to its own file and hashing the whole thing.
 
-**The copy boundary, as it applies here:** each `<…, verbatim>` placeholder below
-takes that table's **preamble plus the table itself**, header row through last
-row. Paragraphs that follow a table in this spec are commentary and are not
-copied.
+**The one placeholder, and the agreement rule.** `@DATE@` is substituted
+everywhere it appears — the `Current as of` sentence and all nine `Fetched`
+cells — with a single date matching `^\d{4}-\d{2}-\d{2}$` that is **not earlier
+than `2026-09-04`**, the date this spec's citations were read. One date and not
+ten because Table C obliges **one re-fetch pass**: a row whose citation was
+confirmed in that pass carries the pass's date, and a row that could not be
+confirmed is not refreshed silently — it is changed, which changes the rendering
+block. There is therefore nothing to reconcile between the header date and the
+cells, and no second placeholder to validate.
 
+The two sentinel comments are part of this spec, not of the rendered file. The
+extraction takes the lines strictly between them, minus the fence lines, and
+fails loudly if either sentinel is missing, duplicated, or not followed/preceded
+by its fence.
+
+<!-- BEGIN-CANONICAL-INVENTORY -->
 ```markdown
 # Instruction-file inventory
 
-**Current as of <DATE>. This document is a dated inventory, never a complete
+**Current as of @DATE@. This document is a dated inventory, never a complete
 list** — an enumeration of instruction filenames cannot close, because no
 structural marker distinguishes one. A tool whose instruction file is
 undocumented, or whose filename the user configured, is not covered here and is
@@ -199,51 +208,20 @@ This inventory is the canonical source for `INSTRUCTION_BASENAMES` in
 `src/core/dream/promote.js`: every DENY row below is a name the dream run
 refuses to promote into the vault, at any depth and in any case.
 
+**This file is GENERATED and is never edited by hand.** It is the canonical
+rendering block of `docs/specs/WP-instruction-basename-currency.md` with one
+date substituted for `@DATE@`. To change it, change that block and re-render.
+
 ## Table A — denied basenames
-
-<Table A's inclusion-rule preamble, verbatim>
-
-<Table A of WP-instruction-basename-currency, verbatim, header included>
-
-## Table B — accepted omissions and handoffs
-
-<Table B's preamble, verbatim>
-
-<Table B of WP-instruction-basename-currency, verbatim, header included>
-
-## Table C — how this stays current
-
-<Table C of WP-instruction-basename-currency, verbatim, header included>
-```
-
-**The refusal string is unchanged.** A newly denied basename is refused with the
-existing message the `INSTRUCTION_BASENAMES` branch already emits
-(`promote.js:238`), which interpolates the folded basename:
-
-```text
-not admitted: `gemini.md` is a harness instruction file
-```
-
-No new reason string, no new refusal shape, no change to `makeAdmit`'s return
-type.
-
-## Contract reference
-
-Activation (ADR-0031, 2-of-7): **(vi)** `WP-dot-segment-denial` inherits the
-boundary this spec draws, and the standing obligation has every future release as
-its consumer; **(vii)** the same denial set appears in the inventory document,
-in `promote.js`, in its JSDoc, in the tests, in the RED-proof declaration and in
-the release runbook — six mirrored surfaces.
-
-### Table A — the dated inventory of denied basenames (canonical, as of 2026-09-04)
 
 **Inclusion rule** (the single place it is decided): a basename is DENY when
 current vendor documentation establishes it as an instruction-file discovery
 path at a **plain, dot-free, project-relative location**. That rule and nothing
 else — no per-name judgement about how ordinary the name looks, because that
-judgement is what goes stale. **Every citation below was fetched and read on the
-date its own `Fetched` cell carries, and returned HTTP 200 on that date** — the
-cell is the claim's provenance, so the preamble needs no date of its own.
+judgement is what goes stale. **Every citation below was fetched and read on the date at the top of this
+document, and returned HTTP 200 on that date.** One re-fetch pass, one date:
+every `Fetched` cell carries the `Current as of` date and no other, which is
+what makes this whole document a function of exactly one placeholder.
 **Stored spelling** is what goes into `INSTRUCTION_BASENAMES` in
 `src/core/dream/promote.js`: NFC-lowercased, because that module folds a
 candidate's basename before looking it up, so a member in vendor spelling would
@@ -251,28 +229,17 @@ be unreachable.
 
 | Disposition | Basename | Stored spelling | Convention it is | Citation | Fetched |
 |---|---|---|---|---|---|
-| DENY | `CLAUDE.md` | `claude.md` | Claude Code project instructions, `./CLAUDE.md` | https://code.claude.com/docs/en/memory | 2026-09-04 |
-| DENY | `CLAUDE.local.md` | `claude.local.md` | Claude Code local instructions, `./CLAUDE.local.md`; documented, not deprecated | https://code.claude.com/docs/en/memory | 2026-09-04 |
-| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://opencode.ai/docs/rules/ | 2026-09-04 |
-| DENY | `AGENTS.override.md` | `agents.override.md` | Codex CLI's per-directory override, checked ahead of `AGENTS.md` in each directory from the project root down | https://learn.chatgpt.com/docs/agent-configuration/agents-md | 2026-09-04 |
-| DENY | `AGENT.md` | `agent.md` | Zed's project-instruction list, position 6; Roo Code's workspace-root fallback when `AGENTS.md` is absent | https://zed.dev/docs/ai/instructions · https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ | 2026-09-04 |
-| DENY | `GEMINI.md` | `gemini.md` | Gemini CLI's default context file, searched from the working directory up to the project root; Zed's list, position 9 | https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md | 2026-09-04 |
-| DENY | `QWEN.md` | `qwen.md` | Qwen Code's default context file, project root | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md | 2026-09-04 |
-| DENY | `WARP.md` | `warp.md` | Warp project rules; still fully supported and takes priority over `AGENTS.md` in the same directory | https://docs.warp.dev/knowledge-and-collaboration/rules | 2026-09-04 |
-| DENY | `replit.md` | `replit.md` | Replit Agent's project context file, which must sit at the project root | https://docs.replit.com/features/project-setup/replit-dot-md | 2026-09-04 |
+| DENY | `CLAUDE.md` | `claude.md` | Claude Code project instructions, `./CLAUDE.md` | https://code.claude.com/docs/en/memory | @DATE@ |
+| DENY | `CLAUDE.local.md` | `claude.local.md` | Claude Code local instructions, `./CLAUDE.local.md`; documented, not deprecated | https://code.claude.com/docs/en/memory | @DATE@ |
+| DENY | `AGENTS.md` | `agents.md` | the AGENTS.md open format, repository root; read by Codex CLI, Warp, Zed, opencode, Copilot, Cursor, Cline, Roo Code, Junie, Kiro, Goose and OpenHands | https://agents.md/ · https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://opencode.ai/docs/rules/ | @DATE@ |
+| DENY | `AGENTS.override.md` | `agents.override.md` | Codex CLI's per-directory override, checked ahead of `AGENTS.md` in each directory from the project root down | https://learn.chatgpt.com/docs/agent-configuration/agents-md | @DATE@ |
+| DENY | `AGENT.md` | `agent.md` | Zed's project-instruction list, position 6; Roo Code's workspace-root fallback when `AGENTS.md` is absent | https://zed.dev/docs/ai/instructions · https://roocodeinc.github.io/Roo-Code/features/custom-instructions/ | @DATE@ |
+| DENY | `GEMINI.md` | `gemini.md` | Gemini CLI's default context file, searched from the working directory up to the project root; Zed's list, position 9 | https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md | @DATE@ |
+| DENY | `QWEN.md` | `qwen.md` | Qwen Code's default context file, project root | https://github.com/QwenLM/qwen-code/blob/main/docs/users/features/memory.md | @DATE@ |
+| DENY | `WARP.md` | `warp.md` | Warp project rules; still fully supported and takes priority over `AGENTS.md` in the same directory | https://docs.warp.dev/knowledge-and-collaboration/rules | @DATE@ |
+| DENY | `replit.md` | `replit.md` | Replit Agent's project context file, which must sit at the project root | https://docs.replit.com/features/project-setup/replit-dot-md | @DATE@ |
 
-**THE COPY BOUNDARY, stated once and applying to Tables A, B and C alike: the
-copied region is the inclusion-rule preamble plus the table itself, from its
-header row through its last row. Any paragraph AFTER a table — including this
-one — is this spec's own commentary and is NOT copied into the inventory
-document.** That boundary is why no transitional sentence sits inside a table:
-how many of these rows are new *today* is a fact about this work package, not
-about the inventory, and is stated in Current state instead. The row count is
-checked rather than asserted — `grep -c '^| DENY |'` is verification step V1's
-first output, and criterion 3 requires it to equal the size of
-`INSTRUCTION_BASENAMES`.
-
-### Table B — accepted omissions and handoffs (canonical)
+## Table B — accepted omissions and handoffs
 
 Everything found in the same sweep as Table A and deliberately **not** denied by
 basename, with the reason.
@@ -316,8 +283,95 @@ An `OMIT` row is assigned to nobody and is a stated non-denial.
 | OMIT | `SKILL.md`, `LEARNINGS.md` | Wienerdog itself | **deliberately never denied.** These are Wienerdog's own vault artifacts (ADR-0020) and `promote.js:111-116` names them; denying `SKILL.md` would break the shipped skill-plus-ledger atomic promotion. OpenHands' use of the name is at `.agents/skills/NAME/SKILL.md`, a dot path | none — deliberately admitted; the shipped skill-plus-ledger promotion depends on it | `src/core/dream/promote.js:111-116` |
 | OMIT | user-configured names — Gemini CLI and Qwen Code `context.fileName`; Codex CLI `project_doc_fallback_filenames` (documented example: `TEAM_GUIDE.md`); Goose `CONTEXT_FILE_NAMES` | several | **THIS IS THE NAMED RESIDUAL.** The name space is unbounded and user-chosen, so no inventory can cover it. This is the residual the 2026-08-05 ruling accepted, restated rather than reopened | none — unbounded and user-chosen; the named residual | https://learn.chatgpt.com/docs/agent-configuration/agents-md · https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md |
 
+## Table C — how this stays current
+
+| Fact | Value |
+|---|---|
+| Owner | **the release maintainer** — whoever executes `docs/runbooks/release.md`. Deliberately a role, not a person: a name in a checked-in runbook goes stale on the first handover. If a person is wanted instead, this cell is the one place that changes |
+| Trigger | **every MINOR version bump** — a `package.json` version going `0.x.y` → `0.(x+1).0`. Objective and observable in the diff; patch releases are not triggered |
+| Where the obligation is recorded | **exactly one numbered step** in `docs/runbooks/release.md`, whose body is the canonical sentence named in the next row. Exactly one; zero and two both fail. **Nothing else about that step is checked or constrained** |
+| The step's canonical text | **pinned verbatim** in `docs/specs/WP-instruction-basename-currency.md`, between its `BEGIN-CANONICAL-RELEASE-STEP` and `END-CANONICAL-RELEASE-STEP` sentinels (after this work package is Done, under `docs/specs/done/`). **The obligation IS that sentence, byte for byte.** A check that looked for tokens instead accepted a step negating every one of them, so the contract is the bytes and negation is impossible without changing them |
+| What the step obliges | exactly what the canonical sentence says: re-fetch every citation in this inventory, add any newly documented plain-path convention, and **re-render this document from the spec's canonical block** with the pass's date. **If the set of denied basenames changed, `INSTRUCTION_BASENAMES` in `src/core/dream/promote.js` and its tests change in the same pull request** — a docs-only refresh would recreate exactly the defect this inventory was created to close |
+| What it is NOT | nothing scheduled, nothing that watches, polls or runs; no CI step, no hook, no job. **ADR-0004** — it is a line in a runbook a human follows |
+| The failure it accepts, stated | a release cut without performing the step leaves the inventory stale and nothing detects it. That is the cost of a human obligation, and it is chosen over machinery on ADR-0004 |
+```
+<!-- END-CANONICAL-INVENTORY -->
+
+**The canonical release-runbook step.** The block below is the BODY of the one
+numbered step `docs/runbooks/release.md` must carry — everything after its
+its number and the space after it number, on one line, as that runbook's other steps are written. **The
+obligation is these bytes, not a set of words in them:** round 2 executed a step
+carrying every required token and negating every one of them, and the check said
+OK. V4 asserts that exactly one numbered line of the runbook has this body, and
+asserts nothing else, so a negation is unconstructible without changing the
+pinned text. Same extraction as the rendering above, same two-sentinel shape.
+
+<!-- BEGIN-CANONICAL-RELEASE-STEP -->
+```text
+**Re-inventory the instruction filenames — MINOR releases only.** On every MINOR version bump the release maintainer MUST re-fetch every citation in `docs/instruction-file-inventory.md`, add any newly documented plain-path convention, and re-render that document from the canonical block in `docs/specs/done/WP-instruction-basename-currency.md` with the date of this pass. If the set of denied basenames changed, `INSTRUCTION_BASENAMES` in `src/core/dream/promote.js` and its tests MUST be updated in the same pull request.
+```
+<!-- END-CANONICAL-RELEASE-STEP -->
+
+**The refusal string is unchanged.** A newly denied basename is refused with the
+existing message the `INSTRUCTION_BASENAMES` branch already emits
+(`promote.js:238`), which interpolates the folded basename:
+
+```text
+not admitted: `gemini.md` is a harness instruction file
+```
+
+No new reason string, no new refusal shape, no change to `makeAdmit`'s return
+type.
+
+## Contract reference
+
+Activation (ADR-0031, 2-of-7): **(vi)** `WP-dot-segment-denial` inherits the
+boundary this spec draws, and the standing obligation has every future release as
+its consumer; **(vii)** the same denial set appears in the inventory document,
+in `promote.js`, in its JSDoc, in the tests, in the RED-proof declaration and in
+the release runbook — six mirrored surfaces.
+
+### Table A — the dated inventory of denied basenames (pointer)
+
+**Canonical text: the `## Table A — denied basenames` section of the rendering
+block above.** It is not restated here, and this subsection decides nothing the
+block does not carry.
+
+What Table A is: the dated inventory of basenames the promotion allowlist
+refuses, one row per documented convention, with the vendor-documentation URL
+that establishes it and the date that URL was read. Its **inclusion rule** and
+its **Stored spelling** column are stated in the block's own preamble, which is
+part of the shipped file.
+
+Spec-side commentary, outside the rendering and therefore outside the file:
+
+**THE COPY BOUNDARY IS GONE, and its deletion is the round-2 design change.**
+There is no boundary to state, because there is no region to locate: the whole
+file is one span, rendered from one block. Rounds 1 and 2 each broke a check that
+had to *find* the right part of the shipped document — regions, headings, final
+cells, step tokens — and the runbook's same-kind rule says the third repair is a
+design change, not a fourth patch. So nothing is copied and nothing is compared
+piecewise; V3 re-renders the file and compares every byte. What follows is
+spec-side commentary, which lives outside the rendering block and therefore
+outside the file by construction rather than by rule: how many of these rows are
+new *today* is a fact about this work package, not about the inventory, and is
+stated in Current state instead.
+
+### Table B — accepted omissions and handoffs (pointer)
+
+**Canonical text: the `## Table B — accepted omissions and handoffs` section of
+the rendering block above.** Not restated here.
+
+What Table B is: everything the same sweep found and this work package
+deliberately does **not** deny by basename, each with its reason, its assignment
+(`HANDOFF` rows go to `WP-dot-segment-denial`; `OMIT` rows go to nobody) and a
+measured fifth column saying what refuses the row **independently** of the
+dot-segment class rule.
+
+Spec-side commentary, outside the rendering and therefore outside the file:
+
 **Twenty-four rows: seventeen HANDOFF, seven OMIT** — a spec-side count, outside
-the copy boundary. **Every value in the fifth column was measured through the
+the rendering block. **Every value in the fifth column was measured through the
 production predicate**, path by path, not inferred from the row's shape; the run
 is in the round-1 record. It is a column of *mechanisms*, not of states, so it
 stays true after `WP-dot-segment-denial` lands: what changes then is that the
@@ -327,17 +381,16 @@ partly covered (`.windsurfrules`, `.roorules`, `.junie/AGENTS.md` alone), and si
 are fully refused already.** That eleven-row gap is the residual this work package
 hands on and does not close.
 
-### Table C — the standing maintenance obligation (canonical)
+### Table C — the standing maintenance obligation (pointer)
 
-| Fact | Value |
-|---|---|
-| Owner | **the release maintainer** — whoever executes `docs/runbooks/release.md`. Deliberately a role, not a person: a name in a checked-in runbook goes stale on the first handover. If a person is wanted instead, this cell is the one place that changes |
-| Trigger | **every MINOR version bump** — a `package.json` version going `0.x.y` → `0.(x+1).0`. Objective and observable in the diff; patch releases are not triggered |
-| Where the obligation is recorded | **exactly one numbered step** in `docs/runbooks/release.md`. Exactly one, because the check that enforces this row locates the step by the inventory path and refuses zero matches and two |
-| The five tokens that step's text MUST carry | the single place these literals are decided, and the only thing the check asserts on the step's text: **(1)** `docs/instruction-file-inventory.md` — the literal path; **(2)** `MINOR` — the trigger; **(3)** `release maintainer` — the owner role; **(4)** `re-fetch` — the citation-and-date refresh; **(5)** `same pull request` — the source-and-test synchronisation. Case-sensitive as written. Prose around them is the implementer's; a step that merely *links* the inventory carries one token and fails |
-| What the step obliges | re-fetch every citation in Table A and Table B of the inventory; add any newly documented plain-path convention; update the `Current as of` date and each row's `Fetched` cell. **If the DENY set changed, `INSTRUCTION_BASENAMES` and its tests change in the same pull request** — a docs-only refresh would recreate exactly the defect this work package closes |
-| What it is NOT | nothing scheduled, nothing that watches, polls or runs; no CI step, no hook, no job. **ADR-0004** — it is a line in a runbook a human follows |
-| The failure it accepts, stated | a release cut without performing the step leaves the inventory stale and nothing detects it. That is the cost of a human obligation, and it is chosen over machinery on ADR-0004 |
+**Canonical text: the `## Table C — how this stays current` section of the
+rendering block above.** Not restated here.
+
+What Table C is: the standing maintenance obligation — its owner, its objective
+trigger, the one runbook step that records it, **the exact sentence that step
+must contain** (the row `The step's canonical text`), what the step obliges, what
+it is not, and the failure it accepts. ADR-0004 bounds it: a line in a runbook a
+human follows, nothing that watches, polls or runs.
 
 ### Table D — the required RED proof (one row, one mutation; ADR-0036)
 
@@ -351,16 +404,22 @@ author against the finished file; this row decides what the mutation **is**.
 
 ### Mirrored Surface Checklist
 
-**The copy boundary is itself a registered surface, and it governs all three
-tables.** It is stated in the paragraph after Table A, in the Deliverables cell
-for `docs/instruction-file-inventory.md`, in the skeleton under "Exact
-contracts", in acceptance criterion 1 and in **verification V3**, which is the only
-thing that enforces it. A change to what is copied moves all five in one pass. Registered at round zero, after the conformance executors
-found cross-references inside cells that would dangle once copied.
+**THE CANONICAL RENDERING BLOCK IS THE SINGLE SURFACE FOR TABLES A, B AND C.**
+They exist nowhere else in this spec; the three `### Table …` subsections below
+are pointers that decide nothing. So the classic mirror problem does not arise
+for their content — there is one copy, and the shipped document is a byte
+function of it. What remains registered is the small set of surfaces that
+describe the *mechanism*: the Deliverables cell for
+`docs/instruction-file-inventory.md`, the "Exact contracts" prose around the two
+sentinel blocks, acceptance criteria **1** and **4**, and verification steps
+**V3** and **V4**. A change to how the file or the runbook step is produced moves
+all of them in one pass. **Registered at round 2**, replacing the copy-boundary
+entry: rounds 1 and 2 each broke a check that had to locate part of the shipped
+artifact, so the boundary was deleted rather than described again.
 
 **Table A** (the denial set):
 
-- [ ] Deliverables cells for `docs/instruction-file-inventory.md` (the row shape), `src/core/dream/promote.js` (the stored spelling and the literal's shape) and `tests/unit/dream-promote.test.js` (all three sites)
+- [ ] Deliverables cells for `docs/instruction-file-inventory.md` (generated, never typed), `src/core/dream/promote.js` (the stored spelling and the literal's shape) and `tests/unit/dream-promote.test.js` (all three sites)
 - [ ] Acceptance criteria **1, 2, 3, 7** and verification **V1**, **V2** and **V3**. **Criterion 7 is the independent oracle and V3 is the fidelity oracle**; criteria 2 and 3 take the shipped document as theirs, so all four move together and a change to Table A must reach criterion 7's hand-written literal in the same pass
 - [ ] Current state — the measured admits and the `fold` paragraph
 - [ ] `src/core/dream/promote.js:84-95` — the JSDoc, which after this work package points at the inventory rather than restating the list
@@ -373,14 +432,14 @@ found cross-references inside cells that would dangle once copied.
 - [ ] Current state's clause-(b) measurement (`.rules`, `.goosehints`, `.mdc`, …) — the evidence behind **Table B's preamble**, which is where the `.md`-only extension reason is now stated once for every row that names it
 - [ ] The inventory document's **opening paragraph**, which states the residual Table B's last row decides
 - [ ] **The fifth column, `Refused independently of the dot-segment rule`** — measured per row through the production predicate, and the surface that stops the preamble from overstating coverage. It moves with Table B's preamble and with Table B's trailing count of `none` rows
-- [ ] Acceptance criterion **1** and verification **V3**, which compare this table cell by cell against the shipped copy
+- [ ] Acceptance criterion **1** and verification **V3**, which compare the whole shipped file against this block
 - [ ] `docs/specs/WP-dot-segment-denial.md` — **a NON-move.** That spec's own required verification owns the class predicate; this work package hands it rows and changes none of its text
 
 **Table C** (the obligation):
 
 - [ ] The Deliverables cell for `docs/runbooks/release.md`
-- [ ] Acceptance criterion **4** and verification **V4**, plus **Table C's five-token row**, which is what V4 asserts
-- [ ] The inventory document's `## Table C — how this stays current` section, which is Table C copied and which **V3** compares
+- [ ] Acceptance criterion **4** and verification **V4**, plus **Table C's `The step's canonical text` row** and the sentinel-pinned sentence it names, which is what V4 asserts
+- [ ] The inventory document's `## Table C — how this stays current` section, which **is** Table C — the same bytes, rendered — and which **V3** compares as part of the whole file
 
 **Table D** (the RED proof):
 
@@ -442,21 +501,17 @@ found cross-references inside cells that would dangle once copied.
 
 ## Acceptance criteria
 
-- [ ] **1.** `docs/instruction-file-inventory.md` exists and follows the skeleton
-      under "Exact contracts", **including its three section headings, which keep
-      the `Table A` / `Table B` / `Table C` labels** so the cross-references
-      inside the cells resolve in the shipped document. The **copied region is
-      each table's preamble plus the table itself**, header row through last row
-      — commentary after a table is this spec's and is not copied. Inside that
-      region the copy is verbatim **with exactly two exceptions**: each Table A
-      row's `Fetched` cell, and the document's `Current as of` date, which carry
-      the date the implementer re-fetched. (Table B has no per-row date; the
-      `Current as of` date covers its citations, and Table A's preamble carries
-      no date of its own — it defers to the `Fetched` cells.) Every DENY row
-      starts with `| DENY |` and holds its basename in backticks in the **second**
-      cell. **This criterion is PROVED BY V3, the region compare** — it was
-      unchecked prose until round 1, which is how a silently shrunken Table B or
-      C could have shipped green.
+- [ ] **1. THE SHIPPED FILE IS THE RENDERING, BYTE FOR BYTE.**
+      `docs/instruction-file-inventory.md` equals the canonical rendering block
+      of this spec with `@DATE@` substituted by **one** date matching
+      `^\d{4}-\d{2}-\d{2}$` that is not earlier than `2026-09-04`. **There is no
+      other permitted difference** — not a heading, not a paragraph, not a cell,
+      not a line ending, not a trailing byte. **The file is PRODUCED by running
+      V3 with `--write` and is never retyped**, and V3 without `--write` proves
+      it. Nothing is located inside the document, so this criterion has no
+      structure a wrong document can satisfy: rounds 1 and 2 each defeated a
+      check that had to find the right part of it, and the third repair deletes
+      the finding rather than improving it.
 - [ ] **2.** Every basename the inventory marks `DENY` is refused with a reason
       containing `is a harness instruction file` at each of the three tier-local
       depths `06-Identity/`, `01-Projects/example/`, `02-Areas/x/y/`, in every
@@ -471,12 +526,15 @@ found cross-references inside cells that would dangle once copied.
       has DENY rows, and every member equals its own `NFC`-lowercased form.
       **Same oracle as criterion 2, therefore the same limitation** — the two
       shrink together, and criterion 7 is what does not.
-- [ ] **4.** `docs/runbooks/release.md` carries **exactly one** numbered step
-      whose text contains the inventory path, and that step's text carries **all
-      five tokens Table C decides** — the literal path, `MINOR`, `release
-      maintainer`, `re-fetch` and `same pull request`. Zero matching steps and
-      two matching steps both fail. A step that merely links the inventory
-      carries one token and fails.
+- [ ] **4. THE OBLIGATION IS A SENTENCE, BYTE FOR BYTE.**
+      `docs/runbooks/release.md` has **exactly one** numbered line whose body —
+      everything after its its number and the space after it — equals the canonical release step pinned
+      between this spec's `BEGIN-CANONICAL-RELEASE-STEP` and
+      `END-CANONICAL-RELEASE-STEP` sentinels. Zero and two both fail, and an
+      unnumbered occurrence does not count. **Nothing else about the runbook is
+      checked or constrained.** Round 2 executed the previous token check against
+      a step that carried every required token and negated every one of them, and
+      it passed; a negation of these bytes is not constructible.
 - [ ] **5.** `npm run red-proofs`, unfiltered, reports `3 declared proof(s), 3
       selected`, a `PROVEN` roll-up line for
       `WP-instruction-basename-currency criterion 7`, `RUN: PROVEN`, and exits 0.
@@ -499,9 +557,22 @@ found cross-references inside cells that would dangle once copied.
       pass and the pull request says so under "Decisions made". **Why it is
       written by hand and not derived:** criteria 2 and 3 both take the shipped
       document as their oracle, so an omission propagated to the document, the
-      constant and the fixtures passes all of them; a hand-written expected set
+      constant and the fixtures passes all of them;       a hand-written expected set
       is the only surface in this work package a consistent omission does not
       also shrink. Round 1's [A] finding, both channels.
+      **THE ANCHORING CHAIN, stated explicitly because round 2 asked for it.**
+      The literal lives in `tests/unit/dream-promote.test.js`, a file the
+      implementer edits for other reasons in this same work package — so it is
+      not shrink-proof by isolation. It is shrink-proof by **anchoring**: the
+      literal must equal the DENY basenames of the shipped document (criterion
+      7's half (a)); the shipped document must equal this spec's canonical
+      rendering byte for byte (criterion 1, proved by V3); and the canonical
+      rendering is spec text, which the Deliverables table lets the implementer
+      touch only to flip `status:`. Shrinking every mirror therefore requires
+      editing the canonical rendering itself — an explicit contract change,
+      visible as such in the diff, and not the accident this criterion exists to
+      catch. Both round-2 channels reached the same conclusion and declined to
+      count that contract-tampering case as a separate finding.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -511,7 +582,7 @@ found cross-references inside cells that would dangle once copied.
 # the shipped document. The guard names the DELIVERABLE-ABSENT state directly
 # instead of surfacing it as a readFileSync throw from inside the suite, and the
 # count is the number V2 must agree with. Criterion 1 is NOT carried here — it
-# is V3's, and round 1 found that gap.
+# is V3's, and rounds 1 and 2 each found a way past the checks that tried.
 test -f docs/instruction-file-inventory.md || { echo "MISSING DELIVERABLE: docs/instruction-file-inventory.md"; exit 1; }
 grep -c '^| DENY |' docs/instruction-file-inventory.md
 npm test
@@ -539,87 +610,79 @@ if(code.length!==inv.length){console.error('FAIL: INSTRUCTION_BASENAMES has '+co
 console.log('V2 OK: '+code.length+' names in INSTRUCTION_BASENAMES = '+inv.length+' DENY rows, all pre-folded');
 "
 
-# V3 — criterion 1: THE COPY IS REALLY A COPY. Compares the shipped document's
-# three copied regions against this spec's canonical ones, allowing only the
-# permitted Fetched-cell substitution, and rejects duplicate DENY basenames.
-# This is the step that closes round 1's [A] finding on the documentation side:
-# without it, Tables B and C, their preambles and every citation were unchecked.
-# Region = everything under the heading down to the LAST line beginning with a
-# pipe, which is exactly the copy boundary, so commentary after a table is
-# excluded by construction. Observed at round 1 in six states: absent document
-# (red), compliant (green), one DENY row dropped (red, naming it), one Table B
-# cell reworded (red, naming it), Table C's heading removed (red), a duplicated
-# DENY row (red), and Fetched dates moved to 2027-01-15 (GREEN — the permitted
-# substitution). The spec path below is where this spec lives during
-# implementation; it moves under docs/specs/done/ only after the WP is Done.
+# V3 — criterion 1. THE WHOLE FILE, NOT A REGION. Extracts the canonical
+# rendering block from this spec between its two sentinels, substitutes the one
+# @DATE@ placeholder, and compares EVERY BYTE against the shipped document.
+# Nothing is located inside the document, so nothing about the document can be
+# located wrongly: no headings, no regions, no final cells, no duplicate scan.
+# Round 2 killed all four of those by executing the old region compare against a
+# document that had no H1, no "Current as of" line and NOT-A-DATE in every
+# Fetched cell — and got exit 0. This form cannot: a missing opening paragraph is
+# a byte difference like any other.
+#
+# The SAME command with --write is how the implementer PRODUCES the file. Run it
+# once with --write, then once without, and paste both. Never retype the block.
+#   node -e "<the script below>" 2026-09-15 --write
 node -e "
 const fs=require('fs');
 const SPEC='docs/specs/WP-instruction-basename-currency.md';
 const DOC='docs/instruction-file-inventory.md';
-for(const f of [SPEC,DOC]) if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
-function region(text,prefix){
-  const lines=text.split('\n');
-  const hits=[];
-  for(let i=0;i<lines.length;i++) if(lines[i].startsWith(prefix)) hits.push(i);
-  if(hits.length!==1) return {err:hits.length+' headings start with '+JSON.stringify(prefix)+', expected 1'};
-  const out=[];
-  for(let j=hits[0]+1;j<lines.length;j++){ if(/^#{1,6} /.test(lines[j])) break; out.push(lines[j]); }
-  while(out.length && !out[out.length-1].startsWith('|')) out.pop();
-  while(out.length && out[0].trim()==='') out.shift();
-  if(out.length===0) return {err:'empty region under '+JSON.stringify(prefix)};
-  return {text:out.map((l)=>l.startsWith('| DENY |')?l.replace(/\|[^|]*\|\$/,'| <FETCHED> |'):l).map((l)=>l.replace(/\s+\$/,'')).join('\n')};
+const BEGIN='<!-- BEGIN-CANONICAL-INVENTORY -->', END='<!-- END-CANONICAL-INVENTORY -->';
+const args=process.argv.slice(1);
+const write=args.indexOf('--write')>=0;
+const date=args.filter((a)=>a!=='--write')[0]||'';
+if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}\$/.test(date)){console.error('FAIL: pass exactly one date as YYYY-MM-DD');process.exit(1);}
+if(date<'2026-09-04'){console.error('FAIL: '+date+' is earlier than 2026-09-04, the date this spec read its citations');process.exit(1);}
+if(!fs.existsSync(SPEC)){console.error('FAIL: missing input '+SPEC);process.exit(1);}
+const L=fs.readFileSync(SPEC,'utf8').split('\n');
+function at(m){const h=[];for(let i=0;i<L.length;i++) if(L[i]===m) h.push(i);
+  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times, expected 1');process.exit(1);} return h[0];}
+const b=at(BEGIN), e=at(END);
+if(!(b<e)||L[b+1]!=='\`\`\`markdown'||L[e-1]!=='\`\`\`'){console.error('FAIL: the sentinels do not wrap a markdown fence');process.exit(1);}
+const rendered=L.slice(b+2,e-1).join('\n').split('@DATE@').join(date)+'\n';
+if(rendered.indexOf('@DATE@')>=0){console.error('FAIL: a placeholder survived substitution');process.exit(1);}
+if(write){fs.writeFileSync(DOC,rendered);console.log('V3 --write: rendered '+DOC+' at '+date+', '+rendered.split('\n').length+' lines, '+rendered.length+' bytes');process.exit(0);}
+if(!fs.existsSync(DOC)){console.error('FAIL: missing input '+DOC);process.exit(1);}
+const actual=fs.readFileSync(DOC,'utf8');
+if(actual===rendered){console.log('V3 OK: '+DOC+' is byte-identical to the canonical rendering at '+date+' ('+rendered.length+' bytes)');process.exit(0);}
+const A=actual.split('\n'), R=rendered.split('\n');
+for(let i=0;i<Math.max(A.length,R.length);i++) if(A[i]!==R[i]){
+  const ai=A[i]===undefined?'<end of file>':A[i], ri=R[i]===undefined?'<end of file>':R[i];
+  let c=0; while(c<ai.length&&c<ri.length&&ai[c]===ri[c]) c++;
+  const w=(x)=>JSON.stringify(x.slice(Math.max(0,c-30),c+70));
+  console.error('FAIL: first byte difference at line '+(i+1)+', column '+(c+1));
+  console.error('  expected: '+w(ri));
+  console.error('  actual  : '+w(ai));
+  break;
 }
-const spec=fs.readFileSync(SPEC,'utf8'), doc=fs.readFileSync(DOC,'utf8');
-let bad=0;
-for(const t of ['A','B','C']){
-  const a=region(spec,'### Table '+t+' — '), b=region(doc,'## Table '+t+' — ');
-  if(a.err){console.error('FAIL: spec Table '+t+': '+a.err);bad++;continue;}
-  if(b.err){console.error('FAIL: document Table '+t+': '+b.err);bad++;continue;}
-  if(a.text===b.text){console.log('Table '+t+': identical ('+a.text.split('\n').length+' lines)');continue;}
-  bad++;
-  const A=a.text.split('\n'), B=b.text.split('\n');
-  for(let i=0;i<Math.max(A.length,B.length);i++) if(A[i]!==B[i]){
-    console.error('FAIL: Table '+t+' diverges at region line '+(i+1));
-    console.error('  spec: '+(A[i]===undefined?'<missing>':A[i].slice(0,110)));
-    console.error('  doc : '+(B[i]===undefined?'<missing>':B[i].slice(0,110)));
-    break;
-  }
-}
-const deny=doc.split('\n').filter((l)=>l.startsWith('| DENY |')).map((l)=>l.split('|')[2].trim());
-const dup=deny.filter((x,i)=>deny.indexOf(x)!==i);
-if(dup.length){console.error('FAIL: duplicate DENY basenames: '+[...new Set(dup)].join(', '));bad++;}
-if(bad){process.exit(1);}
-console.log('V3 OK: all three copied regions are byte-identical modulo the Fetched cells; '+deny.length+' unique DENY rows');
-"
+console.error('FAIL: '+DOC+' is not the canonical rendering ('+A.length+' lines vs '+R.length+')');
+process.exit(1);
+" 2026-09-04
 
-# V4 — criterion 4. NOT a pathname grep: round 1 found that a step reading
-# "Read docs/instruction-file-inventory.md" passed the old check while the whole
-# obligation was missing. This isolates ONE numbered step by the inventory path,
-# refuses zero matches and two, and asserts Table C's five tokens on that step's
-# own text. It takes an optional path argument so the same code can be rehearsed
-# against a temp copy; with no argument it reads the real runbook. Observed at
-# round 1 in five states: absent file (red), no matching step (red — the
-# untouched tree), a link-only step (red, naming the four missing tokens), two
-# matching steps (red), a step with all five tokens (green).
+# V4 — criterion 4. THE OBLIGATION IS A SENTENCE, NOT A BAG OF TOKENS. Extracts
+# the canonical step body from this spec between its two sentinels and requires
+# exactly one numbered line of the runbook whose body equals it BYTE FOR BYTE.
+# Round 2 executed the old token check against "On a MINOR release, the release
+# maintainer need not re-fetch docs/instruction-file-inventory.md; updating code
+# and tests in the same pull request is unnecessary" and got V4 OK. A negation
+# is unconstructible here: it would have to be byte-identical to the affirmative.
+# Takes an optional runbook path so the same code can be rehearsed on a temp
+# copy; with none it reads the real runbook.
 node -e "
 const fs=require('fs');
-const f=process.argv[1]||'docs/runbooks/release.md';   // node -e puts the first extra arg at argv[1], not argv[2] — measured
-if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
-const lines=fs.readFileSync(f,'utf8').split('\n');
-const steps=[]; let cur=null;
-for(const l of lines){
-  if(/^\d+\. /.test(l)){ if(cur) steps.push(cur); cur={n:l.match(/^(\d+)\./)[1],text:[l]}; }
-  else if(cur) cur.text.push(l);
-}
-if(cur) steps.push(cur);
-const P='docs/instruction-file-inventory.md';
-const hits=steps.filter((x)=>x.text.join('\n').includes(P));
-if(hits.length!==1){console.error('FAIL: '+hits.length+' numbered step(s) name '+P+', expected exactly 1 (of '+steps.length+' steps)');process.exit(1);}
-const step=hits[0], text=step.text.join('\n');
-const TOKENS=[P,'MINOR','release maintainer','re-fetch','same pull request'];
-const missing=TOKENS.filter((t)=>!text.includes(t));
-if(missing.length){console.error('FAIL: step '+step.n+' is missing '+missing.length+' of the five Table C tokens: '+missing.map((t)=>JSON.stringify(t)).join(', '));process.exit(1);}
-console.log('V4 OK: step '+step.n+' of '+steps.length+' carries all five Table C tokens');
+const SPEC='docs/specs/WP-instruction-basename-currency.md';
+const BEGIN='<!-- BEGIN-CANONICAL-RELEASE-STEP -->', END='<!-- END-CANONICAL-RELEASE-STEP -->';
+const RB=process.argv.slice(1)[0]||'docs/runbooks/release.md';
+for(const f of [SPEC,RB]) if(!fs.existsSync(f)){console.error('FAIL: missing input '+f);process.exit(1);}
+const L=fs.readFileSync(SPEC,'utf8').split('\n');
+function at(m){const h=[];for(let i=0;i<L.length;i++) if(L[i]===m) h.push(i);
+  if(h.length!==1){console.error('FAIL: sentinel '+m+' occurs '+h.length+' times, expected 1');process.exit(1);} return h[0];}
+const b=at(BEGIN), e=at(END);
+if(!(b<e)||L[b+1]!=='\`\`\`text'||L[e-1]!=='\`\`\`'||e-1!==b+3){console.error('FAIL: the sentinels do not wrap a one-line text fence');process.exit(1);}
+const want=L[b+2];
+const hits=fs.readFileSync(RB,'utf8').split('\n').filter((l)=>/^[0-9]+\. /.test(l)&&l.replace(/^[0-9]+\. /,'')===want);
+if(hits.length!==1){console.error('FAIL: '+hits.length+' numbered line(s) of '+RB+' carry the canonical step body, expected exactly 1');process.exit(1);}
+console.log('V4 OK: '+RB+' carries the canonical step body exactly once ('+want.length+' bytes)');
 "
 
 # V5 — criterion 5. UNFILTERED, deliberately: a --wp filter reports every other
