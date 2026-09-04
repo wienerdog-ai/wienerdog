@@ -92,8 +92,21 @@ const { sanitizeProjectName } = require('../digest');
  * `AGENTS.override.md` as a live shadowing convention (`src/adapters/codex.js`)
  * and `CLAUDE.local.md` as a current Claude one, which is why `.md` is not a
  * safe content-only extension.
+ *
+ * `docs/instruction-file-inventory.md` is the canonical, dated inventory this
+ * Set is drawn from — a member here is not authoritative, that document is.
  */
-const INSTRUCTION_BASENAMES = new Set(['claude.md', 'claude.local.md', 'agents.md', 'agents.override.md']);
+const INSTRUCTION_BASENAMES = new Set([
+  'claude.md',
+  'claude.local.md',
+  'agents.md',
+  'agents.override.md',
+  'agent.md',
+  'gemini.md',
+  'qwen.md',
+  'warp.md',
+  'replit.md',
+]);
 
 /** Path segments that make a path an instruction-discovery root at any depth. */
 const DENIED_SEGMENTS = new Set(['.claude', '.codex']);

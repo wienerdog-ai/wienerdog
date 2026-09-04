@@ -11,3 +11,4 @@ Pre-1.0, releases are manual until release-please lands (M7). Until then:
 7. After publishing: `npm view wienerdog@<version> dist.tarball | xargs curl -s | tar -tz` and confirm the file list matches the intended release (no unreleased modules leaked in).
 8. Tag `v<version>` (if not already), GitHub release with the changelog section.
 9. Post-release: weekly smoke workflow (`smoke.yml`, M7) verifies published-package install on a clean runner.
+10. **Re-inventory the instruction filenames — MINOR releases only.** On every MINOR version bump the release maintainer MUST re-fetch every citation in `docs/instruction-file-inventory.md`, add any newly documented plain-path convention, and re-render that document from the canonical block in `docs/specs/done/WP-instruction-basename-currency.md` with the date of this pass. If the set of denied basenames changed, `INSTRUCTION_BASENAMES` in `src/core/dream/promote.js` and its tests MUST be updated in the same pull request.
