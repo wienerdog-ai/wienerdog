@@ -1061,7 +1061,7 @@ function promote(o) {
   // four shapes absent from a `rel` — no segment empty, none `.`, none `..`,
   // none containing a separator — and a violation THROWS rather than refusing,
   // so it cannot be reported, dispositioned or survived. `isSafeRelativePath`
-  // (`layout.js:65-71`) already guarantees THREE of the four: no `..`, nothing
+  // (in `src/core/layout.js`) already guarantees THREE of the four: no `..`, nothing
   // absolute or backslashed, and — since WP-dot-segment-denial's class rule —
   // no segment that IS `.`, a `.` segment being a dot-prefixed one like any
   // other. THE CALLER THEREFORE CLOSES EXACTLY THE REMAINING ONE — empty — and

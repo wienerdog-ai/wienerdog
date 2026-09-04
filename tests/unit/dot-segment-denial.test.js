@@ -322,7 +322,17 @@ test('dot-segment-denial B2/B3: readVaultLayout and inferLayout equal the refere
         const name = `${b3Samples[i]}-${kw}`;
         const abs = path.join(bvault, name);
         fs.mkdirSync(abs);
-        const trimmed = name.trim();
+        // Read the spelling the FILESYSTEM actually returns, not the
+        // pre-filesystem string this test drew: on macOS (HFS+/APFS
+        // normalization), directory enumeration can hand back a composed
+        // character (é, ñ, å, ç) decomposed (NFD), and `pick()` (and hence
+        // `inferLayout`) only ever sees that returned spelling — Table F's B3
+        // pre-step is "each segment of the picked directory name after
+        // pick's trim", and the picked name comes from `topLevelDirs`'
+        // `fs.readdirSync`, never from the string used to create it.
+        const fsEntry = fs.readdirSync(bvault, { withFileTypes: true }).find((e) => e.isDirectory());
+        assert.ok(fsEntry, `B2/B3 reference: B3 expected exactly one directory under ${bvault}`);
+        const trimmed = fsEntry.name.trim();
         const expected = kw === 'reports' ? `${trimmed}/dreams` : trimmed;
         const impl = inferLayout(bvault)[`${kw}_dir`] !== expected;
         const ref = refValue(expected);

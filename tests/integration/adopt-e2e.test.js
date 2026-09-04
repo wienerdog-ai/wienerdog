@@ -615,9 +615,33 @@ test('adopt-e2e: adopt --yes round-trips a dot-prefixed tier candidate through d
     const persisted = {};
     for (const m of cfg.matchAll(/^  (\w+_dir):\s*(.*)$/gm)) persisted[m[1]] = m[2].trim();
 
+    // NON-VACUITY GUARD: `adopt.js`'s renderLayoutBlock always writes exactly
+    // these six `_dir` keys (plus `daily_filename`, not a path and not matched
+    // by the regex above). If `adopt` omitted the block, or rendered a shape
+    // the regex above does not match, `persisted` would be `{}` and both
+    // comparison loops below would vacuously pass. Fail loud instead.
+    const EXPECTED_DIR_KEYS = ['identity_dir', 'daily_dir', 'projects_dir', 'skills_dir', 'reports_dir', 'inbox_dir'];
+    for (const key of EXPECTED_DIR_KEYS) {
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(persisted, key),
+        `the written vault_layout: block must carry ${key} — got keys ${JSON.stringify(Object.keys(persisted))}`
+      );
+    }
+
     // Conjunct 1 — the discriminating one, RED on the untouched tree: the
     // `vault_layout:` block written into config.yaml carries no value with a
-    // dot-prefixed segment.
+    // dot-prefixed segment. A concrete non-dot value is pinned for the one key
+    // this vault's fixture actually exercises (`.projects` is this vault's
+    // only project-tier candidate, and it fails isSafeRelativePath, so the
+    // producer's hygiene loop must fall back to the built-in default) — this
+    // is what makes the assertion discriminating rather than merely "no dot
+    // segment", which the untouched tree's own class-unaware validator could
+    // still satisfy by accident on a different fixture.
+    assert.equal(
+      persisted.projects_dir,
+      '01-Projects',
+      `persisted projects_dir must fall back to the built-in default, got ${JSON.stringify(persisted.projects_dir)}`
+    );
     for (const [key, value] of Object.entries(persisted)) {
       assert.ok(
         !value.split('/').some((seg) => seg.startsWith('.')),
