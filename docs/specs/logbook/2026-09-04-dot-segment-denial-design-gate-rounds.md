@@ -304,6 +304,140 @@ left unrecorded is one an implementer takes silently.
   measurement establishes that `inferLayout` has no *other* emission path — only
   that every key it currently emits was graded.
 
+## Round zero — orchestrator's executors, 2026-09-04, rebased onto `29c61d03`
+
+The clean-context **template-conformance** executor reported the spec CONFORMANT
+with nothing silently absent. The **coherence** executor reproduced every
+citation, every Current-state measurement, V1/V2/V4 as written, the
+"exactly one existing test breaks" claim byte for byte, the `adopt --yes` round
+trip and the `.myreports` edge case, and returned **four findings**. All four
+were fixed.
+
+**The branch was rebased, not amended:** the architect's first commit is
+`f7a8a9e8` on top of `29c61d03`; these fixes land as a second commit above it.
+`git diff --stat c26214cb 29c61d03 -- src tests scripts` is **empty**, so no
+measurement above is owed a re-run for the rebase — the only base-dependent facts
+that moved are the sibling's path and status.
+
+**SUPERSEDED BY FINDING 2, and left standing above rather than rewritten:**
+§0.4's and §0.8's numbers describe the draft in which the class loop sat
+**before** clause (b). Finding 2 moved it to **last**. Everything §0.4 records
+was really run, and it is what the rejected alternative measures; the numbers
+that replace it for the shipped design are in "the re-runs" below. Specifically,
+§0.8's design decision **3** ("the class check sits before the `.md` extension
+check") is **withdrawn**, and §0.4's `handoff 15/87` and its "20-name fitted
+matcher" belong to that superseded ordering.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **1** [B] | Current state said the sibling's spec "still reads `status: In-Review` at `docs/specs/WP-instruction-basename-currency.md`". On the branch's actual base it is `docs/specs/done/WP-instruction-basename-currency.md` with `status: Done` (filed in `c9b4a82d`, PR #212) | **FIXED.** The Current-state preamble now pins the base at `29c61d03` with the one-line justification (`git diff --stat c26214cb 29c61d03 -- src tests scripts` empty), and **all five** mentions of the sibling — the Current-state bullet, the Deliverables trap paragraph, the Out-of-scope bullet, the Mirrored Surface Checklist's NON-move entry and Table D's preamble — now name the `done/` path. `depends_on` stays empty and the reason is now the simple one: there is no open work package to depend on |
+| **2** [A/B] | Table A row A5's *"Every other refusal string in the module is emitted for exactly the paths it is emitted for today"* was **false under the draft's own fix**. With the loop before clause (b) it also runs before clause (a), so a dot path **out of any tier** — `.github/copilot-instructions.md` at the vault root, a live input because `writeIntoVault` calls `admit` with the RESOLVED path — moved off *"not under a writable vault tier directory"* onto the dot reason. No test asserts that string, so nothing broke; the universal claim was simply wrong | **FIXED by taking option (i): the loop moves to LAST**, after clause (a), immediately before `return null` — see the decision and its measurements below |
+| **3** [C] | The held-out generator was fully deterministic (the same 104 strings every run), so the anti-leakage substring check caught literal hardcoding but not an obfuscated reimplementation of the same generator inside production code | **FIXED by seeding.** The generator draws from a per-run seed (`Date.now()`, overridable by `WD_HELD_OUT_SEED`), the seed is **printed as V2's first line**, and re-supplying it reproduces the run exactly — verified below. Implementation notes carries the same obligation for the shipped test, and **the residual is stated in one line**: seeding varies the values, not the family shape, so a matcher fitted to the shape still passes — which is what criterion 3's independent oracle and the review gates are for |
+| **4** [C] | Table D's oracle-shrink protection is *"visible in the diff"*, not mechanically gated: `scripts/boundary-check.js` is file-level and admits any edit to the spec file once it is touched at all — and it must be touched, for the `status:` flip | **FIXED by naming it.** A new **NAMED RESIDUAL** entry in the Mirrored Surface Checklist under Table D says exactly that, and states what a reviewer should expect instead: *the diff to this spec file is exactly the one-line `status:` change and nothing else; any second hunk in it is anomalous and is a contract change to be judged as one* |
+
+### 0.11 Finding 2 — the ordering decision, measured on both alternatives
+
+**The two options, measured on scratch copies of `29c61d03` (never the
+worktree).** `makeAdmit(defaultLayout())`, the four inputs that separate them:
+
+```text
+                                        UNTOUCHED            (ii) loop FIRST        (i) loop LAST
+.github/copilot-instructions.md   not under a writable   begins with a dot      not under a writable
+  (vault root, out of tier)         vault tier directory                          vault tier directory
+.gitignore  (vault root)          only `.md` content     begins with a dot      only `.md` content
+                                    files are promoted                             files are promoted
+01-Projects/example/.cursorrules  only `.md` content     begins with a dot      only `.md` content
+                                    files are promoted                             files are promoted
+01-Projects/example/
+  .github/copilot-instructions.md ADMITTED               begins with a dot      begins with a dot
+```
+
+**Option (i) is taken.** Under it the loop is reachable only by a path every
+other clause admits, so **no path refused today changes the reason it is refused
+with** — row A5's universal becomes true as written rather than being narrowed
+to a longer exception list. Option (ii) would have required enumerating three
+classes of refusal-string change (7 Table D paths, out-of-tier dot paths, and
+root dot non-`.md` paths) and keeping that enumeration correct; option (i)
+requires none, because the change is confined to the admit/refuse boundary. The
+module's *"(c) first"* comment argues that an ENUMERATED check should prefer its
+own reason over an extension complaint; it does not reach a class rule whose job
+is to refuse what the other clauses admit. **Simplest to state, simplest to
+prove, and it is the option that keeps the claim honest** — which is what the
+finding asked for.
+
+**What changed in the spec as a consequence, all in one pass:** row A5 (position,
+the exact claim, and the rejected alternative with its measurement); Table D's
+"After" column — **17 rows now carry the dot reason and 12 keep today's reason
+exactly**, where the draft had 24 and 5; the count paragraph under Table D; the
+three UNCHANGED example pairs under "Exact contracts" (one of them the vault-root
+case); V2's `HANDOFF` expected-reason map; criterion 3 ("the twelve rows that
+keep today's reason"); Table C's C1 cell; the Security checklist's first bullet;
+and the Mirrored Surface Checklist entry for A5, which now registers all five
+mirrors by name.
+
+### 0.12 The re-runs on the shipped ordering, V1/V2 extracted from the spec
+
+Five trees, the extracted V2 run in each. **These supersede §0.4's table.**
+
+```text
+UNTOUCHED 29c61d03
+  admit 0/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 36/87
+  FAIL: 603 of 652                                                            rc=1
+FULL FIX (ordering (i))
+  admit 312/312 | reader 234/234 | producer 7/7 | over 12/12 | handoff 87/87
+  V2 OK                                                                       rc=0
+MUTANT P — the promotion clause reverted (the SHIPPED ENUMERATION)
+  admit 0/312 | reader 234/234 | producer 7/7 | over 12/12 | handoff 36/87
+  FAIL: 363 of 652                                                            rc=1
+MUTANT L — the layout clause reverted
+  admit 312/312 | reader 0/234 | producer 1/7 | over 12/12 | handoff 87/87
+  FAIL: 240 of 652                                                            rc=1
+MUTANT E — an 18-name matcher FITTED to the dot segments of Table D's paths
+  admit 0/312 | reader 234/234 | producer 7/7 | over 12/12 | handoff 87/87
+  FAIL: 312 of 652                                                            rc=1
+```
+
+The three claims §0.4 established survive the reorder unchanged, and one gets
+sharper: **`handoff 36/87` on the untouched tree** is the twelve already-refused
+rows matching their expected reason at all three depths while the seventeen
+admitted ones do not — the oracle now measures exactly the admit/refuse boundary
+row A5 confines the change to. `MUTANT E` still satisfies the hand-written
+oracle **87 of 87** while scoring **0 of 312** held out.
+
+**V1**, extracted and run on the untouched tree:
+
+```text
+MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js                     rc=1
+```
+
+**The full suite under ordering (i):** `npm test` on the scratch copy →
+`tests 2611 / pass 2598 / fail 1`, the failure again and only
+`dream-promote report-fallback: a reports_dir with a trailing slash still
+produces a report` at `tests/unit/dream-promote.test.js:1940`. **The blast-radius
+claim is unchanged by the reorder**, which is itself worth recording: the one
+break is layout-side and the promotion clause's position cannot affect it.
+
+**The seed, verified reproducible.** An untouched-tree run printed
+`seed 1788534226945`; re-running with `WD_HELD_OUT_SEED=1788534226945` produced
+the identical draw (`.zqyo`, `.ZQYO`, …) and the identical tally. A second
+unseeded run drew different segments and reached the same verdict — which is the
+property the seeding buys: the values vary, the conclusion does not.
+
+**`npm run lint`** with both revised documents in the tree: `Linting: 635
+file(s)`, `0 error(s)`, `frontmatter check passed: 267 spec(s), 4 agent(s)`,
+rc=0.
+
+### 0.13 What this round did NOT change
+
+- **No acceptance criterion was weakened or removed**, and no verification step
+  was added: V2 grew a seed and a corrected expected-reason map inside its
+  existing body, which is a fix within the frozen surface rather than new
+  machinery (`docs/runbooks/codex-review.md`, "The loop converges by freezing
+  surface").
+- **The Dispatch precondition is untouched.** The reader's silence is still the
+  owner's call and no finding argued with it.
+- **`status:` stays `Draft`.** Only the orchestrator's design-gate loop flips it.
+
 ## External rounds
 
 **STOP CRITERION (pinned before round 1):** the loop closes when an external
