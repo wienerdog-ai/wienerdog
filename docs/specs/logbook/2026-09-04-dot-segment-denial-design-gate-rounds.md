@@ -731,3 +731,111 @@ and two Table E rows moved with it. No `src/` behaviour, no ADR contract and no
 user-observable product change: the shipped predicate is the same one-line rule
 in all four drafts. The orchestrator owns the call; round 3 as the closing
 confirmation is the shape this loop has taken before.
+
+### Round 3 fixes — architect, 2026-09-04, on top of `9d26b67c`
+
+Both channels confirmed the round-2 redesign: every requested mutant fails by
+reference disagreement (ASCII-only 3184/5000, length ≤ 16 3396/5000, NFKC
+4955/5000, z ∪ D 2464/5000, fitted-18 `ref1` 1010/2000; `length > 1` 5000/5000
+and caught by Table E 34/38 **exactly as Table F row F7 says it must be**), and
+the reference predicate, the Table E verdicts, the six-identity partition, the
+signals and the one-line roll-up are all correct on one atomic work package.
+Zero scope objections counted.
+
+**NEITHER CHANNEL FOUND ANYTHING ABOUT THE PRODUCT'S RULE.** Every finding is
+V2's **input control** or record hygiene — the grading was sound and the two
+things handed to it were not. Under weighted closure that is **LIGHT**: fixed
+inside the frozen surface, no new mechanism, no further external round.
+
+**The shape of all three, in one sentence:** *a probabilistic grading is only as
+good as the sample it is handed, and rounds 1–2 had spent all their attention on
+what the grading compares.* Round zero's lesson, one level up: the byte compare
+was sound and its inputs were unchecked; here the reference equality was sound
+and its **sample size and seed** were the submitter's to choose.
+
+| # | Finding | Disposition |
+|---|---|---|
+| **R3-1** [A, converged] | V2 let the submitter **shrink and choose** the sample. `Number(WD_HELD_OUT_N \|\| 1000)` had no lower bound — N=200/250 passed the distribution precondition (63–70 distinct first characters) and an in-alphabet wrong B1 predicate scored **400/400 at N=200** against **1998/2000 at N=1000**. And `WD_HELD_OUT_SEED` was accepted as acceptance input — a B1 predicate wrong only on a second code point of `漢` scored **2000/2000 under seed 78** and 1990/2000 under seed 79; a B2/B3 predicate admitting uppercase `.AB…` was unexercised under seed 0 and caught under seed 26. Neither Table D nor Table E covers those inputs | **FIXED with two guards inside the fenced command, in the smallest form.** `WD_HELD_OUT_N` is validated as a safe integer ≥ 1000 and the command exits non-zero otherwise (`WD_HELD_OUT_N=999` → rc=1 is a required self-check). A set `WD_HELD_OUT_SEED` **exits non-zero** unless `WD_HELD_OUT_REPLAY=1` is also set; that mode prints `REPLAY (NOT acceptance evidence)` on its run line and closes with a line saying it cannot satisfy criterion 1. Reproducibility is untouched — the seed is still printed and replay still re-supplies it. Table F rows **F3** and **F4** carry both, criterion 1 states both, and the Mirrored Surface Checklist registers the pair |
+| **R3-2** [A, plugin] | **The round-2 pruning removed a contract.** At `a3985def` the Implementation notes required grading `inferLayout`'s distinct `reports_dir` path ("Grade this key" for `<reports-top>/dreams`); the round-2 V2 created only `*-projects` directories and inspected only `projects_dir`, and Table E covered projects/inbox/daily but never reports — so a producer that validates the directory it picked while letting `.myreports/dreams` through passed every B3 oracle | **FIXED, and the loss is recorded rather than smoothed over.** B3's draws now **cycle every producer keyword** — `projects`, `inbox`, `daily`, `identity`, `skills`, `reports` — and the `reports` draws are graded on the **JOINED** value `<picked>/dreams`, which is the branch `pick` never reaches. New Table F row **F8**; Table E row **E9** gained `.myreports/` with `reports_dir` required to be `reports/dreams`; the Implementation-notes bullet now calls grading it a contract and carries a do-not-prune-again marker. **Measured on a purpose-built mutant** whose hygiene loop skips `reports_dir`: `ref3 917/1000`, `boundary 38/39`, every other count green — and directly, `.myreports/` produced `.myreports/dreams` under the mutant against `reports/dreams` under the fix |
+| **R3-3** [C, shadow] | Stale pre-redesign measurements in current-contract surfaces: the identity-partition prose still said C1 `boundary 27/34` and C2 `23/34`, and criterion 3 still said the fitted matcher "scores 0 of 312 on criterion 1" | **FIXED, and one class of rot removed with it.** All pre-redesign `312`/`234`/`34` denominators are gone from the non-historical text (the logbook's earlier sections stay as history). **And the sweep surfaced a defect nobody had reported:** every `ref` count in the spec is **seed-dependent** and cannot reproduce, so quoting one as a canonical fact was itself a rot source. Those cells now state the invariant — *about half of each point's verdicts, because about half the draws are dot-prefixed* — with one unseeded run's numbers as an illustration, while the `handoff` and `boundary` counts stay exact because they are deterministic. A new checklist entry makes the distinction a registered rule |
+
+**CORRECTION, entered here and left where the wrong claim was made.** Round 2's
+record says of the R2-D pruning: *"No contract was deleted."* **That was false**
+— R3-2 is exactly a deleted contract, the `reports_dir` grading obligation, and
+the plugin channel found it by diffing against `a3985def` rather than by reading
+the pruned text. The claim is withdrawn and replaced by the narrower true one:
+*the pruning removed duplicated explanation and, in one place, an obligation
+that only looked like duplication because Tables A11 and F had absorbed
+everything around it.* The lesson is the one the runbook already states for
+canonical cells and which applies to deletions too: after pruning, re-read what
+is left for the sentence the pruning just falsified — and, for a prune, diff
+against the pre-prune revision rather than trusting the reading.
+
+### 3.1 Round-3 measurements — eleven trees, V2 extracted from the spec and run as written
+
+`ref` counts are seed-dependent; `over`, `handoff` and `boundary` are exact.
+
+```text
+UNTOUCHED 29c61d03      ref1  994/2000 | ref2  960/2000 | ref3  508/1000 | 12/12 | 36/87 | 16/39   rc=1
+FULL FIX                ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | 12/12 | 87/87 | 39/39   rc=0
+MUTANT C1               ref1 1086/2000 | ref2 2000/2000 | ref3 1000/1000 | 12/12 | 36/87 | 30/39   rc=1
+MUTANT C2               ref1 2000/2000 | ref2 1072/2000 | ref3  512/1000 | 12/12 | 87/87 | 25/39   rc=1
+reports-blind producer  ref1 2000/2000 | ref2 2000/2000 | ref3  917/1000 | 12/12 | 87/87 | 38/39   rc=1
+ASCII-only              ref1 1098/2000 | ref2 1092/2000 | ref3  523/1000 | 12/12 | 87/87 | 36/39   rc=1
+length <= 16            ref1 1100/2000 | ref2 1166/2000 | ref3  547/1000 | 12/12 | 87/87 | 37/39   rc=1
+length > 1              ref1 2000/2000 | ref2 2000/2000 | ref3 1000/1000 | 12/12 | 87/87 | 35/39   rc=1
+trimStart+NFKC          ref1 1982/2000 | ref2 1988/2000 | ref3  992/1000 | 12/12 | 87/87 | 31/39   rc=1
+z-family + Table D      ref1  982/2000 | ref2 1100/2000 | ref3  489/1000 | 12/12 | 87/87 | 16/39   rc=1
+fitted 18-name          ref1  922/2000 | ref2 2000/2000 | ref3 1000/1000 | 12/12 | 87/87 | 30/39   rc=1
+```
+
+**The reports-blind row is R3-2's whole argument in one line:** every count green
+except `ref3` and one boundary case. Under the round-2 grading it was green
+everywhere.
+
+**The C1/C2 partition is unchanged by both round-3 fixes** — C1 reddens B1's
+three surfaces with the layout points green, C2 reddens B2/B3's two with B1
+green, `over 12/12` under both — so Table C's identity table and both
+`expectRed` lists stand as written.
+
+### 3.2 The four modes of the fenced command, run as written
+
+```text
+acceptance (seed unset), untouched tree
+  seed 1788538728069  samples 1000 per enforcement point
+  generator: 111 distinct first code points of 112, leading-dot share 0.499
+  ref1 992/2000 | … | boundary 16/39      FAIL: 2629 of 5138                       rc=1
+acceptance (seed unset), full fix
+  generator: 111 of 112, share 0.502
+  2000/2000 | 2000/2000 | 1000/1000 | 12/12 | 87/87 | 39/39   V2 OK                rc=0
+WD_HELD_OUT_N=999
+  FAIL: WD_HELD_OUT_N must be a safe integer >= 1000 (the Table F row F3 floor)    rc=1
+WD_HELD_OUT_SEED=78 without replay
+  FAIL: WD_HELD_OUT_SEED is set. An acceptance run must draw its own seed …        rc=1
+WD_HELD_OUT_REPLAY=1 WD_HELD_OUT_SEED=78, full fix
+  REPLAY (NOT acceptance evidence) seed 78  samples 1000 …
+  REPLAY OK on seed 78 - a reproduction, NOT acceptance evidence: criterion 1 is
+  satisfied only by a run that drew its own seed                                   rc=0
+WD_HELD_OUT_REPLAY=1 without a seed
+  FAIL: WD_HELD_OUT_REPLAY=1 needs WD_HELD_OUT_SEED=<seed> …                       rc=1
+```
+
+The replay mode's rc=0 is deliberate and harmless: it is a reproduction, and its
+own output refuses to be read as acceptance evidence.
+
+**V1**, extracted and run on the untouched tree:
+`MISSING DELIVERABLE: tests/unit/dot-segment-denial.test.js`, rc=1.
+**`npm run lint`** with both revised documents: `0 error(s)`, rc=0.
+**Wall time:** 0.44 s at the N = 1000 floor.
+
+### 3.3 What round 3 did not change
+
+- **The rule, the reference predicate, the ordering, Table D, the adopt round
+  trip, the Deliverables boundary, ADR-0004 and size M** — all confirmed by both
+  channels, none widened, none touched.
+- **The machinery did not grow a mechanism.** V2 gained two argument gates and
+  one keyword cycle inside its existing body; nothing was added to
+  `scripts/red-proofs.js`, CI or `package.json`.
+- **The Dispatch precondition** is untouched and still the owner's.
+- **`status:` stays `Draft`.** The orchestrator closes the loop on its own
+  mechanical verification and owns the flip.
