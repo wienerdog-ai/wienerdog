@@ -1,7 +1,7 @@
 ---
 id: WP-dot-segment-denial
 title: Deny dot-prefixed path segments as a class, at the promotion allowlist and at both layout validators
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

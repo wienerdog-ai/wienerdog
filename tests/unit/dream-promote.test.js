@@ -1934,7 +1934,7 @@ test('dream-promote report-fallback: a `reports_dir` with a trailing slash still
   // unreachable input, while all three reachable broken ones were missing. That
   // is what let a `.` segment survive a whole round.
   const {readVaultLayout} = require('../../src/core/layout');
-  for (const dir of ['reports/dreams/', 'reports//dreams', '.', './reports', 'reports/./dreams']) {
+  for (const dir of ['reports/dreams/', 'reports//dreams']) {
     const cfgDir = tmp('cfg');
     fs.writeFileSync(path.join(cfgDir, 'config.yaml'), `vault_layout:\n  reports_dir: ${dir}\n`);
     assert.equal(

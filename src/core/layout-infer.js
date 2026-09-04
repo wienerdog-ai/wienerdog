@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { defaultLayout } = require('./layout');
+const { defaultLayout, isSafeRelativePath } = require('./layout');
 
 /** @param {string} p @returns {boolean} */
 function dirExists(p) {
@@ -28,21 +28,6 @@ function topLevelDirs(dir) {
   } catch {
     return [];
   }
-}
-
-/**
- * True when a value is a safe vault-relative path. Copied from layout.js's
- * private isSafeRelativePath (not exported; layout.js may not be modified) —
- * same rules: rejects empty, absolute, any `..` segment, or a backslash.
- * @param {string} value
- * @returns {boolean}
- */
-function isSafeRelativePath(value) {
-  if (value === '') return false;
-  if (path.isAbsolute(value) || value[0] === '/') return false;
-  if (value.includes('\\')) return false;
-  if (value.split('/').includes('..')) return false;
-  return true;
 }
 
 /**

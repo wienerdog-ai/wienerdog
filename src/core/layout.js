@@ -58,7 +58,9 @@ function cleanValue(raw) {
  * WP-024, adopt in WP-026), so a traversal or absolute value would let a
  * config edit read files OUTSIDE the vault into the injected session digest
  * (confused-deputy; PR #24 review). Rejected: empty, absolute, any `..`
- * segment (split on '/'), or a backslash anywhere.
+ * segment (split on '/'), a backslash anywhere, or any dot-prefixed segment
+ * (audit finding C3, 2026-08-05 ruling item 3 — denied as a class, so the
+ * promotion allowlist's own dot rule is unconditional).
  * @param {string} value  output of cleanValue
  * @returns {boolean}
  */
@@ -67,6 +69,7 @@ function isSafeRelativePath(value) {
   if (path.isAbsolute(value) || value[0] === '/') return false;
   if (value.includes('\\')) return false;
   if (value.split('/').includes('..')) return false;
+  if (value.split('/').some((seg) => seg.startsWith('.'))) return false;
   return true;
 }
 
@@ -171,4 +174,10 @@ function layoutPromptLines(layout, date, vaultDir) {
   ];
 }
 
-module.exports = { defaultLayout, readVaultLayout, resolveDailyPath, layoutPromptLines };
+module.exports = {
+  defaultLayout,
+  readVaultLayout,
+  resolveDailyPath,
+  layoutPromptLines,
+  isSafeRelativePath,
+};
