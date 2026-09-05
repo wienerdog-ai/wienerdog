@@ -38,7 +38,7 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 
 - Every finding carries a **materiality band** beside its disposition —
   **A**: silent wrong behavior with a data-loss or security consequence;
-  **B**: caught downstream; **C: hygiene**. A round reported as counts
+  **B**: caught downstream; **C**: hygiene. A round reported as counts
   without bands is not decision-grade. The band grades the finding's
   CONSEQUENCE and is orthogonal to LIGHT/HEAVY (below, under "Weighted
   closure"), which grades its FIX; the STOP CRITERION bullet below binds
@@ -102,9 +102,10 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   grades whether its FIX changes the product, and therefore whether a
   fresh round is owed — the two are orthogonal, and a pinned criterion
   names its outcomes in terms of both. Worked example, non-normative —
-  the requirement above is unchanged: this WP's own criterion in its
-  round record, whose step 0 is the band gate and whose ladder is
-  LIGHT/HEAVY (`docs/HANDOVER.md:371-372`).
+  the requirement above is unchanged: WP-process-runbook-sweeps' criterion
+  in docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md,
+  whose step 0 is the band gate and whose ladder is LIGHT/HEAVY
+  (`docs/HANDOVER.md:371-372`).
 - The reviewer's raw output is committed BEFORE anyone reads or judges
   it — adjudication happens on evidence the adjudicator cannot have
   shaped. This is what makes an after-the-fact ruling possible when a
@@ -326,10 +327,10 @@ every backend.
   verdicts were readings and neither disclosed it.)
 - Review is read-only, checked mechanically: `git status --porcelain`
   in the reviewed checkout is byte-identical before and after the run,
-  or the run is invalid. The obligation is symmetric: while a gate is
-  reading a worktree, **nothing writes into a worktree a gate is
-  reading** — one untracked file voids the verdict, however clean the
-  diff (`inbox` WP-quarantine-banner-location; WP-dream-promote-in-workspace).
+  or the run is invalid. The obligation is symmetric: **nothing writes
+  into a worktree a gate is reading** — one untracked file voids the
+  verdict, however clean the diff (`inbox` WP-quarantine-banner-location;
+  WP-dream-promote-in-workspace).
 - Output is relayed verbatim (see Rules).
 
 ### Backend selection
