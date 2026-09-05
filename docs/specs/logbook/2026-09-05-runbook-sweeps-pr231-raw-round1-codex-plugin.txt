@@ -1,0 +1,32 @@
+# PR gate raw — Codex plugin review (review --wait --scope branch --base main) — WP-process-runbook-sweeps
+# tip reviewed: f59e3f69109dd55cf420f47ba890e6de8d68823b ; base main = e119b607e2f9304ccafbdc714c67431d333b7b25 ; committed pre-adjudication
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a07310-eb50-73c0-8d57-99abcf5cbddc).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat e119b607e2f9304ccafbdc714c67431d333b7b...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat e119b607e2f9304ccafbdc714c67431d333b7b... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-process-runbook-sweeps.md; git diff e119b607e2...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-process-runbook-sweeps.md; git diff e119b607e2... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '188,290p' docs/specs/WP-process-runbook-sweeps.md; cat docs/runbooks/co...
+[codex] Command completed: /bin/zsh -lc "sed -n '188,290p' docs/specs/WP-process-runbook-sweeps.md; cat docs/runbooks/co... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '161,188p' docs/specs/WP-process-runbook-sweeps.md; sed -n '321,458p' do...
+[codex] Command completed: /bin/zsh -lc "sed -n '161,188p' docs/specs/WP-process-runbook-sweeps.md; sed -n '321,458p' do... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,220p' scripts/lint.js; sed -n '451,500p' docs/specs/WP-process-runboo...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,220p' scripts/lint.js; sed -n '451,500p' docs/specs/WP-process-runboo... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces...
+[codex] Command failed: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces... (exit 1)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces... (exit 0)
+[codex] Command completed: /bin/zsh -lc 'npm run lint' (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: Reviewed tip f59e3f69109dd55cf420f47ba890e6de8d68823b against the supplied merge base. The do...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+Reviewed tip f59e3f69109dd55cf420f47ba890e6de8d68823b against the supplied merge base. The documentation changes implement the work package’s specified rules without actionable defects; lint passed and all 21 committed anchors were verified.
+# plugin exit=0 ; porcelain before/after: identical
