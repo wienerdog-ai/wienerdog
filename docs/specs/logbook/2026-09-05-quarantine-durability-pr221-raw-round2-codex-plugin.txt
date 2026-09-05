@@ -1,0 +1,15 @@
+# Raw gate output — Codex plugin native review (codex-companion.mjs review --wait --base main), PR #221 round 2, wp/quarantine-preserve-durability at 6b6c5596 (base main = bb58e398). Committed BEFORE adjudication. git status --porcelain identical before and after.
+
+# Codex Review
+
+Target: branch diff against main
+
+The production durability implementation appears sound, but the Windows guards make the required red-proof lane fail and the shipped-test changes exceed the work package's explicit assertion boundary.
+
+Full review comments:
+
+- [P2] Avoid skipping identities selected by red-proofs — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/quarantine-preserve-durability/tests/unit/dream-validate.test.js:2753-2753
+  On win32, `npm run red-proofs` still selects declarations whose `expectRed` entries name QPD-1 through QPD-7, but this and the analogous guards report six of those identities as SKIP; the runner rejects a skipped declared baseline identity, so the required V3 verification always errors on Windows. Platform-gate the proof selection or provide runnable Windows branches instead, while retaining QPD-5's platform-neutral identity cases as required by [Table F5](docs/specs/WP-quarantine-preserve-durability.md#L694).
+
+- [P2] Limit the shipped test to one added assertion — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/quarantine-preserve-durability/tests/unit/dream-validate.test.js:2619-2619
+  This shipped D3 test adds both this non-vacuity assertion and the following descriptor-closure assertion, although [criterion 10](docs/specs/WP-quarantine-preserve-durability.md#L2119-L2123) explicitly permits exactly one added assertion and declares a second one a finding. Preserve the necessary non-vacuity check by folding it into the single closure assertion, or amend the governing work-package boundary before landing.

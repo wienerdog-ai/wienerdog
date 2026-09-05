@@ -1,0 +1,22 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals, pr-rubric), PR #221 round 2, detached worktree at 6b6c5596 (base main = bb58e398). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty).
+
+{
+  "findings": [
+    {
+      "title": "[P2] Reduce the shipped test to one new assertion",
+      "body": "Materiality C (hygiene). This shipped D3 test adds this non-vacuity assertion plus the following descriptor-closure assertion, but [acceptance criterion 10](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/docs/specs/WP-quarantine-preserve-durability.md:2115) permits exactly one added assertion and explicitly declares a second one a finding. Fold the non-vacuity guard into the permitted closure check so the test remains meaningful while matching the work package's exact shipped-test accounting.",
+      "confidence_score": 0.99,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/tests/unit/dream-validate.test.js",
+        "line_range": {
+          "start": 2619,
+          "end": 2619
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "Executed rubric/spec/diff inspections, revision checks, `git diff --check`, `node --check`, V1/V2, the corrected boundary check, proof-declaration structural checks, test/title/assertion counts, and final `git diff --exit-code`; all exited 0. Two preliminary boundary invocations exited 1 because of reviewer-side argument packaging; `npm run red-proofs` and `npm test` exited 1 before running because sandboxed `mkdtemp` returned EPERM, while `npm run lint` exited 1 because absent `node_modules` caused a blocked registry lookup (its frontmatter check passed). Initial and final `git status --porcelain=v1` both exited 0 with identical empty output, but the explicit acceptance-criterion violation prevents approval.",
+  "overall_confidence_score": 0.99
+}
