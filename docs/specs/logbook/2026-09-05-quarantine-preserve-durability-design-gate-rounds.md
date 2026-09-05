@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| 6 (`1e38f90d`) | needs-attention / needs-attention | `…gate-raw-round6-codex-plugin.txt`, `…gate-raw-round6-herdr-shadow.txt` (both `d19941a1`) | Plugin 2 B + 1 C; shadow 2 A + 2 B; no scope objections. **BOTH CHANNELS VALIDATED THE DESIGN** — no false-SUCCESS path in the prescribed sequence, exactly three pathname removals each gated, the create-failure branch removing nothing, the chains complete and ordered, A12 cited correctly, the stub carrying its routed items. What remained is **evidence form and mirror rot**: no new object, no reopened family. **[A, shadow] `ownsName`'s failure-closed form was unspecified and untested** — F8 makes it load-bearing at four gates but pinned only its `lstat` line, so a predicate with no `catch` passed every identity and would emit a raw `ENOENT` (leaking the fd) the moment the in-scope user deletes a name before a gate; and a comparison narrowed to `Number` lets DISTINCT inodes above `MAX_SAFE_INTEGER` compare equal and authorize a deletion. → FIX: the WHOLE BODY becomes a byte-exact source form, F8 states what `false` means at each gate (fail closed, remove nothing, descriptor still closed), QPD-5 gains an ENOENT case and a doctored-bigint case, QPD-6 gains an ENOENT case, and two proofs — `ownership-check-not-failure-closed`, `ownership-check-narrows-to-number` — pin them. **[A, shadow] O_EXCL provenance was unscoped** against Node's own "might not work with network file systems" caveat, while a user's core can sit on a network-mounted home. → settled as a PRODUCT boundary: **Dispatch precondition item 7** — state the precondition (a local POSIX filesystem with atomic `O_EXCL` and hard links), disclose network-mounted cores as a named residual (what fails: exclusivity, hence provenance under overlapping runs; what holds: everything that consults only the held descriptor), and add **no runtime check**, because a cheap probe cannot tell "this filesystem does not honour `O_EXCL`" from "nothing raced me just now". **[B, converged] QPD-6 said SIX cases and listed five** → `(f)` added and the row re-counted to seven with the ENOENT case. **[B, converged] F10's operative mirrors still carried the round-4 model** ("three residuals, one destructive") in Exact contracts, the proof-scope paragraph and the Security checklist, and the checklist's blast-radius entry still said five tests / two seams → all rewritten, and the count audit extended to cardinals ONE–FOUR, which is exactly how they survived. **Correction carried:** Linux `fsync` does NOT require a write-open descriptor — that is System V's rule — so F5's rationale for `O_RDWR` is now "this function writes through it". All FIX. **Round 7 runs on both channels as the closing confirmation.** |
 | 5 (`7a2b8a57`) | needs-attention / needs-attention | `…gate-raw-round5-codex-plugin.txt`, `…gate-raw-round5-herdr-shadow.txt` (both `38cabb26`) | Plugin 1 A + 1 B + 1 C; shadow 1 A + 1 B; no scope objections; nobody re-argued A12, the declined pinning or the six items. **THE NARROWED CONTRACT HELD — no channel found a false-SUCCESS path** — but its DISCLOSURE was incomplete and one canonical row was stale. Round 5 is therefore disclosure completeness and mirror rot on the design settled at round 4: **not a new object, not a reopened family**. **Converged (A):** F10's residual set was FALSE. The same irreducible check-then-unlink sits at BOTH temp removals as well as the `dest` one — and on the post-commit temp removal the run still reports **SUCCESS**, so that damage is silent; the premise *"the temp name is random and unpublished"* was also false (`.tmp-${process.pid}-${stem}${ext}`, `validate.js:720`). → FIX by COMPLETING the disclosure: F10 now names ONE CLASS with an instance at each of this call's three pathname removals, three destructive, plus the after-gate success window; the temp-name premise is corrected AND turned into the reason GUARANTEED (1) still holds (distinct pids ⇒ distinct temp names ⇒ overlapping runs never contend for one); item 6 re-priced over all three removals — **recommendation UNCHANGED and now stronger**, because never removing the post-commit temp would leave a second link at a deterministic pid-derived name and make the next same-pid run fail a preservation that should succeed; QPD-6 and criterion 7 narrowed to substitutions BEFORE a gate, with the after-gate windows disclosed and deliberately untested. **Plugin (A):** the inherited `tmpOwned` heuristic — written for `writeFileSync`, which combines create and write — was carried onto a standalone `O_CREAT`+`O_EXCL` open, so a non-EEXIST create failure could delete a foreign file. → FIX: `fd < 0` ⇒ this invocation created nothing ⇒ removes nothing; `let tmpOwned` deleted; new proof `create-failure-removes-unowned` and a sixth QPD-6 case. **Converged (B):** canonical F1 still described the superseded pathname write → rewritten to the round-4 descriptor form, with every mirror swept. **[C] counts** → the by-shape rule applied completely, verified by a recorded grep. All FIX. **Round 6 runs on both channels as the closing confirmation.** |
 | 4 (`80cf27de`) | needs-attention / needs-attention | `…gate-raw-round4-codex-plugin.txt`, `…gate-raw-round4-herdr-shadow.txt` (both `bda158e2`) | Plugin 1 A; shadow 4 A + 1 C; no scope objections; nobody re-argued A12, the declined directory pinning, or the owner items. **THE THIRD CONSECUTIVE ROUND to find a window inside the "user's own hand" class F10 put IN SCOPE** (round 2 rename→open, round 3 link→open and the unconditional temp removal, round 4 create→open adoption, the D1 catch after a successful open, and a check-to-unlink race). **Node has no `unlinkat`, so a pathname unlink after a pathname check is irreducibly TOCTOU** — the shadow said so in its own words and asked for an explicit disposition rather than a fifth window fix. → **THE ANSWER IS TO NARROW THE CONTRACT, and row F10 is rewritten as GUARANTEED / DISCLOSED / OUTSIDE.** GUARANTEED: overlapping runs, closed by construction; and against the user's hand, that no substitution can produce a false SUCCESS. DISCLOSED: three residuals, only the third destructive — (a) `tmp` substituted before the commit leaves a spare link, nothing deleted; (b) `dest` substituted after the last gate on the SUCCESS path; (c) `dest` substituted between the ownership gate and the unlink on the FAILURE path, which deletes the replacement and which nothing in Node can close. PRICED as **owner item 6**: never removing on failure closes (c) but contradicts Table D rows D2/D3 and would leave this product's own secret-bearing artifact behind on every failed preservation — recommendation, keep the removal and disclose. **Two concrete fixes taken:** provenance moves to the EXCLUSIVE CREATE (`O_RDWR`, `O_CREAT` and `O_EXCL`, with the write and the read through that descriptor), which closes the adoption window by construction AND fixes `fsync`'s Linux `EBADF` on a read-only descriptor — F5 now scopes the darwin measurement honestly and names CI's `[ubuntu-latest, macos-latest]` matrix as where Linux is proved; and the shared D1 `catch` is gated wherever the descriptor exists, the unconditional rule narrowed to the create-failure state alone. **[C] the count mirrors** were swept completely, the by-shape rule applied to the last four. All FIX. **Round 5 runs on both channels and is the closing confirmation only if the NARROWED contract holds.** |
 | 3 (`95f07f36`) | needs-attention / needs-attention | `…gate-raw-round3-codex-plugin.txt`, `…gate-raw-round3-herdr-shadow.txt` (both `444d8d80`) | Plugin 1 A, shadow 1 A + 1 B, one routed objection. **BOTH CHANNELS VERIFIED EVERY ROUND-2 DISPOSITION CLOSED** — F10's A12 citation accurate and consistent with the threat model, F9's `linkSync` an atomic EEXIST no-clobber decision at the commit instant, the `lstat`+`isFile`+`bigint` pin closing the symlink case, the 18-case matrix accounting for every site with coherent routes, criterion 8 / DoD item 2 honest about V1's bound, SHAs and counts matching, the stub sound. **Neither re-litigated A12 or the declined directory pinning, so the family did NOT reopen at the design level** — escalation (i) does not fire again: what remained was the RESIDUE of round 2's design, an implementation-SHAPE defect in the prescribed SEQUENCE. **Converged (A):** the ownership handoff after the link acted on PATHNAMES this invocation may no longer own — (a) `dest` replaced between the link and the open bound the descriptor to the replacement, the byte comparison short-circuited before the ownership check, and the mandated cleanup deleted the user's file; (b) the temp name replaced between the link and its unconditional removal was unlinked by an invocation that no longer owned it. Both sit inside F10's IN-SCOPE "user's own hand". → FIX by the closed form **"ACT ONLY ON THE INODE YOU HOLD"**: open `tmp` ONCE before the commit, and gate every pathname act on `ownsName(p, fd)` — the temp removal, the last gate, and the failure removal of `dest`. **The read moves onto that descriptor, which DELETES the post-commit window rather than narrowing it** (measured: the fd's inode survives `linkSync`, `dest` names it, `nlink` 2 → 1). The `replaced` flag disappears: one predicate, three gates. QPD-5 gains the post-commit substitution, QPD-6 gains the temp substitution, and four RED proofs are added or retargeted so detection and non-removal are proved separately. **[B/C] stale count mirrors** → every prose count removed and the checklist given a COUNTS-BY-SHAPE rule. **Routed (shadow):** the pruning pass excludes only its own run's basenames, so an overlapping run can select a still-running invocation's fresh artifact for eviction — added to the disposal stub's call-site list as a live-run ownership question durable unlink does not answer. All FIX. HEAVY (the source forms change) → **round 4 is the closing confirmation on both channels.** |
@@ -889,6 +890,130 @@ three can delete a replacement; on the post-commit temp removal the run still
 reports success, so that one is silent. A fourth, non-destructive instance is a
 substitution at `dest` after the last gate. Every instance is untested by design, and
 Dispatch precondition item 6 prices the only mechanism that removes the class.
+
+**OUTSIDE.** Arbitrary same-user native code — `docs/THREAT-MODEL.md`'s **A12** —
+against which no durability protocol can hold, and for which every added pin would
+imply a false guarantee.
+
+## Round 6 — architect's revision pass, 2026-09-05
+
+### Round 6 fixes
+
+**Both channels validated the design.** The shadow's own `validated_points` list
+records the success expression's order, the descriptor-based write/read/flush, the
+two directory chains, **exactly three pathname-removal paths each with a preceding
+ownership check and no fourth destructive act**, the create-failure short-circuit,
+the A12 citation and the disposal stub's routed items. Nothing re-argued A12, the
+declined pinning or the six standing owner items. **Round 6 is therefore evidence
+form and mirror rot — no new object, no reopened family**, and escalation (i) does
+not fire.
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [shadow] | `ownsName`'s failure-closed form unspecified and untested. F8 makes it load-bearing at four gates but the exact form pinned only its `lstat` line, and Table C mutated only gate removal, ungated disposal and `lstat`→`stat`. A predicate with **no catch** passes QPD-5/QPD-6 and emits a raw `ENOENT` — leaking the held descriptor — when the user deletes a name before a gate; a comparison narrowed to **`Number`** lets distinct inodes above `MAX_SAFE_INTEGER` compare equal and authorize a deletion | **FIX.** The WHOLE BODY of `ownsName` is now a byte-exact source form — both stats `bigint`, `isFile()` on the named entry, bigint `dev`/`ino` equality, `return false` on either stat throwing. F8 states **what `false` MEANS at each of the four gates** (temp: not unlinked, the preservation may still succeed; last gate: the preservation fails; failure path: `dest` not removed — and the descriptor is closed in every case, because the close is on no gate's path). QPD-5 gains (d) `dest` deleted before the last gate and (e) doctored stats whose inodes are distinct as `BigInt` and equal as `Number`; QPD-6 gains (g) the temp name deleted before its gate. Two proofs pin them |
+| **A2** [shadow] | The `O_EXCL` provenance guarantee is unscoped against Node's documented "might not work with network file systems" caveat, and a user's core can sit on a network-mounted home | **SETTLED AS A PRODUCT BOUNDARY — Dispatch precondition item 7.** F8 now carries the precondition inline and F10 discloses it as a second, non-adversarial residual. **No runtime check is proposed, and the reason is measurable:** a probe cheap enough to run per preservation cannot distinguish "this filesystem does not honour `O_EXCL`" from "nothing else raced me just now", so it is a false-negative by construction; and a fail-closed check keyed on mount type would abort dreams on filesystems that work. Nothing in the repo states a filesystem assumption today — the nearest frame is `docs/THREAT-MODEL.md`'s **single-user-machine trust model**, which this boundary sits beside |
+| **B1** [converged] | QPD-6 said SIX cases and listed five — the round-5 create-failure case existed in criterion 7 and in `create-failure-removes-unowned` but not in the canonical row | **FIX.** `(f)` added explicitly, and the row is now SEVEN with the round-6 ENOENT case |
+| **B2** [converged] | F10's operative mirrors still carried the round-4 model — Exact contracts, the proof-scope paragraph and the Security checklist all said "three residuals, one destructive" — and the Mirrored Surface Checklist's blast-radius entry still said five tests / two seams | **FIX, and the audit that missed them is fixed too.** Every mirror now states one check-then-unlink class, three destructive removal instances plus the non-destructive after-gate one. The blast-radius entry stops restating a number and points at Current state, which measures it; Current state's own "three seams" is corrected to enumerate the four |
+| — | **Correction carried from the shadow's `fsync(2)` check** | Linux `fsync` does **not** require a write-open descriptor — that requirement is System V's (HP-UX, AIX). F5's rationale for `O_RDWR` is now the true one: **this function writes the artifact through that descriptor.** Nothing in the design depended on the false premise; the round-4 record keeps it as history, and the SPEC no longer asserts it |
+
+### 6.1 Measurements
+
+```text
+BASELINES at 38562ec4 (unchanged)
+  npm test 2623 / 2611 / 0 / 12  exit 0 | red-proofs 11 declared, RUN: PROVEN  exit 0
+
+THE CANDIDATE (round-5 form + the round-6 evidence)
+  npm test                       tests 2629 / pass 2617 / fail 0 / skipped 12   exit 0
+    (the three new cases live INSIDE QPD-5 and QPD-6, so the test count is unchanged)
+  npm run red-proofs (unfiltered)
+    30 declared proof(s), 30 selected — ALL PROVEN; RUN: PROVEN                 exit 0
+    criterion 6 — destination-ownership-gate-removed; destination-removal-not-gated;
+                  ownership-check-follows-symlinks; ownership-check-not-failure-closed;
+                  ownership-check-narrows-to-number
+    criterion 7 — commit-clobbers-destination; tmp-removal-dropped;
+                  tmp-removal-not-gated; d1-cleanup-not-gated;
+                  provenance-adopted-not-created; create-failure-removes-unowned
+  Both new expectRed sets correct on the first run.
+
+V1/V2 unchanged by this pass and re-verified on the round-6 candidate: untouched RED,
+compliant GREEN, wrapped compliant GREEN, over-claim fixture RED, P0b-in-cell-2 RED,
+differently worded over-claim GREEN (still the measured bound).
+```
+
+**One fixture that had to be corrected before it measured anything.** The
+above-`MAX_SAFE_INTEGER` case first asserted `Number(9007199254740993n) !== 9007199254740993`
+— which is false, because the source literal collapses to the same double. The
+meaningful assertions are that the two fixture inodes are **distinct as `BigInt`**
+and **equal as `Number`**, and the case only became evidence once it said that.
+
+### 6.2 The count audit, extended and recorded
+
+Round 5's grep began at FIVE, which is exactly how "three residuals, one destructive"
+survived it. The audit now runs in two stages:
+
+```text
+(1) grep -noE '\b(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|THIRTEEN|FOURTEEN|
+      SIXTEEN|SEVENTEEN|one|two|three|four|five|six|seven|eight|nine|ten|eleven|
+      twelve|thirteen|fourteen|fifteen|sixteen|seventeen|thirty)\b [A-Za-z]+' SPEC
+(2) …filtered to the NOUNS a table enumerates — residual, identity, proof, mutation,
+      declaration, case, item, gate, removal, seam, test, instance, site, criterion,
+      roll-up, window — which is the class the by-shape rule covers.
+```
+
+Stage 2's output after the sweep:
+
+```text
+154:three removals   154:three windows   221:four gates    444:one test
+626:FOUR instances   626:one instance    674:one mutation  689:TWO sites
+692:FIVE cases       693:SEVEN cases     695:one declaration 696:one declaration
+698:one proof        706:two gates       1150:four gates   1254:seven roll-up
+1299:one-mutation    1299:two residual   1492:one identity 1764:one proof
+1861:SEVEN roll-up   1975:one case       2051:seven roll-up
+```
+
+**Every hit is legitimate under the rule, and each was checked individually:**
+`154` is item 6 counting this call's three removals, which F10 decides and the item
+prices; `221` is the DREAM's four gates (ADR-0034), unrelated; `626` is F10's own
+cell; `689`/`692`/`693` are Table C's own cells; `706` and `1150` are historical or
+inside a proof's `why`; `1254`/`1861`/`2051` are criterion 11's asserted roll-up
+count; the rest are "one X" singulars. **The one stale hit the extension caught was
+Current state's "three seams"**, which the migration had made four — now enumerated
+rather than counted.
+
+### 6.3 What round 6 did NOT change
+
+- **The design.** Both channels validated it: the sequence, the three gated removals,
+  the create-failure short-circuit, the chains, the A12 boundary. Rows F1–F4, F6, F7
+  and F9 are untouched.
+- **The recommendation on items 1–6.** Item 7 is added; none of the others moves.
+- **The guarantee sentence**, byte for byte.
+- **Table P and Table D.**
+- **The disposal stub**, which both channels confirmed carries its routed items
+  without the success protocol depending on it.
+
+### 6.4 The statement the closing round is asked to verify verbatim
+
+**GUARANTEED.** A preservation that reports success has written, verified and
+flushed one inode it CREATED; that inode's bytes and every directory entry it
+depends on have had the platform's flush complete, in the order Table F fixes; and
+`dest` was a regular file naming that inode at the last gate. Against **overlapping
+runs** — the concurrency this product creates itself — this holds by construction on
+the supported filesystem: distinct pids give distinct temp names, and F9's commit
+refuses a destination it did not create. Against **the user's own hand**, no
+substitution at any point can produce a false SUCCESS, and no name deleted before a
+gate produces an error escaping this function.
+
+**DISCLOSED.** *(1)* One class — a check-then-unlink window — with an instance at
+each of this call's three pathname removals, because Node ≥18 has no
+descriptor-relative unlink and no removal shape whose ownership test is separable
+from its act. **All three can delete a replacement; on the post-commit temp removal
+the run still reports success, so that one is silent.** A fourth, non-destructive
+instance is a substitution at `dest` after the last gate. Every instance is untested
+by design, and Dispatch precondition item 6 prices the only mechanism that removes
+the class. *(2)* A filesystem precondition: a local POSIX filesystem with atomic
+`O_EXCL` and hard links. On a network-mounted core exclusivity — and therefore
+provenance under overlapping runs — is not guaranteed; everything that consults only
+the held descriptor still holds. Dispatch precondition item 7.
 
 **OUTSIDE.** Arbitrary same-user native code — `docs/THREAT-MODEL.md`'s **A12** —
 against which no durability protocol can hold, and for which every added pin would
