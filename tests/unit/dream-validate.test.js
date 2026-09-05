@@ -4000,10 +4000,16 @@ test('dream-validate: ledger corpus [C17] non-adjacent CANDIDATE duplicate headi
   );
 });
 test('dream-validate: ledger corpus [C18] the same ledger as the COMMITTED baseline, A refuses', () => {
+  // The LAST a.b-keyed section carries 3 distinct claude: sessions: with A3's
+  // duplicate refusal mutated away, last-wins is what the pre-fix collapse
+  // yields, and only THIS section's fields are visible to skillBodyViolation's
+  // own >=3-Claude-session floor — codex: sessions here would let that floor
+  // refuse first, on its OWN unrelated string, and the row would never reach
+  // the "authorize" its Today column records (round-1 gate finding).
   const dup = ledgerK(
     { heading: 'a.b', untrustedLine: untrustedBullet('true') },
     { heading: 'c.d', patternKey: '`c.d`' },
-    { heading: 'a.b', untrustedLine: untrustedBullet('false') },
+    { heading: 'a.b', untrustedLine: untrustedBullet('false'), sessionIds: 'claude:s1, claude:s2, claude:s3', recurrence: '3' },
   );
   assert.equal(
     runA(dup, 'a.b'),
@@ -4260,11 +4266,14 @@ test('dream-validate: ledger corpus [C40-baseline] generated matrix, committed-b
   }
 });
 test('dream-validate: ledger corpus [C40-authorization] generated matrix, authorization read, A refuses (LPC-E)', () => {
+  // Same reason as C18: the LAST a.b-keyed section (the one last-wins would
+  // surface if A3's duplicate refusal were mutated away) needs 3 distinct
+  // claude: sessions, or skillBodyViolation's own Codex floor refuses first.
   for (const cp of WS_CODEPOINTS) {
     const dup = ledgerK(
       { heading: 'a.b' },
       { heading: 'c.d', patternKey: '`c.d`' },
-      { heading: `a.b${String.fromCodePoint(cp)}` },
+      { heading: `a.b${String.fromCodePoint(cp)}`, sessionIds: 'claude:s1, claude:s2, claude:s3', recurrence: '3' },
     );
     assert.equal(
       runA(dup, 'a.b'),
