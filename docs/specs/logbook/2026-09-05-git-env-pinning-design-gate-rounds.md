@@ -31,6 +31,14 @@ at a plain `git archive HEAD | tar -x` copy of the tree in scratch, never the
 worktree. `git status --porcelain` in the worktree was checked after the probe
 runs and showed only this pass's own two spec files.
 
+**Pasted tool output in this record is normalized in two whitespace respects
+and no other:** trailing whitespace was stripped so `git diff --check` exits 0 —
+round 1's hermetic shadow found 30 such lines, all of them line-end spaces
+inside quoted command output and blank neighbour lines in range dumps — and the
+hard tabs `git ls-tree` puts before a path were expanded to one space, which
+markdownlint's MD010 refuses even inside a fence. No visible character of any
+pasted output was changed.
+
 **Every measurement was run FROM A FILE** (`docs/runbooks/codex-review.md`,
 "Run a gate from a script, not from an inline shell one-liner"). The drivers are
 `m1-write-targets.sh`, `m2-config-code.sh`, `m3-reach-and-minimal-env.sh`,
@@ -153,7 +161,7 @@ vault cat-file with alternates:    only-in-other
 == P5 GIT_NAMESPACE + update-ref HEAD ==
 update-ref rc=0
 real HEAD now: 0e60c750791a19ecac8992f1235a22a661fd2270 (was a125f40742f8812ef46f574e77f2f386d8c51641)
-namespaced ref: 
+namespaced ref:
 
 == P6 GIT_CEILING_DIRECTORIES = the vault itself (denial channel) ==
 0e60c750791a19ecac8992f1235a22a661fd2270
@@ -257,7 +265,7 @@ ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.TR5qa8qVTf vaultHEAD=8
 fatal: failed to unpack tree object 5eaac5140510be5a1624b402cd339fff102fff91
   without alternates rc=128
   with alternates rc=0
-  index now holds: b.txt 
+  index now holds: b.txt
 
 == P14 GIT_CONFIG_GLOBAL as a CODE channel (core.fsmonitor via a relocated global config) ==
   rc=0 fsmonitor-log-lines=2
@@ -337,31 +345,31 @@ src/cli/dream.js:166-175  (gitIn — the pipeline seam)
    before:  */
    FIRST : function gitIn(spawnGit, cwd, args, opts = {}) {
    LAST  : }
-   after : 
+   after :
 
 src/cli/dream.js:178-186  (spawnGitPinned — the pinned front door)
    before: /** The real seam: the WP-154 pinned front door, never a bare `git`. */
    FIRST : function spawnGitPinned(o) {
    LAST  : }
-   after : 
+   after :
 
 src/cli/dream.js:226-231  (the private-index environment)
    before:   // untouched whatever happens here.
    FIRST :   const tmpIndex = path.join(o.stateDir, `dream-index.${process.pid}.tmp`);
    LAST  :   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
-   after : 
+   after :
 
 src/cli/dream.js:562-562  (the spawnGit default)
    before:   // row W1(c). JS-only: production passes no opts, so the pinned door always runs.
    FIRST :   const spawnGit = opts.spawnGit || spawnGitPinned;
    LAST  :   const spawnGit = opts.spawnGit || spawnGitPinned;
-   after : 
+   after :
 
 src/cli/dream.js:587-587  (the assertGitRepo call site)
    before:   // 2. Vault must be a git repo (read-only check; fail fast without the lock).
    FIRST :   assertGitRepo(vaultDir);
    LAST  :   assertGitRepo(vaultDir);
-   after : 
+   after :
 
 src/cli/dream.js:1007-1007  (show HEAD:reports/warnings.md)
    before:       const warningsRender = composeWarnings(ledger);
@@ -373,28 +381,28 @@ src/core/dream/validate.js:64-81  (validate.js's module-private git())
    before:  */
    FIRST : function git(vaultDir, args, opts = {}) {
    LAST  : }
-   after : 
+   after :
 
 src/core/dream/validate.js:88-93  (assertGitRepo)
    before:  */
    FIRST : function assertGitRepo(vaultDir) {
    LAST  : }
-   after : 
+   after :
 
 src/core/dream/promote.js:387-418  (constructMergeEnv — the precedent)
    before:  */
    FIRST : function constructMergeEnv(root) {
    LAST  : }
-   after : 
+   after :
 
 src/core/exec-identity.js:93-118  (resolveExecutable — reads env.PATH)
    before:  */
    FIRST : function resolveExecutable(name, env, platform) {
    LAST  : }
-   after : 
+   after :
 
 src/core/exec-identity.js:451-461  (verifyPin — compares the resolved path to the pin)
-   before: 
+   before:
    FIRST :   const live = resolveExecutable(name, env, platform);
    LAST  :   }
    after :   const liveDir = path.dirname(live.realpath);
@@ -403,7 +411,7 @@ src/cli/run-job.js:58-78  (WIN_ENV_PASSTHROUGH)
    before:  *  paths.home so the passthrough can never overwrite the deterministic homedir. */
    FIRST : const WIN_ENV_PASSTHROUGH = [
    LAST  : ];
-   after : 
+   after :
 
 src/cli/run-job.js:150-150  (buildCleanEnv — the scheduled run's clean env)
    before:  */
@@ -451,10 +459,10 @@ docs/runbooks/codex-review.md:160-170  (a cited range is checked at both ends)
    before:   the spec itself provides.
    FIRST : - A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must
    LAST  :   WP-index-guard-residuals; `docs/HANDOVER.md:298`).
-   after : 
+   after :
 
 docs/runbooks/codex-review.md:188-191  (verification machinery may grow only to guard)
-   before: 
+   before:
    FIRST : - Verification machinery may GROW only to guard a product behavior, and
    LAST  :   the existing surface, or accepted as a named residual.
    after : - Why this is the convergence condition, measured: each fix injects
@@ -594,13 +602,13 @@ U-rows never referenced outside their own row  = U8,U9,U12,U14,U15,U16,U17,U18,U
 acceptance criteria                            = 8  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8
 verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
 deliverable rows                               = 7
-   create src/core/dream/git-env.js  exists=false 
-   modify src/cli/dream.js  exists=true 
-   modify tests/unit/dream-pipeline.test.js  exists=true 
-   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true 
-   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false 
-   modify docs/adr/0012-dream-run-lifecycle.md  exists=true 
-   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true 
+   create src/core/dream/git-env.js  exists=false
+   modify src/cli/dream.js  exists=true
+   modify tests/unit/dream-pipeline.test.js  exists=true
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true
 files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
 file:line citations in the spec                = 17
    `src/cli/dream.js:587`
@@ -814,13 +822,13 @@ U-rows never referenced outside their own row  = U8,U9,U12,U14,U15,U16,U17,U18,U
 acceptance criteria                            = 8  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8
 verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
 deliverable rows                               = 7
-   create src/core/dream/git-env.js  exists=false 
-   modify src/cli/dream.js  exists=true 
-   modify tests/unit/dream-pipeline.test.js  exists=true 
-   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true 
-   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false 
-   modify docs/adr/0012-dream-run-lifecycle.md  exists=true 
-   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true 
+   create src/core/dream/git-env.js  exists=false
+   modify src/cli/dream.js  exists=true
+   modify tests/unit/dream-pipeline.test.js  exists=true
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true
 files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
 file:line citations in the spec                = 17
    `src/cli/dream.js:587`
@@ -893,6 +901,524 @@ frontmatter check passed: 269 spec(s), 4 agent(s)
 lint passed
 ```
 
+## Round 1 — external, double channel, tip `4cb6259f`
+
+Both channels ran on `4cb6259f`, both returned **needs-attention**, and
+`git status --porcelain` was byte-identical before and after in each. The raws
+are committed **before** any of this was read or judged:
+
+| Channel | Raw | Commit that introduced it |
+|---------|-----|---------------------------|
+| Codex plugin | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-codex-plugin.txt` | `8b47487d` |
+| Hermetic shadow | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-herdr-shadow.txt` | `9c7d25a9` |
+
+**Both verdicts are READINGS on the executable points, and both disclosed it.**
+Neither sandbox could run the suite: `npm test` exited 1 before any test ran
+(`mkdtemp` refused, EPERM) and `node scripts/red-proofs.js` the same way. The
+shadow's `npm run lint` also failed on an unavailable registry lookup while its
+frontmatter check passed. Every finding below therefore rests on the channels'
+own targeted probes — which they executed and reported — and on this record's
+re-derivation, not on a suite run.
+
+### Findings, bands, criterion branch, disposition
+
+| # | Channels | Band | Criterion branch (§0.1) | Disposition and what changed |
+|---|----------|------|-------------------------|------------------------------|
+| **R1-A** | shadow F1 + plugin F2 — **CONVERGED** | A | 4 (operative content) → **HEAVY** | **FIX.** Both executed the predicate: with `HOME`/`XDG_CONFIG_HOME` replaced by `/nonexistent`, AC1 passed — so a builder with constant or empty config roots, or a fixed shared index path, satisfied AC1–AC4 and reddened all three mutations while silently dropping the user's global config and its hooks. AC1 now asserts the complete **key → VALUE** map (each carried key equal to the value Table U decides; `GIT_INDEX_FILE` equal to `<paths.state>/dream-index.<pid>.tmp` on exactly the three `private` shapes and absent from the six `unset` ones), with deterministic set/unset fixtures instead of "present on the host". **And a new AC5, the POSITIVE CONTROL both channels asked for:** a hook configured through the user's config FILES still fires on the pinned `update-ref`, while the same hook injected through `GIT_CONFIG_COUNT` does not. AC5 is the executable statement of O1's principle, and it is also R1-B's "prove the chosen boundary" |
+| **R1-B** | shadow F2 | A | 1 (**OWNER**) for the XDG half + 4 (**HEAVY**) for the rest | **FIX + PARK.** The reviewer is right on two facts and wrong on the frame. Facts: *"manual == scheduled"* was FALSE as written — `run-job` sets `HOME` from `paths.home` and carries no `XDG_CONFIG_HOME`; and the security checklist calling the launching environment *"the one untrusted input"* is what licensed reading `HOME=/attacker` as an injection. **Fixed:** `HOME` is now carried **as `paths.home`** (`src/core/paths.js:54`), the same code-derived value the scheduled child gets, so an environment that lies about `HOME` relocates the whole product — ADR-0025's half-sandbox contract, not a git channel of this WP; the security bullet is narrowed to what it means (untrusted **as a selector for the run's own git act** — repository, object store, index, config injection — not as the identity of the user the run acts for); `XDG_CONFIG_HOME` is **not carried**, which is what makes the manual==scheduled sentence true. **Parked as owner item O3** with its overrule cost, appended to `2026-09-05-owner-rulings-git-env-pinning-queue.md`. The frame the finding got wrong: a value the product already derives is not an injection channel merely because an environment variable participates in deriving it |
+| **R1-C** | shadow F3 + plugin F3 — **CONVERGED** | B | 5/6 → **LIGHT**, folded into this pass | **FIX.** U20's *"no cost"* was false in two descendant directions. **(i) MEASURED here:** the user's own `reference-transaction` hook — the very hook O1 preserves — fires on the pinned `update-ref` under the constructed environment and therefore runs under **that** environment, losing the launching shell's `SSH_AUTH_SOCK`, `GNUPGHOME`, `GPG_TTY` and askpass variables; its environment is dumped below. **(ii) NOT MEASURED, `git help partial-clone` as provenance:** a partial-clone vault's pinned read can trigger a lazy `git fetch` subprocess, which loses agent-only authentication. U20 now reads **ABSENT, with TWO NAMED COSTS**, each framed as the manual run becoming identical to the scheduled one, which has had neither. O1's principle now says hooks stay **honoured — they RUN** — but run under the run's environment |
+| **R1-D** | shadow F4 | C | 2 → **DESIGN** | **RE-DERIVED, not patched.** The provenance sentence promises the pinned argv for every MEASURED cell and one cell broke it: U10's second result used `update-index --refresh`, not the pinned `update-index --add --cacheinfo`. Per the criterion the response is a mechanical re-derivation of the whole table, not a row fix. One driver now issues **every** measured probe with the exact pinned argv, plus a chained replay of `commitNamedSet`'s own sequence; its full output is below and the Measured-reach column was rewritten **from** it. Result: U10's claim **survives with the correct argv** — `core.fsmonitor` fires on the pinned `update-index --add --cacheinfo` (2) and on `write-tree` (2) — and **five other rows changed**, three of them because the re-derivation found the old evidence too weak or too strong |
+| **R1-E** | plugin F1 | A | 4 (**HEAVY** on the claims) | **FIX of the claims; the behaviour is ROUTED.** Executed by the reviewer and reproduced here: from a subdirectory of a repository, `rev-parse --git-dir` and `rev-parse HEAD` both exit 0 and resolve the **ancestor**; only a ceiling at the parent makes them 128. So `assertGitRepo` does not establish "the vault is its own repository root" — U15's scope sentence was false — and O2's *"never a commit into the wrong repository"* was an overclaim, **withdrawn**: a nested non-repository vault is targeted at its ancestor by discovery, today, independent of the environment. U15 now states the true precondition; O2's bound becomes *"no inherited environment variable decides the repository; repository DISCOVERY from the vault directory is unchanged by this WP"*; the successor stub gains the nested-vault question as a named second item with the cost of each of its three answers. **No run-set `GIT_CEILING_DIRECTORIES` was added** — it is a hardening proposal with a user-visible cost (a vault legitimately adopted inside a larger repository would stop dreaming) and becomes text only on an explicit owner yes |
+
+**Round outcome: DESIGN** (branch 2 fired on R1-D), so a round 2 is owed on the
+revised tip regardless of the other four being LIGHT or HEAVY.
+
+**Housekeeping from the raws.** The shadow's `git diff --check` found trailing
+whitespace in this record; stripped in the same commit as these fixes.
+
+### R1-D — the re-derivation
+
+Three drivers, all in scratch, all run from files: `rederive-table-u.sh` (every
+probe, pinned argv, in isolation), `rederive-2-chained.sh` (the chained replay
+plus the `env -i` probes re-run with their log path carried), and
+`rederive-3-worktree.sh` (`U12` and `U15` on fresh repositories). Two harness
+defects the re-derivation found in ITS OWN first pass are recorded rather than
+silently corrected, because each produced a plausible-looking wrong number:
+
+- **Under `env -i`, the recording scripts inherited no log variable**, so they
+  could not write and every count read `0`. Part 1's `U2`, `U3` and `U20` blocks
+  are that defect, not a measurement; part 2 re-runs them with the log path
+  carried and they read `2`, `2` and `0` respectively.
+- **Part 1's later blocks ran against a vault whose HEAD earlier probes had
+  already advanced**, so `U12`'s `rev-parse HEAD -> NOT-VAULT` line compares
+  against a stale baseline. Part 3 re-runs `U12` on a fresh repository: every
+  shape identical with and without the variable.
+
+**And one defect that reached outside the scratch tree, disclosed rather than
+buried.** Part 2's first run carried a backtick pair inside a double-quoted
+`echo` argument — the words *a real*, then a backticked `git commit`, inside
+double quotes — which the shell executed as a command substitution in the
+driver's own working directory, the **main checkout**. It
+printed that checkout's status and exited without committing (`nothing added to
+commit`). Verified immediately afterwards and again after the re-run: `HEAD` is
+`4b629ec6`, the working tree carries the same single untracked directory it
+started with, and `git reflog -1` is unchanged — **nothing was written**. The
+line now uses single quotes. This is `codex-review.md`'s "run a gate from a
+script, not from an inline shell one-liner" arriving from the one direction that
+rule does not name: the quoting hazard inside a script, not the invocation of it.
+
+#### Part 1 — every probe with the pinned argv, in isolation
+
+```text
+ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p
+git: git version 2.50.1 (Apple Git-155)
+vault  HEAD=5efd883d83f6be6fc136d54cf79791d988f37752 tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f blob(a.txt)=98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2
+other  HEAD=4893f9794b3e3a03749dc6b4168b92f1815595e7 tree=da3faabc2fcb5ab8064a3910b9cb8c37719e37d8
+
+== U-BASELINE: the nine shapes under the ambient environment ==
+  [baseline]
+    (1) ls-tree            rc=0  100644 blob 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 a.txt
+    (2) hash-object -w     rc=0  sha=737cf08b4737f757ca4e8d4f824922499bcc3312  inVault=yes inOther=no
+    (6) read-tree          rc=0  [private index]
+    (3) update-index --add --cacheinfo  rc=0  [private index]
+    (7) write-tree         rc=0  tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f
+    (4) show HEAD:reports/warnings.md   rc=0  vault-warnings
+    (5) rev-parse HEAD     rc=0  5efd883d83f6be6fc136d54cf79791d988f37752  (VAULT)
+
+== U6 GIT_DIR=<other>/.git, all nine ==
+  [GIT_DIR=other]
+    (1) ls-tree            rc=128  fatal: not a tree object
+    (2) hash-object -w     rc=0  sha=a9d88c3f9bdbac069986d019bb99681b4e39ec6a  inVault=no inOther=yes
+    (6) read-tree          rc=128  [private index]
+    (3) update-index --add --cacheinfo  rc=0  [private index]
+    (7) write-tree         rc=128  tree=error: invalid object 100644 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 for 'a.txt'
+    (4) show HEAD:reports/warnings.md   rc=128  fatal: path 'reports/warnings.md' exists on disk, but not in 'HEAD'
+    (5) rev-parse HEAD     rc=0  4893f9794b3e3a03749dc6b4168b92f1815595e7  (NOT-VAULT)
+    (8) commit-tree        rc=128  new=fatal: 4b6ba41e22b4ece94115c6c7757ec76d53964a0f is not a valid object
+    (9) update-ref         rc=128
+    -> other HEAD 4893f9794b3e3a03749dc6b4168b92f1815595e7 -> 4893f9794b3e3a03749dc6b4168b92f1815595e7  moved=no
+    -> vault HEAD 5efd883d83f6be6fc136d54cf79791d988f37752 -> 5efd883d83f6be6fc136d54cf79791d988f37752  moved=no
+
+== U7 GIT_OBJECT_DIRECTORY=<other>/.git/objects (GIT_DIR unset), all nine ==
+  [GIT_OBJECT_DIRECTORY=other]
+    (1) ls-tree            rc=128  fatal: not a tree object
+    (2) hash-object -w     rc=0  sha=740f49c2aa8b09dbda89c18b1285c56956b93f38  inVault=no inOther=yes
+    (6) read-tree          rc=128  [private index]
+    (3) update-index --add --cacheinfo  rc=0  [private index]
+    (7) write-tree         rc=128  tree=error: invalid object 100644 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 for 'a.txt'
+    (4) show HEAD:reports/warnings.md   rc=128  fatal: path 'reports/warnings.md' exists on disk, but not in 'HEAD'
+    (5) rev-parse HEAD     rc=0  5efd883d83f6be6fc136d54cf79791d988f37752  (VAULT)
+
+== U8 GIT_COMMON_DIR=<other>/.git with GIT_DIR=<vault>/.git, all nine ==
+  [GIT_COMMON_DIR=other]
+    (1) ls-tree            rc=128  fatal: not a tree object
+    (2) hash-object -w     rc=0  sha=e95edc8aeb52d8966a91323beb184a7248de1e67  inVault=no inOther=yes
+    (6) read-tree          rc=128  [private index]
+    (3) update-index --add --cacheinfo  rc=0  [private index]
+    (7) write-tree         rc=128  tree=error: invalid object 100644 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 for 'a.txt'
+    (4) show HEAD:reports/warnings.md   rc=128  fatal: path 'reports/warnings.md' exists on disk, but not in 'HEAD'
+    (5) rev-parse HEAD     rc=0  5efd883d83f6be6fc136d54cf79791d988f37752  (VAULT)
+
+== U9 GIT_ALTERNATE_OBJECT_DIRECTORIES: pinned read-tree of a tree only in OTHER ==
+fatal: failed to unpack tree object da3faabc2fcb5ab8064a3910b9cb8c37719e37d8
+    without alternates rc=128
+    with alternates    rc=0  index holds: b.txt
+
+== U10 GIT_CONFIG_COUNT injecting core.fsmonitor, per PINNED shape ==
+  [GIT_CONFIG_COUNT] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=2
+    write-tree: fsmonitor-invocations=2
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== U10 GIT_CONFIG_COUNT injecting core.hooksPath, on the pinned update-ref ==
+    (9) update-ref rc=0  hook-invocations=2
+      REFTX HOOK RAN prepared
+      REFTX HOOK RAN committed
+
+== U11 GIT_CONFIG_GLOBAL selecting a config carrying core.fsmonitor, per PINNED shape ==
+  [GIT_CONFIG_GLOBAL] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=2
+    write-tree: fsmonitor-invocations=2
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== U2 HOME-resolved ~/.gitconfig carrying core.fsmonitor, per PINNED shape ==
+  [HOME=<fixture>] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=0
+    write-tree: fsmonitor-invocations=0
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== U3 XDG_CONFIG_HOME-resolved git/config carrying core.fsmonitor, per PINNED shape ==
+  [XDG_CONFIG_HOME=<fixture>, HOME has no .gitconfig] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=0
+    write-tree: fsmonitor-invocations=0
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== U12 GIT_WORK_TREE=<empty dir>, all nine ==
+  [GIT_WORK_TREE=empty]
+    (1) ls-tree            rc=0  100644 blob 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 a.txt
+    (2) hash-object -w     rc=0  sha=d6be993a29e2ac6d5d49506937c005415eb1cf8f  inVault=yes inOther=no
+    (6) read-tree          rc=0  [private index]
+    (3) update-index --add --cacheinfo  rc=0  [private index]
+    (7) write-tree         rc=0  tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f
+    (4) show HEAD:reports/warnings.md   rc=0  vault-warnings
+    (5) rev-parse HEAD     rc=0  78c4264b5d1c9f4ab59b90bb2c686743aa2c0299  (NOT-VAULT)
+
+== U13 inherited GIT_INDEX_FILE on the SIX unset-disposition shapes ==
+    (5) rev-parse    rc=0
+    (1) ls-tree      rc=0
+    (2) hash-object  rc=0
+    (4) show         rc=0
+    (8) commit-tree  rc=0
+    (9) update-ref   rc=0
+    pointed-at index bytes changed across all six: no
+
+== U14 GIT_NAMESPACE on the pinned update-ref ==
+    (9) update-ref rc=0
+    real HEAD b17032a687294ef630631e03ead27895bc57672f -> 06d2c1a057cff754b3dd8eaaf3a8b0fb196fe1cc  moved=YES
+    refs under refs/namespaces/: ''
+
+== U15 GIT_CEILING_DIRECTORIES, and R1-E's nested-directory case ==
+    vault is its own repo root:
+      ceiling=<vault>  rev-parse HEAD rc=0
+      ceiling=<parent> rev-parse HEAD rc=0
+    R1-E: a NON-repository directory INSIDE a repository (<vault>/nested/deep):
+      rev-parse --git-dir rc=0 out=/private/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/vault/.git
+      rev-parse HEAD      rc=0 out=06d2c1a057cff754b3dd8eaaf3a8b0fb196fe1cc  (the ANCESTOR repository)
+      with ceiling at the parent: rev-parse --git-dir rc=128 out=fatal: not a git repository (or any of the parent directories): .git
+
+== U16 GIT_EXEC_PATH: a planted git-hash-object, with a live-channel control ==
+    (2) hash-object -w --stdin -> 4f6c4ee9d928270b4304e3abcd8d81df3e740d12 ; planted-binary invocations=0
+    control: git wdprobe (non-builtin) -> planted-binary invocations=1
+      FAKE git-wdprobe RAN
+
+== U17 GIT_ATTR_* / filter drivers on the pinned show and hash-object ==
+    (4) show      rc=0 filter-invocations=0
+    (2) hash-object (no --path) rc=0 filter-invocations=0
+
+== U20 signing: does the pinned commit-tree sign from the user's config? ==
+    (8) commit-tree rc=0 out=0716fe7b588eaf73a23563b089a25c3787eb0f90  gpg-program invocations=0
+
+== R1-C(i) the user's own hook, fired by the pinned update-ref UNDER THE CONSTRUCTED ENV ==
+    (9) update-ref rc=0  (constructed env = PATH + HOME + the log path only)
+    the hook the USER configured through ~/.gitconfig DID fire: 2 time(s)
+    and this is the environment it ran under:
+      --- reference-transaction hook fired (prepared); its environment: ---
+      CPATH=/usr/local/include
+      GIT_EXEC_PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core
+      GIT_PREFIX=
+      HOME=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/uhome
+      HOOKENV_LOG=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/hookenv.log
+      LIBRARY_PATH=/usr/local/lib
+      MANPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/share/man:/Library/Developer/CommandLineTools/usr/share/man:/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/share/man:
+      PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core:/usr/bin
+      PWD=/private/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/vault
+      SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+      SHLVL=1
+      _=/usr/bin/env
+      __CF_USER_TEXT_ENCODING=0x1F5:0x0:0x0
+      --- end hook env ---
+      --- reference-transaction hook fired (committed); its environment: ---
+      CPATH=/usr/local/include
+      GIT_EXEC_PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core
+      GIT_PREFIX=
+      HOME=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/uhome
+      HOOKENV_LOG=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/hookenv.log
+      LIBRARY_PATH=/usr/local/lib
+      MANPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/share/man:/Library/Developer/CommandLineTools/usr/share/man:/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/share/man:
+      PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core:/usr/bin
+      PWD=/private/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p/vault
+      SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+      SHLVL=1
+      _=/usr/bin/env
+      __CF_USER_TEXT_ENCODING=0x1F5:0x0:0x0
+      --- end hook env ---
+
+ROOT kept at /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.DcvsiXWE3p
+```
+
+#### Part 2 — the chained replay, and the `env -i` probes with their log path carried
+
+```text
+ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.AiBKGLylVS
+git: git version 2.50.1 (Apple Git-155)
+
+== A0 the chain under the ambient environment (control) ==
+  [control]  vault=765472c4bc07e27ab5cfa8597df5c9210e2ddedf other=aace11f2667d99b03e4d70f0b6a5b52c183356f8
+    (5) rev-parse HEAD                  rc=0 -> 765472c4bc07e27ab5cfa8597df5c9210e2ddedf  (VAULT)
+    (6) read-tree <own head>            rc=0
+    (1) ls-tree <own head> -- a.txt     rc=0 mode=100644
+    (2) hash-object -w --stdin          rc=0 sha=ced0d24043540233faea11b8d511d4b4bc63f235  inVault=yes inOther=no
+    (3) update-index --add --cacheinfo  rc=0
+    (7) write-tree                      rc=0 tree=ce270befa9aa56fbae2ee0361e1d2991a070f7e8
+    (8) commit-tree <own tree> -p <own head>  rc=0 commit=a2af3b93eb7b88735add1adc6ba64dbb739c012a
+    (9) update-ref -m … HEAD <new> <old> rc=0
+    => vault HEAD moved: YES   other HEAD moved: no
+
+== A1 the chain under an inherited GIT_DIR=<other>/.git ==
+  [GIT_DIR=other]  vault=0f4b655c3ae426d972f3691d696e5155c5f85118 other=8aa6292e5444032622f1fd427e17f858631cacad
+    (5) rev-parse HEAD                  rc=0 -> 8aa6292e5444032622f1fd427e17f858631cacad  (OTHER)
+    (6) read-tree <own head>            rc=0
+    (1) ls-tree <own head> -- a.txt     rc=0 mode=100644
+    (2) hash-object -w --stdin          rc=0 sha=ced0d24043540233faea11b8d511d4b4bc63f235  inVault=no inOther=yes
+    (3) update-index --add --cacheinfo  rc=0
+    (7) write-tree                      rc=0 tree=f3d572684438883912118b230e40b248ceed7410
+    (8) commit-tree <own tree> -p <own head>  rc=0 commit=8c1ac24232d94433f5bec29a8fbbd92d4b275708
+    (9) update-ref -m … HEAD <new> <old> rc=0
+    => vault HEAD moved: no   other HEAD moved: YES
+
+== A2 the chain under an inherited GIT_OBJECT_DIRECTORY=<other>/.git/objects ==
+  [GIT_OBJECT_DIRECTORY=other]  vault=2acae50dad28eb5c1f79608c5aca94167467a383 other=325992cd1d3c0764b4e5b9a9d5c59f7718a078c6
+    (5) rev-parse HEAD                  rc=0 -> 2acae50dad28eb5c1f79608c5aca94167467a383  (VAULT)
+    (6) read-tree <own head>            rc=128
+    ABORTS HERE — the run stops before it writes anything
+
+== A3 the chain under GIT_DIR=<vault>/.git + GIT_COMMON_DIR=<other>/.git ==
+  [GIT_COMMON_DIR=other]  vault=a70081b86452fe53c4dd11ca3a4e890f381fada3 other=3cf81e26eca0ef7b13caf6678ce465be0718008d
+    (5) rev-parse HEAD                  rc=0 -> a70081b86452fe53c4dd11ca3a4e890f381fada3  (VAULT)
+    (6) read-tree <own head>            rc=128
+    ABORTS HERE — the run stops before it writes anything
+
+== B1 U2 — HOME-resolved ~/.gitconfig carrying core.fsmonitor (log path carried) ==
+  [env -i PATH,HOME,FSM_LOG] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=2
+    write-tree: fsmonitor-invocations=2
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== B2 U3 — XDG_CONFIG_HOME-resolved git/config, HOME holding no .gitconfig ==
+  [env -i PATH,HOME(empty),XDG_CONFIG_HOME,FSM_LOG] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=2
+    write-tree: fsmonitor-invocations=2
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== B3 U3 control — the SAME XDG config with XDG_CONFIG_HOME NOT carried ==
+  [env -i PATH,HOME(empty),FSM_LOG] which pinned shape RUNS core.fsmonitor?
+    ls-tree: fsmonitor-invocations=0
+    hash-object: fsmonitor-invocations=0
+    read-tree: fsmonitor-invocations=0
+    update-index: fsmonitor-invocations=0
+    write-tree: fsmonitor-invocations=0
+    show: fsmonitor-invocations=0
+    rev-parse: fsmonitor-invocations=0
+
+== B4 U20 signing — the pinned commit-tree under a HOME whose config sets commit.gpgsign (log path carried) ==
+    (8) commit-tree rc=0 out=553b8d6f5d79d728ffd33af3b1c2527c08897f65
+    gpg-program invocations=0
+    control - the same config used by a real "git commit" instead of the pinned plumbing:
+    after a real git-commit under the same HOME: gpg-program invocations=1
+      FAKEGPG RAN --status-fd=2 -bsau t <t@e>
+
+ROOT kept at /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.AiBKGLylVS
+```
+
+#### Part 3 — `U12` and `U15` on fresh repositories
+
+```text
+ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.O7eCHnn7Xi  git: git version 2.50.1 (Apple Git-155)
+vault HEAD=5799509701d9e5f6a6076ee3e940535b9ac2764e tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f
+
+== U12 GIT_WORK_TREE=<empty dir>, all nine shapes, FRESH repo, nothing run before ==
+  [baseline]
+    (1) ls-tree      rc=0 100644 blob 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 a.txt
+    (2) hash-object  rc=0 sha=4f6c4ee9d928270b4304e3abcd8d81df3e740d12
+    (6) read-tree    rc=0
+    (3) update-index rc=0
+    (7) write-tree   rc=0 tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f
+    (4) show         rc=0 vault-warnings
+    (5) rev-parse    rc=0 5799509701d9e5f6a6076ee3e940535b9ac2764e (VAULT)
+    (8) commit-tree  rc=0 3c45323b5eb7428c1d0fe6e00833f7c8fc2f28f4
+    (9) update-ref   rc=0  vault HEAD moved: YES
+  [GIT_WORK_TREE]
+    (1) ls-tree      rc=0 100644 blob 98dd3ab8e7fa1a16d516ee4636ce96d9206f29a2 a.txt
+    (2) hash-object  rc=0 sha=4f6c4ee9d928270b4304e3abcd8d81df3e740d12
+    (6) read-tree    rc=0
+    (3) update-index rc=0
+    (7) write-tree   rc=0 tree=4b6ba41e22b4ece94115c6c7757ec76d53964a0f
+    (4) show         rc=0 vault-warnings
+    (5) rev-parse    rc=0 3c45323b5eb7428c1d0fe6e00833f7c8fc2f28f4 (NOT-VAULT)
+    (8) commit-tree  rc=0 603ed857087a0fe0556938cac69eec2357d2857e
+    (9) update-ref   rc=0  vault HEAD moved: YES
+
+== U15 GIT_CEILING_DIRECTORIES on a vault that IS its own repository root ==
+    no ceiling        rev-parse HEAD rc=0
+    ceiling=<vault>   rev-parse HEAD rc=0
+    ceiling=<parent>  rev-parse HEAD rc=0
+ROOT kept at /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.O7eCHnn7Xi
+```
+
+#### R1-C(i) — the user's hook fires, and this is the environment it runs under
+
+The tail of part 1, quoted again because it is the measurement R1-C rests on:
+the hook the user configured through their own `~/.gitconfig` fired twice on the
+pinned `update-ref` under an environment of `PATH`, `HOME` and the log path
+only — so **honoured** is true — and its environment contains none of
+`SSH_AUTH_SOCK`, `GNUPGHOME`, `GPG_TTY` or any askpass variable. What it does
+contain beyond the constructed map is git's own additions (`GIT_EXEC_PATH`,
+`GIT_PREFIX`, `PWD`, a `PATH` prefixed with `git-core`) and four variables Apple's
+`/usr/bin/git` shim injects (`CPATH`, `LIBRARY_PATH`, `MANPATH`, `SDKROOT`) —
+neither of which this WP controls, and both stated so the dump is not read as
+the constructed map alone.
+
+#### Per-row result of the re-derivation
+
+| Row | Result | What moved |
+|-----|--------|-----------|
+| U1 `PATH` | unchanged | rests on a code reading of `resolveExecutable`/`verifyPin`, not on a git probe |
+| U2 `HOME` | **CHANGED** | probe replaced by the pinned argv (a `~/.gitconfig` `core.fsmonitor` runs on `update-index --add --cacheinfo` and `write-tree`, 2 each, and on no other shape) **and** the disposition now pins the VALUE to `paths.home` (R1-B) |
+| U3 `XDG_CONFIG_HOME` | **CHANGED** | CARRIED → **NOT CARRIED** with a named cost (R1-B, owner item O3); measured in both directions, including the not-carried control at 0 |
+| U4 win32 | **CHANGED** | `USERPROFILE` moves to a SET value (`paths.home`, mirroring `run-job.js:155`); `HOMEDRIVE`/`HOMEPATH` dropped — they would resolve the config against something other than the bound home |
+| U5 `GIT_INDEX_FILE` (ours) | **CHANGED** | the exact value is now part of the row and of AC1, not merely the key |
+| U6 `GIT_DIR` | **CHANGED** | the isolated four-shape claim is **withdrawn** — fed the vault's own object names, five shapes exit 128. The chained replay is the measurement: `rev-parse HEAD` returns the other repository's head and every following shape succeeds against it, ending with **the other repository's HEAD moved and the vault's unmoved** |
+| U7 `GIT_OBJECT_DIRECTORY` | **CHANGED** | two facts now: isolated, the pinned `hash-object -w --stdin` writes into the other object store; chained, `read-tree <own head>` exits 128 first and the run aborts before writing |
+| U8 `GIT_COMMON_DIR` | **CHANGED** | same two facts as U7 |
+| U9 alternates | unchanged | re-reproduced with the pinned `read-tree «tree-ish»`: 128 without, 0 with, and the other repository's path enters the private index |
+| U10 `GIT_CONFIG_*_n` | **CHANGED (evidence), conclusion stands** | the pinned `update-index --add --cacheinfo` **does** run `core.fsmonitor` (2), as does `write-tree` (2); the five read shapes do not. The `--refresh` argv the finding named is gone from the record |
+| U11 `GIT_CONFIG_GLOBAL` | **CHANGED** | widened, correctly: the same two-shape profile as U10, not `write-tree` alone |
+| U12 `GIT_WORK_TREE` | **CHANGED (evidence)** | re-run on a fresh repository — all nine shapes identical with and without it; the earlier `NOT-VAULT` line is disclosed as a stale-baseline artifact |
+| U13 inherited `GIT_INDEX_FILE` | unchanged | the six `unset` shapes leave the pointed-at index byte-identical |
+| U14 `GIT_NAMESPACE` | unchanged | the pinned `update-ref … HEAD` moved the repository's real head; no ref under `refs/namespaces/` |
+| U15 `GIT_CEILING_DIRECTORIES` | **CHANGED** | no reach for a root vault (three ceilings, all rc 0), and the scope sentence is corrected for R1-E: discovery from `-C <vault>` resolves an ancestor for a nested non-repository directory |
+| U16 `GIT_EXEC_PATH` | unchanged | planted `git-hash-object` not executed; planted `git-wdprobe` executed — the live-channel control |
+| U17 `GIT_ATTR_*` | unchanged | no filter driver ran for the pinned `show` or `hash-object -w --stdin` |
+| U18 / U19 | unchanged | NOT MEASURED, provenance stated |
+| U20 transport/signing | **CHANGED** | signing re-measured with the pinned `commit-tree` **and a live-config control** (a real `git commit` under the same home invokes the program once, so the zero is about `commit-tree`); two named costs added (R1-C) |
+| U21 closure row | unchanged | the mechanism row |
+
+Twelve of twenty-one rows moved. **Nothing in the table now rests on a probe
+whose argv is not one of the nine.**
+
+### Revision — the tree after R1-A … R1-E
+
+The spec grew from **581 to 680 lines** (`wc -l`): AC1's key→value map, the new
+AC5 positive control, O3, O1's two rewritten paragraphs, O2's withdrawn bound
+and twelve rewritten Table U cells. It still touches **8 files** — the seven
+Deliverables plus the spec itself — the README bound. `coherence.js` on the revised spec, rc 0 —
+note the acceptance criteria now number **nine** and every one of the 19 distinct
+`file:line` citations resolves, including the three added this round
+(`src/core/paths.js:54`, `src/cli/run-job.js:47-50`, `:155`):
+
+```text
+spec line count                                = 681
+Table U rows                                   = 21  U1,U2,U3,U4,U5,U6,U7,U8,U9,U10,U11,U12,U13,U14,U15,U16,U17,U18,U19,U20,U21
+U-ids mentioned anywhere but absent from table = none
+U-rows never referenced outside their own row  = U8,U9,U12,U14,U15,U16,U17,U18,U19 (informational)
+acceptance criteria                            = 9  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8,AC9
+verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
+deliverable rows                               = 7
+   create src/core/dream/git-env.js  exists=false 
+   modify src/cli/dream.js  exists=true 
+   modify tests/unit/dream-pipeline.test.js  exists=true 
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true 
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false 
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true 
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true 
+files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
+file:line citations in the spec                = 23
+   `src/core/paths.js:54`
+      FIRST:   const home = env.HOME || os.homedir();
+      LAST :   const home = env.HOME || os.homedir();
+   `src/cli/dream.js:587`
+      FIRST:   assertGitRepo(vaultDir);
+      LAST :   assertGitRepo(vaultDir);
+   `src/core/dream/validate.js:64-81`
+      FIRST: function git(vaultDir, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:166-175`
+      FIRST: function gitIn(spawnGit, cwd, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:178-186`
+      FIRST: function spawnGitPinned(o) {
+      LAST : }
+   `src/core/exec-identity.js:553`
+      FIRST: function spawnPinnedSync(name, paths, opts = {}) {
+      LAST : function spawnPinnedSync(name, paths, opts = {}) {
+   `src/cli/dream.js:562`
+      FIRST:   const spawnGit = opts.spawnGit || spawnGitPinned;
+      LAST :   const spawnGit = opts.spawnGit || spawnGitPinned;
+   `src/cli/dream.js:226-231`
+      FIRST:   const tmpIndex = path.join(o.stateDir, `dream-index.${process.pid}.tmp`);
+      LAST :   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
+   `src/cli/dream.js:1007`
+      FIRST:       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+      LAST :       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+   `tests/red-proofs/dream-pipeline.proofs.json:10-11`
+      FIRST:       "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
+      LAST :       "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+   `src/cli/run-job.js:150`
+      FIRST: function buildCleanEnv(paths, name, platform = process.platform) {
+      LAST : function buildCleanEnv(paths, name, platform = process.platform) {
+   `src/cli/dream.js:179`
+      FIRST:   return spawnPinnedSync('git', getPaths(), {
+      LAST :   return spawnPinnedSync('git', getPaths(), {
+   `src/core/dream/promote.js:387-418`
+      FIRST: function constructMergeEnv(root) {
+      LAST : }
+   `src/core/exec-identity.js:93-118`
+      FIRST: function resolveExecutable(name, env, platform) {
+      LAST : }
+   `src/cli/run-job.js:47-50`
+      FIRST: const ENV_PASSTHROUGH = [
+      LAST : ];
+   `src/cli/run-job.js:155`
+      FIRST:       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+      LAST :       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+   `src/cli/run-job.js:58-78`
+      FIRST: const WIN_ENV_PASSTHROUGH = [
+      LAST : ];
+   `docs/specs/done/WP-criterion-red-harness.md:95-96`
+      FIRST:   builds the private index environment at exactly one site — the `indexEnv`
+      LAST :   constant, `{ ...process.env, GIT_INDEX_FILE: tmpIndex }`. This is stated as an
+   `docs/specs/done/WP-audit-c-close-disposition.md:130`
+      FIRST:   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+      LAST :   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+RED ids named in the Exact-contracts table     = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+RED ids in V4's `want`  array                    = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+template sections absent                       = none
+
+COHERENCE: no failures
+```
+
+`npm run lint` on the revision commit's tree:
+
+```text
+$ npm run lint
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 651 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+--- frontmatter check ---
+frontmatter check passed: 269 spec(s), 4 agent(s)
+
+lint passed
+```
+
 ## External rounds
 
-Round 1 runs on this revised tip. Appended by the orchestrator below this line.
+Round 2 is owed (DESIGN). Appended by the orchestrator below this line.

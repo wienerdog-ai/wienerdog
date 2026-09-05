@@ -46,8 +46,31 @@ verdict is the launching environment's, not the vault's. With
 `WP-dream-git-env-pinning` landed the consequence is bounded: the pipeline's own
 calls no longer follow the redirection, so a wrongly-passing guard costs a late,
 loud failure at `rev-parse HEAD` in the vault instead of the early, friendly
-*"vault is not a git repository — run `npx wienerdog init` first"*. It is never a
-commit into the wrong repository.
+*"vault is not a git repository — run `npx wienerdog init` first"*.
+
+**A SECOND ITEM, and it is NOT an environment question at all** — added
+2026-09-06 by `WP-dream-git-env-pinning`'s round-1 design gate, which measured
+it. **`assertGitRepo` does not establish that the vault is a repository; it
+establishes that the vault is INSIDE one.** From a directory that is not a
+repository but lies within one, `git -C <dir> rev-parse --git-dir` and
+`rev-parse HEAD` both exit **0** and resolve the **ancestor** repository; only a
+`GIT_CEILING_DIRECTORIES` at that directory's parent makes them 128. So a vault
+directory nested inside a larger repository is targeted at that ancestor by
+DISCOVERY — today, with no environment variable involved and unchanged by the
+pin. The question this WP must answer, with the cost of each answer:
+
+- **Require `rev-parse --show-toplevel == vault`.** Cost: a vault legitimately
+  adopted *inside* a larger repository — which `adopt` accepts today — stops
+  dreaming, loudly. That is a user-visible product change and therefore an owner
+  decision, not an implementer's.
+- **Set `GIT_CEILING_DIRECTORIES` for the run's own calls.** Same user-visible
+  cost by a different route, plus it puts a `GIT_*` key back into the
+  constructed environment that Table U row U15 currently keeps out.
+- **Accept and name it.** Cost: the residual stays, stated in `assertGitRepo`'s
+  own contract rather than implied by what the guard happens to check.
+
+`WP-dream-git-env-pinning` deliberately took none of these: a hardening proposal
+with a user-visible cost becomes text only on an explicit owner yes.
 
 ## What done means
 
@@ -67,7 +90,12 @@ commit into the wrong repository.
    reddens an assertion that `assertGitRepo` **refuses** a non-repository vault
    while `GIT_DIR` is exported to a real repository elsewhere. The proof is what
    makes item 1 checkable; an existence grep over `buildGitEnv` is not.
-4. `WP-dream-git-env-pinning`'s owner item O2 and its "Out of scope" bullet are
+4. The nested-vault item above is answered — by an owner ruling if the answer
+   is either of the first two, because both stop a currently-working vault from
+   dreaming. Its verification is the measured pair: a vault that IS a repository
+   root still dreams, and a non-repository directory inside a repository gets
+   whatever the ruling says it gets, asserted rather than inherited.
+5. `WP-dream-git-env-pinning`'s owner item O2 and its "Out of scope" bullet are
    left as the record of why this was a successor rather than a fold-in; neither
    is rewritten.
 
@@ -75,5 +103,6 @@ commit into the wrong repository.
 
 `src/core/dream/validate.js`, `tests/unit/dream-validate.test.js`, one new
 `tests/red-proofs/*.proofs.json`. Roughly three files — an S — which is exactly
-the split that kept `WP-dream-git-env-pinning` inside
-`docs/specs/README.md`'s ≤8-files sizing heuristic.
+the split that kept `WP-dream-git-env-pinning` inside `docs/specs/README.md`'s
+≤8-files sizing heuristic. The nested-vault item adds no file if the answer is
+"accept and name it", and one contract change to `assertGitRepo` otherwise.

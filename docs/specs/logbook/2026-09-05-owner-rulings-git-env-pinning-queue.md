@@ -78,3 +78,33 @@ before reversing either.
 produced no finding that argues against the recommendation.** The six round-zero
 findings are all machinery or citations and are recorded, with what changed, in
 `2026-09-05-git-env-pinning-design-gate-rounds.md`.
+
+### Appended 2026-09-06 after design-gate round 1 — one PARKED item (escalation (ii))
+
+Round 1's hermetic shadow (finding F2, band A) argued that carrying `HOME` and
+`XDG_CONFIG_HOME` verbatim from the launching shell preserves an arbitrary-code
+channel, since a selected config may carry `core.fsmonitor`. Two of its facts
+were right and were fixed rather than argued with: `HOME` is now carried **as
+`paths.home`**, the run's bound home, and `XDG_CONFIG_HOME` is **not carried**.
+The second half is a product call, so it is parked here.
+
+**O3 — `XDG_CONFIG_HOME` is NOT carried by the run's constructed git
+environment** (the third item of this queue, numbered to continue the two
+above). Recommendation adopted under the standing process above.
+*Why:* `run-job`'s `ENV_PASSTHROUGH` does not carry it either, so dropping it
+is exactly what makes *"a manual dream behaves like the scheduled one"* a
+true sentence rather than an aspiration — and carrying it in the manual path
+alone would recreate the divergence this WP exists to remove. *The cost, and
+it is real:* a user whose global git config is relocated **only** by
+`XDG_CONFIG_HOME` does not have it applied to the run's own git calls, in
+either mode. That is already the scheduled run's behaviour today. A
+`HOME`-resolved `~/.gitconfig` still applies, and this is measured in both
+directions (carried → a `core.fsmonitor` in that config runs during the
+pinned `update-index` and `write-tree`; not carried → it runs during none of
+the nine). *Overrule cost:* the reversal is **"carry it in BOTH surfaces"**,
+never in this one alone — `src/cli/run-job.js` joins the Deliverables with a
+new `ENV_PASSTHROUGH` entry, Table U row U3 flips to CARRIED, AC1's key→value
+map and its unset fixture change, and the ADR amendment and the design-gate
+record follow. The spec's `## Dispatch precondition — owner items` carries
+this text; it is cited here, not restated, for the reason the previous
+append gives.
