@@ -1,0 +1,77 @@
+# Design gate raw — round 1 — Codex plugin adversarial review — WP-audit-e-ledger-parser-corpus
+# tip reviewed: 87b51216786bc1f784fe906d2d74c683689ec85b ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a0719e-6208-7dd1-b0d5-c27a69563912).
+[codex] Turn started (01a0719e-630a-7683-bac3-5d759bd7906e).
+[codex] Assistant message captured: I’ll drive the shipped gates against the corpus and additional edge cases, check the mutation...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff --stat main...HEAD; cat CL...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff --stat main...HEAD; cat CL... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '110,620p' src/core/dream/validate.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '110,620p' src/core/dream/validate.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "cat src/core/frontmatter.js; sed -n '1,240p' tests/unit/dream-validate.test.js;...
+[codex] Command completed: /bin/zsh -lc "cat src/core/frontmatter.js; sed -n '1,240p' tests/unit/dream-validate.test.js;... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '378,612p' src/core/dream/validate.js; rg -n 'function makeGates|module....
+[codex] Command completed: /bin/zsh -lc "sed -n '378,612p' src/core/dream/validate.js; rg -n 'function makeGates|module.... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'parseLedgerEntries' src tests scripts --glob '*.js' --glob '"'!src/gws/*...
+[codex] Command failed: /bin/zsh -lc "rg -n 'parseLedgerEntries' src tests scripts --glob '*.js' --glob '"'!src/gws/*... (exit 1)
+[codex] Assistant message captured: The parser has exactly three call sites, as the spec claims. The test sweep found three affec...
+[codex] Running command: /bin/zsh -lc "sed -n '1259,1285p' src/core/dream/validate.js; sed -n '1498,1535p' src/core/dr...
+[codex] Command completed: /bin/zsh -lc "sed -n '1259,1285p' src/core/dream/validate.js; sed -n '1498,1535p' src/core/dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg --files tests/red-proofs; sed -n '1630,1685p' scripts/red-proofs.js; rg -n '...
+[codex] Command completed: /bin/zsh -lc "rg --files tests/red-proofs; sed -n '1630,1685p' scripts/red-proofs.js; rg -n '... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '90,108p' tests/unit/frontmatter.test.js; cat tests/red-proofs/dot-segme...
+[codex] Command completed: /bin/zsh -lc "sed -n '90,108p' tests/unit/frontmatter.test.js; cat tests/red-proofs/dot-segme... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo...
+[codex] Assistant message captured: I found a contract hole worth testing further: U+2028 inside a trust value causes the shipped...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo...
+[codex] Running command: /bin/zsh -lc "cat tests/unit/frontmatter.test.js; rg -n '\\.untrusted|parseLedgerEntries|pars...
+[codex] Command completed: /bin/zsh -lc "cat tests/unit/frontmatter.test.js; rg -n '\\.untrusted|parseLedgerEntries|pars... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"); for (const n of fs.readdirSync(\"tests/...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"); for (const n of fs.readdirSync(\"tests/... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --test tests/unit/frontmatter.test.js'
+[codex] Command completed: /bin/zsh -lc 'node --test tests/unit/frontmatter.test.js' (exit 0)
+[codex] Assistant message captured: The Unicode baseline test confirms the hole: the proposed changes still allow it to become `f...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\"'\"'node:fs'\"'\"'),Module=require('\"'\"'node:mo... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git rev-parse main; git diff --exit-code 8c52808f HEAD -- src tests scripts'
+[codex] Command completed: /bin/zsh -lc 'git rev-parse main; git diff --exit-code 8c52808f HEAD -- src tests scripts' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet: the corpus misses a present-...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet: the corpus misses a present-but-unreadable baseline value that bypasses raise-only, and LPC-B's declared reach omits C28.
+
+Executed:
+- git status --porcelain before/after; git rev-parse HEAD/main; git diff --stat main...HEAD; git diff --exit-code 8c52808f HEAD -- src tests scripts: exit 0. Correct commits; no code diff; status remained exactly "?? node_modules\n".
+- Read-only rg/cat/sed/wc inspections of the specified sources, tests, declarations and documents: successful except one mistyped sed expression and one nonexistent guessed proof filename, both exit 1; corrected inspections succeeded.
+- Initial node heredoc: exit 1 because the read-only sandbox prohibits its temporary file. Retried with safely quoted node -e.
+- node -e edge-case driver: exit 0; exercised 32 scalar variants, hostile headings, duplicate variants and all 16 baseline/candidate trust-state combinations.
+- node -e corpus/mutation driver: exit 0; reproduced all 30 rows across 71 path/sample observations and independently exercised six non-vacuous mutations against an in-memory model of the ruled changes.
+- node -e counterexample/control driver: exit 0; reproduced the Unicode bypass and verified a scalar-capture control closes it without changing those 71 observations.
+- node --test tests/unit/frontmatter.test.js: exit 0, 13 passed.
+- node -e existing-proof-anchor/status checks: exit 0; all 26 validate.js mutation anchors still match, status unchanged.
+Full-suite, lint and red-proofs results were not independently rerun.
+
+Additional shipped verdicts: FALSE, TrUe, fAlSe, unmatched/single quotes, tab comments, on/off/0/~/null, YAML tags/containers, fullwidth false and zero-width characters all keep/authorize. Space/tab/NBSP/BOM padding around false also keeps/authorizes. Embedded U+2028/U+2029/CR values refuse as candidates and authorizers but permit baseline-to-false lowering. constructor and prototype keep/authorize; hasOwnProperty and toString refuse. Trailing-space/tab duplicate headings collapse and authorize today; case-different headings remain distinct and uppercase headings fail schema.
+
+Structural checks found exactly three parser call sites, no fourth read, sound absent-baseline handling, and no missing deliverable. The additional invocation-window trust comparison is downstream of candidate schema validation. ADR insertion and implementation-only timing are unambiguous. Null-prototype conversion affects five assertions in three test identities, including the nonempty {k:'v'} comparison.
+
+Findings:
+- [high] A: A Unicode-containing baseline value bypasses INVALID raise-only (docs/specs/WP-audit-e-ledger-parser-corpus.md:335-337)
+  Missing corpus row: baseline `- derived_from_untrusted: fal\u2028se` (an actual U+2028), candidate `false`. Both the shipped gate and an in-memory implementation of the ruled changes return null (keep); the resulting ledger then authorizes a body revision. The parser splits only on LF, but its bullet regex uses `.*`, which cannot consume U+2028. It therefore skips the present bullet and retains null instead of INVALID. A1's value reader never runs, and A4 deliberately exempts null. U+2029 and embedded CR reproduce the same hole. Existing C21/C23 cannot distinguish this incorrect implementation.
+  Recommendation: Add baseline-to-false rows containing embedded U+2028/U+2029, requiring the exact raise-only refusal. Require present malformed scalar values to reach INVALID rather than disappear as absent. Preserve C23's genuinely absent-bullet behavior; use the existing corpus and gates.
+- [medium] B: LPC-B also changes C28's required exact verdicts (docs/specs/WP-audit-e-ledger-parser-corpus.md:355-363)
+  Reverting only the collector changes C28's __proto__, constructor and toString heading verdicts to repeated-heading refusals; constructor's authorization verdict changes too. Table D lists only C24–C27. With the mandated exact-verdict assertions and a separate C28 identity, evaluateRed rejects the undeclared failure downstream. Checking only C28's disagreement count hides it: measured counts are zero for both correct code and LPC-B because constructor becomes rejected on both paths.
+  Recommendation: Restate LPC-B's measured reach to include C28 and its resulting test identities. Preserve exact expected verdicts for C28's samples rather than asserting agreement alone; no additional proof or gate is needed.
+
+Next steps:
+- Routed scope objections: none. The 488-line size excess remains the already-recorded F6 residual; this review proposes no new gate machinery.
+- Add the Unicode baseline rows and correct LPC-B's reach within the existing tables before dispatch.
+rc=0
+PORCELAIN: identical
