@@ -307,7 +307,11 @@ test('broker-verbs: [AUD-D1] create_draft_to_self addresses the server-resolved 
   // An argument object carrying ANY address key is schema-rejected, zero calls.
   for (const extra of [{ to: 'evil@x.y' }, { cc: 'evil@x.y' }, { bcc: 'evil@x.y' }]) {
     const { services: s2, registry: r2 } = makeRegistry();
-    await assert.rejects(() => r2.callTool('create_draft_to_self', { subject: 's', body: 'b', ...extra }));
+    await assert.rejects(
+      () => r2.callTool('create_draft_to_self', { subject: 's', body: 'b', ...extra }),
+      (err) => /unexpected field/i.test(err.message),
+      `[AUD-D1] a supplied ${Object.keys(extra)[0]} is schema-rejected`
+    );
     assert.equal(s2.calls.length, 0, `[AUD-D1] zero calls with a supplied ${Object.keys(extra)[0]}`);
   }
 
@@ -601,6 +605,37 @@ test("broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subjec
       '[AUD-D4] astral To: refused at step 4 (UTF-16 .length over 320), not step 7'
     );
     assert.equal(services.called('gmail.users.drafts.create').length, 0, '[AUD-D4] astral To: zero drafts.create calls');
+  }
+
+  // To — the OTHER half of criterion 5's UTF-16-.length branch: step 4 must
+  // ACCEPT at its own boundary, and the resulting To line must still be
+  // ≤998 octets. A grammar-accepted address of exactly 320 UTF-16 code
+  // units, built from 3-octet BMP filler characters (U+3042, via
+  // String.fromCharCode — never a literal glyph in source) at every
+  // position the grammar leaves free, is the maximum-density witness: 318
+  // filler units (the "@" and "." separators must stay 1-octet ASCII) give
+  // an address of 956 octets and a To line of 960 — comfortably within the
+  // "up to 4 + 320*3 = 964 octets" ceiling a fully-3-octet 320-unit value
+  // would reach, and far under the 998-octet bound.
+  {
+    const filler = String.fromCharCode(0x3042); // 1 UTF-16 code unit, 3 UTF-8 octets
+    const local = filler.repeat(106);
+    const label1 = filler.repeat(106);
+    const label2 = filler.repeat(106);
+    const addr320 = `${local}@${label1}.${label2}`; // 320 UTF-16 code units total
+    assert.equal(addr320.length, 320, 'witness precondition: exactly 320 UTF-16 code units');
+    const services = fakeReplyServices({ headers: hdrs({ From: addr320 }) });
+    const { registry } = makeRegistry({ services });
+    await registry.callTool('create_reply_draft', { id: 'm1', body: 'b' });
+    const created = services.called('gmail.users.drafts.create');
+    assert.equal(created.length, 1, '[AUD-D4] To: a 320-UTF-16-unit address is ACCEPTED at step 4');
+    const mime = Buffer.from(created[0].params.requestBody.message.raw, 'base64url').toString('utf8');
+    const toLine = mime.split('\r\n')[0];
+    assert.match(toLine, /^To: /, '[AUD-D4] To: the recorded MIME opens with the To line');
+    assert.ok(
+      Buffer.byteLength(toLine, 'utf8') <= 998,
+      `[AUD-D4] To: the emitted line is within the 998-octet bound (measured ${Buffer.byteLength(toLine, 'utf8')})`
+    );
   }
 });
 

@@ -73,20 +73,16 @@
       "id": "reply-grammar-dropped",
       "wp": "WP-audit-d-code-derived-recipients",
       "criterion": "4",
-      "why": "step 3's grammar is what keeps a non-mailbox value (an address literal, a dotless domain, two @ signs, a quoted local part) from becoming a drafted recipient; accepting the whole trimmed value verbatim with no grammar check at all lets every one of [AUD-D3]'s step-3 fixtures draft instead of refuse",
+      "why": "step 3's grammar's \"no match → refuse\" branch is what keeps a non-mailbox value (an address literal, a dotless domain, two @ signs, a quoted local part) from becoming a drafted recipient; removing only that branch and keeping the capture when the grammar DOES match (erratum 2 — the unconditional-whole-value form necessarily also reddens [AUD-D2], measured 10/13 rows moved, which the table's own two-sided discipline forbids) lets every one of [AUD-D3]'s twelve step-3 fixtures draft instead of refuse, while every [AUD-D2] accepted row still matches the grammar and is byte-unmoved — measured 0/13 [AUD-D2] rows moved, 12/12 step-3 fixtures moved, none of the twelve caught later by step 4 or step 7",
       "file": "src/gws/gmail.js",
-      "find": "  const match = BARE_RE.exec(trimmedSelected) || MAILBOX_RE.exec(trimmedSelected);\n  if (!match) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  const address = match[1];",
-      "replace": "  const address = trimmedSelected; /* RP_MUT_REPLY_GRAMMAR_DROPPED */",
+      "find": "  if (!match) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  const address = match[1];",
+      "replace": "  const address = match ? match[1] : trimmedSelected; /* RP_MUT_REPLY_GRAMMAR_DROPPED */",
       "marker": "RP_MUT_REPLY_GRAMMAR_DROPPED",
       "occurrences": 1,
       "expectRed": [
         {
           "test": ["broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4"],
           "signal": "[AUD-D3]"
-        },
-        {
-          "test": ["broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address Table B's order produces, over every accepted case"],
-          "signal": "[AUD-D2]"
         }
       ]
     },
