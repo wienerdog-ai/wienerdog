@@ -42,6 +42,41 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 #6 (evening session of 2026-09-05, owner-authorized
+> merges).** Measured on `main` at `2ccc3d58`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 8 | `WP-process-runbook-sweeps` | **Done** | design loop #230 (`e119b607`), implementation #231 (`2ccc3d58`), filed in this pass | **Design loop: round zero, two clean-context executors, and TWO double-channel rounds** (plugin + hermetic shadow; four raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md`). The 13 stub bullets measured as **19 atomic rules** against the five process files: 1 ALREADY BOUND (the ADR-0031 breaker), 9 PARTIAL, 8 UNBOUND, 1 UNPAID (R19, zero provenance, not landed — owner item O4); **17 rules landed through 14 edit points, 9 EXTENDing an existing sentence**, `codex-review.md` +4 bullets. **Round 1 fired the pinned DESIGN branch**: the shadow found R12 mis-measured UNBOUND, and the cause was the round-zero sweep using the stub's 13 ids against the 19-row table — the whole set was re-derived with aligned ids (exactly one row moved). Four findings converged across channels, among them the screen reading the WORKING TREE while the WP lands R04 (fixed: `git show HEAD:`, dirty-tree refusal, labelled an anchor-PRESENCE screen blind to meaning, placement and polarity) and R13's "only form is a design question" contradicting the unqualified two-rounds rule (fixed: the bullet opens with the precedence clause). **Round 2 returned no product finding on either channel**; the live criterion gained `docs/HANDOVER.md:371-372`'s band gate as step 0. Clean-context mechanical closure: three band-C items, one dropped with reason (a verification fence is not a program). **Implementation: two rounds of the triple-channel PR gate** — round 1 plugin CLEAN, shadow *"patch is correct"* with zero findings, wd-reviewer REQUEST-CHANGES **with no A finding** (one B: the R12 worked-example sentence transcribed a spec-internal "this WP" into the runbook; three C), EXTEND intactness proven by an 8-word-shingle survival check; round 2 on `3ce5ba57`: plugin CLEAN, shadow *"patch is correct"* (zero findings; round 1 confirmed resolved), wd-reviewer **APPROVE** with one band-C residual (erratum 3). Merged tree: lint clean, screen 21 PASS. **Two dated errata** plus one routed residual in the filed spec |
+>
+> **Owner instruction this session, verbatim** (record:
+> `docs/specs/logbook/2026-09-05-owner-rulings-runbook-sweeps-queue.md`):
+> *"I hereby authorize you to perform merges in this session too."* The four
+> owner items (O1–O4) were dispatched under the settled recommendation process;
+> the record carries a dated amendment with round 1's corrected overrule costs.
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried
+> forward unchanged (the dot-segment spec's V2 B3 loop; the adopt-e2e
+> Deliverables cell; the basename WP's Table C position clause; the
+> phase-environment contract table for `scripts/red-proofs.js`; ADR-0010's
+> "adopt requires the user to confirm" sentence vs `--yes`; the orphaned `(ii)`
+> sub-bullet at step 19 in `src/cli/dream.js`; the durability WP's five;
+> audit-D's errata 3–6; audit-E's errata 1, 3 and 4) **plus this WP's:**
+> ADR-0031 and `.claude/agents/wd-architect.md:22` say "in one pass" / "in the
+> same pass" while `_TEMPLATE.md` now says "and in the same commit" — the ADR is
+> the weaker of two surfaces stating one contract (owner's act to amend);
+> `_TEMPLATE.md`'s Security-checklist heading says "delete only if" while
+> `spec-authoring.md:25-27` requires an `N/A` line in place (the runbook governs;
+> the heading is stale); Table B "after :N" insertion points inside a dense list
+> should name the neighbouring bullet.
+>
+> **Next in the queue:** `WP-dream-git-env-pinning` (**owner product decision** —
+> the maturing architect records a recommendation with the cost of overruling
+> it), then the successors: `WP-quarantine-disposal-durability` (**Draft**), and
+> unfiled — `WP-quarantine-only-copy-shelf`, `WP-red-proofs-marker-audit`, the
+> owner's named option **(c)** (mid-trim of `References`), and the criterion-7
+> one-test follow-up from audit-D's erratum 4.
+>
 > **Status pass, 2026-09-06 #5 (owner-authorized merges).** Measured on `main`
 > at `54960a9d`, not transcribed:
 >

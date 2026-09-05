@@ -1,7 +1,7 @@
 ---
 id: WP-process-runbook-sweeps
 title: Codify the paid-for review and sweep disciplines into the runbooks
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,17 @@ epic: spec-system
 ---
 
 # WP-process-runbook-sweeps: Codify the paid-for review and sweep disciplines into the runbooks
+
+> **Errata, 2026-09-06 (post-merge) — three, plus one routed residual. None is a defect in what shipped.**
+> The merged tree at `2ccc3d58` is green — `npm run lint` 0 errors, frontmatter 268 spec(s) / 4 agent(s), the anchor-presence screen 21 PASS on the merged blobs — and every entry below was fixed on the branch before merge or is a spec-surface item routed onward. **None rewrites the original text.**
+>
+> **Erratum 1 — Table B's R12 content cell is phrased from inside the spec.** *What is wrong:* the cell's non-normative worked-example clause reads *"this WP's own criterion in the round record"*, and the implementer transcribed it verbatim into `docs/runbooks/codex-review.md`, a standing runbook where "this WP" names nothing. *What is true:* Table B pins anchor literals, not sentences; the landed sentence is the implementer's, and it now cites `docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md` by path (fixed on the branch at `3ce5ba57`, PR #231 gate round 1, wd-reviewer band B). *Routing:* spec-surface, recorded here — an operative-content cell is written in the voice of the file it lands in, with resolvable citations. **Class: a spec-internal referent leaking into a landed artifact.**
+>
+> **Erratum 2 — Table B's "after :N" insertion points do not name the neighbouring bullet.** *What is wrong:* in a dense bullet list (the Rules section of `codex-review.md`), "after :375" and "after :390" leave the implementer to resolve ordering against unlisted neighbours — the untouched circuit-breaker bullet sits between the two. *What is true:* the implementer resolved it correctly (wd-reviewer verified all 14 edit points), so nothing shipped wrong. *Found:* the implementer's own lesson, PR #231. *Routing:* spec-surface, recorded here — name the neighbour when the insertion point is inside a list.
+>
+> **Erratum 3 — the landed R12 sentence's logbook path is the only unbackticked path in `docs/runbooks/codex-review.md`.** *What is wrong:* `docs/runbooks/codex-review.md:106` cites the round record without backticks while every other path in the file, including the provenance three lines below, is backticked. *Found:* wd-reviewer, PR #231 gate round 2 (band C, the round's only finding; "does not owe a fresh round"). *Routing:* **residual, fix on the next touch of the file** — the orchestrator chose not to edit the tip after three verdicts on it, so "both gates on the same tip" holds exactly. **Class: cosmetic.**
+>
+> **Routed residual — ADR-0031 is now the weaker of two surfaces stating one contract.** R09 made `docs/specs/_TEMPLATE.md` say "in one pass **and in the same commit**"; ADR-0031 still says "in one pass" and `.claude/agents/wd-architect.md:22` "in the same pass". The spec ruled the ADR amendment out of scope (the owner's act). wd-reviewer's closed-contract drift note, PR #231 round 1. Whoever next opens ADR-0031 carries the commit-atomicity clause into it and the architect duty file.
 
 ## Context (read this, nothing else)
 
