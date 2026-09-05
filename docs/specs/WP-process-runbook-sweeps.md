@@ -1,7 +1,7 @@
 ---
 id: WP-process-runbook-sweeps
 title: Codify the paid-for review and sweep disciplines into the runbooks
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

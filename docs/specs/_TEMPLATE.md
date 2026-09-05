@@ -87,8 +87,10 @@ single place its facts are decided — and have the operative prose cite it
 
 For each canonical table above, name **every surface in this spec that mirrors
 it**, so a review finding updates the table and all its mirrors in one pass
-(update-all-mirrors) and any new mirror found in review is added here on the
-spot (register-new-mirrors):
+**and in the same commit** (update-all-mirrors) — no commit exists in which
+the canonical table and a registered mirror disagree (`inbox`
+WP-dream-promote-in-workspace) — and any new mirror found in review is added
+here on the spot (register-new-mirrors):
 
 - [ ] Deliverables-table cells that restate a path or rule
 - [ ] Acceptance criteria that assert its facts

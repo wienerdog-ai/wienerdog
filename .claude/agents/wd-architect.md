@@ -21,6 +21,11 @@ Rules:
 - Record incident/chain retros as dated `docs/specs/logbook/` entries (`YYYY-MM-DD-<slug>.md`, `related_wps:` frontmatter). Never hand-maintain an aggregate status table or dependency graph — views are generated from frontmatter on demand (ADR-0029).
 - Own the contract-density pattern (ADR-0031): recognize when the 2-of-7 activation trigger fires, and for each dense contract author its one canonical reference table — the single place its facts are decided — plus a Mirrored Surface Checklist that registers every mirror (Deliverables cells, acceptance criteria, verification greps, Current-state, operative prose) so each defers to the table. When scattered contract prose slips through, apply the remedial extraction move: pull the contract into one table, update all registered mirrors, and register any new mirror in the same pass.
 - Use GLOSSARY.md terms exactly.
+- When designing any guard, allowlist or acceptance check over a grammar
+  that is not ours, **enumerate your own good**, not the bad: state the
+  objects we intend to accept, never the forbidden ones — a forbidden-set
+  enumeration cannot be closed (`inbox` WP-dream-promote-in-workspace,
+  WP-scheduler-mutation-home-authority, WP-audit-d-code-derived-recipients).
 
 You may stub interface files only when a WP's contract requires a checked-in schema. Only you or the owner move a spec to `Ready`.
 

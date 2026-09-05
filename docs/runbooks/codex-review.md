@@ -14,7 +14,9 @@ findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
 2. **PR review (additional gate): alongside wd-reviewer.** wd-reviewer remains
    the merge gate (spec-fidelity review); Codex is an independent second
    opinion on the same diff. Both run; Gyula merges only when both are clean
-   or every finding is dispositioned.
+   or every finding is dispositioned. Both gates run **on the same tip**, and
+   each verdict names the tip it ran on: two verdicts on different trees are
+   not two verdicts on the same work (`docs/HANDOVER.md:370-371`).
 3. **Dispatch-time re-verification (mandatory): every WP, at the moment it is
    handed to an implementer.** The **orchestrator session** re-runs the spec's
    executable Current-state claims against current `main` before it writes the
@@ -34,6 +36,13 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 
 ### Finding disposition
 
+- Every finding carries a **materiality band** beside its disposition —
+  **A**: silent wrong behavior with a data-loss or security consequence;
+  **B**: caught downstream; **C: hygiene**. A round reported as counts
+  without bands is not decision-grade. The band grades the finding's
+  CONSEQUENCE and is orthogonal to LIGHT/HEAVY (below, under "Weighted
+  closure"), which grades its FIX; the STOP CRITERION bullet below binds
+  the criterion that uses both (`docs/HANDOVER.md:364-366`).
 - Every finding gets exactly one disposition: **fix** (a genuine defect),
   **residual** (accepted, one-line reason — the rule above), or **drop**
   (style/preference; noted in the round record, never in the artifact).
@@ -69,6 +78,15 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   defensible alone and never faced the aggregate question.
 - When two consecutive rounds land findings of the same kind, the next
   step is a design question, never another textual patch.
+- **This distinction never suspends the repeat rules** above: it routes
+  a single finding, not a round. Two consecutive rounds on the same kind
+  still escalate under the bullet above, and two on the same contract
+  family still fire the ADR-0031 circuit-breaker below, however each
+  finding was classified. Within one finding: **form insufficiency** —
+  the deciding facts never reach the observation point — reopens as
+  design; a **predicate defect** — the facts are there and the question
+  is wrong — is a fix (`inbox` WP-dream-promote-in-workspace;
+  `docs/HANDOVER.md:355-358`).
 - A design loop states its STOP CRITERION in the round record BEFORE
   the first adversarial round, and re-states it whenever a HEAVY fix
   triggers a fresh round: which outcome closes the loop, and which
@@ -78,7 +96,15 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   without one drifted — the treadmill's fuel is an undefined finish
   line. A round record with no stated criterion is a loop where this
   rule did not run. No tooling, no hook — one more line in a record
-  that is already being written.
+  that is already being written. **The pinned criterion also maps each
+  band to an outcome**: the A/B/C materiality bands (above) grade a
+  finding's CONSEQUENCE; LIGHT/HEAVY (below, under "Weighted closure")
+  grades whether its FIX changes the product, and therefore whether a
+  fresh round is owed — the two are orthogonal, and a pinned criterion
+  names its outcomes in terms of both. Worked example, non-normative —
+  the requirement above is unchanged: this WP's own criterion in its
+  round record, whose step 0 is the band gate and whose ladder is
+  LIGHT/HEAVY (`docs/HANDOVER.md:371-372`).
 - The reviewer's raw output is committed BEFORE anyone reads or judges
   it — adjudication happens on evidence the adjudicator cannot have
   shaped. This is what makes an after-the-fact ruling possible when a
@@ -136,6 +162,11 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   JSDoc, so this one is a check, not an attention problem. (Measured: the same
   drift returned in three consecutive drafts of one package; applied to its
   successor's first draft it caught three more, one wrong at both ends.)
+  That is the check applied when a citation is **written**; when
+  *following* one, grep for the cited text itself — a line number is
+  trustworthy for existence, not for position, and serves only to
+  disambiguate multiple hits (`inbox` WP-quarantine-banner-location,
+  WP-index-guard-residuals; `docs/HANDOVER.md:298`).
 
 ### Weighted closure
 
@@ -295,7 +326,10 @@ every backend.
   verdicts were readings and neither disclosed it.)
 - Review is read-only, checked mechanically: `git status --porcelain`
   in the reviewed checkout is byte-identical before and after the run,
-  or the run is invalid.
+  or the run is invalid. The obligation is symmetric: while a gate is
+  reading a worktree, **nothing writes into a worktree a gate is
+  reading** — one untracked file voids the verdict, however clean the
+  diff (`inbox` WP-quarantine-banner-location; WP-dream-promote-in-workspace).
 - Output is relayed verbatim (see Rules).
 
 ### Backend selection
@@ -364,7 +398,10 @@ other.
   (measured, bash 3.2.57). Three of the four *over*-claimed a hazard and one
   under-claimed a capability, so the bias is not in one direction: the defect is
   the missing run. **Paste the reproduction or do not state the behaviour** — and
-  when someone else's claim cannot be reproduced, the burden is on the run.
+  when someone else's claim cannot be reproduced, the burden is on the run. The
+  same rule covers a claim that a fix landed: **the proof of a fix is the
+  re-run**, never the edit — report what the tool printed, not what you
+  changed (`docs/HANDOVER.md:342-343`).
 - **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
   vacuous; it does **not** show the check is not *over-strict*, because a check
   that rejects the correct answer is also red before the work and looks identical
@@ -373,6 +410,14 @@ other.
   state, including the awkward-but-legal cases (expect green). Cheap — the second
   run is a heredoc — and it is the only thing that catches a gate which will
   punish the implementer for doing the work correctly.
+- **A mutation matrix is evidence only once each cell proves its own
+  mutation reached the code under test**: grep the injected marker before
+  believing the matrix (`inbox` WP-dream-promote-in-workspace). A guard
+  that has stopped guarding must fail, not pass silently — it must notice
+  its own death (`docs/HANDOVER.md:351`). And a canary whose argument
+  count differs from the exploit's dies on shape before reaching the slot
+  under test, so a mismatched arity proves nothing about that slot
+  (`inbox` WP-dream-promote-in-workspace, WP-show-slot-own-value-kind).
 - **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a
   finding on the *same* contract family, stop fixing finding-by-finding and do a
   contract-**extraction** pass instead: pull that contract into one canonical
@@ -387,7 +432,17 @@ other.
   gate measured as exit 0 that actually exited 1, pasted as green evidence;
   it appeared twice in one day on the same check (PR #22's boundary run)
   before the pattern was named. The general form: read the VALUE the tool
-  produced, not the value the pipeline last touched.
+  produced, not the value the pipeline last touched — **not your own
+  recount** of what it printed (`inbox` WP-dream-promote-in-workspace;
+  `docs/HANDOVER.md:344`).
+- **A `+0` test delta proves nothing on its own.** A test that died before
+  reaching your change reports a zero that describes where the run
+  stopped, not what changed — check whether it dies relative to what you
+  touched (`docs/HANDOVER.md:345-346`). `+0/−0` beside a claimed content
+  change is the same shape in git: read the committed blob to prove the
+  commit, not the working tree (`inbox` WP-dream-promote-in-workspace,
+  3rd occurrence: PRs #19, #24, #61; WP-launcher-no-self-resync-republish;
+  `docs/HANDOVER.md:347-349`).
 - **A zero-hit sweep is evidence only if the sweep demonstrably read its
   targets.** A grep that failed to open a file also reports zero matches —
   an unquoted variable holding several paths, a shim that does not
