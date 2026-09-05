@@ -177,7 +177,7 @@ implementer writes the sentence around them.
 | R08 | spec-authoring.md | `:56-63` claim-sweep bullet · EXTEND | The sweep pattern must also match the claim stated pronominally, and a claim's scope must be written next to the claim so one pattern catches both | `pronoun-aware` · `adjacent to the claim` |
 | R09 | _TEMPLATE.md | `:88-91` checklist intro · EXTEND | "In one pass" is made concrete: the canonical table and every registered mirror land in one commit, so no commit exists in which they disagree | `in the same commit` |
 | R11 | codex-review.md | before `:37` (head of Finding disposition's bullet list) · NEW bullet | Every finding carries a band beside its disposition — **A**: silent wrong behavior with a data-loss or security consequence; **B**: caught downstream; **C**: hygiene. A round reported as counts without bands is not decision-grade. The band grades the finding's CONSEQUENCE and is orthogonal to LIGHT/HEAVY (`:140-152`), which grades its FIX; R12 binds the criterion that uses both | `materiality band` · `C: hygiene` |
-| R12 | codex-review.md | `:72-81` STOP CRITERION bullet · EXTEND | The pinned criterion must map each materiality band to an outcome. Reconcile the two taxonomies in place: **A/B/C bands grade a finding's CONSEQUENCE**; **LIGHT/HEAVY (`:140-152`) grades whether its FIX changes the product**, and therefore whether a fresh round is owed. They are orthogonal, and a pinned criterion names its outcomes in terms of both | `maps each band to an outcome` |
+| R12 | codex-review.md | `:72-81` STOP CRITERION bullet · EXTEND | The pinned criterion must map each materiality band to an outcome. Reconcile the two taxonomies in place: **A/B/C bands grade a finding's CONSEQUENCE**; **LIGHT/HEAVY (`:140-152`) grades whether its FIX changes the product**, and therefore whether a fresh round is owed. They are orthogonal, and a pinned criterion names its outcomes in terms of both. *(Worked example, non-normative — the requirement above is unchanged: this WP's own criterion in the round record, whose step 0 is the band gate and whose ladder is LIGHT/HEAVY.)* | `maps each band to an outcome` |
 | R13 | codex-review.md | after `:71` (end of the two-consecutive-rounds bullet) · NEW bullet | **The bullet must OPEN by naming the precedence**, because it sits under an unconditional rule: this distinction routes a SINGLE finding and never suspends the repeat rules — two consecutive rounds on the same kind still escalate under `:70-71`, and two on the same contract family still fire the ADR-0031 breaker at `:376-383`, however each finding was classified. Within one finding: form insufficiency = the deciding facts never reach the observation point, and reopens as design; a predicate defect = the facts are there and the question is wrong, and is a fix | `never suspends the repeat rules` · `form insufficiency` · `predicate defect` |
 | R14 | wd-architect.md | after `:23` (end of the `Rules:` list) · NEW rule line | When designing any guard, allowlist or acceptance check over a grammar that is not ours, enumerate our own intended objects rather than the forbidden ones; a forbidden-set enumeration cannot be closed | `enumerate your own good` |
 | R15 | wd-reviewer.md | `:21` contract-density paragraph · EXTEND | Judge the whole cell, never the grep window a mirror walk matched: a grep is blind to intra-cell falsification and to a restatement in different vocabulary | `the whole cell, never the grep window` |
@@ -211,8 +211,9 @@ spot (register-new-mirrors).
 - [ ] Implementation notes and owner items O1–O4 — they mirror Table B's File
       column for R14 (O1) and R15 (O2), and Table A's disposition for R19 (O4);
       **O3 additionally restates Table A's whole PARTIAL/ALREADY-BOUND list**
-      ("R10 entirely, and the bound halves of R01, R02, R08, R09, R15–R18"), so a
-      disposition change moves that sentence too
+      ("R10 entirely, and the bound halves of R01, R02, R08, R09, R12, R15–R18"),
+      so a disposition change moves that sentence too — R12 joined it in round 1
+      and was missed there, which is what round-2 finding R2-E caught
 
 ## Implementation notes & constraints
 
@@ -290,18 +291,29 @@ as such.
   if nothing else lands there) and one added or amended for the new file;
   **Current state**'s per-file bullet for both files; the **DATA** line's path;
   the **Implementation-notes aggregate counts** (edit points per file, and
-  "`wd-architect.md` gains one rule line"); the **five-file scope** sentence in
-  Context if the file count changes; and **this owner item**. The rule's wording
-  and its anchor are unaffected.
+  "`wd-architect.md` gains one rule line"); and **this owner item**. Three that a
+  naive "swap one row" reading misses: **Table B's R14 insertion point and mode**
+  — "after `:23` (end of the `Rules:` list)" names a construct that exists only in
+  `wd-architect.md`, so a new host needs its own insertion point and may need a
+  different mode (`create` rather than `modify`, if the host is a new file, which
+  also adds a **Deliverables `create` row**); **Table A's R14 "already binds at"**
+  cell, if the new host already says something on the subject; and the **exact
+  path list in Context (`:25-30`)**, which must change **whenever the host file
+  changes — not only when the file count changes**, since replacing one file with
+  another leaves the count at five while making the named list wrong. The rule's
+  wording and its anchor are unaffected.
 - **O2 — R15 lands in `.claude/agents/wd-reviewer.md`, not `codex-review.md`.**
   *Recommendation:* the duty file. Its provenance bullet names wd-reviewer
   explicitly, and the duty file is what a reviewer session actually loads;
   `codex-review.md` is read by the orchestrator, who is not the actor here.
   *Cost of overruling — every canonical and mirrored edit it implies:* **Table
-  B**'s R15 File and insertion-point cells (canonical — `codex-review.md` has no
-  contract-density paragraph, so a new insertion point must be chosen);
-  **Table A**'s R15 "already binds at" cell if the new host already says
-  something; the **Deliverables** row for `wd-reviewer.md`, which this WP would
+  B**'s R15 File, insertion-point **and mode** cells (canonical — `codex-review.md`
+  has no contract-density paragraph, so a new insertion point must be chosen and
+  the mode very likely turns from `EXTEND` into a `NEW` bullet); **Table A**'s R15
+  "already binds at" cell if the new host already says something; the **exact path
+  list in Context (`:25-30`)**, which changes whenever the **host file** changes,
+  count or not — here the count does drop, but the path list is what must be
+  right either way; the **Deliverables** row for `wd-reviewer.md`, which this WP would
   then stop touching, **reducing the WP to four files**; **Current state**'s
   bullets for both files; the **DATA** line's path; the **already-bound
   non-regression grep** for `Contract-density detector (ADR-0031)`, which stops
@@ -311,7 +323,8 @@ as such.
   markdownlinted, so moving it into `docs/` brings it under markdownlint — a
   small gain, not a reason on its own.
 - **O3 — the already-bound halves (R10 entirely, and the bound halves of R01,
-  R02, R08, R09, R15–R18) get no retroactive "paid for by" provenance line.**
+  R02, R08, R09, R12, R15–R18) get no retroactive "paid for by" provenance
+  line.**
   *Recommendation:* do not add them. That text already carries its own measured
   evidence inline, and a provenance line added to text nobody is otherwise
   changing is an addition with no protected value. *Cost of overruling — every
@@ -380,32 +393,59 @@ aspirational", "EXTEND leaves the existing claim intact" and "only EXTEND
 rewrites are deleted" criteria assert. **Do not read 21 PASS as evidence that the
 rules are right — only that their anchors landed.**
 
-Three properties make the screen worth its size. It runs **from a file**, never
-as an inline one-liner: a pattern passed through nested quotes silently changes
-what the gate matched (`codex-review.md:350-357`). It reads the **committed
-blob** (`git show HEAD:<path>`) and refuses to run on a dirty tree, because a
-verification that greps the working tree while the claim is about the commit is
-the exact failure R04 lands and `inbox` WP-frontmatter-recognition-failopen
-records; an unstaged anchor passes a worktree read and fails this one (measured).
-And it **fails closed on its own input**: the loop's heredoc propagates failure
-and the run is rejected unless exactly the declared number of anchors was
-processed, so a shell that cannot deliver the DATA cannot certify anything
-(reproduced in both round-1 review sandboxes; not reproducible on the authoring
-host — round-1 record). Matching is whitespace-flattened with markdown emphasis
-marks stripped, so a hard wrap or a bolded word inside an anchor cannot fail a
-correctly written rule — R08's own discipline applied to R08's gate.
+**Run this block as a script** (`bash verify.sh`), not pasted line by line into
+an interactive shell: its guards exit non-zero on failure, which is the point.
+Four properties make the screen worth its size, and each one closes a measured
+false green.
+
+1. It runs **from a file**, never as an inline one-liner: a pattern passed
+   through nested quotes silently changes what the gate matched
+   (`codex-review.md:350-357`). The file is a **fresh `mktemp` path**, written
+   under a guard and removed after the run — a fixed path can already hold an
+   older screen, and a failed write there leaves the wrapper running the stale
+   one and reporting its exit status as the result (reproduced: write rc=1,
+   stale script rc=0, wrapper rc=0 — round-2 record).
+2. It reads the **committed blob** (`git show HEAD:<path>`), because a
+   verification that greps the working tree while the claim is about the commit
+   is the exact failure R04 lands and `inbox`
+   WP-frontmatter-recognition-failopen records; an unstaged anchor passes a
+   worktree read and fails this one (measured).
+3. It **refuses when it cannot establish the tree is clean** — not only when the
+   tree is dirty. `git status` is captured into a variable with its exit code
+   read on the very next line (`codex-review.md:384-390`); a status that fails
+   prints nothing and exits non-zero, and testing only its output would read
+   that silence as "clean" (reproduced with `GIT_INDEX_FILE=/dev/null`: rc=128,
+   empty stdout, `git show` still working — round-2 record).
+4. It **fails closed on its own input**: the loop's heredoc propagates failure
+   and the run is rejected unless exactly the declared number of anchors was
+   processed, so a shell that cannot deliver the DATA cannot certify anything
+   (reproduced in both round-1 review sandboxes; not reproducible on the
+   authoring host — round-1 record).
+
+Matching is whitespace-flattened with markdown emphasis marks stripped, so a hard
+wrap or a bolded word inside an anchor cannot fail a correctly written rule —
+R08's own discipline applied to R08's gate.
 
 ```bash
-cat > /tmp/wd-sweeps-sentinels.sh <<'SCRIPT'
+screen=$(mktemp) || exit 1
+cat > "$screen" <<'SCRIPT' || exit 1
 #!/usr/bin/env bash
 # ANCHOR-PRESENCE SCREEN over the COMMITTED tree. Proves each Table B anchor
 # literal is present in the committed file. Proves NOTHING about meaning,
 # placement or polarity — an inverted sentence containing an anchor PASSES.
 DECLARED=21
-if [ -n "$(git status --porcelain)" ]; then
+status=$(git status --porcelain)
+status_rc=$?
+if [ "$status_rc" -ne 0 ]; then
+  printf 'REFUSED: git status failed (rc=%s), so the tree state is UNKNOWN.\n' "$status_rc"
+  echo 'An unreadable or corrupt index prints nothing and exits non-zero; treating'
+  echo 'that empty output as "clean" is how this screen would certify a dirty tree.'
+  exit 1
+fi
+if [ -n "$status" ]; then
   echo 'REFUSED: the working tree is dirty. This screen reads the COMMITTED blob,'
   echo 'so a result now would describe files nobody will merge. Commit, then re-run.'
-  git status --porcelain
+  printf '%s\n' "$status"
   exit 1
 fi
 rc=0
@@ -458,9 +498,10 @@ fi
 printf 'sentinels exit=%s\n' "$rc"
 exit "$rc"
 SCRIPT
-bash /tmp/wd-sweeps-sentinels.sh
+bash "$screen"
 rc=$?
-printf 'sentinel gate rc=%s\n' "$rc"
+rm -f "$screen"
+printf 'anchor screen rc=%s\n' "$rc"
 
 # Already-bound text this WP must NOT disturb (each must stay present)
 grep -qF -- 'Loop circuit-breaker (ADR-0031)' docs/runbooks/codex-review.md
@@ -478,8 +519,8 @@ npm run lint
 ```
 
 The screen is a NEW verification step, so it is trusted only after being observed
-on **six** states, all outputs pasted (the round-1 record holds the architect's
-runs of every one):
+on **eight** states, all outputs pasted (the round-1 and round-2 records hold the
+architect's runs of every one):
 
 | State | Expected |
 |-------|----------|
@@ -489,6 +530,8 @@ runs of every one):
 | deliverable absent from the commit | red — `FAIL(absent)` |
 | anchor present but only UNSTAGED | red — the commit read does not see it |
 | dirty tree | `REFUSED`, exit 1, no verdict issued |
+| `git status` itself fails (`GIT_INDEX_FILE=/dev/null`) | `REFUSED`, exit 1 — an unknown tree state is never "clean" |
+| the screen file cannot be written | exit 1 before anything runs — never a stale script's status |
 
 And one state is recorded as a **disclosed limit, not a proof**: a commit whose
 sentence *inverts* a rule while preserving its anchor returns **PASS**. That is

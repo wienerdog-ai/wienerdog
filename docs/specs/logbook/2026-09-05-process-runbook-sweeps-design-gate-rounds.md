@@ -41,8 +41,8 @@ nested quotes (`codex-review.md:350-357`). The drivers are `measure-bound.js`,
 > **Round 1 ran under the text below, and it is kept verbatim for that
 > reason.** Finding R1-D then measured it as neither exhaustive nor
 > exclusive, so it is superseded by the ordered decision list under
-> "Round 2 — criterion pinned in advance". The criterion has ONE canonical
-> text at a time; this block is the historical record of what round 1 was
+> "The criterion — canonical text (amended after round 2)". The criterion has
+> ONE canonical text at a time; this block is the historical record of what round 1 was
 > judged against, not a second live authority.
 
 Pinned here per `codex-review.md:72-81`, before any adversarial round runs.
@@ -1472,7 +1472,14 @@ GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
     inner rc=0
 ```
 
-## Round 2 — criterion pinned in advance
+## Round 2 — criterion pinned in advance (SUPERSEDED after round 2)
+
+> **Round 2 ran under the text below, kept verbatim for that reason.**
+> Findings R2-C and R2-D then measured it as still not total (no catch-all for
+> a change to the spec's global contract; FALLBACK absent from the ladder; the
+> A/B/C bands never consulted). It is superseded by "The criterion — canonical
+> text (amended after round 2)" below. One canonical text at a time; this block
+> is the record of what round 2 was judged against.
 
 Re-stated before round 2 because R1-C is HEAVY (`codex-review.md:72-81` requires
 the criterion to be re-stated whenever a HEAVY fix triggers a fresh round). This
@@ -1514,7 +1521,253 @@ matched DESIGN and OWNER at once — first-match-wins sends it to #1; a second
 screen-only round matched CLOSE and FALLBACK with no precedence — #6 is reached
 before #7 and carries the fallback itself.
 
-## External rounds (round 2 onward)
+## Round 2 — external, double channel, tip `3e3bfde2`
+
+Both channels ran on `3e3bfde2`, both verdicts name that tip, and both reported
+`porcelain before/after: identical`. Raws committed **before** adjudication, each
+cited with the SHA of the commit that introduced it (`codex-review.md:82-91`):
+
+| Channel | Raw | Introduced by |
+|---------|-----|---------------|
+| Codex plugin adversarial review | `docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round2-codex-plugin.txt` | `091a4498` |
+| Hermetic Codex shadow (`codex exec`, read-only sandbox) | `docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round2-herdr-shadow.txt` | `e6675468` |
+
+**Neither channel found anything about the product.** The plugin confirmed "R13
+preserves both repeat rules; R12's disposition and taxonomy reconciliation are
+supported" and "no further Table A misdisposition established"; the shadow
+re-derived Table A against the aligned ids and the 19/17/9/21 counts and found no
+row wrong. Every finding is about the screen, the round record, or the owner-item
+text. Under `codex-review.md:150-152` — "the loop is DONE when a round finds
+nothing about the product" — this is that round; the fixes below are machinery
+and mirrors.
+
+### Findings, bands, and the branch each hit
+
+| # | Channel(s) | Band | Branch | Weight | Disposition | What changed |
+|---|-----------|------|--------|--------|-------------|--------------|
+| R2-A | plugin | A | 7 (screen) | LIGHT | fix | `git status` is captured into a variable with `status_rc=$?` on the next line; a non-zero status refuses with "tree state UNKNOWN". Testing only stdout read a failed status as clean |
+| R2-B | shadow | A | 7 (screen) | LIGHT | fix | The screen is written to a fresh `mktemp` path under `\|\| exit 1` and removed after the run. The fixed `/tmp` path let a failed write leave a stale screen running and its exit status reported as the result |
+| R2-C | plugin + shadow (converged) | B | 7 (record) | LIGHT | fix | Catch-all branch 5 added for a change to the spec's global contract; FALLBACK placed on the ladder explicitly as an action, not a rank |
+| R2-D | shadow | B | 7 (record) | LIGHT | fix (record only) | Step 0 band gate added, from `docs/HANDOVER.md:371-372` verbatim. **R12's Table B operative content is UNCHANGED** — see below |
+| R2-E | plugin + shadow (converged) | B | 6 (mirror drift) | LIGHT | fix | R12 added to O3's restated list and its checklist mirror; O1 and O2 now enumerate insertion point, mode, and the Context path list tied to the HOST file changing rather than the file count |
+| R2-F | **self-found** during R2-E's mirror walk | C | 6 (mirror drift) | LIGHT | fix | O2 named neither the mode nor the Context path list. Neither channel raised it; the walk did, because it derives the ten mirror categories from the tables instead of reading the prose |
+
+**Round outcome: LIGHT.** Step 0 routes the round to the list (R2-A and R2-B are
+band A, above C). Every finding lands on branch 6 or 7, and the most escalating
+outcome any of them produced is LIGHT. No fresh external round is owed by the
+criterion; a mechanical re-verification closes it.
+
+**FALLBACK did not fire, by the letter, and here is the letter.** The screen drew
+findings in round 1 (R1-A, R1-B) and again in round 2 (R2-A, R2-B) — the second
+consecutive round landing on the screen. Branch 7's trigger is a second
+consecutive **screen-only** round, and round 1 was not screen-only: it carried
+R1-C (HEAVY, Table B content) and R1-E (DESIGN, a Table A disposition). So the
+trigger is not met and the screen survives. **Standing note, so this does not
+rest on memory: the next screen finding of any kind fires FALLBACK and the
+per-rule screen is dropped**, with `npm run lint` plus the reviewer's read
+against Table B carrying it. That is recorded in branch 7 itself.
+
+### R2-D — why R12's Table B content did NOT change
+
+R12 requires the pinned criterion to "map each materiality band to an outcome".
+The shadow read the live round-2 criterion, saw it routing by subject matter with
+no A/B/C anywhere, and concluded R12's requirement was unmet. It was — but the
+defect was in the criterion, not in R12.
+
+The paid-for rule is `docs/HANDOVER.md:371-372` verbatim: *a pinned reading
+before each round ("clean or C-only → proceed; anything above C returns
+banded")*. That **is** a band→outcome map, and it **composes** with the subject
+list rather than replacing it. Three questions, three instruments:
+
+- the **band** decides whether the round returns at all (step 0),
+- the **branch list** decides where an above-C finding goes,
+- **LIGHT/HEAVY** decides whether a fresh external round is owed.
+
+Adding step 0 makes the criterion satisfy R12 as written, so **R12's Table B
+operative content is unchanged** — no branch-4 escalation, no round 3. R12's row
+now names this WP's own criterion as the worked example, which is what the
+reconciliation was for.
+
+**Every consolidated finding now carries exactly one band.** The round-1 table
+listed R1-C as "A/B" — the plugin filed it `[high] [A]`, the shadow
+`materiality_band: B`. **Adopted: B, the shadow's.** The repo's definitions key
+band A on *silent wrong behavior with a data-loss or security consequence*
+(`docs/HANDOVER.md:364-366`); a weakened escalation rule has neither, and its
+cost is a loop that fails to escalate — visible to the next round's reader, which
+is band B, "caught downstream". The plugin's `[high]` is a severity label in its
+own scheme, not a band in this one.
+
+### R2-A and R2-B, reproduced on the host before either was applied
+
+```text
+===== R2-A: does git status --porcelain fail with empty stdout and non-zero rc? =====
+  stdout bytes = 0 ; rc = 128
+  stderr was:
+    fatal: /dev/null: index file smaller than expected
+  the SHIPPED condition is: [ -n "$(git status --porcelain)" ]
+    -> would proceed  <-- FAILS OPEN on a status error
+  and git show still works under the same env:
+    git show rc=0
+  full shipped screen under GIT_INDEX_FILE=/dev/null:
+    rc=1  PASS=0  FAIL=21
+    fatal: /dev/null: index file smaller than expected
+    FAIL  docs/runbooks/codex-review.md :: the proof of a fix is the re-run
+
+===== R2-B: a stale script at the fixed /tmp path survives a failed write =====
+  target is now mode 444 and holds the stale script
+  --- the shipped fence shape: cat > PATH <<SCRIPT ... ; bash PATH ; rc=$? ---
+    cat rc=1 ; stderr: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/repro-r2ab.sh: line 39: /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/stale-target.sh: Permission denied
+STALE ROUND-1 SCRIPT RAN (checks 20 anchors, knows nothing of the 21st)
+sentinels exit=0
+    bash PATH rc=0   <-- the wrapper reports this as the gate result
+    REPRODUCED: write failed, stale script ran, wrapper rc=0 (false green)
+
+  --- the FIXED fence shape: f=$(mktemp) || exit 1 ; cat > "$f" <<SCRIPT || exit 1 ---
+NEW SCRIPT RAN
+    fresh path used; inner rc=7
+    fixed-shape wrapper rc=7  (7 = the new script's own status, not a stale 0)
+
+  --- and the guard when the write itself cannot happen (unwritable dir) ---
+    write guarded: cat failed, exiting 1 without running anything
+    guarded-write wrapper rc=1
+```
+
+Note what the R2-A block does and does not show. The full screen under
+`GIT_INDEX_FILE=/dev/null` returned 21 FAIL — but those FAILs come from the
+untouched tree genuinely lacking the anchors, **not** from the guard. The
+load-bearing line is the one above them: the shipped condition "would proceed",
+because `git status` printed nothing and exited 128. With compliant blobs that
+path yields 21 PASS and exit 0 without ever establishing the tree is clean, which
+is the plugin's claim, confirmed.
+
+### The O1-O3 mirror walk (R2-E), derived not read
+
+Every list below is computed from Table A and Table B; the owner-item prose is
+only ever compared against them.
+
+```text
+DERIVED from Table A:
+  ALREADY BOUND : R10
+  PARTIAL       : R01,R02,R08,R09,R12,R15,R16,R17,R18
+
+O3 restated list (expanded from the prose): R01,R02,R08,R09,R10,R12,R15,R16,R17,R18
+  in Table A but MISSING from O3 : []
+  in O3 but NOT bound/partial    : []
+
+Checklist mirror of the list         : R01,R02,R08,R09,R10,R12,R15,R16,R17,R18
+  agrees with O3 ? true
+
+O3 per-file cost list mentions       : R01,R02,R08,R09,R10,R12,R15,R16,R17,R18
+  rows in the restated list but absent from the per-file list: []
+  rows in the per-file list but absent from the restated list: []
+
+O1 (governs Table B R14, file=wd-architect.md, point=after `:23` (end of the `Rules:` list) · NEW rule line)
+   yes  names Table B File cell
+   yes  names the insertion point
+   yes  names the mode
+   yes  names the Deliverables row
+   yes  names Current state
+   yes  names the DATA line
+   yes  names the Context path list
+   yes  ties Context to HOST change, not count
+   yes  names the aggregate counts
+   yes  names itself
+
+O2 (governs Table B R15, file=wd-reviewer.md, point=`:21` contract-density paragraph · EXTEND)
+   yes  names Table B File cell
+   yes  names the insertion point
+   yes  names the mode
+   yes  names the Deliverables row
+   yes  names Current state
+   yes  names the DATA line
+   yes  names the Context path list
+   yes  ties Context to HOST change, not count
+   yes  names the aggregate counts
+   yes  names itself
+```
+
+The walk itself needed one fix mid-run, and it is the same lesson this WP lands:
+its first version matched un-flattened prose and reported three O2 categories as
+missing that were present but **hard-wrapped across a line**. Flattening the
+input (R08) cleared them. The tool was wrong, not the spec — but only a rerun
+could tell which.
+
+## The criterion — canonical text (amended after round 2)
+
+This is the criterion's single canonical text. §0.1 and the round-2 head copy are
+superseded records of what rounds 1 and 2 were judged against.
+
+**Step 0 — the band gate** (`docs/HANDOVER.md:371-372`). Before any branch is
+consulted: a round whose findings are **all band C** → **CLOSE**, hygiene fixed
+in place. **Any finding above C** → route every finding through the list below.
+Bands are A/B/C as `docs/HANDOVER.md:364-366` defines them — A: silent wrong
+behavior with a data-loss or security consequence; B: caught downstream; C:
+hygiene.
+
+**Then, applied PER FINDING, first match wins:**
+
+1. **Scope** — the finding argues a rule should not land at all, or should land
+   outside the Deliverables table → **OWNER item**, carrying a recommendation and
+   the enumerated overrule cost. The loop continues on the remaining findings.
+2. **Disposition** — it changes a Table A disposition → **DESIGN**: re-derive the
+   whole set mechanically with the sweep's ids aligned to Table A's, and update
+   every registered mirror in the same commit. Never a row patch.
+3. **Same-family repeat** — it is the second consecutive round landing a finding
+   on a Table A or Table B row, in any registered mirror → **ADR-0031
+   extraction** (`codex-review.md:376-383`), never a third row patch.
+4. **Operative content** — it changes Table B's operative content, insertion
+   point, mode, or anchor literals → **HEAVY fix**, then a full fresh external
+   round.
+5. **Any other change to what the implementer must land** — the "operative, not
+   aspirational" rule under Exact contracts, the Deliverables permission
+   boundary, the paid-for-by provenance rule, or anything else that changes what
+   gets built without touching a Table A or Table B row → **HEAVY fix**, then a
+   full fresh external round.
+6. **Mirror drift** — a registered mirror disagrees with a canonical table that
+   is itself right → **LIGHT fix**: correct every mirror the checklist names, in
+   the same commit, and re-run the mirror walk. No new round.
+7. **Machinery or record only** — it is about the anchor-presence screen or this
+   round record and nothing else → **LIGHT fix**, mechanically re-verified, no new
+   round. If this is the **second consecutive screen-only round** → **FALLBACK**
+   (see the ladder): drop the per-rule screen; `npm run lint` plus the reviewer's
+   read against Table B carry it (`codex-review.md:154-164`). *Standing note for
+   this WP: the screen drew findings in rounds 1 and 2, neither of which was
+   screen-only, so the letter has not fired. The next screen finding of any kind
+   fires it.*
+8. **Nothing about the product** → **CLOSE**.
+
+**Round rule.** A round's outcome is the **most escalating** outcome any single
+finding produced, on the ladder `CLOSE < LIGHT < HEAVY < EXTRACTION < DESIGN`.
+Two things sit off that ladder deliberately:
+
+- **FALLBACK is an ACTION, not a rank.** It says what to do with the screen (drop
+  it); it does not say what the round costs. A round that triggers FALLBACK
+  therefore aggregates as **LIGHT**, unless some other finding ranks higher.
+- **OWNER items are raised alongside** and do not by themselves hold the loop
+  open.
+
+### The counter-case pass — this round's own findings, routed
+
+Applying the amended list to the six findings that produced it
+(the round-1 lesson: route the current round through a new criterion before
+pinning it):
+
+| Finding | Band | Step 0 | First branch matched | Outcome |
+|---------|------|--------|----------------------|---------|
+| R2-A | A | above C → route | 7 (the screen) | LIGHT |
+| R2-B | A | above C → route | 7 (the screen) | LIGHT |
+| R2-C | B | above C → route | 7 (this record) | LIGHT |
+| R2-D | B | above C → route | 7 (this record) | LIGHT |
+| R2-E | B | above C → route | 6 (mirror vs a correct Table A) | LIGHT |
+| R2-F | C | above C → route (the round is not all-C) | 6 (mirror drift) | LIGHT |
+
+Aggregate: **LIGHT**. And the three counter-cases the channels built against the
+previous text now each land on exactly one branch: a change to the global
+operative/provenance contract → **5**; a repeated screen finding → **7**, whose
+FALLBACK is an action while the round still aggregates LIGHT; a
+FALLBACK-plus-LIGHT round → **LIGHT**, with no unrankable outcome.
+
+## External rounds (round 3 onward, if any)
 
 <!-- orchestrator: Codex plugin adversarial review + hermetic shadow; raws
      committed BEFORE adjudication, each round citing the raw file's path AND
