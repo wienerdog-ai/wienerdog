@@ -1,0 +1,331 @@
+# Design gate raw — round 1 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: 87b51216786bc1f784fe906d2d74c683689ec85b (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision 87b51216786bc1f784fe906d2d74c683689ec85b vs main: docs/specs/WP-audit-e-ledger-parser-corpus.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: the corpus misses a normalized trailing-whitespace duplicate that a wrong implementation can authorize while passing C17, and LPC-B's mandatory RED set is not stable across conforming implementations. The stated parseFrontmatter test-repair cost is also measurably wrong and permits a weakened observable.",
+  "findings": [
+    {
+      "title": "C17 does not catch duplicate detection performed on raw heading lines",
+      "file": "docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "line_start": 331,
+      "line_end": 344,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "The parser normalizes trailing whitespace through /^##\\s+(.+?)\\s*$/, but C17 repeats the byte-identical heading. A plausible implementation can track raw heading lines while continuing to key entries by the normalized capture. Executed differential: both normalized-key and raw-line trackers returned the required C17 repeated-heading refusal; for `## a.b`, `## c.d`, `## a.b   `, the normalized-key tracker refused while the raw-line tracker returned KEEP. The shipped validator currently returns KEEP and AUTHORIZE for both ASCII- and NBSP-trailed variants. Thus acceptance criterion 1 can pass while a committed first-true/last-false duplicate still authorizes a Tier-3 revision.",
+      "recommendation": "Add a corpus row using a non-adjacent final `## a.b   ` heading whose `Pattern-Key` is `a.b`, on both K and A paths, with the exact candidate and committed-ledger duplicate refusal strings. This adds a behavioural corpus row, not gate machinery."
+    },
+    {
+      "title": "LPC-B's required expectRed set depends on an unspecified duplicate-tracking algorithm",
+      "file": "docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "line_start": 348,
+      "line_end": 367,
+      "materiality_band": "B",
+      "confidence": 0.99,
+      "body": "Table D requires collector reversion to redden C24, C25, C26 and C27 because its measured implementation detects duplicates through `entries[key] !== undefined`. A conforming implementation may instead use an independent Set, which Table A does not prohibit. Executed in-memory designs produced identical correct C24-C27 verdicts. After reverting only the collector, lookup-based tracking reddened C24-C27, while Set-based tracking reddened only C24, C25 and C27; C26 remained KEEP. Since red-proofs requires exact failing-set equality, criterion 7 rejects a behaviourally correct Set-based implementation.",
+      "recommendation": "Make LPC-B contract-stable: restrict its selected identities and expectRed set to C24, C25 and C27, excluding algorithm-dependent C26. Do not constrain the duplicate detector's source shape."
+    },
+    {
+      "title": "The null-prototype test cost is five affected assertions, and the permitted keys-only repair can lose a value observable",
+      "file": "docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "line_start": 395,
+      "line_end": 404,
+      "materiality_band": "A",
+      "confidence": 0.98,
+      "body": "The spec calls the cost three assertions and permits repairing them by comparing keys. Grep found five affected direct deepEqual calls across three test identities: dream-validate.test.js:307 and :308, plus frontmatter-unify.test.js:61, :93 and :94. Line 61 expects `{k:'v'}`, not `{}`. A keys-only repair there allows an implementation returning `{k:'wrong'}` for both spaced and unspaced forms to pass: line 62 only compares those two results, and the shared corpus exercises the spaced form. Updating only one assertion per named test identity also leaves later assertions failing downstream.",
+      "recommendation": "State the observables rather than a repair technique: missing and unclosed blocks have zero own keys; the no-separator document has exactly key `k` with value `v`; spaced and unspaced forms remain deeply equivalent. Identify all five affected calls, or accurately call them three test identities."
+    }
+  ],
+  "probe_results": {
+    "shipped_value_matrix": {
+      "False": "K KEEP; A AUTHORIZE",
+      "FALSE": "K KEEP; A AUTHORIZE",
+      "TRUE": "K KEEP; A AUTHORIZE",
+      "\"false\"": "K KEEP; A AUTHORIZE",
+      "'false'": "K KEEP; A AUTHORIZE",
+      "false # ok": "K KEEP; A AUTHORIZE",
+      "yes": "K KEEP; A AUTHORIZE",
+      "on": "K KEEP; A AUTHORIZE",
+      "1": "K KEEP; A AUTHORIZE",
+      "~": "K KEEP; A AUTHORIZE",
+      "empty": "K KEEP; A AUTHORIZE",
+      "ASCII-padded false": "K KEEP; A AUTHORIZE",
+      "tab-padded false": "K KEEP; A AUTHORIZE",
+      "NBSP-padded false": "K KEEP; A AUTHORIZE",
+      "fullwidth ｆａｌｓｅ": "K KEEP; A AUTHORIZE",
+      "Cyrillic-a fаlse": "K KEEP; A AUTHORIZE",
+      "false plus zero-width suffix": "K KEEP; A AUTHORIZE"
+    },
+    "shipped_heading_matrix": {
+      "__proto__": "K: learnings ledger has no valid entries; A target: invalid revision_pattern_key",
+      "constructor": "K KEEP; A AUTHORIZE",
+      "prototype": "K KEEP; A AUTHORIZE",
+      "hasOwnProperty": "K invalid heading; A invalid revision_pattern_key",
+      "toString": "K invalid heading; A invalid revision_pattern_key"
+    },
+    "shipped_duplicate_matrix": {
+      "exact non-adjacent": "K KEEP; A AUTHORIZE",
+      "ASCII trailing-whitespace non-adjacent": "K KEEP; A AUTHORIZE",
+      "NBSP trailing-whitespace non-adjacent": "K KEEP; A AUTHORIZE",
+      "case-different non-adjacent": "K invalid `A.b` heading; A refuses because selected first `a.b` is true"
+    },
+    "shipped_transition_matrix": {
+      "INVALID to absent": "candidate schema refusal",
+      "absent to INVALID": "KEEP",
+      "INVALID to INVALID": "KEEP",
+      "absent to false": "KEEP",
+      "INVALID to false": "KEEP",
+      "INVALID to true": "KEEP"
+    },
+    "ruled_table_b_matrix": {
+      "schema": {
+        "null": "refuse missing/invalid",
+        "true": "KEEP",
+        "false": "KEEP",
+        "INVALID": "refuse missing/invalid"
+      },
+      "authorization": {
+        "null": "refuse untrusted-derived",
+        "true": "refuse untrusted-derived",
+        "false": "AUTHORIZE",
+        "INVALID": "refuse untrusted-derived"
+      },
+      "raise_only_with_false_candidate": {
+        "null": "KEEP",
+        "true": "raise-only refusal",
+        "false": "KEEP",
+        "INVALID": "raise-only refusal"
+      }
+    },
+    "consumer_enumeration": [
+      "src/core/dream/validate.js:389 — authorization read, currently direct `[key]` lookup",
+      "src/core/dream/validate.js:536 — candidate read, consumed by empty/schema/history/invocation checks",
+      "src/core/dream/validate.js:548 — committed-baseline history read, conditional on baselineLedgerBytes",
+      "No fourth parseLedgerEntries call exists in the JavaScript tree.",
+      "Result indexing occurs at src/core/dream/validate.js:550 and :583; null-prototype entries and headEntries are sound when baselineLedgerBytes is absent."
+    ],
+    "other_challenges": [
+      "ADR-0020 insertion point is unambiguous: after the revision section beginning at line 206 and before Future work at line 381. The amendment is correctly deferred until code lands.",
+      "The six implementation deliverables are complete for the specified design; no additional product file was identified.",
+      "The only Object.prototype own-property name admitted by the pattern-key regex is constructor; executed heading probes agree.",
+      "Initial and final git status --porcelain outputs were both empty."
+    ]
+  },
+  "routed_scope_objections": [
+    {
+      "objection": "The spec is 488 lines against the pre-pinned approximately-400-line ceiling.",
+      "routing": "Already recorded as F6 and an accepted machinery residual at docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md:349-352; not counted again toward this verdict."
+    },
+    {
+      "objection": "A source-shape grep, sentinel, new script, Object.hasOwn guard, __proto__-by-name check, warn channel, coerceScalar use, distinct INVALID message, or INVALID-to-null mapping could be proposed.",
+      "routing": "Ruled out by USER_FOCUS and Tables A/B/D; none is recommended or counted."
+    },
+    {
+      "objection": "LPC-B could be repaired by prescribing entries-based duplicate detection.",
+      "routing": "Rejected as a source-shape constraint. The finding recommends a contract-stable behavioural proof selection instead."
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": "sed -n '/VENDORED CONTENT/,$p' docs/runbooks/review-prompts/adversarial.md; printf '\\n--- USER FOCUS ---\\n'; sed -n '1,$p' ../focus-ae1.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "empty"
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=80 main...87b51216786bc1f784fe906d2d74c683689ec85b -- docs/specs/WP-audit-e-ledger-parser-corpus.md docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,260p' docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '261,620p' docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,300p' docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "wc -l docs/specs/WP-audit-e-ledger-parser-corpus.md docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md src/core/dream/validate.js src/core/frontmatter.js docs/adr/0020-skill-revision-lifecycle.md tests/unit/dream-validate.test.js tests/unit/frontmatter-unify.test.js scripts/red-proofs.js; rg --files tests/red-proofs -g '*.proofs.json'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '181,360p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '361,520p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md | sed -n '181,380p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '277,380p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '381,488p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/frontmatter.js | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"parseLedgerEntries|ledgerViolation|skillBodyViolation|parseFrontmatter|PATTERN_KEY_RE|\\.untrusted|headEntries\" src/core/dream/validate.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '300,640p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/adr/0020-skill-revision-lifecycle.md | sed -n '60,100p;190,386p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '314,610p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"function makeGates|const makeGates|makeGates\\(|gates\\.ledger|gates\\.skillBody|parseFrontmatter returns|derived_from_untrusted|revision_pattern_key|LEARNINGS|constructor|__proto__\" tests/unit/dream-validate.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/frontmatter-unify.test.js | sed -n '1,130p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"deep(Equal|StrictEqual).*\\{\\}|deepStrictEqual\\([^\\n]*\\{\\}|parseFrontmatter\" tests -g '*.js'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"expectRed|own-body|test identity|find|replace|suite|evaluateRed|declared proof|selected\" scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "for f in tests/red-proofs/*.proofs.json; do echo \"FILE $f\"; sed -n '1,260p' \"$f\"; done",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '1,240p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '285,320p;500,980p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '260,620p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '620,980p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '980,1340p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1340,1740p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1740,2265p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1450,1536p'; nl -ba tests/unit/dream-validate.test.js | sed -n '840,980p'; rg -n \"function evaluateRed|function validateProof|function applyMutation|function runProof\" scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '620,770p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1460,1745p'",
+      "exit_status": 0
+    },
+    {
+      "command": "for f in tests/red-proofs/*.proofs.json; do jq -c '{file:input_filename,suite,proofs:[.proofs[]|{id,wp,criterion,file,occurrences,testNamePattern,expectRed}]}' \"$f\"; done",
+      "exit_status": 0
+    },
+    {
+      "command": "node <<'NODE' [in-memory shipped-gate matrix driver]",
+      "exit_status": 1,
+      "result": "zsh could not create its heredoc temporary file; Node did not start and the repository was untouched"
+    },
+    {
+      "command": "node -e '<in-memory shipped-gate driver for value, heading, duplicate, and baseline/candidate transition matrices>'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n --glob '*.js' 'parseLedgerEntries|parseFrontmatter\\(' . [USER_FOCUS exclusions]; rg -n --glob '*.js' 'Object\\.entries\\([^)]*parseLedgerEntries|parseLedgerEntries\\([^\\n]*\\)\\[' . --glob '!node_modules/**'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<in-memory conforming-design/LPC-B driver; shell single-quote escaped>'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<in-memory shipped-gate duplicate-normalization driver>'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<in-memory ruled trust design, Table B consumer matrix>'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<in-memory duplicate-detector differential: parsed key vs raw heading line>'",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD main; git diff --name-status main...HEAD -- docs/specs/WP-audit-e-ledger-parser-corpus.md docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md; git diff --name-only main...HEAD",
+      "exit_status": 0,
+      "result": "HEAD 87b51216786bc1f784fe906d2d74c683689ec85b; main 8c52808f5df9ebe281a5a15c49938b0d9097b99e; exactly the two reviewed files differ"
+    },
+    {
+      "command": "rg -n \"assert\\.deepEqual\\(parseFrontmatter\" tests/unit/dream-validate.test.js tests/unit/frontmatter-unify.test.js; rg -n \"assert\\.deep(Equal|StrictEqual)\\([^\\n]*parseFrontmatter|assert\\.deep(Equal|StrictEqual)\\(parseFrontmatter\" tests -g '*.js'",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD -- docs/specs/WP-audit-e-ledger-parser-corpus.md docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "empty and identical to the initial status"
+    }
+  ]
+}
