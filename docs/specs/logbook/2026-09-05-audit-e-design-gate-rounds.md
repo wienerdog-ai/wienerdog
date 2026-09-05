@@ -356,7 +356,7 @@ contract's accepted/refused set), so round 2 is a full external round.
 | # | Channel | Band | Disposition — and what changed |
 |---|---------|------|-------------------------------|
 | **R1-A** | plugin A | **HEAVY** | **fix.** A bullet that NAMES the field could read as ABSENT: the parser splits on LF, but the bullet regex anchors `(.*)$`, and `.` matches neither CR nor U+2028/U+2029 — so the line is skipped, `untrusted` stays `null`, and A4 exempts `null`. New Table A row **A7** (match the key prefix; the raw value is the remainder of the LF-delimited line), Table B's INVALID reach widened, rows **C36–C39** added |
-| **R1-B** | shadow A | **HEAVY** | **fix.** The spec permitted a raw-line duplicate detector, which passes C17 yet keeps `## a.b`, `## c.d`, `## a.b␠␠␠`. Table A row **A3** now states the observable — detection is on the NORMALISED heading key — and rows **C40–C42** pin it on all three reads. The detector's shape stays the implementer's |
+| **R1-B** | shadow A | **HEAVY** | **fix.** The spec permitted a raw-line duplicate detector, which passes C17 yet keeps `## a.b`, `## c.d`, `## a.b␠␠␠`. Table A row **A3** now states the observable — detection is on the NORMALISED heading key — and rows **C40–C42** pin it on all three reads. The detector's shape stays the implementer's. **Superseded by R2-A:** four hand-picked witnesses were not enough, and C40 became a generated matrix while C41/C42 were repurposed |
 | **R1-C** | plugin B + shadow B | LIGHT | **fix.** Table D's `LPC-B` omitted C28 and included C26, which is algorithm-dependent. Set restated to **C24, C25, C27, C28**; C26 excluded with its reason; a second governing rule added to Table D (a declared set may contain only rows stable across conforming implementations); C28 now requires exact per-key verdicts rather than an agreement count |
 | **R1-D** | shadow A | LIGHT | **fix.** The permitted "compare keys" repair would let `{k:'wrong'}` pass at `frontmatter-unify.test.js:61`. Implementation notes now state three OBSERVABLES instead of a technique, Current state carries the measured six-calls/five-failures/three-identities split, and criterion **3b** asserts them |
 | **R1-E** | plugin | LIGHT | **fix.** Table C now opens with a **class rule** that closes it against the contract — after the trim, the value is `true`, `false`, or INVALID, with no case folding, quote stripping, comment stripping, YAML coercion, Unicode normalisation or homoglyph folding — and the rows are witnesses of its classes. Missing classes added as rows **C31–C35** (YAML-ish word, YAML null, YAML tag, homoglyph, interior invisible) and **C43** (`## prototype`); C5 and C11 widened to name their whole class |
@@ -422,6 +422,86 @@ rule that actually guards against the archive's failure mode. F6's residual is
 therefore re-accepted rather than re-opened: Table C alone is now ~60 lines and
 it *is* the deliverable.
 
+## Round 2 — external double channel, 2026-09-05, on `a1b69cc1` — THE LOOP CLOSES
+
+Raws committed BEFORE adjudication, each with the SHA of the commit that
+introduced it:
+
+| Channel | Raw | Introduced by |
+|---------|-----|---------------|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-e-gate-raw-round2-codex-plugin.txt` | `803e43a3` |
+| Hermetic shadow | `docs/specs/logbook/2026-09-05-audit-e-gate-raw-round2-herdr-shadow.txt` | `a9a586c2` |
+
+### The closure decision
+
+Both channels returned needs-attention, and **neither established a
+product-verdict defect.** The plugin reproduced C31–C43's Today and REQUIRED
+verdicts, swept every Unicode code point in three value positions and confirmed
+A7's widening is exactly CR/U+2028/U+2029 with nothing newly refused, ran three
+conforming duplicate detectors, checked the three `parseFrontmatter` observables
+against the six original assertions, and judged C39 a consequence of A7's stated
+LF-remainder-plus-trim contract rather than an owner item. The shadow's finding is
+a corpus-**witness** gap that a wrong detector slips through — not a wrong verdict.
+
+**Under "Weighted closure" the loop is DONE at round 2:** the round found nothing
+about the product. The remaining findings are machinery, they are fixed inside the
+existing surface, and an orchestrator executor verifies them mechanically before
+the `Ready` flip rather than a third external round extending the loop.
+
+### The circuit breaker fired TWICE, and both were answered by EXTRACTION
+
+Per ADR-0031, two consecutive rounds landing on the same contract family stop
+being patched and become an extraction. Both remaining findings qualified:
+
+| Family | R1 | R2 | Extraction |
+|--------|----|----|-----------|
+| duplicate-heading normalisation | R1-B | R2-A | The contract is **"detection on the key the parser CAPTURED"** (A3 already said so); its witnesses become a **generated matrix** quantifying over ECMAScript `\s` itself, so the corpus can no longer be satisfied by hand-picked members |
+| RED-proof sets | R1-C | R2-B | Table D gains a **proof-SELECTION contract**: TOTAL REACH (measured, may vary) is recorded separately from SELECTED WITNESSES (declared, stable), and the selection is carried by the shipped `testNamePattern` facility rather than by hoping an undeclared row stays quiet |
+
+### Findings, bands, dispositions
+
+| # | Channel | Band | Disposition — and what changed |
+|---|---------|------|-------------------------------|
+| **R2-A** | shadow A | LIGHT (machinery) | **fix, as EXTRACTION.** Round 1's four hand-picked suffixes covered **4 of 24** code points the capture strips; an adversarial detector stripping exactly those four passed every witness and authorized for the other twenty (executed). Row **C40** is redefined as a generated matrix — every non-LF code point matched by `\s`, on all three reads, asserted under three identities so LPC-D and LPC-E stay distinguishable. **C41** and **C42** are repurposed to the two cases that genuinely remain: interior (not trailing) whitespace, and a non-whitespace Unicode heading. No source-shape constraint on the detector |
+| **R2-B** | plugin A | LIGHT (machinery) | **fix, as EXTRACTION.** Excluding an algorithm-dependent row from `expectRed` does not stop the runner seeing it fail — `evaluateRed` rejects "failed in its OWN BODY but is not declared". `scripts/red-proofs.js` was read before the rule was written: `testNamePattern` is passed to BASELINE, RED **and** CONTROL, so an unselected identity never runs in any phase. Table D now carries both columns and the selection contract, plus the two constraints it imposes (every declared identity must be selected by its own pattern; every corpus row needs an individually selectable identity) |
+| **R2-C** | shadow B | LIGHT | **fix.** Table D listed C39 among the green controls "nothing reddens" thirteen lines after declaring LPC-G reddens it. C39 is now stated as green on the compliant design and intentionally red under LPC-G, and the green-control list is registered as a mirror of acceptance criterion 1 |
+| **R2-D** | plugin | LIGHT, non-blocking | **fix, at zero row cost.** Unicode-bearing hostile headings had no witness though the regex decides them; they became row **C42**, which the R2-A extraction had freed |
+
+### Measurements this round
+
+```text
+R2-A  `\s` minus LF enumerates 24 code points, measured:
+        U+0009 U+000B U+000C U+000D U+0020 U+00A0 U+1680 U+2000-U+200A
+        U+2028 U+2029 U+202F U+205F U+3000 U+FEFF
+      Round 1 rowed 4 of those 24.
+      C40's matrix under the ruled design: all 24 x all three reads give the
+      exact refusal for that read. Zero exceptions.
+      C41 `## a<U+00A0>b` (interior) -> key "a b" -> Pattern-Key refusal, not a duplicate.
+      C42 `## <fullwidth a.b>` and `## a<U+200B>b` -> Pattern-Key refusal (U+200B is not \s).
+
+R2-B  TOTAL REACH, measured per mutation:
+        LPC-A -> C6-C14, C31-C35, C21, C36, C37, C38      (selected: C6-C14, C31-C35)
+        LPC-F -> C21, C37                                  (selected: C21)
+        LPC-B -> C24, C25, C27, C28  under all three detectors
+                 + C26 under the lookup detector ONLY      (selected: C24, C25, C27, C28)
+        LPC-G -> C37, C39                                  (selected: both)
+      The three conforming detectors (lookup / Set / array indexOf) agree on
+      every corpus row when the collector is null-prototype — run, not assumed.
+```
+
+`npm run lint` passes with every document in the tree, exit 0, `0 error(s)`.
+
+### Size ceiling, re-measured (F6, final)
+
+Spec **575 → 594 lines**. The growth is one extraction that made a row stronger
+without adding rows (C40 replaced four hand-picked members with a generated
+matrix over 24), one extraction that added a contract Table D was missing, and
+two repurposed rows. **Corpus row count is unchanged at 43** and **no gate,
+script or grep was added in any round.** F6 closes as a **named residual**: the
+spec is 594 lines against a ~400 ceiling, the surplus is Table C (43 rows) and
+Table D's selection contract, and both are the deliverable rather than machinery
+around it.
+
 ## The stop criterion (pinned BEFORE round 1; RESTATED after round 1's HEAVY fixes)
 
 **Restatement, 2026-09-05 after round 1.** The criterion below is unchanged in
@@ -444,5 +524,5 @@ count while explicitly not firing on this round's growth.
   a recommendation and an overrule cost, not folded in.
 - **Size ceiling (learned from the archive):** if the spec passes ~400 lines, or
   a round adds gate machinery rather than a corpus row, **that is itself a
-  finding**. It is open as F6, re-measured at 575 lines after round 1, with a re-accepted
-  residual: this round added thirteen corpus rows and zero machinery.
+  finding**. It is open as F6, closed at 594 lines as a named residual after round 2 — the surplus is
+  Table C's 43 rows and Table D's selection contract, and no round added a gate.
