@@ -190,6 +190,47 @@ test('buildMime throws WienerdogError when from contains a CR', () => {
   );
 });
 
+test('buildMime emits In-Reply-To and References when given, in order, before Content-Type; absent leaves the bytes identical to today\'s', () => {
+  const withReply = gmail.buildMime({
+    to: 't@x.com',
+    subject: 'Re: S',
+    body: 'B',
+    inReplyTo: '<mid1@x>',
+    references: '<mid0@x> <mid1@x>',
+  });
+  const decodedWithReply = Buffer.from(withReply, 'base64url').toString('utf8');
+  assert.equal(
+    decodedWithReply,
+    'To: t@x.com\r\nSubject: Re: S\r\nIn-Reply-To: <mid1@x>\r\nReferences: <mid0@x> <mid1@x>\r\n' +
+      'Content-Type: text/plain; charset="UTF-8"\r\n\r\nB'
+  );
+
+  // With both absent the bytes are identical to today's (no new headers).
+  const withoutReply = gmail.buildMime({ to: 't@x.com', subject: 'S', body: 'B' });
+  assert.equal(
+    Buffer.from(withoutReply, 'base64url').toString('utf8'),
+    'To: t@x.com\r\nSubject: S\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\nB'
+  );
+});
+
+test("gws-gmail: [AUD-D7] buildMime refuses a CR or LF in every header it emits, including the two reply headers", () => {
+  const base = { to: 'a@b.com', subject: 'x', body: 'hi' };
+  const cases = [
+    { field: 'to', args: { ...base, to: 'a@b.com\r\nBcc: evil@evil.com' }, pattern: /To/ },
+    { field: 'subject', args: { ...base, subject: 'x\r\nBcc: evil@evil.com' }, pattern: /Subject/ },
+    { field: 'from', args: { ...base, from: 'f@x.com\r\nBcc: evil@evil.com' }, pattern: /From/ },
+    { field: 'inReplyTo', args: { ...base, inReplyTo: '<mid1@x>\r\nBcc: evil@evil.com' }, pattern: /In-Reply-To/ },
+    { field: 'references', args: { ...base, references: '<mid0@x>\r\nBcc: evil@evil.com' }, pattern: /References/ },
+  ];
+  for (const c of cases) {
+    assert.throws(
+      () => gmail.buildMime(c.args),
+      (err) => err.name === 'WienerdogError' && c.pattern.test(err.message),
+      `[AUD-D7] a CR/LF in ${c.field} is refused by assertHeaderSafe, naming the field`
+    );
+  }
+});
+
 test('_alert (via alert.run) throws when opts.subject contains a CRLF', async () => {
   const calls = { send: 0 };
   const services = {

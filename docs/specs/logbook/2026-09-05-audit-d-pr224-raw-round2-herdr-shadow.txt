@@ -1,0 +1,9 @@
+# PR gate raw — PR #224 round 2 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, pr-rubric) — WP-audit-d-code-derived-recipients
+# tip reviewed: a488db21cc7c4e51422a35329f347d5a347164f8 (detached worktree) ; base main = aa937430 ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No findings were identified (materiality bands A/B/C: none); changed paths match the Deliverables boundary, boundary-check and git diff --check exited 0, skill digests matched, V4 returned presence 0 and sweep 1 as required, and V5 exited 0. The seven changed unit suites passed 83/83 with exit 0; V1 exited 1 before testing because mkdtemp was denied, V2 exited 1 because unavailable markdownlint attempted a blocked network fetch while frontmatter passed, and both V3 commands exited 1 before mutations because sandbox creation was denied. All read-only inspection commands exited 0, and initial and final git status commands exited 0 with identical empty porcelain output, so the worktree remained unchanged; verdict: patch is correct.",
+  "overall_confidence_score": 0.96
+}

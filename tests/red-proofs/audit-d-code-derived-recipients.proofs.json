@@ -1,0 +1,192 @@
+{
+  "suite": "tests/unit/broker-verbs.test.js",
+  "proofs": [
+    {
+      "id": "self-recipient-from-args",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "2",
+      "why": "create_draft_to_self is safe by construction only if the drafted recipient is ALWAYS the getProfile-resolved self address; a handler that instead takes the address from args (with a literal fallback) reopens the exact free-address surface this WP exists to close, and [AUD-D1]'s assertion on the decoded MIME's To header catches it",
+      "file": "src/gws/broker/verbs.js",
+      "find": "      return gmail.draft(services, { to: self, subject: args.subject, body: args.body });",
+      "replace": "      return gmail.draft(services, { to: args.to || 'attacker@evil.example' /* RP_MUT_SELF_RECIPIENT_FROM_ARGS */, subject: args.subject, body: args.body });",
+      "marker": "RP_MUT_SELF_RECIPIENT_FROM_ARGS",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D1] create_draft_to_self addresses the server-resolved account and refuses when it cannot resolve one"],
+          "signal": "[AUD-D1]"
+        }
+      ]
+    },
+    {
+      "id": "self-resolve-failure-swallowed",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "2",
+      "why": "the fail-loud throw on an unusable getProfile result is what keeps create_draft_to_self from ever drafting to a garbage or empty address; swallowing it behind a literal fallback lets a draft go out with no verified self address, and [AUD-D1]'s unresolved-address assertion catches it",
+      "file": "src/gws/broker/verbs.js",
+      "find": "      const self = res && res.data && res.data.emailAddress;\n      if (!self || !String(self).includes('@')) {\n        throw new WienerdogError('could not determine your Google account address — no draft was created');\n      }",
+      "replace": "      let self = res && res.data && res.data.emailAddress; /* RP_MUT_SELF_RESOLVE_FAILURE_SWALLOWED */\n      if (!self || !String(self).includes('@')) { self = 'unresolved@example.com'; }",
+      "marker": "RP_MUT_SELF_RESOLVE_FAILURE_SWALLOWED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D1] create_draft_to_self addresses the server-resolved account and refuses when it cannot resolve one"],
+          "signal": "[AUD-D1]"
+        }
+      ]
+    },
+    {
+      "id": "reply-recipient-not-derived",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "3",
+      "why": "create_reply_draft's whole safety property is that args.body — untrusted model output — never reaches a header; overriding the derived recipient with an address pulled from args.body in the HANDLER (where the mutation must live, since replyTarget takes only id) reopens exactly the surface [AUD-D2] exists to close",
+      "file": "src/gws/broker/verbs.js",
+      "find": "      const target = await gmail.replyTarget(services, { id: args.id });\n      return gmail.draft(services, {\n        to: target.to,",
+      "replace": "      const target = await gmail.replyTarget(services, { id: args.id }); /* RP_MUT_REPLY_RECIPIENT_NOT_DERIVED */\n      const bodyAddr = (String(args.body).match(/[^\\s<>,;:\"\\\\@]+@[^\\s<>,;:\"\\\\@]+\\.[^\\s<>,;:\"\\\\@]+/) || [])[0];\n      return gmail.draft(services, {\n        to: bodyAddr || target.to,",
+      "marker": "RP_MUT_REPLY_RECIPIENT_NOT_DERIVED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address Table B's order produces, over every accepted case"],
+          "signal": "[AUD-D2]"
+        }
+      ]
+    },
+    {
+      "id": "reply-candidate-count-ungated",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "4",
+      "why": "Table B step 3 requires the WHOLE selected value to be exactly one mailbox; a mutant that instead takes the first address-shaped substring anywhere in it accepts a value naming several mailboxes (several bracketed mailboxes, two bare mailboxes, mixed bare+angle) instead of refusing, and [AUD-D3] carries those exact fixtures",
+      "file": "src/gws/gmail.js",
+      "find": "  const match = BARE_RE.exec(trimmedSelected) || MAILBOX_RE.exec(trimmedSelected);",
+      "replace": "  const match = /([^\\s<>,;:\"\\\\@[\\]()]+@[^\\s<>,;:\"\\\\@[\\]().]+(?:\\.[^\\s<>,;:\"\\\\@[\\]().]+)+)/.exec(trimmedSelected); /* RP_MUT_REPLY_CANDIDATE_COUNT_UNGATED */",
+      "marker": "RP_MUT_REPLY_CANDIDATE_COUNT_UNGATED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4"],
+          "signal": "[AUD-D3]"
+        }
+      ]
+    },
+    {
+      "id": "reply-grammar-dropped",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "4",
+      "why": "step 3's grammar's \"no match → refuse\" branch is what keeps a non-mailbox value (an address literal, a dotless domain, two @ signs, a quoted local part) from becoming a drafted recipient; removing only that branch and keeping the capture when the grammar DOES match (erratum 2 — the unconditional-whole-value form necessarily also reddens [AUD-D2], measured 10/13 rows moved, which the table's own two-sided discipline forbids) lets every one of [AUD-D3]'s twelve step-3 fixtures draft instead of refuse, while every [AUD-D2] accepted row still matches the grammar and is byte-unmoved — measured 0/13 [AUD-D2] rows moved, 12/12 step-3 fixtures moved, none of the twelve caught later by step 4 or step 7",
+      "file": "src/gws/gmail.js",
+      "find": "  if (!match) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  const address = match[1];",
+      "replace": "  const address = match ? match[1] : trimmedSelected; /* RP_MUT_REPLY_GRAMMAR_DROPPED */",
+      "marker": "RP_MUT_REPLY_GRAMMAR_DROPPED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4"],
+          "signal": "[AUD-D3]"
+        }
+      ]
+    },
+    {
+      "id": "reply-fetch-failure-drafts-anyway",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "4",
+      "why": "a messages.get failure must refuse (fixed message, zero drafts.create) rather than draft with placeholder content; a mutant that catches the failure and continues with a literal fallback recipient and subject drafts where correct code refuses, and [AUD-D3]'s messages.get-failure case catches it",
+      "file": "src/gws/gmail.js",
+      "find": "  } catch {\n    throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  }",
+      "replace": "  } catch {\n    /* RP_MUT_REPLY_FETCH_FAILURE_DRAFTS_ANYWAY */\n    res = { data: { threadId: '', payload: { headers: [{ name: 'From', value: 'fallback@example.com' }, { name: 'Subject', value: 'fallback subject' }] } } };\n  }",
+      "marker": "RP_MUT_REPLY_FETCH_FAILURE_DRAFTS_ANYWAY",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4"],
+          "signal": "[AUD-D3]"
+        }
+      ]
+    },
+    {
+      "id": "threading-dropped",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "5",
+      "why": "a reply draft must thread to its source via threadId on the drafts.create request; dropping it silently starts a new thread instead, and [AUD-D4]'s threading assertion on the recorded request body catches it",
+      "file": "src/gws/gmail.js",
+      "find": "  const message = opts.threadId ? { raw, threadId: opts.threadId } : { raw };",
+      "replace": "  const message = { raw }; /* RP_MUT_THREADING_DROPPED */",
+      "marker": "RP_MUT_THREADING_DROPPED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets"],
+          "signal": "[AUD-D4]"
+        }
+      ]
+    },
+    {
+      "id": "output-bound-removed",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "5",
+      "why": "step 7's line-length check is the owner-ruled defence against an emitted header line over 998 octets; deleting it entirely makes the verb draft at every one of [AUD-D4]'s step-7 refused rows instead of refusing",
+      "file": "src/gws/gmail.js",
+      "find": "  for (const line of outputLines) {\n    if (Buffer.byteLength(line, 'utf8') > OUTPUT_LINE_MAX_OCTETS) {\n      throw new WienerdogError(REPLY_REFUSAL_OUTPUT);\n    }\n  }",
+      "replace": "  /* RP_MUT_OUTPUT_BOUND_REMOVED: step 7's line-length check deleted entirely */",
+      "marker": "RP_MUT_OUTPUT_BOUND_REMOVED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets"],
+          "signal": "[AUD-D4]"
+        }
+      ]
+    },
+    {
+      "id": "output-bound-measured-in-code-units",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "5",
+      "why": "step 7 must measure UTF-8 octets, not UTF-16 code units, or a multi-byte Subject (329 €) passes a code-unit check while producing a 1000-octet line; [AUD-D4]'s € subject rows catch a code-unit measure",
+      "file": "src/gws/gmail.js",
+      "find": "    if (Buffer.byteLength(line, 'utf8') > OUTPUT_LINE_MAX_OCTETS) {",
+      "replace": "    if (line.length > OUTPUT_LINE_MAX_OCTETS) { /* RP_MUT_OUTPUT_BOUND_MEASURED_IN_CODE_UNITS */",
+      "marker": "RP_MUT_OUTPUT_BOUND_MEASURED_IN_CODE_UNITS",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets"],
+          "signal": "[AUD-D4]"
+        }
+      ]
+    },
+    {
+      "id": "empty-subject-prefixed",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "5",
+      "why": "step 5's fixed point requires an empty (or whitespace-only) source subject to derive the empty string, never 'Re: '; prefixing unconditionally breaks that fixed point, and [AUD-D4]'s empty/spaces-only/tabs-only subject rows catch it",
+      "file": "src/gws/gmail.js",
+      "find": "  const subject = trimmedSubject === '' ? '' : /^re:/i.test(trimmedSubject) ? trimmedSubject : `Re: ${trimmedSubject}`;",
+      "replace": "  const subject = /^re:/i.test(trimmedSubject) ? trimmedSubject : `Re: ${trimmedSubject}`; /* RP_MUT_EMPTY_SUBJECT_PREFIXED */",
+      "marker": "RP_MUT_EMPTY_SUBJECT_PREFIXED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets"],
+          "signal": "[AUD-D4]"
+        }
+      ]
+    },
+    {
+      "id": "step1-scan-drops-a-field",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "6",
+      "why": "step 1 must scan ALL five raw values for a CR/LF before any of them can be used; dropping Subject/Message-ID/References from that scan (never a recipient field — a CR/LF there still fails the grammar the same way on both sides, an indistinguishable pair) lets a CR/LF in one of those three sail through to buildMime's assertHeaderSafe, which throws its OWN message rather than step 1's — [AUD-D5] asserts step 1's fixed message AND that buildMime (reached only via draft(), which this mutant DOES invoke) was never invoked",
+      "file": "src/gws/gmail.js",
+      "find": "  // Step 1 — CR/LF, on the raw values, before any trim.\n  for (const v of raw) {\n    if (/[\\r\\n]/.test(v)) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  }",
+      "replace": "  // Step 1 — CR/LF, on the raw values, before any trim.\n  for (const v of [rawReplyTo, rawFrom]) { /* RP_MUT_STEP1_SCAN_DROPS_A_FIELD: Subject/Message-ID/References removed from the scan */\n    if (/[\\r\\n]/.test(v)) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  }",
+      "marker": "RP_MUT_STEP1_SCAN_DROPS_A_FIELD",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["broker-verbs: [AUD-D5] a CR or LF anywhere in any of the five RAW header values, one field at a time, produces zero drafts.create calls and never reaches buildMime"],
+          "signal": "[AUD-D5]"
+        }
+      ]
+    }
+  ]
+}

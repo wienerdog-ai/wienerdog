@@ -35,11 +35,11 @@ test('broker-registry: listTools advertises ONLY the declared allowedVerbs', () 
   const registry = buildRegistry({
     services: fakeServices(),
     routineId: 'weekly-review',
-    allowedVerbs: ['create_draft'],
+    allowedVerbs: ['create_draft_to_self'],
     grantCheck: () => true,
   });
   const tools = registry.listTools();
-  assert.deepEqual(tools.map((t) => t.name), ['create_draft'], 'only the declared verb is advertised');
+  assert.deepEqual(tools.map((t) => t.name), ['create_draft_to_self'], 'only the declared verb is advertised');
 });
 
 test('broker-registry: an undeclared verb throws "unknown broker verb" BEFORE any dispatch (zero side effect)', async () => {
@@ -47,7 +47,7 @@ test('broker-registry: an undeclared verb throws "unknown broker verb" BEFORE an
   const registry = buildRegistry({
     services,
     routineId: 'weekly-review',
-    allowedVerbs: ['create_draft'], // send_digest_to_self is NOT declared
+    allowedVerbs: ['create_draft_to_self'], // send_digest_to_self is NOT declared
     grantCheck: () => true,
   });
   await assert.rejects(
@@ -61,10 +61,10 @@ test('broker-registry: absent/empty allowedVerbs advertises nothing and rejects 
   const services = fakeServices();
   const absent = buildRegistry({ services, routineId: 'daily-digest', grantCheck: () => true });
   assert.deepEqual(absent.listTools(), [], 'absent allowedVerbs → advertise nothing');
-  await assert.rejects(() => absent.callTool('create_draft', { to: 'x@y.z', subject: 's', body: 'b' }), /unknown broker verb/);
+  await assert.rejects(() => absent.callTool('create_draft_to_self', { subject: 's', body: 'b' }), /unknown broker verb/);
 
   const empty = buildRegistry({ services, routineId: 'daily-digest', allowedVerbs: [], grantCheck: () => true });
   assert.deepEqual(empty.listTools(), [], 'empty allowedVerbs → advertise nothing');
-  await assert.rejects(() => empty.callTool('create_draft', { to: 'x@y.z', subject: 's', body: 'b' }), /unknown broker verb/);
+  await assert.rejects(() => empty.callTool('create_draft_to_self', { subject: 's', body: 'b' }), /unknown broker verb/);
   assert.equal(services.calls.length, 0, 'a fail-closed registry never dispatches');
 });

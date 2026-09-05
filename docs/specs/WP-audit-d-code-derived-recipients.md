@@ -1,7 +1,7 @@
 ---
 id: WP-audit-d-code-derived-recipients
 title: Split create_draft into two code-derived-recipient verbs
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []
@@ -173,6 +173,31 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+> **Erratum 1 — 2026-09-05, found at implementation, before the PR gate.**
+> `src/core/runtime-skill-digests.json` was missing from this table. Editing a
+> vendored operating skill changes its sha256, and that file is the checked-in
+> integrity anchor (`src/core/runtime-settings.js:25-34`), so the two `SKILL.md`
+> rows below could not be satisfied without it: the drift guard fails, and a merge
+> would leave weekly-review and inbox-triage refusing to run with *"refusing to run
+> tampered skill text"*. The implementer correctly did **not** touch it and
+> reported it instead — the boundary worked. **This is a permission-boundary
+> overrun of the same class the durability WP's round-1 reviewer caught**: a
+> Deliverables table that lists the file a change edits but not the file that
+> change invalidates.
+>
+> **Erratum 2 — 2026-09-05, found at the PR gate, round 1, by wd-reviewer.**
+> Table C's `reply-grammar-dropped` row carried the parenthetical *"(take the whole
+> trimmed value as the address)"*. Executed literally that mutation **necessarily**
+> reddens `[AUD-D2]` as well — every angle-addr row then yields the whole
+> `phrase <addr>` string as `to` — so an implementer following the row verbatim
+> must declare a two-identity `expectRed`, which the **same table's** discipline
+> paragraph forbids (*"a mutation whose measured set EXCEEDS its declaration is
+> restated, not widened into the declaration"*). **The row and the paragraph could
+> not both be satisfied.** The row is now the narrow form, measured. **Class: a
+> row-level EXAMPLE contradicting its own table's governing rule** — the same
+> family as round 1's `C26`/`expectRed` lesson on the sibling WP. A governing
+> paragraph does not police the examples beneath it; only executing one does.
+
 <!-- Always allowed without listing: this spec file itself (the status flip),
      package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
 
@@ -184,6 +209,7 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 | modify | src/core/runtime-profile.js | `inbox-triage` → `['gmail_search','gmail_read','create_reply_draft']`; `weekly-review` → `['create_draft_to_self']`; update the `:113` comment to name the new verb |
 | modify | skills/wienerdog-inbox-triage/SKILL.md | name `create_reply_draft`; the Draft section says the reply goes to the message id, not to an address |
 | modify | skills/wienerdog-weekly-review/SKILL.md | name `create_draft_to_self`; delete "with the user's own address as `to`" |
+| modify | src/core/runtime-skill-digests.json | regenerate the two entries whose `SKILL.md` this WP edits (`wienerdog-inbox-triage`, `wienerdog-weekly-review`) — the ADR-0021-style integrity anchor; the other two entries are byte-identical and must not move |
 | modify | docs/GLOSSARY.md | line 36's example list: `create_draft` → `create_draft_to_self` |
 | modify | docs/THREAT-MODEL.md | T4a only: `:138` gains the drafts sentence; the named residual is added as its own paragraph after `:140`'s (Exact contracts) |
 | modify | docs/adr/0026-gws-capability-broker.md | §2's draft bullet (`:152-153`) and a new **Amendment 2** appended after the Amendment 1 block (Exact contracts) |
@@ -290,6 +316,23 @@ ruling requires a refusal that did not previously exist. Neither is
 never be the message a `create_reply_draft` refusal produces** — that is the
 property `[AUD-D5]` asserts. It never reads the message body, and it never accepts
 an address from its caller.
+
+**`src/core/runtime-skill-digests.json` — how to regenerate.** Each value is the
+**lowercase sha256 hex of the RAW bytes** of `skills/<skillId>/SKILL.md` exactly as
+committed — **no newline, whitespace or encoding normalisation of any kind**
+(`src/core/runtime-settings.js:25-34`). Regenerate **only** the two entries whose
+skill this WP edits:
+
+```bash
+shasum -a 256 skills/wienerdog-inbox-triage/SKILL.md
+shasum -a 256 skills/wienerdog-weekly-review/SKILL.md
+```
+
+The file keeps **exactly four** keys — `wienerdog-dream`,
+`wienerdog-daily-digest`, `wienerdog-inbox-triage`, `wienerdog-weekly-review` — and
+the first two values must be **byte-identical** to their current entries, because
+this WP does not touch those skills. A test pins both facts (the key set and the
+64-hex-digit shape), so an added, removed or renamed key fails.
 
 **`create_draft_to_self`'s handler** mirrors `verbs.js:197-201` exactly: resolve
 via `getProfile`, and when the result carries no `@`, throw
@@ -611,7 +654,7 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 | ″ | `[AUD-D1]` | `self-resolve-failure-swallowed` | 2 | replace the fail-loud throw on an unusable `getProfile` result with a literal fallback address |
 | `broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address Table B's order produces, over every accepted case` | `[AUD-D2]` | `reply-recipient-not-derived` | 3 | **in the `create_reply_draft` HANDLER**, where `args.body` is in scope — override `replyTarget`'s `to` with the first address found in `args.body`. (`replyTarget` takes only `id`, so the mutation cannot live there) |
 | `broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4` | `[AUD-D3]` | `reply-candidate-count-ungated` | 4 | replace Table B's exactly-one-candidate requirement with "take the first candidate" |
-| ″ | `[AUD-D3]` | `reply-grammar-dropped` | 4 | in `replyTarget`, accept the selected value without matching Table B's single-mailbox grammar (take the whole trimmed value as the address) |
+| ″ | `[AUD-D3]` | `reply-grammar-dropped` | 4 | in `replyTarget`, **remove the "no match → refuse" branch only, and keep the capture when the grammar does match**: `const address = match ? match[1] : trimmedSelected;`. Every `[AUD-D2]` accepted row still matches and is byte-unmoved, while all twelve step-3 fixtures draft instead of refusing — **measured: 0/13 `[AUD-D2]` rows move, 12/12 step-3 fixtures move**, and none of the twelve is caught later by step 4 or step 7. **Do NOT take the whole trimmed value unconditionally** (`const address = trimmedSelected;`): that also rewrites the recipient of every angle-addr row, moving 10/13 `[AUD-D2]` rows, so its measured set would exceed this declaration (erratum 2) |
 | ″ | `[AUD-D3]` | `reply-fetch-failure-drafts-anyway` | 4 | catch the `messages.get` failure and continue with a **literal fallback recipient and subject**, so the mutant DRAFTS where the correct code refuses. (Continuing with an *empty* header set would not do: Table B then refuses on "both empty", producing the same zero-draft observable as correct code — a vacuous proof) |
 | `broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets` | `[AUD-D4]` | `threading-dropped` | 5 | drop `threadId` from the `drafts.create` request body |
 | ″ | `[AUD-D4]` | `output-bound-removed` | 5 | delete Table B step 7's line-length check entirely — the mutant drafts at every step-7 refused row, so the identity reddens on the refused side while the accepted side is unmoved |
@@ -637,6 +680,13 @@ step 3 also reddens `[AUD-D2]`'s quoted-display-name row, so its set exceeds
 `[AUD-D3]`; the fix is a narrower mutation, because widening the declaration would
 make the pair stop distinguishing the two identities — which is the whole reason
 `evaluateRed`'s comparison is two-sided.
+
+**And it happened for real, in the row directly above this paragraph** (erratum 2):
+`reply-grammar-dropped` said "take the whole trimmed value as the address", which
+moves 10 of 13 `[AUD-D2]` rows as well as all 12 step-3 fixtures, so an implementer
+following it verbatim declared both identities — the exact widening this paragraph
+forbids. **A governing rule does not police the examples beneath it.** The row was
+narrowed and re-measured; the rule was already right.
 
 **Every mutation above must produce a DIFFERENT observable than correct code under
 its identity** — `evaluateRed` compares failing sets, so a mutant that lands on the
@@ -679,6 +729,7 @@ added here on the spot.
 - [ ] **Table B** ← the Gmail-threading bullet (step 5's no-truncation rule is what satisfies the Subject-match condition)
 - [ ] **Table B** ← Table C's `[AUD-D3]` / `[AUD-D5]` / `[AUD-D7]` fixture-ownership paragraph
 - [ ] **Table B** ← the T4a residual paragraph quoted in Exact contracts (the `Reply-To`-else-`From` sentence)
+- [ ] **Erratum 1** ← the Deliverables row for `src/core/runtime-skill-digests.json`, the Exact-contracts regeneration rule, acceptance criterion 10a, and V1's drift-guard note — **whenever a `skills/*/SKILL.md` row is added to or removed from Deliverables, this set moves with it**
 - [ ] **Table C** ← the Deliverables rows for **all three** `.proofs.json` files and for `tests/unit/gws-broker.test.js` and `tests/unit/gws-gmail.test.js`, acceptance criterion 10, and verification step V3
 - [ ] **Table B** ← the two "consequences" bullets under Table B (the whole-value-grammar rationale and the fail-closed narrowing)
 - [ ] **Table B** ← the `[AUD-D2]` and `[AUD-D3]` identity names in Table C, and the masking-trap note beneath it
@@ -824,13 +875,26 @@ added here on the spot.
        and, for `weekly-review`, `mcp__wienerdog-broker__create_draft_to_self` —
        exact names, no wildcard. (V1)
 10. [ ] Every declaration in Table C reports `PROVEN`. (V3)
+10a. [ ] **The vendored-skill integrity anchor is back in step with the two edited
+        skills**: `src/core/runtime-skill-digests.json` carries the regenerated
+        sha256 of each edited `SKILL.md`, still holds exactly the four operating
+        skills, and leaves `wienerdog-dream` and `wienerdog-daily-digest`
+        byte-identical. **Observable — already shipped, no new test:**
+        `runtime-settings: every shipped operating skill matches its checked-in
+        digest (drift guard)` and `runtime-settings: the digest map covers EXACTLY
+        the 4 fixed operating skills` both pass, and nothing anywhere reports
+        *"refusing to run tampered skill text"*. (V1) *(Erratum 1.)*
 11. [ ] Idempotence — `N/A — this WP ships no command and writes nothing outside
         the repo; it changes broker verb definitions and their callers only.`
 
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# V1 — full suite (baseline at 8c52808f: tests 2630 / pass 2618 / fail 0 / skipped 12)
+# V1 — full suite (baseline at 8c52808f: tests 2630 / pass 2618 / fail 0 / skipped 12).
+# This is also where the vendored-skill drift guard runs (Erratum 1): editing a
+# SKILL.md without regenerating src/core/runtime-skill-digests.json fails
+# `runtime-settings: every shipped operating skill matches its checked-in digest
+# (drift guard)` and every test that loads either edited skill.
 node tests/with-temp-root.js tests/run.js
 
 # V2 — lint
@@ -935,6 +999,14 @@ the BAD is not — and the form above extends it from names to whole records.
 - **`src/gws/scope-sets.js`** — no OAuth scope changes of any kind.
 - **`tests/scenarios/broker-e2e/`** — measured to need no change (Implementation
   notes). Strengthening it to assert draft recipients is a separate WP.
+- **The model-supplied `subject` of `create_draft_to_self` and
+  `send_digest_to_self` carries a 512-**character** schema cap but no octet
+  bound**, so a multi-byte subject can still build a `Subject:` line over 998
+  octets on those two verbs. Table B step 7 bounds only `create_reply_draft`'s
+  **derived** headers, which is what the owner ruled. Correctly out of scope here;
+  **recorded as a follow-up candidate beside option (c)** in
+  `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`, and
+  worth naming under "Discovered issues" in the PR.
 - **`FIX-PLAN.md`** (rows `ST2` / `N-R2` at `:525,:541`) — a dated record of the
   0.10.0 unfreeze, not a live claim; records are not rewritten when the thing they
   recorded changes.

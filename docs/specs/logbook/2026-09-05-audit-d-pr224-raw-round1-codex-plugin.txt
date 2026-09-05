@@ -1,0 +1,35 @@
+# PR gate raw — PR #224 round 1 — Codex plugin native review — WP-audit-d-code-derived-recipients
+# tip reviewed: b95038d17b60cfd220f9e99b20d498319446d3b3 ; base main = aa937430 ; porcelain before/after identical ; committed pre-adjudication ; NOTE: the reviewer reports its test execution was blocked by the sandbox — this verdict is a READING
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0720a-40b2-7c52-bf3c-1416d93146e2).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat aa9374308435c752d4947fa32919a77465d7a9...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat aa9374308435c752d4947fa32919a77465d7a9... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-d-code-derived-recipients.md; git diff a...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-d-code-derived-recipients.md; git diff a... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '255,470p' docs/specs/WP-audit-d-code-derived-recipients.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '255,470p' docs/specs/WP-audit-d-code-derived-recipients.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d -- tests/unit/broker-verbs.te...
+[codex] Command completed: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d -- tests/unit/broker-verbs.te... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat src/gws/gmail.js; cat src/cli/gws-broker.js; cat src/gws/broker/registry.js...
+[codex] Command completed: /bin/zsh -lc "cat src/gws/gmail.js; cat src/cli/gws-broker.js; cat src/gws/broker/registry.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '55,90p' tests/scenarios/broker-e2e/run-broker-e2e.js; git diff aa937430...
+[codex] Command completed: /bin/zsh -lc "sed -n '55,90p' tests/scenarios/broker-e2e/run-broker-e2e.js; git diff aa937430... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat src/gws/broker/credentials.js; rg -n 'capabilityClass|brokerVerbs' src | he...
+[codex] Command completed: /bin/zsh -lc "cat src/gws/broker/credentials.js; rg -n 'capabilityClass|brokerVerbs' src | he... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d'
+[codex] Command completed: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/red-proofs/audit-d-broker-assembly.proofs.json; cat tests/red-proofs/...
+[codex] Command completed: /bin/zsh -lc "cat tests/red-proofs/audit-d-broker-assembly.proofs.json; cat tests/red-proofs/... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: No actionable regressions found in the recipient derivation, credential routing, MIME constru...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+No actionable regressions found in the recipient derivation, credential routing, MIME construction, or updated consumers. Test execution was blocked by the read-only sandbox's prohibition on creating temporary directories.
+rc=0
+PORCELAIN: identical

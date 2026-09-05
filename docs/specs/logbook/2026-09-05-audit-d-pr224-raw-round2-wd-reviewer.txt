@@ -1,0 +1,124 @@
+# PR gate raw — PR #224 round 2 — wd-reviewer (claude-opus-5 agent, detached checkout with real node_modules) — WP-audit-d-code-derived-recipients
+# tip reviewed: a488db21cc7c4e51422a35329f347d5a347164f8 ; base main = aa937430 ; porcelain before/after identical (reported) ; committed pre-adjudication
+
+APPROVE
+
+**PR #224 round 2 — head `a488db21`, base main `aa937430`. No band-A or band-B finding. Three band-C items, none product-affecting; all four round-1 dispositions are CLOSED by execution.**
+
+Product code is **byte-identical** to round 1's reviewed tip (`git diff --name-only b95038d1..HEAD -- src skills` → 0 files); the round-2 commit touches only `tests/red-proofs/audit-d-code-derived-recipients.proofs.json` and `tests/unit/broker-verbs.test.js`. I re-derived the product properties myself anyway rather than inheriting round 1's verdict.
+
+---
+
+### `git status --porcelain` — before and after
+
+Both **empty**. Reported before any command and again after every check including two full `red-proofs` runs; worktree left at `a488db21`, no tracked file modified. All probes live under `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr224r2-scratch/`.
+
+### What I executed
+
+| Check | Exit | Result |
+|---|---|---|
+| `node tests/with-temp-root.js tests/run.js` (V1) | **0** | tests 2638 / pass 2626 / fail 0 / skipped 12 — matches the spec's expected shape |
+| `npm run lint` (V2) | **0** | markdownlint 644 files 0 errors; shellcheck + PSScriptAnalyzer clean; frontmatter 268 specs / 4 agents |
+| `node scripts/red-proofs.js --wp WP-audit-d-code-derived-recipients` (V3 sel.) | 1 | `53 declared, 16 selected`; **all 16 PROVEN**; run-level `FILTERED` — the runner's design when a selection leaves other WPs' declarations out, not a defect |
+| `node scripts/red-proofs.js` (V3 whole tree) | **0** | `53 declared proof(s), 53 selected`, **`RUN: PROVEN`**, 75 PROVEN lines |
+| V4 presence guard + sweep (extracted from the spec's fence at `:893-978`, run with `sh`) | — | `V4 presence guard exit: 0`, `V4 sweep exit: 1` (zero live-surface hits for `create_draft`) |
+| V5 full-record verb-table compare | **0** | nine names, key ≡ record `name`, all nine records match Table A |
+| `node scripts/boundary-check.js <spec> <24 changed files>` | **0** | no stray file |
+| `literals.js` — byte-compare the three prescribed doc literals | **0** | T4a sentence 286/286, T4a residual 869/869, ADR Amendment 2 1272/1272 chars — identical |
+| `tablec.js` — declarations vs Table C | **0** | 3 files, one `suite` each; **16 shipped tuples ≡ 16 Table C rows**, no extras; every identity found verbatim in its suite |
+| `probe-tableb.js` — my own Table B case-table probe (not derived from the PR's tests) | **0** | **PASS 107 / FAIL 0** |
+| `probe-crit7.js` — criterion 7's `grantCheck: () => false` clause | 0 | property **holds** for both verbs (see finding 2) |
+| `marker-audit.js` — band markers under `[AUD-D*]` identities | 1 | **63 of 64** carry their marker (see finding 1) |
+| `shasum -a 256` on all four `SKILL.md` vs the digest map | — | all four match; exactly 4 keys; `wienerdog-dream` / `wienerdog-daily-digest` byte-identical to `aa937430` |
+
+---
+
+### PART 1 — the four round-1 dispositions
+
+**1. Erratum 2 / `reply-grammar-dropped` — CLOSED.**
+`tests/red-proofs/audit-d-code-derived-recipients.proofs.json:76-85` now carries the narrow pair, byte-matching the erratum'd Table C row (spec `:654`):
+```
+"find":    "  if (!match) throw new WienerdogError(REPLY_REFUSAL_INPUT);\n  const address = match[1];"
+"replace": "  const address = match ? match[1] : trimmedSelected; /* RP_MUT_REPLY_GRAMMAR_DROPPED */"
+```
+The no-match refusal is removed and the capture is kept, exactly as the row prescribes; the `const match = …` declaration line is **not** in the `find` (the earlier attempt that deleted it and produced a `ReferenceError` is recorded in the commit body). `expectRed` is now `[{test: "broker-verbs: [AUD-D3] …", signal: "[AUD-D3]"}]` — the `[AUD-D2]` entry is gone. **Measured, not read**: `--wp` run reports `PROVEN reply-grammar-dropped (criterion 4)`, i.e. `evaluateRed`'s two-sided comparison found the observed own-body failing set **equal** to `["[AUD-D3]"]`. The run-level `FILTERED`/exit 1 is the runner's design (14 other WPs' criteria are `FILTERED — left out`), matching V3's own note in the spec.
+
+**2. The unmarked `[AUD-D1]` schema-rejection assertion — CLOSED.**
+`tests/unit/broker-verbs.test.js:310-314` now reads:
+```js
+await assert.rejects(
+  () => r2.callTool('create_draft_to_self', { subject: 's', body: 'b', ...extra }),
+  (err) => /unexpected field/i.test(err.message),
+  `[AUD-D1] a supplied ${Object.keys(extra)[0]} is schema-rejected`
+);
+```
+Both halves of round-1 finding 2 are fixed: the band marker is present, and the validator pins the **actual** schema-rejection message rather than "it rejects for some reason" — I confirmed `unexpected field` is the real text produced by `validate()` under `additionalProperties: false` (the assertion is green in V1). Count: **64 assertions under `[AUD-D*]` identities, 63 carry their marker** — the one miss is new code, see finding 1.
+
+**3. The `[AUD-D4]` `To` accepted witness — CLOSED, with one precision.**
+`tests/unit/broker-verbs.test.js:616-641`. Built **without literal glyphs**: `String.fromCharCode(0x3042)` repeated 106+106+106 with ASCII `@` and `.` separators, `assert.equal(addr320.length, 320)` pinning the precondition, `created.length === 1` pinning that step 4 **accepts** at its boundary. The maximum-density reasoning is sound — 318 filler units is the most the grammar permits (the `@` and one `.` must be 1-octet), so 956 address octets / 960 `To`-line octets is the true reachable maximum, and the comment's `4 + 320×3 = 964` is the loose ceiling.
+**Precision:** the assertion pins the **bound**, not the count — `Buffer.byteLength(toLine,'utf8') <= 998`, with the measured 960 appearing only in the failure-only message. That is the literal clause criterion 5 states under the UTF-16 branch (*"no `To` line over 998 octets is reachable at all"*), and the disposition asked for *one witness*, so I read this as closed as specified; pinning `=== 960` would over-constrain. Noting it because the task asked whether the octet count is pinned: **it is not — the 998 bound is.**
+
+**4. The two spec errata — CLOSED.**
+`git diff aa937430 HEAD -- docs/specs/WP-audit-d-code-derived-recipients.md` decomposes exactly three ways, one per commit: `e66783b8` = the `status: Ready → In-Review` flip **and nothing else**; `a145b5b3` = erratum 1 propagated in one pass to all four registered mirrors (Deliverables row `:212`, Exact-contracts regeneration rule `:320-336`, criterion 10a `:878-886`, V1's drift-guard note `:893-897`) plus its own new checklist line `:732`; `0adb3bde` = erratum 2's block, the narrowed Table C row, the "it happened for real" paragraph, and one Out-of-scope bullet. **Tables A and B are byte-unmoved** (no hunk lands in `:397-603`); Table C moved **only** the `reply-grammar-dropped` row.
+One thing worth naming: the Out-of-scope bullet at `:999-1006` (the model-supplied `subject`'s 512-**character** cap with no octet bound) rode in on the erratum-2 commit but is not erratum-2 material — it is the disposition of round-1 finding 4, correctly recorded as a non-claim rather than fixed. Legitimate, just not what the commit subject says.
+
+---
+
+### Findings
+
+**1. [quality] `tests/unit/broker-verbs.test.js:626` — the new `[AUD-D4]` `To` witness reintroduces exactly the defect round-1 finding 2 closed: an assertion under an `[AUD-D*]` identity with no band marker. Band C. Non-blocking.**
+
+```js
+assert.equal(addr320.length, 320, 'witness precondition: exactly 320 UTF-16 code units');
+```
+Spec `:673-675` makes the marker universal (*"Each identity carries its band marker in **every** assertion message"*), and `evaluateRed` enforces it via `hit.node.diag.raw.includes(entry.signal)` — the TAP diagnostic carries the assertion message, not the test name. Fix: append `[AUD-D4] ` to the message.
+
+**Why this does not gate, stated so a fresh session can weigh it the same way.** Round 1's instance was materially different: it was an `assert.rejects` with *no validator at all* on a behavioural claim (criterion 2's "schema-rejected"), so it under-pinned a real property. This one asserts a property of a string the test itself just built from `String.fromCharCode` and `repeat` — **no mutation of any product file can redden it**, so the signal check can never fire on it. I verified that: none of the 16 declared mutations touches anything this line depends on, and all 16 are PROVEN. The three behavioural assertions in the same block (`created.length`, the `^To: ` match, the 998-octet bound) all carry `[AUD-D4]`.
+
+**For wd-architect (spec hygiene, not a gate).** This is the **second** round in a row that a reviewer has had to catch a missing marker by hand, and the two instances differ in kind — one behavioural, one a test-harness precondition. Two options, either of which closes the family: state a carve-out in the `:673-675` rule for assertions on test-constructed preconditions, or make the rule mechanical (my `marker-audit.js` is ~90 lines and could live beside `scripts/red-proofs.js`, which already owns the `signal` contract). A rule a reviewer must scan 64 assertions to enforce will keep producing this finding.
+
+**2. [criteria] Acceptance criterion 7's second clause is unasserted by V1. Band C. Property verified true by me.**
+
+Criterion 7 (spec `:851-853`) requires that *"a `grantCheck` that always returns `false` does not change either verb's outcome"*, attributed to V1. No shipped test drives either new verb with a false `grantCheck`: `makeRegistry`'s default is `grantCheck: overrides.grantCheck || (() => true)` (`tests/unit/broker-verbs.test.js:91`), the only false-grant test is `send_digest_to_self`'s at `:733-745`, and no test asserts the gate is SEND-only. The class pins at `:151-152` cover the criterion's *first* clause only.
+
+I executed the clause (`probe-crit7.js`): with `grantCheck: () => false`, both `create_draft_to_self` and `create_reply_draft` produce an **identical** outcome to `grantCheck: () => true` — same response text, 1 `drafts.create` call, byte-identical MIME. `src/gws/broker/registry.js:71` gates on `verb.capabilityClass === CAPABILITY_CLASS.SEND`, so the property holds by construction. **So this is a missing assertion, not a defect.**
+
+Materiality is genuinely low and I want to be precise about why: the spec deliberately gives criterion 7 no RED declaration (`:706-712`) on the ground that it pins code this WP does not modify, so there is no mutation to catch. The residual risk is an availability one — a future change that gated DRAFT would silently stop both routines drafting with no test firing. Fix if cheap: one test driving both verbs through `buildRegistry` with `grantCheck: () => false` and asserting the draft is still created.
+
+**3. [quality] `src/cli/gws-broker.js:97-101` — the `classesFor` wrapper adds an indirection the Exact contract does not ask for. Band C. Non-blocking.**
+
+```js
+const classesFor = (verbNames) => requiredClassesFor(verbNames);
+const classes = classesFor(profile.brokerVerbs);
+```
+Exact contracts (spec `:249-253`) prescribe the two consumer sites as `requiredClassesFor(profile.brokerVerbs)` and `requiredClassesFor([name])`. The shipped alias is semantically identical — pure pass-through, no branch, both sites unconditional — and the RED proofs `extra-classes-dropped-derivation` and `extra-classes-dropped-refusal` both pin the sites through it, so nothing is weakened. But its comment claims it is what keeps the sites from drifting, which it does not: the anti-drift property comes from both sites calling the helper unconditionally, not from the local binding. CLAUDE.md's "no abstractions for single-use code / minimum that solves the problem" reads against it. Inlining `requiredClassesFor` at both sites would match the contract literally and remove a misleading comment.
+
+---
+
+### Contract fidelity — what I confirmed directly
+
+- **`create_draft` deleted**, not de-allowlisted: `assert.equal(VERBS.create_draft, undefined, …)` at `broker-verbs.test.js:156`, V4's sweep exits 1 over all six live surfaces, V5 pins the nine-name table.
+- **Table A**: V5 compares all nine complete records — `service`, `capabilityClass`, `extraClasses`, whole `limits`, the schema's complete top-level key set, `type`, `required`, `additionalProperties`, and every property schema including `pattern` — plus the key ≡ `name` tie. Caps 3 and 10 as ruled; `extraClasses: Object.freeze(['READ'])` on both.
+- **Table B's ORDER, steps 0–8**, at `src/gws/gmail.js:225-283`: bound (`RAW_VALUE_MAX_CHARS = 998`, characters) before the CR/LF scan, scan on the **raw** values before any trim, the prescribed linear `hasContent = (v) => /[^ \t]/.test(v)`, grammar on the trimmed value, step-4 bound, step-5 subject with **no truncation** and the empty fixed point, step-6 threading, step-7 `Buffer.byteLength(line,'utf8') > 998` over the four emitted lines. My 107-assertion probe covers every row of both case tables, executed as the pipeline: all five step-0 rows, all eight step-1 rows, both step-2 rows, all twelve step-3 rows, step 4 at 320-accept / 321-refuse, all six step-7 refusals (including the `€` code-unit trap and the 998-character/2994-octet case), the four exactly-998-octet accepted boundaries, the 900-character and astral-straddling-512 subjects, all three fixed-point rows, `Re: already` idempotence, threading, the no-`Message-ID` MIME being **byte-identical** to `buildMime({to, subject:'Re: hi', body})`, and — the property the WP exists for — an address written into `body` reaching **no** header.
+- **Two fixed refusal messages**, never `assertHeaderSafe`'s: both constants match Exact contracts byte for byte, and every one of my 27 refusal rows returned the correct one of the two with zero `drafts.create` calls.
+- **`assembleRegistry`**: `const loadServices = deps.loadServices ?? loadCredentialServices;` is the **first line** (`gws-broker.js:96`); **no branch on `deps` anywhere** in the body; both consumer sites unconditional; exported alongside `run` and `compositeServices`. The refusal string emits identically to the spec's literal (the local is named `missing` rather than `cls`; the produced sentence is the same).
+- **Digests**: exactly four keys; the two edited skills' values equal `shasum -a 256` of their raw committed bytes; `wienerdog-dream` and `wienerdog-daily-digest` byte-identical to `aa937430`.
+- **Boundary**: 25 changed paths = the **20 Deliverables rows** + the spec itself + 4 files under `docs/specs/logbook/`. Nothing else.
+- **Conventions**: zero dependency changes (`package.json`/`package-lock.json` untouched); JSDoc only, no TypeScript, no build step; nothing started — `replyTarget` is a pure derivation over one `messages.get`; branch `wp/audit-d-code-derived-recipients`; every commit conventional with the WP id; PR title matches DoD item 2 exactly; glossary terms used canonically (`docs/GLOSSARY.md:36` updated in step with Table A).
+
+### Closed-Contract Drift Check
+
+**Clean on the settled contracts.** Tables A and B are byte-unmoved from the `Ready` spec on main, so no already-settled canonical fact was silently reinterpreted, and no mirror was promoted to primary. Table C's single moved row is the ratified erratum-2 narrowing, adjudicated by the maintainer and applied to the row *and* re-measured in the declaration in one pass — the discipline paragraph at `:684-689` that governs it now also records the incident, so rule and example agree. Erratum 1 remains propagated to all four of its registered mirrors plus its own checklist line.
+
+**One registration gap, for wd-architect, non-blocking.** Erratum 1 registered itself as a Mirrored Surface Checklist line (`:732`); **erratum 2 did not.** Its fact now lives on three surfaces — the erratum block (`:187-199`), Table C's row (`:654`), and the "it happened for real" paragraph (`:684-689`) — with nothing binding them. If that row is ever re-narrowed again, the other two drift silently. The checklist's own standing rule (*"any new mirror found in review is added here on the spot"*) applies; add an **Erratum 2** line naming those three surfaces.
+
+**Contract-density: no new finding.** This is round 6+ on Table B and, as in round 1, nothing landed on the ordered steps, the grammar, or either bound — the canonical extraction has taken. My three findings are spread across three unrelated families (test-marker hygiene, an unasserted criterion clause, one code-quality nit), which is the opposite of the repeat-family signal that would call for a canonical-extraction pass. No contract-dense inline prose needs extracting, and the escalation rule does not fire: round 1's spec defect was ruled and applied, and round 2 found no product finding on either channel of the same contract.
+
+### Files
+
+- Spec: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224r2/docs/specs/WP-audit-d-code-derived-recipients.md`
+- Finding 1: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224r2/tests/unit/broker-verbs.test.js`
+- Finding 2: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224r2/src/gws/broker/registry.js` (the gate) + the same test file (the missing assertion)
+- Finding 3: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224r2/src/cli/gws-broker.js`
+- Re-runnable probes: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr224r2-scratch/{probe-tableb.js,probe-crit7.js,marker-audit.js,literals.js,tablec.js}` (each takes the worktree root as `argv[2]`)
+- Raw logs: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr224r2-scratch/{V1.log,V2.log,V3-sel.log,V3-all.log,verify-all.log}`

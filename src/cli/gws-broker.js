@@ -19,7 +19,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { runBrokerServer } = require('../gws/broker/server');
 const { buildRegistry } = require('../gws/broker/registry');
-const { VERBS } = require('../gws/broker/verbs');
+const { VERBS, requiredClassesFor } = require('../gws/broker/verbs');
 const { loadCredentialServices } = require('../gws/broker/credentials');
 const grantStore = require('../gws/broker/grant-store');
 
@@ -89,15 +89,23 @@ function compositeServices(byClass) {
  * fail-closed — the rest of the registry keeps working.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/runtime-profile').RuntimeProfile} profile
+ * @param {{ loadServices?: (paths, capabilityClass) => Promise<object> }} [deps]
+ *   loadServices defaults to `loadCredentialServices`; a test injects a loader
+ *   that resolves or rejects per class.
  * @returns {Promise<import('../gws/broker/server').BrokerRegistry>}
  */
-async function assembleRegistry(paths, profile) {
-  const classes = [...new Set(profile.brokerVerbs.map((v) => VERBS[v].capabilityClass))];
+async function assembleRegistry(paths, profile, deps = {}) {
+  const loadServices = deps.loadServices ?? loadCredentialServices;
+  // Both consumer sites (the derivation below and the pre-dispatch refusal)
+  // go through this one binding, so neither can drift from the other onto
+  // the old single-class rule.
+  const classesFor = (verbNames) => requiredClassesFor(verbNames);
+  const classes = classesFor(profile.brokerVerbs);
   /** @type {Record<string, object>} */
   const byClass = {};
   for (const cls of classes) {
     try {
-      byClass[cls] = await loadCredentialServices(paths, cls);
+      byClass[cls] = await loadServices(paths, cls);
     } catch (err) {
       const msg = err instanceof WienerdogError ? err.message : 'credential load failed';
       process.stderr.write(`wienerdog broker: ${cls} credential unavailable — ${msg}\n`);
@@ -120,9 +128,12 @@ async function assembleRegistry(paths, profile) {
     listTools: () => inner.listTools(),
     callTool: async (name, args) => {
       const verb = VERBS[name];
-      if (verb && !loaded.has(verb.capabilityClass)) {
-        // Fixed, secret-free refusal: the class credential never loaded.
-        throw new WienerdogError(`the ${verb.capabilityClass} credential is not available in this run`);
+      if (verb) {
+        const missing = classesFor([name]).find((cls) => !loaded.has(cls));
+        if (missing) {
+          // Fixed, secret-free refusal: the class credential never loaded.
+          throw new WienerdogError(`the ${missing} credential is not available in this run`);
+        }
       }
       return inner.callTool(name, args);
     },
@@ -166,5 +177,8 @@ async function run(argv) {
 
 // compositeServices is exported for the getProfile-routing regression test
 // (WP-gws-getprofile-via-read) — the live broker-e2e that also covers it is not
-// part of `npm test`, so the routing must be lockable in CI.
-module.exports = { run, compositeServices };
+// part of `npm test`, so the routing must be lockable in CI. assembleRegistry
+// is exported so a test can drive the REAL assembly path with an injected
+// loader (WP-audit-d-code-derived-recipients) — the default binding, resolved
+// once at entry, keeps the no-deps production path identical in body.
+module.exports = { run, compositeServices, assembleRegistry };

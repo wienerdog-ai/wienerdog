@@ -1,0 +1,73 @@
+{
+  "suite": "tests/unit/gws-broker.test.js",
+  "proofs": [
+    {
+      "id": "extra-classes-dropped-helper",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "8",
+      "why": "requiredClassesFor's whole job is the union of a verb's capabilityClass AND its extraClasses; ignoring extraClasses means a DRAFT-only-derived verb that also needs READ (getProfile/messages.get) never has READ requested, so [AUD-D6]'s requested-set assertion ({DRAFT, READ}) catches it on a singleton profile",
+      "file": "src/gws/broker/verbs.js",
+      "find": "    for (const extra of verb.extraClasses || []) classes.add(extra);",
+      "replace": "    /* RP_MUT_EXTRA_CLASSES_DROPPED_HELPER: extraClasses ignored */",
+      "marker": "RP_MUT_EXTRA_CLASSES_DROPPED_HELPER",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader"],
+          "signal": "[AUD-D6]"
+        }
+      ]
+    },
+    {
+      "id": "extra-classes-dropped-derivation",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "8",
+      "why": "assembleRegistry's credential-loading loop must iterate requiredClassesFor(profile.brokerVerbs), the UNION including extraClasses; deriving classes from each verb's own capabilityClass alone (the old rule) never loads READ for a DRAFT-only singleton profile, and [AUD-D6]'s requested-set assertion on that real assembly path catches it",
+      "file": "src/cli/gws-broker.js",
+      "find": "  const classes = classesFor(profile.brokerVerbs);",
+      "replace": "  const classes = [...new Set(profile.brokerVerbs.map((v) => VERBS[v].capabilityClass))]; /* RP_MUT_EXTRA_CLASSES_DROPPED_DERIVATION */",
+      "marker": "RP_MUT_EXTRA_CLASSES_DROPPED_DERIVATION",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader"],
+          "signal": "[AUD-D6]"
+        }
+      ]
+    },
+    {
+      "id": "extra-classes-dropped-refusal",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "8",
+      "why": "the pre-dispatch refusal must gate on EVERY class the verb requires, not only its own capabilityClass; gating on capabilityClass alone lets a DRAFT verb dispatch while its required READ credential never loaded, so the model sees the masked 'broker verb ... failed' instead of the fixed class-unavailable refusal — [AUD-D6]'s READ-unavailable-state assertion catches it",
+      "file": "src/cli/gws-broker.js",
+      "find": "        const missing = classesFor([name]).find((cls) => !loaded.has(cls));\n        if (missing) {\n          // Fixed, secret-free refusal: the class credential never loaded.\n          throw new WienerdogError(`the ${missing} credential is not available in this run`);\n        }",
+      "replace": "        if (!loaded.has(verb.capabilityClass)) { /* RP_MUT_EXTRA_CLASSES_DROPPED_REFUSAL */\n          throw new WienerdogError(`the ${verb.capabilityClass} credential is not available in this run`);\n        }",
+      "marker": "RP_MUT_EXTRA_CLASSES_DROPPED_REFUSAL",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader"],
+          "signal": "[AUD-D6]"
+        }
+      ]
+    },
+    {
+      "id": "required-classes-gated-on-deps",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "8",
+      "why": "both consumer sites must consult requiredClassesFor UNCONDITIONALLY — the injected-loader path and the production no-deps path must run the identical body; consulting it only when deps.loadServices was supplied (and falling back to the old single-class rule otherwise) passes every injected [AUD-D6] case while production, which calls assembleRegistry with no deps, stays broken — caught only by [AUD-D6]'s no-deps-path assertions",
+      "file": "src/cli/gws-broker.js",
+      "find": "  const classesFor = (verbNames) => requiredClassesFor(verbNames);",
+      "replace": "  const classesFor = (verbNames) => deps.loadServices ? requiredClassesFor(verbNames) : [...new Set(verbNames.map((v) => VERBS[v].capabilityClass))]; /* RP_MUT_REQUIRED_CLASSES_GATED_ON_DEPS */",
+      "marker": "RP_MUT_REQUIRED_CLASSES_GATED_ON_DEPS",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader"],
+          "signal": "[AUD-D6]"
+        }
+      ]
+    }
+  ]
+}

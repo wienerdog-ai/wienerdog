@@ -1,0 +1,31 @@
+# PR gate raw — PR #224 round 2 — Codex plugin native review — WP-audit-d-code-derived-recipients
+# tip reviewed: a488db21cc7c4e51422a35329f347d5a347164f8 ; base main = aa937430 ; porcelain before/after identical ; committed pre-adjudication ; 51 targeted tests executed by the reviewer; full suite not run in its sandbox (disclosed)
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a07224-8b6b-70a2-85f3-910d3829a4fc).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git diff --stat aa9374308435c752d4947fa32919a77465d7a98d; find .. -name AGENTS....
+[codex] Command completed: /bin/zsh -lc 'git diff --stat aa9374308435c752d4947fa32919a77465d7a98d; find .. -name AGENTS.... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-d-code-derived-recipients.md; git diff a...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-d-code-derived-recipients.md; git diff a... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '255,430p' docs/specs/WP-audit-d-code-derived-recipients.md; sed -n '1,1...
+[codex] Command completed: /bin/zsh -lc "sed -n '255,430p' docs/specs/WP-audit-d-code-derived-recipients.md; sed -n '1,1... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '430,510p' docs/specs/WP-audit-d-code-derived-recipients.md; git diff aa...
+[codex] Command completed: /bin/zsh -lc "sed -n '430,510p' docs/specs/WP-audit-d-code-derived-recipients.md; git diff aa... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff aa9374308435c752d4947fa32919a77465d7a98d -- tests/unit/broker-registry...
+[codex] Command completed: /bin/zsh -lc "git diff aa9374308435c752d4947fa32919a77465d7a98d -- tests/unit/broker-registry... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d'
+[codex] Command completed: /bin/zsh -lc 'git diff aa9374308435c752d4947fa32919a77465d7a98d' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/red-proofs/audit-d-broker-assembly.proofs.json; cat tests/red-proofs/...
+[codex] Command completed: /bin/zsh -lc "cat tests/red-proofs/audit-d-broker-assembly.proofs.json; cat tests/red-proofs/... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: No actionable regressions were found in the recipient derivation, credential routing, or upda...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+No actionable regressions were found in the recipient derivation, credential routing, or updated consumers. All 51 targeted tests passed, and both updated skill digests match their files. The full suite was not run in the read-only environment.
+rc=0
+PORCELAIN: identical
