@@ -1,7 +1,7 @@
 ---
 id: WP-audit-e-ledger-parser-corpus
 title: Ledger-parser correctness — three-state trust reader, null-prototype records, contract-complete hostile corpus
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: []
@@ -13,6 +13,83 @@ epic: audit-close
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
+
+> **Errata, 2026-09-06 (post-merge) — four. None is a defect in what shipped.**
+> The merged tree at `54960a9d` is green — **2684/2672/0/12**, **60 declared
+> proofs, 60 selected, RUN: PROVEN**, lint clean — and every entry below was
+> either fixed on the branch before merge (2, 3) or is a spec-surface item routed
+> onward (1, 4). **None rewrites the original text.**
+>
+> **Erratum 1 — a header comment states the session-id convention more broadly
+> than two of its own fixtures follow it.** *What is wrong:*
+> `tests/unit/dream-validate.test.js:3790-3791` says Session-IDs are *"deliberately
+> `codex:*` on every Path-K fixture and `claude:s1,s2,s3` on every Path-A fixture"*.
+> *What is true:* **C18** and **C40-authorization** are Path-A rows built through
+> the `ledgerK` helper (`:3846`), and they carry the `claude:` ids **only on the
+> section last-wins surfaces** — the LAST `a.b`-keyed section — because that is the
+> one whose fields `skillBodyViolation` sees when A3's duplicate refusal is mutated
+> away. The two inline comments state the narrower rule correctly
+> (`:4003-4008` and `:4269-4271`). *Found:* wd-reviewer, PR #226 gate round 2
+> (band C, non-blocking). *Routing:* **spec-surface, recorded here** — the header
+> should read "on the section last-wins surfaces". **Class: a helper-level comment
+> generalising a rule that two fixtures deliberately apply more narrowly.**
+> *(The three ranges above are the measured ones; the ranges circulated in the
+> done-flip brief were each off by one at one or both ends — `:3789` is a blank
+> `//` separator, and the two inline comments run `:4003-4008` / `:4269-4271`.)*
+>
+> **Erratum 2 — the fixtures for C18 and C40-authorization could not reach the
+> verdict their Today column claims.** *What is wrong:* both originally built the
+> committed duplicate ledger from `codex:` sessions. *What is true:*
+> `skillBodyViolation` applies its own **>=3-distinct-Claude-session floor before
+> the duplicate check**, so it refused first on an unrelated string and the row's
+> `authorize` — the fail-open the row exists to witness — **was never exhibited**.
+> *Found:* PR #226 gate round 1, wd-reviewer. *Routing:* **fixed on the branch at
+> `3efcac1f`** before merge; the round-2 shadow confirmed the fail-open is now
+> witnessed by mutating LPC-E in memory. **Lesson, and it generalises: prove a
+> row's TODAY verdict under the mutant on a scratch copy, not only its REQUIRED
+> verdict on the real tree.** A row whose fixture cannot reach the verdict it
+> records witnesses nothing, and it is green the whole time.
+>
+> **Erratum 3 — `signal` must be a literal substring of the real TAP diagnostic.**
+> *What is wrong:* Table D never said what a `signal` string is measured against.
+> *What is true:* `evaluateRed` matches `signal` as a **substring of the assertion's
+> own message argument** as it appears in the TAP diagnostic, so the implementer's
+> first pass — descriptive signals — failed, and all seven had to be re-measured by
+> running the RED phase. **Nine assertions gained a message argument for exactly
+> that reason; no assertion logic changed.** *Found:* implementation, PR #226.
+> *Routing:* **spec-surface, recorded here** — Table D should state it, because it
+> is discoverable only by running the phase.
+>
+> **Erratum 4 — acceptance criterion 7 pins a repo-wide total that a sibling work
+> package invalidates.** *What is wrong:* criterion 7 reads *"the totals rising
+> from 37 to 44"*. *What is true:* 37 and 44 are relative to this WP's **design
+> base `8c52808f`**. `WP-audit-d-code-derived-recipients` landed sixteen
+> declarations in between, so the merged tree measures **60 declared, 60 selected,
+> all PROVEN** — of which **exactly seven are this WP's** (`lpc-a-…` through
+> `lpc-g-…`, measured). The criterion was true when written and true of its own
+> base; it is simply not a statement about `main`. *Found:* this done-flip pass,
+> re-measuring the merged tree rather than transcribing the brief. *Routing:*
+> **spec-surface, recorded here.** **Class: an acceptance criterion phrased as an
+> absolute repo-wide count instead of a delta this WP owns** — it goes stale
+> without anyone touching the spec, which is the same shape as a Current-state
+> claim rotting between `Ready` and dispatch. A criterion should say "seven more
+> than the base", not "44".
+>
+> **Successors and residuals, carried forward.**
+>
+> - **The size-ceiling residual (F6), closed as named.** The spec is **594 lines**
+>   against the ~400 ceiling pinned before round 1. The surplus is Table C's 43
+>   rows and Table D's selection contract; **no round added a gate, script or
+>   grep**, which is the half of the ceiling rule that guards the archive
+>   predecessor's failure mode. Recorded in
+>   `docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md`.
+> - **C26's reach is lookup-detector-only**, and that is a recorded property of
+>   Table D rather than a defect: a lookup-based duplicate detector reddens C26
+>   under LPC-B and a Set-based or array-based one does not, all three conform, so
+>   C26 is excluded from LPC-B's SELECTED WITNESSES and named as excluded.
+> - **The implementer's two "Decisions made", both accepted as the simpler
+>   option:** the shared `headDuplicateKeys` local, and the position of the
+>   candidate duplicate check. Neither changes a Table C verdict.
 
 ## Dispatch precondition (FIVE owner items; accepting all five recommendations changes no Deliverables row)
 
