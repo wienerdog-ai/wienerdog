@@ -1435,6 +1435,35 @@ function patchFs(name, make) {
   return () => { fs[name] = orig; };
 }
 
+/**
+ * Intercept the descriptor READ-BACK of whichever inode `dest` currently
+ * names, matched by INODE — row F8's own binding — rather than by pathname:
+ * `quarantinePreserve`'s read-back moved off a pathname `readFileSync(dest)`
+ * onto a positional read through the descriptor it already holds, so an
+ * injection that used to match `dest` by path now has to match what that
+ * descriptor names instead. `behavior === 'throw'` raises `err`; `'corrupt'`
+ * returns a short read, which can never byte-compare equal to the judged
+ * bytes — the exact two shapes the shipped `readFileSync(dest)` injections
+ * used (returning wrong bytes, or throwing).
+ * @param {string} dest @param {'corrupt'|'throw'} behavior @param {Error} [err]
+ * @returns {() => void} restorer
+ */
+function patchDestRead(dest, behavior, err) {
+  return patchFs('readSync', (orig) => function (fd, ...rest) {
+    let matches = false;
+    try {
+      const want = fs.statSync(dest, { bigint: true });
+      const got = fs.fstatSync(fd, { bigint: true });
+      matches = want.dev === got.dev && want.ino === got.ino;
+    } catch { /* dest absent, or fd unrelated to it: no match */ }
+    if (matches) {
+      if (behavior === 'throw') throw err;
+      return 0; // a short read can never byte-compare equal to the judged bytes
+    }
+    return orig.call(this, fd, ...rest);
+  });
+}
+
 /** True iff `p` is `abs` and the read asked for a Buffer (no encoding). */
 function isBufferReadOf(p, opts, abs) {
   if (typeof p !== 'string') return false;
@@ -1639,7 +1668,7 @@ test('EP2: a quarantine-severity finding still withholds — the redact arm neve
 test('EP2 redact arm R1: the redacted/ preserve fails → withhold, no copy, index cleared', () => {
   const f = redactFixture();
   const under = path.join(f.stateDir, 'quarantine', 'redacted') + path.sep;
-  const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+  const un = patchFs('openSync', (orig) => function (p, ...rest) {
     if (typeof p === 'string' && path.resolve(p).startsWith(path.resolve(under))) {
       const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
     }
@@ -1926,7 +1955,7 @@ for (const tracked of [false, true]) {
     const f = tracked ? trackedRedactFixture() : redactFixture();
     const before = fs.readFileSync(f.abs);
     const under = path.join(f.stateDir, 'quarantine') + path.sep;
-    const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+    const un = patchFs('openSync', (orig) => function (p, ...rest) {
       if (typeof p === 'string' && path.resolve(p).startsWith(path.resolve(under))) {
         const e = new Error('ENOSPC: injected'); e.code = 'ENOSPC'; throw e;
       }
@@ -1968,8 +1997,8 @@ for (const tracked of [false, true]) {
 function failWithheldPreserveOnly(f) {
   const q = path.resolve(path.join(f.stateDir, 'quarantine')) + path.sep;
   const r = path.resolve(path.join(f.stateDir, 'quarantine', 'redacted')) + path.sep;
-  return patchFs('writeFileSync', (orig) => function (p, ...rest) {
-    if (typeof p === 'string') {
+  return patchFs('openSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
       const abs = path.resolve(p);
       if (abs.startsWith(q) && !abs.startsWith(r)) {
         const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
@@ -2328,19 +2357,35 @@ test('EP2 redact arm (P0b regression): a CORRUPTED redacted/ artifact is a prese
   const before = fs.readFileSync(f.abs);
   const q = path.resolve(path.join(f.stateDir, 'quarantine')) + path.sep;
   const r = path.resolve(path.join(f.stateDir, 'quarantine', 'redacted')) + path.sep;
-  // Corrupt the WRITE under `redacted/` (the write succeeds; the bytes are
-  // wrong), and fail every write under `quarantine/` that is NOT under
-  // `redacted/` (the withheld arm) — the cross-product this arm requires.
-  const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
-    if (typeof p === 'string') {
+  // Corrupt the descriptor WRITE under `redacted/` (the exclusive create
+  // succeeds; the bytes landed are wrong), and fail the exclusive CREATE for
+  // every tmp under `quarantine/` that is NOT under `redacted/` (the
+  // withheld arm) — the cross-product this arm requires.
+  let corruptFd = -1;
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
       const abs = path.resolve(p);
-      if (abs.startsWith(r)) return orig.call(this, p, Buffer.from('CORRUPT\n'));
-      if (abs.startsWith(q)) { const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e; }
+      if (abs.startsWith(q) && !abs.startsWith(r)) {
+        const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
+      }
+      if (abs.startsWith(r)) {
+        const fd = orig.call(this, p, ...rest);
+        corruptFd = fd;
+        return fd;
+      }
     }
     return orig.call(this, p, ...rest);
   });
+  const unWrite = patchFs('writeSync', (orig) => function (fd, buf, offset, length, position) {
+    if (fd === corruptFd) {
+      const corrupt = Buffer.from('CORRUPT\n');
+      orig.call(this, fd, corrupt, 0, corrupt.length, 0);
+      return length; // claim the full requested length so writeAllAt's loop exits
+    }
+    return orig.call(this, fd, buf, offset, length, position);
+  });
   let err;
-  try { err = driveAbort(require('../../src/core/dream/validate'), f); } finally { un(); }
+  try { err = driveAbort(require('../../src/core/dream/validate'), f); } finally { unOpen(); unWrite(); }
   assertAbort(f, err, { which: ABORT.bothFailed, identity: ABORT.notPerformed, basename: null, onDisk: before });
   // Table D row D2: the corrupted artifact does not survive — it is removed,
   // not left behind for a later run to trip over.
@@ -2375,10 +2420,7 @@ test('quarantinePreserve (P0b, Table D row D2): a corrupted artifact is a FAILUR
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
   const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
-  const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
-    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) return Buffer.from('CORRUPT\n');
-    return orig.call(this, p, ...rest);
-  });
+  const un = patchDestRead(dest, 'corrupt');
   let res;
   try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
   assert.equal(res, null, 'a corrupted artifact is reported as a FAILURE, never a success');
@@ -2389,12 +2431,8 @@ test('quarantinePreserve (P0b, Table D row D2): an artifact that cannot be read 
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
   const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
-  const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
-    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
-      const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
-    }
-    return orig.call(this, p, ...rest);
-  });
+  const e = new Error('EACCES: injected'); e.code = 'EACCES';
+  const un = patchDestRead(dest, 'throw', e);
   let res;
   try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
   assert.equal(res, null, 'an unreadable artifact is reported as a FAILURE');
@@ -2411,7 +2449,7 @@ test('quarantinePreserve (Table D row D1): the write fails before any rename —
   fs.writeFileSync(collisionPath, collisionBytes);
 
   const content = Buffer.from('the judged bytes\n');
-  const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+  const un = patchFs('openSync', (orig) => function (p, ...rest) {
     if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
       const e = new Error('ENOSPC: injected'); e.code = 'ENOSPC'; throw e;
     }
@@ -2431,11 +2469,11 @@ test('quarantinePreserve (Table D row D1): the write fails before any rename —
   assert.deepEqual(fs.readdirSync(qdir).sort(), [collisionName], 'no `-1` artifact was created either');
 });
 
-test('quarantinePreserve (Table D row D1): the rename fails after a successful write — tmp is removed, dest was never created', () => {
+test('quarantinePreserve (Table D row D1): the commit fails after a successful write — tmp is removed, dest was never created', () => {
   const stateDir = freshStateDir();
   const qdir = path.join(stateDir, 'quarantine');
   const content = Buffer.from('the judged bytes\n');
-  const un = patchFs('renameSync', () => function () {
+  const un = patchFs('linkSync', () => function () {
     const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
   });
   let res;
@@ -2520,30 +2558,40 @@ test("quarantinePreserve (Table D row D1, round-3 review): a failure AFTER the e
   const stateDir = freshStateDir();
   const qdir = path.join(stateDir, 'quarantine');
   const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
-  const un = patchFs('writeFileSync', (orig) => function (p, data, opts) {
-    if (typeof p === 'string' && path.resolve(p) === path.resolve(tmpPath) && opts && opts.flag === 'wx') {
-      // Call THROUGH: the real O_CREAT|O_EXCL create runs and genuinely
-      // allocates `tmpPath` on disk before the injected failure fires —
-      // exactly the shape of a disk-full or filesize-limit error that
-      // strikes after the directory entry already exists.
-      orig.call(this, p, data, opts);
+  let heldFd = -1;
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    // Call THROUGH: the real O_CREAT|O_EXCL create runs and genuinely
+    // allocates `tmpPath` on disk — exactly the shape of a disk-full or
+    // filesize-limit error that strikes after the directory entry already
+    // exists.
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(tmpPath)) heldFd = fd;
+    return fd;
+  });
+  const unWrite = patchFs('writeSync', (orig) => function (fd, ...rest) {
+    if (fd === heldFd) {
+      orig.call(this, fd, ...rest);
       const e = new Error('ENOSPC: injected after the exclusive create'); e.code = 'ENOSPC';
       throw e;
     }
-    return orig.call(this, p, data, opts);
+    return orig.call(this, fd, ...rest);
   });
   const content = Buffer.from('the judged bytes\n');
   let res;
   try {
     res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
-  } finally { un(); }
+  } finally { unOpen(); unWrite(); }
   assert.equal(res, null, 'a preservation failure, not a success');
   assert.equal(fs.existsSync(tmpPath), false, "this invocation's own partial tmp file is removed and confirmed absent");
 });
 
-test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after a failed rename fails LOUD', () => {
+test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after the commit fails LOUD, and the held descriptor is CLOSED', () => {
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
+  // Left in place, unmigrated, on purpose: under row F9 the commit is
+  // `linkSync`, so this injected `renameSync` failure never fires — the
+  // commit SUCCEEDS, and it is the post-commit gated temp removal below that
+  // fails instead, for an equivalent reason (Current state; herdr-shadow).
   const unRename = patchFs('renameSync', () => function () {
     const e = new Error('EXDEV: injected'); e.code = 'EXDEV'; throw e;
   });
@@ -2553,22 +2601,32 @@ test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after a 
     }
     return orig.call(this, p, ...rest);
   });
+  // Observe the artifact descriptor by INODE (descriptor numbers are REUSED,
+  // so a bare number would read the same for a leak and a non-leak alike):
+  // once this call returns, that inode's own descriptor must be gone.
+  let heldFd = -1;
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) heldFd = fd;
+    return fd;
+  });
   let threw = null;
   try {
     quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
-  } catch (e) { threw = e; } finally { unRename(); unRm(); }
+  } catch (e) { threw = e; } finally { unRename(); unRm(); unOpen(); }
   assert.ok(threw instanceof WienerdogError, `expected a WienerdogError: ${String(threw)}`);
   assert.match(threw.message, /\.tmp-/, threw.message);
+  assert.ok(
+    heldFd >= 0 && (() => { try { fs.fstatSync(heldFd); return false; } catch (e) { return e && e.code === 'EBADF'; } })(),
+    'the tmp create was observed AND the held descriptor is CLOSED even though the post-commit removal threw'
+  );
 });
 
 test('quarantinePreserve (Table D row D3): a dest that cannot be removed after a failed verification fails LOUD', () => {
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
   const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
-  const unRead = patchFs('readFileSync', (orig) => function (p, ...rest) {
-    if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) return Buffer.from('CORRUPT\n');
-    return orig.call(this, p, ...rest);
-  });
+  const unRead = patchDestRead(dest, 'corrupt');
   const unRm = patchFs('rmSync', (orig) => function (p, ...rest) {
     if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
       throw new Error('EACCES: cannot remove');
@@ -2598,9 +2656,9 @@ test('quarantinePreserve (Table D row D4): every failure leaves this invocation 
   // D0: no stateDir at all.
   assert.equal(quarantinePreserve(undefined, content, '04-Atomic/x.md', '2026-07-02', 'withheld'), null);
 
-  // D1: the write fails.
+  // D1: the exclusive create fails.
   {
-    const un = patchFs('writeFileSync', (orig) => function (p, ...rest) {
+    const un = patchFs('openSync', (orig) => function (p, ...rest) {
       if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
         const e = new Error('ENOSPC'); e.code = 'ENOSPC'; throw e;
       }
@@ -2611,14 +2669,11 @@ test('quarantinePreserve (Table D row D4): every failure leaves this invocation 
     } finally { un(); }
   }
 
-  // D2: the rename succeeds (into the NEXT collision slot, `-1`, since the
+  // D2: the commit succeeds (into the NEXT collision slot, `-1`, since the
   // seeded name occupies the un-suffixed one), but verification fails.
   {
     const dest1 = path.join(qdir, '2026-07-02-x-1.md');
-    const un = patchFs('readFileSync', (orig) => function (p, ...rest) {
-      if (typeof p === 'string' && path.resolve(p) === path.resolve(dest1)) return Buffer.from('CORRUPT\n');
-      return orig.call(this, p, ...rest);
-    });
+    const un = patchDestRead(dest1, 'corrupt');
     try {
       assert.equal(quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'), null);
     } finally { un(); }
@@ -2630,6 +2685,743 @@ test('quarantinePreserve (Table D row D4): every failure leaves this invocation 
     assert.deepEqual(fs.readFileSync(path.join(qdir, name)), bytes, `${name} is byte-identical to before the call`);
   }
 });
+
+// ── QPD-1..QPD-7 (`WP-quarantine-preserve-durability`, Table C) ─────────────
+// Direct `quarantinePreserve` unit coverage of the durability protocol: which
+// objects are flushed, in what order, what a flush failure does, and the
+// ownership gates that bind every pathname act to the descriptor this
+// invocation created.
+
+/** Every `fsyncSync` this call issues, in order, resolved to the PATH its
+ *  descriptor was opened under (the directory chain is identified this way)
+ *  and to the (dev, ino) fstat saw AT CALL TIME (the artifact is identified
+ *  by inode, per row F8 — the descriptor is opened under `tmp`, not `dest`).
+ *  @returns {{events: Array<{path:string|null, dev:bigint, ino:bigint,
+ *    isFile:boolean}>, restore: () => void}} */
+function traceFlushes() {
+  const openPaths = new Map(); // fd -> path
+  const events = [];
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string') openPaths.set(fd, p);
+    return fd;
+  });
+  const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
+    const st = fs.fstatSync(fd, { bigint: true });
+    events.push({ path: openPaths.get(fd) || null, dev: st.dev, ino: st.ino, isFile: st.isFile() });
+    return orig.call(this, fd);
+  });
+  return { events, restore: () => { unOpen(); unFsync(); } };
+}
+
+/** Every directory descriptor `openSync` returns for one of `dirPaths`,
+ *  tracked so closure can be checked by INODE OF THE DESCRIPTOR ITSELF
+ *  (`fstatSync(fd)` throws `EBADF` once closed) — never by counting closes,
+ *  because descriptor numbers are REUSED (Implementation notes, trap vii). */
+function traceDirDescriptors(dirPaths) {
+  const opened = [];
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && dirPaths.some((d) => path.resolve(d) === path.resolve(p))) {
+      opened.push(fd);
+    }
+    return fd;
+  });
+  return {
+    opened,
+    stillOpen: () => opened.filter((fd) => {
+      try { fs.fstatSync(fd); return true; } catch { return false; }
+    }),
+    restore: unOpen,
+  };
+}
+
+/** The fixed chain (row F3), computed the same way `quarantineDirChain` is,
+ *  for a test to assert against without importing the internal function. */
+function chainFor(stateDir, kind) {
+  const shelf = path.join(stateDir, 'quarantine');
+  const qdir = kind === 'redacted' ? path.join(shelf, 'redacted') : shelf;
+  const anchor = path.dirname(stateDir);
+  const chain = [qdir];
+  if (qdir !== shelf) chain.push(shelf);
+  chain.push(stateDir);
+  if (anchor !== stateDir) chain.push(anchor);
+  return chain;
+}
+
+test('dream-validate: [QPD-1] a successful preservation flushes the artifact through the descriptor its bytes were verified through', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const tracer = traceFlushes();
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { tracer.restore(); }
+  assert.ok(res, '[QPD-1] the preservation succeeded');
+  assert.ok(tracer.events.length >= 1, '[QPD-1] at least one flush was issued');
+  const dest = path.join(stateDir, 'quarantine', res.name);
+  const destStat = fs.statSync(dest, { bigint: true });
+  const first = tracer.events[0];
+  assert.ok(first.isFile, '[QPD-1] the first flush is a REGULAR FILE');
+  assert.equal(first.dev, destStat.dev, '[QPD-1] the first flush is on dest\'s device');
+  assert.equal(first.ino, destStat.ino, '[QPD-1] the first flush is on dest\'s INODE — asserted by inode, not by the name the descriptor was opened under');
+});
+
+test('dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  function assertSiteFails(kind, label, failFactory) {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const chain = chainFor(stateDir, kind);
+    const qdir = chain[0];
+    const dest = path.join(qdir, '2026-07-02-x.md');
+    const un = failFactory(chain);
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', kind); } finally { un(); }
+    assert.equal(res, null, `[QPD-2] ${kind} ${label}: expected a preservation failure`);
+    assert.equal(fs.existsSync(dest), false, `[QPD-2] ${kind} ${label}: dest must be absent`);
+    const tmpLeft = fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((n) => n.startsWith('.tmp-')) : [];
+    assert.deepEqual(tmpLeft, [], `[QPD-2] ${kind} ${label}: no temp left`);
+  }
+  function failArtifactFsync() {
+    let fired = false;
+    return patchFs('fsyncSync', (orig) => function (fd) {
+      if (!fired) { fired = true; const e = new Error('EIO: injected'); e.code = 'EIO'; throw e; }
+      return orig.call(this, fd);
+    });
+  }
+  function failDirOpen(dirPath) {
+    return patchFs('openSync', (orig) => function (p, ...rest) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(dirPath)) {
+        const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+      }
+      return orig.call(this, p, ...rest);
+    });
+  }
+  function failDirFsync(dirPath) {
+    let matchedFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(dirPath)) matchedFd = fd;
+      return fd;
+    });
+    const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
+      if (fd === matchedFd) { const e = new Error('EIO: injected'); e.code = 'EIO'; throw e; }
+      return orig.call(this, fd);
+    });
+    return () => { unOpen(); unFsync(); };
+  }
+
+  // The complete distinct-site matrix: the ONE artifact site, and TWO sites
+  // (open, fsync) per directory in the chain, on BOTH arms.
+  for (const kind of ['withheld', 'redacted']) {
+    assertSiteFails(kind, 'artifact fsync', failArtifactFsync);
+    const names = kind === 'redacted'
+      ? ['redacted shelf', 'quarantine shelf', 'state', 'anchor']
+      : ['quarantine shelf', 'state', 'anchor'];
+    names.forEach((name, i) => {
+      assertSiteFails(kind, `${name} open`, (c) => failDirOpen(c[i]));
+      assertSiteFails(kind, `${name} fsync`, (c) => failDirFsync(c[i]));
+    });
+  }
+
+  // The three shipped abort ROUTES, driven through the actual gate.
+  const gates = makeGates;
+  const layout = { identity_dir: '06-Identity', skills_dir: '05-Skills' };
+
+  // (route 1) a withheld-arm artifact failure with NO redaction attempted
+  // (a hard secret never enters the redact arm) → Table P row P1/P2.
+  {
+    const stateDir = freshStateDir();
+    fs.mkdirSync(stateDir, { recursive: true });
+    const g = gates({ stateDir });
+    const un = failArtifactFsync();
+    let threw = null;
+    try {
+      g.secret({
+        rel: '04-Atomic/leak.md',
+        record: {},
+        baselineBytes: null,
+        afterBytes: Buffer.from(AWS_LEAK),
+        addedLineNumbers: [1, 2],
+        layout,
+        date: '2026-07-02',
+      });
+    } catch (e) { threw = e; } finally { un(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-2] expected the shipped abort: ${String(threw)}`);
+    assert.ok(threw.message.includes(ABORT.noRedactionAttempted), `[QPD-2] ${threw.message}`);
+  }
+
+  // (route 2) an ANCHOR failure on the redact arm — on BOTH chains, so both
+  // preserves fail → Table P row P3.
+  {
+    const stateDir = freshStateDir();
+    fs.mkdirSync(stateDir, { recursive: true });
+    const anchor = path.dirname(stateDir);
+    const g = gates({ stateDir });
+    const un = failDirOpen(anchor);
+    let threw = null;
+    try {
+      g.secret({
+        rel: '04-Atomic/fp.md',
+        record: {},
+        baselineBytes: null,
+        afterBytes: Buffer.from(REDACT_NOTE),
+        addedLineNumbers: [1],
+        layout,
+        date: '2026-07-02',
+      });
+    } catch (e) { threw = e; } finally { un(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-2] expected the shipped abort: ${String(threw)}`);
+    assert.ok(threw.message.includes(ABORT.bothFailed), `[QPD-2] ${threw.message}`);
+  }
+
+  // (route 3) a REDACTED-SHELF-ONLY failure — the withhold arm succeeds on
+  // its own shelf → NO abort at all.
+  {
+    const stateDir = freshStateDir();
+    fs.mkdirSync(stateDir, { recursive: true });
+    const redactedShelf = path.join(stateDir, 'quarantine', 'redacted');
+    const g = gates({ stateDir });
+    const un = failDirOpen(redactedShelf);
+    let verdict = null;
+    let threw = null;
+    try {
+      verdict = g.secret({
+        rel: '04-Atomic/fp.md',
+        record: {},
+        baselineBytes: null,
+        afterBytes: Buffer.from(REDACT_NOTE),
+        addedLineNumbers: [1],
+        layout,
+        date: '2026-07-02',
+      });
+    } catch (e) { threw = e; } finally { un(); }
+    assert.equal(threw, null, '[QPD-2] a redacted-shelf-only failure must NOT abort — the withhold arm succeeds on its own shelf');
+    assert.ok(verdict && verdict.refuse, '[QPD-2] the withhold arm still refuses (the note is not promoted)');
+    assert.ok(
+      verdict.preserved.some((p) => p.location === 'quarantine'),
+      `[QPD-2] the withheld copy survives: ${JSON.stringify(verdict.preserved)}`
+    );
+    assert.ok(
+      !verdict.preserved.some((p) => p.location === 'quarantine/redacted'),
+      `[QPD-2] no redacted copy: ${JSON.stringify(verdict.preserved)}`
+    );
+  }
+});
+
+test('dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  const stateDir = freshStateDir();
+  const content = Buffer.from('the judged bytes\n');
+  const tracer = traceFlushes();
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+  } finally { tracer.restore(); }
+  assert.ok(res, '[QPD-3] the preservation succeeded');
+  const dest = path.join(stateDir, 'quarantine', res.name);
+  const destStat = fs.statSync(dest, { bigint: true });
+  assert.ok(tracer.events.length >= 1, '[QPD-3] at least one flush was issued');
+  assert.equal(tracer.events[0].ino, destStat.ino, '[QPD-3] the artifact\'s inode is flushed FIRST');
+  const chain = chainFor(stateDir, 'withheld');
+  const gotChain = tracer.events.slice(1).map((e) => path.resolve(e.path));
+  assert.deepEqual(gotChain, chain.map((p) => path.resolve(p)), '[QPD-3] the flushed sequence equals the fixed chain, in order');
+});
+
+test('dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  const stateDir = freshStateDir();
+  assert.equal(fs.existsSync(path.join(stateDir, 'quarantine')), false, '[QPD-4] precondition: neither directory exists yet');
+  const content = Buffer.from('the judged bytes\n');
+  const tracer = traceFlushes();
+  let res;
+  try {
+    res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'redacted');
+  } finally { tracer.restore(); }
+  assert.ok(res, '[QPD-4] the preservation succeeded');
+  const dest = path.join(stateDir, 'quarantine', 'redacted', res.name);
+  const destStat = fs.statSync(dest, { bigint: true });
+  assert.ok(tracer.events.length >= 1, '[QPD-4] at least one flush was issued');
+  assert.equal(tracer.events[0].ino, destStat.ino, '[QPD-4] the artifact\'s inode is flushed FIRST');
+  const chain = chainFor(stateDir, 'redacted');
+  assert.equal(chain.length, 4, '[QPD-4] the two-level chain has the intermediate shelf');
+  const gotChain = tracer.events.slice(1).map((e) => path.resolve(e.path));
+  assert.deepEqual(gotChain, chain.map((p) => path.resolve(p)), '[QPD-4] the flushed sequence equals the two-level chain, in order');
+});
+
+test('dream-validate: [QPD-5] every act at dest is gated on the created inode — a substitution before the last gate fails the preservation and is never removed, the returned bytes are the ones read after the flush and compared, and a stat that cannot complete fails LOUD', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  // (a) a substitution from INSIDE THE COMMIT ITSELF — the post-commit,
+  // pre-read window. The bytes still compare EQUAL (the read goes through
+  // the held descriptor), so only the ownership gate can see it.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    const foreignBytes = Buffer.from('a substitution planted from inside the commit\n');
+    const un = patchFs('linkSync', (orig) => function (t, d) {
+      orig.call(this, t, d);
+      fs.rmSync(d, { force: true });
+      fs.writeFileSync(d, foreignBytes);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-5] (a): the substitution must fail the preservation');
+    assert.ok(fs.existsSync(dest), '[QPD-5] (a): the substituted entry is never removed');
+    assert.deepEqual(fs.readFileSync(dest), foreignBytes, '[QPD-5] (a): the substituted entry is still there, byte-unchanged');
+  }
+
+  // (b) a regular file renamed over `dest` from INSIDE THE ARTIFACT FLUSH.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    const foreignBytes = Buffer.from('a substitution planted during the artifact flush\n');
+    let fired = false;
+    const un = patchFs('fsyncSync', (orig) => function (fd) {
+      if (!fired) {
+        fired = true;
+        fs.rmSync(dest, { force: true });
+        fs.writeFileSync(dest, foreignBytes);
+      }
+      return orig.call(this, fd);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-5] (b): the substitution must fail the preservation');
+    assert.ok(fs.existsSync(dest), '[QPD-5] (b): the substituted entry is never removed');
+    assert.deepEqual(fs.readFileSync(dest), foreignBytes, '[QPD-5] (b): the substituted entry is still there, byte-unchanged');
+  }
+
+  // (c) a HARD LINK of the held inode into a directory the chain never
+  // flushes, then a SYMLINK at `dest` — the case a FOLLOWING stat accepts;
+  // the shipped `lstat` correctly refuses it.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    const sideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-qpd5c-'));
+    const un = patchFs('linkSync', (orig) => function (t, d) {
+      orig.call(this, t, d);
+      const sideCopy = path.join(sideDir, 'side.md');
+      orig.call(this, d, sideCopy); // the REAL linkSync — `fs.linkSync` is still this wrapper
+      fs.rmSync(d, { force: true });
+      fs.symlinkSync(sideCopy, d);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-5] (c): a symlink to a hard link of the held inode must fail the preservation (lstat, not stat)');
+    assert.ok(fs.existsSync(dest), '[QPD-5] (c): the substituted entry is never removed');
+    assert.ok(fs.lstatSync(dest).isSymbolicLink(), '[QPD-5] (c): the substituted entry — the symlink — is still there');
+  }
+
+  // (d) `dest` DELETED before the last gate — `null`, no raw error escapes,
+  // nothing is recreated or removed in its place.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    let fired = false;
+    const un = patchFs('readSync', (orig) => function (fd, ...rest) {
+      if (!fired) { fired = true; fs.rmSync(dest, { force: true }); }
+      return orig.call(this, fd, ...rest);
+    });
+    let res;
+    let threw = null;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } catch (e) { threw = e; } finally { un(); }
+    assert.equal(threw, null, '[QPD-5] (d): no raw error escapes');
+    assert.equal(res, null, '[QPD-5] (d): a deleted dest fails the preservation');
+    assert.equal(fs.existsSync(dest), false, '[QPD-5] (d): nothing is recreated in its place');
+  }
+
+  // (e) doctored stats whose inodes are DISTINCT as BigInt and collapse to
+  // the SAME Number — `null`, because a Number-narrowed comparison would
+  // have reported SUCCESS.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const unFstat = patchFs('fstatSync', (orig) => function (fd, opts) {
+      const real = orig.call(this, fd, opts);
+      if (opts && opts.bigint) return { dev: real.dev, ino: 9007199254740992n, isFile: () => real.isFile() };
+      return real;
+    });
+    const unLstat = patchFs('lstatSync', (orig) => function (p, opts) {
+      const real = orig.call(this, p, opts);
+      if (opts && opts.bigint) return { dev: real.dev, ino: 9007199254740993n, isFile: () => real.isFile() };
+      return real;
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { unFstat(); unLstat(); }
+    assert.equal(Number(9007199254740992n), Number(9007199254740993n), '[QPD-5] precondition: these collapse to the same Number');
+    assert.equal(res, null, '[QPD-5] (e): a BigInt-distinct, Number-equal inode pair must not be treated as a match');
+  }
+
+  // (f) row F0's linearization: an IN-PLACE overwrite of the SAME inode
+  // DURING the final gate — identity holds, so the preservation SUCCEEDS,
+  // and the RETURNED bytes are the ones created and verified, never a
+  // later re-read.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    const intruder = Buffer.from('INTRUDER BYTES!!\n');
+    const un = patchFs('lstatSync', (orig) => function (p, opts) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
+        const fdw = fs.openSync(dest, 'r+');
+        try { fs.writeSync(fdw, intruder, 0, intruder.length, 0); } finally { fs.closeSync(fdw); }
+      }
+      return orig.call(this, p, opts);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.ok(res, '[QPD-5] (f): identity still holds — the preservation SUCCEEDS');
+    assert.deepEqual(res.bytes, content, '[QPD-5] (f): the returned bytes are what this call verified, not a later re-read');
+    assert.notDeepEqual(fs.readFileSync(dest).subarray(0, content.length), content, '[QPD-5] (f): the artifact under the name has since diverged');
+  }
+
+  // (g) row F6's second half: an in-place overwrite at the ARTIFACT-FLUSH
+  // seam — `null`, because with the flush FIRST the read that follows sees
+  // the new bytes and the comparison rejects them.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    const intruder = Buffer.from('INTRUDER!');
+    let fired = false;
+    const un = patchFs('fsyncSync', (orig) => function (fd) {
+      if (!fired) {
+        fired = true;
+        const fdw = fs.openSync(dest, 'r+');
+        try { fs.writeSync(fdw, intruder, 0, intruder.length, 0); } finally { fs.closeSync(fdw); }
+      }
+      return orig.call(this, fd);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-5] (g): the read that follows the flush sees the new bytes and the comparison rejects them');
+  }
+
+  // (h) a ONE-SHOT non-`ENOENT` stat failure at the LAST GATE — RAISES,
+  // `dest` is NOT removed, and the held descriptor IS closed.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    let heldFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) heldFd = fd;
+      return fd;
+    });
+    let fired = false;
+    const unLstat = patchFs('lstatSync', (orig) => function (p, opts) {
+      if (!fired && typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
+        fired = true;
+        const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+      }
+      return orig.call(this, p, opts);
+    });
+    let threw = null;
+    try {
+      quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+    } catch (e) { threw = e; } finally { unOpen(); unLstat(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-5] (h): expected a WienerdogError: ${String(threw)}`);
+    assert.ok(fs.existsSync(dest), '[QPD-5] (h): dest is NOT removed');
+    assert.throws(() => fs.fstatSync(heldFd), /EBADF/, '[QPD-5] (h): the held descriptor is closed');
+  }
+
+  // (i) a PERSISTENT non-`ENOENT` stat failure at the FAILURE-PATH recheck
+  // of `dest`, reached by failing the byte comparison so the last gate is
+  // never evaluated — the same raise, again removing nothing.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(stateDir, 'quarantine', '2026-07-02-x.md');
+    let tmpFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) tmpFd = fd;
+      return fd;
+    });
+    const unWrite = patchFs('writeSync', (orig) => function (fd, buf, offset, length, position) {
+      if (fd === tmpFd) {
+        const corrupt = Buffer.from('CORRUPT!!\n');
+        orig.call(this, fd, corrupt, 0, corrupt.length, 0);
+        return length;
+      }
+      return orig.call(this, fd, buf, offset, length, position);
+    });
+    const unLstat = patchFs('lstatSync', (orig) => function (p, opts) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(dest)) {
+        const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+      }
+      return orig.call(this, p, opts);
+    });
+    let threw = null;
+    try {
+      quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+    } catch (e) { threw = e; } finally { unOpen(); unWrite(); unLstat(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-5] (i): expected a WienerdogError: ${String(threw)}`);
+    assert.ok(fs.existsSync(dest), '[QPD-5] (i): the call never returns null while its own dest is still present — dest is NOT removed');
+  }
+});
+
+test('dream-validate: [QPD-6] the commit is no-clobber, every temp-name act is gated on the inode this invocation CREATED, a stat that cannot complete fails LOUD, and exactly one name is left', () => {
+  // (a) a competing `dest` planted after the collision loop looked and
+  // before the commit: `null`, the other invocation's bytes intact, no temp
+  // left.
+  {
+    const stateDir = freshStateDir();
+    const qdir = path.join(stateDir, 'quarantine');
+    const content = Buffer.from('the judged bytes\n');
+    const dest = path.join(qdir, '2026-07-02-x.md');
+    const foreignBytes = Buffer.from('another invocation already committed here\n');
+    const un = patchFs('linkSync', (orig) => function (t, d) {
+      fs.mkdirSync(path.dirname(d), { recursive: true });
+      fs.writeFileSync(d, foreignBytes);
+      return orig.call(this, t, d);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-6] (a): EEXIST is an ordinary preservation failure');
+    assert.deepEqual(fs.readFileSync(dest), foreignBytes, "[QPD-6] (a): the other invocation's bytes are intact");
+    assert.deepEqual(fs.readdirSync(qdir).filter((n) => n.startsWith('.tmp-')), [], '[QPD-6] (a): no temp left');
+  }
+
+  // (b) the temp name substituted BETWEEN THE EXCLUSIVE CREATE AND THE
+  // COMMIT: the preservation FAILS and the user's file is untouched —
+  // provenance is the CREATED inode, so the substitute is caught rather
+  // than adopted.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const foreignBytes = Buffer.from('substituted between the create and the commit\n');
+    let tmpPath = null;
+    const un = patchFs('fchmodSync', (orig) => function (fd, mode) {
+      const r = orig.call(this, fd, mode);
+      if (tmpPath) { fs.rmSync(tmpPath, { force: true }); fs.writeFileSync(tmpPath, foreignBytes); }
+      return r;
+    });
+    const unOpen = patchFs('openSync', (orig2) => function (p, ...rest) {
+      const fd = orig2.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) tmpPath = p;
+      return fd;
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); unOpen(); }
+    assert.equal(res, null, '[QPD-6] (b): the substitute is caught rather than adopted');
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (b): the substitute is never removed');
+    assert.deepEqual(fs.readFileSync(tmpPath), foreignBytes, "[QPD-6] (b): the user's substituted file is untouched");
+  }
+
+  // (c) the same substitution WITH THE COMMIT THEN THROWING: the shared
+  // `catch` must NOT delete it, because identity exists there.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const foreignBytes = Buffer.from('substituted, and the commit then throws\n');
+    let tmpPath = null;
+    const unChmod = patchFs('fchmodSync', (orig) => function (fd, mode) {
+      const r = orig.call(this, fd, mode);
+      if (tmpPath) { fs.rmSync(tmpPath, { force: true }); fs.writeFileSync(tmpPath, foreignBytes); }
+      return r;
+    });
+    const unOpen = patchFs('openSync', (orig2) => function (p, ...rest) {
+      const fd = orig2.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) tmpPath = p;
+      return fd;
+    });
+    const unLink = patchFs('linkSync', () => function () {
+      const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { unChmod(); unOpen(); unLink(); }
+    assert.equal(res, null, '[QPD-6] (c): a preservation failure');
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (c): the shared catch must NOT delete a name identity does not own');
+    assert.deepEqual(fs.readFileSync(tmpPath), foreignBytes, "[QPD-6] (c): the shared catch must NOT delete a name identity does not own");
+  }
+
+  // (d) the temp name substituted AFTER THE COMMIT AND BEFORE ITS GATE: the
+  // preservation still SUCCEEDS and the name is NOT unlinked.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const foreignBytes = Buffer.from('substituted after the commit, before its gate\n');
+    const un = patchFs('linkSync', (orig) => function (t, d) {
+      const r = orig.call(this, t, d);
+      fs.rmSync(t, { force: true });
+      fs.writeFileSync(t, foreignBytes);
+      return r;
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.ok(res, '[QPD-6] (d): the preservation still SUCCEEDS');
+    const tmpPath = path.join(stateDir, 'quarantine', `.tmp-${process.pid}-x.md`);
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (d): the substituted name is NOT unlinked');
+    assert.deepEqual(fs.readFileSync(tmpPath), foreignBytes, '[QPD-6] (d): the substituted name is NOT unlinked');
+  }
+
+  // (e) the ordinary success post-condition — exactly ONE name holds the
+  // artifact, and provenance is the CREATE ITSELF: the temp name's ONE open
+  // carries `O_CREAT|O_EXCL` — never a pathname write followed by a separate
+  // open, which would ADOPT whatever name resolves to at that instant
+  // instead of holding the inode this invocation created.
+  {
+    const stateDir = freshStateDir();
+    const qdir = path.join(stateDir, 'quarantine');
+    const content = Buffer.from('the judged bytes\n');
+    let sawExclusiveCreate = false;
+    const un = patchFs('openSync', (orig) => function (p, flags, ...rest) {
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-') && typeof flags === 'number') {
+        const excl = fs.constants.O_CREAT | fs.constants.O_EXCL;
+        if ((flags & excl) === excl) sawExclusiveCreate = true;
+      }
+      return orig.call(this, p, flags, ...rest);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.ok(res, '[QPD-6] (e): the preservation succeeded');
+    assert.deepEqual(fs.readdirSync(qdir), [res.name], '[QPD-6] (e): exactly one name holds the artifact');
+    assert.ok(sawExclusiveCreate, '[QPD-6] (e): provenance is the create itself — an O_CREAT|O_EXCL open, never an adopted name from a separate open');
+  }
+
+  // (f) a non-`EEXIST` create FAILURE with foreign bytes then planted at the
+  // temp name: `fd < 0`, so this invocation created nothing, returns `null`,
+  // and the foreign file survives byte-identical.
+  {
+    const stateDir = freshStateDir();
+    const qdir = path.join(stateDir, 'quarantine');
+    fs.mkdirSync(qdir, { recursive: true });
+    const tmpPath = path.join(qdir, `.tmp-${process.pid}-x.md`);
+    const foreignBytes = Buffer.from('a foreign file already at the temp name\n');
+    fs.writeFileSync(tmpPath, foreignBytes);
+    const content = Buffer.from('the judged bytes\n');
+    const un = patchFs('openSync', (orig) => function (p, ...rest) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(tmpPath)) {
+        const e = new Error('ENOSPC: injected'); e.code = 'ENOSPC'; throw e;
+      }
+      return orig.call(this, p, ...rest);
+    });
+    let res;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } finally { un(); }
+    assert.equal(res, null, '[QPD-6] (f): fd < 0 removes nothing');
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (f): the foreign file survives byte-identical');
+    assert.deepEqual(fs.readFileSync(tmpPath), foreignBytes, '[QPD-6] (f): the foreign file survives byte-identical');
+  }
+
+  // (g) the temp name DELETED before its gate: row F8's predicate fails
+  // closed, no raw error escapes, and the preservation still SUCCEEDS.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    const un = patchFs('linkSync', (orig) => function (t, d) {
+      const r = orig.call(this, t, d);
+      fs.rmSync(t, { force: true });
+      return r;
+    });
+    let res;
+    let threw = null;
+    try { res = quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld'); } catch (e) { threw = e; } finally { un(); }
+    assert.equal(threw, null, '[QPD-6] (g): no raw error escapes');
+    assert.ok(res, '[QPD-6] (g): the preservation still SUCCEEDS');
+  }
+
+  // (h) a non-`ENOENT` stat failure at the POST-COMMIT temp gate — RAISES,
+  // the temp name is NOT unlinked, the descriptor is closed.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    let heldFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) heldFd = fd;
+      return fd;
+    });
+    const unLstat = patchFs('lstatSync', (orig) => function (p, opts) {
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
+        const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+      }
+      return orig.call(this, p, opts);
+    });
+    let threw = null;
+    try {
+      quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+    } catch (e) { threw = e; } finally { unOpen(); unLstat(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-6] (h): expected a WienerdogError: ${String(threw)}`);
+    const tmpPath = path.join(stateDir, 'quarantine', `.tmp-${process.pid}-x.md`);
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (h): the temp name is NOT unlinked');
+    assert.throws(() => fs.fstatSync(heldFd), /EBADF/, '[QPD-6] (h): the descriptor is closed');
+  }
+
+  // (i) a non-`ENOENT` stat failure INSIDE THE SHARED `catch`, reached by
+  // making the commit throw — the same raise, nothing removed, and the
+  // descriptor still closed.
+  {
+    const stateDir = freshStateDir();
+    const content = Buffer.from('the judged bytes\n');
+    let heldFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) heldFd = fd;
+      return fd;
+    });
+    const unLstat = patchFs('lstatSync', (orig) => function (p, opts) {
+      if (typeof p === 'string' && path.basename(p).startsWith('.tmp-')) {
+        const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+      }
+      return orig.call(this, p, opts);
+    });
+    const unLink = patchFs('linkSync', () => function () {
+      const e = new Error('EACCES: injected'); e.code = 'EACCES'; throw e;
+    });
+    let threw = null;
+    try {
+      quarantinePreserve(stateDir, content, '04-Atomic/x.md', '2026-07-02', 'withheld');
+    } catch (e) { threw = e; } finally { unOpen(); unLstat(); unLink(); }
+    assert.ok(threw instanceof WienerdogError, `[QPD-6] (i): expected a WienerdogError: ${String(threw)}`);
+    const tmpPath = path.join(stateDir, 'quarantine', `.tmp-${process.pid}-x.md`);
+    assert.ok(fs.existsSync(tmpPath), '[QPD-6] (i): nothing removed');
+    assert.throws(() => fs.fstatSync(heldFd), /EBADF/, '[QPD-6] (i): the descriptor is still closed');
+  }
+});
+
+test('dream-validate: [QPD-7] every directory descriptor the flush protocol opens is CLOSED, on the steady-state path and after a directory fsync that throws', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  // (a) a successful preservation on the REDACTED arm — the deepest chain.
+  {
+    const stateDir = freshStateDir();
+    const chain = chainFor(stateDir, 'redacted');
+    const tracer = traceDirDescriptors(chain);
+    let res;
+    try {
+      res = quarantinePreserve(stateDir, Buffer.from('bytes\n'), '04-Atomic/x.md', '2026-07-02', 'redacted');
+    } finally { tracer.restore(); }
+    assert.ok(res, '[QPD-7] the preservation succeeded');
+    assert.equal(tracer.opened.length, 4, '[QPD-7] all four chain directories were opened (non-vacuity)');
+    assert.deepEqual(tracer.stillOpen(), [], '[QPD-7] no directory descriptor is still open when the call returns');
+  }
+
+  // (b) a directory `fsync` made to THROW: the preservation fails as row F4
+  // requires, and the descriptor opened for that directory is closed anyway.
+  {
+    const stateDir = freshStateDir();
+    const anchor = path.dirname(stateDir);
+    let failingFd = -1;
+    const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+      const fd = orig.call(this, p, ...rest);
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(anchor)) failingFd = fd;
+      return fd;
+    });
+    const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
+      if (fd === failingFd) { const e = new Error('EIO: injected'); e.code = 'EIO'; throw e; }
+      return orig.call(this, fd);
+    });
+    let res;
+    try {
+      res = quarantinePreserve(stateDir, Buffer.from('bytes\n'), '04-Atomic/x.md', '2026-07-02', 'withheld');
+    } finally { unOpen(); unFsync(); }
+    assert.equal(res, null, '[QPD-7] row F4: the failing directory flush is a preservation failure');
+    assert.ok(failingFd >= 0, '[QPD-7] the failing directory was in fact opened (non-vacuity)');
+    assert.throws(() => fs.fstatSync(failingFd), /EBADF/, '[QPD-7] the descriptor opened for the failing directory is closed anyway');
+  }
+});
+
 
 
 // ── AC-14 — the retention contract for state/quarantine/redacted/ ───────────

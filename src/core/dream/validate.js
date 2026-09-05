@@ -637,43 +637,224 @@ function removeOwnedQuarantinePath(p) {
   }
 }
 
+// ── Durability protocol (`WP-quarantine-preserve-durability`, Table F) ──────
+//
+// POSIX-only (row F5, Dispatch precondition item 1): a NAMED CONSTANT, not a
+// caught error — a caught error cannot tell "this platform has no such call"
+// from "this flush really failed", and row F4 must keep the second one loud.
+// On win32 the protocol issues no flush and claims none, which is today's
+// behaviour there, unchanged.
+const DURABILITY_AVAILABLE = process.platform !== 'win32';
+
+/**
+ * Flags for the artifact's ONE create-open (row F8's provenance). `O_CREAT`
+ * with `O_EXCL` is what makes the create ATOMIC — provenance is the create
+ * itself, not a fully successful write. `O_RDWR`, not `O_WRONLY`: this
+ * function writes the artifact through this descriptor AND reads it back
+ * through the same one (row F5) — not because a platform requires a
+ * write-open descriptor for `fsync` (an earlier draft said Linux does; that
+ * is false and belongs to System V-derived systems instead). `O_NOFOLLOW` is
+ * added where the platform has it — win32 has none — and the fallback is an
+ * explicit branch that names what is lost, deliberately not the
+ * `fs.constants.X || 0` idiom, which makes a missing flag look like a present
+ * one (matching `src/core/dream/vault-write.js` and
+ * `src/core/dream/workspace.js`).
+ */
+const TEMP_CREATE_FLAGS =
+  fs.constants.O_RDWR |
+  fs.constants.O_CREAT |
+  fs.constants.O_EXCL |
+  (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+
+/** Flags for a directory's flush-open (row F3): read-only, never a write
+ *  path, plus `O_DIRECTORY` and — same idiom as `TEMP_CREATE_FLAGS` —
+ *  `O_NOFOLLOW` where the platform has it. */
+const DIR_OPEN_FLAGS =
+  fs.constants.O_RDONLY |
+  fs.constants.O_DIRECTORY |
+  (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+
+/** Close `fd` and swallow any error — a `close` that fails after a flush that
+ *  COMPLETED cannot turn a successful preservation into a failed one, because
+ *  `close` is not a flush (row F4). A no-op when `fd < 0` (nothing was ever
+ *  opened). @param {number} fd */
+function closeQuietly(fd) {
+  if (fd < 0) return;
+  try {
+    fs.closeSync(fd);
+  } catch { /* best-effort: F4's subject is the flush, not the close */ }
+}
+
+/** Write `content` through `fd` at an EXPLICIT position, never the
+ *  descriptor's own offset — measured: `readFileSync(fd)` right after
+ *  `writeFileSync(fd)` returns EMPTY because the position sits at EOF
+ *  (Implementation notes). @param {number} fd @param {Buffer} content */
+function writeAllAt(fd, content) {
+  let written = 0;
+  while (written < content.length) {
+    written += fs.writeSync(fd, content, written, content.length - written, written);
+  }
+}
+
+/** Read from `fd` at explicit position 0, asking for ONE BYTE MORE than
+ *  `length` so an artifact LONGER than the judged bytes fails the comparison
+ *  that follows rather than passing on a prefix (Implementation notes).
+ *  @param {number} fd @param {number} length @returns {Buffer} */
+function readAllAt(fd, length) {
+  const buf = Buffer.alloc(length + 1);
+  let got = 0;
+  for (;;) {
+    const n = fs.readSync(fd, buf, got, buf.length - got, got);
+    if (n === 0 || (got += n) >= buf.length) break;
+  }
+  return buf.subarray(0, got);
+}
+
+/**
+ * ACT ONLY ON THE INODE YOU CREATED (row F8). Does `p`, looked up BY NAME,
+ * name the SAME inode `fd` already holds? THREE-VALUED, not two: a stat that
+ * cannot COMPLETE is not evidence of absence.
+ * @param {string} p @param {number} fd
+ * @returns {boolean} OWNED (`true`) or ABSENT-OR-FOREIGN (`false`, the
+ *   fail-closed outcome: `ENOENT`, or a completed stat that did not match)
+ * @throws {WienerdogError} INDETERMINATE — any stat failure but `ENOENT`,
+ *   because *I could not look* is not *it is not there*
+ */
+function ownsName(p, fd) {
+  try {
+    const open = fs.fstatSync(fd, { bigint: true });
+    const named = fs.lstatSync(p, { bigint: true });
+    return named.isFile() && named.dev === open.dev && named.ino === open.ino;
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return false;
+    throw new WienerdogError(
+      `quarantinePreserve: could not determine whether ${JSON.stringify(p)} is this invocation's own artifact: ${err && err.message}`
+    );
+  }
+}
+
+/** Flush the artifact's bytes through the descriptor this invocation already
+ *  holds (row F1). No open, no close — the descriptor's lifetime is the
+ *  caller's. @param {number} fd @returns {boolean} */
+function flushFd(fd) {
+  try {
+    fs.fsyncSync(fd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Flush ONE directory entry (row F2/F3): open it, `fsync` it, close it.
+ * Round 10's finding is why the whole body is a byte-exact source form — the
+ * boolean this returns is all the rest of the protocol sees, so a form that
+ * opens, flushes, returns `true` and never closes satisfies every other row
+ * while leaking one descriptor per chain member on every successful
+ * preservation.
+ * @param {string} dir @returns {boolean}
+ */
+function flushDir(dir) {
+  let fd = -1;
+  try {
+    fd = fs.openSync(dir, DIR_OPEN_FLAGS);
+    fs.fsyncSync(fd);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (fd >= 0) closeQuietly(fd);
+  }
+}
+
+/**
+ * The FIXED directory chain a preservation depends on, bottom-up, ending at
+ * the ANCHOR (row F3): `qdir`, the shelf above it when `qdir` is the
+ * `redacted/` one, `stateDir`, and the core directory —
+ * `path.dirname(stateDir)`. A closed list, flushed on every successful
+ * preservation whether or not this call created any of it: `acquireLock`
+ * creates `stateDir` earlier in the SAME run (`src/core/dream/lock.js`), so a
+ * created-set derivation would leave the core unflushed (measured, Current
+ * state).
+ * @param {string} stateDir @param {string} qdir
+ * @returns {string[]}
+ */
+function quarantineDirChain(stateDir, qdir) {
+  const shelf = path.join(stateDir, 'quarantine');
+  const anchor = path.dirname(stateDir);
+  const chain = [qdir];
+  if (qdir !== shelf) chain.push(shelf);
+  chain.push(stateDir);
+  if (anchor !== stateDir) chain.push(anchor);
+  return chain;
+}
+
+/**
+ * Flush the artifact's bytes (row F1), then the directory chain that names
+ * it, bottom-up (rows F2/F3) — the WHOLE set, before the read-back that
+ * follows (row F6). Returns `true` only once every flush in that closed list
+ * has completed; a flush that does not complete at any target returns
+ * `false` without throwing, which the caller treats as an ordinary
+ * preservation FAILURE (row F4).
+ *
+ * Durability here is what the platform's flush provides and no more: Node documents no device-level guarantee for `fs.fsync` and exposes no way to request or observe one, so nothing in this file may state that a preserved copy is on the medium.
+ *
+ * POSIX-only (row F5): on win32 this issues no flush and claims none.
+ * @param {number} fd  the descriptor this invocation created, wrote through
+ *   and will read back through
+ * @param {string} stateDir @param {string} qdir
+ * @returns {boolean}
+ */
+function flushPreservation(fd, stateDir, qdir) {
+  if (!DURABILITY_AVAILABLE) return true;
+  if (!flushFd(fd)) return false;
+  for (const dir of quarantineDirChain(stateDir, qdir)) {
+    if (!flushDir(dir)) return false;
+  }
+  return true;
+}
+
 /**
  * Preserve the working-tree bytes of a flagged vault file into the private
  * quarantine tree (audit A5, WP-123 OWNER-APPROVED): dir 0700, file 0600,
- * atomic write (tmp + rename), name `<date>-<sanitized-basename>` with a
- * numeric suffix before the extension on collision.
+ * name `<date>-<sanitized-basename>` with a numeric suffix before the
+ * extension on collision. The write is an exclusive create followed by a
+ * no-clobber commit (`WP-quarantine-preserve-durability`, Table F row F9) —
+ * never a plain rename over `dest`.
  *
  * `tmp` IS CREATED EXCLUSIVELY (`WP-preservation-abort-widening`, Table D
- * row D1): a crash can leave a `.tmp-<pid>-<stem>` file behind, and pids are
- * reused, so a later invocation naming the same path must never open it for
- * writing — that would silently overwrite a foreign file, and treating the
- * reused pathname as this invocation's own would then delete it on any later
- * failure. `flag: 'wx'` makes that collision an ordinary preservation
- * FAILURE instead, and OWNERSHIP BEGINS AT THE SUCCESSFUL EXCLUSIVE CREATE,
- * NOT AT A FULLY SUCCESSFUL WRITE: `EEXIST` is the only outcome in which the
- * path is not ours; a write failure AFTER the create (ENOSPC, a filesize
- * limit, an I/O error) still leaves this invocation's own partial bytes on
- * disk under that name, and Table D row D1 requires those be found and
- * removed, not left behind because the write never finished. The
- * pre-existing foreign file itself is never opened, written or removed.
+ * row D1; row F8): a crash can leave a `.tmp-<pid>-<stem>` file behind, and
+ * pids are reused, so a later invocation naming the same path must never
+ * open it for writing — that would silently overwrite a foreign file, and
+ * treating the reused pathname as this invocation's own would then delete it
+ * on any later failure. `O_CREAT|O_EXCL` makes that collision an ordinary
+ * preservation FAILURE instead, and OWNERSHIP BEGINS AT THE SUCCESSFUL
+ * EXCLUSIVE CREATE: the create is atomic, so a throw from it allocates
+ * nothing, and the descriptor it returns IS the ownership record for every
+ * pathname act that follows (row F8's `ownsName`). The pre-existing foreign
+ * file itself is never opened, written or removed.
  *
  * Best-effort in ONE direction only: any failure up to and including a failed
- * rename (including a missing stateDir) returns `null`, and `null` is falsy
+ * commit (including a missing stateDir) returns `null`, and `null` is falsy
  * exactly where the previous `false` was, so the withhold call site keeps its
  * `if (!preserved)` shape. It is NOT best-effort about what a non-`null`
- * return means (`WP-preservation-abort-widening`, Table P row P0b): after the
- * rename, the artifact is read back and byte-compared against `content`
- * before success is reported, and a failed cleanup after either a write/rename
- * failure (Table D row D1) or a failed verification (row D2) is a
- * `WienerdogError`, not a swallowed failure (row D3).
+ * return means (`WP-preservation-abort-widening` Table P row P0b;
+ * `WP-quarantine-preserve-durability` Table F): after the commit, the
+ * artifact's bytes and the directory chain that names it are flushed, and
+ * only then is the artifact read back through the held descriptor and
+ * byte-compared against `content` before success is reported. A failed
+ * cleanup after a create/write/commit failure (Table D row D1), a failed
+ * verification (row D2), or a stat that could not determine ownership (row
+ * F8's INDETERMINATE outcome) is a `WienerdogError`, not a swallowed failure
+ * (row D3).
  *
  * TAKES THE BYTES, NEVER A PATH TO READ. Under promotion the flagged content is
  * the brain's workspace bytes, which the gate already holds — the delta carried
  * them — and a second read would preserve something other than what is being
  * judged. The TOCTOU the old vault read closed is closed here by construction.
  * The read-back P0b adds is a DIFFERENT read: it re-reads the ARTIFACT this
- * call itself just wrote, never the TARGET, so it does not conflict with the
- * "one captured buffer" contract above.
+ * call itself just wrote, THROUGH THE DESCRIPTOR IT HOLDS, never the TARGET by
+ * name, so it does not conflict with the "one captured buffer" contract above.
  * @param {string|undefined} stateDir
  * @param {Buffer} content  the EXACT bytes to preserve
  * @param {string} rel  vault-relative path of the flagged file (names the copy)
@@ -681,14 +862,27 @@ function removeOwnedQuarantinePath(p) {
  * @param {'withheld'|'redacted'} [kind='withheld']  selects the destination:
  *   'withheld' -> <stateDir>/quarantine/           (nothing was promoted)
  *   'redacted' -> <stateDir>/quarantine/redacted/  (the sanitized form was promoted)
- * @returns {{name:string, bytes:Buffer}|null} the destination BASENAME actually
- *   written TOGETHER WITH THE VERIFIED BYTES READ BACK FROM IT, or `null` when
- *   the write, the rename, or the verification failed. The caller cannot
- *   reconstruct the name — `displayName` throws the directories away and the
- *   collision loop appends `-1`, `-2`, … .
+ * @returns {{name:string, bytes:Buffer}|null} the destination BASENAME this
+ *  invocation committed, TOGETHER WITH THE BYTES IT CREATED, FLUSHED, AND THEN READ
+ *  BACK AND COMPARED THROUGH ITS OWN DESCRIPTOR — or `null` when the create, the
+ *  write, the commit, the flush, the verification or the identity check failed.
+ *
+ *  THE TWO FIELDS CARRY DIFFERENT STRENGTHS, and row F10 is where that is decided.
+ *  `bytes` is what this call verified: on a POSIX platform it was read from the
+ *  created inode AFTER a flush of that inode had COMPLETED (row F6). That is not a
+ *  claim that a flush completed over these particular bytes — absent a concurrent
+ *  writer of that inode the two coincide, and row F10's instance (v) is the case
+ *  where they need not, because fsync and read are separable operations on a
+ *  mutable inode. On win32 no flush is issued and none is claimed (row F5). `name` was
+ *  bound to that inode AT THE LAST GATE; a same-UID hand can rebind it afterwards —
+ *  and a caller publishing the name is publishing a binding that was true at that
+ *  instant.
  * @throws {WienerdogError} Table D row D3 — the path this invocation owns
- *   (`tmp` before the rename, `dest` after it) could not be removed following
- *   a failure
+ *   (`tmp` before the commit, `dest` after it) could not be removed following
+ *   a failure — OR row F8's INDETERMINATE outcome: a stat that could not
+ *   determine ownership (any code but `ENOENT`) at one of the four gates that
+ *   consult it. The same class, disposition and route, with one added reason
+ *   and no new shape
  */
 function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   // Code-supplied, never user input: a typo must fail loudly rather than write
@@ -699,11 +893,12 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   let tmp = null;
   let dest = null;
   let name = null;
-  let tmpOwned = false; // true only once the EXCLUSIVE create of `tmp` succeeds
+  let qdir = null;
+  let fd = -1;
   try {
     if (!stateDir) return null;
     if (!Buffer.isBuffer(content)) return null;
-    const qdir = kind === 'redacted'
+    qdir = kind === 'redacted'
       ? path.join(stateDir, 'quarantine', REDACTED_SUBDIR)
       : path.join(stateDir, 'quarantine');
     fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
@@ -718,55 +913,62 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
       dest = path.join(qdir, name);
     }
     tmp = path.join(qdir, `.tmp-${process.pid}-${stem}${ext}`);
-    // EXCLUSIVE create (`WP-preservation-abort-widening`, Table D row D1): a
-    // pre-existing file at this exact name — a crash-leftover from a REUSED
-    // pid, same stem — is a collision candidate, never opened for writing.
-    // `EEXIST` is the ONLY outcome in which the path is not ours; every
-    // OTHER failure here happened AFTER the exclusive create allocated the
-    // directory entry, so the file exists and IS ours (round-3 review: a
-    // truncation limit or disk-full error after `O_CREAT|O_EXCL` used to
-    // leave a partial secret-bearing temp file on disk with `tmpOwned` still
-    // false, so cleanup skipped it). `tmpOwned` is therefore set inside this
-    // inner catch for every code but `EEXIST`, and the rethrow lets the
-    // outer catch below run the ordinary D0/D1 cleanup either way.
-    try {
-      fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' });
-    } catch (err) {
-      if (!err || err.code !== 'EEXIST') tmpOwned = true;
-      throw err;
-    }
-    tmpOwned = true;
-    fs.chmodSync(tmp, 0o600);
-    fs.renameSync(tmp, dest);
+    fd = fs.openSync(tmp, TEMP_CREATE_FLAGS, 0o600);
+    writeAllAt(fd, content);
+    fs.fchmodSync(fd, 0o600);
+    fs.linkSync(tmp, dest);
   } catch {
-    // Table D rows D0/D1. `tmpOwned` is true whenever this invocation is
-    // known to have created `tmp` — either the exclusive create succeeded
-    // outright, or it failed with something other than `EEXIST` (meaning
-    // the directory entry was allocated before the failure). A foreign file
-    // already sitting at that name on an `EEXIST` is NEVER treated as
-    // owned and is left untouched — exactly like a `dest` collision
-    // candidate. `dest` itself is NOT owned in this state either: the
-    // collision loop above may have pointed it at a name an earlier run's
-    // artifact already holds.
-    if (tmpOwned) removeOwnedQuarantinePath(tmp);
+    // Table D rows D0/D1, gated on row F8's identity rather than on a flag
+    // the shipped write's own catch used to set: `O_CREAT|O_EXCL` is atomic,
+    // so `fd < 0` means this invocation created nothing and removes nothing;
+    // with a descriptor, the write or the commit is what threw and `tmp` is
+    // removed only while it still names the inode this call created. The
+    // close sits in a `finally` because the gate itself can throw (row F8's
+    // INDETERMINATE outcome).
+    let ownedTmp = false;
+    try {
+      ownedTmp = fd >= 0 && ownsName(tmp, fd);
+    } finally {
+      closeQuietly(fd);
+      fd = -1;
+    }
+    if (ownedTmp) removeOwnedQuarantinePath(tmp);
     return null;
   }
 
-  // Table D row D2: the rename COMPLETED — `tmp` no longer exists under that
-  // name, and the path this invocation owns is now `dest`. P0b: a
-  // preservation SUCCEEDS only if the artifact itself is read back and
-  // byte-compares equal to the judged bytes; a mismatch or a read that fails
-  // is a preservation FAILURE, reported exactly as an unwritable directory is.
-  let readBack = null;
+  // Table D row D2 / row F9: the commit COMPLETED — `dest` names the inode
+  // this invocation created. Everything from here on is gated on that same
+  // descriptor's identity, and the descriptor is closed in ONE finalizer
+  // covering the whole post-create lifetime (row F8: closed in every case).
+  let ownedDest = false;
+  let verified = null;
   try {
-    readBack = fs.readFileSync(dest);
-  } catch {
-    readBack = null;
+    if (ownsName(tmp, fd)) removeOwnedQuarantinePath(tmp);
+    // The flush-then-verify block (row F6): the WHOLE flush set runs before
+    // the read-back, so the read occurs after a completed flush OF THAT
+    // INODE — not a claim that the flush covered the returned bytes, which
+    // coincides only absent a concurrent writer of that inode (row F10 (v)).
+    // `verified = readBack` is NOT a re-read — row F0's linearization claim
+    // rests on that — and a `WienerdogError` here (row F8's INDETERMINATE
+    // outcome) is RE-THROWN rather than turned into a preservation failure,
+    // because it is the one signal that says this call could not tell
+    // whether its own artifact is still at that name.
+    try {
+      const readBack = flushPreservation(fd, stateDir, qdir) ? readAllAt(fd, content.length) : null;
+      if (readBack !== null && Buffer.compare(readBack, content) === 0 && ownsName(dest, fd)) {
+        verified = readBack;
+      }
+    } catch (err) {
+      if (err instanceof WienerdogError) throw err;
+      verified = null;
+    }
+    if (verified === null) ownedDest = ownsName(dest, fd);
+  } finally {
+    closeQuietly(fd);
+    fd = -1;
   }
-  if (readBack !== null && Buffer.compare(readBack, content) === 0) {
-    return { name, bytes: readBack };
-  }
-  removeOwnedQuarantinePath(dest);
+  if (verified !== null) return { name, bytes: verified };
+  if (ownedDest) removeOwnedQuarantinePath(dest);
   return null;
 }
 
@@ -1089,12 +1291,15 @@ function makeGates(o = {}) {
    * @throws {WienerdogError} TWO structurally different throws.
    *   (1) Table P row P0 (`WP-preservation-abort-widening`): no VERIFIED
    *   artifact holds the judged bytes — the trigger is a CLASS (Table P rows
-   *   P0-P3), not a single named case, and only byte-identity is established
-   *   (P0b); the durable conjunct stays deferred to
-   *   `WP-quarantine-preserve-durability`.
-   *   (2) Table D row D3: a preservation failure's cleanup (removing `tmp` or
-   *   `dest`) could not be completed — this propagates out of
-   *   `quarantinePreserve` and straight out of this function unchanged.
+   *   P0-P3), not a single named case; byte-identity (P0b) and the durable
+   *   conjunct (`WP-quarantine-preserve-durability`, Table F) are both
+   *   established before a preservation may report success.
+   *   (2) Table D row D3, including `WP-quarantine-preserve-durability`
+   *   Table F row F8's INDETERMINATE outcome: a preservation failure's
+   *   cleanup (removing `tmp` or `dest`) could not be completed, or a stat
+   *   could not determine ownership of a path this call may own — this
+   *   propagates out of `quarantinePreserve` and straight out of this
+   *   function unchanged.
    */
   const secret = (g) => {
     const { rel, afterBytes, date } = g;
