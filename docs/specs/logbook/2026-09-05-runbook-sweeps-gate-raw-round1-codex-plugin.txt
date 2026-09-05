@@ -1,0 +1,69 @@
+# Design gate raw — Codex plugin adversarial review — WP-process-runbook-sweeps
+# tip reviewed: d2cb7aca8ed03ae8c2238d15d3a88d0a6e83c2d5 ; base main = 98a8b49a6ba1dae627d0d93470a19385c7e89657 ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a072cb-dfae-7a01-b1cf-f6688035286c).
+[codex] Turn started (01a072cb-e095-7f33-93d4-9e2e4edcf0bd).
+[codex] Assistant message captured: I’ll inspect the two-file diff, check its claims against the seven context files, and execute...
+[codex] Running command: /bin/zsh -lc 'git diff main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/logbook/202...
+[codex] Command completed: /bin/zsh -lc 'git diff main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/logbook/202... (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-process-runbook-sweeps.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-process-runbook-sweeps.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/runbooks/codex-review.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/runbooks/codex-review.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,121p' docs/runbooks/codex-review.md"
+[codex] Running command: /bin/zsh -lc "sed -n '207,470p' docs/specs/WP-process-runbook-sweeps.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,121p' docs/runbooks/codex-review.md" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '207,470p' docs/specs/WP-process-runbook-sweeps.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md docs/specs/_TEMPLATE.md .claude/agents/wd-a...
+[codex] Running command: /bin/zsh -lc "sed -n '1,240p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gat...
+[codex] Command completed: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md docs/specs/_TEMPLATE.md .claude/agents/wd-a... (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '1,240p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gat... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md .claude/agents/wd-architect.md .claude/agen...
+[codex] Command completed: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md .claude/agents/wd-architect.md .claude/agen... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/_TEMPLATE.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/_TEMPLATE.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'grant|declin|deni|STOP|"'^###|''^##'"' docs/specs/logbook/2026-09-05-pro...
+[codex] Command completed: /bin/zsh -lc "rg -n 'grant|declin|deni|STOP|"'^###|''^##'"' docs/specs/logbook/2026-09-05-pro... (exit 0)
+[codex] Assistant message captured: The anchor checks test whether phrases occur, but leave the surrounding rule to the implement...
+[codex] Running command: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess spec=Path('\\''docs/spec...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess spec=Path('\\''docs/spec... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '240,470p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-g...
+[codex] Command completed: /bin/zsh -lc "sed -n '240,470p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-g... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '470,766p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-g...
+[codex] Command completed: /bin/zsh -lc "sed -n '470,766p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-g... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1218,1257p' memory/lessons/inbox.md sed -n '1275,1286p' memory/lessons/...
+[codex] Command completed: /bin/zsh -lc "sed -n '1218,1257p' memory/lessons/inbox.md sed -n '1275,1286p' memory/lessons/... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff --numstat main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/l...
+[codex] Command completed: /bin/zsh -lc "git diff --numstat main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/l... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path('\\''docs/specs/W...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path('\\''docs/specs/W... (exit 0)
+[codex] Assistant message captured: The gate returned the expected 20 FAIL after I fed its data through stdin to work around the ...
+[codex] Running command: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path('\\''docs/specs/W...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path('\\''docs/specs/W... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not ship yet: the sentinel gate admits false g...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not ship yet: the sentinel gate admits false greens, R13 conflicts with mandatory escalation, and the stop criterion leaves outcomes unrouted. Executed scoped git diff/status, Bash sentinel checks, and in-memory counter-cases. Baseline with DATA supplied through stdin: 20 FAIL. Worktree remained clean. Read the specified documents and context; lint/tests were not run. No product-scope objections.
+
+Findings:
+- [high] [A] Required anchors survive inverted or rejected rules (docs/specs/WP-process-runbook-sweeps.md:412-415)
+  The predicate checks unrestricted substrings, not operative meaning. Executed counter-case: unchanged target files plus sentences explicitly rejecting each required anchor produced 20 PASS. Specifically, “It is NOT required that nothing writes into a worktree a gate is reading” passes R17. The prescribed violating state merely rewords an anchor, so its red result never establishes that the gate rejects an inverted rule.
+  Recommendation: Label the sentinels as presence-only checks. Require recorded whole-construct review against Table B for meaning and preservation, and include an anchor-preserving inversion in the validation evidence. Do not certify semantic correctness from the three current states.
+- [high] [A] R13 exempts repeated predicate defects from escalation (docs/specs/WP-process-runbook-sweeps.md:181)
+  R13 requires “Only form is a design question” immediately after existing codex-review.md:70–71: “When two consecutive rounds land findings of the same kind, the next step is a design question, never another textual patch.” Repeated predicate defects satisfy the existing trigger while R13 forbids its outcome. The existing circuit breaker at :376–383 also mandates contract extraction for repeated same-family findings without a form-insufficiency exception. Landing R13 as specified silently weakens those rules.
+  Recommendation: Limit the form/predicate distinction to ordinary defect routing and explicitly preserve the repeated-kind and ADR-0031 escalation triggers. State which rule takes precedence.
+- [medium] [A] Failure to open the DATA heredoc reports success (docs/specs/WP-process-runbook-sweeps.md:368)
+  Running the extracted Bash script verbatim in this read-only environment printed “cannot create temp file for here document”, followed by “sentinels exit=0”, and returned 0. The loop executed no checks, leaving rc initialized to success. This is an observed false green when the shell cannot prepare the gate's input, independent of the implementation's contents.
+  Recommendation: Propagate failure of the loop command, for example with `done <<'DATA' || exit 1`. That change returned 1 under the same reproduced failure. Include this failed-input case in the recorded gate validation.
+- [medium] [B] Stop criterion is neither exhaustive nor exclusive (docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md:39-60)
+  A first-round finding that changes operative content, or moves a rule between existing Deliverables, cannot CLOSE but triggers neither DESIGN nor OWNER escalation; neither repeat branch applies. Conversely, a second sentinel-only round qualifies for both CLOSE and FALLBACK, with no precedence stated. These counter-cases leave the orchestrator choosing the outcome after seeing findings—the ambiguity this pre-pinned criterion is meant to prevent.
+  Recommendation: Add explicit routing for operative-content changes and moves within the Deliverables set. Order escalation, repeat/fallback, and closure checks with stated precedence, including how mixed rounds are resolved.
+
+Next steps:
+- Resolve the four findings within the two reviewed documents and update the validation record.
+# plugin exit=0 ; porcelain before/after: identical

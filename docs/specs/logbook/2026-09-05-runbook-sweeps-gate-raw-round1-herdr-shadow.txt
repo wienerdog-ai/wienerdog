@@ -1,0 +1,72 @@
+# Design gate raw — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-process-runbook-sweeps
+# tip reviewed: d2cb7aca8ed03ae8c2238d15d3a88d0a6e83c2d5 (detached worktree) ; base main = 98a8b49a6ba1dae627d0d93470a19385c7e89657 ; committed pre-adjudication
+
+{
+  "target": "d2cb7aca8ed03ae8c2238d15d3a88d0a6e83c2d5 vs 98a8b49a6ba1dae627d0d93470a19385c7e89657",
+  "verdict": "needs-attention",
+  "summary": "Do not ship this design yet. The sentinel can report green without processing its data and accepts uncommitted, misplaced, or inverted rules. R13 contradicts the existing two-round circuit breaker, and the pinned stop criterion is neither exhaustive nor mutually exclusive.",
+  "findings": [
+    {
+      "title": "Sentinel exits green when its DATA heredoc cannot be created",
+      "file": "docs/specs/WP-process-runbook-sweeps.md",
+      "line_start": 351,
+      "line_end": 391,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "The loop initializes rc=0, but does not fail closed if the `done <<'DATA'` redirection itself fails. I executed the extracted script in this read-only environment: Bash printed `cannot create temp file for here document`, processed zero anchors, then printed `sentinels exit=0` and returned 0. Thus an unwritable/full temporary directory can certify even the untouched tree. The four-state proof in the round record never exercises failure of the gate's own input transport.",
+      "recommendation": "Make script creation and DATA delivery fail closed, for example with `set -euo pipefail` plus explicit guards around both operations. Add a proved-red state where heredoc/temp creation fails and assert that no run can succeed unless exactly 20 anchors were processed."
+    },
+    {
+      "title": "Anchor matcher certifies uncommitted, misplaced, and inverted rules",
+      "file": "docs/specs/WP-process-runbook-sweeps.md",
+      "line_start": 338,
+      "line_end": 407,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "The gate greps each mutable working-tree file as one undifferentiated string. It never reads `HEAD`, checks the Table B insertion point, or evaluates polarity. I ran its matcher against `This rule is rejected: the proof of a fix is the re-run` and `The two gates are not required to run on the same tip`; both returned 0. Unstaged anchors likewise pass despite being absent from the commit, reproducing the exact failure documented in `memory/lessons/inbox.md:928-933` and contradicting R04. Consequently 20 PASS can accompany a rule in a comment, a negated rule, or a commit that lacks the rule.",
+      "recommendation": "Run the checks against committed blobs after rejecting a dirty tree, scope each anchor to its declared construct, and add wrong-location plus negated/inverted red cases. If semantic correctness remains review-only, explicitly demote this to an anchor-presence screen rather than evidence that Table B was implemented."
+    },
+    {
+      "title": "R13 contradicts the existing unconditional two-round escalation rule",
+      "file": "docs/specs/WP-process-runbook-sweeps.md",
+      "line_start": 181,
+      "line_end": 181,
+      "materiality_band": "B",
+      "confidence": 0.95,
+      "body": "R13 requires the new adjacent text to say `Only form is a design question`. The sentence it extends says, without qualification, `When two consecutive rounds land findings of the same kind, the next step is a design question, never another textual patch` (`codex-review.md:70-71`); `wd-reviewer.md:19` similarly escalates two failed rounds to the architect. Two repeated predicate-defect findings therefore simultaneously must and must not become a design question. An implementer cannot preserve the existing claim, as acceptance requires, while landing R13 literally.",
+      "recommendation": "State the precedence explicitly: use form-versus-predicate for the initial routing decision, while preserving the two-consecutive-same-family extraction rule regardless of that classification. Update Table B's operative content accordingly."
+    },
+    {
+      "title": "Pinned stop criterion has overlapping branches and uncovered outcomes",
+      "file": "docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md",
+      "line_start": 39,
+      "line_end": 65,
+      "materiality_band": "B",
+      "confidence": 0.99,
+      "body": "The criterion is not a decidable partition. A finding that changes Table B's operative content but not its disposition or landing file is barred from CLOSE yet matches none of DESIGN, OWNER, or FALLBACK. Conversely, a recommendation to drop a rule both changes its Table A disposition and argues it should not land, matching DESIGN and OWNER simultaneously. A second consecutive sentinel finding that also changes a table can trigger FALLBACK, DESIGN, and the ADR-0031 repeat rule together. The record supplies no precedence.",
+      "recommendation": "Replace the bullets with an ordered, exhaustive decision table that assigns every possible finding to exactly one terminal action, including operative-content and insertion-point changes, and states precedence for owner-scope, fallback, disposition, and same-family-repeat cases."
+    },
+    {
+      "title": "R12 is already partially bound but is measured as UNBOUND",
+      "file": "docs/specs/WP-process-runbook-sweeps.md",
+      "line_start": 151,
+      "line_end": 151,
+      "materiality_band": "B",
+      "confidence": 0.92,
+      "body": "The cited target already operatively requires a STOP CRITERION in the round record `BEFORE the first adversarial round` and requires it to state `which outcome closes the loop, and which outcome escalates` (`codex-review.md:72-81`). That is the pinning half of R12. Only the explicit mapping from the new A/B/C bands is missing. Marking R12 UNBOUND and placing it in R11's new bullet duplicates ownership instead of extending the existing stop-criterion construct; the current round record's use of LIGHT/HEAVY rather than A/B/C already demonstrates the resulting split.",
+      "recommendation": "Change R12 to PARTIAL, cite `codex-review.md:72-81` as its bound half, and EXTEND that stop-criterion bullet only with the missing requirement to map A/B/C outcomes. Reconcile the A/B/C and LIGHT/HEAVY taxonomies explicitly."
+    },
+    {
+      "title": "Owner-item overrule costs omit the spec's registered mirror changes",
+      "file": "docs/specs/WP-process-runbook-sweeps.md",
+      "line_start": 273,
+      "line_end": 300,
+      "materiality_band": "B",
+      "confidence": 0.96,
+      "body": "O1 and O2 describe an overrule as only a Deliverables-row swap and sentinel-path change. The spec's own checklist says the Table B File column is also mirrored by Current state, implementation/owner items, and Deliverables; Table B itself must change. O2 can additionally remove `wd-reviewer.md` from the deliverables and change the claimed five-file scope. O3 says the cost is roughly six lines in `codex-review.md`, although the affected bound text also lives in `spec-authoring.md`, `_TEMPLATE.md`, and `wd-reviewer.md`. These are measured decision costs, so understating them can obtain an owner ruling on a materially false patch estimate.",
+      "recommendation": "For each owner option, enumerate every canonical and mirrored edit implied by the overrule, including Table B, Current state, Deliverables, sentinels, scope/count prose, and the owner-item text itself."
+    }
+  ],
+  "executed": "Ran `git status --short`; `git diff --name-status` and `git diff --unified=80` for the supplied revisions; `wc -l`; complete numbered reads via `nl -ba`/`sed` of the two review files and all seven requested context files; targeted `rg` sweeps over the five target documents, inbox, and HANDOVER; the extracted sentinel script via Bash process substitution (observed false-green heredoc failure); an fd-fed equivalent gate (20 FAIL, rc=1); the three already-bound greps (all rc=0); inbox diff and five-deliverable numstat (empty, rc=0); inverted and negated anchor counter-cases (both matcher rc=0); `npm run lint` (rc=1 because markdownlint attempted an unavailable registry fetch; frontmatter passed); `git diff --check` (rc=2, trailing whitespace in the logbook); and `git rev-parse` for HEAD/main."
+}
+# codex exit=0 ; porcelain before/after: identical
