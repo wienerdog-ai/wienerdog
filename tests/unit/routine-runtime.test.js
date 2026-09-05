@@ -116,7 +116,7 @@ test('routine-runtime: composeRoutineRun (weekly-review) is fully hermetic with 
     path.join(RUNTIME_DIR(paths), 'broker-mcp-weekly-review.json'),
     'weekly-review is mcp:broker since WP-141 (A2-RESTORE done)'
   );
-  assert.equal(flagValue(args, '--allowedTools'), 'mcp__wienerdog-broker__create_draft');
+  assert.equal(flagValue(args, '--allowedTools'), 'mcp__wienerdog-broker__create_draft_to_self');
 
   // The ONLY writable root is the staging dir — never the vault/home; the
   // snapshot subdir is added for read intent only.

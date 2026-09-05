@@ -1,0 +1,22 @@
+{
+  "suite": "tests/unit/gws-gmail.test.js",
+  "proofs": [
+    {
+      "id": "reply-headers-unasserted",
+      "wp": "WP-audit-d-code-derived-recipients",
+      "criterion": "6",
+      "why": "buildMime's new In-Reply-To and References lines must pass through assertHeaderSafe exactly as To and Subject already do — step 1 refuses a CR/LF in these fields before create_reply_draft ever calls buildMime, so this defence-in-depth property is unreachable through the verb and is proven only by calling buildMime directly; [AUD-D7] does exactly that",
+      "file": "src/gws/gmail.js",
+      "find": "  if (m.inReplyTo) lines.push(`In-Reply-To: ${assertHeaderSafe(m.inReplyTo, 'In-Reply-To')}`);\n  if (m.references) lines.push(`References: ${assertHeaderSafe(m.references, 'References')}`);",
+      "replace": "  if (m.inReplyTo) lines.push(`In-Reply-To: ${m.inReplyTo}`); /* RP_MUT_REPLY_HEADERS_UNASSERTED */\n  if (m.references) lines.push(`References: ${m.references}`);",
+      "marker": "RP_MUT_REPLY_HEADERS_UNASSERTED",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["gws-gmail: [AUD-D7] buildMime refuses a CR or LF in every header it emits, including the two reply headers"],
+          "signal": "[AUD-D7]"
+        }
+      ]
+    }
+  ]
+}

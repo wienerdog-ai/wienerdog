@@ -144,8 +144,8 @@ test('wienerdog-inbox-triage: all mandatory ## headings are present verbatim', (
   }
 });
 
-test('wienerdog-inbox-triage: references the create_draft verb and states it has no send tool', () => {
-  assert.ok(inboxTriage.text.includes('create_draft'), 'missing create_draft verb');
+test('wienerdog-inbox-triage: references the create_reply_draft verb and states it has no send tool', () => {
+  assert.ok(inboxTriage.text.includes('create_reply_draft'), 'missing create_reply_draft verb');
   assert.ok(!inboxTriage.text.includes('wienerdog gws'), 'no gws Bash CLI reference may remain');
   const neverSendIdx = inboxTriage.text.indexOf('## Never send');
   assert.ok(neverSendIdx !== -1);

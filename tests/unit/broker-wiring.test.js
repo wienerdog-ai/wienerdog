@@ -80,8 +80,8 @@ test('broker-wiring: a non-broker profile gets no config (null)', () => {
 test('broker-wiring: composeClaudeArgs emits --allowedTools naming exactly the profile verbs, no wildcard', () => {
   const cases = {
     'daily-digest': ['calendar_list', 'gmail_search', 'gmail_read', 'send_digest_to_self'],
-    'inbox-triage': ['gmail_search', 'gmail_read', 'create_draft'],
-    'weekly-review': ['create_draft'],
+    'inbox-triage': ['gmail_search', 'gmail_read', 'create_reply_draft'],
+    'weekly-review': ['create_draft_to_self'],
   };
   for (const [id, verbs] of Object.entries(cases)) {
     const profile = getProfile(id);
@@ -101,10 +101,10 @@ test('broker-wiring: composeClaudeArgs emits --allowedTools naming exactly the p
   }
 });
 
-test('broker-wiring: weekly-review is mcp:broker with exactly create_draft (A2-RESTORE done)', () => {
+test('broker-wiring: weekly-review is mcp:broker with exactly create_draft_to_self (A2-RESTORE done)', () => {
   const p = getProfile('weekly-review');
   assert.equal(p.mcp, 'broker');
-  assert.deepEqual([...p.brokerVerbs], ['create_draft']);
+  assert.deepEqual([...p.brokerVerbs], ['create_draft_to_self']);
 });
 
 test('broker-wiring: the dream profile emits NO --allowedTools (no MCP surface)', () => {
