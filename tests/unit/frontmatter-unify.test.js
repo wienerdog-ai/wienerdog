@@ -58,7 +58,13 @@ test('config.readScalar round-trips the corpus through the one coercer', () => {
 });
 
 test('a no-separator-space line agrees with the spaced form on both consumers', () => {
-  assert.deepEqual(parseFrontmatter('---\nk:v\n---\n'), { k: 'v' });
+  // A2: the record is null-prototype, so it is not `deepEqual` to a `{k:'v'}`
+  // plain object any more — the OBSERVABLE is own keys exactly ['k'] WITH the
+  // value check (a keys-only compare would accept `{k: 'wrong'}`).
+  const got = parseFrontmatter('---\nk:v\n---\n');
+  assert.deepEqual(Object.keys(got), ['k']);
+  assert.equal(got.k, 'v');
+  // Both sides are null-prototype, so this comparison needs no repair.
   assert.deepEqual(parseFrontmatter('---\nk:v\n---\n'), parseFrontmatter('---\nk: v\n---\n'));
   assert.equal(readScalar('k:v', 'k'), 'v');
   assert.equal(readScalar('k:v', 'k'), readScalar('k: v', 'k'));
@@ -90,6 +96,7 @@ test('the skill-body split matches the shared parser body rule', () => {
 test('validator semantics preserved: quoted booleans stay strings, absent block is {}', () => {
   assert.equal(parseFrontmatter('---\nk: "true"\n---\n').k, 'true');
   assert.equal(parseFrontmatter('---\nk: \'false\'\n---\n').k, 'false');
-  assert.deepEqual(parseFrontmatter('no frontmatter'), {});
-  assert.deepEqual(parseFrontmatter('---\nunclosed: 1\n'), {});
+  // A2: null-prototype — the OBSERVABLE is zero own keys.
+  assert.deepEqual(Object.keys(parseFrontmatter('no frontmatter')), []);
+  assert.deepEqual(Object.keys(parseFrontmatter('---\nunclosed: 1\n')), []);
 });
