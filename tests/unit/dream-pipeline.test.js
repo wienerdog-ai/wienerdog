@@ -1430,6 +1430,78 @@ test('dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed f
 });
 
 
+test('dream-pipeline: [L7] the undelivered record is already in the output at the instant the ledger becomes durable (row G11, criterion 6)', async () => {
+  const ctx = setup();
+  // Precondition this seam depends on: a watermarks.json fixture would make
+  // step 4's one-time migration write the ledger FIRST, landing the injected
+  // fault before promote() has even run — a different and useless test.
+  assert.equal(
+    fs.existsSync(path.join(ctx.state, 'watermarks.json')),
+    false,
+    'no watermarks.json fixture — the migration must not write the ledger early'
+  );
+
+  const reportRel = `reports/dreams/${DATE}.md`;
+  const realRenameSync = fs.renameSync;
+  let ledgerRenameObserved = false;
+  // THE LEDGER-BOUNDARY SEAM. Only the rename whose DESTINATION is the ledger
+  // basename is touched; every other rename (workspace build, git plumbing,
+  // the report/warnings writes) passes straight through to the real fs call.
+  // The rename is DELEGATED FIRST — so the final ledger really is durable —
+  // and only then does this throw, simulating a crash/termination in the gap
+  // `writeLedger`'s own `fs.chmodSync` sits in. A patch that threw INSTEAD of
+  // renaming would test a ledger that never became durable, a weaker claim.
+  fs.renameSync = (from, to) => {
+    if (String(to).endsWith('transcript-ledger.json')) {
+      realRenameSync(from, to);
+      ledgerRenameObserved = true;
+      throw new Error('WD_TEST_INJECTED_CRASH_AFTER_LEDGER_RENAME');
+    }
+    return realRenameSync(from, to);
+  };
+  let r;
+  try {
+    r = await runDream(ctx, ['--yes'], {
+      opts: {
+        platform: 'linux',
+        // The refused-report arm (i): a symlinked report target, same
+        // mechanism as the REFUSED report test above.
+        reapGroup: async () => {
+          const abs = path.join(ctx.vault, reportRel);
+          fs.mkdirSync(path.dirname(abs), { recursive: true });
+          try { fs.symlinkSync('/tmp/somewhere-else.md', abs); } catch { /* already planted */ }
+          return { reaped: true };
+        },
+      },
+    });
+  } finally {
+    fs.renameSync = realRenameSync;
+  }
+
+  assert.ok(ledgerRenameObserved, 'the injected fault actually landed at the ledger rename');
+  assert.ok(r.thrown, 'the injected crash propagates — the run does not swallow it');
+  assert.ok(
+    fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')),
+    'the ledger really is durable at the moment of the crash'
+  );
+  // THE DISCRIMINATOR (criterion 6): by the time the ledger became durable —
+  // the FIRST durable claim any surface can make about this run — the output
+  // already carries the complete enforcement record: the announcing line AND
+  // the record's own lines. That is only true if row G11's delivery runs at
+  // step 17b, before step 18's writeLedger call that this seam interrupts.
+  assert.match(
+    r.output,
+    /the report could not be written to your vault/,
+    `the announcing line was not delivered before the ledger became durable: ${r.output}`
+  );
+  assert.match(
+    r.output,
+    /the complete record of this run follows/,
+    `the record's own lines were not delivered before the ledger became durable: ${r.output}`
+  );
+  assert.match(r.output, /Refused by policy/, 'the record itself, not just the announcement, was captured');
+});
+
 test('dream-pipeline: the report refusal on an EXPECT CONFLICT — the criterion\'s other named cause (row G11 case a)', async () => {
   const ctx = setup();
   const reportRel = `reports/dreams/${DATE}.md`;

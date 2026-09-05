@@ -1,0 +1,67 @@
+{
+  "suite": "tests/unit/ledger.test.js",
+  "proofs": [
+    {
+      "id": "banner-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "1",
+      "why": "reverting the exhausted banner's use of the constant to the shipped shelf-and-delete literal must redden the banner's own full-string pin and nothing else in this suite",
+      "file": "src/core/dream/ledger.js",
+      "find": "        `${PRESERVED_COPIES_POINTER} ` +\n        'The session files themselves are untouched.'",
+      "replace": "        'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest ' +\n        'of the files there (not the redacted/ folder inside it). ' + /* RP_MUT_QBL_BANNER_SHELF */\n        'The session files themselves are untouched.'",
+      "marker": "RP_MUT_QBL_BANNER_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-1\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim"], "signal": "[QBL-1]" }
+      ]
+    },
+    {
+      "id": "summary-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "2",
+      "why": "reverting the summary line's use of the constant to the shipped shelf sentence must redden the summary line's own full-string pin; the three counts are untouched, so a pin that only checked the integers would stay green here",
+      "file": "src/core/dream/ledger.js",
+      "find": "    `row. ${PRESERVED_COPIES_POINTER}`",
+      "replace": "    'row. The withheld notes are in state/quarantine/.' /* RP_MUT_QBL_SUMMARY_SHELF */",
+      "marker": "RP_MUT_QBL_SUMMARY_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-2\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim"], "signal": "[QBL-2]" }
+      ]
+    },
+    {
+      "id": "warnings-shelf-claim-restored",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "3",
+      "why": "restoring warnings.js's own retyped shelf literal must redden the warnings document's pin — that carrier is the one this WP converts from a retyped copy into an import",
+      "file": "src/core/dream/warnings.js",
+      "find": "const SECRET_EXHAUSTED_REMEDIATION = PRESERVED_COPIES_POINTER;",
+      "replace": "const SECRET_EXHAUSTED_REMEDIATION = /* RP_MUT_QBL_WARNINGS_SHELF */\n  'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest of the files there (not the redacted/ folder inside it).';",
+      "marker": "RP_MUT_QBL_WARNINGS_SHELF",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-3\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim"], "signal": "[QBL-3]" }
+      ]
+    },
+    {
+      "id": "pointer-derivation-ledger-suite",
+      "wp": "WP-quarantine-banner-location",
+      "criterion": "5",
+      "why": "THE DERIVATION PROOF. Appending a marker inside the canonical constant's own literal must move EVERY carrier that derives from it, so all three identities in this suite go red together. A carrier that imported the constant and then composed a byte-identical copy of its own does not move, its identity stays green, and this proof cannot be PROVEN — which is the only observable difference between one author and two",
+      "file": "src/core/dream/ledger.js",
+      "find": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.';",
+      "replace": "  'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed. RP_MUT_QBL_DERIVATION_LEDGER';",
+      "marker": "RP_MUT_QBL_DERIVATION_LEDGER",
+      "occurrences": 1,
+      "testNamePattern": "\\[QBL-[123]\\]",
+      "expectRed": [
+        { "test": ["ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim"], "signal": "[QBL-1]" },
+        { "test": ["ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim"], "signal": "[QBL-2]" },
+        { "test": ["ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim"], "signal": "[QBL-3]" }
+      ]
+    }
+  ]
+}

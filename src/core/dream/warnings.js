@@ -57,7 +57,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { displayName, quarantineSizeBytes, SECRET_REVERT_EXHAUSTED_REASON } = require('./ledger');
+const {
+  displayName,
+  quarantineSizeBytes,
+  SECRET_REVERT_EXHAUSTED_REASON,
+  PRESERVED_COPIES_POINTER,
+} = require('./ledger');
 const { writeIntoVault } = require('./vault-write');
 
 /**
@@ -82,10 +87,11 @@ const HEADER_PARAGRAPH =
   'below changes.';
 
 /** The one remediation line in the document, and it rides ONE group: a
- *  secret-exhausted quarantine is the single class the user can act on. Byte-
- *  identical to the sentence the digest banner uses for the same class. */
-const SECRET_EXHAUSTED_REMEDIATION =
-  'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest of the files there (not the redacted/ folder inside it).';
+ *  secret-exhausted quarantine is the single class the user can act on.
+ *  Imported from `ledger.js`'s `PRESERVED_COPIES_POINTER` rather than
+ *  retyped, so this line and the other ledger-derived surfaces have exactly
+ *  one author (Table L row L0, `WP-quarantine-banner-location`). */
+const SECRET_EXHAUSTED_REMEDIATION = PRESERVED_COPIES_POINTER;
 
 /**
  * The reason → heading map, IN EMISSION ORDER, and the single place these

@@ -1,0 +1,7 @@
+# Raw gate output — Codex plugin native review (codex-companion.mjs review --wait --base main), PR #218 round 1, wp/quarantine-banner-location at 0fc37e0e (base main = 0fd50422). Committed BEFORE adjudication. git status --porcelain identical before and after.
+
+# Codex Review
+
+Target: branch diff against main
+
+The changed carriers consistently use the canonical pointer, and the undelivered report record is moved before ledger persistence as specified. No functional regression or actionable defect was found.

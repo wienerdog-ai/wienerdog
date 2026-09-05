@@ -829,12 +829,32 @@ test('doctor: every Table A reason class renders its exact message, in row order
   assert.equal(lines[idxRE], '[warn] 2 session transcript(s) are being skipped: the session file could not be read');
   assert.equal(
     lines[idxSRE],
-    '[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. The withheld copies are in state/quarantine/.'
+    '[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.'
   );
   // hostile key (unrecognized reason) + missing reason + non-string reason = 3
   assert.equal(lines[idxUnrec], '[warn] 3 session transcript(s) are being skipped for a reason this version does not recognize');
   assert.doesNotMatch(r.stdout, /evil|pwn|traversal|some-unrecognized-future-reason|oc1\.jsonl|missing-reason|nonstring-reason/);
   assert.doesNotMatch(r.stdout, /\x1b\[31m/);
+});
+
+test('doctor: [QBL-4] the secret-exhausted line renders the preserved-copies pointer verbatim', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedLedger(core, {
+    '/a/sre1.jsonl': quarantinedRecord('secret-revert-exhausted'),
+  });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  const lines = r.stdout.split('\n').filter(Boolean);
+  const idxSRE = lines.findIndex((l) => l.includes('withheld by the secret check too many times in a row'));
+  assert.ok(idxSRE >= 0, '[QBL-4]');
+  assert.equal(
+    lines[idxSRE],
+    '[warn] 1 session transcript(s) are being skipped: the notes made from them were withheld by the secret check too many times in a row. Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.',
+    '[QBL-4]'
+  );
+  assert.ok(!r.stdout.includes('state/quarantine'), '[QBL-4]');
+  assert.ok(!r.stdout.includes('redacted/'), '[QBL-4]');
 });
 
 test('doctor: counts come from the ledger, never from a stale/hand-edited/empty reports/warnings.md', () => {

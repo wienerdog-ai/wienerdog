@@ -8,6 +8,7 @@ const path = require('node:path');
 
 const ledgerLib = require('../../src/core/dream/ledger');
 const { writeWatermarks } = require('../../src/core/dream/watermarks');
+const { composeWarnings } = require('../../src/core/dream/warnings');
 
 /** @returns {string} a fresh empty state dir. */
 function tempState() {
@@ -600,8 +601,8 @@ test('ledger: quarantineBannerLine renders the exhausted sentence, names no comm
     line,
     '> [!warning] Wienerdog: 2 session transcript(s) are no longer being dreamed over — the notes made ' +
       'from them were withheld by the secret check too many times in a row: sess-a.jsonl, sess-b.jsonl. ' +
-      'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest ' +
-      'of the files there (not the redacted/ folder inside it). ' +
+      'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names ' +
+      'each copy and its folder, in its dream report or in the output it printed. ' +
       'The session files themselves are untouched.'
   );
   assert.ok(!line.includes(INFORMATIONAL_SENTENCE_OPENER), 'the informational sentence is not emitted for this reason');
@@ -691,7 +692,8 @@ test('ledger: secretRevertSummaryLine is built from integers alone', () => {
     ledgerLib.secretRevertSummaryLine({ withheld: 2, deferred: 3, quarantined: 0 }),
     'wienerdog: dream — the secret check withheld 2 note(s); 3 session transcript(s) ' +
       'will be retried on the next run and 0 were skipped after too many withheld runs in a ' +
-      'row. The withheld notes are in state/quarantine/.'
+      'row. Copies of the withheld notes are kept outside your vault; the dream run that withheld ' +
+      'them names each copy and its folder, in its dream report or in the output it printed.'
   );
   // Anything that is not a non-negative safe integer renders as 0, which is what
   // makes it structurally impossible for a basename or a matched value to enter.
@@ -702,4 +704,52 @@ test('ledger: secretRevertSummaryLine is built from integers alone', () => {
     assert.ok(line.includes('and 0 were skipped'), `quarantined=${String(bad)} → 0`);
   }
   assert.ok(ledgerLib.secretRevertSummaryLine({}).includes('withheld 0 note(s)'));
+});
+
+// ---- WP-quarantine-banner-location: Table C, QBL-1..3 ----
+
+test('ledger: [QBL-1] the exhausted banner renders the preserved-copies pointer verbatim', () => {
+  let l = ledgerLib.recordSecretExhausted(EMPTY, disc({ path: '/tmp/proj/sess-a.jsonl' }));
+  l = ledgerLib.recordSecretExhausted(l, disc({ path: '/tmp/proj/sess-b.jsonl' }));
+  const line = ledgerLib.quarantineBannerLine(l);
+  assert.equal(
+    line,
+    '> [!warning] Wienerdog: 2 session transcript(s) are no longer being dreamed over — the notes made ' +
+      'from them were withheld by the secret check too many times in a row: sess-a.jsonl, sess-b.jsonl. ' +
+      'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names ' +
+      'each copy and its folder, in its dream report or in the output it printed. ' +
+      'The session files themselves are untouched.',
+    '[QBL-1]'
+  );
+  assert.ok(!line.includes('state/quarantine'), '[QBL-1]');
+  assert.ok(!line.includes('redacted/'), '[QBL-1]');
+});
+
+test('ledger: [QBL-2] the secret-revert summary line renders the preserved-copies pointer verbatim', () => {
+  const line = ledgerLib.secretRevertSummaryLine({ withheld: 2, deferred: 3, quarantined: 0 });
+  assert.equal(
+    line,
+    'wienerdog: dream — the secret check withheld 2 note(s); 3 session transcript(s) ' +
+      'will be retried on the next run and 0 were skipped after too many withheld runs in a ' +
+      'row. Copies of the withheld notes are kept outside your vault; the dream run that withheld ' +
+      'them names each copy and its folder, in its dream report or in the output it printed.',
+    '[QBL-2]'
+  );
+  assert.ok(!line.includes('state/quarantine'), '[QBL-2]');
+  assert.ok(!line.includes('redacted/'), '[QBL-2]');
+});
+
+test('ledger: [QBL-3] the vault warnings document renders the preserved-copies pointer verbatim', () => {
+  const l = ledgerLib.recordSecretExhausted(EMPTY, disc({ path: '/tmp/proj/sess-a.jsonl' }));
+  const doc = composeWarnings(l).toString('utf8');
+  assert.ok(
+    doc
+      .split('\n')
+      .includes(
+        'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.'
+      ),
+    '[QBL-3]'
+  );
+  assert.ok(!doc.includes('state/quarantine'), '[QBL-3]');
+  assert.ok(!doc.includes('redacted/'), '[QBL-3]');
 });

@@ -1073,6 +1073,48 @@ async function run(argv, opts = {}) {
         if (newSkills.length > 0) recordSkills(paths.state, newSkills);
       }
 
+      // 17b. ROW G11 — EVERY RECORD THIS RUN PRODUCED REACHES THE USER.
+      //     Returning is not delivering, and this is the delivery.
+      //
+      //     IT RUNS BEFORE STEP 18, AND THE ORDER IS THE GUARANTEE. Every
+      //     durable surface this run writes from step 18 onwards — the
+      //     ledger, the digest banner it drives, the vault warnings file —
+      //     carries a sentence saying the run named each preserved copy and
+      //     its folder. Printed after them, that sentence would be a promise
+      //     about output a crash or a throw could still prevent. Printed
+      //     here it is a statement about output that has already happened.
+      //
+      //     (i) THE REFUSED REPORT ARM. When `promote()` returns
+      //     `report.outcome === 'refused'`, `report.record` holds the COMPLETE
+      //     enforcement record and the vault holds none of it: the vault object
+      //     is left untouched and the record travels through this run's log and
+      //     output instead. Nothing is staged or committed on that arm — there
+      //     are no bytes to commit.
+      //
+      //     (i-b) THE PARTIALLY PUBLISHED REPORT ARM. When `outcome` is
+      //     `promoted` and `accounting.published` is false, THIS RUN PUBLISHED
+      //     THE BODY, the enforcement SECTION never reached the vault, and
+      //     `record` again holds the COMPLETE record — the redaction line and
+      //     every preserved-copy line the refused section would have carried
+      //     included. It differs from (i) in ONE respect and stating it is the
+      //     point: here something IS committed, the report path from that arm's
+      //     `bytes`, so (i)'s "nothing is committed" is (i)'s clause alone. What
+      //     the target HOLDS at the end of such a run is refusal-cause-specific
+      //     and nothing here says anything about it.
+      const undelivered =
+        res.report.outcome === 'refused' ||
+        (res.report.outcome === 'promoted' && res.report.accounting && res.report.accounting.published === false);
+      if (undelivered) {
+        console.log(
+          res.report.outcome === 'refused'
+            ? `wienerdog: dream — the report could not be written to your vault (${neutralise(res.report.reason)}); ` +
+                'the complete record of this run follows and is not stored anywhere else.'
+            : 'wienerdog: dream — the report body was published, but its enforcement section was NOT ' +
+                `(${neutralise(res.report.accounting.reason)}); the complete record of this run follows.`
+        );
+        for (const line of res.report.record) console.log(`  ${line}`);
+      }
+
       // 18. ROW G4 — the transcript advance, from the TYPED EP2 disposition.
       //     ONLY `withheld` defers: a transcript whose only note was WITHHELD is
       //     NOT marked processed, so it regenerates next run rather than being
@@ -1129,39 +1171,6 @@ async function run(argv, opts = {}) {
       // row G8's render-versus-HEAD reconciliation is what makes work.
       reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
 
-      // 20. ROW G11 — EVERY RECORD THIS RUN PRODUCED REACHES THE USER.
-      //     Returning is not delivering, and this is the delivery.
-      //
-      //     (i) THE REFUSED REPORT ARM. When `promote()` returns
-      //     `report.outcome === 'refused'`, `report.record` holds the COMPLETE
-      //     enforcement record and the vault holds none of it: the vault object
-      //     is left untouched and the record travels through this run's log and
-      //     output instead. Nothing is staged or committed on that arm — there
-      //     are no bytes to commit.
-      //
-      //     (i-b) THE PARTIALLY PUBLISHED REPORT ARM. When `outcome` is
-      //     `promoted` and `accounting.published` is false, THIS RUN PUBLISHED
-      //     THE BODY, the enforcement SECTION never reached the vault, and
-      //     `record` again holds the COMPLETE record — the redaction line and
-      //     every preserved-copy line the refused section would have carried
-      //     included. It differs from (i) in ONE respect and stating it is the
-      //     point: here something IS committed, the report path from that arm's
-      //     `bytes`, so (i)'s "nothing is committed" is (i)'s clause alone. What
-      //     the target HOLDS at the end of such a run is refusal-cause-specific
-      //     and nothing here says anything about it.
-      const undelivered =
-        res.report.outcome === 'refused' ||
-        (res.report.outcome === 'promoted' && res.report.accounting && res.report.accounting.published === false);
-      if (undelivered) {
-        console.log(
-          res.report.outcome === 'refused'
-            ? `wienerdog: dream — the report could not be written to your vault (${neutralise(res.report.reason)}); ` +
-                'the complete record of this run follows and is not stored anywhere else.'
-            : 'wienerdog: dream — the report body was published, but its enforcement section was NOT ' +
-                `(${neutralise(res.report.accounting.reason)}); the complete record of this run follows.`
-        );
-        for (const line of res.report.record) console.log(`  ${line}`);
-      }
       // (ii) the out-of-vault records from row G12 reach the SAME channel. They
       //      also travel to the durable dream report through `promote()`'s
       //      `records` input: two channels, deliberately, because a log line is

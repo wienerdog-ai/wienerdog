@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-banner-location
 title: Stop the ledger-derived banners naming a quarantine shelf they cannot observe
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening]

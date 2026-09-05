@@ -762,8 +762,12 @@ test('secretQuarantine: the banner sentence no longer tells the user to delete t
       + 'you meant to keep, delete the rest of the files there (not the redacted/ folder inside it); '
       + 'this notice clears when no withheld copies are left.'
   );
-  // Byte-identical to the exhausted-transcript banner's parenthetical: two
-  // banners about the same folder must not warn about it two different ways.
+  // After WP-quarantine-banner-location the exhausted-transcript banner
+  // (ledger.js's quarantineBannerLine) carries the code-owned
+  // PRESERVED_COPIES_POINTER instead of a folder name, so it has no
+  // parenthetical left to be byte-identical to. This banner is the only one
+  // that still names state/quarantine/ — it reads the folder it announces,
+  // so its sentence and parenthetical are unchanged by that package.
   assert.ok(banner.includes('(not the redacted/ folder inside it)'));
 });
 

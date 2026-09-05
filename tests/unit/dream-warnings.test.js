@@ -122,7 +122,7 @@ test('dream-warnings: every reason class renders under its own heading, in the f
       '',
       '### The notes made from these sessions were withheld by the secret check too many times in a row — 1',
       '',
-      'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest of the files there (not the redacted/ folder inside it).',
+      'Copies of the withheld notes are kept outside your vault; the dream run that withheld them names each copy and its folder, in its dream report or in the output it printed.',
       '',
       '- spent.jsonl',
       '',
@@ -137,7 +137,7 @@ test('dream-warnings: every reason class renders under its own heading, in the f
 });
 
 test('dream-warnings: the remediation line rides the secret-exhausted group and no other', () => {
-  const marker = 'The withheld copies are in state/quarantine/';
+  const marker = 'Copies of the withheld notes are kept outside your vault';
   const spent = render(ledgerOf({ '/x/p/a.jsonl': ['quarantined', 'secret-revert-exhausted', '5:1:1:1'] }));
   assert.equal(spent.split(marker).length - 1, 1, 'present exactly once for the group that carries it');
   for (const reason of ['over-ceiling', 'too-many-lines', 'read-error', 'made-up']) {
