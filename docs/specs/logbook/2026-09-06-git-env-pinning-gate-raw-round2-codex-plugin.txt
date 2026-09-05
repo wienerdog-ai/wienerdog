@@ -1,0 +1,73 @@
+# raw — Codex plugin adversarial review — design-r2
+# tip reviewed: 235af36983b51f2b3e0f1e8c9640b7f65b3b5300 ; base main = 4b629ec6d1173c3724f9bc0e3d7c658eed062541 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a073bd-2307-7442-bb60-d041f3bad712).
+[codex] Turn started (01a073bd-23c3-7ca0-8cc1-9a3048631484).
+[codex] Assistant message captured: I’ll inspect the diff, trace the revised claims against the code, and check the recorded prob...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git diff --unified=...
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git diff --unified=... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '210,440p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '210,440p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^#|''^```|U[0-9]|R1-|STOP|ADR-0031'"' docs/specs/logbook/2026-09-05-gi...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^#|''^```|U[0-9]|R1-|STOP|ADR-0031'"' docs/specs/logbook/2026-09-05-gi... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '150,300p' src/cli/dream.js; sed -n '530,600p' src/cli/dream.js; rg -n '...
+[codex] Command completed: /bin/zsh -lc "sed -n '150,300p' src/cli/dream.js; sed -n '530,600p' src/cli/dream.js; rg -n '... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,110p' tests/unit/dream-pipeline.test.js; sed -n '170,300p' tests/unit...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,110p' tests/unit/dream-pipeline.test.js; sed -n '170,300p' tests/unit... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '40,90p' src/cli/run-job.js; sed -n '145,185p' src/cli/run-job.js; sed -...
+[codex] Command completed: /bin/zsh -lc "sed -n '40,90p' src/cli/run-job.js; sed -n '145,185p' src/cli/run-job.js; sed -... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,65p' tests/unit/dream-pipeline.test.js; sed -n '305,375p' tests/unit/...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,65p' tests/unit/dream-pipeline.test.js; sed -n '305,375p' tests/unit/... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^'"\\| W1|W1\\(c\\)|NEITHER SUPPRESSED|constructed|hook|git environmen...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^'"\\| W1|W1\\(c\\)|NEITHER SUPPRESSED|constructed|hook|git environmen... (exit 0)
+[codex] Assistant message captured: The revised index path and PID match `commitNamedSet`, and the fixture can place AC5’s global...
+[codex] Running command: /bin/zsh -lc "sed -n '970,1270p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-ro...
+[codex] Command completed: /bin/zsh -lc "sed -n '970,1270p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-ro... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat package.json | head -65; sed -n '80,111p' docs/specs/logbook/2026-09-05-git...
+[codex] Command completed: /bin/zsh -lc "cat package.json | head -65; sed -n '80,111p' docs/specs/logbook/2026-09-05-git... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {getPaths}=require(\"./src/core/paths\"); const overrides={WIENE...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {getPaths}=require(\"./src/core/paths\"); const overrides={WIENE... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "sed -n '65,125p' tests/unit/dream-pipeline.test.js; sed -n '485,655p' tests/uni...
+[codex] Command completed: /bin/zsh -lc "sed -n '65,125p' tests/unit/dream-pipeline.test.js; sed -n '485,655p' tests/uni... (exit 0)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "node -e 'const {getPaths}=require(\"./src/core/paths\"); const {buildCleanEnv}=...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {getPaths}=require(\"./src/core/paths\"); const {buildCleanEnv}=... (exit 0)
+[codex] Searching:
+[codex] Assistant message captured: I found two factual problems in the revision: changing HOME can leave every product root fixe...
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '114,145p'; nl -ba docs/...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '114,145p'; nl -ba docs/... (exit 0)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "git status --short; node -e 'const fs=require(\"node:fs\"); const s=fs.readFile...
+[codex] Command completed: /bin/zsh -lc "git status --short; node -e 'const fs=require(\"node:fs\"); const s=fs.readFile... (exit 0)
+[codex] Assistant message captured: The construction still appears implementable within the seven deliverables; neither `paths.js...
+[codex] Starting collaboration tool: wait.
+[codex] Collaboration tool wait completed.
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet: HOME's security rationale re...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 4b629ec6d1173c3724f9bc0e3d7c658eed062541
+Verdict: needs-attention
+
+Do not dispatch yet: HOME's security rationale remains false under supported overrides, and U12's replacement measurement still contradicts its claim. Round-1 status: R1-A fixed; R1-B partially fixed; R1-C fixed; R1-D partially fixed; R1-E fixed. These are design findings, not demonstrated defects in an implemented pin.
+
+Findings:
+- [medium] Correct U2's claim that changing HOME relocates the whole product (docs/specs/WP-dream-git-env-pinning.md:363)
+  Band B; Table U row finding. Executed getPaths() twice with different HOME values and fixed WIENERDOG_HOME, WIENERDOG_VAULT, CLAUDE_CONFIG_DIR and CODEX_HOME: every core/state/config/vault root remained identical. Thus HOME can select a different ~/.gitconfig while the run still targets the same vault; U2's own measurements establish that this config can execute fsmonitor during update-index/write-tree. Calling getPaths() does not eliminate that selector. The manual/nightly equivalence claim is also too broad: an executed buildCleanEnv() comparison confirmed that scheduled PATH is reconstructed while U1 preserves manual PATH. The HOME fallback correction is real, but the claimed security boundary is not.
+  Recommendation: Keep the adopted HOME construction, but explicitly describe HOME as a trusted configuration authority even when overrides keep the vault and state fixed. Correct O1, U2 and the security checklist together; limit manual/scheduled equivalence to the environment properties actually shared.
+- [low] U12's fresh comparison still uses different repository states (docs/specs/WP-dream-git-env-pinning.md:373)
+  Band C; Table U measured-reach finding. Executed a Node extraction/comparison of the committed Part 3 output: baseline rev-parse returns 579950…, while the GIT_WORK_TREE pass returns 3c453…; commit-tree returns 3c453… versus 603ed…. The baseline update-ref advances HEAD before the second pass. Therefore the claim that all nine returned identical results is false, and the replacement probe retains the confounder it claims to remove. This does not establish GIT_WORK_TREE reach; it establishes that the recorded experiment does not support the stated equality.
+  Recommendation: Re-run paired probes from identical repository/index states with fixed commit metadata, and compare outputs mechanically. Update U12 and the record's claims at lines 953–955 and 1300 from those results.
+
+Next steps:
+- Apply the STOP CRITERION explicitly: U2 is a second-consecutive-round Table U finding and triggers branch 3's ADR-0031 extraction. U12 concerns measured reach and routes through branch 2; DESIGN is the higher round outcome. Neither finding is merely record or mirror drift. Scope objections: none; O1–O3 remain adopted.
+- AC1 checks: stateDir is paths.state at dream.js:1042, and commitNamedSet uses process.pid at line 226, so the exact index value is satisfiable in the same-process fixture. The unset-HOME direct test discriminates copying from derivation. The canary catches the specified spread-and-delete implementation.
+- AC5 is realizable within the seven deliverables: place the hook outside the repository's default hooks directory, select it only through the temporary home's .gitconfig, and embed its log path rather than carrying the probe's HOOKENV_LOG variable. Remove the file configuration and reset the log for the injected half; assert successful publication. No paths.js or run-job.js edits are required.
+- RED contracts are structurally satisfiable, but not executed successfully here. Exact-substring mutations can target git-env.js with unique markers. Include AC5's failure in the config-count proof's exact expectRed set. Place AC1's private-index checks so the existing proof retains its frozen three identities and diagnostics. U6's pre-pin chained replay does not contradict AC2's post-pin decoy assertion.
+- Name replacement-ref and identity channels during re-derivation, with provenance and costs, without expanding the allowlist. U21 already drops them. Executed git var with the run's -c identity settings: inherited GIT_AUTHOR_* and GIT_COMMITTER_* won. [Git documents that precedence](https://git-scm.com/docs/git#_git_commits). Replacement controls affect object interpretation; dropping GIT_NO_REPLACE_OBJECTS can reactivate stored replacements during reads. [Git replacement documentation](https://git-scm.com/docs/git-replace) and [Git 2.50.1's replacement-namespace source](https://github.com/git/git/blob/v2.50.1/refs.c) support this; no replacement-ref runtime probe or commit-tree write was executed.
+- Execution limits: inspected the target diff and cited code/records, ran read-only Node/path/identity probes, and confirmed a clean working tree. npm test failed before tests on mkdtemp EPERM; scripts/red-proofs.js failed before proofs on sandbox-creation EPERM. No pipeline, hook, or scratch-repository reproduction is claimed.
