@@ -1123,6 +1123,121 @@ Step 7 makes it safe either way.
   ruling, R5-B reverts to it, and the unit question is recorded as **open**, not as
   an item.
 
+## Round 6 — external double channel, 2026-09-05, on `f2d6acc5` — THE LOOP CLOSES
+
+Both channels **needs-attention**, and both state **by execution** that the
+output-safety rule held: **no accepted input yields a CR/LF bypass or an
+over-998-octet line** (plugin: 111 pipeline cases; shadow: full pipeline plus
+boundary probes). Every remaining finding is gate machinery, wording, or scope
+restoration. **Under the pinned Weighted-closure criterion the loop CLOSES at round
+6**: zero product findings on both channels, so the machinery fixes land in-surface
+and are verified mechanically rather than by a seventh round.
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-codex-plugin.txt` | `67b04075` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-herdr-shadow.txt` | `41a51070` |
+
+| # | Channel(s) | Band | Finding | Disposition |
+|---|---|---|---|---|
+| **R6-A** | CONVERGED | LIGHT (gate) | The "accepted at exactly 998" `To` fixture was **995**, not 998 — an off-by-three that left the accepted boundary unpinned. | **fix** — the shadow's exact witness is used and executed: **246 astral + `U+0800` + `aa@b.co`** = 254 code points, 500 code units, **994 value octets, 998-octet line**. (The plugin's `aaaaa@b.co` variant also lands on 998; one was chosen.) The 999 refusal is kept. Criterion 5's `To` assertions are now explicitly **conditional on the step-4 unit reading**: under code points both rows are reachable and asserted; under UTF-16 `.length` both witnesses refuse at step 4 and the assertion becomes "step 4 refuses; no `To` line over 998 is reachable" — **measured maximum 950 octets**. Step 4's unit is still **not** pinned. |
+| **R6-B** | CONVERGED | LIGHT (gate) | The R5-B rollback was **incomplete**: step 5's input cell still read "≤998 octets by step 0", and the accepted raw-boundary row had been changed to "exactly 998 octets". | **fix** — both restored to characters. Octets now appear **only** in step 7 and its output fixtures. The full hunk audit against `197cd797` is below. |
+| **R6-C** | plugin B | LIGHT (scope restoration) | Step 1's fixed refusal message had been **changed at the ruling pass** from the existing generic reply-address refusal to a new line-break-specific text — model-visible and **unlicensed**. | **fix — reverted.** The `197cd797` message is restored; the "three distinct messages" claim becomes **two** (the generic steps-0–4 refusal, and step 7's new output-bound refusal, which is new because the ruling requires a refusal that did not exist). `[AUD-D5]` now asserts **zero `drafts.create` AND that `buildMime` was never invoked** — see the trap below. |
+| **R6-D** | CONVERGED | LIGHT (wording) | "reaches step 7's refusal"; "All three" `[AUD-D6]` declarations (there are four); "the code-unit mutation reddens only the euro row". | **fix** — all corrected; every step-number mirror re-swept after the step-7 insertion; the `[AUD-D6]` sentence now **points at Table C** instead of counting. |
+| **R6-E** | shadow C | LIGHT (record) | The rulings record omitted `To` from the applied output set, and called the OPEN unit question "no product consequence". | **fix** — `To` added, described as a round-5 **completeness correction under** the ruling rather than an extension. "No product consequence" is replaced by the measured truth: **no output-safety consequence, but availability differs** (below). |
+
+### The fourth masking trap — found while applying R6-C, and it changes the proof
+
+Restoring one generic message for steps 0–4 removes the discriminator `[AUD-D5]`
+had been resting on, so the proof was re-derived by execution rather than argued:
+
+```text
+=== does [AUD-D5] still discriminate with ONE generic message? ===
+  From         correct: step 1 / GENERIC   mutant: step 3 / GENERIC             buildMime 0->0   => INDISTINGUISHABLE
+  Reply-To     correct: step 1 / GENERIC   mutant: step 3 / GENERIC             buildMime 0->0   => INDISTINGUISHABLE
+  Subject      correct: step 1 / GENERIC   mutant: step 8 / assertHeaderSafe    buildMime 0->1   => DISCRIMINATES
+  Message-ID   correct: step 1 / GENERIC   mutant: step 8 / assertHeaderSafe    buildMime 0->1   => DISCRIMINATES
+  References   correct: step 1 / GENERIC   mutant: step 8 / assertHeaderSafe    buildMime 0->1   => DISCRIMINATES
+  drafts.create is 0 in every row, correct and mutant alike — it can never be the discriminator.
+```
+
+**Step 1's scan cannot be proved on a recipient field**: drop it for `From` or
+`Reply-To` and the grammar refuses the value at step 3 with the same message and
+the same zero calls. Only the three non-recipient fields reach `buildMime`, where
+`assertHeaderSafe` throws its **own** message. So `step1-scan-drops-a-field` must
+name `Subject`, `Message-ID` or `References`, and the identity asserts **"buildMime
+never invoked"** rather than a message or a call count. Recorded in the spec beside
+the other three traps.
+
+### R6-A and R6-B, executed from a FILE
+
+```text
+=== the exact 998-octet To witness ===
+  shadow: 246 astral + U+0800 + 'aa@b.co'   254 code points, 500 code units, 994 value octets, To line 998
+  plugin: 246 astral + 'aaaaa@b.co'         256 code points, 502 code units, 994 value octets, To line 998
+ok   ok    witness accepted under CODE-POINT step 4 (To line exactly 998)
+ok   7     999 witness refused under CODE-POINT step 4
+ok   4,4   BOTH refuse at step 4 under CODE-UNIT step 4
+  max To line reachable under CODE-UNIT step 4, over the whole grammar: 950 octets (never >998)
+
+=== raw boundary is CHARACTERS ===
+ok   7     998 ASCII characters PASS step 0 (then step 7 refuses: 9+4+998 = 1011)
+ok   ok    985 ASCII characters pass step 0 AND step 7 (line exactly 998)
+ok   0     999 characters refused at step 0
+ok   7     998 EUR characters (2994 octets) pass step 0, refused at step 7
+
+ALL CHECKS PASSED
+```
+
+### R6-E: the availability difference, measured
+
+```text
+  998 EUR chars in References, NO Message-ID:
+    character bound (as ruled): DRAFTS — References is omitted because there is no Message-ID
+    octet bound (hypothetical): would refuse at step 0 (2994 octets > 998)
+    => not "no product consequence": no output-safety difference, but AVAILABILITY differs.
+```
+
+The character bound is the **more permissive** of the two and both are output-safe,
+which is the honest way to put the open question to the owner.
+
+### R6-B: the hunk audit against `197cd797`
+
+**19 hunks, every one licensed.** Classified:
+
+| Class | Hunks |
+|---|---|
+| ruling (a) — the output bound and its mirrors | 2, 3, 4, 6, 7, 10, 13, 14, 15, 16, 19, and 1 (the `replyTarget` step-range mirror, 0–6 → 0–7) |
+| R4-B — the prescribed blank-check | 18 |
+| R5-B rollback + the unit note | 4 (shared with (a)) |
+| R5-A / R6-C / R6-D / R5-E gate fixes | 5, 8, 9, 11, 12, 17 |
+
+Mechanically confirmed: `git diff 197cd797` contains **no** `998`-related change
+outside step 7 and its fixtures except step 5's cell gaining the word *characters*,
+which names the ruled unit rather than changing it. **An intra-cell re-read of the
+spliced case-table paragraph also caught a duplicated sentence** left by an earlier
+edit — the same re-read rule that R2-D established, doing its job.
+
+### CLOSURE
+
+Under **Weighted closure** (`docs/runbooks/codex-review.md`): *"The loop is DONE
+when a round finds nothing about the product. Machinery findings at that point are
+fixed or accepted as named residuals; they do not extend the loop."* Round 6 found
+**nothing about the product on either channel** — both executed the pipeline and
+confirmed the output-safety rule holds. All five findings are gate machinery,
+wording, or scope restoration, and all are fixed in-surface here.
+
+**The design gate is CLOSED at round 6. There is no round 7.** The orchestrator
+runs an independent clean-context executor over this closing tip; the spec moves to
+`status: Ready` in this commit, and the dispatch-time re-verification gate
+(`docs/runbooks/codex-review.md`) still runs before any implementer starts.
+
+**Six rounds, one circuit-breaker firing, two stop-criterion firings, one owner
+brief and one direct owner ruling.** Owner items stand at **ten**, plus one open
+question. What the loop actually converged on, in one line: *bound what you read and
+bound what you build, in the unit the consumer counts, and prove each check where
+the property lives.*
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -1139,6 +1254,9 @@ Step 7 makes it safe either way.
 | 3 | **Stop criterion** | — | — | **FIRED** on two Table B rows → ruled by the orchestrator under the standing instruction as owner **item 9**: keep the code-derived-recipient verb; the two rows are the ORDER contract not yet applied to itself. Round-4 criterion sharpened to STOP |
 | 4 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-codex-plugin.txt` | `08eec164` | needs-attention — R4-A (B, converged), R4-B (A); one scope objection, excluded from the verdict |
 | 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
+| 6 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-codex-plugin.txt` | `67b04075` | needs-attention — R6-A (converged), R6-C, R6-D; **111 pipeline cases executed; no product finding** |
+| 6 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-herdr-shadow.txt` | `41a51070` | needs-attention — R6-A (converged), R6-B (converged), R6-D (converged), R6-E; **full pipeline + boundary probes; no product finding** |
+| 6 | **WEIGHTED CLOSURE** | — | — | **LOOP CLOSED.** Zero product findings on both channels; machinery fixed in-surface; no round 7. Spec → `Ready` |
 | 5 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-codex-plugin.txt` | `3d80d955` | needs-attention — R5-A (A, converged), R5-B (B, **unlicensed change caught**); two objections routed |
 | 5 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-herdr-shadow.txt` | `6b3857a2` | needs-attention — R5-A (A, converged), R5-C (A, product), R5-D (dissolved), R5-E (C) |
 | 4→5 | **OWNER RULING (direct)** | `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md` | ruled on `197cd797` | **(a) refuse at the output**, plus R4-B and R4-C. (c) successor, not filed; (b) rejected. Table B unfrozen for one pass; applied as steps 2, 5 and 7 and item 10. Round 5 = closing confirmation |

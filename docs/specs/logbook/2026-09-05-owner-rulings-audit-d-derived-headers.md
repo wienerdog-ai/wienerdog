@@ -73,8 +73,13 @@ incoming bound already refuses most such threads, so the marginal loss is small.
 
 `WP-audit-d-code-derived-recipients`:
 
-- **Table B step 7** — the output bound, with the measure stated as UTF-8 octets
-  and its per-header budgets derived from the prefix lengths.
+- **Table B step 7** — the output bound over **`To`, `Subject`, `In-Reply-To` and
+  `References`** — every header line the verb emits except the fixed
+  `Content-Type` — with the measure stated as UTF-8 octets and its per-header
+  budgets derived from the prefix lengths. (`To` was added at round 5 as a
+  completeness correction *under* this ruling, not as an extension of it: step 4
+  bounds 320 **characters** while step 7 bounds **octets**, so `To` was never
+  covered "by construction".)
 - **Table B step 2** — the prescribed blank-check.
 - **Table B step 5** — the empty-subject fixed point.
 - **Exact contracts** — three distinct fixed refusal messages, one per refusing
@@ -105,10 +110,16 @@ change**: the ruling licensed a bound at the OUTPUT, and item 8 as ruled says
 characters. Step 0 has been restored byte-for-byte to its `197cd797` wording, and
 the two bounds now stand in different units on purpose.
 
-**There is no product consequence either way, once step 7 covers every emitted
-line** — a 998-character subject of `€` is 2994 octets, passes step 0, and is
-refused by step 7 (measured). *Cost of unifying:* one word in item 8, and step 0's
-case rows re-measured in octets.
+**There is no OUTPUT-SAFETY consequence either way, once step 7 covers every
+emitted line** — a 998-character subject of `€` is 2994 octets, passes step 0, and
+is refused by step 7 (measured). **But AVAILABILITY differs, and the earlier
+"no product consequence" wording was wrong.** Measured witness: with 998 `€`
+characters in `References` and **no** `Message-ID`, the character bound **drafts**
+— `References` is omitted precisely because there is no `Message-ID`, so no
+over-long line is ever built — whereas an octet bound would refuse it at step 0
+(2994 octets). The character bound is the more permissive of the two, and both are
+output-safe. *Cost of unifying:* one word in item 8, step 0's case rows re-measured
+in octets, and that availability difference accepted.
 
 **This is deliberately NOT filed as an owner item and NOT dispatched under the
 standing instruction**, because the architect has just been caught making exactly
