@@ -104,11 +104,15 @@ injects into **our own act's target** — where our write lands, which repositor
 our call reads, which configuration our call obeys — and it is not a
 configuration surface for a run that is also a scheduled job.
 
-*And `HOME` is CARRIED BY VALUE, not copied from the launch environment* — the
-distinction the first draft of this paragraph missed. The value is `paths.home`,
-the run's **bound home**, from which the vault, the state directory and the
-config roots are all derived (`src/core/paths.js:54`); it is the same value
-`buildCleanEnv` gives the scheduled child. So the sentence *"the pin makes a
+*And `HOME` is taken THROUGH THE RUN'S SINGLE AUTHORITY, `getPaths().home`* —
+which is a claim about where the value comes from, not about what it says. When
+the launching shell sets `HOME`, that authority resolves to the same string
+(`env.HOME || os.homedir()`, `src/core/paths.js:53-54`), and an earlier draft of
+this paragraph over-claimed by calling it "never the launching shell's string".
+What the single authority actually buys: it is the value the vault, the state
+directory and the config roots are all derived from, it is the same value
+`buildCleanEnv` gives the scheduled child, and it still carries a `HOME` when the
+shell has none — where a copy would carry no key at all. So the sentence *"the pin makes a
 manual `wienerdog dream` identical to the nightly one"* is now TRUE rather than
 aspirational — which it was not while `HOME` was copied and `XDG_CONFIG_HOME`
 carried, since `run-job` does neither (row U3, owner item O3). An environment
@@ -356,7 +360,7 @@ that says NOT MEASURED says so and names what it rests on instead.
 | # | Variable | Class | Measured reach into the nine pinned shapes | Disposition |
 |---|----------|-------|--------------------------------------------|-------------|
 | U1 | `PATH` | resolution | — | **CARRIED, inherited verbatim.** The pinned front door resolves `git` on `env.PATH` (`src/core/exec-identity.js:93-118`) and refuses unless the result equals the pinned command path (`:451-461`); a `PATH` this code chose would compare the pin against itself and retire that drift check for the manual run. Residual, inherited from WP-154 and not new here: PATH selection is closed by the pinned absolute spawn and its verification, never by the PATH's contents |
-| U2 | `HOME` | config location | **MEASURED with the pinned argv (R1-D re-derivation)**: a `~/.gitconfig` under the carried home carrying `core.fsmonitor` runs that program during the pinned `update-index --add --cacheinfo` (2 invocations) and the pinned `write-tree` (2), and during none of `ls-tree`, `hash-object -w --stdin`, `read-tree`, `show` or `rev-parse` | **CARRIED, and its value is `paths.home` — the run's BOUND home, never the launching shell's string.** `getPaths()` derives it once (`src/core/paths.js:54`) and every other root of the run comes from it: the vault, the state dir, the config roots. `spawnGitPinned` already calls `getPaths()`. Two things follow, and the second is the answer to "why is a carried key not itself a channel": the git call's home is the **same code-derived value the scheduled child gets** (`buildCleanEnv` sets `HOME: paths.home`), so manual and scheduled runs are now identical here; and an environment that lies about `HOME` to a manual run has relocated **the whole product** — vault included — which is ADR-0025's half-sandbox contract, not a git channel of this WP |
+| U2 | `HOME` | config location | **MEASURED with the pinned argv (R1-D re-derivation)**: a `~/.gitconfig` under the carried home carrying `core.fsmonitor` runs that program during the pinned `update-index --add --cacheinfo` (2 invocations) and the pinned `write-tree` (2), and during none of `ls-tree`, `hash-object -w --stdin`, `read-tree`, `show` or `rev-parse` | **CARRIED, and its value is taken THROUGH THE RUN'S SINGLE AUTHORITY — `getPaths().home` — rather than read off the launching environment.** That is a claim about the SOURCE, not about the string: `getPaths()` is `env.HOME \|\| os.homedir()` (`src/core/paths.js:53-54`), so when the launching environment sets `HOME` the value IS that string, and no test can distinguish a copy from the derivation there (measured). **What the single authority buys is real and is two things.** It is the same value every other root of the run comes from — the vault, the state dir, the config roots — and the same value `buildCleanEnv` gives the scheduled child (`HOME: paths.home`), so manual and scheduled runs agree here by construction rather than by coincidence. And it carries a `HOME` **even when the launching shell has none**, where a copy would carry no key at all — measured, and the case AC1 uses to tell the two implementations apart. The corollary is the answer to "why is a carried key not itself a channel": an environment that lies about `HOME` to a manual run has already relocated **the whole product** — vault included — which is ADR-0025's half-sandbox contract, not a git channel of this WP |
 | U3 | `XDG_CONFIG_HOME` | config location | **MEASURED with the pinned argv, in both directions**: carried, a `$XDG_CONFIG_HOME/git/config` holding `core.fsmonitor` runs during the same two shapes (2 invocations each) with the home holding no `.gitconfig`; **not carried, the same config fires nothing at all (0 on all seven)** | **NOT CARRIED, with a NAMED COST.** Dropping it is what makes "a manual dream behaves like the scheduled one" TRUE rather than aspirational: `run-job`'s `ENV_PASSTHROUGH` (`src/cli/run-job.js:47-50`) does not carry it either, so a scheduled dream has never had it. **The cost:** a user whose global git config is relocated *only* by `XDG_CONFIG_HOME` does not have it applied to the run's own git calls — in either mode, exactly as today for the scheduled run. A `HOME`-resolved `~/.gitconfig` still applies (row U2). Carrying it in both surfaces is parked as owner item **O3** |
 | U4 | win32 only: `SystemRoot`, `windir`, `SystemDrive`, `ComSpec`, `PATHEXT`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP` carried from the launch environment; `USERPROFILE` **set to `paths.home`** | platform essentials | **NOT MEASURED** — no win32 host in this WP's measurements, and the cell says so rather than implying a run | **CARRIED when set, on win32 only**, except `USERPROFILE`, which is SET from the bound home for the same reason `HOME` is (row U2) and exactly as `buildCleanEnv` does (`src/cli/run-job.js:155`). `HOMEDRIVE`/`HOMEPATH` are deliberately **not** carried: Git for Windows would resolve the user's config through them and contradict the bound home. Provenance for the rest: `src/cli/run-job.js:58-78`, the list the scheduled job child already carries for the same `git` spawn; `PATHEXT` is additionally read by `resolveExecutable` on win32 |
 | U5 | `GIT_INDEX_FILE`, the run's own | index selection | see U13 | **SET BY THE RUN**, to exactly `<paths.state>/dream-index.<pid>.tmp`, on the environment of the three shapes whose declared disposition is `private` and on no other — exactly as today. AC1 asserts that value, not merely the key. The two clauses the path must satisfy are Table W row W1(c)'s, cited not restated |
@@ -446,9 +450,13 @@ in review is added here on the spot.
       measured, and chasing them is the rot this row already ruled against.
 - [ ] **`src/core/dream/git-env.js`'s own comments** — the run's first-read
       statement of Table U. It may summarise; it may not decide.
-- [ ] **`tests/unit/dream-pipeline.test.js`'s AC1 assertion** — it names the
-      CARRIED key set, so it is an executable mirror of rows U1–U5 and moves
-      with them. A row added to or removed from U1–U5 that does not move this
+- [ ] **`tests/unit/dream-pipeline.test.js`'s AC1 assertion, and the unit-level
+      `buildGitEnv` assertion beside it** — together they name the CARRIED
+      key→value map, so they are an executable mirror of rows U1–U5 and move
+      with them. **The split is part of the mirror**: the set-`HOME` case belongs
+      to the pipeline fixture and the unset-`HOME` case to the direct
+      `buildGitEnv` call, because only the second can discriminate row U2's
+      source claim. A row added to or removed from U1–U5 that does not move this
       assertion is a table and a mirror disagreeing inside one commit. **Its
       CANARY half mirrors row U21 rather than any one key**: the canary name
       must stay a name no Table U row carries, so a row that happened to name it
@@ -521,10 +529,22 @@ in review is added here on the spot.
       **key → value map** Table U's CARRIED rows decide — not merely the right
       key set:
       - `PATH` equals the inherited `process.env.PATH` (row U1);
-      - `HOME` equals `paths.home` — the run's bound home, **not** whatever
-        `HOME` the test's ambient environment holds (row U2). The fixture makes
-        those two DIFFER, so an implementation that copies rather than derives
-        fails here;
+      - `HOME` equals `getPaths().home` (row U2). **Copying and deriving
+        COINCIDE whenever the launching environment sets `HOME`**, so no fixture
+        can tell them apart there: `getPaths()` is `env.HOME || os.homedir()`
+        (`src/core/paths.js:53-54`) and on POSIX `os.homedir()` itself reads
+        `$HOME` first — measured, with `HOME` set to an arbitrary path,
+        `getPaths().home` tracks it exactly. **The discriminating case is `HOME`
+        UNSET in the launching environment**: a copy carries no `HOME` key at
+        all, while the derivation still carries one, equal to `getPaths().home`
+        (= `os.homedir()`, the passwd home) — measured. Assert **both**: the set
+        case in the pipeline fixture, and the unset case directly against
+        `buildGitEnv` with `process.env.HOME` deleted around the call. The
+        unit-level form for the unset case is deliberate — it keeps a run that
+        falls back to the developer's real home out of the pipeline fixture,
+        which overrides `WIENERDOG_HOME`, `WIENERDOG_VAULT`, `CLAUDE_CONFIG_DIR`
+        and `CODEX_HOME` (`tests/unit/dream-pipeline.test.js:411-414`) but would
+        leave `home` itself to fall back;
       - no `XDG_CONFIG_HOME` key is present, asserted with the fixture exporting
         one (row U3);
       - `GIT_INDEX_FILE` equals exactly `<paths.state>/dream-index.<pid>.tmp` on

@@ -1287,7 +1287,7 @@ the constructed map alone.
 | Row | Result | What moved |
 |-----|--------|-----------|
 | U1 `PATH` | unchanged | rests on a code reading of `resolveExecutable`/`verifyPin`, not on a git probe |
-| U2 `HOME` | **CHANGED** | probe replaced by the pinned argv (a `~/.gitconfig` `core.fsmonitor` runs on `update-index --add --cacheinfo` and `write-tree`, 2 each, and on no other shape) **and** the disposition now pins the VALUE to `paths.home` (R1-B) |
+| U2 `HOME` | **CHANGED** | probe replaced by the pinned argv (a `~/.gitconfig` `core.fsmonitor` runs on `update-index --add --cacheinfo` and `write-tree`, 2 each, and on no other shape) **and** the disposition now pins the SOURCE of the value to `getPaths().home` — a claim about where it comes from, not about what it says (R1-B, narrowed by R1-F) |
 | U3 `XDG_CONFIG_HOME` | **CHANGED** | CARRIED → **NOT CARRIED** with a named cost (R1-B, owner item O3); measured in both directions, including the not-carried control at 0 |
 | U4 win32 | **CHANGED** | `USERPROFILE` moves to a SET value (`paths.home`, mirroring `run-job.js:155`); `HOMEDRIVE`/`HOMEPATH` dropped — they would resolve the config against something other than the bound home |
 | U5 `GIT_INDEX_FILE` (ours) | **CHANGED** | the exact value is now part of the row and of AC1, not merely the key |
@@ -1310,18 +1310,75 @@ the constructed map alone.
 Twelve of twenty-one rows moved. **Nothing in the table now rests on a probe
 whose argv is not one of the nine.**
 
+### R1-F — orchestrator spot-check before round 2 (branch 6, LIGHT)
+
+Found by the orchestrator on `e9ef98bf`, before round 2 was launched, and landed
+first because a reviewer would have found it in minutes. **AC1's `HOME` bullet
+was unsatisfiable as written.** It said *"the fixture makes those two DIFFER, so
+an implementation that copies rather than derives fails here"* — but
+`getPaths()` is `env.HOME || os.homedir()` (`src/core/paths.js:53-54`) and on
+POSIX `os.homedir()` reads `$HOME` first, so whenever the launching environment
+sets `HOME` the two are equal **by construction** and no fixture can separate a
+copying `buildGitEnv` from a deriving one. Reproduced here rather than accepted
+on the report:
+
+```text
+$ node verify-home.js
+A: HOME set to the ambient value
+   process.env.HOME = "/Users/gyulafeher"
+   os.homedir()     = "/Users/gyulafeher"
+   getPaths().home  = "/Users/gyulafeher"
+   equal to env.HOME? true
+B: HOME overridden to /tmp/some-other-home
+   process.env.HOME = "/tmp/some-other-home"
+   os.homedir()     = "/tmp/some-other-home"
+   getPaths().home  = "/tmp/some-other-home"
+   equal to env.HOME? true
+C: HOME DELETED from the environment
+   process.env.HOME = undefined
+   os.homedir()     = "/Users/gyulafeher"
+   getPaths().home  = "/Users/gyulafeher"
+   equal to env.HOME? false
+```
+
+**The only observable difference is `HOME` unset in the launching environment**:
+a copy carries no `HOME` key, the derivation carries one equal to
+`getPaths().home` — case C above. Three surfaces changed, all wording:
+
+- **AC1's `HOME` bullet** now states the coincidence, names the unset case as the
+  discriminating one, and asserts **both** — the set case in the pipeline fixture,
+  the unset case directly against `buildGitEnv` with `process.env.HOME` deleted
+  around the call. The unit-level form for the unset case is deliberate: the
+  pipeline fixture overrides `WIENERDOG_HOME`, `WIENERDOG_VAULT`,
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME` (`tests/unit/dream-pipeline.test.js:411-414`)
+  but would leave `home` itself to fall back to the developer's real home.
+- **Table U row U2** said *"never the launching shell's string"*. **Withdrawn** —
+  with `HOME` set it IS that string. What the row claims now is the SOURCE: the
+  value is taken through the run's single authority, which is what makes it the
+  same home the vault and state dir derive from, the same value the scheduled
+  child gets, and what carries a `HOME` when the shell has none.
+- **O1's principle paragraph** and the `dream-pipeline.test.js` mirror entry
+  follow the same correction; the mirror entry now records that the set/unset
+  split across the two test levels is itself part of the mirror.
+
+**The lesson, which is not about `HOME`:** the first draft asserted a
+DISCRIMINATION without running the two implementations it claimed to separate.
+`codex-review.md`'s "a claim about how a tool behaves is a claim to be RUN"
+reaches this case — the tool was `os.homedir()`, and one `node -e` would have
+shown it.
+
 ### Revision — the tree after R1-A … R1-E
 
-The spec grew from **581 to 680 lines** (`wc -l`): AC1's key→value map, the new
-AC5 positive control, O3, O1's two rewritten paragraphs, O2's withdrawn bound
-and twelve rewritten Table U cells. It still touches **8 files** — the seven
+The spec grew from **581 to 700 lines** (`wc -l`): AC1's key→value map, the new
+AC5 positive control, O3, O1's two rewritten paragraphs, O2's withdrawn bound,
+twelve rewritten Table U cells and R1-F's `HOME` correction. It still touches **8 files** — the seven
 Deliverables plus the spec itself — the README bound. `coherence.js` on the revised spec, rc 0 —
 note the acceptance criteria now number **nine** and every one of the 19 distinct
 `file:line` citations resolves, including the three added this round
-(`src/core/paths.js:54`, `src/cli/run-job.js:47-50`, `:155`):
+(`src/core/paths.js:53-54`, `src/cli/run-job.js:47-50`, `:155`):
 
 ```text
-spec line count                                = 681
+spec line count                                = 701
 Table U rows                                   = 21  U1,U2,U3,U4,U5,U6,U7,U8,U9,U10,U11,U12,U13,U14,U15,U16,U17,U18,U19,U20,U21
 U-ids mentioned anywhere but absent from table = none
 U-rows never referenced outside their own row  = U8,U9,U12,U14,U15,U16,U17,U18,U19 (informational)
@@ -1336,9 +1393,9 @@ deliverable rows                               = 7
    modify docs/adr/0012-dream-run-lifecycle.md  exists=true 
    modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true 
 files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
-file:line citations in the spec                = 23
-   `src/core/paths.js:54`
-      FIRST:   const home = env.HOME || os.homedir();
+file:line citations in the spec                = 25
+   `src/core/paths.js:53-54`
+      FIRST: function getPaths(env = process.env) {
       LAST :   const home = env.HOME || os.homedir();
    `src/cli/dream.js:587`
       FIRST:   assertGitRepo(vaultDir);
@@ -1370,6 +1427,9 @@ file:line citations in the spec                = 23
    `src/cli/run-job.js:150`
       FIRST: function buildCleanEnv(paths, name, platform = process.platform) {
       LAST : function buildCleanEnv(paths, name, platform = process.platform) {
+   `src/core/paths.js:54`
+      FIRST:   const home = env.HOME || os.homedir();
+      LAST :   const home = env.HOME || os.homedir();
    `src/cli/dream.js:179`
       FIRST:   return spawnPinnedSync('git', getPaths(), {
       LAST :   return spawnPinnedSync('git', getPaths(), {
@@ -1394,6 +1454,9 @@ file:line citations in the spec                = 23
    `docs/specs/done/WP-audit-c-close-disposition.md:130`
       FIRST:   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
       LAST :   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+   `tests/unit/dream-pipeline.test.js:411-414`
+      FIRST:   Object.assign(process.env, {
+      LAST :   });
 RED ids named in the Exact-contracts table     = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
 RED ids in V4's `want`  array                    = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
 template sections absent                       = none
