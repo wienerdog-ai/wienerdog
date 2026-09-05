@@ -2616,10 +2616,9 @@ test('quarantinePreserve (Table D row D3): a tmp that cannot be removed after th
   } catch (e) { threw = e; } finally { unRename(); unRm(); unOpen(); }
   assert.ok(threw instanceof WienerdogError, `expected a WienerdogError: ${String(threw)}`);
   assert.match(threw.message, /\.tmp-/, threw.message);
-  assert.ok(heldFd >= 0, 'the tmp create was observed');
-  assert.throws(
-    () => fs.fstatSync(heldFd), /EBADF/,
-    'the held descriptor is CLOSED even though the post-commit removal threw'
+  assert.ok(
+    heldFd >= 0 && (() => { try { fs.fstatSync(heldFd); return false; } catch (e) { return e && e.code === 'EBADF'; } })(),
+    'the tmp create was observed AND the held descriptor is CLOSED even though the post-commit removal threw'
   );
 });
 
