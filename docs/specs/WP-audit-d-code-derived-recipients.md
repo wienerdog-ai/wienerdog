@@ -578,11 +578,14 @@ discriminate was wrong, and both channels executed the disproof.) The two
 properties are therefore proved where each actually lives: **step 1** through the
 verb, and **`assertHeaderSafe`** by calling `buildMime` directly.
 
-**Which identity owns which CR/LF fixture family**, so the two `expectRed` sets
-never overlap: `[AUD-D5]` owns **every CR/LF case that arrives through
+**Which identity owns which CR/LF fixture family**, so the `expectRed` sets never
+overlap: `[AUD-D5]` owns **every CR/LF case that arrives through
 `create_reply_draft`** — all five raw fields, one at a time — and asserts **zero
 `drafts.create` calls AND that `buildMime` was never invoked**, which is how "the
-error is not `assertHeaderSafe`'s" is checked.
+error is not `assertHeaderSafe`'s" is checked. `[AUD-D7]` owns **only direct
+`buildMime` calls** with a CR/LF in `To`, `Subject`, `In-Reply-To` or `References`,
+and never goes through a verb. `[AUD-D3]` owns the **non-CR/LF** refusals — steps
+0, 2, 3 and 4 — and carries no CR/LF fixture at all.
 
 **The fourth masking trap, measured.** Step 1's scan cannot be proved on a
 *recipient* field. With one generic message covering steps 0–4, dropping step 1's
@@ -591,12 +594,10 @@ refuses it anyway — same message, same zero `drafts.create`, `buildMime` still
 never called. Correct and mutant are **indistinguishable**. Dropping it for
 `Subject`, `Message-ID` or `References` is different: nothing downstream inspects
 those, so the mutant reaches **step 8**, `buildMime` runs, and `assertHeaderSafe`
-| `broker-verbs: [AUD-D5] a CR or LF anywhere in any of the five RAW header values, one field at a time, produces zero drafts.create calls and never reaches buildMime` | `[AUD-D5]` | `step1-scan-drops-a-field` | 6 | remove **`Subject`, `Message-ID` or `References`** — never a recipient field, see the trap above — from step 1's CR/LF scan: the mutant reaches step 8, `buildMime` runs, and `assertHeaderSafe` throws its own message, so the identity's "buildMime never invoked" assertion reddens |
+throws its **own** message. **So `step1-scan-drops-a-field` must name a
 non-recipient field**, and `drafts.create` alone can never be the discriminator —
-it is zero on both sides of every row. `[AUD-D7]` owns **only direct `buildMime` calls** with a
-CR/LF in `To`, `Subject`, `In-Reply-To` or `References`, and never goes through a
-verb. `[AUD-D3]` owns the **non-CR/LF** refusals — steps 0, 2, 3 and 4 — and
-carries no CR/LF fixture at all.
+it is zero on both sides of every row.
+
 Each identity carries its band marker in **every** assertion message, so each
 declaration's `signal` is a string the author writes rather than a guess.
 `scripts/red-proofs.js`'s `evaluateRed` requires the observed own-body failing set
@@ -616,7 +617,7 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 | ″ | `[AUD-D4]` | `output-bound-removed` | 5 | delete Table B step 7's line-length check entirely — the mutant drafts at every step-7 refused row, so the identity reddens on the refused side while the accepted side is unmoved |
 | ″ | `[AUD-D4]` | `output-bound-measured-in-code-units` | 5 | measure step 7 with `String.length` instead of UTF-8 octets — reddens on the `€` subject row, and, wherever step 4 is read as code points, on the astral `To` row as well; both exist to pin the measure |
 | ″ | `[AUD-D4]` | `empty-subject-prefixed` | 5 | in step 5, prefix `Re:` even when the trimmed source subject is empty — breaks the fixed point R4-C requires |
-| `broker-verbs: [AUD-D5] a CR or LF anywhere in any of the five RAW header values, one field at a time, is refused BY STEP 1 with zero drafts.create calls` | `[AUD-D5]` | `step1-scan-drops-a-field` | 6 | remove one named field from step 1's CR/LF scan — the mutant then reaches step 7, which refuses with a **different** fixed message, so the identity's assertion on step 1's own text reddens |
+| `broker-verbs: [AUD-D5] a CR or LF anywhere in any of the five RAW header values, one field at a time, produces zero drafts.create calls and never reaches buildMime` | `[AUD-D5]` | `step1-scan-drops-a-field` | 6 | remove **`Subject`, `Message-ID` or `References`** — never a recipient field, see the trap above — from step 1's CR/LF scan: the mutant reaches **step 8**, `buildMime` runs, and `assertHeaderSafe` throws its own message, so the identity's "buildMime never invoked" assertion reddens |
 | `gws-gmail: [AUD-D7] buildMime refuses a CR or LF in every header it emits, including the two reply headers` | `[AUD-D7]` | `reply-headers-unasserted` | 6 | bypass `assertHeaderSafe` on `buildMime`'s new `In-Reply-To` / `References` lines — reachable only by calling `buildMime` directly, which is why this identity is not in the verb suite |
 | `gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader` | `[AUD-D6]` | `extra-classes-dropped-helper` | 8 | in `requiredClassesFor`, union only each verb's own `capabilityClass` and ignore `extraClasses` |
 | ″ | `[AUD-D6]` | `extra-classes-dropped-derivation` | 8 | at consumer site `gws-broker.js:95`, derive the classes to load from `VERBS[v].capabilityClass` alone, ignoring `requiredClassesFor` |

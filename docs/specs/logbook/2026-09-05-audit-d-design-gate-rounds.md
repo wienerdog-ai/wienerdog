@@ -1218,6 +1218,44 @@ which names the ruled unit rather than changing it. **An intra-cell re-read of t
 spliced case-table paragraph also caught a duplicated sentence** left by an earlier
 edit — the same re-read rule that R2-D established, doing its job.
 
+### Mechanical verification of the closing tip, and the one defect it found
+
+An independent clean-context executor ran over `c33e6a06`: **CLEAN** on every
+licensed-hunk classification (step 0 byte-identical and in characters; step 5 and
+the raw-boundary row in characters; step 1's message unchanged; the grammar forms
+byte-identical), all **17 boundary witnesses exact** (accepted 998 / refused 999 /
+the 1033 non-boundary row / 329 `€` = 987 octets), grammar spot-check 6/6, V5
+correctly failing on the base tree, 19 Deliverables rows, 10 owner items,
+frontmatter OK, lint 0 errors over 644 files.
+
+**One defect, LIGHT, fixed in-surface.** A full Table-C-style row
+(`step1-scan-drops-a-field`) had been spliced into the **middle** of the "fourth
+masking trap" prose paragraph, breaking the sentence, and it **contradicted** the
+real Table C row, which still described the mutant as reaching "step 7" — the
+pre-renumbering step. **Cause:** the R6-C edit selected its target with
+`next(l for l in lines if 'step1-scan-drops-a-field' in l)`, and the first line
+containing that string was the *prose* sentence naming the proof id, not the table
+row. The row was written over a sentence, and the real row was never touched.
+
+Repaired: the prose sentence is restored, the orphaned `[AUD-D7]`/`[AUD-D3]`
+ownership tail is moved back into the ownership paragraph where it belongs, and the
+real Table C row now names the non-recipient fields and step 8. Verified after the
+fix: no duplicate proof id, no orphaned table row anywhere in the document, and no
+surviving "step 7" that means the old `assertHeaderSafe` step.
+
+**The lesson, and it is the same one twice.** Selecting an edit target by a
+substring that also appears in prose is how a table row lands in a paragraph — the
+identifier-shaped match is not unique to the structure you meant. Every other edit
+in this loop asserted `count(old) == 1` on a full anchored block; this one used a
+line search, and it is the only one that broke. Anchor on the whole block, or
+assert uniqueness.
+
+**Accepted residual, not a change:** the V1–V5 verification blocks print
+`V5 exit: $rc` and the wrapper's own exit status is the trailing `echo`'s 0. That
+is pre-existing house style in this repo — the PR gate reads the **printed** rc,
+not the block's exit — and it is recorded here so a reviewer does not re-find it as
+a defect.
+
 ### CLOSURE
 
 Under **Weighted closure** (`docs/runbooks/codex-review.md`): *"The loop is DONE
