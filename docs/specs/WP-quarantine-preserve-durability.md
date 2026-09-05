@@ -14,14 +14,14 @@ epic: dream-promotion
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-## Dispatch precondition (FOUR owner items; accepting all four recommendations changes no Deliverables row)
+## Dispatch precondition (FIVE owner items; accepting all five recommendations changes no Deliverables row)
 
 **Every item below carries a recommendation and the cost of overruling it.**
 The owner's standing instruction of 2026-09-05 —
 `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`, *"let us go with
 your recommendations"* — is what lets a dispatcher proceed under these
 recommendations; it is not a reason to skip stating them, and a dispatcher who
-records none of the four has not run this gate. **Accepting all four changes no
+records none of the five has not run this gate. **Accepting all five changes no
 Deliverables row.**
 
 **Item 1 — the platform scope, and it is the only one that changes what a user
@@ -91,13 +91,12 @@ migration, plus a second rendered form of the pointer sentence in all four of
 that package's carriers. It is not a Deliverables row here either way: this
 package touches `src/core/dream/ledger.js` in neither case.
 
-**No fifth item was added by round 1, and that is a check, not an omission.**
-The external round's four findings were adjudicated against escalation (ii): none
-adds durable state beyond the artifact, none changes either shipped `best-effort`
-removal posture, none changes an owner-ruled value, and none depends on a
-measurement on a Windows host — the anchor decision is a fixed list of paths this
-package already computes, and the identity check runs on every platform. So all
-four were fixed inside the package rather than parked.
+**Round 1 added no owner item, and that was a recorded check, not an omission:**
+its four findings were adjudicated against escalation (ii) and none adds durable
+state beyond the artifact, changes a shipped `best-effort` removal posture, changes
+an owner-ruled value, or needs a Windows measurement. **Round 2 added ONE — item 5
+below** — because the answer to its finding family is a boundary statement about
+the threat model, which is the owner's document.
 
 **Item 4 — THE SPLIT, and it is a re-cut of the stub the owner sequenced.** The
 Draft stub put a directory sync after an unlink — *"so a disposed artifact cannot
@@ -117,12 +116,38 @@ identities and their mutations, and a change to two shipped best-effort postures
 which is a contract change, and the runbook's *diff size does not measure contract
 impact* rule makes a contract change the owner's act rather than a fold-in.
 
-**Do not dispatch until all FOUR are answered** (the standing instruction answers
+**Item 5 — WHERE THE ADVERSARY IS PINNED, and it is a threat-model statement, not
+an implementation detail.** Two consecutive review rounds landed four findings in
+one family: a same-UID process substituting an object this protocol depends on. The
+pinned circuit-breaker (ADR-0031) makes the answer a CONTRACT rather than a third
+pin, and Table F row **F10** is that contract: F8 and F9 defend against
+**overlapping runs** (a lock stolen after its deadline; two same-day runs selecting
+the same free name) and **the user's own hand** on the shelf, and **arbitrary
+same-user native code is a NAMED RESIDUAL** citing `docs/THREAT-MODEL.md`'s class
+**A12**, which states in its own words that Wienerdog is *"not a boundary against
+arbitrary software already running as the same user"*.
+
+**Recommendation: pin at A12, and cite the threat model.** The reason is decisive
+rather than economic: **a process that can swap `qdir` aside during its flush can
+also delete the preserved copy one instruction after this function returns**, so no
+durability protocol can hold against it — and the threat model already says, of a
+keyed MAC proposed for the same class, that it *"would only imply a false
+guarantee"*. **Cost of overruling:** descriptor retention for every directory in
+the chain, held open to the last gate, with a bigint `(dev, ino)` re-compare per
+position; the no-clobber commit (already taken); and a race test per substitution
+point — a permanent maintenance surface that still cannot stop a delete-after-
+success, and which would move this package's claim from *what a success means* to
+*what it prevents*, which is the over-claim the whole package is written against.
+**It is not a Deliverables change either way:** the pins would live in
+`src/core/dream/validate.js`, which is already the boundary's first row.
+
+**Do not dispatch until all FIVE are answered** (the standing instruction answers
 them by adopting the recommendations; record that it did). Overruling item 1
 changes one constant and one sentence; item 2 has no honest alternative
 implementation and would send the package back to design; item 3 opens a new
-package and changes nothing here; item 4 re-widens this package and re-sizes it.
-**None of the four changes any path in the Deliverables table.**
+package and changes nothing here; item 4 re-widens this package and re-sizes it;
+item 5 adds the pinning machinery priced above and rewrites rows F8 and F10.
+**None of the five changes any path in the Deliverables table.**
 
 ## Context (read this, nothing else)
 
@@ -173,16 +198,17 @@ way to reach a preservation failure and changes nothing about what happens next.
 
 ## Current state
 
-Every claim below was measured in this tree at `0fd50422` on 2026-09-05
-(`origin/main` after PR #217 merged `WP-quarantine-banner-location` at `Ready`).
-`git diff --stat 0fd50422 HEAD -- src tests scripts` is empty on the branch that
-carries this spec, so no measurement here is owed a re-run for the base.
+Every claim below was measured in this tree at `38562ec4` on 2026-09-05
+(`origin/main` after PRs #218/#219, which merged `WP-quarantine-banner-location`
+and moved its spec to `docs/specs/done/`). **The branch was rebased onto that
+commit during the round-2 pass**, so `git diff --stat 38562ec4 HEAD -- src tests
+scripts` is empty and no measurement here is owed a re-run for the base.
 
-**Baselines.** `npm test` → `tests 2618 / pass 2606 / fail 0 / skipped 12`, exit
+**Baselines.** `npm test` → `tests 2623 / pass 2611 / fail 0 / skipped 12`, exit
 0. `npm run lint` → `Linting: 637 file(s)`, `0 error(s)`, `frontmatter check
 passed: 267 spec(s), 4 agent(s)`, exit 0. `npm run red-proofs` on a pristine
-`git archive` copy with a real `node_modules` → `5 declared proof(s), 5
-selected`, four `PROVEN` criteria roll-up lines, `RUN: PROVEN`, exit 0.
+`git archive` copy with a real `node_modules` → `11 declared proof(s), 11
+selected`, nine `PROVEN` criteria roll-up lines, `RUN: PROVEN`, exit 0.
 
 **There is no flush anywhere in the product.** `grep -rn 'fsync\|fdatasync\|F_FULLFSYNC'
 src/ tests/ scripts/` returns **nothing**, exit 1. The same grep returned nothing
@@ -196,10 +222,10 @@ and the withhold arm's `'withheld'` preserve. Its write path, in order:
 ```text
 fs.mkdirSync(qdir, { recursive: true, mode: 0o700 })   qdir = quarantine/ or quarantine/redacted/
 fs.chmodSync(qdir, 0o700)
-  … the collision loop picks `dest`; `tmp` = .tmp-<pid>-<stem><ext>
+  … the collision loop picks `dest` by `fs.existsSync(dest)` — NOT atomic with the commit
 fs.writeFileSync(tmp, content, { mode: 0o600, flag: 'wx' })   EXCLUSIVE create (Table D row D1)
 fs.chmodSync(tmp, 0o600)
-fs.renameSync(tmp, dest)
+fs.renameSync(tmp, dest)   REPLACES whatever is at `dest` — the ownership gap row F9 closes
 fs.readFileSync(dest)  → Buffer.compare  → success, or removeOwnedQuarantinePath(dest) and null
 ```
 
@@ -295,31 +321,44 @@ is about the message taxonomy and is untouched.
 *"only byte-identity is established (P0b); the durable conjunct stays deferred to
 `WP-quarantine-preserve-durability`."*
 
-**The blast radius on the existing suite is FOUR TESTS, all of them injection
+**The blast radius on the existing suite is FIVE TESTS, all of them injection
 points and none of them an assertion — measured, not hoped.** The candidate fix
-this spec specifies, applied to a `git archive` scratch copy of `0fd50422`, gives
-`npm test` → `tests 2618 / pass 2602 / fail 4`, and the four are exactly:
+this spec specifies, applied to a `git archive` scratch copy of `38562ec4`, gives
+`npm test` → `tests 2623 / pass 2606 / fail 5`, and the five are exactly:
 
 ```text
 ✖ quarantinePreserve (P0b, Table D row D2): a corrupted artifact is a FAILURE and is removed
 ✖ quarantinePreserve (P0b, Table D row D2): an artifact that cannot be read back is a FAILURE and is removed
+✖ quarantinePreserve (Table D row D1): the rename fails after a successful write — tmp is removed, dest was never created
 ✖ quarantinePreserve (Table D row D3): a dest that cannot be removed after a failed verification fails LOUD
 ✖ quarantinePreserve (Table D row D4): every failure leaves this invocation owning nothing, over a NON-EMPTY quarantine tree
 ```
 
-All four inject through `patchFs('readFileSync')` matching `typeof p === 'string'
-&& path.resolve(p) === dest`, and row **F8** reads the artifact through a
-DESCRIPTOR, so they stop intercepting. **With the injection point migrated and no
-assertion touched, the suite returns to `2618 / 2606 / 0 / 12`, exit 0** — also
-measured. If a fifth breaks, something outside Table F moved and it is a finding,
-not a fixture to update.
+Four inject through `patchFs('readFileSync')` matching `typeof p === 'string' &&
+path.resolve(p) === dest`, and row **F8** reads the artifact through a DESCRIPTOR;
+the fifth injects a failing `patchFs('renameSync')`, and row **F9** commits with
+`linkSync`. **With the injection points migrated and no assertion touched, the
+suite returns to `2623 / 2611 / 0 / 12`, exit 0** — also measured. If a sixth
+breaks, something outside Table F moved and it is a finding, not a fixture to
+update.
+
+**Two shipped `renameSync` injections do NOT break, and each for a reason worth
+recording.** `(Table D row D1, herdr-shadow round 1 P1): a FOREIGN file already at
+the tmp pathname` never reaches its rename injection — the exclusive `wx` create
+refuses first, which is the property that test was written for. `(Table D row D3):
+a tmp that cannot be removed after a failed rename fails LOUD` passes for a
+DIFFERENT but equivalent reason under row F9: the commit succeeds, the post-commit
+`removeOwnedQuarantinePath(tmp)` then hits its `rmSync` injection, and the same
+`WienerdogError` matching `/\.tmp-/` is raised. Its contract survives the commit
+change untouched.
 
 **Two seams were weighed and only one of them is affordable.** Seven OTHER
 injections in the same file patch `fs.writeFileSync` on a string path, so making
 the WRITE descriptor-based would silently stop all seven intercepting while the
 suite stayed green — the failure mode that hides. The specified protocol therefore
-leaves the write exactly as it is and moves only the READ-BACK onto a descriptor,
-where the four affected tests fail LOUDLY and are migrated in the same pass.
+leaves the write exactly as it is and moves only the READ-BACK onto a descriptor
+and the COMMIT onto `linkSync`, where the five affected tests fail LOUDLY and are
+migrated in the same pass.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -328,9 +367,9 @@ where the four affected tests fail LOUDLY and are migrated in the same pass.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | **all of Table F.** The six byte-exact source forms under Implementation notes; the guarantee sentence; `quarantinePreserve`'s JSDoc; and the gate's `@throws` block, whose *"the durable conjunct stays deferred to `WP-quarantine-preserve-durability`"* this package makes false |
-| modify | tests/unit/dream-validate.test.js | Table C's five identities **QPD-1**–**QPD-5**, AND the four shipped injections row **F8** forces to move (Implementation notes). **No existing ASSERTION changes** — only the point four `patchFs('readFileSync')` calls intercept at. Measured: the src fix alone gives `2618 / 2602 / 4`, the migration returns it to `2618 / 2606 / 0`, and the identities take it to `2623 / 2611 / 0 / 12` |
-| create | tests/red-proofs/quarantine-preserve-durability.proofs.json | Table C's **nine** declarations, inlined there in full |
+| modify | src/core/dream/validate.js | **all of Table F.** The eleven byte-exact source forms under Implementation notes; the guarantee sentence; `quarantinePreserve`'s JSDoc; and the gate's `@throws` block, whose *"the durable conjunct stays deferred to `WP-quarantine-preserve-durability`"* this package makes false |
+| modify | tests/unit/dream-validate.test.js | Table C's six identities **QPD-1**–**QPD-6**, AND the five shipped injections rows **F8** and **F9** force to move (Implementation notes). **No existing ASSERTION changes** — only the point four `patchFs('readFileSync')` calls and one `patchFs('renameSync')` intercept at, plus one test TITLE. Measured: the src fix alone gives `2623 / 2606 / 5`, the migration returns it to `2623 / 2611 / 0`, and the identities take it to `2629 / 2617 / 0 / 12` |
+| create | tests/red-proofs/quarantine-preserve-durability.proofs.json | Table C's **thirteen** declarations, inlined there in full |
 | modify | docs/specs/done/WP-preservation-abort-widening.md | row **P0b** only, its byte-exact clause appended to **cell 5**. Nothing else in the file — no other row, no assertion, no paragraph |
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | row **B3b** only, its byte-exact clause appended to **cell 2**. Nothing else in the file |
 
@@ -385,11 +424,14 @@ someone else's file, and Table D row D1's ownership rule forbids touching it.
 
 **Nothing else in this package has a shape.** No new export, no new parameter, no
 new field on the preservation record, no new message, no new verdict arm, no new
-gating condition, and no change to the collision loop, the exclusive create, the
-`chmod`s or the rename. The read-back keeps its meaning and changes only what it
-is bound to (row F8). ADR-0004: every step added is a synchronous
-`openSync` / `readFileSync` / `fsyncSync` / `fstatSync` / `closeSync` call that has
-returned before `quarantinePreserve` does.
+gating condition, and no change to the collision loop, the exclusive create or the
+`chmod`s. **Two shipped calls change and both are named rows:** the read-back keeps
+its meaning and changes only what it is bound to (row **F8**), and the commit keeps
+its post-condition — one artifact at `dest`, holding the judged bytes — and changes
+only how it refuses a name it did not create (row **F9**: `linkSync` + a temp
+removal, in place of a replacing `renameSync`). ADR-0004: every step added is a
+synchronous `openSync` / `readFileSync` / `fsyncSync` / `fstatSync` / `lstatSync` /
+`linkSync` / `closeSync` call that has returned before `quarantinePreserve` does.
 
 **The observable difference, measured by driving `makeGates({stateDir}).secret(…)`
 on the rehearsal tree rather than predicted** — every flush resolved through its
@@ -458,7 +500,7 @@ This table is the single place these facts are decided. Every other surface in
 this spec cites it. **Table D and Table P below are always
 `WP-preservation-abort-widening`'s** (Current state says why this table is F).
 
-| # | Fact | Shipped at `0fd50422` (measured) | Required after this WP |
+| # | Fact | Shipped at `38562ec4` (measured) | Required after this WP |
 |---|---|---|---|
 | **F0** | — the rule | a preservation reports SUCCESS on a verified read-back alone; nothing is flushed (Current state: `fsync count = 0`) | **A preservation reports SUCCESS only after the platform's flush has COMPLETED for the artifact AND for every directory entry the artifact depends on, and only if `dest` still names the inode those bytes were verified through.** Rows F1–F3 enumerate the flush set exhaustively, F6 fixes its order, F8 is the identity condition; anything less is row F4's failure. **The set is a CLOSED LIST derived from `stateDir` and `qdir` alone** — never a list anybody maintains, and never a derivation from what this call happened to create |
 | **F1** | the artifact's BYTES | never flushed | flushed **through the DESCRIPTOR its bytes were verified through** (row F8), never by reopening the pathname a second time. The artifact is `dest`, after the rename — not `tmp`: `fs.writeFileSync` returns no descriptor (measured), and replacing the WRITE with a descriptor-based one would break seven shipped failure injections that match a string path (Current state) |
@@ -468,7 +510,9 @@ this spec cites it. **Table D and Table P below are always
 | **F5** | platform | — | **The FLUSHES are POSIX-only, branched EXPLICITLY.** `process.platform === 'win32'` selects a branch that issues no flush and claims no durability — today's behaviour there, unchanged — following `src/core/private-fs.js`'s owner-approved win32 posture. Deliberately NOT expressed as a swallowed error: a caught error cannot tell "this platform has no such call" from "this flush really failed", and F4 must keep the second one loud. **The reopen and row F8's identity check are NOT gated on the platform** — they are properties of the VERIFICATION, not of durability, and they run everywhere. Dispatch precondition item 1 |
 | **F6** | order | — | **the artifact's bytes (F1) before the directory entry that names them (F2), and F2 before the rest of F3's chain, bottom-up.** The reason is not the post-condition — at the moment success is reported every flush in the set has completed either way — it is what a crash MID-protocol leaves behind: with an entry flushed first, a crash can leave a durable, reachable artifact over bytes that were never flushed, i.e. a short file sitting on the shelf the user is told to restore from, which the next run's collision loop then preserves forever under a `-1` name. With F1 first, any artifact that survives a crash holds complete bytes |
 | **F7** | what this table does NOT cover, stated rather than implied | — | **(a)** the REMOVAL of an artifact — Table D rows D1/D2, `pruneRedactedOriginals`' evictions and the identity-gated delete are not made crash-durable here; a disposed artifact can still reappear after a crash, **including one removed by row F4 in the instant before this function returns**. `WP-quarantine-disposal-durability` (Draft), Dispatch precondition item 4. **(b)** anything outside `quarantinePreserve`: the transcript ledger, the digest, the vault write and the git index are untouched. **(c)** the platform's own behaviour — see the guarantee sentence under Implementation notes, which is this package's only statement about what a flush achieves and which V1 pins byte-for-byte |
-| **F8** | **WHICH INODE was verified, flushed, and left at `dest`** | the read-back is `fs.readFileSync(dest)`, **by pathname**, and nothing binds it to anything else. A same-UID process — the user managing the shelf by hand, or a superseded run whose lock was stolen after its deadline — can rename a regular replacement over `dest` at any moment; `O_NOFOLLOW` does not refuse a regular file, and mode 0700 excludes other users, not the user's own processes | **ONE descriptor carries the whole verification.** `dest` is opened ONCE after the rename, and the read-back, the byte comparison and F1's flush all go through that descriptor. **As the LAST gate before success, `dest` must still name that descriptor's `(dev, ino)`** — checked after every flush, which is the latest observable moment and therefore the narrowest window. A mismatch is a preservation FAILURE **that removes NOTHING**: the file now at `dest` is not this invocation's, and Table D row D1's ownership rule — a path this call did not create is never opened for writing and never removed — is what forbids disposing of it. **Two bounds, stated because the row would otherwise over-claim.** (1) The check NARROWS the window; it does not close it, and nothing can: a same-UID process can replace `dest` in the instant after the check, or after the function returns. So what a success MEANS is exactly this and no more — *the bytes were verified through a descriptor, that descriptor's inode was flushed, and `dest` still named that inode at the moment of the check.* (2) The check is only as strong as the platform's `(dev, ino)`; where a platform does not distinguish inodes it degenerates to no check — still no worse than the shipped pathname read-back |
+| **F8** | **WHICH INODE was verified, flushed, and left at `dest`** | the read-back is `fs.readFileSync(dest)`, **by pathname**, and nothing binds it to anything else. A same-UID process — the user managing the shelf by hand, or a superseded run whose lock was stolen after its deadline — can rename a regular replacement over `dest` at any moment; `O_NOFOLLOW` does not refuse a regular file, and mode 0700 excludes other users, not the user's own processes | **ONE descriptor carries the whole verification.** `dest` is opened ONCE after the commit, and the read-back, the byte comparison and F1's flush all go through that descriptor. **As the LAST gate before success, `dest` must still name that descriptor's inode** — `fs.lstatSync(dest, {bigint: true})` compared against `fs.fstatSync(fd, {bigint: true})` on `dev` and `ino`, **plus `isFile()`**. Three words of that are load-bearing and each answers a measured defeat: **`lstat`**, because a FOLLOWING `stat` matches through a symlink planted at the name, so a hard link of the verified inode in a directory the chain never flushes would pass while the artifact came to depend on an unflushed entry; **`isFile()`**, because only a regular file is what row F9 committed; **`bigint`**, because an inode number can exceed `Number.MAX_SAFE_INTEGER`. A mismatch is a preservation FAILURE **that removes NOTHING**: what is at `dest` is not what this invocation committed, and Table D row D1's ownership rule forbids disposing of it. **Two bounds, stated because the row would otherwise over-claim.** (1) The check NARROWS the window; it does not close it, and nothing can: a substitution can land in the instant after the check, or after the function returns. So what a success MEANS is exactly this and no more — *the bytes were verified through a descriptor, that descriptor's inode was flushed, and `dest` was a regular file naming that inode at the moment of the check.* (2) Against the adversary row **F10** puts outside the boundary, none of it holds — and that is a scope statement, not a gap |
+| **F9** | **HOW `dest` COMES INTO EXISTENCE — the commit** | `fs.renameSync(tmp, dest)`, which **REPLACES** whatever is at `dest`. The collision loop's `fs.existsSync(dest)` looked earlier and is not atomic with it, so two overlapping runs can both find the name free: one commits, the other REPLACES it — destroying a copy that run already reported successful — and then, on the byte mismatch that follows, deletes what is left | **A NO-CLOBBER commit: `fs.linkSync(tmp, dest)`, then `removeOwnedQuarantinePath(tmp)`.** `link(2)` fails with `EEXIST` if anything holds `dest`, so this invocation can never commit over a name it did not create; `EEXIST` is an ordinary preservation FAILURE taking the shipped Table D row D1 cleanup, which is fail-closed and is the direction the owner ruled on 2026-09-02. **This is what makes row F8's "remove nothing on a mismatch" DECIDABLE** — after a successful link, `dest` is this invocation's by construction, so anything else later found there was substituted. The temp removal happens OUTSIDE the commit's `catch`, so a removal that cannot be completed is Table D row **D3** and not a second cleanup attempt on the same path; leaving `tmp` behind would be exactly D3's hazard, a secret-bearing file under a name no record reaches. **Named residual:** a filesystem without hard links makes `linkSync` throw, which is a preservation failure — fail-closed, the workspace retained, no copy lost |
+| **F10** | **THE ADVERSARY — who F8 and F9 defend against, and who they do not** | not stated anywhere, which is why two consecutive review rounds landed four findings in this one family | **IN SCOPE, because the product itself creates them: (a) OVERLAPPING RUNS** — a lock stolen after its deadline while the superseded run is still executing (`src/core/dream/lock.js`), or two same-day runs whose collision loops both see the same name free; **(b) THE USER'S OWN HAND** — a person moving, restoring or deleting files on the quarantine shelf while a run is in flight. Both are non-hostile, both are ordinary, and F9 and F8 close them: no run can commit over another's copy, and a substitution under the run's feet fails the preservation instead of being reported as a success. **OUT OF SCOPE, as a NAMED RESIDUAL: arbitrary same-user native code** deliberately substituting objects under `state/`. `docs/THREAT-MODEL.md` classes this as **A12** and says in its own words that Wienerdog is *"not a boundary against arbitrary software already running as the same user"*. **The reason is decisive rather than economic:** a process that can swap `qdir` aside during its flush can also delete the preserved copy one instruction after this function returns, so **no durability protocol can hold against it** — and every pin added for it is machinery that, in the threat model's own phrase about a keyed MAC, *"would only imply a false guarantee"*. **What is therefore NOT built, and would be if the ruling went the other way:** descriptor retention for every directory in the chain with a `(dev, ino)` re-compare at the last gate, and a race test per substitution point. Dispatch precondition item **5** |
 
 Three things this table does **not** change, stated so no one infers them.
 **One:** the trigger class, the message taxonomy, the artifact-ownership contract
@@ -477,7 +521,10 @@ package adds one more way to reach a preservation failure and changes nothing
 about what happens after one. **Two:** byte-identity. P0b's requirement — that a
 success reports the bytes READ BACK from the artifact, compared against the judged
 bytes — is untouched; F8 changes only WHAT THE READ IS BOUND TO, from a pathname
-to a descriptor, which is strictly stronger. **Three:** ADR-0004 — nothing is
+to a descriptor, which is strictly stronger. **Table D's row D1 and row D2 states
+are unchanged in substance by row F9** — "the rename" becomes "the commit", the
+path each state owns is the same one, and the P0b clause under Implementation
+notes names the substitution rather than leaving a reader to infer it. **Three:** ADR-0004 — nothing is
 started, nothing outlives its call, and no daemon, watcher, retry or background
 flush is introduced. A flush is a call that has returned.
 
@@ -513,7 +560,7 @@ declaration is in the implementer's reading set (CLAUDE.md: this spec plus the
 Deliverables files), so a semantic description of a mutation is not something an
 implementer can turn into a valid declaration. Copy the object; do not re-derive it.
 
-**Five identities and NINE proofs, and both numbers are round-1 results.** Each
+**SIX identities and THIRTEEN proofs, and both numbers are round-2 results.** Each
 identity is NARROW on purpose: `evaluateRed`'s equality is a two-sided test, so an
 identity asserting the whole protocol at once would go red under every mutation and
 the declared sets would stop distinguishing anything. Each declaration's
@@ -527,35 +574,30 @@ writes rather than a guess about a diagnostic nobody has produced yet.
 | # | Test identity — the exact top-level test name | Suite | Band marker | What it asserts | Table F row |
 |---|---|---|---|---|---|
 | **QPD-1** | `dream-validate: [QPD-1] a successful preservation flushes the artifact through the descriptor its bytes were verified through` | `tests/unit/dream-validate.test.js` | `[QPD-1]` | a successful `quarantinePreserve` flushed `dest` — the flush RESOLVED THROUGH ITS DESCRIPTOR to that path, not merely counted | F1 |
-| **QPD-2** | `dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort` | same | `[QPD-2]` | **FIVE injection sites, one per loop iteration:** the artifact's `fsyncSync`; `qdir`'s `fsyncSync` and its `openSync`; the anchor's `fsyncSync` and its `openSync`. For each: `quarantinePreserve` returns `null`, `dest` is absent afterwards, **and** the gate driven over the same failure raises the shipped `WienerdogError` carrying Table P row P1/P2's value | F4 |
-| **QPD-3** | `dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor` | same | `[QPD-3]` | the recorded flush sequence **equals** `[dest, state/quarantine, state, <core>]` — an ordered `deepEqual`, so it pins membership, completeness AND order at once | F2, F3, F6 |
-| **QPD-4** | `dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists` | same | `[QPD-4]` | driven on the **redact arm** with neither `quarantine/` nor `redacted/` present: the sequence **equals** `[dest, state/quarantine/redacted, state/quarantine, state, <core>]`. **This is the only identity that can see the intermediate shelf** — on the withheld arm `qdir` IS the shelf | F2, F3, F6 |
-| **QPD-5** | `dream-validate: [QPD-5] a replacement at dest between the verification and the flush FAILS the preservation and is not removed` | same | `[QPD-5]` | a regular file is renamed over `dest` from inside the artifact flush: the preservation returns `null`, and the replacement is **still there, byte-unchanged** — detection AND non-disposal, which are the two halves of row F8 | F8 |
+| **QPD-2** | `dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort` | same | `[QPD-2]` | **THE COMPLETE DISTINCT-SITE MATRIX — 18 cases**: every member of each arm's chain (artifact, `qdir`, the shelf on the redacted arm, `stateDir`, the anchor) × `openSync` and `fsyncSync`. Each asserts `null`, `dest` absent, and no temp left behind. **Then the three shipped abort ROUTES**: a withheld-arm artifact failure → Table P row P1/P2's message; an ANCHOR failure on the redact arm, which is on BOTH chains, so both preserves fail → row **P3**'s message; a REDACTED-ONLY failure → **no abort at all**, because the withhold arm then succeeds on its own shelf and the note is refused with a record naming `quarantine` | F4 |
+| **QPD-3** | `dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor` | same | `[QPD-3]` | the recorded flush sequence **equals** `[dest, state/quarantine, state, <core>]` — an ordered `deepEqual`, pinning membership, completeness AND order at once | F2, F3, F6 |
+| **QPD-4** | `dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists` | same | `[QPD-4]` | driven on the **redact arm** with neither `quarantine/` nor `redacted/` present: the sequence **equals** `[dest, state/quarantine/redacted, state/quarantine, state, <core>]`. The only identity that can see the intermediate shelf | F2, F3, F6 |
+| **QPD-5** | `dream-validate: [QPD-5] a substitution at dest between the verification and the flush FAILS the preservation and is not removed` | same | `[QPD-5]` | **TWO substitutions, injected from inside the artifact flush.** (a) a regular file renamed over `dest`; (b) a **hard link of the verified inode into a directory the chain never flushes, then a symlink at `dest` pointing at it** — the case a following `stat` would accept. Each asserts `null` and that the substituted entry is **still there** | F8 |
+| **QPD-6** | `dream-validate: [QPD-6] the commit is no-clobber: a destination another invocation already holds is never replaced and never removed, and the temp name is gone afterwards` | same | `[QPD-6]` | a competing `dest` planted AFTER the collision loop looked and BEFORE the commit: `null`, the other invocation's bytes byte-unchanged, and no temp left. Plus the success post-condition — exactly ONE name holds the artifact | F9 |
 
-All five live in one suite, so one declaration file carries them (`suite` is a
+All six live in one suite, so one declaration file carries them (`suite` is a
 top-level field and one declaration names one suite). A proof's `criterion` field
-is the acceptance criterion it proves, so `rollUp` emits **six** lines for this WP,
-one per criterion 1–6; criteria 2, 3 and 6 each name two proof ids.
+is the acceptance criterion it proves, so `rollUp` emits **seven** lines for this
+WP, one per criterion 1–7; criteria 2, 3, 4, 6 and 7 each name more than one proof.
 
-**Why nine proofs and not five — this is round 1's finding, recorded where it
-binds.** Both channels showed that one mutation per Table F row leaves whole
-behaviours unguarded: with failure injected only at the artifact, an
-implementation whose directory flush swallows its own failure passes every
-declared mutation; with a single "the parent was flushed" assertion, an
-implementation that omits the intermediate shelf in the two-level case passes too.
-The four added proofs — `directory-flush-failure-swallowed`,
-`intermediate-shelf-not-flushed`, `anchor-not-flushed`,
-`replacement-removed-on-mismatch` — each guard a behaviour no other mutation
-reaches, and no proof here guards the verification machinery itself.
-
-**How the identities OBSERVE a flush, because a count is not evidence.** A test
-that counted `fs.fsyncSync` calls would pass under a protocol that flushed the
-wrong object. The identities resolve each flush to the path its DESCRIPTOR names —
-patch `fs.openSync` to record `fd → path`, patch `fs.fsyncSync` to look the
-descriptor up — which is the property Table F's rows are stated in. The fixture
-shapes, the helper and the injection mechanics beyond that are the implementer's
-(`docs/runbooks/spec-authoring.md`); what Table C fixes is only what
-`evaluateRed`'s equality makes contract.
+**Why thirteen proofs — one per BRANCH and one per CHAIN MEMBER, which is not the
+same as one per site.** Round 2 asked for path-specific mutations for the omitted
+middle-chain failures. The implementation has **one** failure branch for every
+directory (`flushDir`'s result, checked once inside the loop), so a per-site
+mutation would have to invent a per-site branch — machinery guarding machinery.
+What IS path-specific is chain MEMBERSHIP: dropping a member makes that member's
+injection sites unreachable, so QPD-2 reddens along with the sequence identities.
+The four membership mutations plus the two branch mutations are therefore the
+complete set, and **QPD-2's 18-case matrix is what makes each member's site
+reachable in the first place**. Round 2 added `state-directory-not-flushed` for the
+one member that had no mutation, and the three new contracts — the symlink form of
+the identity check, the no-clobber commit, and the temp removal after it — each got
+one.
 
 #### `tests/red-proofs/quarantine-preserve-durability.proofs.json`
 
@@ -567,13 +609,13 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "preservation-flush-removed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "1",
-      "why": "restoring a success path that reports a verified read-back with NO flush issued at all must redden every identity at once: there is nothing left for any of them to observe, QPD-5 included, because its replacement is injected from inside a flush that no longer happens. The positive control that the whole protocol is load-bearing, and the only proof whose expectRed is the full set",
+      "why": "restoring a success path that reports a verified read-back with NO flush issued at all must redden every flush identity at once — QPD-5 included, because its substitutions are injected from inside a flush that no longer happens. QPD-6 stays green: the commit and the temp removal are not flushes, which is what makes it a separate contract. The positive control that the protocol is load-bearing",
       "file": "src/core/dream/validate.js",
       "find": "    if (Buffer.compare(readBack, content) === 0 && flushPreservation(fd, stateDir, qdir)) {",
       "replace": "    if (Buffer.compare(readBack, content) === 0) { /* RP_MUT_QPD_NO_FLUSH */",
       "marker": "RP_MUT_QPD_NO_FLUSH",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-[1-5]\\]",
+      "testNamePattern": "\\[QPD-[12345]\\]",
       "expectRed": [
         {
           "test": [
@@ -583,7 +625,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
         },
         {
           "test": [
-            "dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort"
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
           ],
           "signal": "[QPD-2]"
         },
@@ -601,7 +643,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
         },
         {
           "test": [
-            "dream-validate: [QPD-5] a replacement at dest between the verification and the flush FAILS the preservation and is not removed"
+            "dream-validate: [QPD-5] a substitution at dest between the verification and the flush FAILS the preservation and is not removed"
           ],
           "signal": "[QPD-5]"
         }
@@ -611,17 +653,17 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "artifact-flush-failure-swallowed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "2",
-      "why": "swallowing the ARTIFACT flush's failure makes an unflushed copy report SUCCESS, the false statement Table F row F4 forbids. Only QPD-2 moves: the call is still made and the flushed sequence is unchanged, so QPD-1/3/4 — which observe that the flushes HAPPEN — stay green. That is why the disposition needs an identity of its own",
+      "why": "swallowing the ARTIFACT flush's failure makes an unflushed copy report SUCCESS, the false statement Table F row F4 forbids. Only QPD-2 moves: the call is still made and the flushed sequence is unchanged, so the identities that observe that the flushes HAPPEN stay green",
       "file": "src/core/dream/validate.js",
       "find": "  if (!flushFd(fd)) return false;",
       "replace": "  flushFd(fd); /* RP_MUT_QPD_SWALLOW_FD */",
       "marker": "RP_MUT_QPD_SWALLOW_FD",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-2\\]",
+      "testNamePattern": "\\[QPD-[2]\\]",
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort"
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
           ],
           "signal": "[QPD-2]"
         }
@@ -631,17 +673,17 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "directory-flush-failure-swallowed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "2",
-      "why": "the DIRECTORY branch has its own failure path — distinct open flags, distinct filesystem behaviour — and an implementation can return false correctly for the artifact while letting a directory's openSync or fsyncSync failure pass. Round 1 of the design gate found exactly this: with QPD-2 injecting only at the artifact, every declared mutation passed while a directory-flush failure bypassed D2 and the shipped abort",
+      "why": "the DIRECTORY branch has its own failure path — distinct open flags, distinct filesystem behaviour — and one implementation can return false correctly for the artifact while letting any directory's openSync or fsyncSync failure pass. This is the ONE branch every directory site shares, which is why the site MATRIX is in QPD-2 and the mutation is here",
       "file": "src/core/dream/validate.js",
       "find": "    if (!flushDir(dir)) return false;",
       "replace": "    flushDir(dir); /* RP_MUT_QPD_SWALLOW_DIR */",
       "marker": "RP_MUT_QPD_SWALLOW_DIR",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-2\\]",
+      "testNamePattern": "\\[QPD-[2]\\]",
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort"
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
           ],
           "signal": "[QPD-2]"
         }
@@ -651,7 +693,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "containing-directory-not-flushed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "3",
-      "why": "flushing the artifact bytes and not the directory entry that names them is the half-protocol that looks correct and is not: the bytes survive under no name. Both chain identities move, and so does QPD-2, whose qdir injection sites no longer have a flush to fail",
+      "why": "flushing the artifact bytes and not the directory entry that names them is the half-protocol that looks correct and is not: the bytes survive under no name. Both sequence identities move, and so does QPD-2, whose qdir injection sites no longer have a flush to fail",
       "file": "src/core/dream/validate.js",
       "find": "  const chain = [qdir];",
       "replace": "  const chain = []; /* RP_MUT_QPD_NO_QDIR */",
@@ -661,7 +703,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort"
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
           ],
           "signal": "[QPD-2]"
         },
@@ -683,14 +725,52 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "intermediate-shelf-not-flushed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "3",
-      "why": "THE TWO-LEVEL CASE, and it is invisible on the withheld arm where qdir IS the shelf. Dropping the intermediate quarantine/ entry leaves redacted/'s own entry in a directory that was never flushed, so the shelf can be absent after a crash while every flush the call issued completed. Only QPD-4 moves — which is why the redacted chain needs an identity that is not the withheld one",
+      "why": "THE TWO-LEVEL CASE, invisible on the withheld arm where qdir IS the shelf. Dropping the intermediate quarantine/ entry leaves redacted/'s own entry in a directory that was never flushed. QPD-4 moves, and QPD-2 with it — its redacted-arm shelf sites lose the flush they fail — while QPD-3 stays green, which is exactly the per-arm discrimination round 2 required",
       "file": "src/core/dream/validate.js",
       "find": "  if (qdir !== shelf) chain.push(shelf);",
       "replace": "  /* RP_MUT_QPD_NO_SHELF: the intermediate shelf is dropped from the chain */",
       "marker": "RP_MUT_QPD_NO_SHELF",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-4\\]",
+      "testNamePattern": "\\[QPD-[24]\\]",
       "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
+          ],
+          "signal": "[QPD-2]"
+        },
+        {
+          "test": [
+            "dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists"
+          ],
+          "signal": "[QPD-4]"
+        }
+      ]
+    },
+    {
+      "id": "state-directory-not-flushed",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "4",
+      "why": "the middle of the chain, and the one entry that is ALWAYS present on both arms: dropping stateDir leaves quarantine/'s own entry unflushed. Round 2 found it uncovered — the chain had a mutation for its bottom, its shelf and its anchor, and none for the level between",
+      "file": "src/core/dream/validate.js",
+      "find": "  chain.push(stateDir);",
+      "replace": "  /* RP_MUT_QPD_NO_STATEDIR: the state directory is dropped from the chain */",
+      "marker": "RP_MUT_QPD_NO_STATEDIR",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[234]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
+          ],
+          "signal": "[QPD-2]"
+        },
+        {
+          "test": [
+            "dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor"
+          ],
+          "signal": "[QPD-3]"
+        },
         {
           "test": [
             "dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists"
@@ -703,7 +783,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "anchor-not-flushed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "4",
-      "why": "THE ROUND-1 ANCHOR FINDING. Dropping the anchor leaves state/'s own entry unflushed, and acquireLock creates state/ with mkdirSync(recursive) earlier in the SAME run, so a first run can report success while the directory naming the whole quarantine subtree has no completed flush. Both chain identities move, and QPD-2's anchor injection sites lose the flush they fail",
+      "why": "THE ROUND-1 ANCHOR FINDING. Dropping the anchor leaves state/'s own entry unflushed, and acquireLock creates state/ with mkdirSync(recursive) earlier in the SAME run, so a first run can report success while the directory naming the whole quarantine subtree has no completed flush",
       "file": "src/core/dream/validate.js",
       "find": "  if (anchor !== stateDir) chain.push(anchor);",
       "replace": "  /* RP_MUT_QPD_NO_ANCHOR: the anchor is dropped from the chain */",
@@ -713,7 +793,7 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-2] a flush that does not complete at ANY required target is a preservation failure and takes the only-copy abort"
+            "dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort"
           ],
           "signal": "[QPD-2]"
         },
@@ -761,17 +841,17 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "inode-pin-removed",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "6",
-      "why": "THE ROUND-1 INODE FINDING. Without the identity check the function reports success carrying bytes read from a descriptor whose inode is no longer the one dest names — a same-UID process renamed a regular replacement over it, and O_NOFOLLOW does not refuse a regular file. Only QPD-5 moves: every other identity runs without a replacement",
+      "why": "THE ROUND-1 INODE FINDING. Without the identity check the function reports success carrying bytes read from a descriptor whose inode is no longer the one dest names. Only QPD-5 moves: every other identity runs without a substitution",
       "file": "src/core/dream/validate.js",
       "find": "      if (stillNamed(dest, fd)) verified = readBack; else replaced = true;",
       "replace": "      verified = readBack; /* RP_MUT_QPD_NO_PIN */",
       "marker": "RP_MUT_QPD_NO_PIN",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-5\\]",
+      "testNamePattern": "\\[QPD-[5]\\]",
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-5] a replacement at dest between the verification and the flush FAILS the preservation and is not removed"
+            "dream-validate: [QPD-5] a substitution at dest between the verification and the flush FAILS the preservation and is not removed"
           ],
           "signal": "[QPD-5]"
         }
@@ -781,19 +861,79 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
       "id": "replacement-removed-on-mismatch",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "6",
-      "why": "detecting the replacement is only half of row F8: disposing of it would delete a file this invocation does not own, which is Table D row D1's ownership rule applied to dest. Removing the guard makes the failure path delete somebody else's file, and QPD-5's last two assertions are the only thing that sees it",
+      "why": "detecting the substitution is only half of row F8: disposing of it would delete a file this invocation does not own, which is Table D row D1's ownership rule applied to dest. Removing the guard makes the failure path delete somebody else's file",
       "file": "src/core/dream/validate.js",
       "find": "  if (!replaced) removeOwnedQuarantinePath(dest);",
       "replace": "  removeOwnedQuarantinePath(dest); /* RP_MUT_QPD_RM_REPLACEMENT */",
       "marker": "RP_MUT_QPD_RM_REPLACEMENT",
       "occurrences": 1,
-      "testNamePattern": "\\[QPD-5\\]",
+      "testNamePattern": "\\[QPD-[5]\\]",
       "expectRed": [
         {
           "test": [
-            "dream-validate: [QPD-5] a replacement at dest between the verification and the flush FAILS the preservation and is not removed"
+            "dream-validate: [QPD-5] a substitution at dest between the verification and the flush FAILS the preservation and is not removed"
           ],
           "signal": "[QPD-5]"
+        }
+      ]
+    },
+    {
+      "id": "identity-check-follows-symlinks",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "6",
+      "why": "THE ROUND-2 SYMLINK FINDING. A FOLLOWING stat matches through a symlink planted at dest, so a hard link of the verified inode in a directory the chain never flushes passes the check and the artifact ends up depending on an unflushed entry. lstat inspects the LINK; the isFile() guard refuses anything that is not a regular file. Only QPD-5's second substitution can see it — the regular-file case matches neither way",
+      "file": "src/core/dream/validate.js",
+      "find": "    const named = fs.lstatSync(dest, { bigint: true });",
+      "replace": "    const named = fs.statSync(dest, { bigint: true }); /* RP_MUT_QPD_FOLLOW */",
+      "marker": "RP_MUT_QPD_FOLLOW",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[5]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-5] a substitution at dest between the verification and the flush FAILS the preservation and is not removed"
+          ],
+          "signal": "[QPD-5]"
+        }
+      ]
+    },
+    {
+      "id": "commit-clobbers-destination",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "7",
+      "why": "THE ROUND-2 OWNERSHIP FINDING. A replacing rename lets this invocation commit over a destination another run already holds — destroying that run's copy, and then, on a byte mismatch, deleting what is left. linkSync refuses with EEXIST instead. Only QPD-6 moves: no flush and no identity check is involved, which is why the commit is a contract of its own",
+      "file": "src/core/dream/validate.js",
+      "find": "    fs.linkSync(tmp, dest);",
+      "replace": "    fs.renameSync(tmp, dest); /* RP_MUT_QPD_CLOBBER */",
+      "marker": "RP_MUT_QPD_CLOBBER",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[6]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-6] the commit is no-clobber: a destination another invocation already holds is never replaced and never removed, and the temp name is gone afterwards"
+          ],
+          "signal": "[QPD-6]"
+        }
+      ]
+    },
+    {
+      "id": "tmp-not-removed-after-commit",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "7",
+      "why": "the no-clobber commit leaves the bytes under TWO names, and the temp one is a secret-bearing file no preservation record, no cleanup pass and no abort message reaches — Table D row D3's own hazard. Dropping its removal leaves it behind on every successful preservation, and only QPD-6's post-condition sees it",
+      "file": "src/core/dream/validate.js",
+      "find": "\n  removeOwnedQuarantinePath(tmp);\n",
+      "replace": "\n  /* RP_MUT_QPD_KEEP_TMP: the committed temp name is left behind */\n",
+      "marker": "RP_MUT_QPD_KEEP_TMP",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[6]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-6] the commit is no-clobber: a destination another invocation already holds is never replaced and never removed, and the temp name is gone afterwards"
+          ],
+          "signal": "[QPD-6]"
         }
       ]
     }
@@ -802,27 +942,31 @@ shapes, the helper and the injection mechanics beyond that are the implementer's
 ```
 
 **Every `find` above is a substring of the byte-exact source forms under
-Implementation notes, and all nine were measured on a rehearsal tree**: each
+Implementation notes, and all thirteen were measured on a rehearsal tree**: each
 `find` occurs exactly once in `src/core/dream/validate.js`, each `marker` is in
 its own `replace` and absent from the pristine file, and each mutated file passes
 `node --check` — a mutation that does not parse is a proof that can never run.
-**And all nine were then RUN**: with the five identities written on a rehearsal
-tree and this declaration in place, the unfiltered lane reported
-`14 declared proof(s), 14 selected`, all fourteen `PROVEN`, six `PROVEN` criteria
-lines for this WP and `RUN: PROVEN`, exit 0 — so every declared `expectRed` set is
-measured and not predicted, `evaluateRed`'s own-body equality included. If a
-`find` does not match, the source form was not written as prescribed: fix the
-source, never the declaration.
+**And all thirteen were then RUN**: with the six identities and the five migrated
+injections written on a rehearsal tree and this declaration in place, the
+unfiltered lane reported `24 declared proof(s), 24 selected`, all twenty-four
+`PROVEN`, seven `PROVEN` criteria lines for this WP and `RUN: PROVEN`, exit 0 — so
+every declared `expectRed` set is measured and not predicted, `evaluateRed`'s
+own-body equality included. If a `find` does not match, the source form was not
+written as prescribed: fix the source, never the declaration.
 
 **What these proofs do NOT establish, stated rather than implied.** They establish
-that the protocol's flushes are issued, on the right objects, in the right order,
-that a flush which does not complete at ANY of them fails the preservation, and
-that a replacement at `dest` is detected and left alone. **They do not establish
-that anything survives a crash**, and no test in `npm test` can — see the evidence
-paragraph under Implementation notes, which is where this package draws that line.
-They also do not close row **F8**'s window: a replacement landing after the
-identity check is undetectable by construction, which is why F8 states what a
-success MEANS rather than what it prevents.
+that the protocol's flushes are issued, on the right objects, in the right order;
+that a flush which does not complete at ANY site on EITHER arm fails the
+preservation and takes the route Table P assigns it; that a substitution at `dest`
+— regular file or symlink-to-hard-link — is detected and left alone; and that a
+destination another invocation holds is never committed over. **They do not
+establish that anything survives a crash**, and no test in `npm test` can — see the
+evidence paragraph under Implementation notes. They do not close row **F8**'s
+window: a substitution landing after the identity check is undetectable by
+construction, which is why F8 states what a success MEANS rather than what it
+prevents. **And they establish nothing against row F10's out-of-scope adversary** —
+a same-UID process that swaps a directory aside mid-flush passes every one of
+them, and by F10's ruling that is a boundary statement rather than a gap.
 
 ### Mirrored Surface Checklist
 
@@ -836,30 +980,38 @@ added here on the spot.
       `pruneRedactedOriginals` one states row **F7(a)** as a RULE over a file that
       IS in the boundary.
 - [ ] **Acceptance criteria** — every criterion naming a flushed object, the
-      failure disposition, the fixed chain or its anchor, the platform scope, the
-      order, the identity pin, a Table C identity, or the roll-up line count.
+      failure disposition and its Table P route, the fixed chain or its anchor, the
+      platform scope, the order, the identity pin, **the commit**, a Table C
+      identity, a suite total, or the roll-up line count.
 - [ ] **Verification commands** — V1 (a flush exists at all; the guarantee
       sentence, extracted from this spec by a TWO-STAGE key and matched against the
       source with comment prefixes and hard wraps flattened), V2 (each amended
       `Done` row is its base row plus its clause in the named cell, and nothing else
-      in either file moved), V3 (`npm run red-proofs` and its six roll-up lines), V4
-      (`npm test`, `npm run lint`).
-- [ ] **The six byte-exact source forms** under Implementation notes, which Table
-      C's nine `find` strings quote: a change to any of them changes every
-      declaration that quotes it, in the same pass. **The four migrated injections**
-      named beside them are a mirror too — Table F row F8 decides that the read is
-      descriptor-bound, and those four tests are where the product's own suite
-      states it.
+      in either file moved), V3 (`npm run red-proofs` and its seven roll-up lines),
+      V4 (`npm test`, `npm run lint`). **V1's `on the medium` count and criterion 8's
+      narrowed claim are one fact in two places** — what V1 measures is what the
+      criterion may say.
+- [ ] **The eleven byte-exact source forms** under Implementation notes, which
+      Table C's thirteen `find` strings quote: a change to any of them changes every
+      declaration that quotes it, in the same pass. **The five migrated injections**
+      named beside them are a mirror too — rows F8 and F9 decide that the read is
+      descriptor-bound and the commit no-clobber, and those five tests are where the
+      product's own suite states it.
 - [ ] **The guarantee sentence** under Implementation notes — decided once, quoted
       nowhere else in this spec, pinned by V1 and by acceptance criterion 7. Its
       SCOPE is also asserted by Table F rows F5 and F7(c), and its two-stage
       extraction key is part of V1 rather than of the sentence.
+- [ ] **Row F10's adversary** — decided in F10 and mirrored in FOUR places: Dispatch
+      precondition item **5**, the Security checklist's same-UID bullet, Table C's
+      closing "what these proofs do not establish" paragraph, and Out of scope's
+      declined-pinning bullet. An owner ruling on item 5 updates the row first.
 - [ ] **Current state** — the zero-flush trace, the `mkdirSync`-return measurement
       AND the `acquireLock` measurement that makes it non-load-bearing, the
       `dirname(stateDir)`-is-the-core measurement, the five observability
       measurements, the seam census (two call sites, no `private-fs`), the
-      two-false-mirrors paragraph, and the four-test blast-radius claim with its
-      two-seams reason.
+      two-false-mirrors paragraph, the FIVE-test blast-radius claim with its
+      two-seams reason and its two non-breaking `renameSync` injections, and the
+      shipped write path's `existsSync`/`renameSync` annotations.
 - [ ] **Operative prose** — the Dispatch precondition's four items, its "changes no
       Deliverables row" claim and its round-1 "no fifth item" check (**the section
       HEADING carries the item COUNT and goes stale the moment an item is added**);
@@ -868,8 +1020,9 @@ added here on the spot.
       three "does not change" paragraphs under Table F; Table C's narrowness
       paragraph, its nine-proofs paragraph and its two residual paragraphs.
 - [ ] **Security checklist** — the bullet naming what mode 0700 and the dream lock
-      do NOT exclude, and the bullet forbidding the mismatch arm from removing
-      anything: both are row **F8** stated at a second altitude.
+      do NOT exclude (which now DEFERS to row **F10** rather than deciding), the
+      bullet forbidding the mismatch arm from removing anything (row **F8**), and
+      the bullet on the no-clobber commit (row **F9**).
 - [ ] **Mirrors outside this document** (all inside the Deliverables boundary) —
       `quarantinePreserve`'s JSDoc in `src/core/dream/validate.js`, the EP2 gate's
       `@throws` block in the same file (whose *"the durable conjunct stays deferred
@@ -912,9 +1065,9 @@ added here on the spot.
   described as one — asserting a proxy is the failure mode this paragraph exists to
   prevent.
 
-- **THE SIX SOURCE FORMS TABLE C's `find` STRINGS QUOTE, and they are contract
+- **THE ELEVEN SOURCE FORMS TABLE C's `find` STRINGS QUOTE, and they are contract
   only for that reason.** Everything else about code structure is the
-  implementer's; these six are byte-exact because a RED-proof declaration cannot
+  implementer's; these eleven are byte-exact because a RED-proof declaration cannot
   be written against a shape nobody fixed. Write them exactly, and if a `find` then
   fails to match, the source form is what is wrong. **Every fence below shows its
   REAL indent** — round zero found the previous draft's fences carrying a list
@@ -951,8 +1104,9 @@ added here on the spot.
   }
 ```
 
-  **(e)** and **(f)**, three lines of the chain builder, at **two-space** indent —
-  the first element, the intermediate shelf and the anchor:
+  **(e)**–**(h)**, the four lines of the chain builder, at **two-space** indent —
+  the first element, the intermediate shelf, the state directory and the anchor, in
+  this order:
 
 ```js
   const chain = [qdir];
@@ -960,6 +1114,10 @@ added here on the spot.
 
 ```js
   if (qdir !== shelf) chain.push(shelf);
+```
+
+```js
+  chain.push(stateDir);
 ```
 
 ```js
@@ -971,16 +1129,43 @@ added here on the spot.
   and NOT used** — the chain is fixed (row **F3**), which is what round 1 replaced
   the created-set derivation with.
 
-- **THE FOUR SHIPPED INJECTIONS THAT MUST MOVE, and their assertions must NOT.**
-  Row F8 reads the artifact through a descriptor, so the four `patchFs('readFileSync')`
-  injections in `tests/unit/dream-validate.test.js` that match `typeof p === 'string'
-  && path.resolve(p) === dest` stop intercepting — measured: they are the only four
+  **(i)** row **F8**'s identity read, inside `stillNamed`, at **four-space** indent.
+  `lstat`, not `stat`; `bigint`, not the default; and the `isFile()` guard beside it
+  in the comparison:
+
+```js
+    const named = fs.lstatSync(dest, { bigint: true });
+```
+
+  **(j)** row **F9**'s no-clobber commit, at **four-space** indent, in place of the
+  shipped `fs.renameSync(tmp, dest);`:
+
+```js
+    fs.linkSync(tmp, dest);
+```
+
+  **(k)** row **F9**'s temp removal, at **two-space** indent and **outside** the
+  commit's `catch`, so a removal that cannot be completed is Table D row **D3**
+  rather than a second cleanup attempt:
+
+```js
+  removeOwnedQuarantinePath(tmp);
+```
+
+- **THE FIVE SHIPPED INJECTIONS THAT MUST MOVE, and their assertions must NOT.**
+  Row F8 reads the artifact through a descriptor and row F9 commits with `linkSync`,
+  so five shipped injections stop intercepting — measured: they are the only five
   failures the change causes (Current state). **Migrate the injection point, change
-  no assertion**: one shared helper that records `fd → path` on `openSync` and
-  matches `readFileSync`'s argument whether it is a path or a descriptor is enough,
-  and it is the same resolution Table C's identities need. The four tests are
-  `quarantinePreserve (P0b, Table D row D2)` ×2, `(Table D row D3)` and
-  `(Table D row D4)`; every `assert` in them stays byte-identical.
+  no assertion.** Four of them are `patchFs('readFileSync')` matching
+  `typeof p === 'string' && path.resolve(p) === dest`: one shared helper that records
+  `fd → path` on `openSync` and matches `readFileSync`'s argument whether it is a
+  path or a descriptor is enough, and it is the same resolution Table C's identities
+  need. They are `quarantinePreserve (P0b, Table D row D2)` ×2, `(Table D row D3)`
+  and `(Table D row D4)`. The fifth is `(Table D row D1): the rename fails after a
+  successful write`, whose `patchFs('renameSync')` becomes `patchFs('linkSync')`;
+  **its title says "rename" and is the one identity string this package changes** —
+  to "the commit fails after a successful write", which no declaration names. Every
+  `assert` in all five stays byte-identical.
 
 - **The platform branch is a NAMED CONSTANT, not a caught error** (row **F5**).
   The repo's idiom is an explicit branch that names what is lost —
@@ -1008,7 +1193,7 @@ added here on the spot.
   column number.** A clause whose sentence scopes a particular claim has to sit in
   the cell holding that claim, and **acceptance criterion 8 cannot catch a
   misplacement**, because these rows are one line each so a clause in the wrong
-  cell is still "one changed line". Measured at `0fd50422` by splitting each row on
+  cell is still "one changed line". Measured at `38562ec4` by splitting each row on
   `' | '` (round-trip byte-exact, since `' | '` is the separator no cell can
   contain):
 
@@ -1024,7 +1209,7 @@ added here on the spot.
   Both clauses are byte-exact. **P0b first:**
 
   ```text
-  **Amended 2026-09-05 (`WP-quarantine-preserve-durability`): the DURABLE conjunct is now ENFORCED, so the pointer in the sentence before this one resolves to a paragraph that is superseded as a forward-looking statement and stands as the record of the tree at `fc506110`. What is shipped is that spec's Table F: a preservation reports success only after the platform's flush has completed for the artifact AND for a FIXED chain of directory entries — the containing directory, the shelf above it on the redacted arm, the state directory, and the core directory that names it — and only if `dest` still names the inode those bytes were verified through, the read-back and that flush now sharing one descriptor. A flush that does not complete at any of them is a preservation FAILURE, disposed of by this spec's Table D row D2 and carried to the abort by row P0; an identity mismatch is a failure that removes NOTHING, because the file then at that name is not the invocation's. The guarantee is SCOPED, not absolute: durability to the extent the platform's flush provides, POSIX-only for the flushes, and the identity check narrows the replacement window without closing it. TWO of that paragraph's claims did NOT move and are re-routed rather than retired: D1's and D2's REMOVALS are still not crash-durable, and neither is `pruneRedactedOriginals`' eviction — those are `WP-quarantine-disposal-durability` (Draft), which `depends_on` the durability spec. This row's own text, its byte-identity requirement and every value in it are unchanged, and this clause restates no member of Table P or Table D.**
+  **Amended 2026-09-05 (`WP-quarantine-preserve-durability`): the DURABLE conjunct is now ENFORCED, so the pointer in the sentence before this one resolves to a paragraph that is superseded as a forward-looking statement and stands as the record of the tree at `fc506110`. What is shipped is that spec's Table F: a preservation reports success only after the platform's flush has completed for the artifact AND for a FIXED chain of directory entries — the containing directory, the shelf above it on the redacted arm, the state directory, and the core directory that names it — and only if `dest` is still a regular file naming the inode those bytes were verified through, the read-back and that flush now sharing one descriptor. The COMMIT is no-clobber — a link that refuses an existing name, then the removal of the temp one — so this invocation can never write over, and never delete, a destination another invocation already holds; "the rename" in rows D1 and D2 is that commit, and each row still owns the same path it always did. A flush that does not complete at any target is a preservation FAILURE, disposed of by this spec's Table D row D2 and carried to the abort by row P0; an identity mismatch is a failure that removes NOTHING, because the file then at that name is not the invocation's. The guarantee is SCOPED, not absolute: durability to the extent the platform's flush provides, POSIX-only for the flushes, and the identity check narrows the replacement window without closing it. TWO of that paragraph's claims did NOT move and are re-routed rather than retired: D1's and D2's REMOVALS are still not crash-durable, and neither is `pruneRedactedOriginals`' eviction — those are `WP-quarantine-disposal-durability` (Draft), which `depends_on` the durability spec. This row's own text, its byte-identity requirement and every value in it are unchanged, and this clause restates no member of Table P or Table D.**
   ```
 
   **B3b:**
@@ -1037,23 +1222,25 @@ added here on the spot.
   clause leaves false — the clause scopes the universals it names, and a cell can
   hold one it does not.
 
-- **Why `depends_on` names `WP-quarantine-banner-location`, and it is not a
-  re-decision of the sequencing.** The owner ruled the chain on 2026-09-02
-  (`docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md` item 2) and noted
-  that this spec's `depends_on` *"gains nothing here — its sequencing is this
-  record"*. What has changed since is mechanical, not editorial: **both packages
-  amend `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`** — that one rows Q1,
-  Q2 and Q9, this one row B3b — so merging them out of order puts two branches in
-  the same file. Different rows, so no semantic conflict; the `depends_on` entry
-  is there to make the tooling enforce the order the owner already ruled. V2 reads
-  each base row with `git show main:`, which is correct on either order and stale
-  on neither.
+- **`depends_on` names `WP-quarantine-banner-location`, and that dependency is now
+  SATISFIED.** The owner ruled the chain on 2026-09-02
+  (`docs/specs/logbook/2026-09-02-owner-rulings-stub-queue.md` item 2). The entry
+  was added because both packages amend
+  `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — that one rows Q1, Q2 and Q9,
+  this one row B3b — so an out-of-order merge would have put two branches in one
+  file. That package shipped in PRs #218/#219 and its spec now lives in
+  `docs/specs/done/`; **measured on the rebased base, row B3b is byte-unchanged by
+  it (three cells, same bytes at `0fd50422`, at `38562ec4` and here)**, so this
+  package's clause still applies to the row it was written against. V2 reads each
+  base row with `git show main:`, so it is correct against whatever `main` holds at
+  dispatch.
 
 - **The stub said `size: M` and so does this spec, but the package is a re-cut
   one.** The stub's own Watch-out predicted the split and called it the expected
-  outcome. What was measured: the SUCCESS half is one function, six source forms,
-  four migrated injections and nine proofs; the DISPOSAL half is three call sites,
-  two shipped best-effort postures and a failure disposition nobody has ruled.
+  outcome. What was measured: the SUCCESS half is one function, eleven source forms,
+  five migrated injections and thirteen proofs; the DISPOSAL half is three call
+  sites, two shipped best-effort postures and a failure disposition nobody has
+  ruled.
   Dispatch precondition item 4 states the split with its cost.
 
 - **The `npm run red-proofs` lane refuses in a git worktree whose `node_modules`
@@ -1087,16 +1274,19 @@ added here on the spot.
       add `O_NOFOLLOW` (and `O_DIRECTORY` for a directory) through the repo's
       explicit-branch idiom, matching `src/core/dream/vault-write.js` and
       `src/core/dream/workspace.js`.
-- [ ] **WHAT MODE 0700 AND THE DREAM LOCK DO NOT EXCLUDE, stated because assuming
-      otherwise is what round 1 found.** Mode 0700 excludes other USERS. The dream
-      lock excludes cooperating dream runs — and only until its deadline, after
-      which `acquireLock` STEALS it while the superseded process may still be
-      running (`src/core/dream/lock.js`). Neither excludes another process owned by
-      the same user, including the user's own hands on the quarantine shelf, and
-      `O_NOFOLLOW` refuses a symlink but not a regular file renamed over `dest`.
-      **The answer is row F8's identity check, and its two bounds are stated in
-      that row rather than assumed away here:** it narrows the window and does not
-      close it, and it is only as strong as the platform's `(dev, ino)`.
+- [ ] **WHAT MODE 0700 AND THE DREAM LOCK DO NOT EXCLUDE — and this bullet no
+      longer decides it, row F10 does.** Mode 0700 excludes other USERS. The dream
+      lock excludes cooperating dream runs, and only until its deadline, after which
+      `acquireLock` STEALS it while the superseded process may still be running
+      (`src/core/dream/lock.js`). `O_NOFOLLOW` refuses a symlink at the open but not
+      a regular file committed over `dest`, and a following `stat` would not refuse
+      a symlink at the check either. **Row F10 is where the adversary is decided**:
+      overlapping runs and the user's own hand are IN scope and are closed by rows
+      F9 and F8; arbitrary same-user native code is OUT, as a named residual citing
+      `docs/THREAT-MODEL.md`'s class **A12**. This bullet cites that row and decides
+      nothing of its own — which is the round-2 correction: a security checklist that
+      asserts an exclusion the product does not have is the assumption reviewers
+      break.
 - [ ] **Nothing is disclosed and nothing new is written.** The protocol reads
       descriptors and flushes them; it creates no file, writes no byte, and emits
       no message — the only user-visible effect is that one more class of failure
@@ -1108,6 +1298,15 @@ added here on the spot.
       choosing at a name they control — the inverse of the hazard, created by the
       fix for it. `replacement-removed-on-mismatch` is the RED proof that this
       guard is load-bearing.
+- [ ] **The commit never destroys what it did not create** (row **F9**). `linkSync`
+      refuses with `EEXIST`; the shipped replacing `renameSync` did not, so an
+      overlapping run could commit over — and then, on the byte mismatch that
+      followed, delete — a copy another run had already reported successful. That is
+      a DATA-LOSS path against an adversary this product creates itself, which is why
+      it is closed here rather than routed. It also retires the shipped collision
+      loop's non-atomic `existsSync(dest)` window, which the round-2 shadow routed as
+      an ownership race: the window still exists, and the commit no longer acts on
+      it.
 - [ ] **The failure path removes exactly the one path this invocation owns.** Row
       F4 reuses Table D row **D2**'s existing removal of `dest`; it adds no removal,
       does not touch `tmp` (gone by definition after the rename) and does not touch
@@ -1116,80 +1315,97 @@ added here on the spot.
 ## Acceptance criteria
 
 - [ ] **1.** **The artifact's bytes are flushed, through the descriptor they were
-      verified through** (Table F rows **F1**/**F8**). A successful
-      `quarantinePreserve` has issued the platform's flush for `dest` — the flush
-      resolved through its DESCRIPTOR to that path, never merely counted — before it
-      returns. Evidence: Table C identity **QPD-1**, proof
+      verified through** (Table F rows **F1**/**F8**), resolved through that
+      descriptor to `dest` and never merely counted. Evidence: **QPD-1**, proof
       `preservation-flush-removed`.
-- [ ] **2.** **A flush that does not complete at ANY required target is a
-      preservation failure** (row **F4**) — the artifact, `qdir`, and an F3 ancestor,
-      at the `openSync` as well as the `fsyncSync`. For each: `quarantinePreserve`
-      returns `null`, `dest` is gone, and the gate driven over the same failure
-      raises the shipped only-copy abort carrying Table P row P1/P2's value. **No new
-      message, no new field and no new disposal path.** Evidence: **QPD-2**, proofs
+- [ ] **2.** **A flush that does not complete at ANY required target, on EITHER
+      arm, is a preservation failure** (row **F4**) — the complete distinct-site
+      matrix: every chain member × `openSync` and `fsyncSync`, on the withheld and
+      the redacted arm, each asserting `null`, `dest` absent and no temp left. **And
+      each failure takes the route Table P assigns it, unchanged:** P1/P2 on the
+      withheld arm; **P3** when the failing target is on BOTH chains so the redact
+      arm falls through and the withhold also fails; **no abort at all** when only
+      the redacted shelf fails and the withhold arm succeeds. **No new message, no
+      new field and no new disposal path.** Evidence: **QPD-2**, proofs
       `artifact-flush-failure-swallowed` and `directory-flush-failure-swallowed`.
 - [ ] **3.** **The directory entry that names the artifact is flushed** (row
-      **F2**), after the rename — **and on the redacted arm the shelf above it is
-      too**, which the withheld arm cannot show because there `qdir` IS the shelf.
-      Evidence: **QPD-3** and **QPD-4**, proofs `containing-directory-not-flushed`
-      and `intermediate-shelf-not-flushed`.
+      **F2**), and **on the redacted arm the shelf above it is too** — which the
+      withheld arm cannot show because there `qdir` IS the shelf. Evidence:
+      **QPD-3** and **QPD-4**, proofs `containing-directory-not-flushed` and
+      `intermediate-shelf-not-flushed`.
 - [ ] **4.** **The chain is FIXED and ends at the anchor** (row **F3**): every
       successful preservation flushes `qdir`, the shelf when distinct, `stateDir`
       and `path.dirname(stateDir)` — the core directory — whether or not this call
       created any of them. **Not a created-set derivation:** `acquireLock` creates
       `state/` earlier in the same run, so a created-set would leave the core
       unflushed (measured, Exact contracts). Evidence: **QPD-3** and **QPD-4**'s
-      ordered sequences, proof `anchor-not-flushed`.
+      ordered sequences, proofs `state-directory-not-flushed` and
+      `anchor-not-flushed`.
 - [ ] **5.** **The order is the artifact, then the chain bottom-up** (row **F6**),
       asserted as an ordered SEQUENCE and not as a set. Evidence: **QPD-3** and
       **QPD-4**, proof `flush-order-inverted`.
-- [ ] **6.** **`dest` still names the verified inode, and a replacement is not
-      removed** (row **F8**). With a regular file renamed over `dest` between the
-      verification and the completion of the flush: `quarantinePreserve` returns
-      `null`, and the replacement is still there, byte-unchanged. Evidence:
-      **QPD-5**, proofs `inode-pin-removed` and `replacement-removed-on-mismatch`.
+- [ ] **6.** **`dest` is still a regular file naming the verified inode, and a
+      substitution is not removed** (row **F8**). With a regular file renamed over
+      `dest`, and with a symlink to a hard link of the verified inode planted at it,
+      each injected between the verification and the completion of the flush:
+      `quarantinePreserve` returns `null` and the substituted entry is still there.
+      The check is `lstat` + `isFile()` + bigint `(dev, ino)`; a FOLLOWING stat is a
+      defect. Evidence: **QPD-5**, proofs `inode-pin-removed`,
+      `replacement-removed-on-mismatch` and `identity-check-follows-symlinks`.
       **This criterion does not claim the window is closed** — row F8 states what a
-      success means instead, and nothing can close it against a same-UID process.
-- [ ] **7.** **The guarantee sentence is the one this spec decides, present exactly
-      once** in `src/core/dream/validate.js`, wrapped or not, and no sentence in
-      that file claims a preserved copy is on the medium. **V1 is this criterion's
-      evidence**, and it is lexical by construction: what a flush achieves is not
-      something a test can assert, which is why the sentence is spec-owned.
-- [ ] **8.** **The two `Done` rows carry their byte-exact clause and nothing else
+      success means, and row **F10** states whom that holds against.
+- [ ] **7.** **The commit is no-clobber** (row **F9**). A destination another
+      invocation already holds is never committed over — `EEXIST` is an ordinary
+      preservation failure — and is never removed; after a successful commit exactly
+      one name holds the artifact, the temp name being removed under Table D row
+      **D3**'s fail-loud rule. Evidence: **QPD-6**, proofs
+      `commit-clobbers-destination` and `tmp-not-removed-after-commit`.
+- [ ] **8.** **The guarantee sentence is the one this spec decides, present exactly
+      once** in `src/core/dream/validate.js`, wrapped or not, **and the phrase `on
+      the medium` appears in that file exactly once — inside it.** **That is the
+      whole of what V1 measures, and this criterion claims no more.** A lexical
+      check cannot prove the ABSENCE of a differently worded over-claim; that
+      obligation is discharged by the PR gates under Definition of done, not here.
+- [ ] **9.** **The two `Done` rows carry their byte-exact clause and nothing else
       moved.** `WP-preservation-abort-widening` row **P0b** in cell 5 and
       `WP-secret-fence-ep2-redact-arm` row **B3b** in cell 2; `git diff` shows
       exactly one changed line per file. **The placement half is V2's**, because
       each row is ONE line so a line-counting check cannot see a clause that landed
       in the wrong cell.
-- [ ] **9.** **Nothing outside Table F moved, and the four migrated injections
-      changed no assertion.** `npm test` is `tests 2623 / pass 2611 / fail 0 /
-      skipped 12` — the `0fd50422` baseline of `2618 / 2606` plus exactly this WP's
-      five new tests. The four shipped tests named under Implementation notes keep
+- [ ] **10.** **Nothing outside Table F moved, and the five migrated injections
+      changed no assertion.** `npm test` is `tests 2629 / pass 2617 / fail 0 /
+      skipped 12` — the `38562ec4` baseline of `2623 / 2611` plus exactly this WP's
+      six new tests. The five shipped tests named under Implementation notes keep
       every `assert` byte-identical and move only their injection point. Measured on
-      the full rehearsal tree, not predicted. A fifth changed assertion is a finding,
-      not a fixture to update.
-- [ ] **10.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
-      `14 declared proof(s), 14 selected`, `RUN: PROVEN`, and a Criteria roll-up
-      carrying **six** lines for this WP — criteria `1` to `6` — each `PROVEN` and
-      each naming its Table C proof id(s). Six and not nine: criteria 2, 3 and 6
-      each carry two proofs sharing a `(wp, criterion)` pair. Measured on the full
-      rehearsal tree, exit 0.
-- [ ] **11.** Idempotence: `N/A`, and the reason is stated for what this package
+      the full rehearsal tree. A sixth changed assertion is a finding, not a fixture
+      to update.
+- [ ] **11.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
+      `24 declared proof(s), 24 selected`, `RUN: PROVEN`, and a Criteria roll-up
+      carrying **seven** lines for this WP — criteria `1` to `7` — each `PROVEN` and
+      each naming its Table C proof id(s). Seven and not thirteen: criteria 2, 3, 4,
+      6 and 7 each carry more than one proof sharing a `(wp, criterion)` pair.
+      Measured on the full rehearsal tree, exit 0.
+- [ ] **12.** Idempotence: `N/A`, and the reason is stated for what this package
       is. It ships no command and writes nothing outside the repo. Inside
       `quarantinePreserve` the added steps are one extra open, a read, descriptor
-      flushes and two `stat`s — they create no file and change no byte; running the
-      gate twice over the same input does exactly what it does today, one more class
-      of failure aside.
-- [ ] **12.** `npm test` and `npm run lint` pass.
+      flushes and two `stat`s; the commit creates the same single artifact it
+      created before, under one name. Running the gate twice over the same input
+      does exactly what it does today, one more class of failure aside.
+- [ ] **13.** `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
 # V1 — the durability protocol exists, and its guarantee sentence is the one
-#      THIS SPEC decides, present exactly once. The `test -f` guards are
-#      REQUIRED: a negated grep on a missing file exits 2 and the negation turns
-#      that error into a pass, so the check would read greenest exactly where
-#      the work was never done.
+#      THIS SPEC decides, present exactly once — AND the phrase `on the medium`
+#      appears in the file exactly once, inside it. That last count is the only
+#      over-claim this step can catch: it rejects the direct contradiction (the
+#      approved sentence PLUS "a preserved copy is on the medium") and NOTHING
+#      ELSE. A differently worded over-claim passes; acceptance criterion 8 says
+#      so, and Definition of done routes the absence obligation to the PR gates.
+#      The `test -f` guards are REQUIRED: a negated grep on a missing file exits
+#      2 and the negation turns that error into a pass, so the check would read
+#      greenest exactly where the work was never done.
 F=src/core/dream/validate.js
 SPEC=docs/specs/WP-quarantine-preserve-durability.md
 v1=0
@@ -1211,6 +1427,10 @@ else
     flat=$(sed 's/^[[:space:]]*\*[[:space:]]\{0,1\}//' "$F" | tr '\n' ' ' | tr -s ' ')
     m=$(printf '%s' "$flat" | grep -oF "$sent" | wc -l | tr -d ' ')
     if [ "$m" != 1 ]; then echo "V1 GUARANTEE SENTENCE APPEARS $m TIME(S) IN $F, expected 1"; v1=1; fi
+    # The DIRECT contradiction, and only that one: the approved sentence is the
+    # file's single use of the phrase.
+    o=$(grep -oF 'on the medium' "$F" | wc -l | tr -d ' ')
+    if [ "$o" != 1 ]; then echo "V1 'on the medium' APPEARS $o TIME(S) IN $F, expected 1 (inside the approved sentence)"; v1=1; fi
   fi
 fi
 [ "$v1" = 0 ] && echo "V1 OK"
@@ -1258,10 +1478,10 @@ done
 # 0 — a check that can never fail.
 [ "$v1" = 0 ] && [ "$v2" = 0 ] || { echo "V1/V2 RED"; exit 1; }
 
-# V3 — the machine-run RED lane (criteria 1-6 and 10). REGRESSION-kind on the
+# V3 — the machine-run RED lane (criteria 1-7 and 11). REGRESSION-kind on the
 #      untouched tree: it exits 0 there with the already-declared proofs PROVEN.
-#      What discriminates is the CONTENT — the SIX roll-up lines naming this WP,
-#      which cannot appear until the declaration file and the five identities
+#      What discriminates is the CONTENT — the SEVEN roll-up lines naming this WP,
+#      which cannot appear until the declaration file and the six identities
 #      exist. Run it where `node_modules` is a real directory: the lane refuses a
 #      symlinked one by design (Implementation notes).
 npm run red-proofs
@@ -1272,7 +1492,7 @@ npm run lint
 ```
 
 - **V1 is a lexical guard and that is all it is.** It cannot establish that a
-  flush reaches anything; criteria 1–6 and Table C's proofs are what establish the
+  flush reaches anything; criteria 1–7 and Table C's proofs are what establish the
   protocol, and nothing establishes crash survival (Implementation notes).
   **V2 makes ONE decision**: each amended row is its base row plus its clause, in
   the named cell. Everything it might have checked separately — presence in full,
@@ -1280,57 +1500,63 @@ npm run lint
   line-counting check cannot see: an edit ELSEWHERE ON THE SAME LINE. It cannot
   judge whether a clause is *correct*, only that nothing but the clause moved.
 
-- **Both were extracted from the fenced block above and RUN in TEN trees**, each a
-  scratch git repo whose `main` is a pristine `0fd50422` and each carrying THIS
+- **Both were extracted from the fenced block above and RUN in TWELVE trees**, each
+  a scratch git repo whose `main` is a pristine `38562ec4` and each carrying THIS
   spec file, so the clause and sentence extractions run against the real document
-  and the shipped escaping is exercised rather than described. **Re-run in full
-  after round 1**, because both byte-exact `Done`-spec clauses were rewritten that
-  round and V2 reconstructs each amended row from the clause it finds HERE. Observe and paste at
-  least the three the runbook requires — **deliverable absent**, **compliant**,
-  **violating** — and the WRAPPED compliant state:
+  and the shipped escaping is exercised rather than described. **Re-run in full at
+  round 2**, because both byte-exact `Done`-spec clauses were rewritten again and
+  V1 gained a count. Observe and paste at least the three the runbook requires —
+  **deliverable absent**, **compliant**, **violating** — plus the WRAPPED compliant
+  state and the OVER-CLAIM state:
 
   | tree | V1/V2 says | rc |
   |---|---|---|
-  | untouched | `V1 NO FLUSH IS ISSUED AT ALL`, `V1 GUARANTEE SENTENCE APPEARS 0 TIME(S)`, both V2 rows `IS NOT ITS BASE ROW PLUS ITS CLAUSE`, both `DIFF IS empty, expected 1/1` | 1 |
+  | untouched | `V1 NO FLUSH IS ISSUED AT ALL`, `GUARANTEE SENTENCE APPEARS 0 TIME(S)`, `'on the medium' APPEARS 0 TIME(S)`, both V2 rows `IS NOT ITS BASE ROW PLUS ITS CLAUSE`, both `DIFF IS empty, expected 1/1` | 1 |
   | **compliant** (the fix + both clauses in their named cells) | `V1 OK`, `V2 OK` | 0 |
   | **compliant, the guarantee sentence HARD-WRAPPED over four JSDoc lines** | `V1 OK`, `V2 OK` | 0 |
   | `src/core/dream/validate.js` removed | `V1 MISSING DELIVERABLE: …` | 1 |
-  | the guarantee sentence REWORDED into an over-claim | `V1 GUARANTEE SENTENCE APPEARS 0 TIME(S) … expected 1` | 1 |
-  | the guarantee sentence RETYPED a second time in the file | `V1 GUARANTEE SENTENCE APPEARS 2 TIME(S) … expected 1` | 1 |
+  | **the round-2 shadow's OVER-CLAIM fixture** — the approved sentence, one `fsyncSync`, plus `A preserved copy is on the medium.` | `V1 'on the medium' APPEARS 2 TIME(S) … expected 1` | 1 |
+  | the guarantee sentence REWORDED away | `GUARANTEE SENTENCE APPEARS 0 TIME(S)` + `'on the medium' APPEARS 0 TIME(S)` | 1 |
+  | the guarantee sentence RETYPED a second time in the file | `GUARANTEE SENTENCE APPEARS 2 TIME(S) … expected 1` | 1 |
   | the sentence present but `fs.fsyncSync` removed | `V1 NO FLUSH IS ISSUED AT ALL` | 1 |
   | **P0b's clause in cell 2** (the end-of-first-content-cell reading) | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5` | 1 |
   | compliant + one unrelated edited line in the widening spec | `V2 WP-preservation-abort-widening.md DIFF IS 2/2, expected 1/1` | 1 |
   | compliant + P0b's cell 5 REAUTHORED before its clause | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5` | 1 |
+  | **compliant + a DIFFERENTLY WORDED over-claim** — `The preserved copy is safely on disk and will survive a crash.` | **`V1 OK`, `V2 OK`** | **0** |
 
-  **The WRAPPED tree is the state that matters most**, and it is the one a
-  red-before-work run cannot distinguish: a check that punished the implementer for
-  wrapping a JSDoc sentence would look identical from the red side. **The last two
-  are why a numstat check alone is not enough:** both keep the file at one changed
-  line.
+  **The WRAPPED tree and the LAST tree are the two that matter most, in opposite
+  directions.** The wrapped one is the state a red-before-work run cannot reach: a
+  check that punished the implementer for hard-wrapping a JSDoc sentence would look
+  identical from the red side. **The last one is GREEN and is meant to be** — it is
+  the measured bound on what V1 can do, it is why acceptance criterion 8 claims only
+  the count, and it is why the absence obligation lives in Definition of done item 2
+  instead. **The two rows before it are why a numstat check alone is not enough:**
+  both keep the file at one changed line.
 
-- **The NINE RED proofs were RUN, not designed, and so were V3 and V4.** With the
-  five identities and the four migrated injections written on a rehearsal tree and
-  the declaration file in place, the unfiltered lane reported
-  `14 declared proof(s), 14 selected`, **all fourteen `PROVEN`**, six `PROVEN`
+- **The THIRTEEN RED proofs were RUN, not designed, and so were V3 and V4.** With
+  the six identities and the five migrated injections written on a rehearsal tree
+  and the declaration file in place, the unfiltered lane reported
+  `24 declared proof(s), 24 selected`, **all twenty-four `PROVEN`**, seven `PROVEN`
   criteria lines for this WP and `RUN: PROVEN`, exit 0 — so each mutation reddens
   exactly its declared `expectRed` set under its `testNamePattern`, `evaluateRed`'s
-  own-body equality included, and the five pre-existing proofs are undisturbed.
-  `npm test` on the same tree: `2623 / 2611 / 0 / 12`, exit 0. (A
-  `--wp WP-quarantine-preserve-durability` run of the same tree reports
-  `RUN: FILTERED` and exits non-zero — that is the filter reporting a partial run,
-  not a failure. V3 runs the lane unfiltered.)
+  own-body equality included, and the eleven pre-existing proofs are undisturbed.
+  `npm test` on the same tree: `2629 / 2617 / 0 / 12`, exit 0.
 
-- **Three traps found by running the seam rather than reasoning about it.**
+- **Four traps found by running the seam rather than reasoning about it.**
   (i) `fs.writeFileSync` hands back no descriptor (measured), so the artifact's
-  flush cannot ride the write; it rides the READ-BACK's descriptor instead, after
-  the rename. Rewriting the WRITE to a descriptor-based one would have broken
-  **seven** existing failure injections that match a string path — silently, since
-  they would simply stop intercepting. (ii) Moving the READ-BACK onto a descriptor
-  breaks **four** injections in the same file — loudly, which is why that seam is
-  affordable and the other is not; both numbers are measured. (iii) A test that
-  COUNTS `fs.fsyncSync` calls proves nothing about which object was flushed; the
-  identities resolve each descriptor to its path, which is how Table F's rows are
-  stated, and QPD-3/QPD-4 go further and pin the whole ordered sequence.
+  flush rides the READ-BACK's descriptor, after the commit. Rewriting the WRITE to
+  a descriptor-based one would have broken **seven** existing injections that match
+  a string path — silently, since they would simply stop intercepting.
+  (ii) Moving the READ-BACK onto a descriptor and the COMMIT onto `linkSync` breaks
+  **five** injections in the same file — loudly, which is why those seams are
+  affordable and the other is not; every number is measured.
+  (iii) A test that COUNTS `fs.fsyncSync` calls proves nothing about which object
+  was flushed; the identities resolve each descriptor to its path, and QPD-3/QPD-4
+  pin the whole ordered sequence.
+  (iv) **Two of the three shipped `renameSync` injections do NOT break** — one is
+  never reached because the exclusive `wx` create refuses first, and one passes for
+  an equivalent reason under row F9 (Current state). Predicting them from the call
+  name alone would have been wrong in both directions.
 
 ## Out of scope (do NOT do these)
 
@@ -1358,11 +1584,28 @@ npm run lint
 - **Widening the FLUSHES to win32** — Dispatch precondition item 1. It needs a
   measurement on a Windows host that nothing in this pipeline can take. (Row
   **F8**'s identity check is not gated on the platform and is not affected.)
-- **Closing row F8's replacement window rather than narrowing it.** Nothing can:
+- **Closing row F8's substitution window rather than narrowing it.** Nothing can:
   the only mechanism would be excluding a same-UID process from the shelf, which
   neither mode 0700 nor the steal-able dream lock does. F8 states what a success
   MEANS instead of what it prevents; a proposal to widen that claim is a contract
   change, not a fix.
+- **PINNING THE DIRECTORY INODES OF THE CHAIN — declined, and row F10 is the
+  reason.** Retaining a descriptor for every directory in the chain to the last gate
+  and re-comparing each against the pathname then occupying its position would
+  defend against a same-UID process swapping `qdir` aside mid-flush and restoring it
+  — an **A12** actor, whom `docs/THREAT-MODEL.md` places outside the boundary and
+  who can in any case delete the preserved copy after this function returns. Every
+  pin added for that actor is machinery that implies a guarantee the product does
+  not have. **This is a Dispatch-precondition item (5), not a silent decline**, and
+  it carries the overrule cost.
+- **The collision loop's `existsSync(dest)` window.** Row **F9** does not remove
+  the window; it removes the loop's ability to act on it, because the commit refuses
+  a name it did not create. Making the SELECTION atomic — a create-or-retry loop
+  over the numbered candidates — is a different contract, it belongs to whoever owns
+  the naming rule, and nothing in this package needs it. The round-2 shadow routed
+  this as an ownership race; it is ABSORBED to the extent that no copy can be
+  destroyed by it, and the residue is a preservation that fails instead of picking
+  the next free name.
 - **Anything about which copies exist, where the gate writes them, when a
   preservation fails for a NON-flush reason, or what happens after one** —
   `WP-preservation-abort-widening` Tables P and D, both shipped. This package cites
@@ -1378,15 +1621,23 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body, including
-   V1's three states (absent, compliant, violating) and the WRAPPED compliant
-   state, V2's five states, and V3's six roll-up lines.
-2. Conventional commits; PR titled
+   V1's three states (absent, compliant, violating), the WRAPPED compliant state and
+   the OVER-CLAIM state, V2's five states, and V3's seven roll-up lines.
+2. **The no-over-claim obligation, which V1 cannot discharge.** List in the PR body
+   every sentence of durability-related prose this diff adds to
+   `src/core/dream/validate.js` outside the approved guarantee sentence. **A claim
+   that a preserved copy is on the medium, safely on disk, or will survive a crash
+   is a blocking finding for both review gates** — acceptance criterion 8 says V1
+   catches only the direct `on the medium` contradiction, and this item is where the
+   rest is caught. Stated here rather than left implied, because a lexical check
+   cannot prove semantic absence and the spec no longer claims it can.
+3. Conventional commits; PR titled
    `fix(dream): make a preserved quarantine artifact durable (WP-quarantine-preserve-durability)`.
-3. PR template filled, including "Decisions made" (or "none"), "Discovered issues",
+4. PR template filled, including "Decisions made" (or "none"), "Discovered issues",
    and `Generated-by:`. Report there any sentence the two amended cells still leave
    false after their clause (Implementation notes).
-4. This spec's `status:` flipped to `In-Review` in the same PR.
-5. Both PR review gates have run on the diff and are clean or fully dispositioned —
+5. This spec's `status:` flipped to `In-Review` in the same PR.
+6. Both PR review gates have run on the diff and are clean or fully dispositioned —
    they are defined in `docs/runbooks/codex-review.md` and not restated here.
    `In-Review` marks the START of review: this list is complete only when review
    is.
