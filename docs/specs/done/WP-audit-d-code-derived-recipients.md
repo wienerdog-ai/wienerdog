@@ -100,8 +100,10 @@ epic: audit-close
 > - **`buildMime` emits raw UTF-8 in headers and its optional `From` carries no
 >   length bound.** Both pre-existing, on no path this verb takes.
 >   **Discovered issues.**
-> - **OPEN owner question — the input bound's unit.** Step 0 counts **998
->   characters** (as ruled, item 8); step 7 counts **998 UTF-8 octets**. There is
+> - **The input bound's unit — RULED 2026-09-06, keep characters** (owner, verbatim:
+>   *"agreed. let us keep characters."*; record
+>   `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-queue.md`). Step 0 counts **998
+>   characters** (item 8); step 7 counts **998 UTF-8 octets**. There is
 >   **no output-safety consequence** either way once step 7 covers every emitted
 >   line, but **availability differs**: with 998 `€` characters in `References` and
 >   no `Message-ID`, the character bound drafts while an octet bound would refuse
