@@ -372,7 +372,7 @@ always means: throw the fixed `WienerdogError` from Exact contracts, with **zero
 |---|---|---|---|---|
 | **0. CR/LF, on RAW values, before anything else** | every raw header value this verb reads: `Reply-To`, `From`, `Subject`, `Message-ID`, `References` — **untrimmed**, all five, whether or not the step-1 selection will use them | test each for `\r` or `\n` **anywhere** | no CR or LF survives into any later step, so no later trim, prefix or truncation can erase one | refuse |
 | **1. Recipient selection** | the raw `Reply-To` and `From` | select `Reply-To` when it is non-empty after horizontal trimming, else `From`. The **raw** selected value carries forward | exactly one header value is under consideration | both empty → refuse |
-| **2. BOUND, before any parsing** | the **raw** selected value | its length must be ≤ **998** characters (RFC 5322 §2.1.1's line limit) | the grammar's cost is bounded by a constant the attacker cannot raise — **this is what makes step 3's cost a non-question, on any engine** | over → refuse |
+| **2. BOUND, before any parsing** | the **raw** selected value | its length must be ≤ **998** characters (RFC 5322 §2.1.1's line limit) | the grammar's cost is a constant the attacker cannot raise. **Measured on Node v25.9.0 at the bound: ≤ 3.24 ms per hostile header even with the round-1 backtracking forms, and ≤ 0.0035 ms with the derived forms below** — where the same round-1 shape costs 3 393 ms unbounded at 32 000 characters. **This is what makes step 3's cost a non-question, on any engine and after any future revision of the grammar** | over → refuse |
 | **3. Grammar** | the selected value, horizontally trimmed | must match the single-mailbox grammar below, whole | the value is exactly one mailbox; no part of it is ignored | no match → refuse |
 | **4. Address bound** | the grammar's capture group | ≤ **320** characters | the recipient fits the field | over → refuse |
 | **5. Subject** | the raw `Subject` (CR/LF-clean since step 0) | horizontally trim; prefix `Re:` and one space unless it already matches `/^re:/i`; then truncate to the first 512 characters | truncation is safe **because** step 0 already ran | — |
@@ -422,8 +422,12 @@ Two properties of these forms are deliberate and are what the derivation buys:
 `DLABEL` excludes `.`, so the domain's dot structure is **deterministic** rather
 than a greedy split that can be re-tried at every dot; and `PHRASE`'s three
 alternatives begin on **disjoint** characters (atom-char, horizontal space, `"`),
-so the alternation never backtracks between them. Neither property is what the
-contract *relies* on — step 2 is — but both make the derived forms honest.
+so the alternation never backtracks between them. Both were measured, and both
+hold. **Neither is what the contract relies on — step 2 is.** The distinction is
+load-bearing rather than modest: a claim about a pattern's complexity is
+input-, engine- and revision-dependent, and it was re-argued in two consecutive
+review rounds before the bound settled it. If the grammar is ever revised, step 2
+still holds and these two properties must be re-measured.
 
 #### The executed case table (criterion 4's stated coverage lives here)
 
@@ -811,8 +815,11 @@ reverse any of them by dated amendment.
    it. *Recommendation: take the bound.* It is what makes the grammar's cost a
    non-question on any engine and any input, rather than a property that has to be
    re-argued each time the pattern changes — which is what round 1 and round 2 both
-   spent a finding on. It is also unreachable by conforming mail: a value that long
-   would have arrived folded, and folding means CRLF, which step 0 already refuses.
+   spent a finding on. **Measured**: at the bound a hostile header costs ≤ 3.24 ms
+   even against the backtracking forms the bound was introduced to cap, versus
+   3 393 ms for the same shape unbounded at 32 000 characters. It is also
+   unreachable by conforming mail: a value that long would have arrived folded, and
+   folding means CRLF, which step 0 already refuses.
    *Cost of overruling:* without a pre-parse bound the grammar's worst case becomes
    an input-dependent claim that must be re-measured on every engine after every
    change to the pattern, and the two Table B findings that fired the

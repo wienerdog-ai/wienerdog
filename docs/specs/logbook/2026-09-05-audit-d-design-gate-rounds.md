@@ -496,7 +496,7 @@ depth**, explicitly not the check the contract relies on.
 
 | # | Channel(s) | Band | Finding | Disposition |
 |---|---|---|---|---|
-| **R2-A** | plugin A | HEAVY | Quadratic backtracking in the round-1 regexes. | **fix, via the contract** — step 2 bounds the raw value at 998 *before* the grammar runs, so the cost is bounded by a constant on any engine; and the derived forms remove the two backtracking shapes anyway (`DLABEL` excludes `.`, making the domain's dot structure deterministic; `PHRASE`'s three alternatives start on disjoint characters, so the alternation never backtracks between them). **See the reproduction note below — I could not reproduce the timing, and the contract does not rest on it.** |
+| **R2-A** | plugin A | HEAVY | Quadratic backtracking in the round-1 regexes — **REPRODUCED on Node v25.9.0** by the orchestrator and, after the measurement defect below was found, here as well: doubling `n` quadruples the time, reaching 3 393 ms at n=32 000. | **fix, via the contract** — step 2 bounds the raw value at 998 *before* the grammar runs, so the cost is a constant on any engine: **3.24 ms per hostile header at the bound with the round-1 forms**, 0.0035 ms with the derived ones. The derived forms also remove both backtracking shapes (`DLABEL` excludes `.`, so the domain's dot structure is deterministic; `PHRASE`'s three alternatives start on disjoint characters, so the alternation never backtracks between them) — recorded as a true property of the derivation, explicitly not the thing the invariant rests on. |
 | **R2-B** | plugin B | HEAVY | Valid single mailboxes refused: `"Alice"<alice@…>` (no whitespace before `<`) and `Alice "Team <east>" <alice@…>` (atom + quoted word). | **fix** — the grammar now states whitespace between words and before `<` as OPTIONAL, and `phrase = 1*word` with `word = atom / quoted-string`. Both are ACCEPTED fixtures in the executed case table and in criterion 3. |
 | **R2-C** | plugin A | HEAVY | A READ **sibling** masks `extra-classes-dropped-derivation`: with `brokerVerbs: ['gmail_read', newVerb]` the old single-class derivation still loads READ and all six states pass. And the injected-deps cases never exercise the DEFAULT loader — an implementation that drops the fallback passes them while production calls `assembleRegistry` with no `deps`. | **fix** — criterion 8 now requires **SINGLETON** profiles (`brokerVerbs: [verb]`, one per new verb), an **instrumented** loader asserting the set of classes actually **REQUESTED** rather than only the dispatch outcome, and a separate pin that `assembleRegistry` with no `deps` resolves `loadServices` to `loadCredentialServices`. The `[AUD-D6]` identity name carries all three. |
 | **R2-D** | plugin B **+** shadow B — **CONVERGED** | HEAVY | **R1-D was not closed.** Spec `:285` still read "the recipient must already have mailed the user — but …", and the round-1 record's "re-swept afterwards: zero hits" was false. | **fix** — the clause is deleted; the residual now states only author-nomination (`Reply-To` else `From`) and that the recipient may be a third party who never wrote. The round-1 row above carries a **dated correction line** rather than a silent rewrite. **Lesson, recorded:** the round-1 sweep pattern was built around the wording that same pass had just rewritten, so it was structurally blind to the clause it left standing — a sweep must be for the CLAIM, and after rewriting a cell the whole cell is re-read. This is the repo's existing intra-cell rule failing in the one place no mirror checklist can see. |
@@ -528,37 +528,113 @@ ok   third@example.net              Reply-To precedence (the residual: a third p
 39 cases, 0 mismatch(es)
 ```
 
-**Worst-case match time AT the 998 bound**, over five adversarial shapes (unclosed
-quote, unterminated atom run, phrase with no `<`, phrase with an unclosed angle,
-dot-heavy domain):
+**Worst-case match time AT the 998 bound.** Eleven adversarial shapes, each built
+to be **exactly 998 characters INCLUDING its failing tail** — an earlier attempt
+truncated the tail to reach the length, which destroys the shape and understates
+every number. Min of 50 runs after warmup, Node v25.9.0:
 
 ```text
-  domain dots, no @-terminator     len= 803  0.0011 ms/match
-  atext run, unterminated          len= 998  0.0045 ms/match
-  phrase run then no <             len= 998  0.0044 ms/match
-  phrase + unclosed angle          len= 991  0.0030 ms/match
-  quoted, unterminated             len= 997  0.0026 ms/match
+shape                                  r1:bare  r1:mbox   r2:bare   r2:mbox   (ms)
+A       'a@' + '.'*n + '!,'              0.712    0.000    0.0001    0.0001
+A angle '<a@' + '.'*n + '!,>'            0.000    3.237    0.0000    0.0000
+B       'a@' + 'b.'*n + '!,'             0.355    0.000    0.0023    0.0000
+dots + atom tail                         0.710    0.000    0.0000    0.0000
+angle + dots + atom tail                 0.000    3.231    0.0000    0.0000
+phrase run, no '<'                       0.001    0.001    0.0015    0.0029
+phrase+space run, no '<'                 0.000    0.005    0.0000    0.0035
+phrase then unclosed '<'                 0.001    0.001    0.0006    0.0021
+unterminated quoted                      0.000    0.003    0.0000    0.0025
+quoted words then no '<'                 0.000    0.000    0.0000    0.0031
+long phrase then valid-looking addr      0.001    0.001    0.0012    0.0023
+
+WORST at the bound — round-1 forms: 3.24 ms   round-2 derived forms: 0.0035 ms
 ```
 
-### Reproduction note on R2-A — stated honestly, because the burden is on the run
+**Read this the right way round.** The number that matters is the FIRST pair: the
+**round-1** forms cost up to **3.24 ms per hostile header at the bound**, and the
+bound is what holds them there — unbounded, the same shape costs 3 393 ms at
+n=32 000. Three to four milliseconds for a hostile header is a non-question, and
+that is the entire point: **the bound is the answer, not the speed of any
+particular pattern.** The derived forms' 0.0035 ms is a property of the derivation,
+recorded because it is true, and it is explicitly NOT what the invariant rests on —
+if the grammar is ever revised, the bound still holds and the derivation's speed
+must be re-measured.
 
-**I could not reproduce the quadratic timing.** On Node 25.9.0 I ran the round-1
-`BARE` and `MAILBOX` forms against the shapes that should exhibit it — `a@` +
-`"b."`×n + a character outside `ATEXT` (forcing failure at every dot position), up
-to 32 003 characters; `"P "`×n followed by a bare `<` and by `<not-an-addr>`; and a
-long atom run with no `<` — up to 1 601 characters. Every measurement stayed under
-0.06 ms and did not grow super-linearly; V8 appears to fail these out before the
-backtracking materialises. The orchestrator re-ran the timing and **did** reproduce
-it, so the finding stands on that run and not on mine.
+### R2-A REPRODUCED — and my round-2 non-reproduction was a measurement defect
 
-**The contract deliberately does not depend on which of us is right.** Step 2's
-998-character bound is what makes the cost a non-question — on any engine, for any
-input, whatever the pattern is next revised to. That is precisely why the bound is
-the contract-level answer and a faster regex would not have been: a regex fix would
-have left "is it linear?" as an input-dependent claim to be re-argued after every
-change, and two of the five Table B findings were exactly that argument. The
-derived forms' determinism is recorded as an honest property of the derivation,
-not as the thing the invariant rests on.
+**Correction, 2026-09-05.** The round-2 pass recorded "I could not reproduce the
+quadratic timing." **That was wrong, and the cause is now determined.** R2-A is
+real on this engine.
+
+The orchestrator reproduced it on Node v25.9.0 with the round-1 forms exactly as
+Table B stated them, timing `process.hrtime.bigint()` around a single `.test()`:
+
+```text
+input A = "a@" + ".".repeat(n) + "!,"        (mailbox form wrapped as "<" + A + ">")
+input B = "a@" + "b.".repeat(n/2) + "!,"
+
+n=998    A: bare=0.8ms   mbox=3.4ms    | B: bare=0.39ms
+n=4000   A: bare=11.5ms  mbox=52.7ms   | B: bare=5.75ms
+n=8000   A: bare=45.9ms  mbox=213.1ms  | B: bare=22.98ms
+n=16000  A: bare=184.9ms mbox=847.3ms  | B: bare=92.01ms
+n=32000  A: bare=741.2ms mbox=3393.7ms | B: bare=367.54ms
+```
+
+Re-run here from a FILE, same engine, the numbers land on top of the
+orchestrator's — and the shape I had used in round 2 is quadratic too:
+
+```text
+=== ROUND-1 forms ===
+    n      A:bare     A:mbox      B:bare    MINE:bare   (ms, single .test())
+   998       0.77       3.33        0.37         1.48
+  4000      12.05      55.33        5.81        22.94
+  8000      45.92     211.71       22.95        91.75
+ 16000     184.33     847.96       91.94       368.31
+ 32000     737.64    3392.91      366.93      1476.18
+```
+
+Doubling `n` quadruples the time on every column, my own shape included.
+
+**Cause of the non-reproduction — determined, not guessed.** The round-2
+measurement ran inside a shell `node -e '…'`, and the nested quoting doubled every
+backslash in the pattern. The regex actually built was not the one Table B stated:
+
+```text
+Table B stated : ^([^\s<>,;:"\\@\[\]()]+@[^\s<>,;:"\\@\[\]()]+\.[^\s<>,;:"\\@\[\]()]+)$
+what ran       : ^([^\\s<>,;:"\\\\@\\[\\]()]+@[^\\s<>,;:"\\\\@\\[\\]()]+\\.[^\\s<>,;:"\\\\@\\[\\]()]+)$
+identical?     : false
+```
+
+Every `\s` became a literal backslash plus `s`, and `\.` became a literal backslash
+plus any character — so the class no longer excluded whitespace, and the domain's
+dot was no longer a dot. The mangled pattern fails almost immediately on every
+input and never reaches the ambiguous domain split. Measured side by side:
+
+```text
+    n   MANGLED:A   CORRECT:A   MANGLED:MINE  CORRECT:MINE   (ms)
+  998       0.032       0.761          0.002         1.437
+ 4000       0.002      11.505          0.002        22.907
+16000       0.004     183.943          0.009       367.393
+```
+
+A flat 0.002 ms at every size — which is exactly what round 2 reported and read as
+"no super-linear growth".
+
+**This is the runbook's own named failure**, and it is worth stating in its own
+words: *"a pattern passed through nested quotes silently changes what the gate
+matched, and the result looks like the gate moved. Put the gate in a file, quote
+once, and compare against the literal there."* Round 2 broke that rule while
+measuring a regex, and then published the reading as a disagreement with a
+reviewer. **The lesson for this loop: a non-reproduction is a claim like any other,
+and it carries the same burden of a correct run — the bar for contradicting a
+reviewer is higher than the bar for agreeing, not lower.** Every regex measurement
+in this record has since been re-run from a file.
+
+**What does NOT change: the contract.** Step 2's 998-character pre-parse bound was
+chosen precisely so the answer does not depend on who measured what, and the
+correct numbers make that case better than the wrong ones did — at the bound the
+round-1 forms cost 3.24 ms per hostile header instead of 0.0035 ms, and both are a
+non-question. The bound is the answer; the pattern's speed is not.
 
 ### R2-E re-proved, block extracted VERBATIM from the spec
 
