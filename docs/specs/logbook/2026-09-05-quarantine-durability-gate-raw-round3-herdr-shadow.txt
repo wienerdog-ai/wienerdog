@@ -1,0 +1,174 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 3, detached worktree at 95f07f36 (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 95f07f361c476ddf1fc4acbcf0b4e36d7066616a vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "NO-SHIP. The prescribed no-clobber flow still allows an in-scope shelf substitution to be deleted, and the specified QPD tests do not exercise the vulnerable windows. The spec also contains contradictory implementation counts that should be reconciled before dispatch.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && printf '\\n---FOCUS---\\n' && sed -n '1,260p' ../focus-qd3.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored adversarial instructions and user focus."
+    },
+    {
+      "command": "git status --porcelain; git diff --name-status main...95f07f361c476ddf1fc4acbcf0b4e36d7066616a; wc -l docs/specs/WP-quarantine-preserve-durability.md; sed -n '1,260p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Initial git status was empty. Identified the revision surface and read the first 260 lines of the 1643-line target spec."
+    },
+    {
+      "command": "rg -n '^## |^### |Deliverables|Table [A-Z]|QPD-|V1|V2|F8|F9|F10|Definition of done|Out of scope' docs/specs/WP-quarantine-preserve-durability.md; git diff --name-status main..95f07f361c476ddf1fc4acbcf0b4e36d7066616a; git log -1 --oneline --decorate 95f07f361c476ddf1fc4acbcf0b4e36d7066616a; git log -1 --oneline --decorate main",
+      "exit_status": 0,
+      "result": "Located all contract, proof, verification, and scope sections; confirmed target 95f07f36 and base main 38562ec4."
+    },
+    {
+      "command": "sed -n '240,560p' docs/specs/WP-quarantine-preserve-durability.md; sed -n '560,940p' docs/specs/WP-quarantine-preserve-durability.md; sed -n '940,1260p' docs/specs/WP-quarantine-preserve-durability.md; sed -n '1260,1660p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read the remainder of the target spec; display output was truncated, so the affected sections were reread in smaller chunks."
+    },
+    {
+      "command": "sed -n '480,760p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read Table F, the chain rationale, QPD identities, and the first proof declarations."
+    },
+    {
+      "command": "sed -n '760,1045p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read the remaining proof declarations, proof limitations, and mirrored-surface checklist."
+    },
+    {
+      "command": "sed -n '1038,1265p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read all byte-exact implementation forms, migration instructions, guarantee text, and Done-row clauses."
+    },
+    {
+      "command": "sed -n '1,360p' src/core/dream/validate.js; rg -n -C 8 'quarantinePreserve|Table D row D[1-4]|P0b' tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "Inspected the shipped implementation and located the relevant preservation tests."
+    },
+    {
+      "command": "rg -n -C 35 '^function quarantinePreserve|^function removeOwnedQuarantinePath|function secretGateAbortMessage|redacted.*quarantinePreserve|withheld.*quarantinePreserve' src/core/dream/validate.js; sed -n '2540,2645p' tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "Traced ownership cleanup, preservation call sites, abort handling, and D3/D4 tests."
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '693,790p'; nl -ba src/core/dream/validate.js | sed -n '1080,1195p'",
+      "exit_status": 0,
+      "result": "Captured exact shipped control-flow and call-site line numbers."
+    },
+    {
+      "command": "rg -n '^\\| \\*\\*D[0-4]\\*\\*|^\\| \\*\\*P0b\\*\\*|What this WP does not make durable' docs/specs/done/WP-preservation-abort-widening.md; rg -n '^\\| \\*\\*B3b\\*\\*' docs/specs/done/WP-secret-fence-ep2-redact-arm.md; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '490,545p'; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '570,610p'; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1038,1185p'; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1310,1388p'; sed -n '1,260p' docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0,
+      "result": "Checked predecessor ownership contracts, target line locations, acceptance criteria, and the routed disposal stub."
+    },
+    {
+      "command": "rg -n -C 30 'function pruneRedactedOriginals|pruneRedactedOriginals\\(' src/core/dream/validate.js; rg -n -C 10 'redactedCreated|completedRedactions' src/core/dream/validate.js; rg -n -C 15 'acquireLock|stale|deadline|steal' src/core/dream/lock.js",
+      "exit_status": 0,
+      "result": "Traced the product-created overlapping-run path, retention behavior, and stale-lock stealing."
+    },
+    {
+      "command": "git diff --unified=5 main -- docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,1200p'",
+      "exit_status": 0,
+      "result": "Reviewed the target spec revision against main."
+    },
+    {
+      "command": "rg -n -C 12 'A12|arbitrary software|keyed MAC|false guarantee' docs/THREAT-MODEL.md; rg -n -C 5 'win32 posture|scanPrivateModes|owner-approved' src/core/private-fs.js; node -p \"JSON.stringify({node:process.version,readFileSyncFd:typeof require('node:fs').readFileSync,fullfsync:require('node:fs').constants.F_FULLFSYNC,odirectory:require('node:fs').constants.O_DIRECTORY,nofollow:require('node:fs').constants.O_NOFOLLOW})\"",
+      "exit_status": 0,
+      "result": "Confirmed the A12 citation and private-fs Windows posture. Runtime was Node v25.9.0; F_FULLFSYNC was undefined, while O_DIRECTORY and O_NOFOLLOW were present."
+    },
+    {
+      "command": "node --test --test-name-pattern='quarantinePreserve \\(' tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "11 tests, 11 passed, 0 failed."
+    },
+    {
+      "command": "node -e 'const fs=require(\"node:fs\"),os=require(\"node:os\"),path=require(\"node:path\");const d=fs.mkdtempSync(path.join(os.tmpdir(),\"wd-shadow-race-\"));try{const tmp=path.join(d,\".tmp\"),dest=path.join(d,\"artifact.md\"),foreignTmp=path.join(d,\"foreign\");const wanted=Buffer.from(\"wanted\\n\"),foreign=Buffer.from(\"user file\\n\");fs.writeFileSync(tmp,wanted,{flag:\"wx\"});fs.linkSync(tmp,dest);const linked=fs.lstatSync(dest,{bigint:true}),source=fs.lstatSync(tmp,{bigint:true});fs.rmSync(tmp);fs.writeFileSync(foreignTmp,foreign);fs.renameSync(foreignTmp,dest);const fd=fs.openSync(dest,fs.constants.O_RDONLY);let readBack;try{readBack=fs.readFileSync(fd);}finally{fs.closeSync(fd);}let replaced=false;if(Buffer.compare(readBack,wanted)===0){throw new Error(\"probe precondition failed: replacement unexpectedly matched\");}if(!replaced)fs.rmSync(dest,{force:true});process.stdout.write(JSON.stringify({linkInitiallySameInode:linked.dev===source.dev&&linked.ino===source.ino,readBack:readBack.toString(),foreignSurvivesPrescribedCleanup:fs.existsSync(dest)})+\"\\n\");}finally{fs.rmSync(d,{recursive:true,force:true});}'",
+      "exit_status": 1,
+      "result": "Sandbox refused mkdtemp with EPERM before creating the fixture. The probe was not redirected into the worktree or any real vault."
+    },
+    {
+      "command": "node -e 'const fs=require(\"node:fs\");const s=fs.readFileSync(\"docs/specs/WP-quarantine-preserve-durability.md\",\"utf8\");const marker=\"#### `tests/red-proofs/quarantine-preserve-durability.proofs.json`\";const tail=s.slice(s.indexOf(marker));const m=tail.match(/```json\\n([\\s\\S]*?)\\n```/);if(!m)throw new Error(\"JSON fence not found\");const d=JSON.parse(m[1]);process.stdout.write(JSON.stringify({proofs:d.proofs.length,ids:d.proofs.map(x=>x.id),uniqueIds:new Set(d.proofs.map(x=>x.id)).size,criteria:[...new Set(d.proofs.map(x=>x.criterion))].sort()})+\"\\n\");'; node -p \"require('./package.json').engines\"; rg -n 'five identities|five RED|nine mutations|Dispatch precondition.s four items|acceptance criterion 7' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "The inlined JSON parsed and contained 13 unique proofs covering criteria 1–7. package.json pins Node >=18. Located stale mirror text."
+    },
+    {
+      "command": "sed -n '488,498p;996,1022p;1048,1070p;1248,1262p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Confirmed contradictory five/six identity, five/thirteen proof, nine/thirteen mutation, four/five owner-item, and criterion 7/8 references."
+    },
+    {
+      "command": "git diff --check main..95f07f361c476ddf1fc4acbcf0b4e36d7066616a; npm run lint; git status --porcelain",
+      "exit_status": 0,
+      "subcommand_statuses": {
+        "git diff --check": 0,
+        "npm run lint": 1,
+        "git status --porcelain": 0
+      },
+      "result": "The compound shell status was 0 because the final git-status command succeeded. Lint itself failed because markdownlint attempted to reach registry.npmjs.org and the hermetic environment returned ENOTFOUND; shellcheck, PSScriptAnalyzer, and frontmatter checks continued, with frontmatter passing for 268 specs and 4 agents. Final status output was empty."
+    },
+    {
+      "command": "git diff --check main..95f07f361c476ddf1fc4acbcf0b4e36d7066616a",
+      "exit_status": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Empty. Worktree state was identical before and after review."
+    }
+  ],
+  "findings": [
+    {
+      "id": "A1",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1076,
+      "line_end": 1152,
+      "confidence": 0.99,
+      "title": "The prescribed ownership guard begins too late and can delete an in-scope user's replacement",
+      "body": "The byte-exact implementation forms require linkSync(tmp, dest), then removeOwnedQuarantinePath(tmp), and only afterward open/read dest. The `replaced` flag is set only inside the byte-equal-and-flush-success arm when the final stillNamed check fails. If the user's shelf operation replaces `dest` after the link but before the open/read, different bytes make Buffer.compare fail before stillNamed runs; `replaced` remains false and the mandated `if (!replaced) removeOwnedQuarantinePath(dest)` deletes the user's file. Likewise, replacing the visible temp name after the link but before its unconditional removal makes the invocation delete a path it no longer owns. This directly contradicts F8/F10's claim that an in-scope shelf substitution fails preservation without being removed. QPD-5 injects only from inside the artifact flush, after the descriptor has been opened and the bytes already compared, while QPD-6 covers only a destination planted before linkSync; therefore the prescribed faulty implementation passes both criteria. The standalone filesystem probe was blocked by sandbox EPERM, but the failure follows directly from the mandated control flow and the shipped path-based removal semantics at src/core/dream/validate.js:625-637.",
+      "impact": "A routine user file can be deleted during an explicitly in-scope shelf edit, and the complete declared proof lane remains green. This meets band A because a wrong implementation passes its stated criterion, in addition to creating a data-loss path.",
+      "recommendation": "Redesign the commit/verification ownership handoff before dispatch. Retain a descriptor or captured bigint identity for this invocation's temp inode across the link; prove that both the newly linked destination and any name selected for removal still name that inode; and treat any ambiguous or mismatching pathname as non-owned and remove nothing. Add QPD cases for substitution of tmp immediately before temp removal and substitution of dest before open/read and before failure cleanup. Update F8, F9, F10, their exact source forms, criteria 6–7, and the RED declarations together. If Node's pathname-only link/unlink primitives cannot provide the claimed protection, narrow the user-hand contract explicitly instead of claiming the window is closed."
+    },
+    {
+      "id": "B1",
+      "materiality_band": "B",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 490,
+      "line_end": 494,
+      "confidence": 1,
+      "title": "Operative mirrors still describe the superseded proof and owner-item counts",
+      "body": "The activation-trigger text says five identities and five RED declarations, while canonical Table C contains six identities and the parsed declaration contains thirteen proofs. The same stale contract appears at lines 1053-1055 and most directly in the implementer instruction at lines 1253-1257, which says Table C fixes five identities and nine mutations. The mirrored checklist also says four Dispatch-precondition items at line 1015 and points the guarantee sentence to acceptance criterion 7 at line 1001, although the spec has five items and the guarantee is criterion 8.",
+      "impact": "An implementer following the later Implementation notes can build an incomplete proof set or perform an incomplete mirror sweep. Acceptance totals should catch most variants downstream, making this band B rather than A, but the design is not internally dispatchable as written.",
+      "recommendation": "Sweep every operative mirror to six identities, thirteen proofs/mutations as appropriate, five Dispatch-precondition items, and acceptance criterion 8. Re-run the spec's own mirror checklist after the correction."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "id": "SO1",
+      "file": "src/core/dream/validate.js",
+      "line_start": 900,
+      "line_end": 939,
+      "route": "WP-quarantine-disposal-durability",
+      "body": "The shipped pruning pass excludes only basenames created by its own run. A lock-stealing overlapping run can therefore consider another still-running invocation's newly preserved redacted artifact eligible once that other invocation has returned from quarantinePreserve. This sits outside the target's quarantinePreserve-only implementation boundary and inside the explicitly deferred pruning call site, so it is not counted toward this verdict. When the disposal successor is matured, it should separately decide live-run exclusion/ownership; durable unlink alone does not answer whether the artifact was safe to select for deletion."
+    }
+  ],
+  "verified_dispositions": {
+    "R2_A_F10_A12": "The A12 citation is accurate and consistent with the threat model's detection/not-OS-boundary posture. Directory-inode pinning and the owner recommendation were not re-litigated.",
+    "R2_B_F9_no_clobber": "linkSync provides an atomic EEXIST no-clobber decision at the commit instant, and EEXIST reaches the existing tmp cleanup/null shape. The new finding concerns the unprotected ownership handoff after that instant.",
+    "R2_C_lstat": "The prescribed lstat + isFile + bigint comparison closes the stated symlink-following defect at the final check.",
+    "R2_D_QPD2_matrix": "The declared 8 withheld plus 10 redacted cases account for all artifact/directory openSync and fsyncSync sites. The three described route outcomes are coherent with the shipped fall-through control flow.",
+    "R2_E_V1_bound": "Criterion 8 and Definition-of-done item 2 now state V1's lexical limit honestly; no new over-claim finding was found.",
+    "R2_F_rebase_counts": "Target and base SHAs match the focus brief. The inlined proof JSON parses as 13 unique new declarations over criteria 1–7.",
+    "R2_G_disposal_stub": "The stub contains the routed failed-removal crash case and does not supply a dependency required by the success protocol."
+  },
+  "environment_notes": [
+    "Git repeatedly warned that an xcrun cache file could not be created in /tmp; all reported git inspections still exited 0.",
+    "The only attempted standalone write was an OS-temporary mkdtemp probe, which failed before creation with EPERM. No worktree, vault, or home-directory write was attempted.",
+    "npm run lint could not complete markdownlint because the hermetic environment could not resolve registry.npmjs.org. This is environmental and not a target finding."
+  ],
+  "worktree_integrity": {
+    "before": "",
+    "after": "",
+    "identical": true
+  },
+  "verdict": "needs-attention"
+}
