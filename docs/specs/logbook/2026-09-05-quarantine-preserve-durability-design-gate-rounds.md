@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| 8 (`53e0c713`) | needs-attention / needs-attention | `…gate-raw-round8-codex-plugin.txt`, `…gate-raw-round8-herdr-shadow.txt` (both `2a57897f`) | Plugin 1 A; shadow 1 A + 1 routed to item 1. **Both channels closed R7-B/C/D and the round-7 guarantee survived except at two edges of the same sentence.** **[A, shadow] READ-BEFORE-FLUSH.** The source form read back and compared BEFORE `flushPreservation`, so an overlapping same-inode write landing between the comparison and the `fsync` left the flush completing over newer contents while the call returned the older buffer — "the returned bytes were flushed" false for exactly that interval, and F10 (v) wrongly treated the whole post-read interval as after-the-flush. → **FIX, taken: the flush runs FIRST**, then the read-back and comparison through the held descriptor, `readBack` still the returned buffer, no post-gate re-read. **The directory chain stays contiguous with F1 rather than moving after the read** — an entry's durability does not depend on the content, and keeping the set in one call preserves F6's own internal rule; the only cost is a wasted directory flush on a path that aborts anyway. New QPD-5 case (g) and proof `read-before-flush` distinguish flush-then-read from read-then-flush by staging an in-place overwrite at the ARTIFACT-FLUSH seam. **[A, plugin] SAME-INODE RELINK before the last gate.** A hand holding a spare hard link can, after `qdir`'s flush, unlink `dest` and relink the spare there; `lstat` sees the right `(dev, ino)` and the gate passes, but the entry observed was created after the flush that covered its directory. → **DISCLOSURE, not redesign** (no primitive makes "the entry I flushed" and "the entry I observe" the same object): F10 instance **(vi)**, with the guarantee now saying the chain flushes covered the entries AS THEY STOOD WHEN THEY RAN and the last gate is an IDENTITY check, not a flush guarantee for the entry observed there; cost stated honestly — the NAME may not survive a crash, the BYTES and the INODE do, and the inode keeps a flushed entry only if the hand's spare link is itself durable. **Not pinned with a test**, per the round-4 rule. **[routed → item 1, taken as hygiene]** the return JSDoc said bytes are "flushed, always" and F0 was universal while F5 issues no flush on win32 → every universal flushed/success mirror is now explicitly POSIX-only, including both `Done`-spec clauses (re-derived; V2 re-run). All FIX. **Round 9 runs on both channels as the closing confirmation.** |
 | 7 (`a4d6be1b`) | needs-attention / needs-attention | `…gate-raw-round7-codex-plugin.txt`, `…gate-raw-round7-herdr-shadow.txt` (both `fc92939e`) | Plugin 1 A; shadow 1 A + 2 B; no scope objections. **Both channels validated every round-6 fix** — the complete `ownsName` body, the new QPD cases, item 7, the chains, three gated removals, create failure removing nothing, flush failure not swallowed. **[A, CONVERGED in substance, from two sides] GUARANTEED (2) OVERCLAIMED.** It said *no substitution, at any point, can make this invocation report SUCCESS over bytes it did not create, verify and flush*, and the design admits two counterexamples: the shadow's **after-gate replacement of `dest`** — `tmp` is already gone, closing the fd releases the created inode, and the returned `name`, which the caller publishes at `validate.js:1167`, now resolves to foreign bytes; and the plugin's **in-place overwrite of the SAME inode after the read-back** — identity passes because it IS this call's inode, so success is reported while the artifact holds bytes no completed flush covered. → FIX by stating the guarantee at its **LINEARIZATION POINT**: the RETURNED BYTES are exactly what this invocation created, wrote through its own descriptor, read back through that same descriptor and flushed — never a later re-read — and the NAME was bound to that inode **at the last gate and not after**. Both counterexamples become disclosed instances **(iv)** and **(v)** of F10, and the obvious "fix" is shown to be worse: a post-flush RE-READ would only narrow the window while making the returned bytes something the call never verified, which the new proof `returned-bytes-rereads-the-artifact` now forbids. Swept: F0, F10, the return JSDoc, both `Done`-spec clauses (re-derived, V2 re-run), Exact contracts, the Security checklist and the closing statement. **[A, shadow] Descriptor lifetime** — the post-commit temp removal raises Table D row D3 while `fd` must stay open, and no required form put it inside a finalizer, so the throw escaped with the descriptor open and F8's "closed in every case" was false. → FIX: ONE `try/finally` covers the whole post-create descriptor lifetime; the failure-path `dest` removal stays outside it, after the close. The shipped D3 temp test is extended to prove closure, and `post-commit-descriptor-leaked` mutates the finalizer away. **[C, shadow] A reversed negation** in the round-6 closing statement — "no removal shape whose ownership test is separable from its act" — inverted the stated reason the residual exists, in the very statement round 7 was asked to verify verbatim. → FIXED, and the phrase grepped everywhere. All FIX. **Round 8 runs on both channels as the closing confirmation.** |
 | 6 (`1e38f90d`) | needs-attention / needs-attention | `…gate-raw-round6-codex-plugin.txt`, `…gate-raw-round6-herdr-shadow.txt` (both `d19941a1`) | Plugin 2 B + 1 C; shadow 2 A + 2 B; no scope objections. **BOTH CHANNELS VALIDATED THE DESIGN** — no false-SUCCESS path in the prescribed sequence, exactly three pathname removals each gated, the create-failure branch removing nothing, the chains complete and ordered, A12 cited correctly, the stub carrying its routed items. What remained is **evidence form and mirror rot**: no new object, no reopened family. **[A, shadow] `ownsName`'s failure-closed form was unspecified and untested** — F8 makes it load-bearing at four gates but pinned only its `lstat` line, so a predicate with no `catch` passed every identity and would emit a raw `ENOENT` (leaking the fd) the moment the in-scope user deletes a name before a gate; and a comparison narrowed to `Number` lets DISTINCT inodes above `MAX_SAFE_INTEGER` compare equal and authorize a deletion. → FIX: the WHOLE BODY becomes a byte-exact source form, F8 states what `false` means at each gate (fail closed, remove nothing, descriptor still closed), QPD-5 gains an ENOENT case and a doctored-bigint case, QPD-6 gains an ENOENT case, and two proofs — `ownership-check-not-failure-closed`, `ownership-check-narrows-to-number` — pin them. **[A, shadow] O_EXCL provenance was unscoped** against Node's own "might not work with network file systems" caveat, while a user's core can sit on a network-mounted home. → settled as a PRODUCT boundary: **Dispatch precondition item 7** — state the precondition (a local POSIX filesystem with atomic `O_EXCL` and hard links), disclose network-mounted cores as a named residual (what fails: exclusivity, hence provenance under overlapping runs; what holds: everything that consults only the held descriptor), and add **no runtime check**, because a cheap probe cannot tell "this filesystem does not honour `O_EXCL`" from "nothing raced me just now". **[B, converged] QPD-6 said SIX cases and listed five** → `(f)` added and the row re-counted to seven with the ENOENT case. **[B, converged] F10's operative mirrors still carried the round-4 model** ("three residuals, one destructive") in Exact contracts, the proof-scope paragraph and the Security checklist, and the checklist's blast-radius entry still said five tests / two seams → all rewritten, and the count audit extended to cardinals ONE–FOUR, which is exactly how they survived. **Correction carried:** Linux `fsync` does NOT require a write-open descriptor — that is System V's rule — so F5's rationale for `O_RDWR` is now "this function writes through it". All FIX. **Round 7 runs on both channels as the closing confirmation.** |
 | 5 (`7a2b8a57`) | needs-attention / needs-attention | `…gate-raw-round5-codex-plugin.txt`, `…gate-raw-round5-herdr-shadow.txt` (both `38cabb26`) | Plugin 1 A + 1 B + 1 C; shadow 1 A + 1 B; no scope objections; nobody re-argued A12, the declined pinning or the six items. **THE NARROWED CONTRACT HELD — no channel found a false-SUCCESS path** — but its DISCLOSURE was incomplete and one canonical row was stale. Round 5 is therefore disclosure completeness and mirror rot on the design settled at round 4: **not a new object, not a reopened family**. **Converged (A):** F10's residual set was FALSE. The same irreducible check-then-unlink sits at BOTH temp removals as well as the `dest` one — and on the post-commit temp removal the run still reports **SUCCESS**, so that damage is silent; the premise *"the temp name is random and unpublished"* was also false (`.tmp-${process.pid}-${stem}${ext}`, `validate.js:720`). → FIX by COMPLETING the disclosure: F10 now names ONE CLASS with an instance at each of this call's three pathname removals, three destructive, plus the after-gate success window; the temp-name premise is corrected AND turned into the reason GUARANTEED (1) still holds (distinct pids ⇒ distinct temp names ⇒ overlapping runs never contend for one); item 6 re-priced over all three removals — **recommendation UNCHANGED and now stronger**, because never removing the post-commit temp would leave a second link at a deterministic pid-derived name and make the next same-pid run fail a preservation that should succeed; QPD-6 and criterion 7 narrowed to substitutions BEFORE a gate, with the after-gate windows disclosed and deliberately untested. **Plugin (A):** the inherited `tmpOwned` heuristic — written for `writeFileSync`, which combines create and write — was carried onto a standalone `O_CREAT`+`O_EXCL` open, so a non-EEXIST create failure could delete a foreign file. → FIX: `fd < 0` ⇒ this invocation created nothing ⇒ removes nothing; `let tmpOwned` deleted; new proof `create-failure-removes-unowned` and a sixth QPD-6 case. **Converged (B):** canonical F1 still described the superseded pathname write → rewritten to the round-4 descriptor form, with every mirror swept. **[C] counts** → the by-shape rule applied completely, verified by a recorded grep. All FIX. **Round 6 runs on both channels as the closing confirmation.** |
@@ -1117,6 +1118,112 @@ exclusivity — and therefore provenance under overlapping runs — is not guara
 everything that consults only the held descriptor still holds. Every instance of (1)
 and (2) is untested as a residual by design, and Dispatch precondition items 6 and 7
 price what would remove them.
+
+**OUTSIDE.** Arbitrary same-user native code — `docs/THREAT-MODEL.md`'s **A12** —
+against which no durability protocol can hold, and for which every added pin would
+imply a false guarantee.
+
+## Round 8 — architect's revision pass, 2026-09-05
+
+### Round 8 fixes
+
+**One ordering improvement and one disclosure, both at the edges of the same
+sentence.** Round 7 moved the guarantee to a linearization point; round 8 found that
+one clause of it was not yet true at that point (the flush ran after the read) and
+that another clause claimed slightly more than the sequence delivers (the last gate
+was reading as a durability statement about the entry it observed). **No new object,
+no reopened family** — escalation (i) does not fire.
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [shadow] | Read-before-flush. `readAllAt` + `Buffer.compare` ran BEFORE `flushPreservation`, so an overlapping same-inode write between the comparison and the `fsync` left the flush completing over newer contents while the call returned the older buffer. F10 (v) wrongly treated the whole post-read interval as after-the-flush, and QPD-5 staged its overwrite only at the final gate — so the wrong ordering satisfied every declared proof | **FIX, and it is strictly better at no cost.** The flush runs FIRST; the read-back and comparison follow through the same held descriptor; `readBack` remains the returned buffer and there is still no post-gate re-read. **The DIRECTORY chain stays contiguous with F1 rather than moving after the read**, and row F6 now says why: an entry's durability does not depend on the content, so its position relative to the read is free, and keeping the set in one call preserves F6's own internal rule — bytes durable before the entry that names them — instead of splitting it around a verification. The only cost is a directory flush wasted when the comparison then fails, on a path that aborts the run anyway. Re-derived: F0, F1, F6, F10 (v)'s window, the return JSDoc, both `Done`-spec clauses, criteria 1 and 5, the sequence block and the source forms. New QPD-5 case **(g)** and proof `read-before-flush` |
+| **A2** [plugin] | Same-inode relink before the last gate. A hand holding a spare hard link to the created inode can wait for `qdir`'s fsync, unlink `dest`, and relink the spare at `dest`; `lstat` sees a regular file with the right `(dev, ino)`, so the gate passes — but the entry it observed was created after the directory flush and no completed flush covers it. Not (i)–(v), and not A12 by F10's own classification | **DISCLOSURE, not redesign — F10 instance (vi).** No primitive makes "the entry I flushed" and "the entry I observe" the same object, so the guarantee now states that **the directory-chain flushes covered the entries AS THEY STOOD WHEN THEY RAN, and the last gate is an IDENTITY check, not a flush guarantee for the entry state observed there.** Cost stated honestly: **the NAME may not survive a crash; the BYTES and the INODE do**, and the inode retains a flushed entry only if the hand's spare link is itself durable — which this call cannot know. **Not pinned with a test**, by the round-4 rule that a disclosed residual is disclosed rather than enshrined |
+| — | **Routed by the shadow to item 1, taken as hygiene** | The return JSDoc said the bytes are "flushed, always" and F0 was universal, while F5 issues no flush on win32 and claims nothing. Every universal flushed/success mirror is now explicitly **POSIX-only** — the JSDoc, F0, and both `Done`-spec clauses, which were re-derived and V2 re-run |
+
+### 8.1 Measurements
+
+```text
+BASELINES at 38562ec4 (unchanged)
+  npm test 2623 / 2611 / 0 / 12  exit 0 | red-proofs 11 declared, RUN: PROVEN  exit 0
+
+THE CANDIDATE (round-7 form + flush-before-read)
+  npm test                       tests 2629 / pass 2617 / fail 0 / skipped 12   exit 0
+    (the reorder breaks nothing; QPD-5 (g) is a new CASE inside an existing identity)
+  npm run red-proofs (unfiltered)
+    33 declared proof(s), 33 selected — ALL PROVEN; RUN: PROVEN                 exit 0
+    criterion 1 — preservation-flush-removed; read-before-flush
+    criterion 5 — flush-order-inverted
+    criterion 6 — destination-ownership-gate-removed; destination-removal-not-gated;
+                  ownership-check-follows-symlinks; ownership-check-not-failure-closed;
+                  ownership-check-narrows-to-number; returned-bytes-rereads-the-artifact
+  `read-before-flush`'s expectRed correct on the first run.
+
+V1/V2 re-run BECAUSE BOTH Done-spec clauses were re-derived again
+  untouched RED rc=1 | compliant V1 OK / V2 OK rc=0 | wrapped compliant rc=0
+  over-claim fixture RED rc=1 | P0b clause in cell 2 RED rc=1 | unrelated line RED rc=1
+  differently worded over-claim  V1 OK / V2 OK  rc=0   ← still the measured bound
+```
+
+**Why the new proof discriminates, stated because it is the whole point of the
+reorder.** With the flush FIRST, an overwrite injected at the artifact-flush seam is
+covered by the flush and then caught by the comparison that follows — the
+preservation FAILS. With the read first, the same overwrite is compared against the
+OLD bytes, passes, and the flush then completes over the NEW ones — SUCCESS for a
+buffer no completed flush ever covered. **One test case separates the two orderings;
+nothing else in the suite does.**
+
+### 8.2 What round 8 did NOT change
+
+- **The mechanism, apart from the order of two calls.** The exclusive-create
+  provenance, the no-clobber commit, the fixed chain and its internal order, the
+  three gated removals, the descriptor finalizer, the create-failure short-circuit
+  and the A12 boundary are all as round 7 left them.
+- **The returned buffer.** It is still `readBack` and still not a re-read;
+  `returned-bytes-rereads-the-artifact` still forbids that shape.
+- **The seven Dispatch-precondition items**, each with its recommendation.
+- **Table P and Table D.**
+- **The disposal stub.**
+
+### 8.3 The statement the closing round is asked to verify verbatim
+
+**GUARANTEED.** A preservation that reports success returns **bytes that are exactly
+what this invocation created, wrote through its own descriptor, FLUSHED, and then
+read back through that same descriptor and byte-compared against the judged bytes —
+never a later re-read** — the flush having completed for that inode and for every
+directory entry it depends on, in the order Table F fixes, BEFORE the comparison;
+and the returned **name was a regular file naming that inode AT THE LAST GATE**.
+Against **overlapping runs** — the concurrency this product creates itself — this
+holds by construction on the supported filesystem: distinct pids give distinct temp
+names, and F9's commit refuses a destination it did not create. Against **the user's
+own hand**, no substitution BEFORE the last gate can make either half false, and no
+name deleted before a gate produces an error escaping this function. **Every
+"flushed" clause is POSIX-only: on win32 the protocol issues no flush and claims
+none (row F5).**
+
+**DISCLOSED.** *(1)* One class — a check-then-unlink window — with an instance at
+each of this call's three pathname removals, because Node ≥18 has no
+descriptor-relative unlink and **no removal shape whose ownership test is NOT
+separable from its act**; equivalently, Node exposes no operation that makes the
+ownership test inseparable from the unlink. **All three can delete a replacement; on
+the post-commit temp removal the run still reports success, so that one is silent.**
+*(2)* Three instances that destroy nothing and are what the guarantee is narrowed
+around: **`dest` substituted after the last gate**, which makes the returned NAME
+resolve to bytes this call never verified while the returned BYTES remain what it
+verified; **an in-place overwrite of the same inode after the comparison**, which
+leaves the artifact under the name diverged from the returned bytes; and **a
+same-inode RELINK before the last gate**, where the entry the gate observes was
+created after the flush that covered its directory — **the chain flushes covered the
+entries as they stood when they ran, and the last gate is an identity check, not a
+flush guarantee for the entry observed there.** Its cost: the NAME may not survive a
+crash; the BYTES and the INODE do, and the inode keeps a flushed entry only if the
+hand's own spare link is durable, which this call cannot know. None is closable — no
+primitive excludes a same-UID writer, and none makes the entry flushed and the entry
+observed the same object. *(3)* A filesystem precondition: a local POSIX filesystem
+with atomic `O_EXCL` and hard links. On a network-mounted core exclusivity — and
+therefore provenance under overlapping runs — is not guaranteed; everything that
+consults only the held descriptor still holds. Every instance of (1) and (2) is
+untested as a residual by design, and Dispatch precondition items 6 and 7 price what
+would remove them.
 
 **OUTSIDE.** Arbitrary same-user native code — `docs/THREAT-MODEL.md`'s **A12** —
 against which no durability protocol can hold, and for which every added pin would
