@@ -1,0 +1,106 @@
+# Design gate raw — round 2 — Codex plugin adversarial review — WP-audit-d-code-derived-recipients
+# tip reviewed: 0fbbb2c78b765246f09ee928008ff4406059d580 ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a07122-5ab6-76b0-8dac-f903d10996f9).
+[codex] Turn started (01a07122-5b9a-70e3-bead-ee70d5e1814d).
+[codex] Assistant message captured: I’ll read the two documents at the pinned commit, verify their code citations, and execute th...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f 0fbbb2c78b765246f...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f 0fbbb2c78b765246f... (exit 0)
+[codex] Running command: /bin/zsh -lc "git show 0fbbb2c:docs/specs/WP-audit-d-code-derived-recipients.md | nl -ba | se...
+[codex] Command completed: /bin/zsh -lc "git show 0fbbb2c:docs/specs/WP-audit-d-code-derived-recipients.md | nl -ba | se... (exit 0)
+[codex] Running command: /bin/zsh -lc "git show 0fbbb2c:docs/specs/WP-audit-d-code-derived-recipients.md | nl -ba | se...
+[codex] Command completed: /bin/zsh -lc "git show 0fbbb2c:docs/specs/WP-audit-d-code-derived-recipients.md | nl -ba | se... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show 0fbbb2c:docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | ...
+[codex] Command completed: /bin/zsh -lc 'git show 0fbbb2c:docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | ... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show 0fbbb2c:src/gws/gmail.js | nl -ba; git show 0fbbb2c:src/gws/broker/ver...
+[codex] Command completed: /bin/zsh -lc 'git show 0fbbb2c:src/gws/gmail.js | nl -ba; git show 0fbbb2c:src/gws/broker/ver... (exit 0)
+[codex] Running command: /bin/zsh -lc "git show 0fbbb2c:src/cli/gws-broker.js | nl -ba; git show 0fbbb2c:src/core/runt...
+[codex] Command completed: /bin/zsh -lc "git show 0fbbb2c:src/cli/gws-broker.js | nl -ba; git show 0fbbb2c:src/core/runt... (exit 0)
+[codex] Assistant message captured: The original comment and mixed-mailbox examples appear fixed, but the prescribed threat-model...
+[codex] Running command: /bin/zsh -lc 'git show 0fbbb2c:src/gws/broker/registry.js; git show 0fbbb2c:src/gws/gmail.js'
+[codex] Command completed: /bin/zsh -lc 'git show 0fbbb2c:src/gws/broker/registry.js; git show 0fbbb2c:src/gws/gmail.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''); const spec = fs.readFileSync('...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''); const spec = fs.readFileSync('... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), cp=require('\\''child_process'\\''); ...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), cp=require('\\''child_process'\\''); ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), cp=require('\\''child_process'\\''); ...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), cp=require('\\''child_process'\\''); ... (exit 0)
+[codex] Running command: /bin/zsh -lc "git show 0fbbb2c:src/gws/broker/verbs.js | nl -ba | sed -n '1,80p'; git show 0f...
+[codex] Command completed: /bin/zsh -lc "git show 0fbbb2c:src/gws/broker/verbs.js | nl -ba | sed -n '1,80p'; git show 0f... (exit 0)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''),path=require...
+[codex] Command failed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''),path=require... (exit 1)
+[codex] Assistant message captured: Both regexes show quadratic backtracking: doubling the hostile dotted-domain input roughly qu...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''),path=require...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''),path=require... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'mailed|wrote|recipient.*author|third party|single.*suite|one.*suite|decl...
+[codex] Command completed: /bin/zsh -lc "rg -n 'mailed|wrote|recipient.*author|third party|single.*suite|one.*suite|decl... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\'');const spec=fs.readFileSync('\\''docs/s...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\'');const spec=fs.readFileSync('\\''docs/s... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'from email import policy; from email.parser import Parser for value...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from email import policy; from email.parser import Parser for value... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js'
+[codex] Command completed: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "git show 0fbbb2c:docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | ...
+[codex] Command completed: /bin/zsh -lc "git show 0fbbb2c:docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''); for(const file of ['\\''docs/specs/WP...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''); for(const file of ['\\''docs/specs/WP... (exit 0)
+[codex] Assistant message captured: Two valid single-mailbox forms are also rejected: `"Alice"<alice@example.org>` and `Alice "Te...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git diff --exit-code 0fbbb2c78b765246f09ee928008ff44060...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git diff --exit-code 0fbbb2c78b765246f09ee928008ff44060... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const cp=require('\\''child_process'\\''); const r=cp.spawnSync('\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const cp=require('\\''child_process'\\''); const r=cp.spawnSync('\\''... (exit 0)
+[codex] Starting collaboration tool: wait.
+[codex] Collaboration tool wait completed.
+[codex] Running command: /bin/zsh -lc "node -e ' const verbs={gmail_read:{capabilityClass:'\\''READ'\\''},create_draft...
+[codex] Command completed: /bin/zsh -lc "node -e ' const verbs={gmail_read:{capabilityClass:'\\''READ'\\''},create_draft... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet. New Table B findings trigger...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet. New Table B findings trigger escalation (i): an ADR-0031 contract-extraction pass, not a third patch.
+
+Executed, read-only:
+- git status --porcelain; git rev-parse HEAD; scoped git diff 8c52808f 0fbbb2c; git show/nl/sed reads of both documents and the seven permitted code files: exit 0. HEAD matched the requested commit.
+- node -e, extracting Table B’s regexes: exit 0; exercised accepted forms, all six criterion-4 header cases, escapes, tabs, empty quoted names, folding and malformed addresses. Ten benchmark subprocesses exited 0.
+- Extracted V5 block through bash: node exited 1 on the unchanged base, as expected; the trailing status-reporting echo made the shell exit 0. Quoting works. Corrected VM replay: compliant 0; destination, reclassification and absent-module mutations 1; weakened schemas 0.
+- node -e registry countermodels: nested-object schemas passed V5 but were rejected downstream; a string id without its pattern, forwarded as the recipient, passed V5 and created one mock draft to attacker@example.net. Harnesses exited 0, except the first nested-schema probe, which deliberately reported rejection with exit 1.
+- Two node -e assembly countermodel harnesses: exit 0; both verbs × three credential states, three individual mutations, both consumers wrong, and READ-sibling masking. Independent class-set reproduction: exit 0.
+- node -e MIME/masking and whitespace-flattened provenance probes; python3 email-parser cross-check; rg claim/count sweep: exit 0.
+- node --test tests/unit/gws-broker.test.js: exit 0, 2/2 passed.
+- An initial heredoc attempt exited 1 because the sandbox prohibited its temporary file; it was rerun using node -e.
+- Final scoped git diff --exit-code and byte comparison of git status: exit 0. Before and after were exactly '?? node_modules\n'.
+
+Round-1 closure: R1-A’s original examples are fixed, but its contract has new failures below. R1-B’s address literal and double-@ cases are genuinely refused. R1-C catches both consumers remaining wrong; its derivation mutation still has a fixture-masking gap. R1-D is not closed. R1-E closes destination/reclassification bypasses and shell escaping, but V5 still permits weakened value schemas. Actual new RED lanes cannot run: this commit contains the specification, not their implementation.
+
+Findings:
+- [high] [A] Table B performs quadratic work before checking address length (docs/specs/WP-audit-d-code-derived-recipients.md:360-363)
+  Both patterns backtrack quadratically across the domain’s repeated dots. Executed against 'a@' + '.'.repeat(n) + '!,' and its angle-bracketed equivalent, doubling n approximately quadrupled runtime. At 8,000/16,000/32,000 dots, the mailbox pattern took 211/847/3,391 ms; the bare pattern took 46/187/736 ms. The 320-character check runs only after a successful capture, so it cannot protect this rejection path. A hostile fetched header can monopolize the broker’s synchronous event loop. This is a Table B finding.
+  Recommendation: During the required ADR-0031 extraction, specify bounded work before matching and a linear recipient parser or demonstrably bounded patterns. Retain an adversarial scaling test.
+- [medium] [B] Table B rejects ordinary single-mailbox display names (docs/specs/WP-audit-d-code-derived-recipients.md:361-362)
+  The executed grammar rejects both '"Alice"<alice@example.org>' and 'Alice "Team <east>" <alice@example.org>'. Its mandatory whitespace before '<' causes the first rejection; its quoted-string-or-plain-atoms alternation causes the second. Both are valid, non-obsolete single mailboxes: Python’s parser returned one address with no defects, consistent with [RFC 5322 §§3.2.5 and 3.4](https://www.rfc-editor.org/rfc/rfc5322.html#section-3.4). Neither involves the owner-accepted narrowing of quoted local parts, address literals or dotless domains. Legitimate replies would be refused. This is a Table B finding.
+  Recommendation: In the extraction pass, define display names as sequences of permitted words and quoted strings, with optional separating whitespace before the angle address. Add both examples to accepted fixtures.
+- [medium] [A] A READ sibling masks the derivation mutation in AUD-D6 (docs/specs/WP-audit-d-code-derived-recipients.md:549-555)
+  Criterion 8 does not require a singleton profile. With brokerVerbs ['gmail_read', newDraftVerb], the old class derivation still loads READ through gmail_read. Executed for each new verb, all six credential-state outcomes remained correct under extra-classes-dropped-derivation: exact missing-class refusals, zero Google calls on refusal, and successful dispatch with both classes available. Thus the criterion can pass while this production consumer remains wrong. V3 should reject the resulting vacuous proof, but the prescribed fixture contract does not ensure the promised non-vacuous mutation. This is a Table C/criterion-8 finding.
+  Recommendation: Require brokerVerbs: [verb] separately for each new verb, with instrumented READ and DRAFT methods. Assert the loader’s requested classes as well as dispatch outcomes.
+- [medium] [B] R1-D’s false provenance claim survives in prescribed product text (docs/specs/WP-audit-d-code-derived-recipients.md:283-288)
+  The paragraph still explicitly says 'the recipient must already have mailed the user', then contradicts itself by allowing an unrelated third party who never wrote. An implementer copying this exact contract would ship the original false threat-model claim. The whitespace-flattened execution found it; logbook line 380 nevertheless reports that all three sites were corrected and the re-sweep found zero hits. This is a surviving Table B provenance-mirror finding, not an objection to the accepted Reply-To residual.
+  Recommendation: Remove the surviving prerequisite claim, retain the author-nominated third-party residual, and correct the logbook’s closure assertion after rechecking the complete prescribed paragraph.
+- [medium] [A] V5’s enumerated names do not enforce address-relevant value constraints (docs/specs/WP-audit-d-code-derived-recipients.md:624-627)
+  V5 checks property names but not their types, requiredness or patterns. Removing create_reply_draft.id’s ^[A-Za-z0-9_-]+$ constraint still prints V5 OK. In an executed countermodel with that weakened schema and a handler forwarding id as to, the real registry accepted id='attacker@example.net' and invoked drafts.create with that recipient. This demonstrates a wrong implementation V5 passes; it does not establish that all behavioral tests would pass. The original destination and reclassification defects are fixed, but the claimed structural protection remains incomplete. This is a verification/Table A finding.
+  Recommendation: Pin the new verbs’ complete scalar input schemas, especially id’s pattern, required fields, types and limits. Keep recipient provenance assertions in behavioral tests.
+
+Next steps:
+- Additional coverage results: all four named refused families and the literal/double-@ examples are actually refused. Escaped quotes, tabs and an empty quoted display name are accepted. Quoted-local, dotless-domain and overlength cases lack explicit criterion-4 fixtures. Leading/trailing CR/LF is erased by trim: '\r\n alice@example.org' reaches buildMime as a clean recipient, contradicting the blanket claim that every folding form is refused; settle that rule during extraction.
+- Table C follow-through: a naive first-angle-candidate mutation also breaks AUD-D2’s accepted quoted display name, so its failing set exceeds AUD-D3. The body-source mutation must also make body available to replyTarget, whose specified input contains only id. A third masking shape was executed: CR/LF in Subject masks bypassed In-Reply-To/References checks. Isolate poisoned fields and measure all eleven actual failing sets after implementation.
+- Assembly follow-through: singleton fixtures distinguish all three declared mutations and both consumers wrong. The injected cases do not prove the default loader path; omitting its fallback could pass those cases while production calls assembleRegistry without deps. Missing methods on malformed fake services produce generic handler failures, but no evidence establishes that as a newly reachable production credential state.
+- The current spec correctly assigns two suites and two declaration files; its canonical count is six identities and eleven declarations. The logbook’s single-suite statement belongs to the historical round-zero record.
+- Routed scope objections: none. Preserve all stated owner rulings and exclusions. Perform the mandated Table B extraction, resolve the findings, then run a fresh external round.
+rc=0
+PORCELAIN: identical
