@@ -1,0 +1,204 @@
+# Design gate raw — round 4 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: f276cbfe8cc5adb965969159d05cef9dec4bba5a (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision f276cbfe8cc5adb965969159d05cef9dec4bba5a vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-ad4.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1 && git rev-parse HEAD main && git diff --stat main..HEAD -- <two reviewed files> && wc -l <two reviewed files and cited code>",
+      "exit_status": 0,
+      "result": "HEAD=f276cbfe8cc5adb965969159d05cef9dec4bba5a; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e; initial porcelain status empty"
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '1,480p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '481,954p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '260,420p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '421,580p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '581,732p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '474,580p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '1,300p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '301,600p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '601,856p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba <each cited file>",
+      "exit_status": 0,
+      "files": [
+        "src/gws/broker/verbs.js",
+        "src/gws/broker/registry.js",
+        "src/gws/broker/limits.js",
+        "src/gws/gmail.js",
+        "src/cli/gws-broker.js",
+        "src/core/runtime-profile.js",
+        "tests/unit/gws-broker.test.js",
+        "tests/unit/gws-gmail.test.js"
+      ]
+    },
+    {
+      "command": "nl -ba src/gws/gmail.js | sed -n '88,170p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/cli/gws-broker.js | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/runtime-profile.js | sed -n '1,210p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '270,430p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '431,570p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '571,690p'",
+      "exit_status": 0
+    },
+    {
+      "command": "node <<'NODE' <44-case reconstruction and edge probes>",
+      "exit_status": 1,
+      "result": "Not executed: zsh could not create its heredoc temporary file in the read-only sandbox"
+    },
+    {
+      "command": "mktemp -d /private/tmp/auditd4.XXXXXX",
+      "exit_status": 1,
+      "result": "Operation not permitted; no fixture was created"
+    },
+    {
+      "command": "node -e '<inline reconstruction of all 44 published case-table families plus boundary probes>'",
+      "exit_status": 0,
+      "result": "44 cases, 0 mismatches; accepted 998-character Subject produced derived length 1002 and physical Subject line length 1011; accepted 600+600 threading fields produced References line length 1213; empty-subject derivation changed from \"Re: \" to \"Re:\" on its second application"
+    },
+    {
+      "command": "node -e '<extract and execute the V5 JavaScript block verbatim from the spec against the detached worktree>'",
+      "exit_status": 1,
+      "result": "Expected design-state RED: create_draft remains and both new verbs are absent"
+    },
+    {
+      "command": "node -e '<extract and execute the same V5 block verbatim against a synthetic countermodel>'",
+      "exit_status": 0,
+      "result": "V5 reported OK despite calendar_list.name=BROKEN_INTERNAL_NAME and calendar_list.capabilityClass=DRAFT"
+    },
+    {
+      "command": "git log --oneline --decorate main..HEAD && git diff --name-only main..HEAD && git diff --check main..HEAD -- <two reviewed files> && rg -n '<suite/count/bound/subject patterns>' <two reviewed files>",
+      "exit_status": 0,
+      "result": "git diff --check clean; searches exposed the stale \"both .proofs.json files\" mirror"
+    },
+    {
+      "command": "git show --format= --unified=40 f276cbfe8cc5adb965969159d05cef9dec4bba5a -- <two reviewed files>",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<exercise current gmail.buildMime and quantify a normal References chain>'",
+      "exit_status": 0,
+      "result": "buildMime emitted an unfolded 1011-character Subject line; base64url length 1438. A 47-character sample Message-ID yields 20 IDs/959 characters accepted at step 0, but appending the current ID produces a 1007-character References value and a 1019-character physical line. Twenty-one such IDs alone total 1007 characters."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "Final porcelain status empty and identical to initial status. Git emitted non-fatal xcrun-cache warnings because /tmp is not writable."
+    }
+  ],
+  "round_3_closure_check": {
+    "R3-A": "Closed for the five raw values: the contract now places the constant-time raw-length check before CR/LF scanning, selection, trimming, prefixing, and grammar matching. No pre-bound length-dependent Table B operation was found.",
+    "R3-B": "Not closed. Truncation and surrogate splitting are removed, but generated Subject and References lines can exceed the cited MIME line limit, and empty/whitespace-only subjects are not idempotent.",
+    "R3-C": "Substantively closed. AUD-D7 directly reaches buildMime, while AUD-D5 owns verb-path CR/LF fixtures and AUD-D3 owns non-CR/LF refusals. Their stated failing sets are disjoint. The replyTarget refusal text and current assertHeaderSafe text are distinct, although the explicit distinction is stated in Table C and criterion 6 rather than in the Exact contracts subsection.",
+    "R3-D": "Not closed. The current V5 passes an executed wrong non-Gmail record.",
+    "R3-E": "Closed by the written contract: the default is bound once, both consumers must call requiredClassesFor unconditionally, no branch on deps is allowed, and criterion 8 plus its mutation explicitly exercise the no-deps path.",
+    "R3-F": "Closed. Owner item 8 now accurately admits that conforming unfolded headers, including References chains, can exceed 998 and be refused."
+  },
+  "findings": [
+    {
+      "title": "The raw-value bound does not bound the physical headers produced after steps 5 and 6",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 385,
+      "line_end": 406,
+      "confidence": 0.98,
+      "materiality_band": "A",
+      "body": "Step 0 accepts each raw field independently through 998 characters, but step 5 adds four characters to Subject and step 6 concatenates References, a space, and Message-ID. buildMime is required to emit those values as single physical lines and the spec explicitly says nothing downstream folds or caps them. Execution accepted a 998-character source Subject and produced a 1002-character derived value and a 1011-character `Subject: ` line. More routinely, twenty 47-character Message-IDs form a 959-character References value and the current 47-character Message-ID also passes step 0, yet step 6 produces a 1007-character References value and a 1019-character line. Those outputs exceed the same RFC 5322 998-character physical-line limit invoked by step 0. Stubbed request assertions can pass while Gmail receives a non-conforming MIME message, risking rejection, malformed parsing, or failure to thread a legitimate reply.",
+      "recommendation": "Retain the ruled raw 998 bound, but add a post-derivation contract that safely MIME-encodes/folds Subject, In-Reply-To, and References inside buildMime. The inserted folding must be code-generated after assertHeaderSafe, never accepted from remote input. Add accepted boundary cases for a 998-character Subject and for individually in-bound References plus Message-ID whose combined output crosses 998, and assert every emitted physical header line is within the limit.",
+      "executed_44_case_table_already_refuses_it": false,
+      "stop_criterion": "FIRED"
+    },
+    {
+      "title": "Horizontal trimming makes an accepted empty subject non-idempotent",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 390,
+      "line_end": 495,
+      "confidence": 0.96,
+      "materiality_band": "B",
+      "body": "An absent, empty, or horizontal-whitespace-only Subject is accepted. The first application derives `Re: `; when that result is used as the next source Subject, horizontal trim changes it to `Re:`, which already matches /^re:/i and is returned without the space. Execution therefore produced `Re: ` and then `Re:`. The table's sole idempotence fixture is `Re: already`, so it misses this accepted edge. This undercuts the claim that step 5 satisfies Gmail's Subject-match condition for every accepted input and can surface downstream as a split or differently titled reply chain.",
+      "recommendation": "Specify a fixed-point rule for an empty trimmed subject, preferably preserving the empty source for documented subject matching. Add empty, spaces-only, tabs-only, and two-successive-application fixtures to Table B and criterion 5.",
+      "executed_44_case_table_already_refuses_it": false,
+      "stop_criterion": "FIRED"
+    },
+    {
+      "title": "V5 still passes a wrong non-Gmail verb record",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 766,
+      "line_end": 814,
+      "confidence": 1,
+      "materiality_band": "A",
+      "body": "V5 pins the nine object keys but compares complete records only for the five records whose mutable service field is `gmail`. I executed the block verbatim against a countermodel whose `calendar_list` object key remained present while its internal name was `BROKEN_INTERNAL_NAME` and its capability class was changed from READ to DRAFT. V5 exited 0 and printed OK. This violates Table A's canonical `calendar_list` row and can remove or misload an existing read verb while the advertised verification succeeds.",
+      "recommendation": "Make V5 compare canonical records for all nine verbs, including at least each record's internal name, service, capabilityClass, extraClasses, schema, and limits. If the four non-Gmail schemas are intentionally delegated to existing tests, V5 must still assert `VERBS[key].name === key`, their service/class, and the exact unchanged record fields Table A claims.",
+      "executed_44_case_table_already_refuses_it": "not applicable"
+    },
+    {
+      "title": "The mirror checklist still assumes two RED-proof declaration files",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 590,
+      "line_end": 606,
+      "confidence": 1,
+      "materiality_band": "C",
+      "body": "Table C and the Deliverables table now correctly require three suites and three declaration files, but the registered mirror at line 606 still says `both .proofs.json files` and mentions only gws-broker.test.js. An implementer following the checklist can incorrectly treat the new MIME declaration as outside the mirrored Table C surface.",
+      "recommendation": "Change the checklist entry to `all three .proofs.json files` and explicitly name tests/unit/gws-gmail.test.js alongside tests/unit/gws-broker.test.js.",
+      "executed_44_case_table_already_refuses_it": "not applicable"
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "subject": "The ruled uniform 998 bound refuses ordinary long References chains",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 900,
+      "line_end": 926,
+      "disposition": "Scope objection only; excluded from the verdict because owner item 8 explicitly keeps the uniform bound and accurately admits this cost.",
+      "evidence": "With a representative 47-character Message-ID, 21 IDs plus separators total 1007 characters. Thus a roughly 21-deep otherwise ordinary folded thread can arrive from Gmail as an unfolded References value over 998 and be refused before drafting.",
+      "executed_44_case_table_already_refuses_it": true
+    }
+  ],
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP. The final Table B stop criterion fires: two accepted classes absent from the executed 44-case refusal table expose generated-header and empty-subject defects. Separately, V5 still accepts an executed wrong verb table. Stop for the required owner ruling; do not perform another dispatch-under-recommendation on Table B."
+}

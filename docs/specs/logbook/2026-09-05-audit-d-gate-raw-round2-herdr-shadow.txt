@@ -1,0 +1,222 @@
+# Design gate raw — round 2 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: 0fbbb2c78b765246f09ee928008ff4406059d580 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision 0fbbb2c78b765246f09ee928008ff4406059d580 vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch. The prescribed Table B transformations can erase CR/LF before validation, contradicting criterion 6 and allowing a draft where the contract requires zero drafts. This is a new Table B finding, so escalation (i) is triggered: perform the ADR-0031 recipient-contract extraction pass rather than applying a third textual patch. R1-D also remains literally present, V5 still accepts materially wrong Table A implementations, and Table C omits a third masking trap.",
+  "table_b_circuit_breaker": {
+    "triggered": true,
+    "finding_ids": [
+      "F1"
+    ],
+    "required_action": "ADR-0031 extraction pass on the recipient-derivation contract; do not apply another isolated Table B patch.",
+    "classification_note": "F1 is a Table B finding. F2 is the surviving R1-D provenance-documentation class; F3 is Table A/V5; F4 is Table C."
+  },
+  "executed_commands": [
+    {
+      "command": "sed adversarial.md; printf focus marker; sed ../focus-ad2.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored operating prompt and USER_FOCUS."
+    },
+    {
+      "command": "git status --porcelain; git diff --unified=80 main...0fbbb2c... -- <two target files>; nl -ba <both target files>",
+      "exit_status": 0,
+      "result": "Initial status was empty. Output was truncated, so both files were subsequently reread in bounded chunks."
+    },
+    {
+      "command": "git rev-parse HEAD; git rev-parse main; git status --porcelain; wc -l <two targets and seven cited files>",
+      "exit_status": 0,
+      "result": "HEAD=0fbbb2c78b765246f09ee928008ff4406059d580; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e; status empty."
+    },
+    {
+      "command": "sed/nl bounded reads of docs/specs/WP-audit-d-code-derived-recipients.md, lines 1-726",
+      "exit_status": 0,
+      "result": "Read the complete specification."
+    },
+    {
+      "command": "nl -ba bounded reads of docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md, lines 1-470",
+      "exit_status": 0,
+      "result": "Read the complete logbook."
+    },
+    {
+      "command": "nl -ba src/gws/broker/verbs.js src/gws/broker/registry.js src/gws/broker/limits.js src/gws/gmail.js src/cli/gws-broker.js src/core/runtime-profile.js tests/unit/gws-broker.test.js",
+      "exit_status": 0,
+      "result": "Read all seven permitted cited files; truncated portions of gmail.js and gws-broker.js were immediately reread separately."
+    },
+    {
+      "command": "sed -n '357,363p' <spec> | od -An -c",
+      "exit_status": 0,
+      "result": "Verified the literal Table B regex text and Markdown-escaped alternation characters."
+    },
+    {
+      "command": "node <<'NODE' <grammar harness>",
+      "exit_status": 1,
+      "result": "The sandbox denied creation of the shell's temporary heredoc file before Node ran."
+    },
+    {
+      "command": "mktemp -d /tmp/wienerdog-shadow-ad2.XXXXXX",
+      "exit_status": 1,
+      "result": "Operation not permitted. No temporary fixture was created."
+    },
+    {
+      "command": "node -e '<first inline grammar harness>'",
+      "exit_status": 1,
+      "result": "Reviewer harness construction error left spaces in ADDR; discarded and rerun with the literal corrected pattern."
+    },
+    {
+      "command": "node -e '<corrected 21-case Table B grammar harness>'",
+      "exit_status": 1,
+      "result": "All named accepted and refused families behaved as intended, including quoted escapes, tabs, empty quoted display name, address literal, and double-@. Two mismatches remained: leading CRLF and trailing LF were removed by trim() and therefore accepted."
+    },
+    {
+      "command": "node -e '<regex timing harness over quoted, plain-atom, and addr adversarial families at lengths 1000..16000>'",
+      "exit_status": 0,
+      "result": "No super-linear growth observed. Plain-display cases grew from 0.0123 ms to 0.1720 ms per pair; addr cases from 0.0019 ms to 0.0280 ms per pair."
+    },
+    {
+      "command": "rg -n -i 'already (mailed|emailed|written|wrote)|must .*mail|recipient .*mail|who (mailed|wrote)|never wrote|third party|Reply-To|nominated' <two targets>",
+      "exit_status": 0,
+      "result": "Found the surviving false provenance clause at specification lines 285-288."
+    },
+    {
+      "command": "V5 node -e block copied verbatim from specification lines 603-631",
+      "exit_status": 1,
+      "result": "The single-quote escaping is valid. On the pinned base it correctly failed because create_draft remains and both replacement verbs are absent."
+    },
+    {
+      "command": "node -e '<synthetic V5 check: destination mutant and wrong-schema/classes mutant>'",
+      "exit_status": 0,
+      "result": "A destination property was rejected, but a nine-name/five-gmail table with required=[], property schemas={}, wrong capability classes, and wrong extraClasses passed V5."
+    },
+    {
+      "command": "node -e '<Table B subject prefix/truncate/assertHeaderSafe ordering probe>'",
+      "exit_status": 0,
+      "result": "Two source Subjects containing CR/LF beyond the 512-character retained prefix became CRLF-free 512-character subjects and were accepted by the prescribed buildMime assertion."
+    },
+    {
+      "command": "node -e '<AUD-D6 three-state assembly model for correct/helper/derivation/refusal/both-consumers-wrong variants>'",
+      "exit_status": 0,
+      "result": "Correct: 0/6 failing assertions; helper mutant: 4/6; derivation mutant: 2/6; refusal mutant: 2/6; both consumers wrong: 4/6."
+    },
+    {
+      "command": "node -e '<reply-headers-unasserted masking probe>'",
+      "exit_status": 0,
+      "result": "CR/LF in To or Subject did not discriminate the mutant; CR/LF in In-Reply-To or References did discriminate it."
+    },
+    {
+      "command": "git diff --name-only main...0fbbb2c...; git diff --check main...0fbbb2c... -- <two targets>",
+      "exit_status": 0,
+      "result": "The branch also contains the two ignored round-1 raw files. The two reviewed target files passed diff --check."
+    },
+    {
+      "command": "rg <suite/count/Table C terms> <two targets>; awk <Table C row count>",
+      "exit_status": 0,
+      "result": "The live spec consistently declares two suites, two declaration files, six identities, and eleven mutation rows."
+    },
+    {
+      "command": "awk <Deliverables row count> <spec>",
+      "exit_status": 0,
+      "result": "Counted 17 current deliverable rows. The logbook's historical line 184 says 15; this is non-material historical bookkeeping, not a live Table C assumption."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Final status was empty, identical to the initial status. Git emitted sandbox-related xcrun cache warnings but completed successfully."
+    }
+  ],
+  "round_1_closure": [
+    {
+      "id": "R1-A",
+      "closed": false,
+      "assessment": "The original comment-address, mixed-mailbox, and quoted-display regressions are closed. However, the whole-value claim is not: generic trim() ignores leading/trailing CR/LF, after which the grammar accepts the remaining mailbox. This is F1 and a new Table B finding."
+    },
+    {
+      "id": "R1-B",
+      "closed": true,
+      "assessment": "The corrected ADDR structurally rejects user@[192.0.2.1] and alice@relay@example.org. The other expressly refused address forms tested—quoted local part and dotless domain—were also rejected."
+    },
+    {
+      "id": "R1-C",
+      "closed": true,
+      "assessment": "The three-state real-assembly contract distinguishes the helper and both production consumers. The executed model showed that each declared mutation fails AUD-D6 and that both consumers cannot remain wrong while the identity passes. No credible cross-identity failure was found."
+    },
+    {
+      "id": "R1-D",
+      "closed": false,
+      "assessment": "Specification lines 285-288 still instruct the implementer to write 'the recipient must already have mailed the user' immediately before admitting that the address may be an unrelated third party who never wrote."
+    },
+    {
+      "id": "R1-E",
+      "closed": false,
+      "assessment": "The original destination-field and service-reclassification escapes are closed, and the verbatim shell block parses. But V5 enumerates only table keys, gmail membership, additionalProperties, and property-key sets; a materially wrong Table A implementation still passes."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "title": "Table B erases CR/LF before the required refusal check",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 359,
+      "line_end": 369,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "table_b_finding": true,
+      "body": "The selected recipient header is parsed only after trimming, while Subject is prefixed and truncated to 512 characters before buildMime applies assertHeaderSafe. Execution showed that leading/trailing CR/LF around a mailbox is stripped and accepted, and CR/LF beyond the retained Subject prefix is truncated away and accepted. A draft is therefore created although Table B line 369 and criterion 6 at lines 544-545 require any CR/LF in a derived value to produce zero drafts.create calls. The logbook's lines 402-406 additionally claim the grammar itself refuses the CR/LF case. Although these examples erase rather than inject the malicious suffix, the stated security invariant and verification criterion are false for the prescribed implementation.",
+      "recommendation": "Trigger the required ADR-0031 Table B extraction pass. In the extracted contract, validate raw Reply-To/From/Subject/Message-ID/References values for CR/LF before trimming, prefixing, or truncating; allow only explicit horizontal-space trimming where intended. Add boundary-CRLF recipient cases and a Subject case whose CR/LF occurs beyond character 512."
+    },
+    {
+      "id": "F2",
+      "title": "The false R1-D provenance claim remains in the exact threat-model text",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 280,
+      "line_end": 291,
+      "materiality_band": "B",
+      "confidence": 0.99,
+      "table_b_finding": false,
+      "body": "The exact paragraph to be copied into docs/THREAT-MODEL.md still says 'the recipient must already have mailed the user' at line 285, then contradicts itself by saying Reply-To may identify an unrelated third party who never wrote. This reproduces the precise false claim R1-D was meant to eliminate and would ship misleading security documentation.",
+      "recommendation": "Delete the 'recipient must already have mailed the user' clause. State only that the selected message's author nominates Reply-To, else From, and that the resulting recipient may be a third party who never contacted the user."
+    },
+    {
+      "id": "F3",
+      "title": "V5 still accepts a materially wrong canonical verb-table implementation",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 598,
+      "line_end": 631,
+      "materiality_band": "A",
+      "confidence": 0.97,
+      "table_b_finding": false,
+      "body": "V5 checks names, gmail membership, additionalProperties, and property-key sets only. The executed synthetic implementation retained those values while setting every required array empty, every property schema to {}, every capabilityClass to READ, and every extraClasses array wrong; V5 passed. Thus the block described as enumerating Table A's intended shape does not enforce required fields, types, limits, patterns, capability classes, or extraClasses. A wrong implementation can pass this verification step.",
+      "recommendation": "Make V5 compare the complete canonical fields it claims to pin: capabilityClass, extraClasses, inputSchema.required, and each property's type/range/maxLength/pattern, in addition to current checks. Alternatively narrow V5's stated contract and add explicit mechanical checks elsewhere for every omitted Table A field."
+    },
+    {
+      "id": "F4",
+      "title": "Table C omits a third masking trap for reply-headers-unasserted",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 420,
+      "line_end": 439,
+      "materiality_band": "B",
+      "confidence": 0.94,
+      "table_b_finding": false,
+      "body": "The reply-headers-unasserted mutation bypasses only the new In-Reply-To and References assertions. Execution showed that an AUD-D5 fixture placing CR/LF only in To or Subject is refused identically by correct and mutant code, so the mutation does not redden. Only Message-ID/In-Reply-To or References input discriminates it. The masking note claims two traps but omits this third one; V3 would catch the vacuous declaration downstream, but the spec does not tell the implementer how to make it non-vacuous.",
+      "recommendation": "Add a third masking-trap note requiring AUD-D5 to inject CR/LF separately into Message-ID/In-Reply-To and References, not merely recipient or Subject, and require each case to assert zero drafts.create calls."
+    }
+  ],
+  "other_focus_checks": {
+    "grammar": "Bare, angle-only, plain-display, quoted-display with punctuation, escaped quote/backslash, empty quoted display, and tab-separated display forms were accepted. Mixed bare+angle, several angle mailboxes, comment/trailing text, group, address literal, double-@, quoted local, dotless domain, and internal folded whitespace were refused. No accepted multi-mailbox/comment/group value or wrong selected mailbox was found beyond F1's trim-before-validation issue.",
+    "catastrophic_backtracking": "No super-linear behavior was observed through 16,000-unit adversarial inputs. The alternatives have disjoint leading character classes, and measured growth was approximately linear.",
+    "criterion_4": "All four refused families plus address-literal and double-@ cases are represented, and all were actually refused by the grammar.",
+    "table_c_identity_split": "The eleven declared mutations map to their stated identities. D1's two, D2's one, D3's three, D4's one, and D6's three are non-vacuous with the stated fixture constraints. D5 needs the additional masking constraint in F4. No mutation was found that necessarily reddens an identity outside its declared set.",
+    "table_c_suite_and_counts": "The live spec consistently uses two suites, two declaration files, six identities, and eleven declarations. Historical logbook text still describes its earlier single-suite state, but the later round explicitly supersedes it.",
+    "assembly_injection": "The optional loader defaults to loadCredentialServices, and the only production caller still supplies two arguments, so no production behavior change was found from injection itself. A test can resolve an incomplete service façade and receive the generic masked handler failure, but production's existing loader contract already assumes complete per-class clients; this is not a new credential state.",
+    "non_material_observation": "Logbook line 184 records 15 deliverable rows while the current spec contains 17. This is historical bookkeeping and does not alter the live contract."
+  },
+  "routed_scope_objections": [],
+  "worktree_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "writes_performed": false,
+    "note": "The requested OS-temp fixture capability was unavailable; both heredoc temporary-file creation and explicit mktemp were denied. All successful probes were fileless node -e or read-only commands."
+  }
+}

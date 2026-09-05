@@ -1,0 +1,76 @@
+# Design gate raw — round 4 — Codex plugin adversarial review — WP-audit-d-code-derived-recipients
+# tip reviewed: f276cbfe8cc5adb965969159d05cef9dec4bba5a ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a0715d-8ae5-7c52-8522-585a1b13c8df).
+[codex] Turn started (01a0715d-8bd9-75e1-aa66-99a64a460772).
+[codex] Assistant message captured: I’ll inspect the two-file diff and cited code, execute the contract checks, and test the clai...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f f276cbfe -- docs/...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f f276cbfe -- docs/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat src/gws/broker/verbs.js src/gws/broker/registry.js src/gws/broker/limits.js...
+[codex] Command completed: /bin/zsh -lc 'cat src/gws/broker/verbs.js src/gws/broker/registry.js src/gws/broker/limits.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '570,1040p'"
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '220,570p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '570,1040p'" (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '220,570p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '447,720p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '447,720p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '720,1025p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '720,1025p'" (exit 0)
+[codex] Assistant message captured: The bound now precedes the scans and transformations of all five header values. I’m checking ...
+[codex] Running command: /bin/zsh -lc 'cat src/gws/gmail.js src/gws/broker/registry.js src/gws/broker/limits.js src/cl...
+[codex] Command completed: /bin/zsh -lc 'cat src/gws/gmail.js src/gws/broker/registry.js src/gws/broker/limits.js src/cl... (exit 0)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js tests/unit/gws-gmail.test.js'
+[codex] Command completed: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js tests/unit/gws-gmail.test.js' (exit 0)
+[codex] Searching:
+[codex] Assistant message captured: V5 passes a concrete wrong implementation: swapping the two draft records’ `name` fields leav...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat src/gws/broker/verbs.js'
+[codex] Command completed: /bin/zsh -lc 'cat src/gws/broker/verbs.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const cp=require('\\''node:child_process'\\''); for(const n of [10,20...
+[codex] Command completed: /bin/zsh -lc "node -e ' const cp=require('\\''node:child_process'\\''); for(const n of [10,20... (exit 0)
+[codex] Assistant message captured: The MIME check found a gap: a conforming 989-character ASCII source Subject is accepted, then...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),pat... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --exit-code 8c52808f f276cbfe -- src/gws/broker/verbs.js src/gws/broke...
+[codex] Command completed: /bin/zsh -lc 'git diff --exit-code 8c52808f f276cbfe -- src/gws/broker/verbs.js src/gws/broke... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --porcelain'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch: MIME construction violates the l...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch: MIME construction violates the line limit on accepted inputs, and V5 still passes a broken verb table.
+
+Executed: `git status --porcelain` before/after (both exit 0; identical `?? node_modules`); `git rev-parse HEAD` (0; f276cbfe); targeted `git diff 8c52808f f276cbfe` (0); `cat`/`nl`/`sed` reads of the two review files and cited code (0); `git diff --exit-code` over the eight cited code/test files (0; unchanged). `node --test tests/unit/gws-broker.test.js tests/unit/gws-gmail.test.js` (0; 11 passed). In-memory `node -e` diagnostics for V5, MIME/pipeline, credential assembly, predicate timing, and expanded case coverage all exited 0. The unchanged V5 shell block was extracted and executed: checker exit 1 for baseline, root-type mutant and extra-schema-key mutant; exit 0 for compliant fixture AND swapped-name mutant. Its enclosing shell exits 0 because of the final echo. Predicate subprocesses exited 0 at 27/37 characters; the 47-character case timed out after 1.5 seconds and received SIGTERM. Two initial heredoc attempts exited 1 because temporary-file creation was prohibited; an interpolation error prevented one tool script from starting. Corrected runs used no files.
+
+R3 remeasurement: A's five-value ordering holds; B removes truncation and preserves astral characters but introduces the MIME finding below; C's direct buildMime mutation is detectable, and a References scan mutation produces the distinct downstream message; D remains incomplete; E's no-deps assertions reject the branching mutant (0/6 passed versus 6/6 injected); F now acknowledges conforming-mail refusals. These were in-memory contract models, not an implemented WP or actual evaluateRed run. Expanded rendered case coverage passed 47/47; the document calls it 44. Empty Subject also remains non-idempotent: empty → 'Re: ' → 'Re:'. Stale mirrors still say three AUD-D6 declarations and both proof files.
+
+Findings:
+- [high] Accepted headers become overlong MIME lines (docs/specs/WP-audit-d-code-derived-recipients.md:390-392)
+  Band B — downstream format failure. A source Subject containing 989 ASCII characters fits a conforming 998-character `Subject: ` line and passes every Table B check. Prefixing produces a 1002-character output line; the maximum accepted source produces 1011. Likewise, 19 synthetic 50-character Message-IDs form a 968-character References value, but appending the parent ID produces a 1031-character References line. The prescribed buildMime extension emits these without folding. This violates the [RFC 5322 line limit](https://www.rfc-editor.org/rfc/rfc5322.html#section-2.1.1), risking downstream rejection or rewriting; live Gmail rejection was not measured. Base64url wrapping does not repair the decoded MIME. Executed-table refusal: NO — all raw values pass, so the final Table B stop criterion fires.
+  Recommendation: Stop for the required owner ruling. Specify safe MIME encoding/folding after raw-value validation, preserving decoded Subject and threading semantics; test physical output-line lengths, including appended References.
+- [high] V5 permits record names to disagree with their dispatch keys (docs/specs/WP-audit-d-code-derived-recipients.md:794-804)
+  Band A — a wrong implementation passes verification. Swapping only `create_draft_to_self.name` and `create_reply_draft.name` passes the unchanged executable V5 block: both the object-key set and aggregate record-name set remain correct, while the per-record comparison omits `v.name`. Executing the real buildRegistry with that fixture advertises `create_draft_to_self` with required arguments `[id, body]`. Calls dispatch by object key to the self schema requiring subject/body, so an MCP consumer following the advertised schema cannot create the draft. This is outside V5's stated exclusions for handlers, descriptions and apiMethod.
+  Recommendation: Assert `v.name === name` for every table entry and execute a swapped-name countermodel. Also verify advertised schemas correspond to the records used for dispatch.
+- [medium] The size bound does not make an unspecified predicate computationally safe (docs/specs/WP-audit-d-code-derived-recipients.md:385-387)
+  Band A — the runtime-safety premise permits a failing implementation. Step 2 explicitly leaves its content test unrestricted because inputs are bounded. The semantically correct predicate `!/^(?:[ \t]+)*$/.test(value)` follows that contract but backtracks exponentially. Executed after the bound, 20 spaces followed by `alice@example.org` took 32 ms; 30 spaces followed by that address exceeded the 1.5-second subprocess limit. The entire latter value is only 47 characters, far below 998. This does not contradict the measurements of the particular supplied grammar; it disproves the inference that the bound alone makes implementation complexity irrelevant. Executed-table refusal: NO — the value is an accepted horizontally padded mailbox, so the final Table B stop criterion applies.
+  Recommendation: Keep the ruled bound, but require a non-backtracking content test or another explicit computational-cost constraint. Remove the claim that any implementation is safe merely because its input is at most 998 characters.
+
+Next steps:
+- Routed scope objection, excluded from the verdict: the uniform 998 bound can stop a thread after only 20 accumulated 50-character Message-IDs (1019 characters including separators). Step 0 already refuses this, and owner item 8 accepts that cost. Actual mailbox prevalence was not measured, so 'routinely' is not established.
+- Pause Table B work for the owner's ruling under the final stop criterion. Do not dispatch another corrective pass under the standing recommendation.
+- Close the V5 name/key gap and reconcile the proof-count and fixture-ownership mirrors before the next review.
+rc=0
+PORCELAIN: identical

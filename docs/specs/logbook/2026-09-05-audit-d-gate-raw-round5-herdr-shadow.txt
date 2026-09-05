@@ -1,0 +1,251 @@
+# Design gate raw — round 5 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: d3041ba07eb2fd9d4f93d5e0e9ae3156b4ca9322 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision d3041ba07eb2fd9d4f93d5e0e9ae3156b4ca9322 vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "summary": "NO-SHIP. The owner-ruling revision does not fully close the output-bound contract. Three Band-A counterexamples are absent from the executed case table: an accepted Unicode recipient can build a 999-octet To line; step 0 can be implemented with String.length and still pass all prescribed fixtures; and the References refused fixture is 1033 octets rather than the required 999-octet boundary, allowing an incorrect per-header limit to pass. R4-C is otherwise a fixed point for all requested subjects, the Subject and In-Reply-To boundaries are correct, and the three refusal messages are distinct and content-free.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' focus-ad5.txt",
+      "exit_statuses": {
+        "prompt": 0,
+        "relative_focus": 1
+      },
+      "result": "Loaded the vendored prompt. The relative focus path did not exist."
+    },
+    {
+      "command": "sed -n '1,320p' <absolute focus-ad5.txt>; sed -n '1,420p' docs/specs/WP-audit-d-code-derived-recipients.md",
+      "exit_statuses": {
+        "absolute_focus": 0,
+        "spec": 0
+      }
+    },
+    {
+      "command": "Initial compound metadata/section-search command containing unsafe backticks",
+      "exit_status": 1,
+      "result": "Rejected by zsh at parse time with unmatched double quote; no subcommand ran."
+    },
+    {
+      "command": "git status --porcelain; git rev-parse HEAD main; git diff --name-status main...HEAD; wc -l <four review files>",
+      "exit_statuses": {
+        "git_status_before": 0,
+        "rev_parse": 0,
+        "diff_name_status": 0,
+        "wc": 0
+      },
+      "result": "Initial porcelain output was empty. HEAD=d3041ba07eb2fd9d4f93d5e0e9ae3156b4ca9322; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e."
+    },
+    {
+      "command": "nl -ba spec lines 421-1026; nl -ba owner-rulings; nl -ba owner-brief",
+      "exit_statuses": {
+        "spec_remainder": 0,
+        "owner_rulings": 0,
+        "owner_brief": 0
+      }
+    },
+    {
+      "command": "nl -ba spec lines 626-917; rg section/boundary terms in design-gate logbook",
+      "exit_statuses": {
+        "spec_middle": 0,
+        "round_index": 0
+      }
+    },
+    {
+      "command": "nl -ba spec lines 863-917; nl -ba design-gate logbook lines 1-350",
+      "exit_statuses": {
+        "spec_dispatch": 0,
+        "rounds_part_1": 0
+      }
+    },
+    {
+      "command": "nl -ba design-gate logbook lines 351-700",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba design-gate logbook lines 701-1041",
+      "exit_status": 0
+    },
+    {
+      "command": "wc -l and nl -ba src/gws/broker/{verbs,registry,limits}.js and src/gws/gmail.js",
+      "exit_statuses": {
+        "wc": 0,
+        "verbs": 0,
+        "registry": 0,
+        "limits": 0,
+        "gmail": 0
+      }
+    },
+    {
+      "command": "nl -ba src/cli/gws-broker.js src/core/runtime-profile.js tests/unit/gws-broker.test.js tests/unit/gws-gmail.test.js",
+      "exit_statuses": {
+        "gws_broker": 0,
+        "runtime_profile": 0,
+        "gws_broker_test": 0,
+        "gws_gmail_test": 0
+      }
+    },
+    {
+      "command": "git diff --unified=8 197cd797 d3041ba... -- docs/specs/WP-audit-d-code-derived-recipients.md; git diff --stat main...HEAD",
+      "exit_statuses": {
+        "spec_delta": 0,
+        "diff_stat": 0
+      },
+      "result": "The derived grammar forms were unchanged. Table B and its case table changed only for UTF-8 units, R4-B, R4-C, and the new output-bound surface."
+    },
+    {
+      "command": "mktemp -d /tmp/wienerdog-ad5.XXXXXX",
+      "exit_status": 1,
+      "result": "Sandbox refused OS-temp creation: Operation not permitted."
+    },
+    {
+      "command": "node /dev/stdin using a quoted heredoc",
+      "exit_status": 1,
+      "result": "zsh could not create its temporary heredoc file."
+    },
+    {
+      "command": "Byte-preserving printf '%s\\n' script pipeline into node /dev/stdin: prefix, boundary, R4-B, and R4-C probe",
+      "exit_status": 0,
+      "result": "Regex source remained [^ \\t]. Prefixes were Subject=9, References=12, In-Reply-To=13. Subject and In-Reply-To accepted/refused sides were 998/999. 329 euros were 987 input octets and produced a 1000-octet Subject line. The listed References refused case produced a 1021-octet value and 1033-octet line. All requested fixed-point cases passed."
+    },
+    {
+      "command": "Byte-preserving Node countermodel for all listed step-7 rows",
+      "exit_status": 0,
+      "result": "An incorrect References limit of 1021 full-line octets passed every listed step-7 case yet accepted an unlisted 999-octet References line."
+    },
+    {
+      "command": "Byte-preserving Node countermodel for step-0 String.length",
+      "exit_status": 0,
+      "result": "A selected From value with 339 UTF-16 code units and 999 UTF-8 octets passed the code-unit check while every listed step-0 fixture was still refused."
+    },
+    {
+      "command": "Byte-preserving Node execution of the exact derived mailbox regex against the step-0 counterexample",
+      "exit_status": 0,
+      "result": "The 999-octet From value matched and captured a@b.co."
+    },
+    {
+      "command": "rg -n create_reply_draft/replyTarget/gmail.draft/buildMime/From across the authorized spec, code, and tests",
+      "exit_status": 0,
+      "result": "Confirmed buildMime has conditional From, while replyTarget's exact return has no from field."
+    },
+    {
+      "command": "nl -ba focused finding ranges; git diff --check main...HEAD",
+      "exit_statuses": {
+        "finding_lines": 0,
+        "diff_check": 0
+      }
+    },
+    {
+      "command": "node -p Unicode-whitespace classification for U+00A0",
+      "exit_status": 0,
+      "result": "The prescribed predicate returned true while Unicode White_Space classification also returned true."
+    },
+    {
+      "command": "Byte-preserving Node header enumeration and astral-address length probe",
+      "exit_status": 0,
+      "result": "An address had 254 Unicode code points, 501 UTF-16 code units, and 995 octets; To plus prefix was 999 octets."
+    },
+    {
+      "command": "Byte-preserving Node execution of the exact bare-address regex against the astral address",
+      "exit_status": 0,
+      "result": "The grammar matched the address; it passed a 320-Unicode-character interpretation and step 0 but produced a 999-octet To line."
+    },
+    {
+      "command": "git status --porcelain; git diff --quiet",
+      "exit_statuses": {
+        "git_status_after": 0,
+        "worktree_diff_quiet": 0
+      },
+      "result": "Final porcelain output was empty and identical to the initial output. The worktree remained untouched."
+    }
+  ],
+  "findings": [
+    {
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 399,
+      "line_end": 402,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "title": "The claimed construction bound for To mixes characters with octets and permits a 999-octet line",
+      "body": "Step 4 allows a captured address of at most 320 characters, while step 7 excludes To on the claim that its line is 4 + at most 320. That arithmetic mixes character and octet units. The prescribed grammar matched an address made from 247 astral characters plus aa@b.co. It is 254 Unicode characters and 995 UTF-8 octets, so it passes the literal 320-character bound and step 0's 998-octet bound, but buildMime emits a 999-octet To line. An implementer using a proper Unicode-character count therefore follows the written contract and sends a prohibited line. The exact replyTarget result prevents From from being emitted, but nothing similarly protects To.",
+      "recommendation": "Add To to step 7's UTF-8 line checks and add accepted-998/refused-999 To fixtures, or explicitly redefine step 4 in a unit that proves every allowed address encodes within the 994-octet To value budget. The first option directly implements ruling (a).",
+      "executed_case_table_already_refuses": false,
+      "stop_criterion": "FIRES: this accepted Table B case is absent from the executed case table and requires owner routing under the supplied round-5 rule."
+    },
+    {
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 513,
+      "line_end": 513,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "title": "Step 0's fixtures do not distinguish UTF-8 octets from String.length",
+      "body": "The contract changed step 0 to UTF-8 octets, but its boundary refusal remains a 999-character From and all other oversized fixtures are multi-megabyte ASCII-like values. A wrong implementation using String.length rejects every listed step-0 fixture. Executed counterexample: 330 euro signs followed by ' <a@b.co>' is 339 UTF-16 code units but 999 UTF-8 octets; the exact mailbox grammar accepts it and captures a@b.co. A code-unit step 0 proceeds to a valid, short draft even though the byte-bound contract requires the fixed step-0 refusal. The 329-euro fixture at line 518 only pins step 7, not step 0.",
+      "recommendation": "Add a step-0 refused fixture below 998 code units but exactly 999 UTF-8 octets, assert the step-0 fixed message and zero drafts.create calls, and add a RED mutation that measures step 0 with String.length.",
+      "executed_case_table_already_refuses": false,
+      "stop_criterion": "The textual rule refuses it, but the executed case table does not contain or prove it; the prescribed implementation criterion passes the countermodel."
+    },
+    {
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 518,
+      "line_end": 526,
+      "materiality_band": "A",
+      "confidence": 1.0,
+      "title": "References has no 999-octet refused boundary, so a wrong per-header limit passes every required row",
+      "body": "The accepted References case is correct: 939 + one space + a 46-octet parent gives a 986-octet value and a 998-octet line. The paired refused case uses 974 + one space + 46, which is a 1021-octet value and a 1033-octet line—not the stated line 1021 and not the one-over boundary. A concrete checker that correctly caps Subject and In-Reply-To at 998 but permits References lines through 1021 passed all nine listed step-7 cases, including the 1033-octet refusal, while accepting the missing 940 + space + 46 case whose References line is exactly 999 octets. Criterion 5 therefore allows an over-limit line to reach Gmail.",
+      "recommendation": "Replace or supplement the refused References fixture with 940 octets of existing References plus a 46-octet parent, assert that the resulting 999-octet line gets step 7's fixed refusal and zero drafts.create calls, and correct the 974-row arithmetic if it remains as a non-boundary accumulation case.",
+      "executed_case_table_already_refuses": false,
+      "stop_criterion": "FIRES: the 999-octet References case is not refused by the executed case table, and a wrong implementation passes the table."
+    },
+    {
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 581,
+      "line_end": 581,
+      "materiality_band": "C",
+      "confidence": 1.0,
+      "title": "The CR/LF mutation mirror still says step 7 performs assertHeaderSafe's refusal",
+      "body": "After inserting the output bound as step 7, assertHeaderSafe moved to step 8. The mutation description still says a dropped step-1 scan reaches step 7 and is refused there; a normal short CR/LF value passes the length-only step 7 and is refused by step 8. Acceptance criterion 6 repeats the stale phrase 'Step 7's assertHeaderSafe' at line 741. The RED identity probably still reddens because step 8's message differs, but its stated causal path is false.",
+      "recommendation": "Change line 581 to say the mutant reaches step 8/assertHeaderSafe and update line 741 to 'Step 8's assertHeaderSafe'.",
+      "executed_case_table_already_refuses": true
+    }
+  ],
+  "ruling_checks": {
+    "prefix_budgets": {
+      "Subject": {
+        "prefix_octets": 9,
+        "value_budget": 989
+      },
+      "References": {
+        "prefix_octets": 12,
+        "value_budget": 986
+      },
+      "In-Reply-To": {
+        "prefix_octets": 13,
+        "value_budget": 985
+      }
+    },
+    "R4_B": "The exact /[^ \\t]/ predicate is linear and agrees with the spec's explicitly defined ASCII space/tab domain. U+00A0 is the only relevant semantic disagreement found under a broader Unicode-horizontal-whitespace reading.",
+    "R4_C": "Closed for all requested cases: empty, spaces, tabs, Re:, re:, RE: with trailing space, Re: Re: x, and ordinary unprefixed subjects are fixed points after one derivation.",
+    "messages": "The three refusal messages are pairwise distinct and contain no fetched header content.",
+    "in_reply_to_failure_mode": "Refusal rather than dropping oversized In-Reply-To is internally consistent with the direct ruling and the spec's stated Gmail threading conditions. Relying on threadId alone would reopen a rejected alternative rather than repair an inconsistency.",
+    "header_enumeration": "buildMime can emit conditional From, To, Subject, conditional In-Reply-To, conditional References, and fixed Content-Type. Under the exact replyTarget return, create_reply_draft has no from value, so From is not emitted on the conforming reply path. Content-Type is fixed. To is not safely bounded under the written Unicode-character interpretation, as Finding 1 demonstrates."
+  },
+  "routed_scope_objections": [
+    {
+      "subject": "R4-B and U+00A0",
+      "objection": "U+00A0 is Unicode horizontal whitespace, but /[^ \\t]/ treats it as content. A U+00A0-only Reply-To beside a valid From is selected and then grammar-refused instead of falling through.",
+      "routing": "Excluded from verdict because R4-B's exact ASCII predicate was directly ruled and the spec explicitly defines horizontal trimming as only space/tab."
+    },
+    {
+      "subject": "General buildMime From line",
+      "objection": "buildMime's pre-existing optional From value has no length bound.",
+      "routing": "Excluded from verdict. The exact create_reply_draft data path cannot supply from, and general pre-existing buildMime header behavior is explicitly out of scope as a discovered issue."
+    }
+  ],
+  "revision_scope_confirmation": {
+    "table_B_rows": "Only ruling-authorized changes were present relative to 197cd797: UTF-8-octet units, prescribed R4-B predicate, R4-C empty-subject behavior, and step 7 output refusal.",
+    "derived_grammar_forms": "No changes.",
+    "case_table": "Only ruling-related rows/unit changes were added. No unrelated case was altered.",
+    "other_files": "No product code changed on the design branch. The additional diff entries beyond the four review files were raw historical reviewer outputs that USER_FOCUS explicitly excluded."
+  },
+  "verdict": "needs-attention",
+  "verdict_reason": "Three Band-A defects let a wrong implementation satisfy the specified criteria; one admits a 999-octet To line under the literal grammar and character bound, and another concrete implementation admits a 999-octet References line while passing every listed step-7 case. The closing criterion therefore does not close. At minimum this requires another architect pass and round 6; Finding 1 also activates the supplied owner stop because the executed Table B case table does not already refuse it."
+}

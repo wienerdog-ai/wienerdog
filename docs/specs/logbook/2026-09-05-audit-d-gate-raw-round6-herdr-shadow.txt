@@ -1,0 +1,204 @@
+# Design gate raw — round 6 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: f2d6acc5660030b92333ae52e2ebcc0126937617 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision f2d6acc5660030b92333ae52e2ebcc0126937617 vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP for this revision. The output-safety rule itself held in execution, but the To boundary table and acceptance criterion are inconsistent: the purported exact-998 accepted fixture is only 995 octets, and the criterion implicitly pins an owner-open step-4 unit. That is a product/gate finding requiring a revision pass and round 7. Three additional wording/provenance defects can be fixed in-surface.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../focus-ad6.txt",
+      "exit_status": 0,
+      "result": "Loaded the vendored operating instructions and full user focus."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Empty porcelain output before review."
+    },
+    {
+      "command": "git rev-parse HEAD main; git diff --name-status main...HEAD",
+      "exit_status": 0,
+      "result": "HEAD=f2d6acc5660030b92333ae52e2ebcc0126937617; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e. Confirmed the four reviewed Markdown files and ignored raw .txt records."
+    },
+    {
+      "command": "wc -l on the four review files",
+      "exit_status": 0,
+      "result": "2436 total lines."
+    },
+    {
+      "command": "nl -ba plus sed ranges covering docs/specs/WP-audit-d-code-derived-recipients.md:1-1064",
+      "exit_status": 0,
+      "result": "Read the complete spec in bounded chunks."
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md; nl -ba docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md",
+      "exit_status": 0,
+      "result": "Read both files completely."
+    },
+    {
+      "command": "nl -ba plus sed ranges covering docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md:1-1145",
+      "exit_status": 0,
+      "result": "Read the complete rounds log in bounded chunks."
+    },
+    {
+      "command": "wc -l and nl -ba over src/gws/broker/verbs.js, registry.js, limits.js, src/gws/gmail.js, src/cli/gws-broker.js, src/core/runtime-profile.js, tests/unit/gws-broker.test.js, tests/unit/gws-gmail.test.js",
+      "exit_status": 0,
+      "result": "Read all cited implementation and test files."
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=80 197cd797 f2d6acc5660030b92333ae52e2ebcc0126937617 -- docs/specs/WP-audit-d-code-derived-recipients.md",
+      "exit_status": 0,
+      "result": "Inspected the complete ruling-surface diff."
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=0 197cd797 f2d6acc5660030b92333ae52e2ebcc0126937617 -- docs/specs/WP-audit-d-code-derived-recipients.md",
+      "exit_status": 0,
+      "result": "Confirmed step 0's canonical row is unchanged but found residual unlicensed octet wording at lines 400 and 550."
+    },
+    {
+      "command": "git log --oneline --decorate --no-abbrev-commit main..HEAD; git diff --no-ext-diff --unified=0 d3041ba0 f2d6acc5660030b92333ae52e2ebcc0126937617 -- <four reviewed files>",
+      "exit_status": 0,
+      "result": "Verified the round-5 revision surface and recorded fixes."
+    },
+    {
+      "command": "rg -n -F searches for 'step 0', '998 octets', '998 characters', 'create_reply_draft', 'gmail.draft', and 'step 7' in reviewed files",
+      "exit_status": 0,
+      "result": "Located unit, step-number, handler-path, and mirror inconsistencies."
+    },
+    {
+      "command": "mktemp -d /private/tmp/wienerdog-shadow-ad6.XXXXXX",
+      "exit_status": 1,
+      "result": "Denied by the read-only sandbox: Operation not permitted."
+    },
+    {
+      "command": "printenv TMPDIR; mktemp -d",
+      "exit_status": 1,
+      "result": "TMPDIR was /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/; creation was denied. No worktree write was attempted."
+    },
+    {
+      "command": "node via a quoted here-document",
+      "exit_status": 1,
+      "result": "zsh could not create its temporary here-document file. Replaced with byte-preserving base64 pipes."
+    },
+    {
+      "command": "printf <base64 boundary-probe source> | base64 -D | node",
+      "exit_status": 0,
+      "result": "References: 939+1+46 gives value 986/line 998 accepted; 940 gives value 987/line 999 refused; 974 gives value 1021/line 1033 refused. Subject and In-Reply-To both had exact 998/999 sides. Listed To accepted witness produced line 995; a constructed 246-astral+U+0800+aa@b.co witness produced line 998; 247 astral+aa@b.co produced line 999. Code-unit step-4 maximum was line 950; code-point maximum was line 1263. A 998-euro subject passed the character input bound and produced a 3007-octet derived line, refused by step 7. U+00A0, U+2003, U+3000, U+FEFF, and U+200B all selected Reply-To and then grammar-refused. Fixed Content-Type measured 41 octets."
+    },
+    {
+      "command": "printf <base64 complete-pipeline source> | base64 -D | node",
+      "exit_status": 0,
+      "result": "Executed 59 ordered-pipeline cases spanning the listed step 0/1/2/3/4/7 families and subject fixed points: 0 mismatches."
+    },
+    {
+      "command": "git show 197cd797:<spec> | sed -n '385p' | shasum -a 256; sed -n '395p' <spec> | shasum -a 256",
+      "exit_status": 0,
+      "result": "Both step-0 row hashes were f1da662bdbd094b9e28ef34d71203ea9f2370811886846dad94ad103e117af73; byte-identical."
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=0 197cd797 f2d6acc5660030b92333ae52e2ebcc0126937617 -- docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md",
+      "exit_status": 0,
+      "result": "Only the post-ruling banner was added; the brief body remained unchanged."
+    },
+    {
+      "command": "printf <base64 open-unit consequence probe> | base64 -D | node",
+      "exit_status": 0,
+      "result": "A 998-character/2994-octet References value with no Message-ID is omitted from output: character-bound policy drafts, octet-bound policy refuses. Therefore changing the input unit has an availability/product consequence, though not an output-safety consequence."
+    },
+    {
+      "command": "git diff --check main...HEAD -- <four reviewed files>",
+      "exit_status": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": "git diff --quiet HEAD -- <four reviewed files>",
+      "exit_status": 0,
+      "result": "The worktree copies exactly match the target commit."
+    },
+    {
+      "command": "git status --porcelain 2>/dev/null | shasum -a 256",
+      "exit_status": 0,
+      "result": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, the empty-output hash. Initial and final porcelain states are identical."
+    }
+  ],
+  "execution_notes": [
+    "Git repeatedly emitted macOS xcrun cache warnings because the sandbox denied temporary cache creation; the affected git commands nevertheless exited 0 and returned usable repository data.",
+    "Two tool-side attempts to prepare a base64 payload failed before any shell command ran because TextEncoder and btoa were unavailable in the orchestration isolate. They made no filesystem or repository changes."
+  ],
+  "findings": [
+    {
+      "id": "R6-A",
+      "title": "The To boundary is not an exact boundary and the criterion silently pins the open step-4 unit",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 551,
+      "line_end": 551,
+      "confidence": 0.99,
+      "body": "The row is titled “accepted at exactly 998 octets,” but its To witness is explicitly only 995. Execution confirmed that 246 astral characters plus aa@b.co produces a 995-octet line, while adding one grammar-accepted three-octet U+0800 character produces the missing exact-998 witness. A checker that accepts only through 995 and refuses 999 passes the listed To cases while wrongly rejecting valid 996–998-octet lines. There is a second contradiction with criterion 5 at lines 762–764: under the deliberately permitted UTF-16 .length interpretation of step 4, both listed astral To values exceed 320 code units and refuse at step 4, so neither the accepted case nor step 7's fixed refusal can occur. The rounds log itself confirms this at lines 1072–1074. Under code points, step 7 is reachable. The current criterion therefore either rejects an allowed implementation or implicitly decides the unit that the package says remains open.",
+      "recommendation": "Replace the accepted To fixture with 246 astral characters + U+0800 + aa@b.co, which is grammar-accepted, 254 code points, 994 value octets, and exactly 998 line octets. Make the To step-7 assertions explicitly conditional on a code-point step-4 implementation; for a code-unit implementation, assert the earlier step-4 refusal and state that no over-998 To line is reachable. Do not resolve step 4's unit.",
+      "executed_case_table_already_refuses": "No. This is a missing accepted-side boundary and a reachability contradiction, not a newly discovered overlong line that the table accepts. The table does refuse the 999-octet witness under code points; under code units it refuses earlier at step 4. The owner-stop condition is therefore not triggered, but this is a product/gate finding and requires round 7."
+    },
+    {
+      "id": "R6-B",
+      "title": "The step-0 unit rollback is incomplete in canonical mirrors",
+      "materiality_band": "C",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 400,
+      "line_end": 400,
+      "confidence": 1,
+      "body": "Step 0's row is byte-identical to 197cd797 and correctly says 998 characters, but step 5 still claims its Subject is ≤998 octets “by step 0.” The accepted bounds row at line 550 was also changed from exactly 998 characters at 197cd797 to exactly 998 octets. Those changes are outside (a)+R4-B+R4-C and contradict lines 395 and 412–416. Thus R5-B restored only the canonical row, not its mirrors.",
+      "recommendation": "Change line 400 to “≤998 characters by step 0” and restore line 550 to “exactly 998 characters.” Keep octets exclusively in step 7 and its output fixtures.",
+      "executed_case_table_already_refuses": "Not applicable: this is an unlicensed unit/provenance mismatch, not an unsafe accepted Table B input."
+    },
+    {
+      "id": "R6-C",
+      "title": "R5-E's step-number sweep still describes the wrong refusal",
+      "materiality_band": "C",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 607,
+      "line_end": 607,
+      "confidence": 0.98,
+      "body": "The mutation description says that dropping a field from step 1 causes step 7 to refuse the CR/LF with a different message. Step 7 is now only an octet-length check. A short CR/LF-bearing Subject, Message-ID, or References value passes step 7 and is refused by step 8's assertHeaderSafe; a recipient field may instead fail the grammar at step 3. The RED identity can still distinguish the messages, but the stated control flow is false.",
+      "recommendation": "State that the mutant reaches a later refusal with a non-step-1 message—step 3 for malformed recipient values or step 8 for short CR/LF-bearing emitted headers—without claiming step 7 performs CR/LF refusal.",
+      "executed_case_table_already_refuses": "Yes. The correct ordered pipeline refuses every listed CR/LF case at step 1; this is proof-description hygiene only."
+    },
+    {
+      "id": "R6-D",
+      "title": "The ruling record understates both the applied header set and the open-unit cost",
+      "materiality_band": "C",
+      "file": "docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md",
+      "line_start": 41,
+      "line_end": 43,
+      "confidence": 0.96,
+      "body": "The ruling record enumerates Subject, In-Reply-To, and References but omits To, although the licensed round-5 application and canonical step 7 now cover To. Separately, lines 108–111 say changing step 0 to octets has “no product consequence.” Execution disproved that wording: with 998 euro characters in References and no Message-ID, the character policy drafts because References is omitted, while the octet policy refuses at step 0. Output safety is unchanged, but availability is not.",
+      "recommendation": "Add To to the recorded applied output set, identifying it as the round-5 completeness correction under option (a). Replace “no product consequence” with “no output-safety consequence,” and record that an octet input bound can introduce additional fail-closed refusals when a long raw value would not be emitted.",
+      "executed_case_table_already_refuses": "Not applicable: this concerns ruling provenance and the stated cost of an open owner question."
+    }
+  ],
+  "confirmed_invariants": [
+    "R5-A is closed numerically: References 939→998 accepted, 940→999 refused, and 974→1033 correctly labeled non-boundary.",
+    "Subject and In-Reply-To each have exact 998/999 one-octet boundaries.",
+    "Step 7 covers every variable header reachable from create_reply_draft: To, Subject, In-Reply-To, and References. Content-Type is fixed at 41 octets.",
+    "From is unreachable on this verb's specified data path: buildMime emits it only when m.from is supplied, while replyTarget returns no from field and the verb schema accepts no address field.",
+    "The step-7 refusal message names no field, and neither criteria nor identity depends on check order.",
+    "A 998-character euro Subject passes the input-character bound but is refused by the UTF-8 output bound; no accepted tested input produced an over-998 transmitted line.",
+    "U+00A0, U+2003, U+3000, U+FEFF, and U+200B-only Reply-To values are selected by the ruled ASCII predicate and then grammar-refused. None falls through to From or selects a wrong recipient.",
+    "The empty, spaces-only, tabs-only, plain, and already-Re subject derivations are fixed points.",
+    "The owner-unit question remains explicitly OPEN and was not converted into an owner item."
+  ],
+  "routed_scope_objections": [
+    {
+      "topic": "Unicode whitespace under /[^ \\t]/",
+      "disposition": "No new objection counted. All five requested code points fail closed at the grammar; this is an availability residual under the ruled R4-B predicate, never a wrong recipient."
+    },
+    {
+      "topic": "buildMime optional From and raw UTF-8 headers",
+      "disposition": "Out of scope as instructed. From is not reachable from create_reply_draft; the pre-existing generic buildMime behavior remains a Discovered issue."
+    },
+    {
+      "topic": "Step-4 character unit",
+      "disposition": "No ruling requested. Under UTF-16 .length, an over-998 To line cannot pass step 4—the executed maximum was 950—so step 4 catches it rather than step 7. Under code points, step 7 catches it. Safety holds under both, but the acceptance criterion must represent both permitted implementations."
+    }
+  ]
+}
