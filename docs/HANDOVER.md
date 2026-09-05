@@ -81,10 +81,11 @@ resuming it.
 > **Also recorded, not defects:** the size-ceiling residual **F6** — 594 lines
 > against a ~400 ceiling, all contract and corpus, **zero gate machinery added in
 > any round** — and **C26's lookup-detector-only reach** as a stated property of
-> Table D. **Plus the OPEN owner question carried forward** from audit-D: whether
-> the input bound should be restated in UTF-8 octets to match the output bound — no
-> output-safety consequence either way, but availability differs, and the character
-> bound as ruled is the more permissive.
+> Table D. **The audit-D input-bound unit question is CLOSED — ruled directly by the
+> owner on 2026-09-06 (*"agreed. let us keep characters."*): step 0 stays at 998
+> CHARACTERS as item 8 says, step 7 at 998 UTF-8 octets; no output-safety consequence
+> either way, and the character bound is the more permissive. Record:
+> `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-queue.md`.
 >
 > **Next in the queue:** `WP-process-runbook-sweeps`, then
 > `WP-dream-git-env-pinning` (**owner product decision** — the maturing architect

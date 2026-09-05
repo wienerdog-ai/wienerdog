@@ -153,6 +153,13 @@ consequence** either way once the output bound covers every emitted line, but
 bound would refuse at step 0. The character bound is the more permissive; both are
 output-safe.
 
+**RULED — 2026-09-06, directly by the owner.** Asked for a recommendation, the orchestrator recommended
+keeping characters (safety is identical either way once step 7 bounds every emitted line in octets; an
+octet input bound refuses more legitimate non-ASCII mail for no gain; the ruled state is the reviewed
+state). The owner, verbatim: *"agreed. let us keep characters."* Item 8 stands as written — the step-0
+input bound is **998 characters**; step 7's output bound stays **998 UTF-8 octets**; the two units are
+deliberate and this question is CLOSED. This is the session's second direct ruling (the first is item 10).
+
 This is deliberately **not** an owner item and **not** dispatched under the standing
 instruction: the architect was caught in round 5 making exactly this change without
 a licence, so recording it as an open question the owner answers directly is the
