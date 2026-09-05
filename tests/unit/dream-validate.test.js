@@ -2750,7 +2750,7 @@ function chainFor(stateDir, kind) {
   return chain;
 }
 
-test('dream-validate: [QPD-1] a successful preservation flushes the artifact through the descriptor its bytes were verified through', () => {
+test('dream-validate: [QPD-1] a successful preservation flushes the artifact through the descriptor its bytes were verified through', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
   const tracer = traceFlushes();
@@ -2768,7 +2768,7 @@ test('dream-validate: [QPD-1] a successful preservation flushes the artifact thr
   assert.equal(first.ino, destStat.ino, '[QPD-1] the first flush is on dest\'s INODE — asserted by inode, not by the name the descriptor was opened under');
 });
 
-test('dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort', () => {
+test('dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   function assertSiteFails(kind, label, failFactory) {
     const stateDir = freshStateDir();
     const content = Buffer.from('the judged bytes\n');
@@ -2910,7 +2910,7 @@ test('dream-validate: [QPD-2] a flush that does not complete at ANY required tar
   }
 });
 
-test('dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor', () => {
+test('dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   const stateDir = freshStateDir();
   const content = Buffer.from('the judged bytes\n');
   const tracer = traceFlushes();
@@ -2928,7 +2928,7 @@ test('dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bo
   assert.deepEqual(gotChain, chain.map((p) => path.resolve(p)), '[QPD-3] the flushed sequence equals the fixed chain, in order');
 });
 
-test('dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists', () => {
+test('dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   const stateDir = freshStateDir();
   assert.equal(fs.existsSync(path.join(stateDir, 'quarantine')), false, '[QPD-4] precondition: neither directory exists yet');
   const content = Buffer.from('the judged bytes\n');
@@ -2948,7 +2948,7 @@ test('dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with
   assert.deepEqual(gotChain, chain.map((p) => path.resolve(p)), '[QPD-4] the flushed sequence equals the two-level chain, in order');
 });
 
-test('dream-validate: [QPD-5] every act at dest is gated on the created inode — a substitution before the last gate fails the preservation and is never removed, the returned bytes are the ones read after the flush and compared, and a stat that cannot complete fails LOUD', () => {
+test('dream-validate: [QPD-5] every act at dest is gated on the created inode — a substitution before the last gate fails the preservation and is never removed, the returned bytes are the ones read after the flush and compared, and a stat that cannot complete fails LOUD', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   // (a) a substitution from INSIDE THE COMMIT ITSELF — the post-commit,
   // pre-read window. The bytes still compare EQUAL (the read goes through
   // the held descriptor), so only the ownership gate can see it.
@@ -3383,7 +3383,7 @@ test('dream-validate: [QPD-6] the commit is no-clobber, every temp-name act is g
   }
 });
 
-test('dream-validate: [QPD-7] every directory descriptor the flush protocol opens is CLOSED, on the steady-state path and after a directory fsync that throws', () => {
+test('dream-validate: [QPD-7] every directory descriptor the flush protocol opens is CLOSED, on the steady-state path and after a directory fsync that throws', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
   // (a) a successful preservation on the REDACTED arm — the deepest chain.
   {
     const stateDir = freshStateDir();

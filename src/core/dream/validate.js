@@ -945,13 +945,14 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   try {
     if (ownsName(tmp, fd)) removeOwnedQuarantinePath(tmp);
     // The flush-then-verify block (row F6): the WHOLE flush set runs before
-    // the read-back, so the comparison that follows is against bytes a
-    // completed flush has already covered. `verified = readBack` is NOT a
-    // re-read — row F0's linearization claim rests on that — and a
-    // `WienerdogError` here (row F8's INDETERMINATE outcome) is RE-THROWN
-    // rather than turned into a preservation failure, because it is the one
-    // signal that says this call could not tell whether its own artifact is
-    // still at that name.
+    // the read-back, so the read occurs after a completed flush OF THAT
+    // INODE — not a claim that the flush covered the returned bytes, which
+    // coincides only absent a concurrent writer of that inode (row F10 (v)).
+    // `verified = readBack` is NOT a re-read — row F0's linearization claim
+    // rests on that — and a `WienerdogError` here (row F8's INDETERMINATE
+    // outcome) is RE-THROWN rather than turned into a preservation failure,
+    // because it is the one signal that says this call could not tell
+    // whether its own artifact is still at that name.
     try {
       const readBack = flushPreservation(fd, stateDir, qdir) ? readAllAt(fd, content.length) : null;
       if (readBack !== null && Buffer.compare(readBack, content) === 0 && ownsName(dest, fd)) {
