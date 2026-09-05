@@ -942,11 +942,177 @@ remaining cuts would remove content a consumer uses.
 
 ## Executor pass — template conformance
 
-<!-- orchestrator: clean-context executor, spec + template only -->
+Clean-context executor, spec + template only (`codex-review.md:102-112`).
+**Verdict: CONFORMANT** — every template section is present or carries an
+explicit `N/A — <one-line reason>` line.
+
+One observation, **dropped (T1)**: the executor noted that the Security checklist
+is kept as a heading with an `N/A —` line rather than deleted, where the
+template's own heading reads "delete only if the WP touches no untrusted input".
+Dropped because `spec-authoring.md:25-27` requires exactly that N/A line in place
+— "a template section is never deleted silently … so absence is always visible
+and checkable" — and the runbook governs the template heading's older phrasing.
+The disagreement between the two is a **real residual, routed not fixed**: it
+belongs to whoever next edits `_TEMPLATE.md`'s section headings, and is out of
+scope for a WP whose only template edit is R09. Recorded here so the next editor
+finds it.
 
 ## Executor pass — internal coherence
 
-<!-- orchestrator: clean-context executor -->
+Clean-context executor; **seven findings, all LIGHT** — none changes a Table A
+disposition or a Table B landing file, so under the §0.1 stop criterion none
+escalates. Every finding was re-verified against the files here before being
+applied (`codex-review.md:332-334`, the orchestrator spot-checks citations before
+anyone acts on a finding); the re-verification run is pasted below. An eighth
+finding (Z7) was **self-found** during the whole-cell re-read that X3's rewrite
+triggered.
+
+| # | Band | Finding | Disposition | What changed |
+|---|------|---------|-------------|--------------|
+| X1 | C | Spec cites `codex-review.md:58-69` for "every addition to the system itself earns its place"; that construct is `:65-69` — `:58-64` is the separate value-question bullet | fix | **Three** citations corrected, not the one reported. The executor named `:47`; a claim-shaped sweep of the spec (`spec-authoring.md:56-63`) found `:214` and `:254` citing the same construct with the same wrong range. All three now read `:65-69`; `:216` was already correct |
+| X2 | C | Table A R05 provenance `docs/HANDOVER.md:350` — the phrase "(grep the / injected marker)" spans the wrap onto `:351` | fix | → `:350-351` |
+| X3 | C | Table A R06 provenance claims an inbox bullet for "a guard must notice its own death"; no such bullet exists | fix | Independently re-measured: a claim-shaped probe over all 1421 inbox lines returns two hits, neither of which states the rule (`:146` is an unrelated `SCHED_SUPPORTED` guard; `:1241` is about guard *designs* defeated by measurement). `:1243` is R05 and `:1244` is the faithful-before-state rule, as the executor said. The inbox half is dropped: R06's provenance is now `docs/HANDOVER.md:351` **only**, and the cell says so explicitly so a later reader does not re-add it |
+| X4 | C | Table A R12 provenance `docs/HANDOVER.md:370-372`; `:370` is R18's clause ("two independent gates on the SAME tip") | fix | → `:371-372`. R18's own `:370-371` was already correct |
+| X5 | C | Mirrored Surface Checklist says the untouched-text criterion mirrors Table A's ALREADY BOUND rows; it also covers the pre-existing bound anchors of two PARTIAL rows | fix | Checklist entry now names both categories and both anchors, and notes they are also Table B insertion points (R16, R15) |
+| X6 | C | The checklist omits O3, which restates Table A's whole PARTIAL/ALREADY-BOUND list | fix | O3 registered as a mirror, with the restated list quoted so the dependency is visible |
+| X7 | B | The criterion "R19 does not appear as a landed rule in any of the five files" has no runnable form (`codex-review.md:122-132`) | fix, by **deletion** | See below |
+| Z7 | C | **Self-found.** Implementation notes claimed "for four rules a repeat one"; re-derived from Table A's own cells, five rules name more than one source | fix | → "for five rules a repeat one" |
+
+**X7 — the choice, and why deletion is the smaller surface.** The alternative was
+a guarded, whitespace-flattened absence grep over the five files. It was rejected
+and the criterion deleted. R19 has **no landed text**, so any pattern for it
+would be phrase-shaped by construction — a sweep for `declined owner grant` finds
+only the wording its author imagined and returns a clean all-clear for every
+other one. That is precisely the failure `codex-review.md:391-399` names and that
+this WP's own R08 lands, and a check that cannot discriminate is machinery
+guarding nothing (`codex-review.md:154-164`). The prohibition stays where a
+prohibition belongs — Out of scope and owner item O4 — and the reviewer's read
+carries it. The choice is recorded in the spec's Implementation notes, so the
+next reader sees the reasoning and not just the absence.
+
+**Z7 is the intra-cell rule paying for itself.** X3 rewrote one Table A cell;
+`spec-authoring.md:51-55` requires re-reading that cell WHOLE for a sentence the
+rewrite just falsified. The re-read went one step further and re-derived every
+Paid-for-by cell's source count, which is what surfaced the stale "four".
+
+### Re-verification of the seven findings, run before applying any of them
+
+```text
+===== X1: codex-review :58-69 is TWO bullets? =====
+codex-review 57-70
+  57:   quietly rebuilding the absence that was the point.)
+  58: - Every solution starts with the value question: what does fixing this
+  59:   protect or earn in the product, and is that worth the fix plus the
+  60:   maintenance it creates? "Not worth solving" is a legitimate
+  61:   disposition — a named residual — and reaching it before the first
+  62:   patch is cheaper than after the third round. The repeat-kind rule
+  63:   below decides HOW to solve what recurs; this question decides
+  64:   WHETHER.
+  65: - The same test gates every addition to the system itself: a new rule,
+  66:   a document, a gate, a process step earns its place by the value it
+  67:   protects, named at the moment of adding — or it is not added. Both
+  68:   runaway loops this repo has survived were additions that each looked
+  69:   defensible alone and never faced the aggregate question.
+  70: - When two consecutive rounds land findings of the same kind, the next
+
+===== X1 sweep: every citation of 58-69 / 65-69 in the spec =====
+  spec:47: restating it. `codex-review.md:58-69` states that every addition to the system
+  spec:214: addition that must name the value it protects (`codex-review.md:58-69`), and
+  spec:216: - **The aggregate question, faced.** `codex-review.md:65-69` requires the
+  spec:254: `codex-review.md:58-69` forbids without a named protected value). *Cost of
+
+===== X2: HANDOVER 349-352 =====
+
+  349:   the working tree.
+  350: - **Prove a mutation was applied before believing its matrix** (grep the
+  351:   injected marker); a guard must notice its own death.
+  352: - **Enumerating the BAD is unclosable when the grammar isn't yours;
+
+===== X3: inbox, claim-shaped sweep for R06 (guard notices its own death) =====
+  inbox:146: - WP-075: `schedule add` registers via real `process.platform` (no injected platform seam), so its failure-path test needs the `SCHED_SUPPORTED` guard — verified NOT dead in CI (true on darwin and systemd ubuntu runners). Functions that take an explicit `platf
+  inbox:1241: - WP-dream-promote-in-workspace: **Enumerating the BAD is unclosable when the grammar isn't ours; enumerating our OWN GOOD is closable.** Two guard directions died by measurement — classifying git's verb (defeated by `--attr-source`, a value-consuming global o
+  inbox hits = 2 (whole file, 1421 lines)
+  --- and the three bullets around 1243 ---
+
+  1243: - WP-dream-promote-in-workspace: **Prove a mutation was APPLIED before believing its result.** Shell escaping silently mangled injected code and three "greens" were unapplied mutations. Every cell now greps its own marker and prints the injected line before the test runs.
+  1244: - WP-dream-promote-in-workspace: **A "before" state must be FAITHFUL or its red is fake.** Reverting a predicate without also restoring the exemption arm it shipped with produced a RED from the package's own legitimate calls, not from the mutation. Read *which* assertion fired, not just the exit code.
+  1245: - WP-dream-promote-in-workspace: **A canary that differs from the exploit by ARITY proves nothing.** The three-token `--index-output` canary went green against a set that accepted the two-token form; argument count is the first thing shape-equality decides, so such a canary dies before reaching the slot under test. The `+0`-delta lesson, one level in.
+
+===== X4: HANDOVER 368-373 =====
+
+  368: ## Process notes
+  369: 
+  370: - The review-gate flow that converged: two independent gates on the SAME tip,
+  371:   both verdicts on that tip, a pinned reading before each round ("clean or
+  372:   C-only → proceed; anything above C returns banded"), and a stop criterion
+  373:   pinned in advance for repeated same-family findings.
+
+===== X5/X6: spec lines 195-210 (checklist) and 298-308 (acceptance) =====
+checklist
+  193: spot (register-new-mirrors).
+  194: 
+  195: - [ ] Deliverables-table cells — each `modify` row's Notes names the rule ids
+  196:       landing in that file; Table B's File column decides which
+  197: - [ ] Acceptance criteria — the anchor-literal criterion quantifies over Table B;
+  198:       the untouched-text criterion over Table A's ALREADY BOUND rows
+  199: - [ ] Verification steps — the sentinel data block is one line per Table B anchor
+  200:       literal, in Table B's order
+  201: - [ ] Current-state description — the passages Table B's Insertion-point column
+  202:       names, and their line ranges
+  203: - [ ] Out of scope — Table A's ALREADY BOUND (R10) and UNPAID (R19) rows
+  204: - [ ] Implementation notes and owner items O1–O4 — they mirror Table B's File
+  205:       column for R14 and R15, and Table A's disposition for R19
+  206: 
+  207: ## Implementation notes & constraints
+  208: 
+
+acceptance
+  296: - [ ] Every `EXTEND` row leaves its insertion point's existing claim intact: the
+  297:       construct still says what it said, and the change at that point is
+  298:       additive. Across the whole PR, the only deleted lines are lines an EXTEND
+  299:       rewrote in place — no bullet, sentence or rule is removed.
+  300: - [ ] The text behind Table A's ALREADY BOUND row and the bound halves this WP
+  301:       must not disturb is still present: `codex-review.md` still contains
+  302:       `Loop circuit-breaker (ADR-0031)` and `A cited RANGE is checked at BOTH
+  303:       ends`, and `.claude/agents/wd-reviewer.md` still contains
+  304:       `Contract-density detector (ADR-0031)`.
+  305: - [ ] R19 does not appear as a landed rule in any of the five files.
+  306: - [ ] `memory/lessons/inbox.md` is not modified by this PR.
+  307: - [ ] `npm run lint` passes: markdownlint reports 0 errors, and the frontmatter
+  308:       check passes, still reporting 4 agent(s) — the two agent-file edits are
+  309:       body-only and must not disturb their frontmatter.
+  310: - [ ] **Idempotence: N/A — docs-only, ships no command and writes nothing outside
+```
+
+### Z7 re-derived from the spec's own table
+
+```text
+  R04 -> 2 sources: ['WP-dream-promote-in-workspace', 'WP-launcher-no-self-resync-republish']
+  R07 -> 2 sources: ['WP-dream-promote-in-workspace', 'WP-show-slot-own-value-kind']
+  R14 -> 3 sources: ['WP-audit-d-code-derived-recipients', 'WP-dream-promote-in-workspace', 'WP-scheduler-mutation-home-authority']
+  R16 -> 2 sources: ['WP-index-guard-residuals', 'WP-quarantine-banner-location']
+  R17 -> 2 sources: ['WP-dream-promote-in-workspace', 'WP-quarantine-banner-location']
+  rules whose Paid-for-by names more than one source = 5
+  spec:230: for five rules a repeat one.
+```
+
+## Orchestrator re-run of the sentinel gate — untouched tree at `0ac75957`
+
+`bash sentinels.sh` extracted verbatim from the spec's Verification steps, run
+from the worktree with the revision stashed so the tree is exactly `0ac75957`.
+This is the independent re-run of §0.6's STATE 1 by a second actor.
+
+```text
+tree                : 0ac75957 (git rev-parse --short HEAD)
+porcelain BEFORE    : 0 lines
+sentinel gate       : 20 FAIL, 0 PASS
+sentinels exit      : 1
+porcelain AFTER     : identical to BEFORE (diff exit 0)
+```
+
+Read-only confirmed mechanically: `git status --porcelain` is byte-identical
+before and after the run (`codex-review.md:296-298`). Result agrees with §0.6's
+STATE 1 row.
 
 ## External rounds
 

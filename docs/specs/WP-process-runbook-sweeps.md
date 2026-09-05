@@ -44,7 +44,7 @@ it).
 **The central constraint is that most of these rules are already bound, in whole
 or in part.** `spec-authoring.md:47-50` states that a fact is stated once, in the
 surface that owns it, and every other surface cites the owner rather than
-restating it. `codex-review.md:58-69` states that every addition to the system
+restating it. `codex-review.md:65-69` states that every addition to the system
 itself — a new rule, a document, a gate, a process step — earns its place by the
 value it protects, named at the moment of adding, or it is not added. So the work
 here is **not** "add thirteen rules": it is to measure what each rule's target
@@ -141,14 +141,14 @@ pasted in the round-zero record). `inbox` means `memory/lessons/inbox.md`.
 | R02 | Read the tool's own summary; never substitute your own recount of its output | PARTIAL | `codex-review.md:384-390` ends with the general form ("read the VALUE the tool produced, not the value the pipeline last touched"), but is about `$?` being clobbered | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:344` |
 | R03 | A `+0` test delta on a test that dies before your change proves nothing — check where it dies | UNBOUND | — | `docs/HANDOVER.md:345-346` |
 | R04 | `+0/−0` beside a claimed content change is a failure signature; prove the commit, not the working tree | UNBOUND | — | `inbox` WP-dream-promote-in-workspace (3rd occurrence: PRs #19, #24, #61) and WP-launcher-no-self-resync-republish; `docs/HANDOVER.md:347-349` |
-| R05 | Prove a mutation was applied (grep the injected marker) before believing its matrix | UNBOUND | — | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:350` |
-| R06 | A guard must notice its own death | UNBOUND | — | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:351` |
+| R05 | Prove a mutation was applied (grep the injected marker) before believing its matrix | UNBOUND | — | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:350-351` |
+| R06 | A guard must notice its own death | UNBOUND | — | `docs/HANDOVER.md:351` only — no inbox bullet states this rule (measured) |
 | R07 | A canary that differs from the exploit by arity proves nothing | UNBOUND | — | `inbox` WP-dream-promote-in-workspace and WP-show-slot-own-value-kind (two payments) |
 | R08 | A claim sweep is pronoun-aware, and a claim's scope citation sits adjacent to the claim | PARTIAL | `spec-authoring.md:56-63` binds claim-not-wording, family-wide and whitespace-flattened; neither clause here | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:362-363` |
 | R09 | Whichever copy of a registered mirror pair moves, the other moves in the same commit | PARTIAL | `_TEMPLATE.md:88-91` and ADR-0031 bind "in one pass"; nothing binds commit-level atomicity | `inbox` WP-dream-promote-in-workspace |
 | R10 | Two consecutive rounds on one contract family → contract extraction, never a third patch | **ALREADY BOUND — this WP does nothing** | `codex-review.md:376-383` (operative and complete); `.claude/agents/wd-reviewer.md:21` | ADR-0031 (its rounds 7–8); `docs/HANDOVER.md:359-361` |
 | R11 | Every review round's findings carry a materiality band, A/B/C as Table B defines them | UNBOUND | — | `docs/HANDOVER.md:364-366` |
-| R12 | The reading those bands trigger is pinned in the round record before the round | UNBOUND | — | `docs/HANDOVER.md:370-372` |
+| R12 | The reading those bands trigger is pinned in the round record before the round | UNBOUND | — | `docs/HANDOVER.md:371-372` |
 | R13 | Separate form insufficiency from a predicate defect before reopening a loop as design | UNBOUND | — | `inbox` WP-dream-promote-in-workspace; `docs/HANDOVER.md:355-358` |
 | R14 | Enumerate your own good, not the bad, wherever the grammar is not yours | UNBOUND | — | `inbox` WP-dream-promote-in-workspace, WP-scheduler-mutation-home-authority, WP-audit-d-code-derived-recipients (three payments) |
 | R15 | A reviewer judges the whole cell, never the grep window that matched | PARTIAL | `spec-authoring.md:51-55` binds the **author's** post-rewrite intra-cell re-read; nothing binds the **reviewer's** read | `inbox` quarantine-surface (names wd-reviewer, PR #33) |
@@ -195,14 +195,20 @@ spot (register-new-mirrors).
 - [ ] Deliverables-table cells — each `modify` row's Notes names the rule ids
       landing in that file; Table B's File column decides which
 - [ ] Acceptance criteria — the anchor-literal criterion quantifies over Table B;
-      the untouched-text criterion over Table A's ALREADY BOUND rows
+      the untouched-text criterion covers BOTH Table A's ALREADY BOUND row (R10)
+      and the pre-existing bound anchors of two PARTIAL rows, which are also
+      Table B insertion points (R16's `A cited RANGE is checked at BOTH ends`,
+      R15's `Contract-density detector (ADR-0031)`)
 - [ ] Verification steps — the sentinel data block is one line per Table B anchor
       literal, in Table B's order
 - [ ] Current-state description — the passages Table B's Insertion-point column
       names, and their line ranges
 - [ ] Out of scope — Table A's ALREADY BOUND (R10) and UNPAID (R19) rows
 - [ ] Implementation notes and owner items O1–O4 — they mirror Table B's File
-      column for R14 and R15, and Table A's disposition for R19
+      column for R14 (O1) and R15 (O2), and Table A's disposition for R19 (O4);
+      **O3 additionally restates Table A's whole PARTIAL/ALREADY-BOUND list**
+      ("R10 entirely, and the bound halves of R01, R02, R08, R09, R15–R18"), so a
+      disposition change moves that sentence too
 
 ## Implementation notes & constraints
 
@@ -211,7 +217,7 @@ spot (register-new-mirrors).
   files (ADR-0004), and this WP does not even ship a file.
 - **No new runbook file.** Every rule lands in a file that already owns its
   subject, so no new document is created. A new document would itself be an
-  addition that must name the value it protects (`codex-review.md:58-69`), and
+  addition that must name the value it protects (`codex-review.md:65-69`), and
   none of these rules needs a home the five existing files cannot give it.
 - **The aggregate question, faced.** `codex-review.md:65-69` requires the
   aggregate cost of an addition to be weighed, not only each addition alone.
@@ -221,7 +227,7 @@ spot (register-new-mirrors).
   already carries; `wd-architect.md` gains one rule line; `wd-reviewer.md`,
   `spec-authoring.md` and `_TEMPLATE.md` gain no new construct at all. Each
   rule's protected value is its Table A "Paid for by" cell — a real failure, and
-  for four rules a repeat one.
+  for five rules a repeat one.
 - **Why the anchor literals are pinned.** Normally a spec states the contract and
   leaves the words to the implementer (`spec-authoring.md:7-14`). Here the words
   *are* the deliverable, and an unpinned sentence cannot be checked mechanically.
@@ -236,6 +242,24 @@ spot (register-new-mirrors).
   the same commit**". ADR-0031 says "in one pass"; one commit satisfies one pass,
   so this is a strictly stronger operationalization, not a contradiction, and it
   needs no owner-signed ADR amendment.
+- **R19 has no acceptance criterion, deliberately (round-zero finding X7).** An
+  earlier criterion asserted that R19 "does not appear as a landed rule in any of
+  the five files" and supplied no runnable form, which is itself a round-zero
+  finding (`codex-review.md:122-132`). The fix is deletion, not a grep: R19 has no
+  landed text, so any pattern for it would be phrase-shaped by construction — the
+  exact failure `codex-review.md:391-399` and this WP's own R08 name, where a
+  sweep finds only the wording its author imagined and reports a clean all-clear
+  for every other one. A check that cannot fail is machinery guarding nothing
+  (`codex-review.md:154-164`). The prohibition lives in Out of scope and owner
+  item O4, and the reviewer's read carries it.
+- **The Security checklist keeps its heading with an `N/A —` line** rather than
+  being deleted, though the template's heading says "delete only if". The runbook
+  governs: a template section is never deleted silently, and one
+  `N/A — <one-line reason>` line stays in its place so absence is visible and
+  checkable (`spec-authoring.md:25-27`). The disagreement between that heading's
+  older phrasing and the runbook is a real residual, but it belongs to whoever
+  next edits `_TEMPLATE.md`'s section headings — not to this WP, whose only
+  template edit is R09.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -251,7 +275,7 @@ as such.
   *design*, and the architect is who designs guards; the alternatives are
   `docs/ARCHITECTURE.md` (not a process file, and outside this WP's Deliverables)
   or a new design-principles runbook (a new document, which
-  `codex-review.md:58-69` forbids without a named protected value). *Cost of
+  `codex-review.md:65-69` forbids without a named protected value). *Cost of
   overruling:* one Deliverables row swapped and one sentinel path changed; the
   wording is unaffected.
 - **O2 — R15 lands in `.claude/agents/wd-reviewer.md`, not `codex-review.md`.**
@@ -302,7 +326,6 @@ as such.
       `Loop circuit-breaker (ADR-0031)` and `A cited RANGE is checked at BOTH
       ends`, and `.claude/agents/wd-reviewer.md` still contains
       `Contract-density detector (ADR-0031)`.
-- [ ] R19 does not appear as a landed rule in any of the five files.
 - [ ] `memory/lessons/inbox.md` is not modified by this PR.
 - [ ] `npm run lint` passes: markdownlint reports 0 errors, and the frontmatter
       check passes, still reporting 4 agent(s) — the two agent-file edits are
