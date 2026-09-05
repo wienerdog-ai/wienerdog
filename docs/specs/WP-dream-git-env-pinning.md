@@ -150,9 +150,9 @@ consequence is a late, loud failure at `rev-parse HEAD` in the vault instead of
 an early, friendly refusal — never a commit into the wrong repository.
 *Overrule cost:* folding it in adds `src/core/dream/validate.js` and
 `tests/unit/dream-validate.test.js` to Deliverables plus a second
-`tests/red-proofs/*.proofs.json` (one declaration file per suite), taking the
-package to nine files and S → M against `docs/specs/README.md`'s ≤8-files
-sizing heuristic.
+`tests/red-proofs/*.proofs.json` (one declaration file per suite) — three rows
+on top of this WP's seven, so **ten files with the spec itself** — and S → M
+against `docs/specs/README.md`'s ≤8-files sizing heuristic.
 
 ## Current state
 
@@ -316,7 +316,7 @@ that says NOT MEASURED says so and names what it rests on instead.
 | U17 | `GIT_ATTR_NOSYSTEM`, `GIT_ATTR_SOURCE` | attribute lookup — a filter-driver code channel | **MEASURED, no reach**: with `filter.wd.clean`/`.smudge` injected and `a.txt filter=wd` committed, no driver ran for `show HEAD:a.txt` or for `hash-object -w --stdin` — which carries no `--path`, by Table W row W1's own contract | **ABSENT** |
 | U18 | `GIT_TEMPLATE_DIR` | new-repository template | **NOT MEASURED** — `git help git` scopes it to `init` and `clone`, neither of which is a pinned shape | **ABSENT** |
 | U19 | `GIT_TRACE` and the other `GIT_TRACE*` variables | diagnostics, with a file sink | **NOT MEASURED** — `git help git` documents an absolute-path value as a file git appends to | **ABSENT, with a NAMED COST**: `GIT_TRACE=1 wienerdog dream` no longer traces the run's own git calls. Accepted: a debugging convenience, against carrying a variable whose value git treats as a write target |
-| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND` | transport and credential helpers | **NOT MEASURED** — none of the nine shapes contacts a remote; Table W row W1(c)'s set contains no `fetch`, `push`, `clone` or `ls-remote` | **ABSENT**, no cost |
+| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, and the signing helpers `GNUPGHOME`, `GPG_TTY`, `SSH_AUTH_SOCK` | transport, credential **and signing** helpers | **Transport half NOT MEASURED** — none of the nine shapes contacts a remote; Table W row W1(c)'s set contains no `fetch`, `push`, `clone` or `ls-remote`. **Signing half MEASURED**: with `HOME` carrying a global `commit.gpgsign=true` and `gpg.program` pointed at a recording script, `commit-tree` exited 0 and the script **never ran** — so `commit-tree` does not sign from config, and the signing helpers are not a channel into any pinned shape. This is the one row where carrying `HOME` (row U2) could have opened a NON-`GIT_*` channel, which is why it was measured rather than reasoned | **ABSENT**, no cost |
 | U21 | **every other variable, `GIT_*` or not** | — | — | **ABSENT — and this row is the mechanism.** The environment is built from U1–U5; U6–U20 are evidence about channels that were measured, never a list of things filtered out. Adding a key is a change to this table, and therefore owner-visible by construction |
 
 ### Mirrored Surface Checklist
@@ -330,8 +330,10 @@ in review is added here on the spot.
 
 - [ ] **Deliverables-table cells** — the `git-env.js` row ("built from Table U's
       CARRIED rows and nothing else") and the `dream.js` row.
-- [ ] **Acceptance criteria** — AC1 quantifies over U1–U5; AC2, AC3 and AC4
-      assert U6, U7 and U10.
+- [ ] **Acceptance criteria** — AC1 quantifies over rows **U1–U4** (the CARRIED
+      keys present on the host) and reaches **U5** through its private-shape
+      clause; its CANARY clause is what makes rows U6–U20 assertable on a host
+      that exports none of them. AC2, AC3 and AC4 assert U6, U7 and U10.
 - [ ] **Verification commands / greps** — V1–V5 below.
 - [ ] **Current state** — the `gitIn`, `indexEnv`, `buildCleanEnv`,
       `constructMergeEnv` and `resolveExecutable` bullets.
@@ -380,7 +382,10 @@ in review is added here on the spot.
 - [ ] **`tests/unit/dream-pipeline.test.js`'s AC1 assertion** — it names the
       CARRIED key set, so it is an executable mirror of rows U1–U5 and moves
       with them. A row added to or removed from U1–U5 that does not move this
-      assertion is a table and a mirror disagreeing inside one commit.
+      assertion is a table and a mirror disagreeing inside one commit. **Its
+      CANARY half mirrors row U21 rather than any one key**: the canary name
+      must stay a name no Table U row carries, so a row that happened to name it
+      would silently retire the check.
 
 ## Implementation notes & constraints
 
@@ -408,7 +413,7 @@ in review is added here on the spot.
   own both-directions runs were made. A normal clone is unaffected: the runner
   excludes a `node_modules` DIRECTORY from its domain.
 - **Two `Done` specs quote today's `indexEnv` literal as a record**
-  (`docs/specs/done/WP-criterion-red-harness.md:95`,
+  (`docs/specs/done/WP-criterion-red-harness.md:95-96`,
   `docs/specs/done/WP-audit-c-close-disposition.md:130`). Neither is amended by
   this WP, and that is deliberate: each is a dated record of what the tree said
   then, neither states a rule this WP changes, and the property
@@ -442,6 +447,16 @@ in review is added here on the spot.
       CARRIED keys present on the host (rows U1–U4), plus `GIT_INDEX_FILE` for
       exactly the shapes whose declared disposition is `private` and for no
       other. **Non-vacuity:** the run invoked git at least once.
+      **AND A CANARY, because the key-set assertion alone is host-dependent:**
+      an implementation that spreads `process.env` and deletes the names Table U
+      lists would satisfy the clause above on any host that exports no `GIT_*`,
+      which is most of them — and it is the delete-list shape row U21 and the
+      Security checklist forbid. So for the whole run the test exports one
+      variable **no Table U row names** (`WIENERDOG_ENV_CANARY`, a name the
+      pipeline fixture's `ENV_KEYS` list can carry through its existing
+      save/overwrite/restore) and asserts it appears in **no** observed `env`.
+      A spread, a filtered copy or a delete-list fails this on every host,
+      whatever the ambient environment happens to hold.
 - [ ] **AC2 — an exported `GIT_DIR` does not redirect the run** (row U6). With
       `GIT_DIR` exported to a decoy repository for the whole run, the vault's
       HEAD advances by the run's commit and the decoy repository's HEAD and
@@ -467,7 +482,12 @@ in review is added here on the spot.
 - [ ] **AC7 — the registered mirrors moved in the same commit**: ADR-0012
       carries the amendment with the exact heading, and Table W row W1 carries
       the amendment with the exact opening sentence, with the hook-residual
-      sentence still present.
+      sentence still present. **NAMED RESIDUAL, stated rather than closed:** V5
+      is a presence grep on three exact strings, so a copied heading over a
+      wrong body passes it — the greps prove PRESENCE, and the CONTENT
+      obligations the Mirrored Surface Checklist spells out for each amendment
+      are the reviewer's read, judged over the whole cell and never over the
+      grep window.
 - [ ] **AC8 — idempotence:** `N/A — this WP ships no command and writes nothing
       outside the repo; a dream run is deliberately not idempotent (ADR-0012),
       and this WP changes only the environment of an existing run's children.`
@@ -482,11 +502,17 @@ npm test
 # Exit 0 and `RUN: PROVEN` are required.
 node scripts/red-proofs.js
 
-# V3 — AC5, this WP's own three, read by id. A `--wp` SELECTION exits 1 with
-# `RUN: FILTERED` whenever other WPs' declarations are left out — that is the
-# runner's design (measured on `4b629ec6`), NOT a failure, and it is why V2 and
-# not this step is the gate. What this step asserts: three `PROVEN` per-proof
-# lines and `PROVEN` on every roll-up line for this WP.
+# V3 — AC5, this WP's own three, read by id. A `--wp` SELECTION never exits 0
+# while any other WP has declarations, and that is the runner's design, not a
+# failure — which is why V2 and not this step is the gate. TWO exit shapes,
+# both measured on `4b629ec6`: BEFORE this WP's declaration file exists the
+# selection matches nothing and the run is `VACUOUS: V2 — the selection matched
+# no proof` (rc 1); with `--wp WP-show-slot-own-value-kind`, whose declarations
+# DO exist, the same command reports those proofs `PROVEN` and the run
+# `FILTERED` (rc 1) because every other WP's declarations were left out. Once
+# this WP's file exists the implementer sees the second shape. What this step
+# asserts is the CONTENT, not the exit code: three `PROVEN` per-proof lines and
+# `PROVEN` on every roll-up line for this WP.
 node scripts/red-proofs.js --wp WP-dream-git-env-pinning
 
 # V4 — AC5's identity check: exactly the three declared ids, from this WP's own
@@ -505,10 +531,15 @@ test -f "$W" && grep -qF "NEITHER SUPPRESSED NOR DETECTED" "$W" || { echo "FAIL:
 echo "V5 OK"
 
 # V6 — the repo gates. The boundary check takes the spec and the changed set,
-# exactly as `.github/workflows/ci.yml` invokes it.
+# as `.github/workflows/ci.yml` invokes it — but WITHOUT `mapfile`, which macOS
+# `/bin/bash` 3.2.57 does not have (measured: `type mapfile` -> not found). No
+# tracked path in this repo carries a space, so word splitting is safe here.
+# NOTE: on the DESIGN branch this check is RED by design — the successor stub
+# `docs/specs/WP-dream-git-env-validate-seam.md` is not in Deliverables and must
+# not be. It is the IMPLEMENTATION branch's gate, and it is there that exit 0 is
+# required.
 npm run lint
-mapfile -t CHANGED < <(git diff --name-only origin/main...HEAD)
-node scripts/boundary-check.js docs/specs/WP-dream-git-env-pinning.md "${CHANGED[@]}"
+node scripts/boundary-check.js docs/specs/WP-dream-git-env-pinning.md $(git diff --name-only origin/main...HEAD)
 ```
 
 ## Out of scope (do NOT do these)

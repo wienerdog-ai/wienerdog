@@ -708,6 +708,191 @@ frontmatter check passed: 269 spec(s), 4 agent(s)
 lint passed
 ```
 
-## Executor passes and external rounds
+## Executor pass — template conformance
 
-Appended by the orchestrator below this line.
+Run in a clean context by the orchestrator against `docs/specs/_TEMPLATE.md`
+(`docs/runbooks/codex-review.md`, "Template conformance"). **Verdict:
+NON-CONFORMANT on two items; both DROPPED by the orchestrator with a measured
+precedent.** Everything else is PRESENT or explicitly `N/A`-marked: the executor
+confirmed all five Mirrored-Surface categories, the Security-checklist `N/A`
+line, AC8's `N/A` and the five Definition-of-done items.
+
+| # | Item | Disposition |
+|---|------|-------------|
+| T1 | The `Authoring rules live in docs/runbooks/spec-authoring.md…` bullet under the H1 is absent | **DROP.** The worked example `docs/specs/done/WP-daily-summary-per-line-framing.md` — the only model spec, per `spec-authoring.md` — omits it too (grep count 0), as does the last matured spec `WP-process-runbook-sweeps`. It is an instruction to the author, not a section of the artifact |
+| T2 | `## Contract reference` and `## Security checklist` drop the template's parenthetical hints | **DROP.** Identical in the worked example (`:129`, `:194`) |
+
+## Executor pass — internal coherence
+
+Run in a clean context, and it **RAN** V1–V6 rather than reading them — on a
+plain `git archive` copy of the base, never in the worktree. All 20 citations
+resolved except one (X3). Seven findings; all LIGHT, so no fresh external round
+is owed by them and round 1 runs on the revised tip.
+
+| # | Band | Finding | Disposition and what changed |
+|---|------|---------|------------------------------|
+| X1 | C | O2's overrule cost said "nine files": Deliverables has 7 rows and the fold-in adds 3 (`validate.js`, `dream-validate.test.js`, a second `proofs.json`) → **ten** | **FIX.** Corrected to ten, spelled as "three rows on top of this WP's seven". The S → M conclusion is unchanged — it was never the number that carried it |
+| X2 | C | The Mirrored Surface Checklist said "AC1 quantifies over U1–U5" while AC1's own text says "rows U1–U4 … plus `GIT_INDEX_FILE` for exactly the private shapes" | **FIX.** The checklist entry now matches AC1's literal wording: U1–U4, reaching U5 through the private-shape clause |
+| X3 | C | `docs/specs/done/WP-criterion-red-harness.md:95` is off by one — `:95` names `indexEnv`, the quoted literal is on `:96` | **FIX.** `:95-96`, re-checked at both ends |
+| X4 | B | **AC1's discrimination is host-dependent.** A spread-then-delete implementation passes AC1 on any runner that exports no `GIT_*` — which is most of them. Rows U8 and U9, both MEASURED to reach a pinned shape, have no dedicated criterion | **FIX, in the smallest form.** AC1 gains a **CANARY** clause: the test exports one variable no Table U row names (`WIENERDOG_ENV_CANARY`, carried by the pipeline fixture's existing `ENV_KEYS` save/overwrite/restore) and asserts it appears in **no** observed `env`. A spread, a filtered copy or a delete-list fails that on every host, whatever the ambient environment holds. **No RED proofs were added for U8/U9** — that would be machinery growth to guard machinery (`codex-review.md:188-191`) |
+| X5 | C | V3's comment claimed the selection "exits 1 with `RUN: FILTERED` (measured on `4b629ec6`)". On the base it is `VACUOUS: V2 — the selection matched no proof`, because this WP's declaration file does not exist yet; `FILTERED` was measured with `--wp WP-show-slot-own-value-kind` | **FIX.** The comment now states **both** measured shapes with the id each was measured under, and what the implementer will see once the file exists. What the step asserts is the CONTENT, not the exit code |
+| X6 | B | V5 is a presence grep on exact strings: a copied heading over a wrong body passes it | **RESIDUAL, named in AC7.** The greps prove PRESENCE; the content obligations spelled out per amendment in the Mirrored Surface Checklist are the reviewer's read, judged over the whole cell and never over the grep window |
+| X7 | C | V6 used `mapfile`, absent from macOS `/bin/bash` 3.2.57 — the only bash on this host (measured: `type mapfile` → not found) | **FIX.** Replaced with `$(git diff --name-only origin/main...HEAD)`; no tracked path in this repo carries a space. The comment now also records that on the DESIGN branch this check is **red by design** — the successor stub is outside Deliverables and must be — and that it is the implementation branch's gate |
+
+**A residual X4 leaves standing, named here rather than closed.** Rows **U8**
+(`GIT_COMMON_DIR`) and **U9** (`GIT_ALTERNATE_OBJECT_DIRECTORIES`) are each
+MEASURED to reach a pinned shape and neither has a dedicated RED proof or a
+dedicated behavioural criterion. What they rest on is **row U21 plus AC1's
+canary**: the environment is built rather than filtered, and the canary is what
+makes that construction observable on a host exporting neither variable. Adding
+two more RED declarations would grow the verification surface to guard something
+the construction already guarantees, which is the growth the convergence rule
+forbids.
+
+**The executor's own run, on a plain `git archive` copy of the base:**
+
+| Step | rc | What it reported |
+|------|----|------------------|
+| V1 `npm test` | 0 | `2684` tests / `2672` pass / `0` fail / `12` skipped |
+| V2 `node scripts/red-proofs.js` | 0 | `RUN: PROVEN`, 60 declared proofs |
+| V3 `--wp WP-dream-git-env-pinning` | 1 | `VACUOUS: V2 — the selection matched no proof` — the deliverable-absent red |
+| V4 declaration identity check | 1 | `MODULE_NOT_FOUND` — the declaration file is absent, RED as intended |
+| V5 mirrors | 1 | fails at the ADR-0012 grep; the third guard (`NEITHER SUPPRESSED NOR DETECTED`) is TRUE today in isolation |
+| V6 | lint 0 / boundary 1 | lint passed (`269 spec(s)`); `boundary-check` exits 1 naming `docs/specs/WP-dream-git-env-validate-seam.md` — expected on the docs branch, and now stated in V6's own comment (X7) |
+
+Discrimination, as the executor judged it: AC2–AC4 behavioural and strong;
+AC5/AC6 correctly scoped after round zero's own rewrite; AC7 weak (X6, named
+residual); AC8 `N/A` by design.
+
+## Orchestrator measurement — does `commit-tree` sign from the user's config?
+
+**The question, and why it is the one worth asking of a carried key.** Row U2
+carries `HOME`, deliberately, so the user's global git config still applies. That
+opens a question no `GIT_*` enumeration can answer: can a *config* value the user
+already has turn a **non-`GIT_*`** variable into a channel into a pinned shape?
+The candidate is `commit.gpgsign=true` — if `commit-tree` signed from it, then
+`GNUPGHOME`, `GPG_TTY` and `SSH_AUTH_SOCK` would each reach shape (8), and Table
+U's carried-key set would be incomplete rather than merely short.
+
+Driver: `scratchpad/orch/gpgsign.sh`, run on git 2.50.1 (Apple Git-155) in a
+`mktemp -d` with `HOME` redirected into it — the real `~/.gitconfig` was checked
+untouched afterwards.
+
+```text
+git version 2.50.1 (Apple Git-155)
+case1 commit-tree with global commit.gpgsign=true: rc=0 stderr=
+case1 gpg log:
+case2 -c commit.gpgsign=false: rc=0 gpg log: ''
+```
+
+**Result: `commit-tree` does not sign from config.** With a global
+`commit.gpgsign=true` and `gpg.program` pointed at a recording script, the
+pinned shape exited 0 and **the script never ran** — the log is empty; the
+`-c commit.gpgsign=false` control behaves identically, so the absence is not an
+artefact of the override. The signing helpers are therefore **not** a channel
+into any of the nine shapes, and carrying `HOME` does not open one.
+
+**Recorded in Table U row U20**, whose title widens to *"transport, credential
+and signing helpers"* and whose reach cell now carries this run as MEASURED for
+the signing half while the transport half stays NOT MEASURED on the shape set.
+The row also states why it is the one row where carrying `HOME` could have opened
+a non-`GIT_*` channel — which is why it was measured rather than reasoned.
+
+## Revision — the tree after X1–X7
+
+The spec grew from **550 to 581 lines** (`wc -l`), all of it AC1's canary clause,
+AC7's named residual, V3's and V6's corrected comments and row U20's measured
+cell. **Sections 0.5 and 0.6 above are the round-zero record and are left as
+they were measured**; the current numbers are here. `coherence.js` re-run on the
+revised spec, rc 0:
+
+```text
+spec line count                                = 582
+Table U rows                                   = 21  U1,U2,U3,U4,U5,U6,U7,U8,U9,U10,U11,U12,U13,U14,U15,U16,U17,U18,U19,U20,U21
+U-ids mentioned anywhere but absent from table = none
+U-rows never referenced outside their own row  = U8,U9,U12,U14,U15,U16,U17,U18,U19 (informational)
+acceptance criteria                            = 8  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8
+verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
+deliverable rows                               = 7
+   create src/core/dream/git-env.js  exists=false 
+   modify src/cli/dream.js  exists=true 
+   modify tests/unit/dream-pipeline.test.js  exists=true 
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true 
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false 
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true 
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true 
+files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
+file:line citations in the spec                = 17
+   `src/cli/dream.js:587`
+      FIRST:   assertGitRepo(vaultDir);
+      LAST :   assertGitRepo(vaultDir);
+   `src/core/dream/validate.js:64-81`
+      FIRST: function git(vaultDir, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:166-175`
+      FIRST: function gitIn(spawnGit, cwd, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:178-186`
+      FIRST: function spawnGitPinned(o) {
+      LAST : }
+   `src/core/exec-identity.js:553`
+      FIRST: function spawnPinnedSync(name, paths, opts = {}) {
+      LAST : function spawnPinnedSync(name, paths, opts = {}) {
+   `src/cli/dream.js:562`
+      FIRST:   const spawnGit = opts.spawnGit || spawnGitPinned;
+      LAST :   const spawnGit = opts.spawnGit || spawnGitPinned;
+   `src/cli/dream.js:226-231`
+      FIRST:   const tmpIndex = path.join(o.stateDir, `dream-index.${process.pid}.tmp`);
+      LAST :   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
+   `src/cli/dream.js:1007`
+      FIRST:       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+      LAST :       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+   `tests/red-proofs/dream-pipeline.proofs.json:10-11`
+      FIRST:       "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
+      LAST :       "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+   `src/cli/run-job.js:150`
+      FIRST: function buildCleanEnv(paths, name, platform = process.platform) {
+      LAST : function buildCleanEnv(paths, name, platform = process.platform) {
+   `src/core/dream/promote.js:387-418`
+      FIRST: function constructMergeEnv(root) {
+      LAST : }
+   `src/core/exec-identity.js:93-118`
+      FIRST: function resolveExecutable(name, env, platform) {
+      LAST : }
+   `src/cli/run-job.js:58-78`
+      FIRST: const WIN_ENV_PASSTHROUGH = [
+      LAST : ];
+   `docs/specs/done/WP-criterion-red-harness.md:95-96`
+      FIRST:   builds the private index environment at exactly one site — the `indexEnv`
+      LAST :   constant, `{ ...process.env, GIT_INDEX_FILE: tmpIndex }`. This is stated as an
+   `docs/specs/done/WP-audit-c-close-disposition.md:130`
+      FIRST:   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+      LAST :   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+RED ids named in the Exact-contracts table     = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+RED ids in V4's `want`  array                    = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+template sections absent                       = none
+
+COHERENCE: no failures
+```
+
+`npm run lint` on the revision commit's tree:
+
+```text
+$ npm run lint
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 651 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+--- frontmatter check ---
+frontmatter check passed: 269 spec(s), 4 agent(s)
+
+lint passed
+```
+
+## External rounds
+
+Round 1 runs on this revised tip. Appended by the orchestrator below this line.
