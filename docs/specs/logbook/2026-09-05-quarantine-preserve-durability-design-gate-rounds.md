@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| 2 (`f0c4f615`) | needs-attention / needs-attention | `…gate-raw-round2-codex-plugin.txt`, `…gate-raw-round2-herdr-shadow.txt` (both `95262ac1`, `e4012314` before the rebase) | Plugin 4 A + 1 B, shadow 3 A + 1 C, one routed objection, no owner-item scope objection; both runs valid. **THE PINNED CIRCUIT BREAKER FIRES — escalation (i), the same-UID substitution family for the SECOND consecutive round** (round 1: the pathname reopen; round 2: plugin A1 the rename/open ownership split, plugin A2 path-resolved directory inodes, shadow A2 a following `stat`, plus the routed pre-rename `existsSync` race). **The answer is a CONTRACT, not a third pin: Table F row F10 — THE ADVERSARY.** F8 and F9 defend against OVERLAPPING RUNS and THE USER'S OWN HAND; arbitrary same-user native code is a NAMED RESIDUAL citing `docs/THREAT-MODEL.md`'s **A12**, because a process that can swap `qdir` aside mid-flush can also delete the copy after this function returns, so no protocol holds against it and every pin implies a false guarantee. Parked as **Dispatch-precondition item 5** with its overrule cost. **For the in-scope adversary, the smallest mechanism that closes it, measured:** row **F9**, a NO-CLOBBER commit (`linkSync` + temp removal) — which also makes F8's "remove nothing" decidable and ABSORBS the routed race. **Shadow A2 TAKEN** (`lstat` + `isFile()` + bigint), not as an A12 defence but because a following `stat` is wrong for the non-hostile case too. **Plugin A2 DECLINED** as an A12 defence, in Out of scope with the reason. **Converged (A): V1 accepts a contradictory over-claim** → V1 gains an `on the medium` count (the shadow's exact fixture now RED), criterion 8 NARROWED to what V1 measures, and the absence obligation moved to Definition of done item 2 as a PR-gate duty; the differently-worded over-claim is recorded GREEN as the measured bound. **Plugin A3 + shadow A1: QPD-2 was not the site matrix and the redacted/P3 route was never exercised** → QPD-2 becomes the complete 18-case matrix over BOTH arms plus three abort routes (P1/P2, P3, and no-abort); `state-directory-not-flushed` added for the one chain member with no mutation. **[B] stale base** → rebased onto `38562ec4`, every baseline and count re-measured. **[C] disposal stub** → fixed. All FIX. HEAVY (the commit primitive changes) → **round 3 runs as a full external round.** |
 | 1 (`cb18367a`) | needs-attention / needs-attention | `…gate-raw-round1-codex-plugin.txt`, `…gate-raw-round1-herdr-shadow.txt` (both `e4012314`) | Plugin 3 A, shadow 3 A, one scope objection routed to the disposal stub and not counted; both runs valid (porcelain empty before and after). **Converged (A) — the inode:** the shipped read-back is `readFileSync(dest)` by pathname and the prescribed flush reopened the pathname, so a same-UID rename between them makes the function flush one inode and report bytes from another; `O_NOFOLLOW` does not refuse a regular file, and neither mode 0700 nor the steal-able dream lock excludes the user's own processes → FIX: row **F8** — ONE descriptor carries the read-back, the comparison and F1's flush, and `dest` must still name its `(dev, ino)` as the LAST gate before success; a mismatch fails and removes NOTHING. **Converged (A) — F4's evidence:** QPD-2 injected only at the artifact, so an implementation whose directory flush swallows its failure passed every declared mutation → FIX: QPD-2 now injects at five sites (artifact `fsync`; `qdir` `fsync` and `open`; anchor `fsync` and `open`), each asserting `null`, `dest` absent and the shipped abort, plus a new `directory-flush-failure-swallowed` proof. **Plugin (A) — the anchor, settled as a DESIGN question:** F3's created-set derivation misses an ancestor an EARLIER STEP OF THE SAME RUN created, and `acquireLock`'s `mkdirSync(stateDir, {recursive:true})` is that step (measured: created-set → 3 flushes stopping at `state/`; fixed chain → 4 ending at the core) → FIX: F3 becomes a FIXED chain to an anchor, `path.dirname(stateDir)`, deleting the `mkdirSync`-return derivation entirely; road not taken and its cost recorded. **Shadow (A) — QPD-4/QPD-5:** neither forced the two-level redacted chain nor a bottom-up order → FIX: QPD-3 and QPD-4 assert the exact ORDERED sequence on each arm, with `intermediate-shelf-not-flushed` and `anchor-not-flushed` as their narrow mutations. **Routed, not counted (shadow):** a crash after D2's removal before return — confirmed covered and now named in the disposal stub. All FIX, applied in this commit. Escalation (i) does not fire (four kinds, one round); escalation (ii) checked against all four and fires on none, so no fifth owner item. HEAVY (the shipped read-back shape and the flush set both change) → **round 2 runs as a full external round on both channels.** |
 
 ## Round 1 — architect's revision pass, 2026-09-05
@@ -463,3 +464,110 @@ extraction was re-verified rather than assumed.
 **Round 2 runs as a FULL external round on both channels**, per weighted closure:
 finding 1 changes the shipped read-back's shape and findings 2–4 change the flush
 set and its evidence, so every fix is HEAVY.
+
+## Round 2 — architect's revision pass, 2026-09-05
+
+### Round 2 fixes
+
+**The circuit breaker fired, and this is the contract it extracted.** Two
+consecutive rounds landed findings in one family — a same-UID process substituting
+an object the protocol depends on — so ADR-0031 and the pinned criterion both say
+the next step is a design question, never another textual patch. **The contract is
+Table F row F10: WHO the protocol defends against.** It was never stated, which is
+exactly why each round could find another unpinned object: the artifact's inode
+(round 1), then the destination's ownership, the directory inodes, and the symlink
+form of the check (round 2). A protocol with no named adversary has no fixed point.
+
+**The tree already owned the answer.** `docs/THREAT-MODEL.md` classes arbitrary
+same-user native code as **A12** and says Wienerdog is *"not a boundary against
+arbitrary software already running as the same user"*; of a keyed MAC proposed for
+the same class it says such a mechanism *"would only imply a false guarantee"*. Row
+F10 applies that, with a reason that is decisive rather than economic: **a process
+that can swap `qdir` aside during its flush can also delete the preserved copy one
+instruction after this function returns.**
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [plugin] | The ownership split between `renameSync(tmp, dest)` and `openSync(dest)`: run B commits over run A and finishes; A opens B's file, short-circuits before `stillNamed`, and the prescribed non-disposal guard does not fire, so A deletes B's only copy | **FIX — row F9, the NO-CLOBBER commit.** `fs.linkSync(tmp, dest)` fails `EEXIST` rather than replacing, then the temp name is removed outside the commit's `catch` (Table D row D3's fail-loud rule). This is an IN-SCOPE adversary under F10 — the product creates overlapping runs itself — and the damage is data loss, so it is closed here rather than routed. It also makes F8's "remove nothing on a mismatch" decidable: after a successful link, `dest` is this invocation's by construction. Identity **QPD-6**, proofs `commit-clobbers-destination` and `tmp-not-removed-after-commit` |
+| **A2** [plugin] | Directory inodes are path-resolved, never pinned: a same-UID process can swap `qdir` aside during its flush and restore it before the final gate | **DECLINED as an A12 defence, and parked as owner item 5.** Retaining a descriptor per chain directory to the last gate with a bigint re-compare defends only against the actor F10 puts outside the boundary. Recorded in Out of scope with the reason, and in the Dispatch precondition with the overrule cost |
+| **A2** [shadow] | `stillNamed` may follow symlinks: a hard link of the verified inode into an unflushed directory plus a symlink at `dest` passes a `statSync` check | **FIX — `fs.lstatSync(dest, {bigint:true})` + `isFile()`.** Taken NOT as an A12 defence but because a following stat is wrong for the non-hostile case too, and it costs two words. QPD-5 gains the symlink-to-hard-link substitution; proof `identity-check-follows-symlinks` |
+| **A3** [plugin] + **A1** [shadow] | QPD-2 was not the full failure-site matrix (no artifact `openSync`, no `stateDir`, no intermediate shelf) and the redacted/P3 route was never exercised under failure | **FIX — one matrix.** QPD-2 is now 18 cases: every chain member of every arm × `openSync` and `fsyncSync`, each asserting `null`, `dest` absent and no temp left. Plus the three abort ROUTES: P1/P2 on the withheld arm, **P3** when the failing target is on both chains, and **no abort** when only the redacted shelf fails. `state-directory-not-flushed` added for the one chain member that had no mutation |
+| **A4** [plugin] + **A3** [shadow] | V1 accepts a contradictory over-claim beside the approved sentence | **FIX, within the frozen surface, in three parts.** (1) V1 counts `on the medium` and requires exactly one — the shadow's own fixture is now RED, measured. (2) Acceptance criterion **8** is NARROWED to exactly what V1 measures; it no longer claims semantic absence. (3) The absence obligation moves to **Definition of done item 2**, a PR-gate duty naming the blocking class. **The byte-exact-whole-block alternative was rejected**: it would make `@param` lines contract and take code structure from the implementer, and it still could not see a claim written elsewhere in the file. A differently worded over-claim is recorded GREEN in the V-block table as the measured bound |
+| **B** [plugin] | Stale base | **FIX — rebased onto `38562ec4`** (docs-only, no conflicts, raw filenames unique). Every baseline, count and SHA re-measured |
+| **C** [shadow] | The disposal stub still said "created-ancestor walk" | **FIX**, plus the commit and the identity check named there so the successor's implementer is pointed at the shipped design |
+| routed [shadow] | The shipped pre-rename `existsSync(dest)` is an ownership race | **ABSORBED, not routed.** Row F9 does not close the window; it removes the commit's ability to act on it. The residue — a preservation that fails instead of picking the next free name — is stated in Out of scope |
+
+**The road not taken, recorded because it was the reviewers' own recommendation.**
+Both channels proposed pinning descriptors for the directory chain. It is declined
+by F10's ruling, and the decline is an owner item rather than an architect's
+preference, because *where the adversary is pinned* is a threat-model statement and
+`docs/THREAT-MODEL.md` is the owner's document.
+
+### 2.1 Measurements
+
+```text
+BASELINES at 38562ec4 (post-rebase)
+  npm test          tests 2623 / pass 2611 / fail 0 / skipped 12       exit 0
+  npm run lint      Linting: 637 file(s) | 0 error(s) | lint passed    exit 0
+                    frontmatter check passed: 267 spec(s), 4 agent(s)
+  npm run red-proofs  11 declared proof(s), 11 selected; RUN: PROVEN   exit 0
+
+THE CANDIDATE
+  src fix alone     tests 2623 / pass 2606 / fail 5                    exit 1
+    ✖ quarantinePreserve (P0b, Table D row D2): a corrupted artifact is a FAILURE and is removed
+    ✖ quarantinePreserve (P0b, Table D row D2): an artifact that cannot be read back is a FAILURE and is removed
+    ✖ quarantinePreserve (Table D row D1): the rename fails after a successful write — tmp is removed, dest was never created
+    ✖ quarantinePreserve (Table D row D3): a dest that cannot be removed after a failed verification fails LOUD
+    ✖ quarantinePreserve (Table D row D4): every failure leaves this invocation owning nothing, over a NON-EMPTY quarantine tree
+  + migrated (5)    tests 2623 / pass 2611 / fail 0                    exit 0
+  + six identities  tests 2629 / pass 2617 / fail 0 / skipped 12       exit 0
+
+  npm run red-proofs (unfiltered, rehearsal tree)
+    24 declared proof(s), 24 selected — ALL PROVEN; RUN: PROVEN        exit 0
+    criterion 1 — preservation-flush-removed=PROVEN
+    criterion 2 — artifact-flush-failure-swallowed=PROVEN; directory-flush-failure-swallowed=PROVEN
+    criterion 3 — containing-directory-not-flushed=PROVEN; intermediate-shelf-not-flushed=PROVEN
+    criterion 4 — state-directory-not-flushed=PROVEN; anchor-not-flushed=PROVEN
+    criterion 5 — flush-order-inverted=PROVEN
+    criterion 6 — inode-pin-removed=PROVEN; replacement-removed-on-mismatch=PROVEN; identity-check-follows-symlinks=PROVEN
+    criterion 7 — commit-clobbers-destination=PROVEN; tmp-not-removed-after-commit=PROVEN
+```
+
+**Two shipped `renameSync` injections do NOT break, and neither could have been
+predicted from the call name.** `(… herdr-shadow round 1 P1): a FOREIGN file
+already at the tmp pathname` never reaches its rename injection — the exclusive
+`wx` create refuses first. `(Table D row D3): a tmp that cannot be removed after a
+failed rename fails LOUD` passes for an EQUIVALENT reason under row F9: the commit
+succeeds, the post-commit temp removal hits its `rmSync` injection, and the same
+`WienerdogError` matching `/\.tmp-/` is raised.
+
+**V1/V2 re-extracted from the revised spec and run in TWELVE trees** (`main` = a
+pristine `38562ec4`, each carrying this spec): untouched → 7 findings, `rc=1`;
+**compliant → `V1 OK / V2 OK`, `rc=0`**; **wrapped compliant → `rc=0`**;
+`validate.js` removed → `MISSING DELIVERABLE`; **the round-2 shadow's over-claim
+fixture → `'on the medium' APPEARS 2 TIME(S) … expected 1`, `rc=1`**; sentence
+reworded → 2 findings; sentence retyped → 2 findings; `fs.fsyncSync` removed → `NO
+FLUSH IS ISSUED AT ALL`; P0b's clause in cell 2 → `NOT ITS BASE ROW PLUS ITS CLAUSE
+IN CELL 5`; one unrelated edited line → `DIFF IS 2/2`; P0b's cell 5 reauthored →
+`NOT ITS BASE ROW …`; **and a DIFFERENTLY WORDED over-claim → `V1 OK / V2 OK`,
+`rc=0` — GREEN, deliberately recorded, because it is the bound on what V1 can do.**
+
+### 2.2 What round 2 did NOT change
+
+- **The guarantee sentence**, byte for byte, and the evidence line it draws. Every
+  round-2 fix is about ownership and verification, not about what a flush achieves.
+- **Table P and Table D.** No new abort, no new message, no new field. Row F9
+  substitutes "the commit" for "the rename" in D1/D2's trigger wording; the path
+  each state owns is unchanged, and the P0b clause names the substitution rather
+  than leaving it to be inferred.
+- **Rows F1–F7.** The flush set, its order, the anchor, the POSIX-only scope and the
+  F7 exclusions are exactly as round 1 left them; what grew is the EVIDENCE for
+  them (QPD-2's matrix, `state-directory-not-flushed`).
+- **The split, and the four earlier owner items.** Item 5 is added; items 1–4 stand
+  with their recommendations unchanged.
+- **The collision loop's naming rule.** Row F9 makes the commit refuse rather than
+  making the SELECTION atomic. A create-or-retry loop over the numbered candidates
+  is a different contract and nothing here needs it.
+
+**Round 3 runs as a FULL external round on both channels**: the commit primitive
+changes, so the fix is HEAVY by the weighted-closure rule.
