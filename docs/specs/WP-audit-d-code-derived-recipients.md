@@ -91,9 +91,15 @@ body}` — **no `threadId`, no `Reply-To`, no `Message-ID`, no `References`**.
 `draft` (`:131-142`) posts `{ message: { raw } }` to `drafts.create` — **no
 `threadId`**. `buildMime` (`:150-160`) emits `From?`, `To`, `Subject`,
 `Content-Type`, blank line, body — each header value through `assertHeaderSafe`.
-Exports at `:162`. **`gmail.draft` has exactly one caller in the tree**
-(`verbs.js:171`); the attended `gws gmail draft` CLI surface described in
-`docs/ARCHITECTURE.md:160` no longer reaches it.
+Exports at `:162`. **`gmail.draft` has exactly one PRODUCT caller**
+(`verbs.js:171`) — the attended `gws gmail draft` CLI surface described in
+`docs/ARCHITECTURE.md:160` no longer reaches it. Its one other caller is
+`tests/unit/gws-gmail.test.js:142`, which asserts the decoded MIME
+(`/^To: ada@acme\.com\r\n/`, then `Content-Type` immediately followed by the
+body). **Measured: that suite passes 9/9 unchanged under the additive extension
+below** — with `inReplyTo`, `references` and `threadId` all absent, the emitted
+bytes and the `drafts.create` request body are identical to today's — so it is
+deliberately NOT a Deliverables row.
 
 **Per-class method routing** — `src/cli/gws-broker.js`. `compositeServices`
 (`:53-82`) builds one gmail façade whose methods route per class: `messages.list`,
@@ -140,8 +146,10 @@ call 1 threw: broker verb create_draft failed
 counter after a FAILED call: 1 (no refund)
 ```
 
-**The consumer sweep** (system `grep` over `src skills templates tests docs bin`,
-every path passed literally, at `8c52808f`). Every `create_draft` occurrence:
+**The consumer sweep**, at `8c52808f`, in two passes: system `grep -rn` over
+`src skills templates tests docs bin`, then a second repo-wide pass (excluding
+`node_modules/` and `.git/`) that reaches the root files — which is where
+`FIX-PLAN.md` was found. Every `create_draft` occurrence:
 `src/core/runtime-profile.js:103,:113,:115`; `src/gws/broker/verbs.js:154,:155`;
 `skills/wienerdog-inbox-triage/SKILL.md:13,:24,:33`;
 `skills/wienerdog-weekly-review/SKILL.md:13,:30,:35`; `docs/GLOSSARY.md:36`;
@@ -152,7 +160,7 @@ the token); `FIX-PLAN.md:525,:541`; and five test files
 `routines-skill-structure.test.js`), plus `docs/specs/done/` and
 `docs/security-audit/` records. **No other caller exists** — in particular
 `tests/scenarios/broker-e2e/` names no verb: `allowedMethodsFor`
-(`run-broker-e2e.js:63-78`) derives the permitted Google methods from each verb's
+(`run-broker-e2e.js:63-79`) derives the permitted Google methods from each verb's
 `apiMethod` string, and `gmail.users.getProfile` is exempted at `:256`.
 
 **Docs that assert the thing that is not yet true.** `docs/THREAT-MODEL.md:140`
@@ -178,12 +186,12 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 | modify | docs/GLOSSARY.md | line 36's example list: `create_draft` → `create_draft_to_self` |
 | modify | docs/THREAT-MODEL.md | T4a only: `:138` gains the drafts sentence; the named residual is added as its own paragraph after `:140`'s (Exact contracts) |
 | modify | docs/adr/0026-gws-capability-broker.md | §2's draft bullet (`:152-153`) and a new **Amendment 2** appended after the Amendment 1 block (Exact contracts) |
-| modify | tests/unit/broker-verbs.test.js | the verb-table pin, the draft tests, and the five new identities of **Table C** |
+| modify | tests/unit/broker-verbs.test.js | the verb-table pin (eight names → nine), the draft tests, and every test identity named in **Table C** |
 | modify | tests/unit/broker-registry.test.js | it uses `create_draft` as its sample allowlisted verb (`:38,:42,:50,:64,:68`) |
 | modify | tests/unit/broker-wiring.test.js | the pinned per-routine verb lists (`:83,:84,:104,:107`) |
 | modify | tests/unit/routine-runtime.test.js | the pinned `--allowedTools` string (`:119`) |
 | modify | tests/unit/routines-skill-structure.test.js | the inbox-triage verb assertion (`:147,:148`) |
-| create | tests/red-proofs/audit-d-code-derived-recipients.proofs.json | the eight declarations of **Table C** |
+| create | tests/red-proofs/audit-d-code-derived-recipients.proofs.json | one declaration per **Table C** row, `suite` = `tests/unit/broker-verbs.test.js` |
 
 ### Exact contracts
 
@@ -359,7 +367,7 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 | `broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address derived from the replied-to message` | `[AUD-D2]` | `reply-recipient-not-derived` | 3 | in `replyTarget`, replace the header-derived recipient with the first address found in the caller-supplied `body` |
 | `broker-verbs: [AUD-D3] create_reply_draft creates no draft when the message cannot be fetched or yields no single usable address` | `[AUD-D3]` | `reply-candidate-count-ungated` | 4 | replace Table B's exactly-one-candidate requirement with "take the first candidate" |
 | ″ | `[AUD-D3]` | `reply-address-pattern-dropped` | 4 | remove Table B's address-acceptance test from `replyTarget` |
-| ″ | `[AUD-D3]` | `reply-fetch-failure-drafts-anyway` | 4 | wrap `messages.get` in a catch that continues with an empty header set |
+| ″ | `[AUD-D3]` | `reply-fetch-failure-drafts-anyway` | 4 | catch the `messages.get` failure and continue with a **literal fallback recipient and subject**, so the mutant DRAFTS where the correct code refuses. (Continuing with an *empty* header set would not do: Table B then refuses on "both empty", producing the same zero-draft observable as correct code — a vacuous proof) |
 | `broker-verbs: [AUD-D4] a reply draft is threaded to its source message, and carries no reply headers when the source has no Message-ID` | `[AUD-D4]` | `threading-dropped` | 5 | drop `threadId` from the `drafts.create` request body |
 | `broker-verbs: [AUD-D5] a CR/LF in any code-derived header value produces zero drafts.create calls` | `[AUD-D5]` | `reply-headers-unasserted` | 6 | bypass `assertHeaderSafe` on `buildMime`'s new `In-Reply-To` / `References` lines |
 | `broker-verbs: [AUD-D6] requiredClassesFor names every credential a verb needs, including its extraClasses` | `[AUD-D6]` | `extra-classes-dropped` | 8 | in `requiredClassesFor`, union only each verb's own `capabilityClass` and ignore `extraClasses` |
@@ -368,11 +376,22 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 belongs to this suite — one declaration file names one `suite`, and a second
 declaration file would be machinery guarding machinery.
 
-**Criteria 1, 7, 9 and 11 carry no declaration, deliberately.** 1 is a structural
-pin over the verb table, checked mechanically and non-vacuously by V5; 7 and 9 are
-pins on code this WP does not modify (`registry.js:71`, `composeClaudeArgs`), so
-there is no branch a mutation could invert that Table C's rows do not already move;
-11 is `N/A`.
+**Every mutation above must produce a DIFFERENT observable than correct code under
+its identity** — `evaluateRed` compares failing sets, so a mutant that lands on the
+same refusal the correct code already makes is a vacuous proof, not a red one. Two
+traps this contract creates, named so the identity's inputs avoid them: (a) for
+`reply-address-pattern-dropped`, the candidate must fail Table B's pattern
+**without containing CR/LF**, or `assertHeaderSafe` refuses the mutant too and the
+observable collapses; (b) for `reply-recipient-not-derived`, the `body` must name a
+**different** address from the header, or both arms draft to the same recipient.
+
+**Criteria 1, 7, 9, 10 and 11 carry no declaration, deliberately.** 1 is a
+structural pin over the verb table, checked mechanically and non-vacuously by V5;
+7 and 9 are pins on code this WP does not modify (`registry.js:71`,
+`composeClaudeArgs`), so there is no branch a mutation could invert that Table C's
+rows do not already move; **10 is the meta-check over this table and cannot declare
+a proof of itself** — its check is V3, whose own both-directions behaviour is
+recorded in the round-zero log; 11 is `N/A`.
 
 ### Mirrored Surface Checklist
 
@@ -380,7 +399,7 @@ Every surface in this spec that mirrors Table A, B or C. A review finding update
 the table **and** every mirror below in one pass; any new mirror found in review is
 added here on the spot.
 
-- [ ] **Table A** ← Deliverables rows for `verbs.js`, `runtime-profile.js`, both `SKILL.md`s, `docs/GLOSSARY.md`, `docs/adr/0026-…` (Amendment 2's verb names), and the four test rows
+- [ ] **Table A** ← Deliverables rows for `verbs.js`, `runtime-profile.js`, both `SKILL.md`s, `docs/GLOSSARY.md`, `docs/adr/0026-…` (Amendment 2's verb names), and the four verb-name-pinning test rows (`broker-registry.test.js`, `broker-wiring.test.js`, `routine-runtime.test.js`, `routines-skill-structure.test.js`)
 - [ ] **Table A** ← acceptance criteria 1, 2, 7, 8, 9
 - [ ] **Table A** ← verification steps V4 (the deleted name) and V5 (the address-field universal)
 - [ ] **Table A** ← Current state's "The verb table" and "The allowlists" paragraphs
@@ -411,7 +430,7 @@ added here on the spot.
   fail loud. Making a missing `Message-ID` fatal would lose a legitimate reply for
   a case with no security content.
 - **The E2E harness needs no change, measured.** `allowedMethodsFor`
-  (`tests/scenarios/broker-e2e/run-broker-e2e.js:63-78`) derives permitted methods
+  (`tests/scenarios/broker-e2e/run-broker-e2e.js:63-79`) derives permitted methods
   by regex over each verb's `apiMethod`, so Table A's two `apiMethod` strings
   (which name `drafts.create` and `messages.get`) admit exactly the right methods,
   and `gmail.users.getProfile` is already exempt at `:256`. That harness is

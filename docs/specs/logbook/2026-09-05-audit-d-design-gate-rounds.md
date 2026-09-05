@@ -110,8 +110,11 @@ the `requiredClassesFor` helper, and it is Dispatch-precondition items 1 and 2.
 
 ### Consumer sweep (the stub deferred this to dispatch time; it ran here)
 
-System `grep` over `src skills templates tests docs bin`, every path literal. The
-sweep read its targets — the output names files and line numbers, and no
+Two passes, every path literal: system `grep -rn` over
+`src skills templates tests docs bin`, then a second repo-wide pass (excluding
+`node_modules/` and `.git/`) that reaches the root files — which is where
+`FIX-PLAN.md` was found; the first pass's scope does not include it. Both sweeps
+read their targets — the output names files and line numbers, and no
 `No such file` appeared on stderr. Every `create_draft` occurrence at `8c52808f`:
 
 | Kind | Sites |
@@ -123,10 +126,11 @@ sweep read its targets — the output names files and line numbers, and no
 | Records (not rewritten) | `FIX-PLAN.md:525,:541`; `docs/specs/done/…`; `docs/security-audit/…` |
 | **No hit** | `templates/`, `bin/`, `tests/scenarios/`, `tests/golden/`, `src/gws/gmail.js` beyond its single caller |
 
-`gmail.draft` has exactly one caller in the tree (`verbs.js:171`) — the attended
+`gmail.draft` has exactly one PRODUCT caller (`verbs.js:171`) — the attended
 `gws gmail draft` CLI that `docs/ARCHITECTURE.md:160` still describes no longer
-reaches it. `tests/scenarios/broker-e2e/` names no verb: `allowedMethodsFor`
-(`run-broker-e2e.js:63-78`) derives permitted Google methods by regex over each
+reaches it. It has one further caller in the suite,
+`tests/unit/gws-gmail.test.js:142` (corrected in the executor pass, below). `tests/scenarios/broker-e2e/` names no verb: `allowedMethodsFor`
+(`run-broker-e2e.js:63-79`) derives permitted Google methods by regex over each
 verb's `apiMethod`, and `gmail.users.getProfile` is exempt at `:256` — so the live
 E2E harness needs no change, measured rather than assumed.
 
@@ -162,7 +166,7 @@ state (Dispatch-precondition item 3).
 | `docs/GLOSSARY.md:36` | broker-verb definition, `create_draft` in the example list |
 | `docs/THREAT-MODEL.md:138` / `:140` / `:142` | T4a mitigations / the A12 residual / the 0.10.0 paragraph — `:140` and `:142` both say "name a new recipient" |
 | `docs/adr/0026-gws-capability-broker.md:152-153` / `:200` / `:240-247` / `:475-520` | §2 draft bullet / D-SEND-SCOPE / §4 / Amendment 1 |
-| `tests/scenarios/broker-e2e/run-broker-e2e.js:63` / `:78` / `:256` | `function allowedMethodsFor(profileId) {` / `return allowed;` / the getProfile exemption |
+| `tests/scenarios/broker-e2e/run-broker-e2e.js:63` / `:79` / `:256` | `function allowedMethodsFor(profileId) {` / its closing `}` (`:78` is `return allowed;`) / the getProfile exemption |
 
 **Stub citations that moved or were wrong**, all corrected in the matured spec:
 the stub's `verbs.js:154/:165/:170` survived unchanged; `registry.js:71` survived;
@@ -321,6 +325,36 @@ product behaviour, in the smallest form that guards it.
 
 Raw reviewer output is committed **before** adjudication, and each round's row here
 cites the raw file's path **and the SHA of the commit that introduced it**.
+
+## Round zero — orchestrator executors, 2026-09-05, on `4c968eeb`
+
+Two clean-context executors ran on the round-zero tip, each given only the
+artifacts and the reference document.
+
+**Template conformance: CONFORMS.** No blocking item; no template section
+silently absent.
+
+**Internal coherence (clean context): 8 findings, all machinery/wording — LIGHT
+under Weighted closure, so they folded into the tip before external round 1
+rather than opening a round.** Everything else the executor checked reproduced:
+~50 citations at both ends, the `compositeServices` DRAFT-only / READ+DRAFT block,
+the attacker-draft demonstration with `grantCheck` consulted 0 times, the
+no-refund counter, V1 2630/2618/0/12, V2 exit 0, V3 `--wp` correctly RED
+(`VACUOUS: the selection matched no proof`), V4 sweep RED (13 hits — the
+executor's count includes the spec's own text, which the six-path V4 list
+excludes), V5 RED (`create_draft.to`). **No product finding; the stop criterion is
+untouched, and no owner item or Table A/B value moved in this pass.**
+
+| # | Finding | Disposition |
+|---|---|---|
+| E1 | Deliverables row for `tests/unit/broker-verbs.test.js` said "the five new identities of Table C"; Table C has six. | **fix** — the cell no longer predicts a count: it says "every test identity named in **Table C**", and also records the verb-table pin moving eight names → nine. |
+| E2 | Deliverables row for the `.proofs.json` said "the eight declarations of Table C"; Table C has nine rows. | **fix** — same treatment: "one declaration per **Table C** row", plus the `suite` value the file must carry. Both cells were re-read whole afterwards; neither predicts any other Table C content. |
+| E3 | `allowedMethodsFor` cited as `run-broker-e2e.js:63-78`; the closing brace is `:79` (`:78` is `return allowed;`). | **fix** — both spec sites and the logbook citation row corrected to `:63-79`. |
+| E4 | "`gmail.draft` has exactly one caller in the tree" is false — `tests/unit/gws-gmail.test.js:142` calls it directly. | **fix** — the universal narrows to one PRODUCT caller and names the unit-test caller as its exception. **Measured, not assumed:** the additive `buildMime`/`draft` extension was applied to a scratch copy and `tests/unit/gws-gmail.test.js` passed **9/9 unchanged** (with `inReplyTo`/`references`/`threadId` absent the bytes and request body are identical), so that file stays OUT of Deliverables. |
+| E5 | The sweep's stated scope (`src skills templates tests docs bin`) does not reach `FIX-PLAN.md`, which it nonetheless cites. | **fix** — both the spec and this record now state the two passes and say which one found the root file. |
+| E6 | **The one finding with teeth.** Table C's `reply-fetch-failure-drafts-anyway` mutation ("continue with an empty header set") lands on Table B's own "both empty → refuse", producing the SAME zero-draft observable as correct code — `evaluateRed`'s equality would have made it a vacuous proof. | **fix** — restated so the mutant DRAFTS (a literal fallback recipient and subject). The other eight rows were re-checked for the same shape: all produce a different observable, but two carry a masking trap, now named in the spec — `reply-address-pattern-dropped` needs a candidate that fails the pattern **without** CR/LF, and `reply-recipient-not-derived` needs a `body` address **different** from the header's. A general sentence stating the requirement was added above them. |
+| E7 | "Criteria 1, 7, 9 and 11 carry no declaration" omits criterion 10. | **fix** (not left) — 10 is added with its reason: it is the meta-check over Table C and cannot declare a proof of itself; V3 is its check. |
+| E8 | Mirrored Surface Checklist said "the four test rows" without naming them. | **fix** — the four verb-name-pinning test files are spelled out. |
 
 ### Round table
 
