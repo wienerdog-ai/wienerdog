@@ -108,3 +108,27 @@ map and its unset fixture change, and the ADR amendment and the design-gate
 record follow. The spec's `## Dispatch precondition — owner items` carries
 this text; it is cited here, not restated, for the reason the previous
 append gives.
+
+### Amendment, 2026-09-06 (after design-gate round 2) — the O1 entry above is superseded on one clause
+
+Round 2's hermetic shadow (finding F2, band B) found that the **O1 entry above
+still says `HOME` and `XDG_CONFIG_HOME` are carried**, which contradicts O3 and
+Table U row U3 as adopted after round 1. This record is append-only, so the
+sentence stands where it is and is corrected here.
+
+**The adopted state, and the primary spec's `## Dispatch precondition — owner
+items` governs it:** `HOME` is **carried, taken through `getPaths().home`** —
+the run's single authority for the home the vault, state directory and config
+roots all derive from, and the same value `buildCleanEnv` gives the scheduled
+child. `XDG_CONFIG_HOME` is **NOT carried** (owner item O3, appended above).
+
+**Two claims in the O1 entry's own reasoning are also withdrawn**, with the
+measurements that falsified them recorded in the spec's *"Why Table U is what it
+is"* section: that `HOME` is *never* the launching shell's string (with `HOME`
+set, it is), and that an environment lying about `HOME` *relocates the whole
+product* (measured: with the four `WIENERDOG_*`/`*_DIR` overrides set, changing
+`HOME` leaves every root but `home` itself identical). **The recommendation O1
+records is unchanged and the adoption stands on it, not on those two
+sentences** — `HOME` is carried because it is where the user's own git
+configuration lives and O1 declines to override the user's configuration. That
+is a trust decision, stated as one.
