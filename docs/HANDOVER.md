@@ -25,8 +25,8 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 | A | Interpolation neutralizer for code-owned markdown control planes | **Done** — `WP-sanitize-project-display-names`, `WP-daily-summary-per-line-framing`, `WP-neutralize-alert-callout-rendering` in `done/` |
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
 | C | Dream write fence (machinery-controlling files) | **Open — one residual** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
-| D | Code-derived draft recipients (no verb accepts a model-named address) | **Not started** — full harvested basis in `WP-audit-d-code-derived-recipients` |
-| E | Ledger-parser correctness + hostile corpus | **Not started** — full harvested basis in `WP-audit-e-ledger-parser-corpus` |
+| D | Code-derived draft recipients (no verb accepts a model-named address) | **Done** — `WP-audit-d-code-derived-recipients` in `docs/specs/done/` |
+| E | Ledger-parser correctness + hostile corpus | **In review (PR #226)** — `WP-audit-e-ledger-parser-corpus` |
 
 Two known status anomalies at handover time:
 `docs/specs/WP-ep2-unscannable-preserve.md` was still In-Review after its PR
@@ -37,6 +37,54 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 (day session of 2026-09-05, owner-authorized
+> merges).** Measured on `main`:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | D | `WP-audit-d-code-derived-recipients` | **Done** | design loop #223, implementation #224 (`ee11229f`), filed in this pass | **Design loop: round zero, two clean-context executors, and SIX double-channel rounds** (plugin + hermetic shadow; twelve raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md`). **The ADR-0031 breaker fired at round 2** on Table B and the answer was a CONTRACT — the recipient derivation restated as **an ORDER of operations over raw values, bounds before parsing**; every finding across two rounds had been the same defect, parsing before bounding. **The stop criterion fired twice.** At round 3 it was ruled by the orchestrator under the standing instruction as **item 9** (keep the code-derived-recipient verb; the findings were the ORDER contract not yet applied to its own rows). At round 4 the **FINAL** criterion fired on derived header lines exceeding RFC 5322's 998 octets, Table B was **frozen**, and an owner brief was written — answered by the owner's **DIRECT ruling (a)**, refuse at the output, which became **item 10** and the first non-standing-instruction decision of the queue. **Round 6 returned zero product findings on both channels** and the loop closed under Weighted closure, verified by an independent clean-context executor. **Implementation: two rounds of the triple-channel PR gate** — round 1 plugin clean (a reading; its tests were sandbox-blocked, disclosed), shadow *"patch is correct"* with zero findings, wd-reviewer REQUEST-CHANGES **with no product finding** (a spec contradiction inside Table C); **errata 1 (the vendored-skill digest anchor missing from Deliverables) and 2 (a mutation parenthetical contradicting its own table's rule) landed on the branch** before merge; round 2 APPROVE / clean / *"patch is correct"*. Merged tree: `2638/2626/0/12`, **53 proofs PROVEN**, lint clean. **Six dated errata** in the filed spec |
+> | E | `WP-audit-e-ledger-parser-corpus` | **Ready → implementation PR #226 open, gate round 1 in progress** at the time of writing | design loop #225 | Round zero, two clean-context executors and **two double-channel rounds**; **two ADR-0031 extractions**; a **43-row hostile corpus** and **44 declared proofs** |
+>
+> **Owner rulings this session, verbatim.** Merges were authorized for the
+> session: *"You are hereby authorized to perform merges in this session. Go
+> ahead and merge 223 once you are ready for it."* And the audit-D escalation was
+> ruled **directly**, after the owner read the ruling brief: *"go with a) as you
+> recommended"* — recorded on its own in
+> `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`,
+> deliberately kept apart from the nine items dispatched under the standing
+> instruction (`docs/specs/logbook/2026-09-05-owner-rulings-audit-d-queue.md`).
+> **A tree should be able to tell a decision the owner made from a
+> recommendation dispatched under a standing authorization**, which is why the
+> two records are separate.
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried
+> forward unchanged (the dot-segment spec's V2 B3 loop grading against the
+> pre-filesystem spelling; the adopt-e2e Deliverables cell's setup enumeration
+> omitting the PATH stub; the basename WP's Table C position clause; the
+> phase-environment contract table for `scripts/red-proofs.js`; ADR-0010's
+> "adopt requires the user to confirm" sentence vs `--yes`; the orphaned `(ii)`
+> sub-bullet at step 19 in `src/cli/dream.js`; and the durability WP's five)
+> **plus this WP's errata 3–6:** the one `[AUD-D*]` assertion with no band marker
+> at `tests/unit/broker-verbs.test.js:626`, which is a test-constructed
+> precondition no product mutation can redden — the rule needs a carve-out and
+> the mechanical check it has always lacked (erratum 3, successor
+> `WP-red-proofs-marker-audit`, **not filed**); acceptance criterion 7's second
+> clause, unasserted by V1 though reviewer-verified TRUE — a one-test follow-up
+> (erratum 4); the `classesFor` pass-through alias at
+> `src/cli/gws-broker.js:102`, semantically identical and pinned through by both
+> RED proofs (erratum 5, hygiene); and erratum 2's missing Mirrored Surface
+> Checklist line, **fixed in this pass** (erratum 6). **Plus the OPEN owner
+> question:** whether the input bound should be restated in UTF-8 octets to match
+> the output bound — **no output-safety consequence either way, but availability
+> differs**, and the character bound as ruled is the more permissive.
+>
+> **Next in the queue:** `WP-audit-e-ledger-parser-corpus` (finish the gate,
+> merge, done-flip), then `WP-process-runbook-sweeps`, then
+> `WP-dream-git-env-pinning`; after those the successors —
+> `WP-quarantine-disposal-durability` (**Draft**), and unfiled:
+> `WP-quarantine-only-copy-shelf`, `WP-red-proofs-marker-audit`, and the owner's
+> named option **(c)**, mid-trim of `References`.
+>
 > **Status pass, 2026-09-05 (overnight continuation #3, owner-authorized
 > merges).** Measured on `main`:
 >

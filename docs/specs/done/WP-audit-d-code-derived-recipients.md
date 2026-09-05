@@ -1,7 +1,7 @@
 ---
 id: WP-audit-d-code-derived-recipients
 title: Split create_draft into two code-derived-recipient verbs
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -13,6 +13,101 @@ epic: audit-close
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
+
+> **Errata, 2026-09-06 (post-merge) — six. None is a defect in what shipped**;
+> the merged tree is green (2638/2626/0/12, 53 proofs PROVEN) and every one of
+> these was either fixed on the branch before merge (1–2) or is a spec-surface or
+> hygiene item routed to a successor (3–6). **None rewrites the original text.**
+> Errata 1 and 2 already have in-body notes beside the Deliverables table; they
+> are restated here as numbered entries so the whole list lives in one place.
+>
+> **Erratum 1 — the vendored-skill digest anchor was not a Deliverables row.**
+> *What is wrong:* the table listed the two `skills/*/SKILL.md` files this WP
+> rewrites but not `src/core/runtime-skill-digests.json`, the checked-in integrity
+> anchor (`src/core/runtime-settings.js:25-34`). *What is true:* editing either
+> skill moves its sha256, so the WP as specified could not be implemented green —
+> 13 tests failed, and a merge would have left weekly-review and inbox-triage
+> refusing to run with *"refusing to run tampered skill text"*. *Found:*
+> implementation, PR #224, before the gate; the implementer correctly did **not**
+> touch the unlisted file and reported instead. *Routing:* **fixed on the branch**
+> — see the in-body Erratum 1 note by the Deliverables table for the regeneration
+> contract and acceptance criterion 10a. **Class: a Deliverables table that lists
+> the file a change EDITS but not the file that change INVALIDATES.**
+>
+> **Erratum 2 — a Table C row contradicting its own table's governing rule.**
+> *What is wrong:* `reply-grammar-dropped` said *"(take the whole trimmed value as
+> the address)"*. *What is true:* executed literally that moves **10 of 13**
+> `[AUD-D2]` accepted rows as well as all 12 step-3 fixtures, so its measured set
+> exceeds its declaration — which the same table's discipline paragraph forbids in
+> as many words. *Found:* PR #224 gate, round 1, **wd-reviewer** (its only
+> finding; no product finding). *Routing:* **fixed on the branch** — the row is the
+> narrow form (`const address = match ? match[1] : trimmedSelected;`), measured at
+> 0/13 and 12/12, and the discipline paragraph gained the real worked case beside
+> its hypothetical one. **Class: a row-level EXAMPLE contradicting the rule stated
+> seven lines beneath it — a governing rule does not police its examples.**
+>
+> **Erratum 3 — one `[AUD-D*]` assertion carries no band marker, and no mutation
+> can redden it.** *What is wrong:* the "every assertion carries its identity's
+> band marker" rule has no carve-out and no mechanical check. *What is true:*
+> `tests/unit/broker-verbs.test.js:626` is a **test-constructed precondition** —
+> `assert.equal(addr320.length, 320, 'witness precondition: exactly 320 UTF-16 code
+> units')` — asserting a property of the fixture the test just built, not of the
+> product. Reviewer-verified: **no product mutation can redden it**, so a marker
+> would be decoration. *Found:* PR #224 gate, round 2, wd-reviewer. *Routing:*
+> **successor, NOT FILED — `WP-red-proofs-marker-audit`**: give the rule an
+> explicit carve-out for test-constructed preconditions and add the mechanical
+> check the rule has always lacked (the reviewer sketched a ~90-line
+> `marker-audit.js` beside `scripts/red-proofs.js`). The rule is right; nothing
+> enforces it, which is how one assertion slipped.
+>
+> **Erratum 4 — acceptance criterion 7's second clause is unasserted by V1.**
+> *What is wrong:* *"a `grantCheck` that always returns `false` does not change
+> either verb's outcome"* has no test behind it. *What is true:* the clause is
+> **TRUE** — the round-2 reviewer probed both verbs under an always-false
+> `grantCheck` and got identical outcomes, one `drafts.create` each, byte-identical
+> MIME; the gate at `registry.js:71` is SEND-only and neither new verb is SEND.
+> *Found:* PR #224 gate, round 2, wd-reviewer. *Routing:* **successor list** — a
+> one-test follow-up. Nothing shipped is wrong; the criterion simply outran its
+> verification, which is the shape a criterion should never have.
+>
+> **Erratum 5 — an indirection the Exact contract did not ask for.**
+> `src/cli/gws-broker.js:102` defines `const classesFor = (verbNames) =>
+> requiredClassesFor(verbNames);` and both consumer sites (`:103`, `:132`) call
+> through it. *What is true:* semantically identical to calling
+> `requiredClassesFor` directly, and **both RED proofs pin the sites through the
+> alias**, so the guarantee is unaffected. *Found:* PR #224 gate, round 2.
+> *Routing:* **hygiene, Discovered issue** — a successor with an independent reason
+> to be in that file may inline it.
+>
+> **Erratum 6 — erratum 2 did not register itself in the Mirrored Surface
+> Checklist.** *What is wrong:* erratum 1 added its own checklist line; erratum 2
+> did not. *What is true:* erratum 2 has **three** surfaces that must move
+> together — the erratum note, Table C's `reply-grammar-dropped` row, and the
+> discipline paragraph's worked case. *Found:* this done-flip pass. *Routing:*
+> **fixed here** — the binding line is added to the checklist below.
+>
+> **Successors and residuals, carried forward.**
+>
+> - **Option (c) — mid-trim of `References`**, keeping the first and most recent
+>   ids that fit: the owner's **named successor** to ruling (a), deliberately
+>   **unfiled**. File it if dogfooding shows deep threads matter; the input bound
+>   already refuses a thread about 21 messages deep.
+> - **The two self verbs' model-supplied `subject`** carries a 512-**character**
+>   schema cap and **no octet bound**, so a multi-byte subject can build a
+>   `Subject:` line over 998 octets on `create_draft_to_self` and
+>   `send_digest_to_self`. Table B step 7 bounds only `create_reply_draft`'s
+>   **derived** headers, which is what the owner ruled. **Follow-up candidate.**
+> - **`buildMime` emits raw UTF-8 in headers and its optional `From` carries no
+>   length bound.** Both pre-existing, on no path this verb takes.
+>   **Discovered issues.**
+> - **OPEN owner question — the input bound's unit.** Step 0 counts **998
+>   characters** (as ruled, item 8); step 7 counts **998 UTF-8 octets**. There is
+>   **no output-safety consequence** either way once step 7 covers every emitted
+>   line, but **availability differs**: with 998 `€` characters in `References` and
+>   no `Message-ID`, the character bound drafts while an octet bound would refuse
+>   at step 0. The character bound is the more permissive; both are output-safe.
+>   Recorded in
+>   `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`.
 
 ## Context (read this, nothing else)
 
@@ -730,6 +825,7 @@ added here on the spot.
 - [ ] **Table B** ← Table C's `[AUD-D3]` / `[AUD-D5]` / `[AUD-D7]` fixture-ownership paragraph
 - [ ] **Table B** ← the T4a residual paragraph quoted in Exact contracts (the `Reply-To`-else-`From` sentence)
 - [ ] **Erratum 1** ← the Deliverables row for `src/core/runtime-skill-digests.json`, the Exact-contracts regeneration rule, acceptance criterion 10a, and V1's drift-guard note — **whenever a `skills/*/SKILL.md` row is added to or removed from Deliverables, this set moves with it**
+- [ ] **Erratum 2** ← the erratum note beside the Deliverables table, Table C's `reply-grammar-dropped` row, and the discipline paragraph's real worked case — **the three move together: narrowing or widening that mutation changes all three or none**
 - [ ] **Table C** ← the Deliverables rows for **all three** `.proofs.json` files and for `tests/unit/gws-broker.test.js` and `tests/unit/gws-gmail.test.js`, acceptance criterion 10, and verification step V3
 - [ ] **Table B** ← the two "consequences" bullets under Table B (the whole-value-grammar rationale and the fail-closed narrowing)
 - [ ] **Table B** ← the `[AUD-D2]` and `[AUD-D3]` identity names in Table C, and the masking-trap note beneath it
