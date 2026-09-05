@@ -1,0 +1,116 @@
+# Design gate raw — round 1 — Codex plugin adversarial review — WP-audit-d-code-derived-recipients
+# tip reviewed: f1db2f126ffe136b0b665d23f5089d48e0e9de07 ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a0710f-c9f2-7222-b4c1-39c75743ab01).
+[codex] Turn started (01a0710f-caef-7772-9492-066e1440a601).
+[codex] Assistant message captured: I’ll check the pinned spec against the cited code, probe the recipient rules and partial-cred...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain' (exit 0)
+[codex] Running command: /bin/zsh -lc 'git rev-parse HEAD main'
+[codex] Command completed: /bin/zsh -lc 'git rev-parse HEAD main' (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --stat 8c52808f f1db2f126ffe136b0b665d23f5089d48e0e9de07'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 8c52808f f1db2f126ffe136b0b665d23f5089d48e0e9de07' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/cli/gws-broker.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/cli/gws-broker.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/broker/registry.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/broker/registry.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/broker/limits.js'
+[codex] Running command: /bin/zsh -lc 'nl -ba src/core/runtime-profile.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/broker/limits.js' (exit 0)
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/core/runtime-profile.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/broker/verbs.js'
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/gmail.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/broker/verbs.js' (exit 0)
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/gmail.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/scope-sets.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/scope-sets.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba skills/wienerdog-inbox-triage/SKILL.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba skills/wienerdog-inbox-triage/SKILL.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba skills/wienerdog-weekly-review/SKILL.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba skills/wienerdog-weekly-review/SKILL.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-audit-d-code-derived-recipients.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-audit-d-code-derived-recipients.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md' (exit 0)
+[codex] Assistant message captured: The extra-class helper covers the missing-READ case in principle. I’m checking whether the pr...
+[codex] Running command: /bin/zsh -lc "sed -n '85,125p' src/core/runtime-profile.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '85,125p' src/core/runtime-profile.js" (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat skills/wienerdog-inbox-triage/SKILL.md'
+[codex] Command completed: /bin/zsh -lc 'cat skills/wienerdog-inbox-triage/SKILL.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat src/gws/scope-sets.js'
+[codex] Command completed: /bin/zsh -lc 'cat src/gws/scope-sets.js' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat skills/wienerdog-weekly-review/SKILL.md'
+[codex] Command completed: /bin/zsh -lc 'cat skills/wienerdog-weekly-review/SKILL.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '195,250p' docs/specs/WP-audit-d-code-derived-recipients.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '195,250p' docs/specs/WP-audit-d-code-derived-recipients.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '320,410p' docs/specs/WP-audit-d-code-derived-recipients.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '320,410p' docs/specs/WP-audit-d-code-derived-recipients.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '455,550p' docs/specs/WP-audit-d-code-derived-recipients.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '455,550p' docs/specs/WP-audit-d-code-derived-recipients.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -B -c 'import re from email import policy from email.parser import Pars...
+[codex] Command completed: /bin/zsh -lc "python3 -B -c 'import re from email import policy from email.parser import Pars... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs = require('\\''fs'\\''); const vm = require('\\''vm'\\''); co...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs = require('\\''fs'\\''); const vm = require('\\''vm'\\''); co... (exit 0)
+[codex] Assistant message captured: The probes confirm two defects in Table B. It selects `old@example.net` from the comment in `...
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''); const {creat...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''fs'\\''), vm=require('\\''vm'\\''); const {creat... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'Candidate extraction|Address acceptance|user@\\[192|extra-classes-droppe...
+[codex] Command completed: /bin/zsh -lc "rg -n 'Candidate extraction|Address acceptance|user@\\[192|extra-classes-droppe... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '533,541p' docs/specs/WP-audit-d-code-derived-recipients.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '533,541p' docs/specs/WP-audit-d-code-derived-recipients.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'ls -1 src/gws/broker/verbs.js src/core/runtime-profile.js src/cli/gws-broker.js...
+[codex] Command completed: /bin/zsh -lc 'ls -1 src/gws/broker/verbs.js src/core/runtime-profile.js src/cli/gws-broker.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "/usr/bin/grep -aEn 'create_draft("'$|[''^_A-Za-z0-9])'"' src/gws/broker/verbs.j...
+[codex] Command completed: /bin/zsh -lc "/usr/bin/grep -aEn 'create_draft("'$|[''^_A-Za-z0-9])'"' src/gws/broker/verbs.j... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {VERBS}=require(\"./src/gws/broker/verbs.js\"); const ADDRESS_FI...
+[codex] Command failed: /bin/zsh -lc "node -e 'const {VERBS}=require(\"./src/gws/broker/verbs.js\"); const ADDRESS_FI... (exit 1)
+[codex] Assistant message captured: The credential probe confirms that checking every required class gives the intended refusal. ...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch this design unchanged: recipient ...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch this design unchanged: recipient parsing selects the wrong mailbox, and the credential proof misses a material failure state.
+
+Executed (exit statuses):
+• git status --porcelain — 0 before and after; stdout identical: '?? node_modules'.
+• git rev-parse HEAD main — 0; confirmed f1db2f12 and 8c52808f.
+• git diff --stat 8c52808f f1db2f126ffe136b0b665d23f5089d48e0e9de07 — 0; exactly the two requested files.
+• nl -ba — each invocation exited 0: src/cli/gws-broker.js; src/gws/broker/{registry,verbs,limits}.js; src/gws/gmail.js; src/core/runtime-profile.js; src/gws/scope-sets.js; both routine SKILL.md files; both reviewed documents.
+• cat — each invocation exited 0: src/gws/scope-sets.js and both routine SKILL.md files.
+• sed -n — each invocation exited 0: runtime-profile.js lines 85–125; the spec lines 195–250, 320–410, 455–550 and 533–541.
+• python3 -B heredoc and node heredoc — each exited 1 because the read-only sandbox refused temporary files; neither probe executed.
+• python3 -B -c mailbox-parser probe — 0; demonstrated wrong selection, false refusal and missed multiple recipients.
+• node -e regex/routing/MIME probe — 0; confirmed the exact regex accepts address literals and multiple @ characters; reproduced class routing; hostile body text remained outside the header block.
+• node -e in-memory assembly/mutation probe — 0; demonstrated the missing-DRAFT testing gap without modifying files.
+• rg -n targeted spec clauses — 0.
+• V4 ls -1 presence guard — 0; all six paths present.
+• V4 /usr/bin/grep -aEn sweep — 0, twelve hits: expected pre-implementation RED.
+• V5 node -e, as specified — 1, create_draft.to: expected pre-implementation RED.
+
+V1–V3 were not executed. No implementation exists at this tip; probes used existing code and in-memory reconstructions of the proposed contracts.
+
+Findings:
+- [high] [A] Angle-bracket counting can select a comment as the recipient (docs/specs/WP-audit-d-code-derived-recipients.md:330-331)
+  Table B selects old@example.net from 'alice@example.org (backup <old@example.net>)', although the mailbox is alice@example.org. The Python email parser reports that source header as valid with no defects. It also accepts 'alice@example.org, Bob <bob@example.net>' as one candidate, silently discarding the first mailbox, and refuses the valid single-mailbox header '"Team <east>" <alice@example.org>'. Thus an implementation satisfying the literal table and criterion 3 can address the wrong mailbox. Counting bracket groups does not establish exactly one mailbox.
+  Recommendation: Specify extraction that accounts for quoted display names, comments and the entire address list. Reject unsupported or ambiguous syntax instead of extracting substrings from it. Add these three cases to AUD-D2/AUD-D3.
+- [high] [A] The credential proof does not protect the assembly refusal (docs/specs/WP-audit-d-code-derived-recipients.md:481-485)
+  Criterion 8 tests unavailable READ only, while Table C mutates only requiredClassesFor. An assembly wrapper checking only extraClasses leaves that helper correct and passes the named missing-READ case. In the in-memory reconstruction using the existing registry, unavailable DRAFT then allowed getProfile to execute and produced 'broker verb create_draft_to_self failed' instead of the required class-unavailable refusal. The proposed all-required-classes implementation works; the declared proof does not distinguish it from this broken integration.
+  Recommendation: Exercise the actual assembly path for both new verbs with READ missing, DRAFT missing and both present. Require zero Google calls on either missing class, and add a mutation of the assembly refusal that ignores the primary class.
+- [medium] [B] The exact address pattern contradicts the accepted narrowing (docs/specs/WP-audit-d-code-derived-recipients.md:332)
+  Executing the exact pattern extracted from this spec accepts both user@[192.0.2.1] and alice@relay@example.org. Square brackets and @ are allowed inside its character classes. The first directly contradicts the address-literal refusal stated at lines 343–346 and in owner item 7; the second is not a usable single mailbox. Following the canonical regex therefore violates the prose contract. This challenges the recommendation's stated premise, not the decision to narrow address support.
+  Recommendation: Make the pattern enforce exactly one @ and exclude address literals, then require explicit rejection fixtures for both examples under AUD-D3.
+- [medium] [B] The residual incorrectly requires the recipient to have mailed the user (docs/specs/WP-audit-d-code-derived-recipients.md:253-259)
+  Reply-To precedence does not establish that the selected recipient ever mailed the user. A message from attacker@example.org with Reply-To: third-party@example.net selects that third party without any provenance check. The quoted threat-model deliverable nevertheless says 'the recipient must already have mailed the user'; Table A repeats this as a cap rationale. The implementation cannot make those claims true. Correcting this description does not require reopening the accepted reply-draft residual or changing Reply-To precedence.
+  Recommendation: Describe the recipient as nominated by the selected message's author, potentially an unrelated third party. Update the residual and Table A rationale consistently while retaining the ruled behavior and caps.
+
+Next steps:
+- Routed scope objections: none. These findings preserve the ruled grants, scopes, SEND exclusions, caps and reply-draft behavior.
+- Correct Table B and its mirrors, strengthen the assembly proof, and rerun the design gate.
+rc=0
+PORCELAIN: identical
