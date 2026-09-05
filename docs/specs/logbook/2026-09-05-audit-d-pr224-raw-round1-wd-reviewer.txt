@@ -1,0 +1,82 @@
+# PR gate raw — PR #224 round 1 — wd-reviewer (claude-opus-5 agent, detached checkout with real node_modules) — WP-audit-d-code-derived-recipients
+# tip reviewed: b95038d17b60cfd220f9e99b20d498319446d3b3 ; base main = aa937430 ; porcelain before/after identical (reported) ; committed pre-adjudication
+
+## REQUEST-CHANGES
+
+Narrow round. The **product code is correct and I could not break it** — every acceptance criterion verifies, every canonical contract byte-matches, and 102 independent assertions I wrote against Table B's case tables (not the PR's tests) all pass. The findings below are confined to the proof/test lane, and finding 1 is a **spec** defect that needs wd-architect before this WP can be filed Done.
+
+### What I executed (all in the detached checkout, nothing else touched)
+
+| Check | Result |
+|---|---|
+| `git status --porcelain` before / after | empty / empty — **identical** |
+| `node scripts/boundary-check.js <spec> <22 changed files>` | **exit 0** — no stray file |
+| `git diff aa937430 HEAD -- <spec>` | status flip + erratum-1 hunk **only**; Tables A/B/C unmoved |
+| V1 `node tests/with-temp-root.js tests/run.js` | **exit 0** — tests 2638 / pass 2626 / fail 0 / skipped 12; all 7 `[AUD-D*]` identities present with Table C's exact names; both drift-guard tests pass |
+| V2 `npm run lint` | **exit 0** — markdownlint 644 files 0 errors, shellcheck/PSSA clean, frontmatter 268 specs |
+| V3 `node scripts/red-proofs.js` (whole tree) | **exit 0** — `53 declared proof(s), 53 selected`, `RUN: PROVEN` |
+| V3 `--wp WP-audit-d-code-derived-recipients` | exit 1 / `RUN: FILTERED`, all 16 individually `PROVEN` — the PR body's explanation of `VERDICT_ORDER` is correct, this is the runner's design, not a defect |
+| V4 presence guard / sweep (extracted from the spec's fence, run with `sh`) | **`V4 presence guard exit: 0`** / **`V4 sweep exit: 1`** (zero live-surface hits) |
+| V5 full-record verb-table compare | **`V5 exit: 0`** — nine names, key≡name, all nine records match Table A |
+| My own `probe-tableb.js` (every accepted + refused row of Table B, via the shipped `replyTarget` and both handlers) | **PASS 102 / FAIL 0** |
+| `shasum -a 256` on all four `SKILL.md` vs the digest map | all four match; exactly 4 keys; the two untouched values byte-identical to `aa937430` |
+
+Contract fidelity I confirmed by inspection: `create_draft` deleted; both schemas exactly Table A's; `extraClasses: ['READ']` frozen on both; `requiredClassesFor` exported and fail-closed; `assembleRegistry(paths, profile, deps)` resolves `deps.loadServices ?? loadCredentialServices` on its **first line** with **no branch on `deps` anywhere** and both consumer sites calling unconditionally (`src/cli/gws-broker.js:98-103`, `:131-136`); the T4a sentence, the T4a residual paragraph and ADR-0026 Amendment 2 are **byte-identical** to the spec's literals and correctly placed. Table B's order is implemented as ordered, unconditional steps at `src/gws/gmail.js:225-283` — bound before scan, scan before trim, no truncation at step 5, octets at step 7.
+
+---
+
+### Findings
+
+**1. [contract] `tests/red-proofs/audit-d-code-derived-recipients.proofs.json:82-90` — `reply-grammar-dropped` declares two identities where Table C's Signal column declares one. This is a SPEC contradiction; route to wd-architect. Band B.**
+
+The shipped `expectRed` names both `[AUD-D3]` and `[AUD-D2]`. Table C's row for this proof (spec `:644`) has Signal `[AUD-D3]` only. The spec's own discipline paragraph (`:663-669`) is explicit and pre-warns about exactly this case:
+
+> `expectRed` sets are MEASURED after implementation, never predicted — and a mutation whose measured set EXCEEDS its declaration is **restated, not widened into the declaration**. The worked case: a "take the first `<…>` candidate" mutation of step 3 also reddens `[AUD-D2]`'s quoted-display-name row … the fix is a narrower mutation, because widening the declaration would make the pair stop distinguishing the two identities.
+
+The implementer applied that rule correctly to `reply-candidate-count-ungated` (narrowed to "first address-shaped substring", measured `[AUD-D3]`-only) and then widened here — but they were following Table C's own parenthetical, which prescribes the broad mutation verbatim: *"(take the whole trimmed value as the address)"*. `replace: "  const address = trimmedSelected;"` is the literal execution of that parenthetical, and it **necessarily** reddens `[AUD-D2]`, because every angle-addr accepted row then yields the whole `phrase <addr>` string as `to`.
+
+So Table C's row-level parenthetical and the expectRed-discipline paragraph cannot both be satisfied. The PR body's "Decisions made" #4 ("No `expectRed` set needed widening") is inconsistent with what shipped, but the implementer had no non-guessing choice.
+
+- **For wd-architect**: reconcile spec `:644`'s parenthetical with `:663-669`. The narrow mutation that satisfies both the paragraph and the semantic description ("accept the selected value without matching Table B's single-mailbox grammar") is `replace` → `const address = match ? match[1] : trimmedSelected;` with the `if (!match) throw` line removed — every `[AUD-D2]` accepted row still matches the grammar and is unmoved, while all twelve `[AUD-D3]` step-3 fixtures draft instead of refusing.
+- **For the implementer, only after that ruling**: if the architect narrows the parenthetical, re-`find`/`replace` and **re-measure** the set (`node scripts/red-proofs.js --wp WP-audit-d-code-derived-recipients`) — never predict it.
+
+**2. [criteria] `tests/unit/broker-verbs.test.js:310` — the only assertion under an `[AUD-D*]` identity that carries neither its band marker nor an error validator. Band C (latent proof-lane trap).**
+
+```js
+await assert.rejects(() => r2.callTool('create_draft_to_self', { subject: 's', body: 'b', ...extra }));
+```
+
+Two problems, both one-line fixes:
+- Spec `:630-632` makes the marker a universal: *"Each identity carries its band marker in **every** assertion message, so each declaration's `signal` is a string the author writes rather than a guess."* `evaluateRed` enforces this by `hit.node.diag.raw.includes(entry.signal)` (`scripts/red-proofs.js:1658`), and the TAP diagnostic carries the assertion message, not the test name — so any future mutation that lands on this line fails the signal check rather than reporting a clean red. I scanned all three suites: **59 of 60** assertions under `[AUD-D*]` identities carry their marker; this is the one.
+- Criterion 2 requires the argument object be *"**schema**-rejected with zero Google calls"*. With no message and no error validator this asserts only "it rejects for some reason". The zero-calls half on `:311` is correctly marked and does carry the safety substance, so this is not a hole in the property — only in what the assertion pins.
+
+Fix: add the validator and the marker, e.g. `(err) => /additionalProperties|not allowed|unknown/i.test(err.message)` plus `` `[AUD-D1] a supplied ${Object.keys(extra)[0]} is schema-rejected` ``.
+
+**3. [quality] `tests/unit/broker-verbs.test.js` `[AUD-D4]` To-block (last block of the identity) — the second clause of criterion 5's UTF-16 branch is argued in a comment but not asserted. Band C.**
+
+Decision 1 (step 4 read as `.length`) is legitimate — the spec deliberately leaves the unit open (`:810-818`). Under that branch criterion 5 requires the assertion *"step 4 refuses, **and no `To` line over 998 octets is reachable at all**"*. The test asserts the first clause only. I verified the second clause independently and it **holds**: with 320 UTF-16 code units and a maximum of 3 UTF-8 octets per code unit (astral pairs are 2 octets/unit), the largest grammar-admissible `To` line is `4 + 320×3 = 964` octets, and an empirical 320-code-unit all-3-octet address produced a conforming line. Optional: pin it with that one witness so the claim does not live only in a comment.
+
+**4. [quality] `src/gws/broker/verbs.js:170-176` — `create_draft_to_self`'s model-supplied `subject` has a 512-**character** schema cap but no octet bound, so a 512-char `€` subject emits a 1545-octet `Subject:` line. Band C, not a regression, correctly out of scope.**
+
+`send_digest_to_self` has the identical shape today, and the spec confines step 7 to `create_reply_draft` (`:434`, `:483-486`) and files the sibling `From` gap under "Discovered issues" (`:481`). Flagging only so it is a deliberate carry-forward: the ruled step-7 output bound now covers four lines built by one verb, while two other verbs still emit an unbounded model-supplied `Subject`. Worth a follow-up WP alongside owner item 10's named successor candidate (c).
+
+---
+
+### Closed-Contract Drift Check
+
+**Clean.** `git diff aa937430 HEAD -- docs/specs/WP-audit-d-code-derived-recipients.md` is exactly the `status: Ready → In-Review` flip plus the erratum-1 hunk. Tables A, B and C are byte-unmoved from the Ready spec on main — no settled contract was silently reinterpreted, and no mirror was promoted to primary. Erratum 1 was propagated correctly **in one pass to all four of its registered mirrors** (Deliverables row `:199`, the Exact-contracts regeneration rule `:307-322`, acceptance criterion 10a `:858-866`, V1's drift-guard note `:873-877`) **and** registered itself as a new checklist line at `:712` with its own move-with-it rule — this is the Mirrored Surface Checklist working as designed.
+
+The one drift is finding 1: Table C's row-level parenthetical at `:644` has fallen out of agreement with the expectRed-discipline paragraph at `:663-669` that governs it. Both are inside the same canonical table, so this is a canonical-table internal inconsistency rather than a mirror lagging its primary — which is why it goes to wd-architect rather than to the implementer.
+
+**Contract-density**: no new finding. This is round 5+ on Table B and the findings have moved off that contract family entirely — this round landed nothing on the ordered steps, the grammar, or the bounds, which is the signal that the canonical-extraction the spec already did has taken. No contract-dense inline prose needs extracting.
+
+### Files
+
+- Spec: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224/docs/specs/WP-audit-d-code-derived-recipients.md`
+- Finding 1: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224/tests/red-proofs/audit-d-code-derived-recipients.proofs.json`
+- Findings 2, 3: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224/tests/unit/broker-verbs.test.js`
+- Finding 4: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr224/src/gws/broker/verbs.js`
+- My probe (re-runnable): `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr224-scratch/probe-tableb.js`
+- Raw logs: `.../review-pr224-scratch/{V1,V2,V3-sel,V3-all}.log`
+
+**No band-A finding.** No model-supplied string reaches a recipient, no wrong mailbox, no CR/LF or over-998-octet line reaches Gmail, and neither new verb is reachable without both its credentials. This is not a two-failed-rounds escalation — round 1's `deps`-branch defect and round 3's masking traps are all closed, and `[AUD-D6]`'s no-deps arm (driving the real `loadCredentialServices` and observing the per-class stderr trace) is a genuinely good answer to the hardest part of the spec.
