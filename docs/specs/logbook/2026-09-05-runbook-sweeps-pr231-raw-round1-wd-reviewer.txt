@@ -1,0 +1,68 @@
+# PR gate raw — round 1 — wd-reviewer (opus) on a detached copy at f59e3f69 with COPIED node_modules — WP-process-runbook-sweeps
+# tip reviewed: f59e3f69109dd55cf420f47ba890e6de8d68823b ; base main = e119b607 ; porcelain before/after byte-identical (reviewer's cmp rc=0) ; committed pre-adjudication
+
+REQUEST-CHANGES
+
+The mechanical gates are all green and the substantive read is almost entirely clean: all 17 Table B rules landed at their named insertion points, in their specified modes, carrying their operative content and provenance, with no inversion, no dropped clause, and no removal anywhere in the PR. One landed sentence contains a reference that cannot resolve in the document it now lives in permanently; two hygiene nits ride with it. No A-band findings.
+
+## Findings
+
+1. **[quality] band B — `docs/runbooks/codex-review.md:104-107`: the R12 worked example contains a dangling "this WP" that no reader of the runbook can resolve.**
+   The landed text reads:
+   > `Worked example, non-normative — the requirement above is unchanged: this WP's own criterion in its round record, whose step 0 is the band gate and whose ladder is LIGHT/HEAVY (`docs/HANDOVER.md:371-372`).`
+
+   `codex-review.md` is a standing process runbook with no WP context anywhere in it, so "this WP" and "its round record" name nothing. The trailing parenthetical points at `docs/HANDOVER.md:371-372` (R12's Table A provenance), not at the record the example cites, so the pointer does not rescue it either. This is the exact defect class the WP exists to prevent — the spec's own "Exact contracts" rule requires a landed rule to name "an action, an artifact, or a line in a record" a reader can check.
+   Proximate cause is Table B's R12 cell, which is phrased from inside the spec (*"this WP's own criterion in the round record"*); the implementer transcribed it verbatim. **This does not need a spec change** — Table B pins anchor literals, not full sentences, and the sentence around them is explicitly the implementer's. No route to wd-architect.
+   **Fix:** replace `this WP's own criterion in its round record` with a resolvable citation, e.g. `WP-process-runbook-sweeps' criterion in docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md` (that file exists on `main`). The anchor `maps each band to an outcome` at `:99-100` is untouched by this edit, so the screen stays at 21 PASS.
+
+2. **[convention] band C — `.claude/agents/wd-architect.md:24-28`: the new R14 bullet is hard-wrapped at ~72 columns; every other bullet in that file is a single unwrapped line.**
+   Rules bullets at `:17-23` (and the prose at `:30`, `:32`) are all one line each. The R14 bullet is the only wrapped construct in the file. `.claude/` is not markdownlinted (confirmed: lint's glob is `docs/** skills/** templates/** tests/** *.md`, 648 files), so nothing caught it. Re-flow to a single line to match `wd-reviewer.md`'s sibling edit, which correctly appended to the existing one-line paragraph. Anchor `enumerate your own good` is whitespace-flattened by the screen, so re-flowing cannot break it.
+
+3. **[quality] band C — `docs/runbooks/codex-review.md:32`: inconsistent emphasis in the band list, apparently to chase the anchor literal.**
+   The list reads `**A**: silent wrong behavior…; **B**: caught downstream; **C: hygiene**` — A and B bold the letter only, C bolds letter-plus-word. The screen strips `*` before matching, so `**C**: hygiene` flattens to `C: hygiene` and passes identically; the inconsistency buys nothing. Make it `**C**: hygiene`.
+
+4. **[quality] band C — `docs/runbooks/codex-review.md:329-331`: R17's extension states its condition twice.**
+   `The obligation is symmetric: while a gate is reading a worktree, **nothing writes into a worktree a gate is reading**` — the subordinate clause and the anchored main clause say the same thing. Reads as anchor-fitting. Suggest `The obligation is symmetric: **nothing writes into a worktree a gate is reading** — one untracked file voids the verdict, however clean the diff.` Anchor preserved verbatim.
+
+## Checks that passed (no finding)
+
+- **[boundary]** 6 files changed: the five Deliverables rows plus the spec itself. `node scripts/boundary-check.js docs/specs/WP-process-runbook-sweeps.md $(git diff --name-only main)` → rc=0. No stray file.
+- **[criteria] EXTEND intactness, verified mechanically rather than by eye.** I flattened each file's blob on `main` and on `f59e3f69` and tested every 8-word shingle of the `main` text for survival in the branch text. Broken shingles cluster into exactly 9 seams in `codex-review.md`, 1 in `spec-authoring.md`, 1 in `_TEMPLATE.md`, 1 in `wd-architect.md`, 0 in `wd-reviewer.md` — one seam per insertion point, and every seam straddles an insertion. No sentence, bullet or rule was removed; the 10 deleted lines are all in-place rewrites of a construct's tail (in one case, `:434-435`, only a terminal `.` became ` —`).
+- **[contract] placement and mode, per Table B row.** R18 → item 2 of "When it runs" (`:17-19`, EXTEND). R11 → first bullet of Finding disposition (`:30-36`, NEW, "before `:37`"). R13 → immediately after the two-consecutive-rounds bullet (`:81-89`, NEW). R12 → STOP CRITERION bullet tail (`:99-107`, EXTEND). R16 → both-ends range bullet (`:165-169`, EXTEND). R17 → read-only bullet (`:329-332`, EXTEND). R01 → claim-to-be-RUN bullet tail (`:401-404`, EXTEND). R05/R06/R07 → one shared NEW bullet immediately after the both-directions bullet (`:413-420`). R02 → exit-code bullet tail (`:434-437`, EXTEND). R03/R04 → one shared NEW bullet immediately after it (`:438-445`). R08 → claim-sweep bullet tail (`spec-authoring.md:63-69`, EXTEND). R09 → checklist intro (`_TEMPLATE.md:88-93`, EXTEND). R14 → end of the `Rules:` list (`wd-architect.md:24-28`, NEW). R15 → contract-density paragraph tail (`wd-reviewer.md:21`, EXTEND). All 14 edit points match; the aggregate in Implementation notes (9 EXTEND + 5 NEW = 14; `codex-review.md` +4 bullets, Rules +2 / Finding disposition +2) holds against the landed diff.
+- **[criteria] operative, not aspirational.** All 17 read as checkable statements; none degraded to "be careful about X". Cross-references that Table B expressed as line numbers were landed as construct names ("below, under \"Weighted closure\"", "the STOP CRITERION bullet below", "the bullet above", "the ADR-0031 circuit-breaker below") — correct for a runbook whose own R16 now says a line number is trustworthy for existence, not position. Every one resolves in the new file.
+- **[criteria] provenance.** All 17 carry a parenthetical matching their Table A "Paid for by" cell, including the multi-source ones (R04's three payments with PRs #19/#24/#61, R14's three inbox bullets, R17's two).
+- **[criteria] out of scope.** R10 cited, never restated (R13 points at the breaker rather than repeating it, as Table B requires). R19 not landed — `grep -rniE 'declin|re-grant|regrant|surface(s)? loudly'` over the five files → rc=1, zero hits. `memory/lessons/inbox.md`, `docs/HANDOVER.md`, `docs/adr/` untouched (`git diff --name-only main` on those paths → empty). Agent frontmatter untouched; frontmatter check still reports 4 agent(s).
+- **[convention]** Conventional commit and PR title both `docs(process): codify the paid-for review and sweep disciplines (WP-process-runbook-sweeps)`; single commit; spec `status:` flipped to `In-Review`; PR template filled with "Decisions made" and `Generated-by:`. Docs-only, zero runtime-dep impact.
+
+## Contract-density / closed-contract drift (ADR-0031, one paragraph)
+
+Tables A and B remain the sole canonical sources and this PR does not edit them (only the spec's `status:` line moved), so no mirror was promoted to primary and no settled contract was reinterpreted. I re-checked the two mirrors most likely to drift: the Deliverables Notes cell for `codex-review.md` ("R01–R07, R11–R13, R16–R18" = 13 rules) matches Table B's File column exactly, and the DATA block's 21 lines still match Table B's anchor column one-for-one in order with `DECLARED=21`. One thing to watch, already dispositioned by the spec and **not** a finding against this PR: R09 makes `_TEMPLATE.md:88-93` say "in one pass **and in the same commit**" while ADR-0031 still says only "in one pass", and `wd-architect.md:22` still says "in the same pass". The spec rules this a strictly stronger operationalization and puts ADR amendment out of scope, which I accept — but the ADR is now the weaker of two surfaces stating one contract, which is the shape that fires the breaker later. Worth a note to wd-architect for whoever next opens ADR-0031; nothing to do here. No finding family repeated across rounds (this is round 1).
+
+## Porcelain check
+
+`git status --porcelain` in `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/reviewer-wt-pr231`: **byte-identical before and after** (`cmp` rc=0, both captures 0 bytes). HEAD still `f59e3f69`. All scratch work went to `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/reviewer-scratch/`; the negative control ran in a separate `git clone` under that path.
+
+## Commands executed, with exit codes
+
+| # | Command | rc |
+|---|---------|----|
+| 1 | `git status --porcelain` (before) | 0, empty |
+| 2 | `git rev-parse HEAD main` | 0 (`f59e3f69` / `e119b607`) |
+| 3 | `git diff --numstat e119b607 f59e3f69` | 0 (6 files, +78/−10) |
+| 4 | `git diff --name-status e119b607 f59e3f69` | 0 (6 × `M`) |
+| 5 | `git diff -U6 e119b607 f59e3f69` | 0 |
+| 6 | `gh pr view 231 --repo wienerdog-ai/wienerdog` | 0 |
+| 7 | `sed -n '430,518p' docs/specs/WP-process-runbook-sweeps.md > verify.sh` (spec's fence, run from a FILE) | 0 |
+| 8 | `bash verify.sh` — full Verification-steps block | **0**; screen: **21 PASS, 0 FAIL, `anchors processed=21 declared=21`, `sentinels exit=0`, `anchor screen rc=0`** |
+| 9 | `grep -qF 'Loop circuit-breaker (ADR-0031)' docs/runbooks/codex-review.md` | 0 |
+| 10 | `grep -qF 'A cited RANGE is checked at BOTH ends' docs/runbooks/codex-review.md` | 0 |
+| 11 | `grep -qF 'Contract-density detector (ADR-0031)' .claude/agents/wd-reviewer.md` | 0 |
+| 12 | `git diff --stat main -- memory/lessons/inbox.md` | 0, **empty output** |
+| 13 | `git diff --numstat main -- <5 deliverables>` | 0 — `5/0`, `1/1`, `60/5`, `7/1`, `4/2` (matches PR body) |
+| 14 | `npm run lint` | 0 — markdownlint **0 error(s)** over 648 files; frontmatter **268 spec(s), 4 agent(s)** |
+| 15 | Negative control: `git clone` → checkout `f59e3f69` → reword `arity proves nothing` → commit → run screen | screen rc=**1**, **exactly 1 FAIL**, 20 PASS, `anchors processed=21 declared=21` |
+| 16 | `grep -rniE 'declin\|re-grant\|regrant\|surface(s)? loudly' <5 files>` (R19 absence) | 1 (no hits) |
+| 17 | `node scripts/boundary-check.js docs/specs/WP-process-runbook-sweeps.md $(git diff --name-only main)` | 0 |
+| 18 | `git log --format='%H %s' e119b607..f59e3f69` | 0 (one conventional commit) |
+| 19 | 8-word-shingle survival check, `main` blob vs `f59e3f69` blob, all five files | 0 — breaks only at the 12 insertion seams |
+| 20 | `git status --porcelain` (after) + `cmp` against the before capture | 0 / 0 — byte-identical |

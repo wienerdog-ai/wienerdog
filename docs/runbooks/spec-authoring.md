@@ -60,7 +60,13 @@ writing. Read both before drafting.
   count that moved is wrong wherever any sentence states it. Sweep the
   concept (one pattern over the claim's shape, whitespace-flattened so a
   hard wrap cannot hide a hit), then verify each hit is corrected text
-  or a named withdrawal.
+  or a named withdrawal. The sweep is also **pronoun-aware**: a claim
+  restated as "it", "that count" or "the same file" is still the claim,
+  and a pattern scoped to the noun alone walks past it. Write a claim's
+  scope citation **adjacent to the claim** itself, not only in a table
+  elsewhere, so one sweep pattern catches both the fact and where it
+  applies (`inbox` WP-dream-promote-in-workspace;
+  `docs/HANDOVER.md:362-363`).
 - CLAUDE.md's `feat|fix|docs|test|chore(scope): message (WP-<slug>)` governs
   IMPLEMENTATION commits, which are one work package by construction. An
   architect's docs-only commit that spans several work packages at once — a

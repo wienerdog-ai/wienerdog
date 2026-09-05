@@ -1,0 +1,6 @@
+# PR gate raw — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, vendored pr-rubric) — WP-process-runbook-sweeps
+# tip reviewed: f59e3f69109dd55cf420f47ba890e6de8d68823b (detached worktree) ; base main = e119b607e2f9304ccafbdc714c67431d333b7b25 ; committed pre-adjudication
+
+patch is correct
+{"target":"f59e3f69109dd55cf420f47ba890e6de8d68823b","verdict":"approve","summary":"No actionable findings. The diff satisfies Table B’s placement, semantics, provenance, preservation, and boundary requirements; the worktree remained clean.","findings":[],"executed":"Diff/file/spec inspection commands: exit 0. Spec verification block: exit 1 because the read-only sandbox prevented mktemp, before checks ran. Equivalent committed-anchor screen: exit 0 (21/21 PASS). Already-bound greps: exit 0. Inbox diff: exit 0, empty. Deliverable numstat: exit 0. git diff --check: exit 0. npm run lint: exit 1 because markdownlint-cli2 attempted an unavailable registry fetch (ENOTFOUND); shellcheck, PSScriptAnalyzer, and frontmatter checks continued, with frontmatter passing for 268 specs and 4 agents. Final git status --porcelain: exit 0, empty."}
+# codex exit=0 ; porcelain before/after: identical
