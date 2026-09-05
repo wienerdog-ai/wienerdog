@@ -1,0 +1,29 @@
+# PR gate raw — PR #226 round 2 — Codex plugin native review — WP-audit-e-ledger-parser-corpus
+# tip reviewed: 3efcac1f75565bd2a51db1299f4155694a84bbe2 ; base main = 881f0d81 ; porcelain before/after identical ; committed pre-adjudication ; 51 focused tests executed by the reviewer; broader testing limited by its sandbox (disclosed)
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0724f-71c3-7cb0-8ee3-36c6adb68be7).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat 881f0d818fc43abc0ea84064b73d0d7a86ec2b...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat 881f0d818fc43abc0ea84064b73d0d7a86ec2b... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-e-ledger-parser-corpus.md; git diff 881f...
+[codex] Running command: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- tests/unit/dream-validate....
+[codex] Command completed: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- tests/unit/dream-validate.... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '300,410p' docs/specs/WP-audit-e-ledger-parser-corpus.md; sed -n '1,180p...
+[codex] Running command: /bin/zsh -lc "node --test --test-name-pattern='ledger corpus|parseFrontmatter' tests/unit/dre...
+[codex] Command completed: /bin/zsh -lc "node --test --test-name-pattern='ledger corpus|parseFrontmatter' tests/unit/dre... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- docs/specs/logbook docs/sp...
+[codex] Command completed: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- docs/specs/logbook docs/sp... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c | wc -l; node --test --test-n...
+[codex] Command completed: /bin/zsh -lc "git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c | wc -l; node --test --test-n... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: No actionable regressions were found. The changes consistently enforce invalid-value handling...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+No actionable regressions were found. The changes consistently enforce invalid-value handling, duplicate-heading refusal, and prototype-safe records. All 51 focused tests passed; broader testing was limited by the read-only sandbox.
+rc=0
+PORCELAIN: identical

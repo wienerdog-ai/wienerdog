@@ -304,8 +304,10 @@ test('dream-validate: parseFrontmatter coerces unquoted booleans, keeps quoted s
 });
 
 test('dream-validate: parseFrontmatter returns {} without a leading block', () => {
-  assert.deepEqual(parseFrontmatter('no frontmatter here'), {});
-  assert.deepEqual(parseFrontmatter('---\nunterminated: x\nbody'), {});
+  // A2: the record is null-prototype, so a `{}` comparison is not `deepEqual`
+  // to it any more — the OBSERVABLE is zero own keys.
+  assert.deepEqual(Object.keys(parseFrontmatter('no frontmatter here')), []);
+  assert.deepEqual(Object.keys(parseFrontmatter('---\nunterminated: x\nbody')), []);
 });
 
 // ── the gate ─────────────────────────────────────────────────────────────────
@@ -3774,4 +3776,532 @@ test('WP-validator-decided-bytes AC6: a malformed Tier-1/2 note is committed exa
   assert.equal(fs.readFileSync(path.join(vault, '01-Journal/2026-07-03.md'), 'utf8'), log);
   assert.equal(res.promoted.find((p) => p.rel === '03-Resources/malformed-note.md').bytes.toString('utf8'), note);
   assert.equal(res.promoted.find((p) => p.rel === '01-Journal/2026-07-03.md').bytes.toString('utf8'), log);
+});
+
+// ── WP-audit-e-ledger-parser-corpus: Table C, the ledger-parser hostile corpus ──
+//
+// Every row calls a gate DIRECTLY on hand-built VALUES (Table D rule (b) — every
+// input arrives as a value): no git repo, no ownership-registry write, no
+// extracts file. `gates.ledger` is `ledgerViolation` and `gates.skillBody` is
+// `skillBodyViolation` (both returned by `makeGates`), and both take
+// `{rel, candidateBytes, ...}` as plain buffers/objects — exactly the inputs
+// Table C's Path column names (K = `gates.ledger`, A = `gates.skillBody`).
+//
+// Session-IDs are deliberately `codex:*` on every Path-K fixture and
+// `claude:s1,s2,s3` on every Path-A fixture: a `codex:` id is "loose
+// accumulation" (WP-084) and never consults `extractsBySession`, so a Path-K
+// corpus row never exercises invocation-binding (already covered above, not
+// this work package's subject); three distinct `claude:` ids clear
+// `skillBodyViolation`'s own >=3-session floor so a VALID entry actually
+// reaches "authorize" rather than refusing for an unrelated reason.
+//
+// Every exotic code point below is written as a JS escape or
+// `String.fromCodePoint`, never as a literal glyph in source (a design-round
+// driver silently lost raw U+2028 through a heredoc) — the self-check test
+// re-derives the 24-code-point `\s`-minus-LF set from the runtime's own regex
+// engine and echoes it, rather than trusting a hand-copied list.
+
+const corpusGates = makeGates();
+const CORPUS_LEDGER_REL = '05-Skills/corpus/LEARNINGS.md';
+const CORPUS_SKILL_REL = '05-Skills/corpus/SKILL.md';
+const CORPUS_SKILL = [
+  '---', 'id: corpus', 'type: skill', 'created: 2026-08-01', 'updated: 2026-08-01',
+  'origin: dream', 'confidence: 0.9', 'recurrence: 3', 'derived_from_untrusted: false',
+  '---', '', 'corpus skill body', '',
+].join('\n');
+const corpusRegistry = { skills: { [CORPUS_SKILL_REL]: { id: 'corpus', created: '2026-08-01' } } };
+
+/** One `## <heading>` ledger section. Every field is a JS string the caller
+ *  supplies verbatim — `untrustedLine` is the RAW bullet line (its own leading
+ *  `- derived_from_untrusted:` and everything after), or `null` to omit the
+ *  bullet entirely (the ABSENT class, C15/C16/C23). */
+function ledgerSection(opts = {}) {
+  const {
+    heading = 'a.b',
+    patternKey = '`a.b`',
+    status = 'open',
+    recurrence = '2',
+    sessionIds = 'codex:s1, codex:s2',
+    firstSeen = '2026-01-01',
+    lastSeen = '2026-01-01',
+    untrustedLine = '- derived_from_untrusted: false',
+    observation = 'a recurring pattern.',
+  } = opts;
+  const lines = [
+    `## ${heading}`,
+    '',
+    `- Pattern-Key: ${patternKey}`,
+    `- Status: ${status}`,
+    `- Recurrence: ${recurrence}`,
+    `- Session-IDs: ${sessionIds}`,
+    `- First-Seen: ${firstSeen}`,
+    `- Last-Seen: ${lastSeen}`,
+  ];
+  if (untrustedLine !== null) lines.push(untrustedLine);
+  lines.push(`- Observation: ${observation}`, '');
+  return lines.join('\n');
+}
+
+/** One or more sections, `codex:` sessions (Path K — invocation-binding never consulted). */
+function ledgerK(...sections) {
+  return sections.map((s) => ledgerSection(s)).join('\n');
+}
+
+/** One section, `claude:` sessions (Path A — clears the >=3-distinct-session floor). */
+function ledgerA(opts = {}) {
+  return ledgerSection({ sessionIds: 'claude:s1, claude:s2, claude:s3', recurrence: '3', ...opts });
+}
+
+/** The `- derived_from_untrusted:` bullet line for RAW value `v` (may embed
+ *  any character, including CR / U+2028 / U+2029 — A7's remainder-of-line rule). */
+function untrustedBullet(v) {
+  return `- derived_from_untrusted: ${v}`;
+}
+
+/** Path K: `gates.ledger` on a candidate LEARNINGS.md, with an optional committed baseline. */
+function runK(candidateText, baselineText) {
+  return corpusGates.ledger({
+    rel: CORPUS_LEDGER_REL,
+    candidateBytes: Buffer.from(candidateText, 'utf8'),
+    baselineLedgerBytes: baselineText == null ? null : Buffer.from(baselineText, 'utf8'),
+    pairedSkillBytes: Buffer.from(CORPUS_SKILL, 'utf8'),
+    registry: corpusRegistry,
+    extractsBySession: new Map(),
+    layout: defaultLayout(),
+  });
+}
+
+/** Path A: `gates.skillBody` on a Tier-3 body revision whose `revision_pattern_key`
+ *  names `key`, with `ledgerText` as the committed `baselineLedgerBytes`. The
+ *  body always changes, so `needsAuth` is unconditionally true — this fixture
+ *  isolates the authorization read, never the bare-promotion allowlist (C29/C30
+ *  use their own dedicated fixture below). */
+function runA(ledgerText, key = 'a.b') {
+  const head = CORPUS_SKILL;
+  const cur = CORPUS_SKILL
+    .replace('corpus skill body', 'revised corpus skill body')
+    .replace('updated: 2026-08-01', 'updated: 2026-08-02')
+    .replace('origin: dream\n', `origin: dream\nrevision_pattern_key: ${key}\n`);
+  return corpusGates.skillBody({
+    rel: CORPUS_SKILL_REL,
+    candidateBytes: Buffer.from(cur, 'utf8'),
+    baselineBytes: Buffer.from(head, 'utf8'),
+    baselineLedgerBytes: ledgerText == null ? null : Buffer.from(ledgerText, 'utf8'),
+    registry: corpusRegistry,
+    layout: defaultLayout(),
+    date: '2026-08-02',
+  });
+}
+
+const K_INVALID_REFUSAL = 'learnings ledger entry a.b: missing/invalid derived_from_untrusted';
+const A_INVALID_REFUSAL = 'authorizing learning a.b is untrusted-derived (never promotable)';
+
+/** @param {string} rawValue @param {boolean} expectKeep */
+function checkK(rawValue, expectKeep) {
+  const text = ledgerK({ untrustedLine: untrustedBullet(rawValue) });
+  const reason = runK(text);
+  if (expectKeep) assert.equal(reason, null, `K path for ${JSON.stringify(rawValue)}`);
+  else assert.equal(reason, K_INVALID_REFUSAL, `K path for ${JSON.stringify(rawValue)}`);
+}
+
+/** @param {string} rawValue @param {boolean} expectAuthorize */
+function checkA(rawValue, expectAuthorize) {
+  const text = ledgerA({ untrustedLine: untrustedBullet(rawValue) });
+  const reason = runA(text);
+  if (expectAuthorize) assert.equal(reason, null, `A path for ${JSON.stringify(rawValue)}`);
+  else assert.equal(reason, A_INVALID_REFUSAL, `A path for ${JSON.stringify(rawValue)}`);
+}
+
+// The self-check the task requires: ECMAScript `\s` matches exactly 24 non-LF
+// code points, GENERATED here (never hand-enumerated) and echoed on failure so
+// a silently-lost exotic code point is caught immediately rather than producing
+// a corpus that quietly tests fewer than 24 members.
+const WS_CODEPOINTS = [];
+for (let cp = 0; cp <= 0xffff; cp += 1) {
+  if (cp === 0x0a) continue; // LF is excluded by definition (the heading/line delimiter)
+  if (/^\s$/.test(String.fromCharCode(cp))) WS_CODEPOINTS.push(cp);
+}
+
+test('dream-validate: ledger corpus self-check — ECMAScript \\s minus LF is exactly 24 code points', () => {
+  const hex = WS_CODEPOINTS.map((cp) => `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`).join(' ');
+  assert.equal(WS_CODEPOINTS.length, 24, `code points observed: ${hex}`);
+});
+
+// ── C1–C16: the trust predicate's value classes (A1) ─────────────────────────
+
+test('dream-validate: ledger corpus [C1] exact literal true, K keeps', () => {
+  checkK('true', true);
+});
+test('dream-validate: ledger corpus [C2] exact literal true, A refuses (untrusted, unchanged)', () => {
+  checkA('true', false);
+});
+test('dream-validate: ledger corpus [C3] exact literal false, K keeps', () => {
+  checkK('false', true);
+});
+test('dream-validate: ledger corpus [C4] exact literal false, A authorizes', () => {
+  checkA('false', true);
+});
+test('dream-validate: ledger corpus [C5] the padding class normalises to the exact literal, K keeps (green control)', () => {
+  const pads = [' ', '\t', String.fromCodePoint(0x00a0), String.fromCodePoint(0xfeff)];
+  for (const pad of pads) checkK(`${pad}false${pad}`, true);
+});
+test('dream-validate: ledger corpus [C6] case variant False, K refuses', () => {
+  checkK('False', false);
+});
+test('dream-validate: ledger corpus [C7] case variant False, A refuses', () => {
+  checkA('False', false);
+});
+test('dream-validate: ledger corpus [C8] case variant TRUE, K refuses', () => {
+  checkK('TRUE', false);
+});
+test('dream-validate: ledger corpus [C9] case variant TRUE, A refuses', () => {
+  checkA('TRUE', false);
+});
+test('dream-validate: ledger corpus [C10] quoted "false", K refuses (the ledger runs no coerceScalar)', () => {
+  checkK('"false"', false);
+});
+test('dream-validate: ledger corpus [C11] the comment class, K refuses (no inline-comment stripping)', () => {
+  checkK('false # ok', false);
+  checkK('false\t# ok', false);
+});
+test('dream-validate: ledger corpus [C12] YAML-ish word yes, K and A refuse', () => {
+  checkK('yes', false);
+  checkA('yes', false);
+});
+test('dream-validate: ledger corpus [C13] numeric 1, K and A refuse', () => {
+  checkK('1', false);
+  checkA('1', false);
+});
+test('dream-validate: ledger corpus [C14] empty value, K and A refuse', () => {
+  checkK('', false);
+  checkA('', false);
+});
+test('dream-validate: ledger corpus [C15] bullet ABSENT, K refuses (regression pin, do not "fix")', () => {
+  const text = ledgerK({ untrustedLine: null });
+  assert.equal(runK(text), K_INVALID_REFUSAL);
+});
+test('dream-validate: ledger corpus [C16] bullet ABSENT, A refuses (regression pin)', () => {
+  const text = ledgerA({ untrustedLine: null });
+  assert.equal(runA(text), A_INVALID_REFUSAL);
+});
+
+// ── C17–C20: duplicate `##` heading, the candidate and its green control ─────
+
+test('dream-validate: ledger corpus [C17] non-adjacent CANDIDATE duplicate heading, K refuses', () => {
+  const text = ledgerK(
+    { heading: 'a.b', untrustedLine: untrustedBullet('true') },
+    { heading: 'c.d', patternKey: '`c.d`' },
+    { heading: 'a.b', untrustedLine: untrustedBullet('false') },
+  );
+  assert.equal(
+    runK(text),
+    'learnings ledger has a repeated entry heading (a.b); each ## heading must appear once',
+    'C17 candidate duplicate'
+  );
+});
+test('dream-validate: ledger corpus [C18] the same ledger as the COMMITTED baseline, A refuses', () => {
+  // The LAST a.b-keyed section carries 3 distinct claude: sessions: with A3's
+  // duplicate refusal mutated away, last-wins is what the pre-fix collapse
+  // yields, and only THIS section's fields are visible to skillBodyViolation's
+  // own >=3-Claude-session floor — codex: sessions here would let that floor
+  // refuse first, on its OWN unrelated string, and the row would never reach
+  // the "authorize" its Today column records (round-1 gate finding).
+  const dup = ledgerK(
+    { heading: 'a.b', untrustedLine: untrustedBullet('true') },
+    { heading: 'c.d', patternKey: '`c.d`' },
+    { heading: 'a.b', untrustedLine: untrustedBullet('false'), sessionIds: 'claude:s1, claude:s2, claude:s3', recurrence: '3' },
+  );
+  assert.equal(
+    runA(dup, 'a.b'),
+    'skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)',
+    'C18 committed duplicate authorization'
+  );
+});
+test('dream-validate: ledger corpus [C19] COMMITTED baseline duplicate, candidate carries both a.b and c.d, K refuses', () => {
+  const dup = ledgerK(
+    { heading: 'a.b', untrustedLine: untrustedBullet('true') },
+    { heading: 'c.d', patternKey: '`c.d`' },
+    { heading: 'a.b', untrustedLine: untrustedBullet('false') },
+  );
+  const clean = ledgerK({ heading: 'a.b' }, { heading: 'c.d', patternKey: '`c.d`' });
+  assert.equal(
+    runK(clean, dup),
+    "learnings ledger's committed version has a repeated entry heading (a.b); the append-only history cannot be compared (fail closed)",
+    'C19 committed duplicate append-only'
+  );
+});
+test('dream-validate: ledger corpus [C20] a clean baseline and a clean candidate, K keeps (green control for C17-C19)', () => {
+  const clean = ledgerK({ heading: 'a.b' }, { heading: 'c.d', patternKey: '`c.d`' });
+  assert.equal(runK(clean, clean), null);
+});
+
+// ── C21–C23: raise-only (A4) ──────────────────────────────────────────────────
+
+test('dream-validate: ledger corpus [C21] baseline False, candidate false, K refuses (raise-only, INVALID fails closed)', () => {
+  const baseline = ledgerK({ untrustedLine: untrustedBullet('False') });
+  const candidate = ledgerK({ untrustedLine: untrustedBullet('false') });
+  assert.equal(
+    runK(candidate, baseline),
+    'learnings ledger lowered derived_from_untrusted of a.b (raise-only)',
+    'C21 raise-only invalid'
+  );
+});
+test('dream-validate: ledger corpus [C22] baseline False, candidate true, K keeps (green control for C21)', () => {
+  const baseline = ledgerK({ untrustedLine: untrustedBullet('False') });
+  const candidate = ledgerK({ untrustedLine: untrustedBullet('true') });
+  assert.equal(runK(candidate, baseline), null);
+});
+test('dream-validate: ledger corpus [C23] baseline bullet ABSENT, candidate false, K keeps (unchanged, owner item 2)', () => {
+  const baseline = ledgerK({ untrustedLine: null });
+  const candidate = ledgerK({ untrustedLine: untrustedBullet('false') });
+  assert.equal(runK(candidate, baseline), null);
+});
+
+// ── C24–C27: `__proto__` / `constructor` headings (A2) ────────────────────────
+
+test('dream-validate: ledger corpus [C24] heading __proto__ alone, K refuses (Pattern-Key slug check)', () => {
+  const text = ledgerK({ heading: '__proto__', patternKey: '`__proto__`' });
+  assert.equal(
+    runK(text),
+    'learnings ledger entry __proto__: Pattern-Key heading is not a valid area.symptom slug',
+    'C24 proto heading'
+  );
+});
+test('dream-validate: ledger corpus [C25] heading __proto__ plus one valid entry, K refuses (as C24)', () => {
+  const text = ledgerK({ heading: '__proto__', patternKey: '`__proto__`' }, { heading: 'a.b' });
+  assert.equal(
+    runK(text),
+    'learnings ledger entry __proto__: Pattern-Key heading is not a valid area.symptom slug',
+    'C25 proto plus valid'
+  );
+});
+test('dream-validate: ledger corpus [C26] heading constructor, fully valid, K keeps and A authorizes (green control)', () => {
+  const kText = ledgerK({ heading: 'constructor', patternKey: '`constructor`' });
+  assert.equal(runK(kText), null);
+  const aText = ledgerA({ heading: 'constructor', patternKey: '`constructor`' });
+  assert.equal(runA(aText, 'constructor'), null);
+});
+test('dream-validate: ledger corpus [C27] baseline constructor + a.b, candidate deleted constructor, K refuses (append-only)', () => {
+  const baseline = ledgerK({ heading: 'constructor', patternKey: '`constructor`' }, { heading: 'a.b' });
+  const candidate = ledgerK({ heading: 'a.b' });
+  assert.equal(
+    runK(candidate, baseline),
+    'learnings ledger deleted an existing entry (constructor); ledger is append-only',
+    'C27 constructor deleted'
+  );
+});
+
+// ── C28: the shared pattern-key sample, at both sites (A5) ───────────────────
+
+const PATTERN_KEY_SAMPLE = [
+  'a.b', 'a', '0', 'a-b', 'a.b-c.d', 'A.b', '_x', '__proto__', 'constructor', 'toString',
+  '.a', '-a', 'a b', 'a/b', 'a..b', 'z'.repeat(64), 'z'.repeat(65), 'a#b', 'a:b',
+];
+// The oracle IS the shipped regex (Table A5: both sites are required to be this
+// SAME regex) — used here only to compute the expected keep/refuse split, never
+// to replace the assertion against the two real call sites below.
+const PATTERN_KEY_ORACLE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
+
+test('dream-validate: ledger corpus [C28] one shared pattern-key sample at both sites, 0 disagreements (A5)', () => {
+  for (const key of PATTERN_KEY_SAMPLE) {
+    const ok = PATTERN_KEY_ORACLE.test(key);
+
+    // Site 1: the `##` heading check.
+    const headingText = ledgerK({ heading: key, patternKey: `\`${key}\`` });
+    const headingReason = runK(headingText);
+    if (ok) {
+      assert.equal(headingReason, null, `heading site keep for ${JSON.stringify(key)}`);
+    } else {
+      assert.equal(
+        headingReason,
+        `learnings ledger entry ${key}: Pattern-Key heading is not a valid area.symptom slug`,
+        `heading site refuse for ${JSON.stringify(key)}`
+      );
+    }
+
+    // Site 2: `revision_pattern_key`. No committed ledger, so a VALID key falls
+    // through to a DIFFERENT (still-refusing) message and an INVALID key is
+    // caught by the regex check itself — the two are distinguishable, which is
+    // what lets this assert each key's exact verdict rather than an agreement
+    // count alone.
+    const revisionReason = runA(null, key);
+    if (ok) {
+      assert.equal(
+        revisionReason,
+        'skill change needs a qualifying learning but no committed ledger authorizes it',
+        `revision_pattern_key site accepts ${JSON.stringify(key)}`
+      );
+    } else {
+      assert.equal(
+        revisionReason,
+        'skill change needs a qualifying learning but has no valid revision_pattern_key',
+        `revision_pattern_key site rejects ${JSON.stringify(key)}`
+      );
+    }
+  }
+});
+
+// ── C29–C30: the bare-promotion allowlist and __proto__ (A2) ─────────────────
+
+const PROMOTE_HEAD = [
+  '---', 'id: promo', 'type: skill', 'created: 2026-08-01', 'updated: 2026-08-01',
+  'origin: dream', 'status: incubating', 'confidence: 0.9', 'recurrence: 3',
+  'derived_from_untrusted: false', '---', '', 'same body', '',
+].join('\n');
+const PROMOTE_REGISTRY = { skills: { '05-Skills/promo/SKILL.md': { id: 'promo', created: '2026-08-01' } } };
+
+/** A bare incubating→active promotion (body unchanged) that ALSO adds one extra
+ *  frontmatter line — the only unauthorized-exempt change is a REAL promotion,
+ *  so any other added field forces `needsAuth`. */
+function runPromotion(extraFrontmatterLine) {
+  const cur = PROMOTE_HEAD
+    .replace('status: incubating', 'status: active')
+    .replace('updated: 2026-08-01', 'updated: 2026-08-02')
+    .replace('derived_from_untrusted: false\n---', `derived_from_untrusted: false\n${extraFrontmatterLine}\n---`);
+  return corpusGates.skillBody({
+    rel: '05-Skills/promo/SKILL.md',
+    candidateBytes: Buffer.from(cur, 'utf8'),
+    baselineBytes: Buffer.from(PROMOTE_HEAD, 'utf8'),
+    baselineLedgerBytes: null,
+    registry: PROMOTE_REGISTRY,
+    layout: defaultLayout(),
+    date: '2026-08-02',
+  });
+}
+
+test('dream-validate: ledger corpus [C29] promotion adding tags: injected, A refuses (green control for C30)', () => {
+  assert.equal(runPromotion('tags: injected'), 'skill change needs a qualifying learning but has no valid revision_pattern_key');
+});
+test('dream-validate: ledger corpus [C30] promotion adding __proto__: injected, A refuses (A2 fix — no longer invisible)', () => {
+  assert.equal(
+    runPromotion('__proto__: injected'),
+    'skill change needs a qualifying learning but has no valid revision_pattern_key',
+    'C30 proto promotion'
+  );
+});
+
+// ── C31–C35: more value classes (A1's class rule) ─────────────────────────────
+
+test('dream-validate: ledger corpus [C31] the YAML-ish word class (on, off), K and A refuse', () => {
+  for (const v of ['on', 'off']) { checkK(v, false); checkA(v, false); }
+});
+test('dream-validate: ledger corpus [C32] the YAML null class (~, null), K and A refuse', () => {
+  for (const v of ['~', 'null']) { checkK(v, false); checkA(v, false); }
+});
+test('dream-validate: ledger corpus [C33] the YAML tag class (!!bool false), K and A refuse', () => {
+  checkK('!!bool false', false);
+  checkA('!!bool false', false);
+});
+test('dream-validate: ledger corpus [C34] the homoglyph class (fullwidth false), K and A refuse', () => {
+  const fullwidthFalse = String.fromCodePoint(0xff46, 0xff41, 0xff4c, 0xff53, 0xff45); // fullwidth f a l s e
+  checkK(fullwidthFalse, false);
+  checkA(fullwidthFalse, false);
+});
+test('dream-validate: ledger corpus [C35] the interior-invisible class (U+200B inside false), K and A refuse', () => {
+  const interiorZwsp = `fal${String.fromCodePoint(0x200b)}se`; // NOT trimmable whitespace
+  checkK(interiorZwsp, false);
+  checkA(interiorZwsp, false);
+});
+
+// ── C36–C39: the unparseable-line class and CRLF (A7) ─────────────────────────
+
+const UNPARSEABLE_CODEPOINTS = [0x0d, 0x2028, 0x2029]; // CR, U+2028, U+2029
+
+test('dream-validate: ledger corpus [C36] unparseable-line value as the CANDIDATE (CR/LS/PS), K refuses (regression pin)', () => {
+  for (const cp of UNPARSEABLE_CODEPOINTS) {
+    checkK(`fal${String.fromCodePoint(cp)}se`, false);
+  }
+});
+test('dream-validate: ledger corpus [C37] same three values on the COMMITTED baseline, candidate false, K refuses (A7 makes it INVALID, A4 fires)', () => {
+  for (const cp of UNPARSEABLE_CODEPOINTS) {
+    const baseline = ledgerK({ untrustedLine: untrustedBullet(`fal${String.fromCodePoint(cp)}se`) });
+    const candidate = ledgerK({ untrustedLine: untrustedBullet('false') });
+    assert.equal(
+      runK(candidate, baseline),
+      'learnings ledger lowered derived_from_untrusted of a.b (raise-only)',
+      `cp=U+${cp.toString(16)}`
+    );
+  }
+});
+test('dream-validate: ledger corpus [C38] same three values on the COMMITTED ledger, A refuses (regression pin)', () => {
+  for (const cp of UNPARSEABLE_CODEPOINTS) {
+    const ledger = ledgerA({ untrustedLine: untrustedBullet(`fal${String.fromCodePoint(cp)}se`) });
+    assert.equal(runA(ledger), A_INVALID_REFUSAL, `cp=U+${cp.toString(16)}`);
+  }
+});
+test('dream-validate: ledger corpus [C39] a whole ledger with CRLF line endings, otherwise valid, K keeps (A7 deliberate widening)', () => {
+  const text = ledgerK({}).split('\n').join('\r\n');
+  assert.equal(runK(text), null, 'C39 crlf ledger');
+});
+
+// ── C40: the generated matrix over all 24 non-LF `\s` code points, all three reads ──
+
+test('dream-validate: ledger corpus [C40-candidate] generated matrix, candidate read, K refuses (LPC-D)', () => {
+  for (const cp of WS_CODEPOINTS) {
+    const text = ledgerK(
+      { heading: 'a.b' },
+      { heading: 'c.d', patternKey: '`c.d`' },
+      { heading: `a.b${String.fromCodePoint(cp)}` },
+    );
+    assert.equal(
+      runK(text),
+      'learnings ledger has a repeated entry heading (a.b); each ## heading must appear once',
+      `cp=U+${cp.toString(16)}`
+    );
+  }
+});
+test('dream-validate: ledger corpus [C40-baseline] generated matrix, committed-baseline read, K refuses (LPC-E)', () => {
+  for (const cp of WS_CODEPOINTS) {
+    const dup = ledgerK(
+      { heading: 'a.b' },
+      { heading: 'c.d', patternKey: '`c.d`' },
+      { heading: `a.b${String.fromCodePoint(cp)}` },
+    );
+    const clean = ledgerK({ heading: 'a.b' }, { heading: 'c.d', patternKey: '`c.d`' });
+    assert.equal(
+      runK(clean, dup),
+      "learnings ledger's committed version has a repeated entry heading (a.b); the append-only history cannot be compared (fail closed)",
+      `cp=U+${cp.toString(16)}`
+    );
+  }
+});
+test('dream-validate: ledger corpus [C40-authorization] generated matrix, authorization read, A refuses (LPC-E)', () => {
+  // Same reason as C18: the LAST a.b-keyed section (the one last-wins would
+  // surface if A3's duplicate refusal were mutated away) needs 3 distinct
+  // claude: sessions, or skillBodyViolation's own Codex floor refuses first.
+  for (const cp of WS_CODEPOINTS) {
+    const dup = ledgerK(
+      { heading: 'a.b' },
+      { heading: 'c.d', patternKey: '`c.d`' },
+      { heading: `a.b${String.fromCodePoint(cp)}`, sessionIds: 'claude:s1, claude:s2, claude:s3', recurrence: '3' },
+    );
+    assert.equal(
+      runA(dup, 'a.b'),
+      'skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)',
+      `cp=U+${cp.toString(16)}`
+    );
+  }
+});
+
+// ── C41–C43: heading edge cases — the boundary controls for C40 ──────────────
+
+test('dream-validate: ledger corpus [C41] whitespace INSIDE a heading (interior NBSP), K refuses (boundary control for C40)', () => {
+  const nbsp = String.fromCodePoint(0x00a0);
+  const text = ledgerK({ heading: `a${nbsp}b`, patternKey: `\`a${nbsp}b\`` });
+  assert.equal(runK(text), `learnings ledger entry a${nbsp}b: Pattern-Key heading is not a valid area.symptom slug`);
+});
+test('dream-validate: ledger corpus [C42] a Unicode-bearing hostile heading that is NOT whitespace, K refuses', () => {
+  const fullwidthAB = `${String.fromCodePoint(0xff41)}.${String.fromCodePoint(0xff42)}`; // fullwidth a . b
+  const text1 = ledgerK({ heading: fullwidthAB, patternKey: `\`${fullwidthAB}\`` });
+  assert.equal(runK(text1), `learnings ledger entry ${fullwidthAB}: Pattern-Key heading is not a valid area.symptom slug`);
+
+  const zwspHeading = `a${String.fromCodePoint(0x200b)}b`; // U+200B is not matched by \s
+  const text2 = ledgerK({ heading: zwspHeading, patternKey: `\`${zwspHeading}\`` });
+  assert.equal(runK(text2), `learnings ledger entry ${zwspHeading}: Pattern-Key heading is not a valid area.symptom slug`);
+});
+test('dream-validate: ledger corpus [C43] heading prototype, fully valid, K keeps and A authorizes (green control)', () => {
+  const kText = ledgerK({ heading: 'prototype', patternKey: '`prototype`' });
+  assert.equal(runK(kText), null);
+  const aText = ledgerA({ heading: 'prototype', patternKey: '`prototype`' });
+  assert.equal(runA(aText, 'prototype'), null);
 });

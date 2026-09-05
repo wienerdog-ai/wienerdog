@@ -1,0 +1,9 @@
+# PR gate raw — PR #226 round 1 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, pr-rubric) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: e4be97333800995e1322f2c3b625a7b32edf344b (detached worktree) ; base main = 881f0d81 ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "Read-only inspection commands all exited 0: rubric/spec reads, initial diff/status checks, every changed-file diff, source searches, commit log, syntax/JSON/proof-count checks, regex-count check, and final `git diff --check`; the changed paths exactly match the specification boundary. Required commands were attempted: unit suite exited 1 because sandbox `mkdtemp` was denied, lint exited 1 because markdownlint could not access npm (`ENOTFOUND`) although frontmatter validation passed, and red-proofs exited 1 because sandbox `mkdtemp` was denied; supplemental direct tests exited 0 with 47/47 corpus tests, 2/2 frontmatter-observable tests, and 2/2 shipped readBool checks passing. Proof-selector auditing had two preliminary exit-1 infrastructure/command errors (heredoc temp-file denial and an invalid audit regex), then the corrected audit exited 0 and confirmed all seven selectors exactly match their declared witnesses; initial and final `git status --porcelain` both exited 0 with empty porcelain output, and there are no materiality-band findings.",
+  "overall_confidence_score": 0.95
+}

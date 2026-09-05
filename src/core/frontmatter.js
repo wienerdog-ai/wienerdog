@@ -103,6 +103,18 @@ function coerceScalar(raw) {
  *  normalize it to the exact literal — see parse.) */
 const INVALID = Symbol('frontmatter.invalid');
 
+/** VALUE-LEVEL three-state boolean reader — the single place a stored scalar
+ *  acquires boolean meaning. `readBool(fields, key)` is this over a Map lookup.
+ *  @param {string|undefined} raw
+ *  @returns {true|false|undefined|typeof INVALID}
+ *    undefined = no value; false/true = exactly `false`/`true`; INVALID = anything else. */
+function boolFromRaw(raw) {
+  if (raw === undefined) return undefined;
+  if (raw === 'false') return false;
+  if (raw === 'true') return true;
+  return INVALID;
+}
+
 /**
  * Typed boolean read. Fails closed on any non-exact form.
  * @param {Map<string,string>} fields
@@ -114,10 +126,7 @@ const INVALID = Symbol('frontmatter.invalid');
  */
 function readBool(fields, key) {
   if (!fields.has(key)) return undefined;
-  const raw = fields.get(key);
-  if (raw === 'false') return false;
-  if (raw === 'true') return true;
-  return INVALID;
+  return boolFromRaw(fields.get(key));
 }
 
 /**
@@ -136,4 +145,4 @@ function readNumber(fields, key) {
   return Number(raw);
 }
 
-module.exports = { parse, coerceScalar, readBool, readNumber, INVALID };
+module.exports = { parse, coerceScalar, readBool, boolFromRaw, readNumber, INVALID };

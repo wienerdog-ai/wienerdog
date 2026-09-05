@@ -7,7 +7,7 @@ const { WienerdogError } = require('../errors');
 const { getPaths } = require('../paths');
 const { spawnPinnedSync } = require('../exec-identity');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
-const { parse, coerceScalar } = require('../frontmatter');
+const { parse, coerceScalar, boolFromRaw, INVALID } = require('../frontmatter');
 const { scanAndRedact, hasHardFinding } = require('../secret-scan');
 const { displayName } = require('./ledger');
 
@@ -130,10 +130,10 @@ function restoreVaultToHead(vaultDir) {
  * @returns {Record<string, string|boolean>}
  */
 function parseFrontmatter(fileText) {
-  if (typeof fileText !== 'string') return {};
+  if (typeof fileText !== 'string') return Object.create(null);
   const fm = parse(fileText); // shared lexer: delimiters + key-line rules
   /** @type {Record<string, string|boolean>} */
-  const data = {};
+  const data = Object.create(null);
   for (const [k, raw] of fm.fields) {
     const { value, quoted } = coerceScalar(raw);
     if (!quoted && value === 'true') {
@@ -380,13 +380,18 @@ function skillBodyViolation(o) {
   }
   if (needsAuth) {
     const key = cur.revision_pattern_key;
-    if (typeof key !== 'string' || !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(key)) {
+    if (typeof key !== 'string' || !PATTERN_KEY_RE.test(key)) {
       return 'skill change needs a qualifying learning but has no valid revision_pattern_key';
     }
     if (baselineLedgerBytes === null || baselineLedgerBytes === undefined) {
       return 'skill change needs a qualifying learning but no committed ledger authorizes it';
     }
-    const learning = parseLedgerEntries(baselineLedgerBytes.toString('utf8'))[key];
+    const { entries: committedLedger, duplicateKeys: headDuplicateKeys } =
+      parseLedgerEntries(baselineLedgerBytes.toString('utf8'));
+    if (headDuplicateKeys.length > 0) {
+      return 'skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)';
+    }
+    const learning = committedLedger[key];
     if (!learning) return `revision_pattern_key ${key} not found in the committed learnings ledger`;
     if (learning.untrusted !== false) return `authorizing learning ${key} is untrusted-derived (never promotable)`;
     // Only CLAUDE sessions authorize: WP-084 invocation-binds + window-verifies them.
@@ -404,37 +409,59 @@ function skillBodyViolation(o) {
 /**
  * Parse a LEARNINGS.md ledger into { <patternKey>: entry }. Line-based, mirroring
  * parseFrontmatter's approach. Backticks around the Pattern-Key value are stripped.
+ *
+ * The collector is NULL-PROTOTYPE (A2): a heading literally spelled `__proto__`
+ * becomes an own key instead of silently setting the record's prototype.
+ *
+ * `duplicateKeys` (A3) names every heading text seen more than once, in
+ * first-repeat order, decided on the NORMALISED key this function CAPTURED —
+ * never on the raw `##` line. A repeated heading is refused by every caller at
+ * every read; this function only reports it.
+ *
+ * The bullet key match (A7) does not let `.` decide where a value ends: it
+ * matches only the field name up to its colon, and the raw value is the
+ * REMAINDER of the LF-delimited line, trimmed — so a value containing CR,
+ * U+2028 or U+2029 still reaches the field (and, for booleans, A1's
+ * `boolFromRaw`) instead of making the bullet read as absent.
  * @param {string} text
- * @returns {Record<string, {key:string, patternKey:string|null, status:string|null,
- *   recurrence:string|null, sessionIds:string[], firstSeen:string|null,
- *   lastSeen:string|null, untrusted:boolean|null, observation:string|null}>}
+ * @returns {{entries: Record<string, {key:string, patternKey:string|null, status:string|null,
+ *   recurrence:string|null, sessionIds:string[], firstSeen:string|null, lastSeen:string|null,
+ *   untrusted:boolean|null|typeof INVALID, observation:string|null}>, duplicateKeys:string[]}}
  */
 function parseLedgerEntries(text) {
-  /** @type {Record<string, any>} */ const entries = {};
+  /** @type {Record<string, any>} */ const entries = Object.create(null);
+  const seenKeys = new Set();
+  /** @type {string[]} */ const duplicateKeys = [];
   let cur = null;
   for (const raw of String(text).split('\n')) {
     const h = raw.match(/^##\s+(.+?)\s*$/);
     if (h) {
-      cur = { key: h[1], patternKey: null, status: null, recurrence: null,
+      const key = h[1];
+      if (seenKeys.has(key)) {
+        if (!duplicateKeys.includes(key)) duplicateKeys.push(key);
+      } else {
+        seenKeys.add(key);
+      }
+      cur = { key, patternKey: null, status: null, recurrence: null,
         sessionIds: [], firstSeen: null, lastSeen: null, untrusted: null, observation: null };
-      entries[h[1]] = cur;
+      entries[key] = cur;
       continue;
     }
     if (!cur) continue;
-    const b = raw.match(/^-\s*([A-Za-z_-]+):\s*(.*)$/);
+    const b = raw.match(/^-\s*([A-Za-z_-]+):/);
     if (!b) continue;
     const field = b[1].toLowerCase();
-    const val = b[2].trim();
+    const val = raw.slice(b[0].length).trim();
     if (field === 'pattern-key') cur.patternKey = val.replace(/^`|`$/g, '');
     else if (field === 'status') cur.status = val;
     else if (field === 'recurrence') cur.recurrence = val;
     else if (field === 'session-ids') cur.sessionIds = val.split(',').map((s) => s.trim()).filter(Boolean);
     else if (field === 'first-seen') cur.firstSeen = val;
     else if (field === 'last-seen') cur.lastSeen = val;
-    else if (field === 'derived_from_untrusted') cur.untrusted = val === 'true';
+    else if (field === 'derived_from_untrusted') cur.untrusted = boolFromRaw(val);
     else if (field === 'observation') cur.observation = val;
   }
-  return entries;
+  return { entries, duplicateKeys };
 }
 
 const SID_RE = /^[a-z0-9]+:[A-Za-z0-9_-]+$/;
@@ -533,7 +560,12 @@ function ledgerViolation(o) {
   if (skillFm.created !== regEntry.created) return 'learnings ledger parent skill created does not match the registry (path reuse)';
 
   const curText = candidateBytes.toString('utf8');
-  const cur = parseLedgerEntries(curText);
+  const { entries: cur, duplicateKeys: curDuplicateKeys } = parseLedgerEntries(curText);
+  // (a2) a repeated `##` heading refuses at the candidate read too (A3): last-wins
+  //      on a collector nothing validated is exactly the hole this closes.
+  if (curDuplicateKeys.length > 0) {
+    return `learnings ledger has a repeated entry heading (${curDuplicateKeys[0]}); each ## heading must appear once`;
+  }
   if (Object.keys(cur).length === 0) return 'learnings ledger has no valid entries';
   // (b) every entry validates against the schema.
   for (const [key, e] of Object.entries(cur)) {
@@ -543,15 +575,25 @@ function ledgerViolation(o) {
   // (c) append-only + raise-only vs HEAD (tracked modifications only). A tracked
   //     ledger whose committed version is unreadable FAILS CLOSED — never skip the
   //     history comparison (skipping it was a fail-open gap).
-  let headEntries = {};
+  let headEntries = Object.create(null);
   if (baselineLedgerBytes !== null && baselineLedgerBytes !== undefined) {
-    headEntries = parseLedgerEntries(baselineLedgerBytes.toString('utf8'));
+    const { entries: parsedHeadEntries, duplicateKeys: headDuplicateKeys } =
+      parseLedgerEntries(baselineLedgerBytes.toString('utf8'));
+    // A repeated heading on the COMMITTED baseline makes the append-only history
+    // uncomparable — fail closed rather than compare against a last-wins collapse.
+    if (headDuplicateKeys.length > 0) {
+      return `learnings ledger's committed version has a repeated entry heading (${headDuplicateKeys[0]}); the append-only history cannot be compared (fail closed)`;
+    }
+    headEntries = parsedHeadEntries;
     for (const [key, he] of Object.entries(headEntries)) {
       const ce = cur[key];
       if (!ce) return `learnings ledger deleted an existing entry (${key}); ledger is append-only`;
       if (ce.firstSeen !== he.firstSeen) return `learnings ledger changed First-Seen of ${key} (immutable)`;
       if (ce.observation !== he.observation) return `learnings ledger rewrote the Observation of ${key} (immutable)`;
-      if (he.untrusted === true && ce.untrusted !== true) {
+      // A4: raise-only fails closed on an INVALID committed value too — INVALID is
+      // "present but unreadable" and may not be lowered; only an ABSENT (null)
+      // baseline value stays exempt (owner item 2).
+      if ((he.untrusted === true || he.untrusted === INVALID) && ce.untrusted !== true) {
         return `learnings ledger lowered derived_from_untrusted of ${key} (raise-only)`;
       }
       // (d) Session-IDs are append-only: every committed id must remain present, so

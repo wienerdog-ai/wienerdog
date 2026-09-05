@@ -1,7 +1,7 @@
 ---
 id: WP-audit-e-ledger-parser-corpus
 title: Ledger-parser correctness — three-state trust reader, null-prototype records, contract-complete hostile corpus
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

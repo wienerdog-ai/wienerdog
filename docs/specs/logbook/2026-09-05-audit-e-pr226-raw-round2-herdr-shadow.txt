@@ -1,0 +1,9 @@
+# PR gate raw — PR #226 round 2 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, pr-rubric) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: 3efcac1f75565bd2a51db1299f4155694a84bbe2 (detached worktree) ; base main = 881f0d81 ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "All read-only inspection commands exited 0, including rubric/spec and changed-file reads, boundary check, syntax and JSON checks, proof-count/selector audits, ADR verbatim comparison, source-shape searches, commit/diff inspection, and `git diff --check main...HEAD`; no Band A, B, or C findings were identified. Required commands were attempted: the unit suite exited 1 because sandbox `mkdtemp` was denied, lint exited 1 because markdownlint could not reach the npm registry while its frontmatter check passed, and red-proofs exited 1 because sandbox `mkdtemp` was denied; supplemental read-only tests exited 0 with 46/46 corpus tests, 5/5 frontmatter tests, and 2/2 shipped readBool tests passing, while an in-memory LPC-E mutation confirmed C18 and all 24 C40 authorization cases fail open as required. Initial and final `git status --porcelain` both exited 0 with empty output, so the worktree remained unchanged.",
+  "overall_confidence_score": 0.97
+}
