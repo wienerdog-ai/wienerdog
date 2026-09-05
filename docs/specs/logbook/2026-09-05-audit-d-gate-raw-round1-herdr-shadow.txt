@@ -1,0 +1,133 @@
+# Design gate raw — round 1 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: f1db2f126ffe136b0b665d23f5089d48e0e9de07 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision f1db2f126ffe136b0b665d23f5089d48e0e9de07 vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch yet. V5 can accept a model-controlled recipient field under an unlisted name, Table C does not prove the two production integrations of requiredClassesFor, and Table B accepts a mixed-syntax multi-address header as one candidate.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; printf '\\n__FOCUS_FILE__\\n'; sed -n '1,260p' ../focus-ad1.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored adversarial instructions and focus file."
+    },
+    {
+      "command": "git status --porcelain=v1 && git rev-parse HEAD && git rev-parse main && git diff --name-status main...HEAD",
+      "exit_status": 0,
+      "result": "Initial status was empty; HEAD=f1db2f126ffe136b0b665d23f5089d48e0e9de07; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e; only the specified WP and logbook differ. Git emitted sandbox-related xcrun cache warnings but completed."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md",
+      "exit_status": 0,
+      "result": "Read the target specification with line numbers."
+    },
+    {
+      "command": "sed -n '173,414p' docs/specs/WP-audit-d-code-derived-recipients.md | nl -ba -v173",
+      "exit_status": 0,
+      "result": "Re-read the deliverables, exact contracts, and Tables A-C without output truncation."
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Read the complete design-gate logbook with line numbers."
+    },
+    {
+      "command": "git diff --unified=80 main...HEAD -- docs/specs/WP-audit-d-code-derived-recipients.md docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Inspected the authorized two-file revision against main. Git emitted sandbox-related xcrun cache warnings but completed."
+    },
+    {
+      "command": "nl -ba src/gws/broker/verbs.js; nl -ba src/gws/broker/registry.js; nl -ba src/gws/broker/limits.js; nl -ba src/gws/gmail.js",
+      "exit_status": 0,
+      "result": "Verified the cited verb definitions, registry ordering, counter behavior, and Gmail helpers."
+    },
+    {
+      "command": "nl -ba src/cli/gws-broker.js; nl -ba src/core/runtime-profile.js; nl -ba src/gws/scope-sets.js; nl -ba skills/wienerdog-inbox-triage/SKILL.md; nl -ba skills/wienerdog-weekly-review/SKILL.md",
+      "exit_status": 0,
+      "result": "Verified class routing, profile allowlists, unchanged scopes, and both routine instructions."
+    },
+    {
+      "command": "node -e 'const values=[\"victim@example.com, Attacker <attacker@example.com>\",\"\\\"Doe, John\\\" <john@example.com>\",\"one@example.com, two@example.com\"]; for(const value of values){const groups=[...value.matchAll(/<([^<>]*)>/g)].map(m=>m[1].trim());const candidates=groups.length?groups:[value.trim()];console.log(JSON.stringify({value,candidates,count:candidates.length}));}'",
+      "exit_status": 0,
+      "result": "The mixed bare-plus-angle value produced only attacker@example.com and a candidate count of one."
+    },
+    {
+      "command": "node -e 'const p=/^[^\\s<>,;:\"\\\\]+@[^\\s<>,;:\"\\\\]+\\.[^\\s<>,;:\"\\\\]+$/; for(const value of [\"victim@example.com, Attacker <attacker@example.com>\",\"\\\"Doe, John\\\" <john@example.com>\",\"one@example.com, two@example.com\"]){const groups=[...value.matchAll(/<([^<>]*)>/g)].map(m=>m[1].trim());const c=groups.length?groups:[value.trim()];console.log(JSON.stringify({value,candidates:c,accepted:c.length===1&&c[0].length<=320&&p.test(c[0]),recipient:c.length===1&&p.test(c[0])?c[0]:null}));}'",
+      "exit_status": 0,
+      "result": "Applying Table B's address pattern accepted the mixed two-mailbox value and selected attacker@example.com."
+    },
+    {
+      "command": "rg -n \"requiredClassesFor|READ credential unavailable|extra-classes-dropped|ADDRESS_FIELDS|inputSchema\\.properties|address key|Candidate extraction|Candidate count\" docs/specs/WP-audit-d-code-derived-recipients.md docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Located every relevant contract, criterion, proof, and logbook claim in the two review files."
+    },
+    {
+      "command": "ls -1 src/gws/broker/verbs.js src/core/runtime-profile.js src/cli/gws-broker.js skills/wienerdog-inbox-triage/SKILL.md skills/wienerdog-weekly-review/SKILL.md docs/GLOSSARY.md; rc=$?; echo \"V4 presence guard exit: $rc\"; /usr/bin/grep -aEn 'create_draft($|[^_A-Za-z0-9])' src/gws/broker/verbs.js src/core/runtime-profile.js src/cli/gws-broker.js skills/wienerdog-inbox-triage/SKILL.md skills/wienerdog-weekly-review/SKILL.md docs/GLOSSARY.md; rc=$?; echo \"V4 sweep exit: $rc\"",
+      "exit_status": 0,
+      "result": "V4 presence guard exit=0; V4 sweep exit=0 with the expected 12 base-state hits. The outer shell exited 0 because the final command reports the captured status."
+    },
+    {
+      "command": "node -e 'const {VERBS}=require(\"./src/gws/broker/verbs.js\"); const ADDRESS_FIELDS=[\"to\",\"cc\",\"bcc\",\"from\",\"recipient\",\"reply_to\",\"replyTo\",\"address\"]; const gmailVerbs=Object.values(VERBS).filter((v)=>v.service===\"gmail\"); const hits=[]; for(const v of gmailVerbs)for(const k of Object.keys((v.inputSchema&&v.inputSchema.properties)||{}))if(ADDRESS_FIELDS.includes(k))hits.push(v.name+\".\"+k); if(gmailVerbs.length===0){console.error(\"V5 FAIL: no gmail verb found — the check would be vacuous\");process.exit(1);} if(hits.length){console.error(\"V5 FAIL: address-bearing gmail verb input(s): \"+hits.join(\", \"));process.exit(1);} console.log(\"V5 OK: no gmail verb input schema declares an address field (\"+gmailVerbs.length+\" gmail verbs of \"+Object.keys(VERBS).length+\" checked)\");'",
+      "exit_status": 1,
+      "result": "Expected base-state failure: create_draft.to."
+    },
+    {
+      "command": "node -e 'const ADDRESS_FIELDS=[\"to\",\"cc\",\"bcc\",\"from\",\"recipient\",\"reply_to\",\"replyTo\",\"address\"]; const VERBS={create_reply_draft:{name:\"create_reply_draft\",service:\"gmail\",inputSchema:{properties:{id:{},body:{},destination:{}}}}}; const gmailVerbs=Object.values(VERBS).filter(v=>v.service===\"gmail\"); const hits=[]; for(const v of gmailVerbs)for(const k of Object.keys((v.inputSchema&&v.inputSchema.properties)||{}))if(ADDRESS_FIELDS.includes(k))hits.push(v.name+\".\"+k); console.log(JSON.stringify({model_supplied_recipient_key:\"destination\",hits,v5_would_pass:gmailVerbs.length>0&&hits.length===0})); process.exit(gmailVerbs.length>0&&hits.length===0?0:1);'",
+      "exit_status": 0,
+      "result": "Demonstrated that V5 reports no hit and passes when an outward verb declares a model-controlled destination field."
+    },
+    {
+      "command": "git diff --check main...HEAD -- docs/specs/WP-audit-d-code-derived-recipients.md docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md; git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "No diff-check errors and final status was empty. Initial and final git status outputs are identical. Git emitted sandbox-related xcrun cache warnings but completed."
+    }
+  ],
+  "findings": [
+    {
+      "title": "V5's field-name denylist does not enforce the zero-address-input contract",
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 528,
+      "line_end": 536,
+      "location": "docs/specs/WP-audit-d-code-derived-recipients.md:528-536",
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "A model-supplied recipient can survive verification under any unlisted property name, such as destination, email, emailAddress, or recipients. additionalProperties:false only rejects undeclared properties; it does not help when a wrong implementation declares one of those fields and routes it to gmail.draft. The executed synthetic probe showed that a create_reply_draft schema containing destination makes the exact V5 logic exit 0. V5 also selects its quantified set using each record's mutable service field, so a service misclassification can remove an outward verb from inspection. This contradicts Table A's exact schemas and the claimed universal that no address key of any kind exists.",
+      "impact": "A wrong implementation can pass V5 while exposing a model-controlled draft recipient, recreating the vulnerability this WP exists to remove.",
+      "recommendation": "Replace the semantic denylist with exact property-set assertions derived from Table A. At minimum, assert create_draft_to_self has exactly subject/body, create_reply_draft exactly id/body, and send_digest_to_self exactly subject/body; also pin those records to service === 'gmail'. Reject every unexpected schema property regardless of its spelling."
+    },
+    {
+      "title": "The RED proof covers requiredClassesFor but not either production call site",
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 353,
+      "line_end": 373,
+      "location": "docs/specs/WP-audit-d-code-derived-recipients.md:353-373",
+      "materiality_band": "A",
+      "confidence": 0.97,
+      "body": "The only AUD-D6 mutation removes extraClasses inside requiredClassesFor. It proves the helper's output, but not that assembleRegistry uses the helper at class derivation or at the pre-dispatch refusal. Those are two independent production edits: current src/cli/gws-broker.js:95 derives only each verb's capabilityClass, while :123 checks only that same class. An implementation can add a correct helper and make AUD-D6 PROVEN while leaving either consumer unchanged. In that state weekly-review does not load READ, or a missing READ credential is not refused before dispatch; the new verb then reaches getProfile/messages.get without its required method and returns the masked broker-verb failure instead of the specified READ-credential message. The logbook's claim at line 205 that exporting the helper supplies a testable seam for criterion 8 therefore does not close the product integration.",
+      "impact": "The new verb can be advertised and callable without the credential it requires, reproducing the measured DRAFT-only failure or misreporting the missing credential.",
+      "recommendation": "Add integration coverage that invokes the real assembly path with injected fake credential loading. Assert that each new verb requests both DRAFT and READ, and separately that a failed READ load causes the exact READ-unavailable refusal before any Google call. Give the two call sites separate mutations so leaving either on the old derivation makes V3 red; export/inject assembleRegistry or extract one production-used assembly plan if needed."
+    },
+    {
+      "title": "Mixed bare and angle-bracket mailboxes bypass the exactly-one-address rule",
+      "affected_file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 329,
+      "line_end": 332,
+      "location": "docs/specs/WP-audit-d-code-derived-recipients.md:329-332",
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "Table B says to use every angle-bracket group whenever any exists and to examine the whole value only when none exists. Consequently, Reply-To: victim@example.com, Attacker <attacker@example.com> yields one extracted candidate, attacker@example.com; that candidate passes the anchored address pattern and the draft is created even though the header contains two mailboxes. The executed probe reproduced this result. This defeats criterion 4's intended refusal for multiple candidate addresses and can silently address a legitimate reply to the wrong participant.",
+      "impact": "A correct implementation of the written algorithm accepts an ambiguous multi-address source header and creates a draft to only the bracketed address instead of failing closed.",
+      "recommendation": "Define an anchored single-mailbox grammar rather than harvesting angle groups. Accept only either one bare address or one complete optional-display-name plus <address> form, with no unmatched prefix/suffix mailbox text; reject commas or semicolons outside a valid quoted display name. Add fixtures for mixed bare/angle ordering, multiple bracketed addresses, quoted display names containing commas, and trailing text."
+    }
+  ],
+  "routed_scope_objections": [],
+  "scope_note": "The no-grant, no-scope-change, SEND exclusion, mandatory-self rejection, accepted reply residual, E2E exclusion, dated-record exclusions, and owner-recommendation boundaries were honored and were not counted against the verdict.",
+  "hermeticity": {
+    "worktree_writes": false,
+    "external_network": false,
+    "temporary_fixtures_created": false,
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "status_identical": true
+  }
+}
