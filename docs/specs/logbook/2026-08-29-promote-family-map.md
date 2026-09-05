@@ -222,3 +222,40 @@ ownership table above is unchanged** — what changed is that all three specs'
 Out-of-scope sections now name that lifecycle as outside the family. The lesson
 is the general one: a stale ownership sentence is not always about a table this
 map lists.
+
+## Amendment, 2026-09-05 — `WP-dream-git-env-pinning` takes Table **U**
+
+`WP-dream-git-env-pinning` (epic `dream-promotion`) joins the family with one
+canonical table — **Table U, the dream run's constructed git environment** — and
+its successor stub `WP-dream-git-env-validate-seam` takes none, citing U instead.
+The ownership table above gains a row:
+
+| Package | Owns | Status |
+|---|---|---|
+| `WP-dream-git-env-pinning` | Table **U** | Draft |
+| `WP-dream-git-env-validate-seam` | none — cites Table **U** | Draft |
+
+**One table, not two, and that is the design rather than economy.** The carried
+keys and the dropped channels are two halves of ONE contract — what the run's
+git calls run under — so they are rows of one table separated by a class column,
+not two tables that could disagree. A second letter would have bought a second
+surface to keep in step.
+
+**Why `U`, measured rather than argued.** `grep -rhoE '^### Table [A-Z]'
+docs/specs/` at `326b2fbd` returns A B C D E F G H J K L M N O P Q R S T U V W Y
+Z — the letter space is FULL, so a collision is forced, exactly as this map's `W`
+paragraph predicted. `I` and `X` stay rejected on the readability ground recorded
+above. Excluding this family's own letters (C, D, E, G, N, Q, R, S, V, W, Y, Z)
+and the nine of `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` (B, H, J, K,
+N, P, Q, R, T), the candidates were **L, M, O and U**. `O` stays rejected on the
+`O1`-as-`01` ground. **`M` was rejected for a reason specific to this package:**
+its spec cites the 2026-08-05 audit's mechanism ids **M7, M9 and M10** in its own
+Context, so "Table M" would sit beside "mechanism M9" on the same page. Measured
+the same way as the `W` decision, `L` collides with 4 specs, `M` with 3 and `U`
+with 4 — `docs/specs/done/WP-symlink-authorship-identity.md`,
+`WP-managed-block-insertion-anchor.md`, `WP-ep2-unscannable-preserve.md` and
+`WP-scheduler-mutation-home-authority.md`, all `Done`, all outside this family,
+and **none cited by either new spec** (measured, not assumed). So the trade taken
+is the smallest live collision under the path-qualified-citation rule this family
+already lives by, and the collision table above gains no row: `U`'s partners are
+outside the five packages that table names.

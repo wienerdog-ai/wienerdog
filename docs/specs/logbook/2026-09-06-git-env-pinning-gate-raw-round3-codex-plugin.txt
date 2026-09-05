@@ -1,0 +1,81 @@
+# raw — Codex plugin adversarial review — design-r3
+# tip reviewed: 2ad1434c46ef485341cc401aa9b2ce26d0078a3f ; base main = 4b629ec6d1173c3724f9bc0e3d7c658eed062541 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a073d8-1a9b-7b00-9c8f-6cb527bb693b).
+[codex] Turn started (01a073d8-1b42-71b2-bb0e-bcc04de83e2f).
+[codex] Assistant message captured: I’ll inspect the diff, check the probe evidence, and trace the RED contract against the runne...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-dream-git-env-pinning.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-dream-git-env-pinning.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '250,540p' docs/specs/WP-dream-git-env-pinning.md | nl -ba -v250"
+[codex] Command completed: /bin/zsh -lc "sed -n '250,540p' docs/specs/WP-dream-git-env-pinning.md | nl -ba -v250" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=3 4b629ec6d1173c3724f9bc0e3d7c658eed062541 -- docs/specs/WP-...
+[codex] Running command: /bin/zsh -lc "rg -n '"'^(##|###)|U6|U7|U10|U12|identity|replacement|R2-'"' docs/specs/logbook...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=3 4b629ec6d1173c3724f9bc0e3d7c658eed062541 -- docs/specs/WP-... (exit 0)
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^(##|###)|U6|U7|U10|U12|identity|replacement|R2-'"' docs/specs/logbook... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '486,613p' docs/specs/WP-dream-git-env-pinning.md | nl -ba -v486; cat te...
+[codex] Command completed: /bin/zsh -lc "sed -n '486,613p' docs/specs/WP-dream-git-env-pinning.md | nl -ba -v486; cat te... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1547,1700p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-r...
+[codex] Running command: /bin/zsh -lc "rg -n 'expectRed|own.body|observed|deepEqual|equal|failureType|testNamePatterns...
+[codex] Command completed: /bin/zsh -lc "sed -n '1547,1700p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-r... (exit 0)
+[codex] Command completed: /bin/zsh -lc "rg -n 'expectRed|own.body|observed|deepEqual|equal|failureType|testNamePatterns... (exit 0)
+[codex] Assistant message captured: The RED contract has two possible gaps: AC1 exports a canary but does not require exporting t...
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round2-codex-plugin....
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round2-codex-plugin.... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1290,1410p' scripts/red-proofs.js; sed -n '175,265p' tests/unit/dream-p...
+[codex] Command completed: /bin/zsh -lc "sed -n '1290,1410p' scripts/red-proofs.js; sed -n '175,265p' tests/unit/dream-p... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '150,270p' src/cli/dream.js; sed -n '375,430p' src/core/dream/promote.js...
+[codex] Command completed: /bin/zsh -lc "sed -n '150,270p' src/cli/dream.js; sed -n '375,430p' src/core/dream/promote.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1600,1690p' scripts/red-proofs.js; sed -n '350,435p' tests/unit/dream-p...
+[codex] Command completed: /bin/zsh -lc "sed -n '1600,1690p' scripts/red-proofs.js; sed -n '350,435p' tests/unit/dream-p... (exit 0)
+[codex] Running command: /bin/zsh -lc "tail -60 scripts/red-proofs.js; sed -n '290,355p' tests/unit/dream-pipeline.tes...
+[codex] Command completed: /bin/zsh -lc "tail -60 scripts/red-proofs.js; sed -n '290,355p' tests/unit/dream-pipeline.tes... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --unified=2 4b629ec6d1173c3724f9bc0e3d7c658eed062541 -- docs/specs/WP-...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=2 4b629ec6d1173c3724f9bc0e3d7c658eed062541 -- docs/specs/WP-... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Running command: /bin/zsh -lc "sed -n '57,105p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-roun...
+[codex] Command completed: /bin/zsh -lc "sed -n '57,105p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-roun... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-codex-plugin....
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-codex-plugin.... (exit 0)
+[codex] Assistant message captured: The record contains all the cited probe IDs, and U6, U7, U10 and U12 have supporting output. ...
+[codex] Running command: /bin/zsh -lc "node -e 'const assert = require('\\''node:assert/strict'\\''); const { evaluate...
+[codex] Command completed: /bin/zsh -lc "node -e 'const assert = require('\\''node:assert/strict'\\''); const { evaluate... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs = require('\\''node:fs'\\''); const {KNOWN_CALLS} = require('...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs = require('\\''node:fs'\\''); const {KNOWN_CALLS} = require('... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\'');const p='\\''docs/specs/done/WP-dr...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\'');const p='\\''docs/specs/done/WP-dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff --numstat 4b629ec6d1173c3724f9bc0e3d7c658eed062541; nl -ba docs/specs/...
+[codex] Command completed: /bin/zsh -lc "git diff --numstat 4b629ec6d1173c3724f9bc0e3d7c658eed062541; nl -ba docs/specs/... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\'');const s=fs.readFileSync('\\''docs/...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\'');const s=fs.readFileSync('\\''docs/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --short'
+[codex] Command completed: /bin/zsh -lc 'git status --short' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet: AC1's declared RED sensitivi...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 4b629ec6d1173c3724f9bc0e3d7c658eed062541
+Verdict: needs-attention
+
+Do not dispatch yet: AC1's declared RED sensitivity is not deterministic, and two Table U reach claims exceed their recorded evidence. No scope objection to O1–O3.
+
+Findings:
+- [medium] Make AC1 sensitive to each declared inheritance mutation (docs/specs/WP-dream-git-env-pinning.md:319-321)
+  Band B; criterion/machinery finding. All three declarations require AC1 to fail, but AC1 mandates exporting XDG_CONFIG_HOME and a canary, not the three restored channels. With those channels unset, conditional single-channel inheritance leaves AC1's complete map and canary assertions green. I executed this predicate counterexample for all three channels and passed synthetic results through the actual evaluateRed(): it rejected the declared AC1 failure as absent. The implementer must invent additional fixture/test placement rules to satisfy the stated exact failure sets.
+  Recommendation: Require deterministic channel exports for AC1's mutation-sensitive cases and specify their test identities. Reconcile all resulting failures with each exact expectRed set, including AC5(b) and the frozen private-index proof.
+- [low] P18 does not measure the pinned show invocation (docs/specs/WP-dream-git-env-pinning.md:408)
+  Band C; Table U ROW finding. U23 claims measured reach on shape (4), but P18 records `show <head>:a.txt` at logbook lines 1832, 1837 and 1842. The pinned shape requires the literal `show HEAD:reports/warnings.md`. I mechanically compared the record with KNOWN_CALLS. This repeats the non-pinned-argv evidence defect despite the corrected-method promise. P18 supports replacement effects on ls-tree/read-tree and records unchanged commit-tree output; it does not establish the claimed pinned show result.
+  Recommendation: Repeat P18 with replacement commits that differ in reports/warnings.md and the exact pinned show argv, then update U23 and its rationale from the paired outputs.
+- [low] P6 does not establish a write into the alternate store (docs/specs/WP-dream-git-env-pinning.md:395)
+  Band C; Table U ROW finding. U9 says the write lands in the alternate, while P6 reports only `storedInVault=no`. Earlier P3/P4 probes already wrote the identical blob SHA into the shared decoy; the method record explicitly acknowledges that shared decoy state. Reusing an existing alternate object can explain this output without any alternate-store write. I extracted and compared these committed outputs; no new Git write was executed. The row conflates alternate-object lookup with write redirection.
+  Recommendation: Measure fresh decoys separately with the blob absent and present, recording both stores before and after. Describe object reuse separately from writes.
+
+Next steps:
+- R2 verification: R2-A fixed in substance; R2-C fixed for U12's recorded comparison; R2-D fixed by adding AC5(b), with the separate AC1 gap above remaining; R2-E fixed by the dated amendment.
+- Extraction remains incomplete: the rationale section is registered, but O1/O3 still repeat rationale, and the checklist omits O3, the security checklist and the owner-rulings record as explicit mirrors.
+- All Table U probe IDs exist. U6/U7/U10/U12 outputs support their stated results; P17d supports identity precedence and P22 records date sensitivity. No extraction-induced dangling citation was found in the seven Deliverables rows.
+- Executed read-only diff/source/record checks, Node predicate and runner-evaluation probes, probe-ID and pinned-argv comparisons. npm test and scripts/red-proofs.js both stopped before tests/proofs on temporary-directory EPERM. Working tree remained clean.
