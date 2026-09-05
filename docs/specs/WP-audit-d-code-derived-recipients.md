@@ -184,6 +184,19 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 > overrun of the same class the durability WP's round-1 reviewer caught**: a
 > Deliverables table that lists the file a change edits but not the file that
 > change invalidates.
+>
+> **Erratum 2 — 2026-09-05, found at the PR gate, round 1, by wd-reviewer.**
+> Table C's `reply-grammar-dropped` row carried the parenthetical *"(take the whole
+> trimmed value as the address)"*. Executed literally that mutation **necessarily**
+> reddens `[AUD-D2]` as well — every angle-addr row then yields the whole
+> `phrase <addr>` string as `to` — so an implementer following the row verbatim
+> must declare a two-identity `expectRed`, which the **same table's** discipline
+> paragraph forbids (*"a mutation whose measured set EXCEEDS its declaration is
+> restated, not widened into the declaration"*). **The row and the paragraph could
+> not both be satisfied.** The row is now the narrow form, measured. **Class: a
+> row-level EXAMPLE contradicting its own table's governing rule** — the same
+> family as round 1's `C26`/`expectRed` lesson on the sibling WP. A governing
+> paragraph does not police the examples beneath it; only executing one does.
 
 <!-- Always allowed without listing: this spec file itself (the status flip),
      package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
@@ -641,7 +654,7 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 | ″ | `[AUD-D1]` | `self-resolve-failure-swallowed` | 2 | replace the fail-loud throw on an unusable `getProfile` result with a literal fallback address |
 | `broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address Table B's order produces, over every accepted case` | `[AUD-D2]` | `reply-recipient-not-derived` | 3 | **in the `create_reply_draft` HANDLER**, where `args.body` is in scope — override `replyTarget`'s `to` with the first address found in `args.body`. (`replyTarget` takes only `id`, so the mutation cannot live there) |
 | `broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4` | `[AUD-D3]` | `reply-candidate-count-ungated` | 4 | replace Table B's exactly-one-candidate requirement with "take the first candidate" |
-| ″ | `[AUD-D3]` | `reply-grammar-dropped` | 4 | in `replyTarget`, accept the selected value without matching Table B's single-mailbox grammar (take the whole trimmed value as the address) |
+| ″ | `[AUD-D3]` | `reply-grammar-dropped` | 4 | in `replyTarget`, **remove the "no match → refuse" branch only, and keep the capture when the grammar does match**: `const address = match ? match[1] : trimmedSelected;`. Every `[AUD-D2]` accepted row still matches and is byte-unmoved, while all twelve step-3 fixtures draft instead of refusing — **measured: 0/13 `[AUD-D2]` rows move, 12/12 step-3 fixtures move**, and none of the twelve is caught later by step 4 or step 7. **Do NOT take the whole trimmed value unconditionally** (`const address = trimmedSelected;`): that also rewrites the recipient of every angle-addr row, moving 10/13 `[AUD-D2]` rows, so its measured set would exceed this declaration (erratum 2) |
 | ″ | `[AUD-D3]` | `reply-fetch-failure-drafts-anyway` | 4 | catch the `messages.get` failure and continue with a **literal fallback recipient and subject**, so the mutant DRAFTS where the correct code refuses. (Continuing with an *empty* header set would not do: Table B then refuses on "both empty", producing the same zero-draft observable as correct code — a vacuous proof) |
 | `broker-verbs: [AUD-D4] a reply draft is threaded to its source, its subject is the untruncated fixed-point derivation, and every emitted header line is within 998 octets` | `[AUD-D4]` | `threading-dropped` | 5 | drop `threadId` from the `drafts.create` request body |
 | ″ | `[AUD-D4]` | `output-bound-removed` | 5 | delete Table B step 7's line-length check entirely — the mutant drafts at every step-7 refused row, so the identity reddens on the refused side while the accepted side is unmoved |
@@ -667,6 +680,13 @@ step 3 also reddens `[AUD-D2]`'s quoted-display-name row, so its set exceeds
 `[AUD-D3]`; the fix is a narrower mutation, because widening the declaration would
 make the pair stop distinguishing the two identities — which is the whole reason
 `evaluateRed`'s comparison is two-sided.
+
+**And it happened for real, in the row directly above this paragraph** (erratum 2):
+`reply-grammar-dropped` said "take the whole trimmed value as the address", which
+moves 10 of 13 `[AUD-D2]` rows as well as all 12 step-3 fixtures, so an implementer
+following it verbatim declared both identities — the exact widening this paragraph
+forbids. **A governing rule does not police the examples beneath it.** The row was
+narrowed and re-measured; the rule was already right.
 
 **Every mutation above must produce a DIFFERENT observable than correct code under
 its identity** — `evaluateRed` compares failing sets, so a mutant that lands on the
@@ -979,6 +999,14 @@ the BAD is not — and the form above extends it from names to whole records.
 - **`src/gws/scope-sets.js`** — no OAuth scope changes of any kind.
 - **`tests/scenarios/broker-e2e/`** — measured to need no change (Implementation
   notes). Strengthening it to assert draft recipients is a separate WP.
+- **The model-supplied `subject` of `create_draft_to_self` and
+  `send_digest_to_self` carries a 512-**character** schema cap but no octet
+  bound**, so a multi-byte subject can still build a `Subject:` line over 998
+  octets on those two verbs. Table B step 7 bounds only `create_reply_draft`'s
+  **derived** headers, which is what the owner ruled. Correctly out of scope here;
+  **recorded as a follow-up candidate beside option (c)** in
+  `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`, and
+  worth naming under "Discovered issues" in the PR.
 - **`FIX-PLAN.md`** (rows `ST2` / `N-R2` at `:525,:541`) — a dated record of the
   0.10.0 unfreeze, not a live claim; records are not rewritten when the thing they
   recorded changes.

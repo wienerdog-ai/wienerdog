@@ -1332,6 +1332,73 @@ change *invalidates*.
 **The lesson, one line: a spec that edits a vendored operating skill lists the
 digest anchor as a Deliverables row.**
 
+## Implementation — erratum 2: a Table C row contradicting its own table's rule
+
+**2026-09-05, found at the PR #224 gate, round 1, by wd-reviewer.** The round was
+otherwise clean on the product: the plugin was a reading (its tests were
+sandbox-blocked, disclosed), the hermetic shadow returned *"patch is correct"* with
+**zero** findings (83/83 in the changed suites, V4/V5 executed), and wd-reviewer's
+own **102-assertion probe against Table B's rows passed** — V1 2638/2626/0/12,
+V3 53/53 PROVEN, Tables A/B/C byte-unmoved, erratum 1 propagated to all four
+registered mirrors. **Its only finding was a spec contradiction, and the spec is
+mine.**
+
+**What.** Table C's `reply-grammar-dropped` row carried the parenthetical *"(take
+the whole trimmed value as the address)"*. Executed literally
+(`const address = trimmedSelected;`) that mutation **necessarily** reddens
+`[AUD-D2]` too — every angle-addr row then yields the whole `phrase <addr>` string
+as the recipient. So the implementer, following the row verbatim, declared
+`expectRed: ["[AUD-D3]","[AUD-D2]"]` — which the **same table's** discipline
+paragraph forbids in as many words: *"a mutation whose measured set EXCEEDS its
+declaration is restated, not widened into the declaration."* **The row and the
+paragraph could not both be satisfied**, and the implementer had no way to comply
+with both.
+
+**Measured before rewriting the row**, both candidate forms against the 13
+`[AUD-D2]` accepted rows and the 12 `[AUD-D3]` step-3 fixtures:
+
+```text
+literal   [AUD-D2] rows moved: 10/13   [AUD-D3] step-3 fixtures moved: 12/12   => reddens [AUD-D2] + [AUD-D3]
+narrow    [AUD-D2] rows moved:  0/13   [AUD-D3] step-3 fixtures moved: 12/12   => reddens [AUD-D3]
+```
+
+The narrow form is the reviewer's: `const address = match ? match[1] :
+trimmedSelected;` with the "no match → refuse" branch removed. Every `[AUD-D2]` row
+still matches the grammar and keeps its capture, so it is byte-unmoved; every
+step-3 fixture drafts instead of refusing, and **none of the twelve is caught later
+by step 4 or step 7**, so the mutation is non-vacuous on all of them. (The literal
+form moves 10 of 13 rather than 13 of 13 because the three bare addr-spec rows are
+their own whole trimmed value.)
+
+**Why six design rounds and a PR gate missed it.** The discipline paragraph that
+this row violates sits **seven lines below it**, was written in the same package,
+and even carries a worked example of exactly this failure mode — a "take the first
+`<…>` candidate" mutation whose set exceeds its identity. The rule was right and
+the row beneath it was wrong, and no round ever executed a Table C mutation to
+compare its measured set against its declaration; the rounds read the rows and
+argued about the contract. **A governing rule does not police the examples beneath
+it.** It took an implementer actually running the mutation to surface it — which is
+what the RED-proof harness is for, and it worked.
+
+**Fixed in the spec** (docs-only, on the implementation branch): the row is the
+narrow form and now carries its measured set; the discipline paragraph gains the
+**real** worked case beside its hypothetical one; a dated **Erratum 2** note sits
+beside erratum 1. `tests/red-proofs/*.json`, tests and `src/` are untouched — the
+implementer re-`find`/`replace`s and **re-measures** after this commit.
+
+**Class: a row-level EXAMPLE contradicting its own table's governing rule** — the
+same family as round 1's `C26`/`expectRed` lesson on the sibling WP.
+
+**The lesson, one line: a table that states a rule about its rows must have each
+row executed against that rule, because prose beneath a row cannot constrain it.**
+
+**Also noted from this round, not acted on here:**
+`tests/unit/broker-verbs.test.js:310` is the one `[AUD-D*]` assertion without its
+band marker (implementer, one line). And the model-supplied `subject` of
+`create_draft_to_self` / `send_digest_to_self` has a 512-**character** cap but no
+octet bound — correctly out of scope, now named in the spec's Out of scope as a
+follow-up candidate beside option (c).
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -1350,6 +1417,7 @@ digest anchor as a Deliverables row.**
 | 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
 | 6 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-codex-plugin.txt` | `67b04075` | needs-attention — R6-A (converged), R6-C, R6-D; **111 pipeline cases executed; no product finding** |
 | 6 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-herdr-shadow.txt` | `41a51070` | needs-attention — R6-A (converged), R6-B (converged), R6-D (converged), R6-E; **full pipeline + boundary probes; no product finding** |
+| impl | **ERRATUM 2** | PR #224 gate round 1 (wd-reviewer) | — | Table C's `reply-grammar-dropped` example contradicted the same table's `expectRed` discipline paragraph; measured 10/13 `[AUD-D2]` rows moved. Row narrowed and re-measured; docs-only |
 | impl | **ERRATUM 1** | PR #224 @ `e66783b8` | — | `src/core/runtime-skill-digests.json` missing from Deliverables; editing a vendored `SKILL.md` moves its digest. 13 tests red. Spec fixed docs-only on the implementation branch; rows 19 → 20 |
 | 6 | **WEIGHTED CLOSURE** | — | — | **LOOP CLOSED.** Zero product findings on both channels; machinery fixed in-surface; no round 7. Spec → `Ready` |
 | 5 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-codex-plugin.txt` | `3d80d955` | needs-attention — R5-A (A, converged), R5-B (B, **unlicensed change caught**); two objections routed |
