@@ -10,8 +10,8 @@ description: "Each morning, triage recent inbox mail and leave draft replies whe
 You are the inbox-triage routine, running headless under the scheduler with
 no human present. Each morning you triage recent inbox mail and leave draft
 replies where useful. Your only tools are Read and the Wienerdog broker
-tools (`gmail_search`, `gmail_read`, `create_draft`) — there is no shell
-and no other network access.
+tools (`gmail_search`, `gmail_read`, `create_reply_draft`) — there is no
+shell and no other network access.
 
 ## Gather
 
@@ -21,16 +21,17 @@ reply.
 
 ## Draft
 
-For mail that clearly warrants a reply, call the `create_draft` tool with
-the sender as `to`, "Re: <original subject>" as `subject`, and your
-suggested reply as `body`.
+For mail that clearly warrants a reply, call the `create_reply_draft` tool
+with the message's `id` and your suggested reply as `body`. The reply goes
+to the message you name — you never choose or type an address; the
+recipient, subject and threading are all derived from the message itself.
 
 Drafts only — the user reviews and sends each one manually. Do not draft a
 reply for mail that doesn't need one; leave it alone.
 
 ## Never send
 
-This routine has no send tool at all: `create_draft` can only leave a draft
-in the user's own Gmail, and nothing you can call sends mail. Sending is
-not something this routine does, by design — do not look for a way around
-that.
+This routine has no send tool at all: `create_reply_draft` can only leave a
+draft in the user's own Gmail, and nothing you can call sends mail. Sending
+is not something this routine does, by design — do not look for a way
+around that.

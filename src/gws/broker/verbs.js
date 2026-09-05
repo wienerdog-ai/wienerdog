@@ -151,24 +151,69 @@ const VERBS = Object.freeze({
     },
   }),
 
-  create_draft: Object.freeze({
-    name: 'create_draft',
+  create_draft_to_self: Object.freeze({
+    name: 'create_draft_to_self',
     capabilityClass: CAPABILITY_CLASS.DRAFT,
-    description: 'Create a Gmail draft (never sends).',
+    extraClasses: Object.freeze(['READ']),
+    description: 'Create a Gmail draft addressed to your OWN address (server-resolved; takes no recipient).',
     service: 'gmail',
-    apiMethod: 'gmail.users.drafts.create',
+    apiMethod: 'gmail.users.drafts.create (recipient = server-resolved self via gmail.users.getProfile)',
+    // ZERO-address-input by construction, same shape as send_digest_to_self:
+    // no to/cc/bcc field exists; additionalProperties:false rejects any
+    // supplied address with zero API calls.
     inputSchema: {
       type: 'object',
       additionalProperties: false,
-      required: ['to', 'subject', 'body'],
+      required: ['subject', 'body'],
       properties: {
-        to: { type: 'string', maxLength: 320, pattern: NO_CRLF },
         subject: { type: 'string', maxLength: 512, pattern: NO_CRLF },
         body: { type: 'string', maxLength: 64 * KB },
       },
     },
+    limits: { maxCallsPerRun: 3 },
+    handler: async (services, args) => {
+      // Mirrors send_digest_to_self's self-resolve exactly: the authenticated
+      // account is the ONLY possible recipient; no address ever comes from args.
+      const res = await services.gmail.users.getProfile({ userId: 'me' });
+      const self = res && res.data && res.data.emailAddress;
+      if (!self || !String(self).includes('@')) {
+        throw new WienerdogError('could not determine your Google account address — no draft was created');
+      }
+      return gmail.draft(services, { to: self, subject: args.subject, body: args.body });
+    },
+  }),
+
+  create_reply_draft: Object.freeze({
+    name: 'create_reply_draft',
+    capabilityClass: CAPABILITY_CLASS.DRAFT,
+    extraClasses: Object.freeze(['READ']),
+    description:
+      'Reply-draft a Gmail message; recipient, subject and threading are all derived from the message itself (never sends).',
+    service: 'gmail',
+    apiMethod: 'gmail.users.drafts.create (recipient/threading from gmail.users.messages.get metadata)',
+    // No address key, and no subject key — both are code-derived from the
+    // replied-to message (Table B), never model-supplied.
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id', 'body'],
+      properties: {
+        id: { type: 'string', maxLength: 128, pattern: '^[A-Za-z0-9_-]+$' },
+        body: { type: 'string', maxLength: 64 * KB },
+      },
+    },
     limits: { maxCallsPerRun: 10 },
-    handler: (services, args) => gmail.draft(services, { to: args.to, subject: args.subject, body: args.body }),
+    handler: async (services, args) => {
+      const target = await gmail.replyTarget(services, { id: args.id });
+      return gmail.draft(services, {
+        to: target.to,
+        subject: target.subject,
+        body: args.body,
+        threadId: target.threadId,
+        inReplyTo: target.inReplyTo,
+        references: target.references,
+      });
+    },
   }),
 
   send_digest_to_self: Object.freeze({
@@ -206,4 +251,19 @@ const VERBS = Object.freeze({
   }),
 });
 
-module.exports = { VERBS };
+/** Every capability class whose credential must load for these verbs to work:
+ *  the union of each verb's `capabilityClass` and its `extraClasses`, sorted,
+ *  deduplicated. Throws WienerdogError on an unknown verb name (fail closed).
+ *  @param {string[]} verbNames @returns {string[]} */
+function requiredClassesFor(verbNames) {
+  const classes = new Set();
+  for (const name of verbNames) {
+    const verb = VERBS[name];
+    if (!verb) throw new WienerdogError(`unknown broker verb: ${name}`);
+    classes.add(verb.capabilityClass);
+    for (const extra of verb.extraClasses || []) classes.add(extra);
+  }
+  return [...classes].sort();
+}
+
+module.exports = { VERBS, requiredClassesFor };

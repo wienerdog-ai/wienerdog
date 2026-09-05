@@ -100,7 +100,7 @@ const PROFILES = Object.freeze({
     tools: Object.freeze(['Read']),
     disallowedTools: DENY,
     mcp: 'broker',
-    brokerVerbs: Object.freeze(['gmail_search', 'gmail_read', 'create_draft']),
+    brokerVerbs: Object.freeze(['gmail_search', 'gmail_read', 'create_reply_draft']),
     permissionMode: 'default',
     skillId: 'wienerdog-inbox-triage',
   }),
@@ -110,9 +110,10 @@ const PROFILES = Object.freeze({
     tools: Object.freeze(['Read']),
     disallowedTools: DENY,
     // A2-RESTORE done (WP-141): the broker is wired, so weekly-review gets its
-    // broker back — it drafts email via the create_draft verb, nothing else.
+    // broker back — it drafts email via the create_draft_to_self verb, nothing
+    // else (WP-audit-d-code-derived-recipients).
     mcp: 'broker',
-    brokerVerbs: Object.freeze(['create_draft']),
+    brokerVerbs: Object.freeze(['create_draft_to_self']),
     permissionMode: 'default',
     skillId: 'wienerdog-weekly-review',
   }),
