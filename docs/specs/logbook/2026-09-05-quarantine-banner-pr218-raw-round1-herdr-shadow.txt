@@ -1,0 +1,8 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals, pr-rubric), PR #218 round 1, detached worktree at 0fc37e0e (base main). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty).
+
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No findings; materiality bands are therefore not applicable. Executed boundary/diff inspections, V1/V2, V5, proof-declaration checks, JSON parsing, git diff --check, ten node --check commands, and targeted tests (8/8 passed): all exited 0; the 14 changed paths exactly match the Deliverables table, and initial/final git status --porcelain both exited 0 with identical empty output. npm run red-proofs and npm test exited 1 before execution because sandboxed mkdtemp returned EPERM; npm run lint exited 1 because unavailable local dependencies triggered a blocked registry lookup (ENOTFOUND), although its frontmatter check passed; no repository writes occurred.",
+  "overall_confidence_score": 0.96
+}

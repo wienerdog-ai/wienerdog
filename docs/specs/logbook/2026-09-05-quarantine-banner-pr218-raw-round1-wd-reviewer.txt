@@ -1,0 +1,48 @@
+# Raw gate output — wd-reviewer agent (claude-opus-5), PR #218 round 1, detached review worktree at 0fc37e0e (base main = 0fd50422), real node_modules. Committed BEFORE adjudication. git status --porcelain identical before and after (both empty).
+
+APPROVE
+
+Boundary, acceptance criteria, contract fidelity and conventions all hold. Every command below was re-run by me in the review worktree (or on `git archive HEAD` scratch copies under the scratchpad), not read from the PR body; the PR's pasted numbers match my own exactly. Findings are hygiene/spec-side only — none blocks merge.
+
+## Findings
+
+1. **[contract] Band C — `docs/specs/WP-quarantine-banner-location.md:955` ("becomes these eleven lines, byte-exactly") vs `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/review-wt-pr218/src/cli/dream.js:1076-1085`.** The spec's fenced block holds exactly **ten** comment lines while the prose calls it eleven. The implementer resolved this by writing the ten lines byte-exactly and leaving the pre-existing blank `//` separator that already sat between the old two-line header and `(i) THE REFUSED REPORT ARM.` — I verified the ten spec lines are present byte-for-byte and that the body after the header is byte-identical to `main`'s block. That is the only reading under which both the "byte-exact" fence and the "eleven" count are true, and it is recorded under "Decisions made". **Spec is at fault, not the diff.** Route to wd-architect: the sentence should read *"becomes these ten lines, replacing the existing two-line header; the blank `//` separator that follows it is untouched"* — otherwise the next reader re-litigates the same ambiguity.
+
+2. **[quality] Band C — `src/cli/dream.js:1174` (the orphaned `(ii)` sub-bullet).** The step-20 comment block enumerated `(i)`, `(i-b)` and `(ii)`. Row L7 moved `(i)`/`(i-b)` and their statements to step 17b; `(ii)` — *"the out-of-vault records from row G12 reach the SAME channel"* — stayed behind at line 1174 documenting the `for (const r of records)` loop it has always documented, but now with no `(i)` within ~50 lines and no numbered parent. The implementer was **right not to touch it**: the spec says *"Move it; do not retype it. Nothing inside the block changes except its two-line header."* Route to wd-architect — the spec's L7 instruction should state the disposition of `(ii)` explicitly (renumber it as part of step 19, or accept the orphan on the record).
+
+3. **[contract] Band C — `docs/specs/WP-quarantine-banner-location.md:957` ("so the numbering stays monotonic and steps 18-20 keep their ids").** After the move there is no step 20 in `src/cli/dream.js` at all — the step-comment ids now run `17`, `17b`, `18`, `19`, `21`, `22` (verified by `grep -nE '^\s*// [0-9]+[a-z]?\. '`). The claim was unsatisfiable in combination with "move it, do not retype it", so the diff is correct and the spec sentence is the stale mirror. Should read *"steps 18, 19 and 21 keep their ids"*.
+
+4. **[contract] Band C — mirror drift on "the two-line comment in `tests/unit/digest.test.js`".** That phrase appears in three registered places: the Deliverables cell for `tests/unit/digest.test.js`, the Mirrored Surface Checklist's "Mirrors outside this document" bullet, and — the load-bearing one — inside the **byte-exact Q1 clause now shipped into `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`**. As shipped the comment is **six** lines (`tests/unit/digest.test.js:765-770`). The implementer had no room here: the clause is byte-exact spec-owned text and the spec explicitly left the replacement wording to them ("prose, not spec-owned text", recorded as a Decision). The Q1 clause reads as a statement about the pre-correction state, so it is not strictly false — but a future reader looking for a two-line comment will not find one. Worth a wd-architect pass so the successor spec does not inherit a size claim about a mirror that has changed size.
+
+## Contract-density / Closed-Contract Drift Check
+
+Table L stayed canonical through this round: L5 (`src/core/digest.js`) and L6 (`src/core/dream/promote.js`) are absent from `git diff --name-only main...HEAD`, so no settled contract was reinterpreted and no mirror was promoted to primary. Table C's two declaration files are **byte-identical** to the spec's inlined JSON (`diff` clean on both), so the RED-proof contract was copied, not re-derived. The three `Done`-spec amendments are append-only and byte-exact — V5's base-row-plus-clause comparison passed on all three, with the file at exactly `3/3` changed lines. The only drift found is the three spec-prose slips above (findings 1, 3, 4), all of the same family: **prose restating a count or a size of something the tables fix** ("eleven lines" over a ten-line fence, "steps 18-20" over a table that moved one of them, "two-line comment" in three places including a now-settled clause). That is one contract family landing three findings in one round, which under ADR-0031 is the signal for a canonical-extraction pass — recommend wd-architect fold the L7 header's line count, the step-id list, and the digest-comment size into the row L7 / Deliverables cells they belong to rather than restating them in prose, before `WP-quarantine-preserve-durability` inherits them.
+
+## Executed
+
+All commands run in `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/review-wt-pr218` unless noted.
+
+| # | Command | Exit | Key result |
+|---|---|---|---|
+| 1 | `git rev-parse HEAD` / `git rev-parse main` | 0 | `0fc37e0eb1cef32c…` / `0fd50422ed84681b…` (base confirmed) |
+| 2 | `git diff --stat main...HEAD` | 0 | 14 files, 334 insertions, 56 deletions |
+| 3 | `git status --porcelain \| awk '{print $2}' \| xargs node scripts/boundary-check.js docs/specs/WP-quarantine-banner-location.md` | 0 | clean tree, no offenders |
+| 4 | `git diff --name-only main...HEAD \| xargs node scripts/boundary-check.js docs/specs/WP-quarantine-banner-location.md` | **0** | all 14 files inside the Deliverables table + always-allowed set |
+| 5 | `sh verify-v125.sh` (V1/V2/V5, extracted from the spec's fenced block by `awk`, run against local `main` = `0fd50422`) | **0** | `V1 OK` / `V2 OK` / `V5 OK` |
+| 6 | `npm run red-proofs` | **0** | `11 declared proof(s), 11 selected`; **five** roll-up lines for this WP (criteria 1,2,3,4,5), criterion 5 naming **both** `pointer-derivation-doctor` and `pointer-derivation-ledger-suite`; `RUN: PROVEN` |
+| 7 | `npm test` | **0** | `tests 2623 / pass 2611 / fail 0 / skipped 12` (baseline 2618/2606 → delta exactly the 5 new tests) |
+| 8 | `npm run lint` | **0** | `Linting: 637 file(s)`, `0 error(s)`, `frontmatter check passed: 267 spec(s), 4 agent(s)` |
+| 9 | `diff <spec File A json> tests/red-proofs/quarantine-banner-location.proofs.json` | 0 | **IDENTICAL** |
+| 10 | `diff <spec File B json> tests/red-proofs/quarantine-banner-location-doctor.proofs.json` | 0 | **IDENTICAL** |
+| 11 | python3 byte-check of the pointer sentence + five source forms (a)–(e) | 0 | sentence len 171, **1** occurrence in `src/`; forms (a)(b)(c)(d)(e) each present, count **1**; `PRESERVED_COPIES_POINTER,` in `module.exports` |
+| 12 | python3 byte-check of the L7 header | 0 | the spec's **ten** lines present byte-exact at `src/cli/dream.js:1076` |
+| 13 | python3 diff of moved block vs `git show main:src/cli/dream.js` | 0 | **body identical after the header** — no line rewritten; both undelivered arms (`refused`, `promoted`+`published===false`) preserved |
+| 14 | `git archive HEAD` → 3 scratch copies A/B/C (node_modules symlinked), `node --check` each | 0 | all three parse |
+| 15 | `node --test --test-name-pattern='\[L7\]' tests/unit/dream-pipeline.test.js` in **A** (shipped, step 17b) | 0 | `tests 1 / pass 1 / fail 0` — **GREEN** |
+| 16 | same in **B** (block moved back to the shipped step-20 position) | 0 | `tests 1 / pass 0 / fail 1` — **RED**, failing on the discriminating assertion (`the announcing line was not delivered before the ledger became durable`, `actual: ''`), not on a precondition |
+| 17 | same in **C** (block immediately after `writeLedger`, before the summary line) | 0 | `tests 1 / pass 0 / fail 1` — **RED**, same assertion, `actual: ''` |
+| 18 | `grep -n 'PRESERVED_COPIES_POINTER' tests/unit/{ledger,doctor,dream-warnings}.test.js tests/integration/dream.test.js` | 1 | **no matches** — all four pins T1–T4 are hand-written literals, as Table C requires |
+| 19 | `grep -rn 'state/quarantine' src/` | 0 | **9** hits (was 13): the four carriers gone, `digest.js` (L5) kept, 8 comment hits kept |
+| 20 | `git log --oneline main..HEAD` | 0 | one commit, conventional: `fix(dream): stop the ledger-derived banners naming a quarantine shelf (WP-quarantine-banner-location)` |
+| 21 | `git diff --numstat main...HEAD` | 0 | spec file `1/1` (status flip only); Done spec `3/3`; `digest.test.js` `6/2` comment-only |
+| 22 | `git status --porcelain` before/after, `diff` | 0 | **byte-identical, both empty — worktree unmodified by this review** |
