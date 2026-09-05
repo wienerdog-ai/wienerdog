@@ -32,7 +32,13 @@ call sites remove such a file, all in `src/core/dream/validate.js`:
 1. `removeOwnedQuarantinePath` — `WP-preservation-abort-widening` Table D rows
    **D1** and **D2**, the disposal of the one path a failed preservation owns. This
    one is **fail-loud** already: row **D3** raises a `WienerdogError` when the
-   removal cannot be completed.
+   removal cannot be completed. **Its narrowest reachable case, routed here by the
+   round-1 shadow channel of the predecessor's design gate (2026-09-05):** a crash
+   after D2 removes `dest` but before `quarantinePreserve` returns lets the removed
+   artifact reappear, because the unlink is not directory-flushed. It cannot make
+   that call report success and it cannot destroy an only copy — the call has
+   already decided to fail — so what it leaves is an orphaned extra artifact under
+   a name no preservation record, no cleanup pass and no abort message reaches.
 2. `pruneRedactedOriginals` — the `REDACTED_RETENTION_CAP = 50` eviction loop.
    Shipped contract: *"Best-effort: a failed prune is ignored and the arm still
    completes."*
