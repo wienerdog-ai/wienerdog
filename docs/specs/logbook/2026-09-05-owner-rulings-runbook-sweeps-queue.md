@@ -64,3 +64,17 @@ The seven coherence findings and the one template note were dispositioned by the
 orchestrator under the same standing process (all LIGHT: citations, mirrors, one
 criterion without a runnable form) and are recorded, with what changed, in
 `2026-09-05-process-runbook-sweeps-design-gate-rounds.md`.
+
+## Amendment, 2026-09-05 (after design-gate round 1)
+
+Round 1's hermetic shadow found (finding R1-F, band B) that the overrule costs
+quoted above for **O1, O2 and O3** were understated: they named one Deliverables
+row and one sentinel path where the spec's own Mirrored Surface Checklist implies
+edits to Table B, Current state, the Implementation-notes counts, the sentinel
+data and the owner-item text — and O3's bound halves live in four files, not
+one, among them `docs/specs/_TEMPLATE.md`, which every future spec inherits. The
+spec's "Dispatch precondition" now enumerates the full cost per item (revision
+`47b1f591`). **The recommendations are unchanged and the adoption above stands
+on them, not on the figures.** The corrected costs are the ones the owner should
+read before reversing any item; the figures above are superseded and kept only
+because this record is append-only.
