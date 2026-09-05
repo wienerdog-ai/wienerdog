@@ -1,0 +1,304 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 7, detached worktree at a4d6be1b (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision a4d6be1b90bbb9c14e4542a5e11f457b291de868 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "NO-SHIP. The prescribed sequence correctly writes, verifies and flushes the O_EXCL-created inode, and round-6's ownership and filesystem-boundary fixes are present. However, the contract still guarantees no false success while explicitly permitting success after `dest` has stopped naming that inode. The descriptor lifecycle is also not failure-safe when post-commit temp removal throws. The closing logbook statement contains a reversed separability claim.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && printf '\\n---FOCUS FILE---\\n' && sed -n '1,260p' ../focus-qd7.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "Porcelain empty before review; git emitted read-only xcrun-cache warnings."
+    },
+    {
+      "command": "git diff --name-status main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --stat main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=80 main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^## |^### |^\\| \\*\\*[A-Z0-9]|GUARANTEED|DISCLOSED|OUTSIDE|ownsName|function quarantinePreserve|QPD-[1-6]|destination-removal-not-gated|ownership-check' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '120,520p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '520,980p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '980,1510p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1510,1810p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '211,472p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '473,607p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '608,760p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '760,1040p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'byte-exact|source form|function flush|function ownsName|function writeAllAt|function readAllAt|O_NOFOLLOW|removeOwnedQuarantinePath\\(tmp\\)|return \\{ name|GUARANTEE SENTENCE|Durability here' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1180,1415p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1415,1547p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1040,1193p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1240,1328p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'writeAllAt|readAllAt|flushFd|flushDir|quarantineDirChain|TEMP_CREATE_FLAGS|DURABILITY_AVAILABLE|DIR_OPEN_FLAGS|closeQuietly' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'function quarantinePreserve|quarantinePreserve\\(|removeOwnedQuarantinePath|patchFs\\(.?(writeFileSync|readFileSync|renameSync)|only byte-identity|durable conjunct' src/core/dream/validate.js tests/unit/dream-validate.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '650,800p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^.*\\| \\*\\*P0b\\*\\* \\|' docs/specs/done/WP-preservation-abort-widening.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^.*\\| \\*\\*B3b\\*\\* \\|' docs/specs/done/WP-secret-fence-ep2-redact-arm.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git show main:docs/specs/WP-quarantine-preserve-durability.md | nl -ba | sed -n '1,130p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'function (writeAllAt|readAllAt|flushFd|flushDir|flushPreservation|quarantineDirChain|ownsName|closeQuietly)|const TEMP_CREATE_FLAGS|DURABILITY_AVAILABLE' docs/specs/logbook/2026-09-05-*",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'QPD-2|QPD-5|QPD-6' docs/specs/logbook/2026-09-05-quarantine-durability-gate-raw-round6-herdr-shadow.txt docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | head -120",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,230p' docs/specs/logbook/2026-09-05-quarantine-durability-gate-raw-round6-herdr-shadow.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'A12|not a boundary against arbitrary software already running as the same user|keyed MAC|false guarantee' docs/THREAT-MODEL.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba .github/workflows/ci.yml | sed -n '1,160p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '\"node\"|engines' package.json",
+      "exit_status": 0,
+      "result": "Node floor is >=18."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '250,480p;1530,1678p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate --max-count=12",
+      "exit_status": 0
+    },
+    {
+      "command": "git show --stat --oneline --decorate HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff HEAD^..HEAD -- docs/specs/WP-quarantine-preserve-durability.md docs/specs/WP-quarantine-disposal-durability.md docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD && git rev-parse main",
+      "exit_status": 0,
+      "result": "HEAD a4d6be1b90bbb9c14e4542a5e11f457b291de868; main 38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "rg -n 'no removal shape whose ownership test|GUARANTEED\\.|DISCLOSED\\.|OUTSIDE\\.' docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=12 1e38f90d..37bcbfb2 -- docs/specs/WP-quarantine-preserve-durability.md docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '719,1192p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<parse proof JSON and group by criterion>'",
+      "exit_status": 1,
+      "result": "Initial extraction omitted the final JSON brace."
+    },
+    {
+      "command": "sed -n '719,1193p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<parse proof JSON and group by criterion>'",
+      "exit_status": 0,
+      "result": "19 proofs; 19 unique ids; 19 unique markers; criteria 1-7 all represented. With the 11 existing declarations this agrees with the stated total of 30."
+    },
+    {
+      "command": "rg -n 'removeOwnedQuarantinePath\\((tmp|dest)\\)|fs\\.(rmSync|unlinkSync|renameSync)\\(' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '\\b(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|THIRTEEN|FOURTEEN|SIXTEEN|SEVENTEEN|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|thirty)\\b [A-Za-z]+' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'three DISCLOSED residuals|three disclosed residuals|FIVE-test|two-seams|SIX cases|six cases|no removal shape whose ownership test' docs/specs/WP-quarantine-preserve-durability.md docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "node - <<'NODE' <mkdtemp filesystem probe> NODE",
+      "exit_status": 1,
+      "result": "The shell could not create its here-document temporary file; no probe body ran."
+    },
+    {
+      "command": "node -e '<fs.mkdtempSync OS-temp probe for O_EXCL write, link, explicit read, file fsync and directory fsync>'",
+      "exit_status": 1,
+      "result": "fs.mkdtempSync failed EPERM in the OS temporary directory. No filesystem operations after mkdtemp ran and no alternate location was attempted."
+    },
+    {
+      "command": "node -e 'const fs=require(\"node:fs\"); console.log(JSON.stringify({node:process.version,platform:process.platform,O_NOFOLLOW:typeof fs.constants.O_NOFOLLOW,O_DIRECTORY:typeof fs.constants.O_DIRECTORY,O_EXCL:typeof fs.constants.O_EXCL,F_FULLFSYNC:typeof fs.constants.F_FULLFSYNC}))'",
+      "exit_status": 0,
+      "result": "Node v25.9.0/darwin: O_NOFOLLOW, O_DIRECTORY and O_EXCL are numbers; F_FULLFSYNC is undefined."
+    },
+    {
+      "command": "<V1 command copied from the specification and run against the untouched design worktree>",
+      "exit_status": 1,
+      "result": "Expected RED state: no fsync, guarantee sentence absent from validate.js, and zero occurrences of 'on the medium'."
+    },
+    {
+      "command": "<V2 reconstruction command copied from the specification and run against the untouched design worktree>",
+      "exit_status": 1,
+      "result": "Expected RED state: both Done-spec rows remain identical to main and do not yet carry their clauses."
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '2350,2640p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1080,1205p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '616,627p;1390,1431p;1929,1935p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '990,1021p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "Porcelain empty after review and identical to the before snapshot; only the same read-only xcrun-cache warnings appeared."
+    }
+  ],
+  "external_documentation_checks": [
+    {
+      "operation": "Searched and opened the official Node.js 18 filesystem documentation.",
+      "status": "success",
+      "source": "[Node.js v18.20.8 filesystem documentation](https://nodejs.org/docs/latest-v18.x/api/fs.html)",
+      "result": "Node documents fsyncSync as OS/device-specific and returning undefined; explicit-position readSync; O_EXCL's network-filesystem caveat; and the requirement to check whether platform-specific constants exist."
+    }
+  ],
+  "findings": [
+    {
+      "title": "The disclosed after-gate replacement is a false-success path under GUARANTEED (2)",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 626,
+      "line_end": 626,
+      "materiality_band": "A",
+      "confidence": 0.97,
+      "body": "F10 guarantees that no substitution 'at any point' can produce a false SUCCESS, yet the same row admits that `dest` can be substituted after the last gate and before the success return. At that point `tmp` has already been removed. Replacing `dest` unlinks the created inode's last pathname; closing `fd` releases it, and `quarantinePreserve` nevertheless returns `{name, bytes}`. The caller publishes that `name` as the preserved artifact (`src/core/dream/validate.js:1167`), but the name now resolves to foreign bytes that this invocation neither verified nor flushed. Disclosing the window does not make GUARANTEED (2), F0's successful-artifact claim, or the returned preservation record true. This is not an objection to item 6's decision to retain the removals; it is a contradiction between the guarantee and the explicitly accepted temporal bound.",
+      "recommendation": "Narrow GUARANTEED (2), F0, the return JSDoc, the two Done-spec clauses and the closing statement to an explicit last-gate linearization point. State that after-gate replacement can make the returned artifact name stale even though the returned byte buffer was verified and flushed. Do not call that outcome 'no false SUCCESS' unless the success record is redesigned to remain truthful."
+    },
+    {
+      "title": "Post-commit temp-removal failure can leak the held artifact descriptor",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1399,
+      "line_end": 1405,
+      "materiality_band": "B",
+      "confidence": 0.96,
+      "body": "The exact source form performs the post-commit `removeOwnedQuarantinePath(tmp)` while `fd` must remain open for the subsequent descriptor read and fsync. That removal deliberately throws Table D row D3 when it cannot complete. No required source form or proof puts this call inside a descriptor finalizer, so the throw can escape with `fd` still open, contradicting F8's line-624 claim that the descriptor is closed in every case. The migrated shipped D3 test only asserts the `WienerdogError` type and message; Table C has no descriptor-closure assertion. A matching implementation can therefore pass every prescribed test while leaking one descriptor per such failure. The run abort catches the primary failure downstream, but a long-lived caller or repeated failures can accumulate descriptors.",
+      "recommendation": "Require a `try/finally` covering the complete post-create descriptor lifetime, or catch the post-commit removal error, close the descriptor, set `fd = -1`, and rethrow the same D3 error. Extend the migrated D3 test to capture the descriptor and prove it is closed after the throw; add a RED mutation that removes that finalizer."
+    },
+    {
+      "title": "The closing DISCLOSED statement reverses the residual's separability premise",
+      "affected_file": "docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "line_start": 1006,
+      "line_end": 1009,
+      "materiality_band": "B",
+      "confidence": 1,
+      "body": "The round-6 closing statement says Node has 'no removal shape whose ownership test is separable from its act'. Canonical F10 and the earlier correct mirror at line 888 say the opposite: there is no shape whose test is NOT separable, so every pathname check and unlink remain two operations. The missing negation reverses the stated reason the residual exists in the exact statement this round was asked to verify verbatim.",
+      "recommendation": "Change line 1008 to 'no removal shape whose ownership test is not separable from its act', or equivalently say that Node exposes no operation making the ownership test inseparable from the unlink."
+    }
+  ],
+  "validated_points": [
+    "Round-6's complete `ownsName` body is present: bigint fstat/lstat, `isFile()`, bigint dev/ino equality, and failure-closed catch.",
+    "QPD-5 now includes deleted-destination and distinct-BigInt/equal-Number cases; QPD-6 enumerates seven cases including create failure and deleted temp.",
+    "The two new ownership mutations parse as valid JSON declarations in the inlined proof object; the object contains 19 unique declarations across criteria 1-7, consistent with 30 total after adding the 11 existing proofs.",
+    "The O_EXCL/hard-link filesystem precondition and network-mounted-core residual are stated in owner item 7 and F10. The official Node 18 documentation supports the O_EXCL caveat.",
+    "Every ordinary success route in the prescribed sequence writes, reads, compares and fsyncs the descriptor returned by the exclusive create before evaluating the destination gate.",
+    "The fixed directory chains are complete and ordered: withheld uses qdir, stateDir and core; redacted additionally uses the intermediate quarantine shelf.",
+    "The source forms contain exactly three destructive pathname-removal sites: catch-path tmp, post-commit tmp and failure-path dest. Each has a preceding ownership predicate; no fourth destructive source-form act was found.",
+    "The create-failure branch has `fd < 0`, computes `ownedTmp` false and removes nothing.",
+    "Flush failure is not swallowed by the prescribed success expression: `flushPreservation` returning false reaches the existing destination failure disposal and returns null; the gate routes that null through the shipped abort behavior.",
+    "The descriptor write and explicit-position read avoid the observed EOF-offset trap; linkSync commits another name for the descriptor's inode before the original temp name is removed.",
+    "The disposal stub carries the D2 crash window, live-run pruning-ownership question and identity-gated delete without becoming a dependency of the successful-preservation protocol.",
+    "The A12 citation matches the threat model's detection-not-prevention posture.",
+    "The worktree remained unchanged: porcelain was empty before and after."
+  ],
+  "limitations": [
+    "The sandbox denied both shell temporary-file creation and fs.mkdtempSync in the OS temporary directory. Consequently no live filesystem probe was completed. No worktree, home-directory or real-vault write was attempted.",
+    "V1 and V2 were run only to confirm their expected pre-implementation RED state. This branch contains design documents, not the rehearsal implementation; npm test, npm run lint and npm run red-proofs were therefore not rerun here."
+  ],
+  "routed_scope_objections": [],
+  "verdict": "needs-attention"
+}
