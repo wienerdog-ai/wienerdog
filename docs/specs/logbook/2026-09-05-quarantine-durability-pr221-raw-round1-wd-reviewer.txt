@@ -1,0 +1,93 @@
+# Raw gate output — wd-reviewer agent (claude-opus-5), PR #221 round 1, detached review worktree at ad8c62dc (base main = bb58e398), real node_modules. Committed BEFORE adjudication. git status --porcelain identical before and after (both empty).
+
+REQUEST-CHANGES
+
+The implementation itself is correct and I am requesting **no change to `src/core/dream/validate.js`**. Every mechanical gate is green: boundary clean, V1/V2/V3/V4 re-run by me and passing, all 13 byte-exact source forms present exactly once, the declaration file byte-identical to Table C, all seven identities and their band markers intact. The three blocking items below are a permission-boundary overrun that I judge to be a **spec** defect, and a Definition-of-done evidence gap in the PR body that I have already closed by running the missing states myself. Findings 4–6 are for wd-architect, not the implementer.
+
+---
+
+1. **[boundary] band B — `tests/unit/dream-validate.test.js:2619-2623`: the D3 temp test gains TWO `assert` statements where the Deliverables cell permits ONE.**
+   Measured: base 2 asserts → head 4 asserts in `quarantinePreserve (Table D row D3): a tmp that cannot be removed after the commit fails LOUD, and the held descriptor is CLOSED`. The added statements are
+   ```js
+   assert.ok(heldFd >= 0, 'the tmp create was observed');
+   assert.throws(
+     () => fs.fstatSync(heldFd), /EBADF/,
+     'the held descriptor is CLOSED even though the post-commit removal threw'
+   );
+   ```
+   The Deliverables cell (`docs/specs/WP-quarantine-preserve-durability.md:9`) says "**(3)** ONE shipped test GAINS one assertion", and acceptance criterion 10 says "a second added assertion, is a finding". Literally, this is that finding.
+   **Do NOT delete the guard.** Without `assert.ok(heldFd >= 0, …)` the permitted assertion is vacuous: if the `openSync` patch never fires, `heldFd` stays `-1` and `fs.fstatSync(-1)` throws `EBADF` too, so `assert.throws(…, /EBADF/)` passes on a leaking implementation. The spec's own Table C row QPD-7 mandates exactly this pattern ("with a non-vacuity guard that four directories really were opened"), so the spec requires in one row what it counts as a violation in another. **Route to wd-architect**: amend the Deliverables cell and criterion 10 to read "one assertion plus its non-vacuity guard" (or "one added *behavioural* assertion"). The implementer's action is only to correct the PR body, which currently claims "one added assertion" (finding 3).
+
+2. **[criteria] band C — PR body: Definition of done item 1 is not satisfied; six required V1/V2 states were declined, not run.**
+   DoD item 1 requires "every V2 state in the table under the fenced block" plus V1's reworded/retyped/`fsyncSync`-removed states. The PR's "Decisions made" declines them as "spec-authoring evidence, not a literal implementer re-run instruction" — that reading is not available: DoD item 1 enumerates them, and the spec's own note says re-running rather than re-reading is "the standing rule here".
+   **I ran all six against this candidate in a scratch tree** (`main` = `bb58e398`, candidate files from `ad8c62dc`). Every one reproduced the spec's predicted message at rc 1, control green at rc 0:
+   | state | observed | rc |
+   |---|---|---|
+   | P0b's clause in cell 2 | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5 …` | 1 |
+   | compliant + one unrelated edited line in the widening spec | `V2 WP-preservation-abort-widening.md DIFF IS 2/2, expected 1/1` | 1 |
+   | compliant + P0b's cell 5 REAUTHORED before its clause | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5 …` | 1 |
+   | guarantee sentence REWORDED away | `V1 GUARANTEE SENTENCE APPEARS 0 TIME(S) …, expected 1` | 1 |
+   | guarantee sentence RETYPED a second time | `V1 GUARANTEE SENTENCE APPEARS 2 TIME(S) …` + `'on the medium' APPEARS 2 TIME(S) …` | 1 |
+   | sentence present, `fs.fsyncSync` removed | `V1 NO FLUSH IS ISSUED AT ALL in src/core/dream/validate.js` | 1 |
+   Action: paste this table into the PR body under the V1/V2 section and drop the first "Decisions made" bullet. No re-derivation needed — the numbers above are measured, not predicted.
+
+3. **[quality] band C — PR body, "Decisions made" bullet 2: the accounting of the D3 test is inaccurate.** It states "The D3 test's title and one added assertion were changed exactly as Table C's `post-commit-descriptor-leaked` declares; nothing else about it moved." Two `assert` statements were added, and an `unOpen`/`patchFs('openSync')` observer was added alongside them. Restate it accurately (it is defensible on the merits — see finding 1); an accounting the reviewer has to correct is the thing round 10's precision rule exists to prevent.
+
+---
+
+The remaining items are spec-side. **Recommend routing 4 and 5 to wd-architect**; neither should be actioned by the implementer, because acting on either would itself breach the permission boundary.
+
+4. **[contract] band C — mirror drift risk, `docs/specs/done/WP-preservation-abort-widening.md` row P0b (the spec-owned, byte-exact clause).** The clause restates Table F row F3's chain *membership* verbatim — "the containing directory, the shelf above it on the redacted arm, the state directory, and the core directory that names it" — inside a `Done` spec. The clause's own closing sentence claims "this clause restates no member of Table P or Table D", which is true but sidesteps that it *does* mirror Table F. F3's membership now lives in four places (Table F, `quarantineDirChain`, QPD-3/QPD-4's ordered `deepEqual`s, and this P0b cell), and only the first three are registered mirrors. `WP-quarantine-disposal-durability` (Draft) inherits this protocol; if the chain ever changes, the P0b cell is the one that will be missed. Recommend either trimming the clause to a citation of Table F, or registering P0b in the Mirrored Surface Checklist. The implementer had zero discretion here — the clause is byte-exact and V2 proves it was applied exactly.
+
+5. **[contract] band C — `tests/unit/dream-validate.test.js:2442`: a third shipped title is now factually stale, and the spec forbids fixing it.** `test('quarantinePreserve (Table D row D1): the write fails before any rename — …')` — under row F9 there is no rename, and the migrated injection is `patchFs('openSync')` on a `.tmp-` basename, so it is the exclusive **create** that fails, not the write. The Deliverables cell permits exactly TWO title changes, so leaving it is the correct implementer choice; the title census under Implementation notes found the two titles forced by the commit and missed the one made stale by the create seam. Same shape as the round-10 finding, in the opposite direction. Note the coverage is intact: the post-create write-failure contract moved cleanly to the round-3 test at `2559`, which now injects through `openSync` then throws from `writeSync`, and QPD-6 case (f) covers the create-failure branch.
+
+6. **[convention] band C — `src/core/dream/validate.js:674`: `O_DIRECTORY` is taken unguarded while `O_NOFOLLOW` is guarded in the same expression.** Implementation notes say "Both flag sets follow the same explicit-branch idiom for `O_NOFOLLOW`/`O_DIRECTORY`". `TEMP_CREATE_FLAGS` and `DIR_OPEN_FLAGS` both apply `typeof fs.constants.O_NOFOLLOW === 'number' ? … : 0` (byte-matching `src/core/dream/vault-write.js:93` — the repo idiom is followed correctly), but `fs.constants.O_DIRECTORY` at line 674 is `|`-ed in raw. No behavioural consequence: `O_DIRECTORY` is present on darwin (`1048576`) and Linux, and `flushDir` is unreachable on the one platform that lacks it because `DURABILITY_AVAILABLE` short-circuits `flushPreservation`. Hygiene only.
+
+---
+
+**Contract-density / Closed-Contract Drift Check.** No settled canonical contract is silently reinterpreted and no mirror is promoted to primary. The one reinterpretation this package makes — `WP-preservation-abort-widening` rows D1/D2's "the rename" now meaning the `linkSync` commit — is *declared* in the amended P0b cell ("'the rename' in rows D1 and D2 is that commit, and each row still owns the same path it always did") rather than left to be inferred, which is the right shape. Both `Done` amendments are append-only and V2 proves byte-for-byte that nothing else on either line moved. Table F remains the single canonical home for the protocol. The one drift risk is finding 4 (F3's membership mirrored into a `Done` cell that is not registered). Findings did not cluster on a single contract family across this round in a way that suggests a canonical-extraction pass is owed; findings 1 and 5 are both about the *shipped-test change census* in the Deliverables cell, which is worth watching — if round 2 produces a third census finding, that cell should become its own small canonical table rather than a prose enumeration inside a Deliverables note.
+
+**Contract fidelity verified (no findings).** All 13 `js` fences under Implementation notes — forms (a)–(l), (d) being two fences — occur in `src/core/dream/validate.js` exactly once each, byte-for-byte, at the prescribed indents. The `@returns` block under "Exact contracts" matches all 15 lines byte-for-byte at `validate.js:865` (only the fence's `/**`→` *` wrapper adapted, as expected), and the signature `function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld')` is unchanged. `tests/red-proofs/quarantine-preserve-durability.proofs.json` is byte-identical to Table C's inlined JSON (621 lines, `diff` empty). All seven QPD identity names match Table C byte-for-byte and occur exactly once each. Every assertion inside each identity carries its `[QPD-N]` band marker (the four apparent misses in QPD-2 are calls to the `assertSiteFails` helper at `2772`, whose own three asserts carry `[QPD-2]`). `DURABILITY_AVAILABLE` is the named constant row F5 prescribes, gating the flushes only — reopen, read-back and `ownsName` run on every platform.
+
+**Quality read against Table F rows F0–F10 (no findings).** Success path flushes the `O_EXCL`-created inode then the chain before the read-back (`flushPreservation(fd, …) ? readAllAt(fd, content.length) : null` — the ternary makes the read conditional on the flush, which is F6's second half). All four gated pathname acts pass `ownsName`: shared-catch temp removal (`fd >= 0 &&` short-circuit means a create failure removes nothing, per F8), post-commit temp removal, the last gate at `dest`, and the failure-path `dest` removal. Every descriptor closes on every path — shared catch `finally`, one post-create finalizer `finally`, `flushDir`'s `finally { if (fd >= 0) closeQuietly(fd); }` — including when `removeOwnedQuarantinePath` throws D3 on the way out, and when `ownsName` raises INDETERMINATE. Non-`ENOENT` stat failures raise D3's `WienerdogError`; the flush/verify block re-throws `WienerdogError` rather than swallowing it, so `dest` is not removed on an indeterminate last gate. `readAllAt` asks for `length + 1` so a longer artifact fails the comparison rather than passing on a prefix; `writeAllAt` and `readAllAt` both use explicit positions. `quarantineDirChain` guards both `qdir !== shelf` and `anchor !== stateDir`. Migrated injections still exercise their shipped contracts: all 391 base `assert` statements survive byte-identically, 115 of 117 shipped tests are unchanged in assert count, and the two absent titles are exactly the two permitted renames. The seam census matches the spec exactly — two `writeSync` injections in shipped tests (`2379`, `2571`), and the two `renameSync` injections left unmigrated (`2507`, `2595`) are the two the spec's Current state predicted would not break, both now carrying a comment saying why. Zero runtime deps added; JSDoc only, no TS; conventional commit title correct; spec `status:` flipped to `In-Review`.
+
+---
+
+## Executed
+
+All commands run in `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/review-wt-pr221` unless noted. `git status --porcelain` was empty (0 bytes) before and after — **the worktree is byte-identical**; all scratch artifacts were written under the scratchpad directory.
+
+| # | command | exit | key output |
+|---|---|---|---|
+| 1 | `git rev-parse HEAD main` | 0 | `ad8c62dc…` / `bb58e398…` — base confirmed as required |
+| 2 | `git diff --name-status main...HEAD` | 0 | 6 files: 5 M, 1 A (`tests/red-proofs/quarantine-preserve-durability.proofs.json`), +1747/−129 |
+| 3 | `git diff --name-only main...HEAD \| xargs node scripts/boundary-check.js docs/specs/WP-quarantine-preserve-durability.md` | 0 | no output — every path in Deliverables or the always-allowed set |
+| 4 | extract fenced verification block → `v.sh` | 0 | spec lines 2145–2237, 93 lines |
+| 5 | `sh v.sh` (full block: V1+V2+V3+V4) | 0 | ran to completion, no `V1/V2 RED` |
+| 6 | `sh v12.sh` (V1/V2 + verdict line) | 0 | `V1 OK`, `V2 OK` |
+| 7 | `npm run red-proofs` | 0 | `37 declared proof(s), 37 selected`; 26 this-WP proofs `PROVEN`; 7 criteria roll-up lines (criteria 1–7) all `PROVEN`; `RUN: PROVEN` |
+| 8 | `npm test` | 0 | `tests 2630 / pass 2618 / fail 0 / skipped 12` — exactly criterion 10's figure |
+| 9 | `npm run lint` | 0 | markdownlint 640 files 0 errors; shellcheck, PSScriptAnalyzer, frontmatter (268 specs / 4 agents) — `lint passed` |
+| 10 | node: all 13 `js` fences from Implementation notes vs `validate.js` | 0 | 13 fences, `NOT-EXACTLY-ONCE: 0` |
+| 11 | `diff` inlined Table C JSON vs shipped declaration | 0 | byte-identical, 621 lines |
+| 12 | node: 7 QPD identity names vs test file | 0 | each occurs exactly once, `MISMATCHES: 0` |
+| 13 | node: band-marker audit per identity | 0 | QPD-1..7: 0 unmarked assertions (4 helper-call false positives resolved at `2772`) |
+| 14 | node: assert-statement set, `main` vs HEAD | 0 | base 391 → head 479; `BASE ASSERT STATEMENTS NOT PRESERVED BYTE-IDENTICALLY IN HEAD: 0` |
+| 15 | node: per-test assert-count diff | 0 | 115/117 shipped tests unchanged; 2 absent = the 2 permitted renames |
+| 16 | node: assert delta for the 2 renamed tests | 0 | D1 commit test `2→2` (delta 0); **D3 temp test `2→4` (delta 2)** — finding 1 |
+| 17 | `diff <(grep test\( base) <(grep test\( head)` | 1 (diff) | exactly 2 shipped titles changed, 7 QPD titles added, 0 removed |
+| 18 | node: `@returns` contract block, spec vs `validate.js:865` | 0 | 15 lines, `mismatches: 0`; signature line present |
+| 19 | grep: residual legacy seams | 0 | 2 `renameSync` (`2507`, `2595` — both spec-predicted), 2 shipped `writeSync` (`2379`, `2571` — matches the census) |
+| 20 | `node -e` fs.constants probe | 0 | `O_DIRECTORY=1048576 O_NOFOLLOW=256` on darwin |
+| 21 | scratch V1/V2 tree build + compliant control (`$SP/vtree`) | 0 | `V1 OK`, `V2 OK` |
+| 22 | scratch state (a) P0b clause in cell 2 | 1 | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5 …`, `V1/V2 RED` |
+| 23 | scratch state (b) unrelated edited line | 1 | `V2 WP-preservation-abort-widening.md DIFF IS 2/2, expected 1/1` |
+| 24 | scratch state (c) P0b cell 5 reauthored | 1 | `V2 ROW P0b IS NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5 …` |
+| 25 | scratch state (d) sentence reworded | 1 | `V1 GUARANTEE SENTENCE APPEARS 0 TIME(S) …, expected 1` |
+| 26 | scratch state (e) sentence retyped twice | 1 | `V1 GUARANTEE SENTENCE APPEARS 2 TIME(S) …` + `'on the medium' APPEARS 2 TIME(S) …` |
+| 27 | scratch state (f) `fs.fsyncSync` removed | 1 | `V1 NO FLUSH IS ISSUED AT ALL in src/core/dream/validate.js` |
+| 28 | scratch restored control | 0 | `V1 OK`, `V2 OK` — confirms 22–27 were the mutations and not tree damage |
+| 29 | `gh pr view 221 --repo wienerdog-ai/wienerdog` | 0 | title matches DoD item 3; `Generated-by:` present; "Decisions made" / "Discovered issues" filled |
+| 30 | `git status --porcelain` before/after `diff` | 0 | identical, both empty — read-only requirement satisfied |
+
+Relevant absolute paths: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/review-wt-pr221/src/core/dream/validate.js`, `…/review-wt-pr221/tests/unit/dream-validate.test.js`, `…/review-wt-pr221/tests/red-proofs/quarantine-preserve-durability.proofs.json`, `…/review-wt-pr221/docs/specs/WP-quarantine-preserve-durability.md`, `…/review-wt-pr221/docs/specs/done/WP-preservation-abort-widening.md`, `…/review-wt-pr221/docs/specs/done/WP-secret-fence-ep2-redact-arm.md`.

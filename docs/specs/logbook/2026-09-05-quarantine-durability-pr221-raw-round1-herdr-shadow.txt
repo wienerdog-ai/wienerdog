@@ -1,0 +1,35 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals, pr-rubric), PR #221 round 1, detached worktree at ad8c62dc (base main = bb58e398). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty).
+
+{
+  "findings": [
+    {
+      "title": "[P2] Reduce the shipped test to one new assertion",
+      "body": "Materiality C (hygiene). This shipped D3 test adds both this non-vacuity assertion and the following descriptor-closure assertion, but [acceptance criterion 10](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/docs/specs/WP-quarantine-preserve-durability.md:2115) permits exactly one new assertion and explicitly declares a second one a finding. Preserve non-vacuity within the permitted closure check so the shipped-test accounting matches the work package.",
+      "confidence_score": 0.99,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/tests/unit/dream-validate.test.js",
+        "line_range": {
+          "start": 2619,
+          "end": 2619
+        }
+      }
+    },
+    {
+      "title": "[P2] Qualify the flush-coverage comment",
+      "body": "Materiality C (hygiene). With a same-inode writer acting after `fsync` and before `readAllAt`, the comparison can examine bytes that the completed flush did not cover; the new return JSDoc correctly acknowledges this, while this comment unconditionally claims the opposite. Qualify the statement with the no-concurrent-writer condition required by [acceptance criterion 1](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/docs/specs/WP-quarantine-preserve-durability.md:1988), or state only that the read occurs after the flush.",
+      "confidence_score": 0.96,
+      "priority": 2,
+      "code_location": {
+        "absolute_file_path": "/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/shadow-wt-pr221/src/core/dream/validate.js",
+        "line_range": {
+          "start": 948,
+          "end": 950
+        }
+      }
+    }
+  ],
+  "overall_correctness": "patch is incorrect",
+  "overall_explanation": "Read-only inspections (`sed`, `rg`, `git diff`, `git log`, and `cmp`), syntax/JSON checks, the corrected boundary check, V1/V2, and `git diff --check` exited 0; the initial usage-only boundary invocation exited 1. `npm run red-proofs` and `npm test` each exited 1 before running because the sandbox denied `mkdtemp`; `npm run lint` exited 1 because missing markdownlint attempted a network lookup, while its frontmatter check passed. Initial and final `git status --porcelain=v1` both exited 0 with identical empty output, but the explicit assertion-count violation and inaccurate durability comment prevent approval.",
+  "overall_confidence_score": 0.98
+}

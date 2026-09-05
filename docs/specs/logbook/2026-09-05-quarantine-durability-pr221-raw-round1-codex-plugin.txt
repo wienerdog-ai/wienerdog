@@ -1,0 +1,12 @@
+# Raw gate output — Codex plugin native review (codex-companion.mjs review --wait --base main), PR #221 round 1, wp/quarantine-preserve-durability at ad8c62dc (base main = bb58e398). Committed BEFORE adjudication. git status --porcelain identical before and after.
+
+# Codex Review
+
+Target: branch diff against main
+
+The production implementation explicitly disables durability flushes on Windows, but the newly added tests assume those flushes always occur. This makes the required test suite fail on that supported platform.
+
+Review comment:
+
+- [P2] Guard POSIX-only durability assertions on Windows — /Users/gyulafeher/Documents/Claude_Projects/wienerdog-wt/quarantine-preserve-durability/tests/unit/dream-validate.test.js:2762-2762
+  On `win32`, `flushPreservation` deliberately issues no `fsyncSync`, but this test unconditionally requires a flush event. QPD-2/3/4/5/7 likewise inject or observe flushes, and QPD-5 also creates an unprivileged symlink, so `npm test` fails on a supported Windows checkout despite production behaving as specified. Guard the POSIX-only cases while retaining platform-neutral ownership checks; this contradicts the explicit F5 contract (`docs/specs/WP-quarantine-preserve-durability.md:694`).
