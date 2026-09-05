@@ -1,0 +1,74 @@
+# Design gate raw — Codex plugin adversarial review — WP-process-runbook-sweeps
+# tip reviewed: 3e3bfde28b13be2951fff23da820460aae9131c6 ; base main = 98a8b49a6ba1dae627d0d93470a19385c7e89657 ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a072e2-6a99-7102-bdae-60a4aee34210).
+[codex] Turn started (01a072e2-6b9b-7792-b1a4-90ec79587b1b).
+[codex] Assistant message captured: I’ll inspect the two-file diff, check the six round-1 fixes against the named context files, ...
+[codex] Running command: /bin/zsh -lc 'git diff main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/logbook/202...
+[codex] Command completed: /bin/zsh -lc 'git diff main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/logbook/202... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md docs/specs/_TEMPLATE.md .claude/agents/wd-a...
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/runbooks/codex-review.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/runbooks/spec-authoring.md docs/specs/_TEMPLATE.md .claude/agents/wd-a... (exit 0)
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/runbooks/codex-review.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-process-runbook-sweeps.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-process-runbook-sweeps.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '187,570p' docs/specs/WP-process-runbook-sweeps.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '187,570p' docs/specs/WP-process-runbook-sweeps.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/runbooks/codex-review.md | sed -n '1,195p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/runbooks/codex-review.md | sed -n '1,195p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^#|R1-[A-G]|LIGHT|HEAVY|RE-DERIVED|O[123]|band|criterion|screen|re-der...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^#|R1-[A-G]|LIGHT|HEAVY|RE-DERIVED|O[123]|band|criterion|screen|re-der... (exit 0)
+[codex] Assistant message captured: R13’s new wording preserves both repeat rules, and R12 now extends the existing stop-criterio...
+[codex] Running command: /bin/zsh -lc "sed -n '328,382p' docs/HANDOVER.md"
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round1-codex-plugin.t...
+[codex] Running command: /bin/zsh -lc "sed -n '1182,1294p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design...
+[codex] Command completed: /bin/zsh -lc "sed -n '328,382p' docs/HANDOVER.md" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '1182,1294p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design... (exit 0)
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round1-codex-plugin.t... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'WP-dream-promote-in-workspace|WP-launcher-no-self-resync-republish|WP-sc...
+[codex] Command completed: /bin/zsh -lc "rg -n 'WP-dream-promote-in-workspace|WP-launcher-no-self-resync-republish|WP-sc... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path(\"docs/specs/WP-p...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess s=Path(\"docs/specs/WP-p... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '338,378p' docs/HANDOVER.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '338,378p' docs/HANDOVER.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,110p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gat...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,110p' docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gat... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '328,400p' docs/runbooks/codex-review.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '328,400p' docs/runbooks/codex-review.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-process-runbook-sweeps.md | sed -n '290,342p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-process-runbook-sweeps.md | sed -n '290,342p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess,re,shlex s=Path(\"docs/s...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'from pathlib import Path import subprocess,re,shlex s=Path(\"docs/s... (exit 0)
+[codex] Assistant message captured: The extracted gate now exits 1 when Bash cannot create the DATA heredoc. With stdin substitut...
+[codex] Running command: /bin/zsh -lc "python3 -c 'import subprocess,os env=os.environ.copy(); env[\"GIT_INDEX_FILE\"]...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import subprocess,os env=os.environ.copy(); env[\"GIT_INDEX_FILE\"]... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/log...
+[codex] Command completed: /bin/zsh -lc 'git diff --check main -- docs/specs/WP-process-runbook-sweeps.md docs/specs/log... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds....
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --porcelain'
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not close round 2: the cleanliness check fails...
+[codex] Turn completion inferred after the main thread finished and subagent work drained.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not close round 2: the cleanliness check fails open, FALLBACK remains unranked, and R1-F's overrule instructions remain incomplete. R13 preserves both repeat rules; R12's disposition and taxonomy reconciliation are supported. Executed the extracted gate: heredoc failure exits 1; stdin-adapted checks reject short/empty input and confirm all 21 anchors align. Also executed Git failure probes and mocked compliant-blob cases. Read the scoped diff and context; no further Table A misdisposition established. Worktree remains clean. No scope objections.
+
+Findings:
+- [medium] [A] A failed cleanliness check is treated as a clean tree (docs/specs/WP-process-runbook-sweeps.md:405-410)
+  The condition tests stdout but discards git status's exit code. Executed with GIT_INDEX_FILE=/dev/null: status exits 128 with empty stdout while git show HEAD:<file> succeeds. With compliant blobs supplied in the stdin-adapted harness, that failure produces 21 PASS and exit 0. An unreadable or corrupt index therefore bypasses the promised dirty-tree refusal; the screen can certify the committed state without establishing that pending changes are absent.
+  Recommendation: Capture status output with an explicitly checked exit status, refuse on failure, then test cleanliness. Update the recorded script and exercise the status-error case.
+- [medium] [B] FALLBACK has no defined round-level outcome (docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md:1498-1507)
+  Branch 6 emits FALLBACK, but the mandatory aggregation ladder contains only CLOSE, LIGHT, HEAVY, EXTRACTION and DESIGN. A repeated screen-only finding therefore produces an outcome the round rule cannot rank, particularly alongside a record-only LIGHT finding. First-match routing fixes the earlier per-finding overlap but leaves the orchestrator choosing the round outcome after seeing findings.
+  Recommendation: Define FALLBACK's aggregation explicitly, or make dropping the screen an accompanying action and separately assign its closure/escalation outcome. Cover a FALLBACK-plus-LIGHT round.
+- [medium] [B] O1 still omits edits required to relocate R14 (docs/specs/WP-process-runbook-sweeps.md:288-295)
+  O1 promises every canonical and mirrored overrule edit, but names only R14's Table B File cell. Choosing its proposed new runbook also invalidates the insertion point ('after :23', end of the architect's Rules list) and potentially the mode. It also leaves Context naming wd-architect.md because O1 requires updating that scope sentence only if the file count changes; replacing one file preserves five. Following this revised overrule list still leaves an internally inconsistent dispatch specification.
+  Recommendation: Enumerate the replacement insertion point/mode, the new-file create action where applicable, and every named-file scope mirror regardless of whether the count changes.
+
+Next steps:
+- Resolve these documentation defects and record the corresponding verification or disposition.
+# plugin exit=0 ; porcelain before/after: identical
