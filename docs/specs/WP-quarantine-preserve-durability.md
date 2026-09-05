@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-preserve-durability
 title: Make a preserved quarantine artifact durable, and say honestly what that guarantees
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening, WP-quarantine-banner-location]
@@ -1011,7 +1011,7 @@ property that the held inode is the one this invocation MADE.
       "id": "flush-order-inverted",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "5",
-      "why": "flushing the directory chain before the artifact leaves a window in which an entry is durable over bytes that are not. The flushed SET is identical, so only the two sequence identities move — and they see it as the FIRST flush no longer being the held inode",
+      "why": "flushing the directory chain before the artifact leaves an interval in which the only COMPLETED flush covers an entry whose bytes have had none — row F6's rule stated as an order, never as a claim about what a crash or a device leaves. The flushed SET is identical, so only the two sequence identities move, and they see it as the FIRST flush no longer being the held inode",
       "file": "src/core/dream/validate.js",
       "find": "  if (!flushFd(fd)) return false;\n  for (const dir of quarantineDirChain(stateDir, qdir)) {\n    if (!flushDir(dir)) return false;\n  }",
       "replace": "  for (const dir of quarantineDirChain(stateDir, qdir)) { /* RP_MUT_QPD_ORDER */\n    if (!flushDir(dir)) return false;\n  }\n  if (!flushFd(fd)) return false;",
@@ -1295,7 +1295,7 @@ property that the held inode is the one this invocation MADE.
       "id": "returned-bytes-rereads-the-artifact",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "6",
-      "why": "THE ROUND-7 LINEARIZATION FINDING. The guarantee is about the RETURNED BYTES — the ones this invocation created, verified and flushed — and not about what the name holds afterwards. Re-reading the artifact at the end would return whatever a same-UID hand wrote in the meantime, silently converting a narrow true claim into a broad false one. Only QPD-5 in-place-overwrite case can see it: every other case either fails, or re-reads bytes that did not change",
+      "why": "THE ROUND-7 LINEARIZATION FINDING. The guarantee is about the RETURNED BYTES — the ones this invocation created, then READ BACK AND COMPARED after a flush of that inode had completed — and not about what the name holds afterwards. Re-reading the artifact at the end would return whatever a same-UID hand wrote in the meantime, silently converting a narrow true claim into a broad false one. Only QPD-5 in-place-overwrite case can see it: every other case either fails, or re-reads bytes that did not change",
       "file": "src/core/dream/validate.js",
       "find": "        verified = readBack;",
       "replace": "        verified = readAllAt(fd, content.length); /* RP_MUT_QPD_REREAD */",
@@ -1315,7 +1315,7 @@ property that the held inode is the one this invocation MADE.
       "id": "read-before-flush",
       "wp": "WP-quarantine-preserve-durability",
       "criterion": "1",
-      "why": "THE ROUND-8 ORDERING FINDING. Reading the artifact back BEFORE the flush lets an overlapping same-inode write land between the comparison and the fsync: the flush then completes over the newer contents while this call returns the older buffer, so the claim that the returned bytes were flushed is false for that interval. Only QPD-5 artifact-flush-seam case can see it — every other case either has no overwrite, or has one placed after the flush where both orderings agree",
+      "why": "THE ROUND-8 ORDERING FINDING. Reading the artifact back BEFORE the flush lets an overlapping same-inode write land between the comparison and the fsync, so the bytes returned were read BEFORE any flush of that inode completed while the fsync that did complete ran over newer contents — the order row F6 fixes is inverted for exactly that interval. Which flush completed before which read is all this proof is about; whether a completed flush covered the returned bytes is row F10 (v)'s subject and is not claimed here. Only QPD-5 artifact-flush-seam case can see it — every other case either has no overwrite, or has one placed after the flush where both orderings agree",
       "file": "src/core/dream/validate.js",
       "find": "      const readBack = flushPreservation(fd, stateDir, qdir) ? readAllAt(fd, content.length) : null;",
       "replace": "      const readBack0 = readAllAt(fd, content.length); /* RP_MUT_QPD_READ_FIRST */\n      const readBack = flushPreservation(fd, stateDir, qdir) ? readBack0 : null;",

@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| **11 (`fa44462d`) — THE LOOP CLOSES** | needs-attention (wording only) / **APPROVE, zero findings** | `…gate-raw-round11-codex-plugin.txt`, `…gate-raw-round11-herdr-shadow.txt` (both `64998de9`) | **The shadow APPROVED and recorded a per-disposition check plus an adversarial trace**: the only prescribed non-null return flushes and verifies the `O_EXCL`-created inode; exactly three pathname removals, each gated, each window disclosed; **every counterexample it could construct maps to a disclosed F10 instance (i)–(vi), the filesystem precondition, or A12**; the failure routing reaches the existing D2 disposal and P0/P3; the declaration is valid with 26 uniquely marked mutations. **The plugin found no false-SUCCESS and no destructive path either**, and raised ONE wording item: three RED-proof `why` strings still carried the coverage language round 9 withdrew — `flush-order-inverted` (an entry becoming *durable* over bytes that are not), `returned-bytes-rereads-the-artifact` (*created, verified and flushed*) and `read-before-flush` (*the claim that the returned bytes were flushed*). Round 10 narrowed F2/F6/F10 and missed the shipped declarations. → **FIX: all three rewritten in ORDER terms only** — which flush COMPLETED before which read or directory flush — and `read-before-flush` now says outright that whether a completed flush covered the returned bytes is row **F10 (v)**'s subject and is not claimed there. **Verified mechanically:** a field-level diff proves only `why` moved (every `find`, `replace`, `marker`, `occurrences`, `testNamePattern` and `expectRed` byte-identical), the occurrence audit re-ran clean, and the overclaim sweep over every `why`, identity name, criterion and mirror classified all 17 remaining hits. **LIGHT under weighted closure — verification-machinery wording inside the frozen surface — so no external round is owed, and the pinned stop criterion is met: neither channel returned a material design finding.** |
 | 10 (`9047e954`) | needs-attention / needs-attention | `…gate-raw-round10-codex-plugin.txt`, `…gate-raw-round10-herdr-shadow.txt` (both `560e0411`) | Plugin 1 A + 1 B; shadow 1 A; no scope objections. **BOTH CHANNELS CONFIRMED EVERY ROUND-9 DISPOSITION GENUINELY CLOSED** — the ordering contract, the three-valued predicate with its two `finally` blocks, the contiguous forms (a)–(k), the mirrors — **and neither found a false-SUCCESS path.** What they found is one unspecified resource lifecycle and two wording overclaims. **[A, shadow] `flushDir`'s DESCRIPTOR was never specified.** The only prescribed directory-flush form is the loop's `if (!flushDir(dir)) return false;`, and the boolean is all the rest of the protocol sees — so `openSync(dir); fsyncSync(fd); return true` satisfies every row, produces the exact `fsync` sequence QPD-3 and QPD-4 assert, and passes every declared mutation while leaking one descriptor per chain member on EVERY successful preservation; a long enough run then exhausts the descriptor limit and the preservations that follow take the shipped only-copy abort. The closure proofs covered only the ARTIFACT descriptor. → **FIX: `flushDir`'s whole body becomes a byte-exact source form** — one `try` for both failure modes (F4's disposition is the same for a failed open and a failed `fsync`), the close in a `finally` through `closeQuietly` (a `close` that errors after a flush that COMPLETED must not fail a preservation; `close` is not a flush). Row **F4** gains the rule; new identity **QPD-7** proves closure on the steady-state path AND after an injected directory `fsync` failure; new proof `directory-descriptor-leaked` removes the finalizer. **The fixture's own design is a measured finding: descriptor numbers are REUSED** — with the protocol correct all four chain opens return the SAME `fd`, so a per-`fd` map or a count of closes reads identical for a leak and a non-leak. The first attempt did exactly that and saw ONE directory instead of four; what discriminates is the set of descriptors STILL OPEN at return. Recorded as trap (vii). **[A, plugin — wording] TWO crash-survival overclaims.** F6 said any artifact surviving a crash holds complete bytes; F10 (vi) said the bytes and inode *do survive*. Both exceed the package's own contract, which establishes completed flush CALLS and their ORDER and nothing about a medium. → **FIX: both rewritten in ORDER-only terms**, and the sweep found two more — F2's *the bytes then survive under no name* and the same phrase inside `containing-directory-not-flushed`'s `why`. **[B, plugin] TEST-CHANGE ACCOUNTING.** The Deliverables cell permitted ONE title change, but `post-commit-descriptor-leaked` selects a D3 test whose shipped title reads *after a failed rename fails LOUD* — a SECOND title change, plus an added assertion the cell's *no existing ASSERTION changes* did not admit. → **FIX: the cell now enumerates all THREE changes to shipped tests** (the migrated seams, TWO titles both forced by row F9's commit, ONE added assertion) and criterion 10 asserts the enumeration; a third title or a second added assertion is a finding. All FIX. **No escalation fires:** no new object, no reopened family, and the guarantee sentence is untouched. **Round 11 runs on both channels as the closing confirmation.** |
 | 9 (`66ca66b9`) | needs-attention / needs-attention | `…gate-raw-round9-codex-plugin.txt`, `…gate-raw-round9-herdr-shadow.txt` (both `c9ea05e8`) | Plugin 1 A + 1 B; shadow 2 A + 1 B + 1 C; no scope objections; nobody re-argued the seven items. **Both channels validated round 8's reorder and its disclosure, and then found the reorder's own limit and a defect in the predicate underneath it.** **[A, plugin] `fsync` AND `read` ARE SEPARABLE.** A same-UID writer to the held inode can write X, let the artifact `fsync` complete over X, and restore the judged bytes J before `readAllAt`: the read and the comparison see J, the identity matches, and the preservation reports SUCCESS although no protocol flush ever covered the final J write. Round 8's instance (v) limited itself to the interval after the comparison, so this was undisclosed. → **THE LAST NARROWING, taken: (v)'s window becomes THE WHOLE CALL**, and the guarantee's flush clause is restated as an ORDER rather than a COVERAGE — the returned bytes were read from the created inode AFTER a flush of it completed and compare equal to the judged bytes, which coincides with *a flush completed over these bytes* only **absent a concurrent writer of that inode**. Three outcomes exhaust (v): an overwrite that PERSISTS is caught (QPD-5 (g) pins it — behaviour the protocol controls), one REVERTED before the read-back is not, one after the comparison diverges the artifact. **No two-write test was added**, per the round-4 rule, and `read-before-flush` is kept because it tests the ordering the protocol DOES control. **[A, shadow] `ownsName` HAD TO BE THREE-VALUED.** Catching every stat error as `false` conflates `ENOENT` and a completed non-matching stat — demonstrably not ours, fail closed — with `EIO`/`EACCES`, where the name may still be OURS. At the post-commit temp gate an indeterminate stat skipped the removal and the run returned **SUCCESS with its own secret-bearing `tmp` link left at a deterministic pid-derived name**; at the last gate and the failure-path recheck it returned **`null` with this invocation's `dest` still present** — against Table D rows **D3** and **D4** as quoted in the spec. → **FIX, and it is PRODUCT BEHAVIOUR, so it is parked as Dispatch precondition item 8:** `ENOENT` and a completed mismatch stay `false`; every other stat failure RAISES row D3's own `WienerdogError` out of `quarantinePreserve` — same class, same route, one added reason, no new abort and nothing added to Table P. The predicate keeps its boolean shape so the four gates read unchanged; the shared `catch`'s close moves into a `finally` because that gate can now throw; the flush-then-verify block RE-THROWS a `WienerdogError` rather than fold it into a preservation failure. Four new cases (QPD-5 (h)(i), QPD-6 (h)(i)) and three new proofs pin detection, propagation and closure separately. **[B, CONVERGED] The superseded source form (e)** — read/compare before the flush — was left standing beside the new one, so `destination-ownership-gate-removed`'s `find` occurred TWICE and the implementer had two mutually exclusive byte-exact instructions. → **DELETED**, the forms re-lettered (a)–(k) with no gap, F6's `read/compare/flush` phrase swept, and the literal occurrence audit re-run and recorded. **[C, shadow] Mirrors** — the disposal stub claimed universal durability (now scoped to POSIX, citing F5/F7(c)); F10 said TWO non-destructive instances while enumerating three (the total is now not written at all, the by-shape rule); QPD-5's identity NAME still said *at ANY point after the commit* (renamed to the seams it tests, and QPD-6 with it); Exact contracts and the Security checklist carried the older inventory (both now name the overwrite and the relink). All FIX. **Escalation (i) FIRES and is answered with a contract, not a patch** — see below. HEAVY (a new failure disposition) → **round 10 runs as a FULL external round.** |
 | 8 (`53e0c713`) | needs-attention / needs-attention | `…gate-raw-round8-codex-plugin.txt`, `…gate-raw-round8-herdr-shadow.txt` (both `2a57897f`) | Plugin 1 A; shadow 1 A + 1 routed to item 1. **Both channels closed R7-B/C/D and the round-7 guarantee survived except at two edges of the same sentence.** **[A, shadow] READ-BEFORE-FLUSH.** The source form read back and compared BEFORE `flushPreservation`, so an overlapping same-inode write landing between the comparison and the `fsync` left the flush completing over newer contents while the call returned the older buffer — "the returned bytes were flushed" false for exactly that interval, and F10 (v) wrongly treated the whole post-read interval as after-the-flush. → **FIX, taken: the flush runs FIRST**, then the read-back and comparison through the held descriptor, `readBack` still the returned buffer, no post-gate re-read. **The directory chain stays contiguous with F1 rather than moving after the read** — an entry's durability does not depend on the content, and keeping the set in one call preserves F6's own internal rule; the only cost is a wasted directory flush on a path that aborts anyway. New QPD-5 case (g) and proof `read-before-flush` distinguish flush-then-read from read-then-flush by staging an in-place overwrite at the ARTIFACT-FLUSH seam. **[A, plugin] SAME-INODE RELINK before the last gate.** A hand holding a spare hard link can, after `qdir`'s flush, unlink `dest` and relink the spare there; `lstat` sees the right `(dev, ino)` and the gate passes, but the entry observed was created after the flush that covered its directory. → **DISCLOSURE, not redesign** (no primitive makes "the entry I flushed" and "the entry I observe" the same object): F10 instance **(vi)**, with the guarantee now saying the chain flushes covered the entries AS THEY STOOD WHEN THEY RAN and the last gate is an IDENTITY check, not a flush guarantee for the entry observed there; cost stated honestly — the NAME may not survive a crash, the BYTES and the INODE do, and the inode keeps a flushed entry only if the hand's spare link is itself durable. **Not pinned with a test**, per the round-4 rule. **[routed → item 1, taken as hygiene]** the return JSDoc said bytes are "flushed, always" and F0 was universal while F5 issues no flush on win32 → every universal flushed/success mirror is now explicitly POSIX-only, including both `Done`-spec clauses (re-derived; V2 re-run). All FIX. **Round 9 runs on both channels as the closing confirmation.** |
@@ -1126,6 +1127,158 @@ against which no durability protocol can hold, and for which every added pin wou
 imply a false guarantee.
 
 ## Round 8 — architect's revision pass, 2026-09-05
+
+### Round 11 fixes — and the loop closes here
+
+**One channel approved outright; the other found wording and nothing else.** The
+shadow's verdict is `approve` with an empty findings array, an item-by-item
+round-10 disposition check and an adversarial trace that maps every counterexample
+it could build onto something this spec already discloses. The plugin agreed on the
+substance — *no false-SUCCESS or new destructive path was found* — and raised three
+sentences.
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [plugin, wording] | Three canonical RED-proof `why` strings still asserted the coverage claim round 9 withdrew: `flush-order-inverted` said a directory entry becomes *durable* while its bytes do not; `returned-bytes-rereads-the-artifact` called the returned bytes *created, verified and flushed*; `read-before-flush` spoke of *the claim that the returned bytes were flushed*. F10 (v) makes that claim false, and round 10's narrowing of F2/F6/F10 did not reach the declaration | **FIX, all three in ORDER terms only.** `flush-order-inverted` now describes *an interval in which the only COMPLETED flush covers an entry whose bytes have had none — row F6's rule stated as an order, never as a claim about what a crash or a device leaves*. `returned-bytes-rereads-the-artifact` now says the returned bytes are the ones *READ BACK AND COMPARED after a flush of that inode had completed*. `read-before-flush` states the inversion as *the bytes returned were read BEFORE any flush of that inode completed while the fsync that did complete ran over newer contents*, and adds the disclaimer outright: **whether a completed flush covered the returned bytes is row F10 (v)'s subject and is not claimed here** |
+| — | [shadow] | **Nothing. `approve`, zero findings, zero scope objections.** Recorded rather than passed over: it is the first verdict in this loop that is not `needs-attention`, and it is what makes round 11 a closing round rather than a twelfth iteration |
+
+### 11.1 The overclaim sweep, and its output
+
+Run over **every** RED-proof `why`, every declared identity NAME, every acceptance
+criterion and the Mirrored Surface Checklist, for
+`flushed|durable|durability|survive|surviving|survival|on the medium|coverage|covered`.
+
+```text
+OVERCLAIM SWEEP — flushed / durable / survive / on the medium / coverage
+
+--- every RED-proof `why`: 4 hit(s) over 26 item(s)
+    [artifact-flush-failure-swallowed] flushed: …the flushed sequence is unchanged…
+    [flush-order-inverted]             flushed: …The flushed SET is identical…
+    [destination-ownership-gate-removed] flushed: …no longer names the inode it verified and flushed…
+    [read-before-flush]                covered: …whether a completed flush covered the returned bytes is
+                                                 row F10 (v)'s subject and is not claimed here…
+--- every declared identity NAME: 0 hit(s) over 8 item(s)
+--- every acceptance criterion: 7 hit(s) over 13 item(s)
+    [crit 1] flushed / covered   [crit 3] flushed ×3   [crit 4] flushed ×2
+--- the Mirrored Surface Checklist: 6 hit(s) over 1 item(s)
+    flushed ×1, on the medium ×1, durability ×3, durable ×1
+
+TOTAL: 17 hit(s)
+```
+
+**All seventeen classified, none an overclaim.** The `why` hits are about the SET
+and the SEQUENCE of flush CALLS the tests record, about **the inode a flush
+completed on** — which is exactly what the protocol establishes — and one is the new
+DISCLAIMER itself. The criterion hits name flush TARGETS (*the directory entry that
+names the artifact is flushed*), proof IDENTIFIERS containing `-not-flushed`, and
+criterion 1's description of what the WRONG ordering produces, which already carries
+round 9's scope beside it. The checklist hits are a registration rule (*every
+criterion naming a flushed object*), V1's `on the medium` count — the over-claim
+machinery itself — the successor spec's filename, the round-9 finding about it
+recorded, and a quotation of the in-file JSDoc this package falsifies.
+
+**One judgement is recorded rather than left implicit.**
+`destination-ownership-gate-removed`'s *"the inode it verified and flushed"* was
+KEPT. It says a flush of that INODE completed, which is order-true and is the whole
+of what the protocol claims; the withdrawn claim was about the returned BYTES. The
+plugin did not flag it, and rewriting correct text to match a pattern would have
+been churn.
+
+### 11.2 Measurements
+
+```text
+THE OCCURRENCE AUDIT, and the field-level proof that `why` cannot have moved it
+  ids identical: 26
+  fields that moved: [directory-descriptor-leaked/why, flush-order-inverted/why,
+                      read-before-flush/why, returned-bytes-rereads-the-artifact/why]
+  PROVED: only `why` moved — every find, replace, marker, occurrences,
+  testNamePattern and expectRed is byte-identical
+    (directory-descriptor-leaked's `why` is round 10's own self-read softening of
+     the unmeasured EMFILE threshold, applied after that tree was built)
+
+  OCCURRENCE AUDIT CLEAN: all 26 finds occur exactly once, all markers absent
+  pre-mutation and present in their replace, and every declared expectRed test
+  name occurs exactly once in the suite
+
+THE V1/V2 BLOCK — unchanged, by hash
+  round 10  sha256 1c5a0267de72e338bb74403cbe99b20cea98068804b06cc1ea37eb7e7a102d2d
+  round 11  sha256 1c5a0267de72e338bb74403cbe99b20cea98068804b06cc1ea37eb7e7a102d2d
+  Neither `Done`-spec clause moved, so V2 is not owed a re-derivation.
+
+npm run lint (worktree)   Linting: 639 file(s) — 0 error(s);
+                          frontmatter check passed: 268 spec(s), 4 agent(s)
+
+NOT RE-RUN, and the reason is stated rather than assumed: `npm test` and
+`npm run red-proofs`. A `why` string is inert — `scripts/red-proofs.js` prints it
+and never evaluates it — and the field-level diff above proves nothing else moved.
+Round 10's run stands: 37 declared proof(s), 37 selected, ALL PROVEN, RUN: PROVEN,
+exit 0; npm test 2630 / 2618 / 0 / 12, exit 0.
+```
+
+### 11.3 CLOSURE, on two independent grounds
+
+**Ground one — weighted closure (`docs/runbooks/codex-review.md`).** Round 11's only
+finding is LIGHT: verification-machinery WORDING inside the frozen surface. It moved
+no canonical row, no source form, no identity, no criterion and no `find` string,
+and the fix was **verified mechanically** — a field-level diff, a re-run occurrence
+audit, a hash comparison of the V-block and a full overclaim sweep. A LIGHT finding
+fixed and verified within the frozen surface owes no further external round.
+
+**Ground two — the pinned STOP CRITERION**, quoted from where it was pinned before
+round 1: the loop closes when an external round returns **no material design
+finding on either channel**. Round 11 returned none. The shadow returned `approve`
+with zero findings on this exact tip; the plugin returned no false-SUCCESS path, no
+new destructive window, no missed flush target, no criterion a wrong implementation
+passes and no scope leak — its single item was wording, which the criterion's own
+sentence disposes of as *"machinery/wording findings at that point are fixed within
+the frozen surface or accepted as named residuals."*
+
+**THE LOOP IS CLOSED.** The spec's `status:` is flipped to `Ready` in the same
+commit, on this record and on
+`docs/specs/logbook/2026-09-05-owner-rulings-durability-queue.md`, which rules all
+eight Dispatch-precondition items.
+
+### 11.4 What the loop CLAIMS — the statement, verbatim and final
+
+Unchanged since round 9; round 10 and round 11 verified it and moved no clause of
+it. It is **§9.4** of this record, and it is not copied here, because a second copy
+is a mirror and this document's own rule is that a mirror goes stale. §9.4 is the
+text; everything else defers to it.
+
+### 11.5 The shape of the loop
+
+**Round zero plus ELEVEN double-channel external rounds** — a Codex plugin gate and
+a hermetic Codex shadow on every one, raws committed BEFORE adjudication, twenty-two
+raw files in this directory.
+
+- **Escalation (i), the ADR-0031 circuit-breaker, fired TWICE, and both times the
+  answer was a CONTRACT rather than a third patch.** At **round 2**, on the same-UID
+  substitution family for the second consecutive round → **row F10, THE ADVERSARY**,
+  which stopped fixing windows one at a time and started stating what is
+  GUARANTEED, what is DISCLOSED and what is OUTSIDE. At **round 9**, on the
+  flushed-bytes clause for the second consecutive round → **"an ORDER, not a
+  COVERAGE"**, which stopped trying to make the clause true and restated what it
+  claims, because `fsync` and `read` are separable operations on a mutable inode and
+  Node fuses nothing.
+- **Escalation (ii), the park-to-the-owner rule, fired FOUR times** — items **5**
+  (round 2, the A12 boundary), **6** (round 4, whether this call removes by pathname
+  at all), **7** (round 6, the supported filesystem) and **8** (round 9, an ownership
+  check that cannot complete). Each is product behaviour the tree does not decide.
+- **Escalation (iii)** — a finding that only re-argues an owner item is a routed
+  scope objection — never had to be invoked: **no channel in eleven rounds
+  re-argued a recommendation.**
+- **What actually changed under review**, in order: the flush set became a fixed
+  chain to an anchor; the read-back moved onto a held descriptor; the commit became
+  no-clobber; provenance moved to the exclusive create; the adversary became a
+  three-tier contract; the guarantee moved to a linearization point; the flush
+  clause became an order; the ownership predicate became three-valued; and a
+  helper's descriptor got a lifecycle. **Every one of those came from a channel, and
+  not one of them was in the round-zero draft.**
+- **The architect's own top-to-bottom self-read, added at round 9 and repeated at
+  rounds 10 and 11**, found **thirteen** further items across two rounds — most of
+  them mirrors the SAME pass had just created. That is the loop's most transferable
+  lesson: a checklist guards surfaces that exist, and cannot guard the one the
+  current edit is writing.
 
 ### Round 10 fixes
 
