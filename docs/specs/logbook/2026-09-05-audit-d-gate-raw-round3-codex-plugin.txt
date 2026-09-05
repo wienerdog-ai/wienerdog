@@ -1,0 +1,95 @@
+# Design gate raw — round 3 — Codex plugin adversarial review — WP-audit-d-code-derived-recipients
+# tip reviewed: 937bae59c84f5989cba7e37b1c3aab098db7a055 ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a07141-2362-7250-84ed-8bc39e3ee66d).
+[codex] Turn started (01a07141-2438-71e2-9bea-b209938af3c1).
+[codex] Assistant message captured: I’ll re-measure the round-2 fixes, execute the recipient pipeline and verification blocks, an...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f..937bae59 -- docs...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff 8c52808f..937bae59 -- docs... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '214,540p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '214,540p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '545,950p'"
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/gmail.js; nl -ba src/cli/gws-broker.js; nl -ba tests/unit/gws-br...
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/broker/verbs.js; nl -ba src/gws/broker/registry.js; nl -ba src/g...
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/gmail.js; nl -ba src/cli/gws-broker.js; nl -ba tests/unit/gws-br... (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '545,950p'" (exit 0)
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/broker/verbs.js; nl -ba src/gws/broker/registry.js; nl -ba src/g... (exit 0)
+[codex] Assistant message captured: The new step-0 guard appears to mask the `reply-headers-unasserted` mutation: it rejects ever...
+[codex] Running command: /bin/zsh -lc 'nl -ba src/gws/gmail.js; nl -ba src/cli/gws-broker.js; nl -ba tests/unit/gws-br...
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/gws/gmail.js; nl -ba src/cli/gws-broker.js; nl -ba tests/unit/gws-br... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '795,840p'; rg...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '795,840p'; rg... (exit 0)
+[codex] Searching:
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as...
+[codex] Command failed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as... (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse... (exit 0)
+[codex] Searching:
+[codex] Assistant message captured: The 39 reconstructed cases pass, including both round-2 mailbox examples. V5 rejects all six ...
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse...
+[codex] Command failed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse... (exit 1)
+[codex] Running command: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js'
+[codex] Command completed: /bin/zsh -lc 'node --test tests/unit/gws-broker.test.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),vm=require('\\''node:vm'\\''),asse... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,224p' docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md; se...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,224p' docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md; se... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''), vm=require('\\''node:vm'\\''), as... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),cp=require('\\''node:child_process...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''),cp=require('\\''node:child_process... (exit 0)
+[codex] Assistant message captured: Criterion 8 catches the old helper and both old consumer paths in the in-memory assembly test...
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''); const log=fs.readFileSync('\\''do...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require('\\''node:fs'\\''); const log=fs.readFileSync('\\''do... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --exit-code 8c52808f 937bae59 -- src/gws/broker/verbs.js src/gws/broke...
+[codex] Command completed: /bin/zsh -lc 'git diff --exit-code 8c52808f 937bae59 -- src/gws/broker/verbs.js src/gws/broke... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet. The 39 reconstructed cases p...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet. The 39 reconstructed cases pass, but V5 still accepts a broken schema, AUD-D5's mutation is masked, and Subject truncation contradicts the threading guarantee.
+
+Executed on Node v25.9.0:
+- `git status --porcelain`, `git rev-parse HEAD`, and the two-file diff against 8c52808f: exit 0. HEAD matches 937bae59.
+- `nl`, `sed`, and `rg` inspections of the two documents and seven cited files: exit 0.
+- `node -e` ordered-pipeline harness, extracting the derived regexes: exit 0; 39/39 cases passed, including both R2-B examples. Also exercised padding, eight threading combinations, Unicode truncation, folded headers, and pre-bound timing.
+- `node -e` V5 countermodel harness executing the extracted JavaScript unchanged: exit 0. Compliant record passed; six recorded weakenings and base/absent records failed; root-schema-type mutant passed.
+- Verbatim V5 shell block on this branch: inner Node exit 1, as expected before implementation; block exit 0 because its final command is echo.
+- `node -e` assembly harness using the cited source with in-memory spec changes: exit 0. Compliant assembly passed all six states; old helper, derivation, refusal, and combined-consumer mutations failed. Default-loader pin passed.
+- `node -e` actual MIME-assertion mutation comparison: exit 0; all 15 injected cases stopped before either builder ran.
+- `node --test tests/unit/gws-broker.test.js`: exit 0, 2/2 passed.
+- Additional historical address-core timing probe: exit 0, quadratic growth reproduced; this was not the complete historical mailbox regex.
+- Preliminary harness attempts exited 1 for a sandbox-blocked heredoc, an extraction error, and a syntax error; corrected runs are reported above.
+- Final scoped `git diff --exit-code` checks and `git status --porcelain`: exit 0. Status remained exactly `?? node_modules`.
+
+R2-C and R2-D are closed on the evidence inspected. No surviving uncorrected recipient-provenance claim was found. The five reply-header sources are covered; threadId remains a JSON field, and no step-7-only CR/LF injection path was found. Full-suite/lint/RED-lane runs were not performed.
+
+Findings:
+- [high] [A] Step 0 makes the required AUD-D5 mutation unkillable (docs/specs/WP-audit-d-code-derived-recipients.md:480)
+  R2-F remains open under the new order. The declared mutation removes assertions only from buildMime, but criterion 6 now exercises step 0. Executing the mutation against 15 per-field CR/LF inputs produced identical refusals and zero builder invocations in both versions. Direct builder injection confirmed that the mutation itself was active. Consequently this declaration cannot become PROVEN while its identity tests the stated pipeline. Simply moving the mutation to step 0 also risks reddening AUD-D3, which independently requires the same refusal fixtures.
+  Recommendation: Separate the step-0 refusal proof from a direct buildMime defence-in-depth proof. Assert the upstream refusal independently of downstream assertions, and reconcile AUD-D3/AUD-D5 overlap before prescribing exact failing sets.
+- [medium] [A] V5 omits the root schema type from its complete-record comparison (docs/specs/WP-audit-d-code-derived-recipients.md:717-722)
+  R2-E is only partially closed. Changing only create_reply_draft.inputSchema.type from 'object' to 'string' passes the extracted V5 block with exit 0. Calling the real registry with valid {id, body} then fails with 'broker schema must be an exact object schema (additionalProperties:false)'. The projection checks required, properties, and additionalProperties but silently discards type, allowing an unusable verb through the claimed complete schema verification.
+  Recommendation: Include inputSchema.type in the canonical comparison, require 'object', and add this countermodel to the executable V5 checks.
+- [medium] [B] Subject truncation defeats the promised source threading (docs/specs/WP-audit-d-code-derived-recipients.md:378-379)
+  The pipeline accepts a source Subject of 'Re: ' + 'a'.repeat(508) + 'tail', changes its length from 516 to 512, and still emits the source threadId and reply headers. Gmail requires matching Subjects when adding a draft to a thread; therefore the claimed threading invariant is unsupported for this accepted input. This consequence is inferred from the documented API requirement, not a live Gmail experiment. A UTF-16 slice also split the emoji in 'a'.repeat(507) + '😀', producing U+FFFD during MIME encoding. Neither case is refused or covered by the executed 39-case table. This meets the stated contract-failure escalation condition. [Gmail Message contract](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages#Message)
+  Recommendation: Route this through the required owner ruling. Resolve subject preservation versus an explicit loss-of-threading residual, specify Unicode-safe truncation if retained, and cover long and boundary-split subjects.
+- [medium] [B / LIGHT] Unbounded horizontal trimming still precedes the bound (docs/specs/WP-audit-d-code-derived-recipients.md:374-375)
+  Step 1 requires a trimmed-view selection before step 2. A straightforward compliant implementation using s.replace(/^[ \t]+|[ \t]+$/g, '') passes all 39 cases but performs quadratic work on Reply-To = 'a' + ' '.repeat(n) + 'x'. The executed pipeline took approximately 74/299/1179 ms for n=8000/16000/32000, with zero grammar calls. The grammar is bounded correctly; the earlier trimming operation is not. The oversized input ultimately receives the existing step-2 refusal, so this is LIGHT under the stipulated table-refusal rule.
+  Recommendation: Specify a linear non-horizontal-whitespace predicate for selection, without constructing a trimmed value. Perform actual trimming only after the selected raw value passes the bound, and check pre-bound work in verification.
+- [medium] [B / LIGHT] Item 8 rests on a false folding premise (docs/specs/WP-audit-d-code-derived-recipients.md:820-822)
+  The claim that conforming mail cannot reach this refusal is false. Unfolding removes folding CRLF; RFC 5322 §2.2.3 explicitly permits unfolded fields without a length restriction. The executed example used a valid display-name phrase with physical lines at most 81 characters, yielding a 1239-character unfolded value with no CR/LF: step 0 passed and step 2 refused. The same false rationale appears in the logbook at lines 657–660. This challenges the recommendation's factual premise, not the owner's choice of a bound. The existing over-bound rule already refuses the input, so classification is LIGHT. [RFC 5322 §2.2.3](https://www.rfc-editor.org/rfc/rfc5322#section-2.2.3)
+  Recommendation: Correct both documents to describe 998 as an operational limit on unfolded values that can reject conforming mail. Preserve the recommendation only with that compatibility cost stated accurately.
+
+Next steps:
+- Routed scope objections: none.
+- Apply the stated owner-ruling escalation to the accepted long-Subject/threading counterexample; do not treat it as another regex revision.
+- Resolve the V5 and Table C verification defects and correct both LIGHT findings before claiming round-2 closure.
+rc=0
+PORCELAIN: identical
