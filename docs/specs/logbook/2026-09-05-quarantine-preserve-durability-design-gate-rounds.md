@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| 9 (`66ca66b9`) | needs-attention / needs-attention | `…gate-raw-round9-codex-plugin.txt`, `…gate-raw-round9-herdr-shadow.txt` (both `c9ea05e8`) | Plugin 1 A + 1 B; shadow 2 A + 1 B + 1 C; no scope objections; nobody re-argued the seven items. **Both channels validated round 8's reorder and its disclosure, and then found the reorder's own limit and a defect in the predicate underneath it.** **[A, plugin] `fsync` AND `read` ARE SEPARABLE.** A same-UID writer to the held inode can write X, let the artifact `fsync` complete over X, and restore the judged bytes J before `readAllAt`: the read and the comparison see J, the identity matches, and the preservation reports SUCCESS although no protocol flush ever covered the final J write. Round 8's instance (v) limited itself to the interval after the comparison, so this was undisclosed. → **THE LAST NARROWING, taken: (v)'s window becomes THE WHOLE CALL**, and the guarantee's flush clause is restated as an ORDER rather than a COVERAGE — the returned bytes were read from the created inode AFTER a flush of it completed and compare equal to the judged bytes, which coincides with *a flush completed over these bytes* only **absent a concurrent writer of that inode**. Three outcomes exhaust (v): an overwrite that PERSISTS is caught (QPD-5 (g) pins it — behaviour the protocol controls), one REVERTED before the read-back is not, one after the comparison diverges the artifact. **No two-write test was added**, per the round-4 rule, and `read-before-flush` is kept because it tests the ordering the protocol DOES control. **[A, shadow] `ownsName` HAD TO BE THREE-VALUED.** Catching every stat error as `false` conflates `ENOENT` and a completed non-matching stat — demonstrably not ours, fail closed — with `EIO`/`EACCES`, where the name may still be OURS. At the post-commit temp gate an indeterminate stat skipped the removal and the run returned **SUCCESS with its own secret-bearing `tmp` link left at a deterministic pid-derived name**; at the last gate and the failure-path recheck it returned **`null` with this invocation's `dest` still present** — against Table D rows **D3** and **D4** as quoted in the spec. → **FIX, and it is PRODUCT BEHAVIOUR, so it is parked as Dispatch precondition item 8:** `ENOENT` and a completed mismatch stay `false`; every other stat failure RAISES row D3's own `WienerdogError` out of `quarantinePreserve` — same class, same route, one added reason, no new abort and nothing added to Table P. The predicate keeps its boolean shape so the four gates read unchanged; the shared `catch`'s close moves into a `finally` because that gate can now throw; the flush-then-verify block RE-THROWS a `WienerdogError` rather than fold it into a preservation failure. Four new cases (QPD-5 (h)(i), QPD-6 (h)(i)) and three new proofs pin detection, propagation and closure separately. **[B, CONVERGED] The superseded source form (e)** — read/compare before the flush — was left standing beside the new one, so `destination-ownership-gate-removed`'s `find` occurred TWICE and the implementer had two mutually exclusive byte-exact instructions. → **DELETED**, the forms re-lettered (a)–(k) with no gap, F6's `read/compare/flush` phrase swept, and the literal occurrence audit re-run and recorded. **[C, shadow] Mirrors** — the disposal stub claimed universal durability (now scoped to POSIX, citing F5/F7(c)); F10 said TWO non-destructive instances while enumerating three (the total is now not written at all, the by-shape rule); QPD-5's identity NAME still said *at ANY point after the commit* (renamed to the seams it tests, and QPD-6 with it); Exact contracts and the Security checklist carried the older inventory (both now name the overwrite and the relink). All FIX. **Escalation (i) FIRES and is answered with a contract, not a patch** — see below. HEAVY (a new failure disposition) → **round 10 runs as a FULL external round.** |
 | 8 (`53e0c713`) | needs-attention / needs-attention | `…gate-raw-round8-codex-plugin.txt`, `…gate-raw-round8-herdr-shadow.txt` (both `2a57897f`) | Plugin 1 A; shadow 1 A + 1 routed to item 1. **Both channels closed R7-B/C/D and the round-7 guarantee survived except at two edges of the same sentence.** **[A, shadow] READ-BEFORE-FLUSH.** The source form read back and compared BEFORE `flushPreservation`, so an overlapping same-inode write landing between the comparison and the `fsync` left the flush completing over newer contents while the call returned the older buffer — "the returned bytes were flushed" false for exactly that interval, and F10 (v) wrongly treated the whole post-read interval as after-the-flush. → **FIX, taken: the flush runs FIRST**, then the read-back and comparison through the held descriptor, `readBack` still the returned buffer, no post-gate re-read. **The directory chain stays contiguous with F1 rather than moving after the read** — an entry's durability does not depend on the content, and keeping the set in one call preserves F6's own internal rule; the only cost is a wasted directory flush on a path that aborts anyway. New QPD-5 case (g) and proof `read-before-flush` distinguish flush-then-read from read-then-flush by staging an in-place overwrite at the ARTIFACT-FLUSH seam. **[A, plugin] SAME-INODE RELINK before the last gate.** A hand holding a spare hard link can, after `qdir`'s flush, unlink `dest` and relink the spare there; `lstat` sees the right `(dev, ino)` and the gate passes, but the entry observed was created after the flush that covered its directory. → **DISCLOSURE, not redesign** (no primitive makes "the entry I flushed" and "the entry I observe" the same object): F10 instance **(vi)**, with the guarantee now saying the chain flushes covered the entries AS THEY STOOD WHEN THEY RAN and the last gate is an IDENTITY check, not a flush guarantee for the entry observed there; cost stated honestly — the NAME may not survive a crash, the BYTES and the INODE do, and the inode keeps a flushed entry only if the hand's spare link is itself durable. **Not pinned with a test**, per the round-4 rule. **[routed → item 1, taken as hygiene]** the return JSDoc said bytes are "flushed, always" and F0 was universal while F5 issues no flush on win32 → every universal flushed/success mirror is now explicitly POSIX-only, including both `Done`-spec clauses (re-derived; V2 re-run). All FIX. **Round 9 runs on both channels as the closing confirmation.** |
 | 7 (`a4d6be1b`) | needs-attention / needs-attention | `…gate-raw-round7-codex-plugin.txt`, `…gate-raw-round7-herdr-shadow.txt` (both `fc92939e`) | Plugin 1 A; shadow 1 A + 2 B; no scope objections. **Both channels validated every round-6 fix** — the complete `ownsName` body, the new QPD cases, item 7, the chains, three gated removals, create failure removing nothing, flush failure not swallowed. **[A, CONVERGED in substance, from two sides] GUARANTEED (2) OVERCLAIMED.** It said *no substitution, at any point, can make this invocation report SUCCESS over bytes it did not create, verify and flush*, and the design admits two counterexamples: the shadow's **after-gate replacement of `dest`** — `tmp` is already gone, closing the fd releases the created inode, and the returned `name`, which the caller publishes at `validate.js:1167`, now resolves to foreign bytes; and the plugin's **in-place overwrite of the SAME inode after the read-back** — identity passes because it IS this call's inode, so success is reported while the artifact holds bytes no completed flush covered. → FIX by stating the guarantee at its **LINEARIZATION POINT**: the RETURNED BYTES are exactly what this invocation created, wrote through its own descriptor, read back through that same descriptor and flushed — never a later re-read — and the NAME was bound to that inode **at the last gate and not after**. Both counterexamples become disclosed instances **(iv)** and **(v)** of F10, and the obvious "fix" is shown to be worse: a post-flush RE-READ would only narrow the window while making the returned bytes something the call never verified, which the new proof `returned-bytes-rereads-the-artifact` now forbids. Swept: F0, F10, the return JSDoc, both `Done`-spec clauses (re-derived, V2 re-run), Exact contracts, the Security checklist and the closing statement. **[A, shadow] Descriptor lifetime** — the post-commit temp removal raises Table D row D3 while `fd` must stay open, and no required form put it inside a finalizer, so the throw escaped with the descriptor open and F8's "closed in every case" was false. → FIX: ONE `try/finally` covers the whole post-create descriptor lifetime; the failure-path `dest` removal stays outside it, after the close. The shipped D3 temp test is extended to prove closure, and `post-commit-descriptor-leaked` mutates the finalizer away. **[C, shadow] A reversed negation** in the round-6 closing statement — "no removal shape whose ownership test is separable from its act" — inverted the stated reason the residual exists, in the very statement round 7 was asked to verify verbatim. → FIXED, and the phrase grepped everywhere. All FIX. **Round 8 runs on both channels as the closing confirmation.** |
 | 6 (`1e38f90d`) | needs-attention / needs-attention | `…gate-raw-round6-codex-plugin.txt`, `…gate-raw-round6-herdr-shadow.txt` (both `d19941a1`) | Plugin 2 B + 1 C; shadow 2 A + 2 B; no scope objections. **BOTH CHANNELS VALIDATED THE DESIGN** — no false-SUCCESS path in the prescribed sequence, exactly three pathname removals each gated, the create-failure branch removing nothing, the chains complete and ordered, A12 cited correctly, the stub carrying its routed items. What remained is **evidence form and mirror rot**: no new object, no reopened family. **[A, shadow] `ownsName`'s failure-closed form was unspecified and untested** — F8 makes it load-bearing at four gates but pinned only its `lstat` line, so a predicate with no `catch` passed every identity and would emit a raw `ENOENT` (leaking the fd) the moment the in-scope user deletes a name before a gate; and a comparison narrowed to `Number` lets DISTINCT inodes above `MAX_SAFE_INTEGER` compare equal and authorize a deletion. → FIX: the WHOLE BODY becomes a byte-exact source form, F8 states what `false` means at each gate (fail closed, remove nothing, descriptor still closed), QPD-5 gains an ENOENT case and a doctored-bigint case, QPD-6 gains an ENOENT case, and two proofs — `ownership-check-not-failure-closed`, `ownership-check-narrows-to-number` — pin them. **[A, shadow] O_EXCL provenance was unscoped** against Node's own "might not work with network file systems" caveat, while a user's core can sit on a network-mounted home. → settled as a PRODUCT boundary: **Dispatch precondition item 7** — state the precondition (a local POSIX filesystem with atomic `O_EXCL` and hard links), disclose network-mounted cores as a named residual (what fails: exclusivity, hence provenance under overlapping runs; what holds: everything that consults only the held descriptor), and add **no runtime check**, because a cheap probe cannot tell "this filesystem does not honour `O_EXCL`" from "nothing raced me just now". **[B, converged] QPD-6 said SIX cases and listed five** → `(f)` added and the row re-counted to seven with the ENOENT case. **[B, converged] F10's operative mirrors still carried the round-4 model** ("three residuals, one destructive") in Exact contracts, the proof-scope paragraph and the Security checklist, and the checklist's blast-radius entry still said five tests / two seams → all rewritten, and the count audit extended to cardinals ONE–FOUR, which is exactly how they survived. **Correction carried:** Linux `fsync` does NOT require a write-open descriptor — that is System V's rule — so F5's rationale for `O_RDWR` is now "this function writes through it". All FIX. **Round 7 runs on both channels as the closing confirmation.** |
@@ -1124,6 +1125,186 @@ against which no durability protocol can hold, and for which every added pin wou
 imply a false guarantee.
 
 ## Round 8 — architect's revision pass, 2026-09-05
+
+### Round 9 fixes
+
+**Escalation (i) FIRES, and the answer is a contract rather than a third patch.**
+Rounds 8 and 9 both landed a finding on the same clause — *the returned bytes were
+flushed*. ADR-0031's circuit-breaker says the second one is a design question, and
+it is: `fsync` and `read` are separable operations on a MUTABLE inode, and **Node
+exposes nothing that fuses them**, so no ordering of the two can bind a completed
+flush to the buffer a later read returns. Round 8 reordered them, which was worth
+doing and is kept; round 9 stops trying to make the clause true and **restates what
+it claims** — an ORDER, not a COVERAGE — with the coincidence scoped to *absent a
+concurrent writer of that inode* and instance **(v)** widened to the whole call.
+There is no third ordering fix to attempt, and the row now says so. **Escalation
+(ii) also fires, on the second finding:** the three-valued predicate changes what a
+user sees, so it is PARKED with the owner as **Dispatch precondition item 8** rather
+than settled in prose. **Escalation (iii)** did not arise — neither channel
+re-argued an owner item.
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [plugin] | `fsync` and `read` are separable. Write X, let the artifact flush complete over X, restore the judged bytes J before `readAllAt`: read and comparison see J, identity matches, SUCCESS — and no protocol flush ever covered the final J write. Round 8's (v) was limited to *after the comparison*, so the case was undisclosed | **THE LAST NARROWING, taken.** Instance (v) becomes **A CONCURRENT WRITER OF THE SAME INODE, window = the whole call**, with three exhaustive outcomes: **(v-a)** an overwrite that PERSISTS is caught by the comparison — the one the protocol controls, pinned by QPD-5 (g); **(v-b)** one REVERTED before the read-back is not caught, and its cost is stated (after a crash the artifact may hold the intruding bytes under a name reported as verified); **(v-c)** one after the comparison diverges the artifact from the returned bytes. The GUARANTEED sentence's flush clause is now scoped twice — POSIX-only (F5) **and** *a flush of that inode completed BEFORE the read, which is not a claim that a flush completed over the bytes returned, absent a concurrent writer of that inode*. Swept: F0, F6, F10 (GUARANTEED (2), the DISCLOSED lead, instances (iv) and (v)), the return JSDoc, Exact contracts, the Security checklist, criteria 1 and 5 and 6, the P0b clause (re-derived, V2 re-run) and the closing statement. **No two-write test**, by the round-4 rule; `read-before-flush` is kept |
+| **A2** [shadow] | `ownsName` caught EVERY stat error as `false`, conflating *demonstrably not ours* with *could not look*. At the post-commit temp gate an `EIO` skipped the removal and the run reported **SUCCESS with its own secret-bearing `tmp` link still present**; at the last gate and the failure-path recheck it returned **`null` with its own `dest` still present** — against the shipped Table D rows **D3** and **D4** the spec itself quotes | **FIX, and it is product behaviour, so it is also Dispatch precondition item 8.** `ENOENT` and a completed non-matching stat stay `false` (fail closed, remove nothing); **every other stat failure RAISES Table D row D3's own `WienerdogError` out of `quarantinePreserve`** — same class, same uncaught route through both call sites, one added reason, no new abort, nothing added to Table P's taxonomy. **The predicate keeps its boolean shape and THROWS**, rather than returning a tri-state token, for a measured reason: `if (ownsName(tmp, fd))` reads unchanged at all four gates, six `find` strings stay valid, and a returned `'absent'` string would be TRUTHY and authorize the very unlink the gate exists to deny. Two source forms follow: the shared `catch`'s close moves into a **`finally`** (a gate that can throw is a gate the close may not sit after), and the flush-then-verify block **re-throws** a `WienerdogError` instead of folding it into a preservation failure. New cases **QPD-5 (h)(i)** and **QPD-6 (h)(i)**; new proofs `ownership-check-collapses-indeterminate`, `ownership-error-swallowed-at-last-gate` and `shared-catch-descriptor-leaked` — detection, propagation and closure are three behaviours and no one proof sees them all. `ownership-check-not-failure-closed` re-derived onto the `ENOENT` arm |
+| **B1** [both, CONVERGED] | Round 8 left the superseded source form **(e)** — read and compare before `flushPreservation` — standing beside the new one. `destination-ownership-gate-removed`'s `find` therefore occurred **twice** in the prescribed region, and the implementer had two mutually exclusive byte-exact instructions | **DELETED.** One authoritative flush → read → compare block remains; the forms are re-lettered **(a)–(k)** with no gap and no duplicate construct; F6's stale `read/compare/flush` phrase is swept (grep: zero remaining). **The literal occurrence audit was re-run and its output is recorded in §9.1** |
+| **C1** [shadow] | Four mirrors: the disposal stub claimed durability universally; F10 said **TWO** non-destructive instances while enumerating three; QPD-5's identity NAME still said *a substitution at dest, at ANY point after the commit, FAILS the preservation*; Exact contracts and the Security checklist carried the older residual inventory | **ALL FIXED.** The stub is scoped to POSIX and cites **F5/F7(c)** rather than duplicating the guarantee. F10 stops writing the total entirely — the by-shape rule applied inside the owning cell, because three consecutive rounds each added one instance. **Both** identities are renamed to the seams they test (QPD-6 too, since it gained the LOUD cases), and every `expectRed` entry, the table row and the suite were renamed in one pass. Exact contracts and the Security checklist now name the overwrite and the relink |
+
+### 9.1 Measurements
+
+```text
+THE CANDIDATE (round-8 form + the three-valued predicate, its finally and its rethrow)
+  npm test                       tests 2629 / pass 2617 / fail 0 / skipped 12   exit 0
+    (UNCHANGED from round 8: the four new cases live INSIDE QPD-5 and QPD-6)
+  npm run red-proofs (unfiltered)
+    36 declared proof(s), 36 selected — ALL PROVEN; RUN: PROVEN                 exit 0
+    criterion 6 — destination-ownership-gate-removed; destination-removal-not-gated;
+                  ownership-check-follows-symlinks; ownership-check-not-failure-closed;
+                  ownership-check-narrows-to-number; returned-bytes-rereads-the-artifact;
+                  ownership-check-collapses-indeterminate;
+                  ownership-error-swallowed-at-last-gate
+    criterion 7 — commit-clobbers-destination; tmp-removal-dropped; tmp-removal-not-gated;
+                  d1-cleanup-not-gated; provenance-adopted-not-created;
+                  create-failure-removes-unowned; post-commit-descriptor-leaked;
+                  shared-catch-descriptor-leaked
+  Every new expectRed set correct on the first run.
+
+THE LITERAL OCCURRENCE AUDIT, re-run on the rehearsal tree (finding B1's ask)
+  OCCURRENCE AUDIT CLEAN: all 25 finds occur exactly once, all markers absent
+  pre-mutation and present in their replace, and every declared expectRed test
+  name occurs exactly once in the suite
+  — and it FAILED FIRST, which is why it is recorded:
+      FAIL ownership-error-swallowed-at-last-gate find_occurrences=0 declared=1
+    the new proof's find spanned four lines of the catch, and the applier wrote a
+    comment inside it. Re-derived as ONE line; re-run clean.
+
+V1/V2 re-run in SEVEN trees, because the P0b clause was re-derived twice this round
+  untouched RED rc=1 | compliant V1 OK / V2 OK rc=0 | wrapped compliant rc=0
+  over-claim fixture RED rc=1 | P0b clause in cell 2 RED rc=1 | unrelated line RED rc=1
+  differently worded over-claim  V1 OK / V2 OK  rc=0   ← still the measured bound
+  The V1/V2 block itself is BYTE-IDENTICAL to round 8's (diffed; it did not change).
+
+npm run lint (worktree)   Linting: 639 file(s) — 0 error(s);
+                          frontmatter check passed: 268 spec(s), 4 agent(s)
+```
+
+### 9.2 The architect's own fresh read of the whole spec, top to bottom
+
+**Requested because rounds 5–9 each found rot in mirrors the previous pass claimed
+swept.** Eleven findings, hunting the three shapes asked for — two byte-exact forms
+prescribing different things, a count or inventory not derived from its table, a
+universal not scoped by F5/F7/F10. **Four of them were introduced by round 9 itself,
+in the same session, which is the argument for doing this before committing rather
+than after.**
+
+1. **F10 instance (iv)** still said the returned `bytes` remain what was *verified
+   and flushed* — the exact overclaim A1 removes, sitting in the row that owns the
+   disclosure. → *verified after a completed flush of that inode*.
+2. **The NEW QPD-5 identity NAME**, written earlier in this same pass, said *the
+   returned bytes are the ones flushed and compared*. Same overclaim, in a CONTRACT
+   string that goes into the declaration, the suite and the roll-up. → *read after
+   the flush and compared*; caught before the lane ran, and everything re-measured.
+3. **Exact contracts' "Nothing else in this package has a shape … no new message"**
+   went FALSE this round: item 8's raise carries message text. → the one new thing
+   is named, with its class (D3's `WienerdogError`), its route and its item.
+4. **Dispatch item 2's "This package adds no new abort, no new message and no new
+   field"** was a package-wide claim about an item-local disposition. → scoped to the
+   item, with a pointer to item 8 for the one that does add a message.
+5. **Out of scope still declined "row F10's residual (c)"** — a letter F10 stopped
+   using at round 5, when the residuals were re-labelled (i)–(iv). **Four rounds
+   stale**, and no count audit could see it because it is a letter, not a number.
+   → *the check-then-unlink CLASS*.
+6. **Criterion 6's closing inventory** still said *plus the after-gate success
+   window*, one non-destructive instance, where F10 now enumerates three. → defers
+   to F10 and counts nothing.
+7. **F10's shipped column** said *FOUR consecutive review rounds each found another
+   window*, phrased as a live count in a document now at round 9. → bounded to
+   *rounds 1 through 4*, which is what it was always describing.
+8. **The P0b clause** scoped the flush (POSIX) and the identity (narrows, does not
+   close) but NOT the filesystem precondition — while the same clause asserts the
+   no-clobber commit's *can never write over a destination another invocation
+   already holds*, which rests on exactly that precondition. → item 7's scope added,
+   V2 re-run.
+9. **Criterion 12's "two `stat`s"** — a prose count of gates F8 owns, and F8 has
+   four. → made shape-based.
+10. **Table C's and criterion 11's "criteria 2, 3, 4, 6 and 7 each carry more than
+    one proof"** — a per-criterion inventory in prose, **stale since round 8**, when
+    criterion 1 gained `read-before-flush`. → both replaced by the shape.
+11. **No duplicate byte-exact form remains**: the eleven `js` fences under
+    Implementation notes were dumped and read as a set — one construct each, letters
+    (a)–(k) contiguous, no gap and no second form of anything.
+
+**The pattern worth naming:** every one of 1–4 and 10 is a mirror of a claim the
+SAME pass had just narrowed. The Mirrored Surface Checklist catches surfaces; what
+it does not catch is a surface the current edit is CREATING. So the self-read
+belongs after the edits and before the commit, not instead of the checklist.
+
+### 9.3 What round 9 did NOT change
+
+- **The flush protocol.** The set, the fixed chain, the anchor, the order inside the
+  set, the win32 branch, and F4's failure disposition are as round 8 left them.
+- **The commit and the provenance.** The exclusive create, the no-clobber `linkSync`,
+  the single descriptor, the returned buffer (`readBack`, never a re-read).
+- **The three pathname removals and their disclosed class.** Item 6 is untouched.
+- **The guarantee sentence V1 pins** — `Durability here is what the platform's flush
+  provides and no more…` — byte-identical, and so is the whole V1/V2 block.
+- **The suite totals** (`2629 / 2617 / 0 / 12`) and the six QPD identities.
+- **Table P and Table D.** Item 8 adds a reason inside D3's existing class; it moves
+  no row, no message taxonomy and no abort field.
+
+### 9.4 The statement the closing round is asked to verify verbatim
+
+**GUARANTEED.** A preservation that reports success returns **bytes that are exactly
+what this invocation created, wrote through its own descriptor, and then — after a
+flush of that inode had COMPLETED — read back through that same descriptor and
+byte-compared equal to the judged bytes, never a later re-read** — the flush having
+completed for that inode and for every directory entry it depends on, in the order
+Table F fixes, BEFORE the comparison; and the returned **name was a regular file
+naming that inode AT THE LAST GATE**. Against **overlapping runs** — the concurrency
+this product creates itself — this holds by construction on the supported
+filesystem: distinct pids give distinct temp names, and F9's commit refuses a
+destination it did not create. Against **the user's own hand**, no substitution OF
+THE NAME before the last gate can make either half false, no name deleted before a
+gate produces an error escaping this function, and **no ownership check that cannot
+COMPLETE is ever answered with a guess** — it raises Table D row D3's own error
+rather than skip a required cleanup or unlink a name it could not confirm. **Every
+"flushed" clause is POSIX-only: on win32 the protocol issues no flush and claims
+none (row F5). And every "flushed" clause states an ORDER, not a COVERAGE:** the
+returned bytes were read after a completed flush of their inode, which coincides
+with *a flush completed over these bytes* only **absent a concurrent writer of that
+inode** — DISCLOSED (2), instance (v).
+
+**DISCLOSED.** *(1)* One class — a check-then-unlink window — with an instance at
+each of this call's three pathname removals, because Node ≥18 has no
+descriptor-relative unlink and **no removal shape whose ownership test is NOT
+separable from its act**; equivalently, Node exposes no operation that makes the
+ownership test inseparable from the unlink. **All three can delete a replacement; on
+the post-commit temp removal the run still reports success, so that one is silent.**
+*(2)* Three instances that destroy nothing and are what the guarantee is narrowed
+around: **`dest` substituted after the last gate**, which makes the returned NAME
+resolve to bytes this call never verified while the returned BYTES remain what it
+verified; **a CONCURRENT WRITER of the same inode, whose window is THE WHOLE CALL**,
+because `fsync` and `read` are separable operations on a mutable object — an
+overwrite that PERSISTS is caught by the comparison, one REVERTED before the
+read-back is not, and one after the comparison leaves the artifact diverged from the
+returned bytes; and **a same-inode RELINK before the last gate**, where the entry the
+gate observes was created after the flush that covered its directory — **the chain
+flushes covered the entries as they stood when they ran, and the last gate is an
+identity check, not a flush guarantee for the entry observed there.** None is
+closable: no primitive excludes a same-UID writer, none binds a flush to the
+snapshot a later read returns, and none makes the entry flushed and the entry
+observed the same object. *(3)* A filesystem precondition: a local POSIX filesystem
+with atomic `O_EXCL` and hard links. On a network-mounted core exclusivity — and
+therefore provenance under overlapping runs — is not guaranteed; everything that
+consults only the held descriptor still holds. **Every instance of (1) and (2) is
+untested as a residual by design, with exactly one exception that is not a residual:
+the overwrite that PERSISTS is behaviour the protocol controls, and QPD-5 case (g)
+pins it.** Dispatch precondition items 6, 7 and 8 price what would remove, bound or
+dispose of the rest.
+
+**OUTSIDE.** Arbitrary same-user native code — `docs/THREAT-MODEL.md`'s **A12** —
+against which no durability protocol can hold, and for which every added pin would
+imply a false guarantee.
 
 ### Round 8 fixes
 
