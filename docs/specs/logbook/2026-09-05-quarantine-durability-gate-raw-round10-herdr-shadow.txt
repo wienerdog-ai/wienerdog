@@ -1,0 +1,176 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 10, detached worktree at 9047e954 (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 9047e9549380ebc6e8f8eec1516063ee448bd3cd vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "verdict": "needs-attention",
+  "summary": "No false-success path was found in the prescribed artifact sequence, and the round-9 ordering and three-valued ownership fixes are genuinely represented. Do not ship the spec yet: directory-descriptor closure remains unspecified and untested, allowing a conforming implementation to exhaust file descriptors during a large preservation run.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../focus-qd10.txt",
+      "exit_status": 0,
+      "result": "Loaded the vendored operating instructions and full round-10 focus."
+    },
+    {
+      "command": "git status --porcelain=v1; git rev-parse HEAD main; git diff --name-status main...HEAD; git diff --stat main...HEAD",
+      "exit_status": 0,
+      "result": "Initial status was empty. HEAD was 9047e9549380ebc6e8f8eec1516063ee448bd3cd and main was 38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,650p'",
+      "exit_status": 1,
+      "result": "The read ran, but output was truncated and the wrapper then failed because `status` is a read-only zsh variable. Missing ranges were reread below."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '240,500p'",
+      "exit_status": 0,
+      "result": "Read the previously truncated context and deliverables region."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '501,950p'",
+      "exit_status": 0,
+      "result": "Read exact contracts, Table F, Table C, and the beginning of the proof declaration."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '680,800p'",
+      "exit_status": 0,
+      "result": "Reread the long canonical Table F rows and Table C introduction."
+    },
+    {
+      "command": "sed -n '699p' docs/specs/WP-quarantine-preserve-durability.md | fold -w 160 | nl -ba",
+      "exit_status": 0,
+      "result": "Read the complete F10 row without long-line truncation."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '951,1350p'",
+      "exit_status": 0,
+      "result": "Read the middle of the RED-proof declaration."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1351,1750p'",
+      "exit_status": 0,
+      "result": "Read the remaining proofs and byte-exact source forms."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1751,2150p'",
+      "exit_status": 0,
+      "result": "Read platform notes, mirror clauses, security checklist, acceptance criteria, and most verification steps."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '2151,2617p'",
+      "exit_status": 0,
+      "result": "Read the remainder of verification, out-of-scope, and definition-of-done sections."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md; rg -n '^#{1,4} |^## Round|^### Round|Round 9|round 9' docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Read the disposal stub and located the round records."
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '1120,1310p'",
+      "exit_status": 0,
+      "result": "Read the complete round-9 disposition, measurements, self-read, and closing statement."
+    },
+    {
+      "command": "git log --oneline --decorate --reverse main..HEAD; git diff --unified=3 HEAD^ HEAD -- docs/specs/WP-quarantine-preserve-durability.md docs/specs/WP-quarantine-disposal-durability.md docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Inspected branch history and the final round-recording commit."
+    },
+    {
+      "command": "rg relevant quarantine functions in src/core/dream/validate.js; nl -ba src/core/dream/validate.js | sed -n '650,790p'; nl -ba src/core/dream/validate.js | sed -n '1110,1205p'",
+      "exit_status": 0,
+      "result": "Traced the shipped preservation function and both EP2 call routes."
+    },
+    {
+      "command": "rg -n 'TEMP_CREATE_FLAGS|DURABILITY_AVAILABLE|function flushFd|function flushDir|function writeAllAt|function readAllAt|function quarantineDirChain|closeQuietly|O_DIRECTORY|O_NOFOLLOW' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Confirmed that helper implementations, including directory-descriptor lifecycle, are not byte-exact source forms."
+    },
+    {
+      "command": "sed -n '800,1400p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<parse and audit declaration>'",
+      "exit_status": 0,
+      "result": "Parsed 25 unique proof declarations, all with occurrence 1, a marker in the replacement, nonempty expectRed, and criteria 1 through 7."
+    },
+    {
+      "command": "sed -n '2084,2154p' docs/specs/WP-quarantine-preserve-durability.md | bash -s",
+      "exit_status": 1,
+      "result": "Expected pre-implementation RED: V1 found no flush or guarantee sentence, and V2 found neither Done-spec clause."
+    },
+    {
+      "command": "node <<'NODE' ... mkdtemp hard-link/fsync probe ... NODE",
+      "exit_status": 1,
+      "result": "The probe did not start because zsh could not create its heredoc temporary file in the sandbox."
+    },
+    {
+      "command": "node -e '<mkdtemp hard-link, explicit-position I/O, file-fsync, directory-fsync probe>'",
+      "exit_status": 1,
+      "result": "Node reached mkdtemp but the read-only sandbox denied creation under the OS temporary directory with EPERM; no fixture was created."
+    },
+    {
+      "command": "node -e '<print fs constants>'; node -p 'require(\"./package.json\").engines'",
+      "exit_status": 0,
+      "result": "On Node v25.9.0/darwin, O_NOFOLLOW, O_DIRECTORY, O_EXCL, O_CREAT, and O_RDWR are numeric; package floor is Node >=18."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": null,
+      "result": "First invocation yielded after 30.2 seconds during markdownlint; its terminal status was not retained by the wrapper."
+    },
+    {
+      "command": "ps -axo pid=,stat=,command= | rg 'node scripts/lint\\.js|markdownlint' || true",
+      "exit_status": 0,
+      "result": "The compound command returned 0 through `|| true`, but `ps` itself was denied by the sandbox, so it could not determine the first lint process state."
+    },
+    {
+      "command": "rg CI matrix in .github/workflows/ci.yml; rg A12 wording in docs/THREAT-MODEL.md",
+      "exit_status": 0,
+      "result": "Confirmed Ubuntu/macOS test jobs and the cited same-user A12 boundary."
+    },
+    {
+      "command": "rg -n 'flushDir|closeSync|directory handles?|directory descriptors?|descriptor (is|still) closed|descriptor.*closure|closed on every' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Confirmed extensive artifact-descriptor closure requirements but no requirement or test for closing directory descriptors."
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '600,650p'; nl -ba src/core/dream/validate.js | sed -n '900,950p'; rg pathname removals in src/core/dream/validate.js",
+      "exit_status": 0,
+      "result": "Confirmed the shipped disposal primitive and removal-site census relevant to F10."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "Frontmatter passed for 268 specs and 4 agents. Markdownlint failed because the hermetic environment could not resolve registry.npmjs.org; npm also could not write its home-directory log. No repository lint finding was produced."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "Final status was empty, identical to the initial status."
+    }
+  ],
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "Directory descriptors can leak while every specified criterion remains green",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1698,
+      "line_end": 1707,
+      "confidence": 0.97,
+      "body": "The only prescribed directory-flush form calls `flushDir(dir)` and checks its Boolean result, but the spec never requires that the descriptor opened for a directory be closed on success or after `fsyncSync` throws. QPD-2 at line 762 asserts failure routing and artifact cleanup; QPD-3/QPD-4 assert only the fsync target sequence. The closure proofs at lines 1274-1291 and 1380-1397 cover only the retained artifact descriptor. Consequently, an implementation such as `openSync(dir); fsyncSync(fd); return true` satisfies the byte-exact form, produces the required fsync sequence, and passes the declared mutations while leaking three directory descriptors on the withheld arm and four on the redacted arm for every successful preservation. A run processing enough secret-bearing notes can reach `EMFILE`, causing later preservations and ultimately the shipped only-copy abort. This is Band A because the acceptance criteria permit a materially wrong implementation to pass.",
+      "recommendation": "Specify `flushDir`'s descriptor lifecycle: after a successful open, close the directory descriptor in a `finally` on both success and every fsync failure. Extend QPD-2 or add a narrow identity that records directory descriptors and proves each is closed on the steady-state path and after an injected directory-fsync failure. Add a RED mutation that removes this finalizer."
+    }
+  ],
+  "routed_scope_objections": [],
+  "round_9_disposition_check": {
+    "R9_A_flush_read_separability": "Genuinely closed as a contract narrowing. Every success path in the prescribed sequence flushes the O_EXCL-created inode before reading and comparing through the same descriptor; F10(v) discloses concurrent-writer outcomes and the text no longer claims byte coverage unconditionally.",
+    "R9_B_three_valued_ownership": "Genuinely closed. ENOENT and completed mismatch return false; other stat failures raise the existing WienerdogError shape; the shared catch and post-create lifetime both close the artifact descriptor through finally blocks.",
+    "R9_C_source_forms_and_occurrences": "Closed in the specification. Forms (a)-(k) are contiguous, the declaration parses with 25 unique finds, and only one flush-then-read form remains. Candidate mutation execution could not be independently repeated because the candidate implementation is not present in this spec-only branch.",
+    "R9_D_mirrors": "Closed for the reviewed surfaces. The disposal stub is POSIX-scoped, F10 avoids a stale numeric inventory, both QPD identity names match their tested seams, and the mirrors name the overwrite and relink residuals."
+  },
+  "cleanliness": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "worktree_writes_performed": false,
+    "temporary_fixture_writes_performed": false,
+    "temporary_fixture_note": "Both permitted OS-temp probe attempts were denied before any fixture could be created."
+  }
+}

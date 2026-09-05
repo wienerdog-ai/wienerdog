@@ -1,0 +1,183 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 2, detached worktree at f0c4f615 (base main). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision f0c4f61517fdc0b65bee197b3a1f29f72b53ca01 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: three Band A gaps allow the stated acceptance evidence to pass implementations that either swallow a required redacted-arm flush failure, accept a symlink-substituted destination with an unflushed dependency, or add a device-durability overclaim.",
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "The RED suite does not prove the redacted/P3 flush-failure disposition",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 527,
+      "line_end": 533,
+      "confidence": 0.98,
+      "body": "F4 says a failure at any required flush must fail preservation, and the surrounding contract says redacted fall-through reaches shipped P3. QPD-2, however, injects its five failures only through the withhold case and asserts P1/P2. QPD-4 exercises the redacted chain only on success. An implementation can therefore preserve every byte-exact source form and pass all nine declared mutations while selectively treating a failed redacted-qdir flush as success. That can report a redacted preservation successful instead of falling through to the withheld attempt and, when that attempt also fails, the shipped P3 abort.",
+      "impact": "A flush failure can bypass the required preservation failure and shipped abort on one production arm.",
+      "recommendation": "Add a redacted-arm failure identity and RED mutation. Inject at least the redacted qdir open and fsync seams, force the withheld fallback to fail too, and assert the exact P3 abort plus removal of both invocation-owned destinations. Ideally cover every distinct redacted-chain target whose handling can diverge."
+    },
+    {
+      "materiality_band": "A",
+      "title": "F8 and QPD-5 permit a symlink-following identity check that adds an unflushed dependency",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 461,
+      "line_end": 471,
+      "confidence": 0.94,
+      "body": "The spec requires only a `(dev, ino)` comparison and QPD-5 replaces `dest` with a regular file. It does not require `stillNamed` to inspect the directory entry without following symlinks. An implementer can use `fs.statSync(dest)` and pass QPD-5. A same-UID process can first hard-link the verified inode into another, unflushed directory and then replace `dest` with a symlink to that link during the flush. `statSync(dest)` follows the symlink and matches `fstatSync(fd)`, so success is reported, but the artifact now depends on the other directory entry, which F1-F3 never flush. After a crash, `dest` can be a durable broken symlink. Node documents that `lstat` differs from `stat` specifically by inspecting the link itself, and Node 18 supports bigint stat values: [Node 18 fs documentation](https://nodejs.org/download/release/v18.20.8/docs/api/fs.html#fslstatsyncpath-options).",
+      "impact": "A preservation can be reportable as successful without completing the flush set for every directory entry on which the resulting artifact depends.",
+      "recommendation": "Specify `fs.lstatSync(dest, { bigint: true })` plus `isFile()` and compare its bigint `dev`/`ino` with `fs.fstatSync(fd, { bigint: true })`. Extend QPD-5 with a symlink-to-hard-link replacement and add a RED proof that replacing `lstat` with following `stat`, removing the regular-file guard, or using an equivalent following check reddens the identity."
+    },
+    {
+      "materiality_band": "A",
+      "title": "V1 passes an explicit device-durability overclaim",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1153,
+      "line_end": 1157,
+      "confidence": 1.0,
+      "body": "Criterion 7 says V1 proves both that the required guarantee sentence occurs once and that no sentence claims the copy is on the medium. V1 checks only one `fs.fsyncSync(` occurrence and one occurrence of the disclaimer. An in-memory adversarial fixture containing the exact disclaimer, one fsync call, and the additional sentence `A preserved copy is on the medium.` produced `flush_count=1`, `guarantee_count=1`, `positive_overclaim_present=1`, and passed the V1 predicate with exit 0.",
+      "impact": "A durability claim beyond what the platform provides can satisfy the stated acceptance check.",
+      "recommendation": "Do not claim V1 proves semantic absence unless it actually rejects contradictory durability text. At minimum add a negative fixture for the direct `on the medium` contradiction and verify the required sentence is inside `flushPreservation`'s JSDoc. Otherwise narrow criterion 7 to what V1 measures and make the no-overclaim review obligation explicit and separately evidenced."
+    },
+    {
+      "materiality_band": "C",
+      "title": "The disposal stub still describes the removed created-set design",
+      "affected_file": "docs/specs/WP-quarantine-disposal-durability.md",
+      "line_start": 77,
+      "line_end": 81,
+      "confidence": 1.0,
+      "body": "The live Watch-out says Table F owns a `created-ancestor walk`, but round 1 explicitly deleted that mechanism and replaced it with a fixed chain flushed on every preservation. This is a stale operative mirror, not historical logbook text.",
+      "impact": "The successor's implementer is directed toward the design that R1-C rejected.",
+      "recommendation": "Replace `created-ancestor walk` with `fixed directory chain ending at the core anchor`."
+    }
+  ],
+  "round_1_closure": {
+    "R1-A": "Partially closed. One descriptor now carries read-back and flush, the regular replacement is detected, non-removal is specified, and the post-check race is honestly bounded. The symlink-following form of `stillNamed` remains admissible and untested; see Band A finding 2.",
+    "R1-B": "Partially closed. The five QPD-2 sites cover artifact, qdir and anchor open/fsync failure through P1/P2, but no failure test proves the redacted/P3 route; see Band A finding 1.",
+    "R1-C": "Closed in the preserve spec. The fixed chain is qdir, distinct shelf, stateDir and core anchor; the above-core residual is explicitly stated. The disposal stub retains one stale phrase; see the Band C finding.",
+    "R1-D": "Closed for ordinary-tree path membership and ordering: QPD-3 and QPD-4 prescribe exact withheld and redacted sequences, including the intermediate shelf and anchor. Descriptor/path identity under adversarial substitution is not closed; see Band A finding 2."
+  },
+  "additional_conclusions": [
+    "`fs.readFileSync(fd)` is documented at the repository's Node floor: integer file-descriptor support was added in Node v5, and a supplied descriptor is not automatically closed. A freshly opened descriptor begins at offset zero. No finding was raised on this point. See [Node 18 fs documentation](https://nodejs.org/download/release/v18.20.8/docs/api/fs.html#fsreadfilesyncpath-options).",
+    "The F3 normal production chain is otherwise complete: flushing qdir covers the rename source removal and destination insertion because tmp and dest share qdir; the distinct shelf, stateDir and core flushes cover each recursively dependent entry bottom-up.",
+    "The stated F8 post-check window is honest: replacement after the last check cannot be excluded against a same-UID process and is not represented as closed."
+  ],
+  "routed_scope_objections": [
+    {
+      "route": "Artifact-ownership contract owner or a new no-clobber successor; do not count toward this verdict",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 386,
+      "line_end": 390,
+      "objection": "The unchanged collision loop checks `existsSync(dest)` and later performs replacing `renameSync(tmp, dest)`. A same-UID process—the adversary F8 explicitly recognizes—can create `dest` between those operations, after which this invocation overwrites a path it did not create. That conflicts with the cited Table D D1 ownership rule. This is a shipped pre-rename ownership race rather than a durability-protocol defect, so it is routed and excluded from the verdict."
+    }
+  ],
+  "owner_item_scope_objections": [],
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../focus-qd2.txt",
+      "exit_statuses": [0, 0]
+    },
+    {
+      "command": "git status --porcelain=v1; git rev-parse HEAD main; git diff --name-status main...HEAD; git diff --stat main...HEAD",
+      "exit_statuses": [0, 0, 0, 0],
+      "result": "Before-status empty; HEAD f0c4f61517fdc0b65bee197b3a1f29f72b53ca01; main 38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "wc -l <three in-scope files>; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,520p'",
+      "exit_statuses": [0, 0],
+      "result": "Preserve spec 1392 lines; disposal stub 89; logbook 465."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '500,850p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '850,1160p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1160,1392p'; nl -ba docs/specs/WP-quarantine-disposal-durability.md; nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_statuses": [0, 0, 0],
+      "note": "The tool display truncated this combined output, so the missing portions were re-read separately."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md; nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '1,245p'",
+      "exit_statuses": [0, 0]
+    },
+    {
+      "command": "rg target constructs across validate.js, dream-validate.test.js and the two Done specs; nl -ba src/core/dream/validate.js | sed -n '60,190p;600,780p'; rg -n -C 14 \"patchFs\\\\('readFileSync'\\\\)\" tests/unit/dream-validate.test.js",
+      "exit_statuses": [0, 0, 1],
+      "note": "The final literal search used a quote form that did not match; the injections were located by the subsequent broader read."
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '2280,2635p'; rg -n -C 6 'function patchFs|patchFs\\\\(' tests/unit/dream-validate.test.js | sed -n '1,240p'",
+      "exit_statuses": [0, 0]
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '270,370p'; rg -n 'flushFd|flushDir|flushPreservation|stillNamed|DURABILITY_AVAILABLE|O_NOFOLLOW|O_DIRECTORY|closeSync|fstatSync|statSync' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_statuses": [0, 0]
+    },
+    {
+      "command": "Official Node documentation web searches for Node 18 readFileSync(fd), stat/lstat bigint behavior and fsyncSync",
+      "exit_status": "N/A",
+      "tool_status": "success"
+    },
+    {
+      "command": "Open https://nodejs.org/download/release/v18.20.8/docs/api/fs.html",
+      "exit_status": "N/A",
+      "tool_status": "success"
+    },
+    {
+      "command": "git merge-base main HEAD; git log --oneline --decorate --graph --max-count=18 --all; git log --oneline --left-right --cherry-pick main...HEAD",
+      "exit_statuses": [0, 0, 0],
+      "result": "Merge base 0fd50422ed84681b4af804e73f232f971049d003."
+    },
+    {
+      "command": "git diff --stat 0fd50422..main -- relevant source/test/script/Done files; git diff --unified=3 0fd50422..main -- src/core/dream/validate.js tests/unit/dream-validate.test.js; count proposed exact source forms in main:src/core/dream/validate.js",
+      "exit_statuses": [0, 0, 0],
+      "result": "The dependency changed only WP-secret-fence-ep2-redact-arm.md among the queried files; source/test seam is unchanged."
+    },
+    {
+      "command": "git diff --unified=2 0fd50422..main -- docs/specs/done/WP-secret-fence-ep2-redact-arm.md; count B3b cells and bytes at 0fd50422, main and HEAD",
+      "exit_statuses": [0, 0],
+      "result": "B3b remains three cells and 7625 bytes at all three refs."
+    },
+    {
+      "command": "rg evaluateRed/testNamePattern context in scripts/red-proofs.js; rg Node engines across package files and missing .nvmrc; rg created-set/fixed-chain wording across the three in-scope files",
+      "exit_statuses": [0, 2, 0],
+      "note": "The Node-floor rg returned 2 because .nvmrc was named but absent; it still showed package.json and package-lock.json declare Node >=18."
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1610,1705p'; inspect scoped diff headers/content with git diff main...HEAD piped through rg and sed",
+      "exit_statuses": [0, 0]
+    },
+    {
+      "command": "Two node -e probes using fs.mkdtempSync(os.tmpdir()): symlink/stat/lstat identity probe; readFileSync(fd) offset/lifetime probe",
+      "exit_statuses": [1, 1],
+      "result": "Both were blocked before fixture creation with EPERM on the OS temporary directory. No path was created or modified."
+    },
+    {
+      "command": "Parse the inlined RED-proof JSON directly from the spec in memory",
+      "exit_status": 0,
+      "result": "9 proofs; criteria 1-6; expected IDs present."
+    },
+    {
+      "command": "node scripts/check-frontmatter.js",
+      "exit_status": 0,
+      "result": "frontmatter check passed: 268 spec(s), 4 agent(s)."
+    },
+    {
+      "command": "In-memory shell reproduction of V1 against a fixture containing the exact guarantee sentence, one fs.fsyncSync call and an explicit positive medium claim",
+      "exit_status": 0,
+      "result": "flush_count=1; guarantee_count=1; positive_overclaim_present=1; V1 predicate passed."
+    },
+    {
+      "command": "git status --porcelain=v1; compare after-status with recorded empty before-status; git diff --exit-code --",
+      "exit_statuses": [0, 0, 0],
+      "result": "Before and after porcelain were identical and empty; tracked worktree diff was empty."
+    }
+  ],
+  "sandbox_observations": [
+    "Git repeatedly emitted xcrun cache warnings because the read-only sandbox denied temporary cache creation; all cited git commands nevertheless returned the recorded successful statuses.",
+    "No worktree, vault, home-directory or persistent path was written."
+  ]
+}

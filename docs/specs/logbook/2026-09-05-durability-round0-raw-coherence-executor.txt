@@ -1,0 +1,65 @@
+# Raw round-zero output — the orchestrator's clean-context INTERNAL-COHERENCE executor (claude-sonnet-5, read-only; probes in mktemp scratch copies), docs/wp-quarantine-preserve-durability at 284144db (base main = 0fd50422). Committed BEFORE adjudication.
+
+## COHERENCE: 1 findings (A: 0, B: 0, C: 1)
+
+**Scope note:** This is an independent internal-coherence pass on `docs/specs/WP-quarantine-preserve-durability.md` (1043 lines, Draft) at worktree HEAD `284144db` (`git diff --stat 0fd50422 HEAD -- src tests scripts` is empty, so all "measured at `0fd50422`" claims are checkable against the current tree unchanged). No file was modified in the worktree; all mutation happened in `mktemp -d` scratch copies (`git archive HEAD | tar -x`), one with `node_modules` unnecessary (repo has zero runtime deps) so `npm run lint`/`red-proofs` ran without a symlink. The architect's own round-zero pass (`docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md`) already ran an extremely thorough internal pass (Z1–Z10, all fixed); I independently re-derived rather than trusted its numbers, and everything re-derived matched.
+
+### Finding 1 — `docs/specs/WP-quarantine-preserve-durability.md:658-660,669-672,677-679`
+**Band: C (hygiene).**
+
+**Evidence.** The five "byte-exact source forms" under Implementation notes sit inside one bulleted list item (`- **THE FIVE SOURCE FORMS...` at line 648), whose continuation lines carry a mandatory 2-space markdown list margin (verified: every non-blank continuation line in that bullet, including the ` ```js ` fence markers, has exactly 2 leading spaces). The raw bytes of the three code fences are:
+- (a), line 659: 4 leading spaces — prose at line 656 says *"at its existing four-space indent"* → **consistent** (margin 2 + real 2 would give 4 only if real were 2, but the JSON `find` for this form is 4-space and matches the real shipped source's actual 4-space nesting exactly — verified: `sed -n '761,763p' src/core/dream/validate.js` shows the real line at 4-space indent. So (a)'s raw bytes happen to equal the real form directly, without margin-stripping.)
+- (b)/(c), lines 670-671: 4 leading spaces each — prose at line 667 says *"at two-space indent"*, and the JSON `find` strings for `flush-failure-swallowed`/`directory-entry-not-flushed` are 2-space (`grep`/python extraction confirmed: `'  if (!flushOne(dest, false)) return false;'`). Stripping the bullet's 2-space margin from the raw 4 correctly yields 2 — consistent with the prose and JSON, but only if the margin IS stripped.
+- (d), line 678: same pattern, 4 raw → 2 real after margin-stripping, matching `created-parents-not-flushed`'s 2-space `find`.
+
+So (a) is internally inconsistent with (b)/(c)/(d): all four fences sit at the *same* list-nesting depth (same 2-space margin) but only (a)'s raw byte count is directly usable without accounting for that margin; (b)/(c)/(d)'s raw byte count requires margin-subtraction to match their own accompanying prose and the canonical JSON. An implementer who copies the Implementation-notes fences byte-for-byte without recognizing the list-margin artifact would over-indent the three lines inside the new `flushPreservation`/`flushOne` functions by 2 spaces relative to the repo's own 2-space top-level-function style (confirmed: `function quarantinePreserve(...)`'s own body starts at 2-space indent) and relative to the spec's explicit "two-space indent" prose.
+
+**Why it's Band C, not A/B.** I built a candidate implementation from the five forms (in a scratch copy) and confirmed mechanically that this ambiguity has zero effect on the actual contract: `scripts/red-proofs.js`'s occurrence-counting (`countOccurrences`, ~line 1443) is unanchored substring search, not line-start-anchored — so even a 4-space-over-indented real line still contains the 2-space `find` substring exactly once, and the mutation/marker mechanics still work (verified: all 5 `find` strings occur exactly once in my candidate `validate.js`, all 5 markers are absent pre-mutation and present exactly once post-mutation, and all 5 mutated variants pass `node --check`). The authoritative, unambiguous JSON block (top-level fence, unaffected by list nesting) and the explicit prose sentence immediately preceding each fence both correctly state the real intended indentation, so a competent implementer resolves the ambiguity correctly by construction.
+
+**Disposition: drop** — a markdown-authoring artifact of list nesting with no effect on any acceptance criterion, verification step, or RED-proof mechanic; not worth spec churn.
+
+### No Band A or B findings
+Everything else I checked — and I re-ran or independently re-derived rather than re-read — came back true/consistent:
+- `grep -rn 'fsync|fdatasync|F_FULLFSYNC' src/ tests/ scripts/` → empty, exit 1 (matches).
+- `grep -n 'writeFilePrivate|private-fs' src/core/dream/validate.js` → empty, exit 1 (matches "seam is one function" claim).
+- Node v25.9.0 measurements reproduced independently: `fs.constants.F_FULLFSYNC` → `undefined`; `fs.fsyncSync(fd)` → `undefined`; `fs.openSync(dir,'r')` → a number; `fs.writeFileSync(...)` → `undefined`.
+- `fs.mkdirSync(p,{recursive:true})` three-state return behavior (two-level → topmost path, repeat → `undefined`, leaf-only → leaf) reproduced exactly as claimed.
+- Exactly 7 `patchFs('writeFileSync', ...)` sites in `tests/unit/dream-validate.test.js` (lines 1642, 1929, 1971, 2334, 2414, 2523, 2603), every one gated on `typeof p === 'string'` — confirms the "seven existing failure injections match a STRING path" claim.
+- `docs/specs/done/WP-preservation-abort-widening.md` row **P0b**: 6 cells when split on `' | '`; cell index 4 (the spec's "cell 5") ends with the exact quoted scoping sentence. `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` row **B3b**: 3 cells; cell index 1 ("cell 2") contains the exact quoted 2026-09-02 phrase. Both match the spec's placement table exactly.
+- Extracted the full V1/V2 fenced verification block (lines 856-941) to a file and ran it with `sh` on an untouched `git archive` scratch copy of HEAD: **exits 1**, with output byte-identical to the spec's own claimed "untouched" row (`V1 NO FLUSH IS ISSUED AT ALL`, `V1 GUARANTEE SENTENCE APPEARS 0 TIME(S)`, both V2 rows `NOT ITS BASE ROW PLUS ITS CLAUSE`, both diffs `empty, expected 1/1`). Also re-ran with `src/core/dream/validate.js` deleted → `V1 MISSING DELIVERABLE`, exit 1 (matches the "deliverable-absent" state). Also hand-built the two correctly-placed clauses (no `src/` fix) → `V2 OK` (matches).
+- Built a candidate implementation of all 5 byte-exact source forms in the scratch copy; independently confirmed each of Table C's 5 `find` strings occurs exactly once, each `marker` is absent pre-mutation/present exactly once post-mutation, and all 5 mutated files pass `node --check`. Ran the compliant candidate's V1/V2 through the extracted block → `V1 OK`, `V2 OK`, and `npm run red-proofs` ran clean (`5 declared proof(s), 5 selected`, all `PROVEN`) without `node_modules` (repo has zero runtime deps).
+- Template conformance: every section of `docs/specs/_TEMPLATE.md` present in the spec; only addition is `## Dispatch precondition` (not a template section, stated as such by round zero — confirmed by header diff).
+- `WP-dream-promote-module.md` row **Q4**'s quoted invariant text and "restated NOWHERE here" phrase — verified byte-exact. Row **Q9**'s "every fact about a copy is a FIELD... WHO FILLS IT AND WHEN" — verified present, supports the Item-2 "no carrier" argument. Row **Q18**'s 2026-09-02 clause — verified untouched/matches "message taxonomy, untouched" claim.
+- `src/core/private-fs.js` win32-posture quotes and `src/core/dream/vault-write.js`/`workspace.js` explicit-branch-idiom quotes — verified byte-exact.
+- Cross-checked Dispatch-precondition Item 3 against `WP-quarantine-banner-location.md`'s Out-of-scope section (the "legacy crash-window record" / `secret-revert-exhausted` paragraph): banner-location's own third owner item already resolved that record class as an accepted residual *within that package*; only the "durable per-record delivery stamp" sub-question is routed to this spec, which is exactly what Dispatch Item 3 addresses. No scope gap.
+
+## Executed
+| # | Command | Exit |
+|---|---|---|
+| 1 | `cat docs/runbooks/codex-review.md`, `cat docs/runbooks/spec-authoring.md` | 0 |
+| 2 | `git log --oneline -5`, `git status` in worktree | 0 |
+| 3 | `Read` full spec (1043 lines, two pages) | — |
+| 4 | `Read` `WP-quarantine-disposal-durability.md`, `Read` the logbook round-zero file | — |
+| 5 | `grep -rn 'fsync\|fdatasync\|F_FULLFSYNC' src/ tests/ scripts/` | 1 (empty match, expected) |
+| 6 | `grep -n 'writeFilePrivate\|private-fs' src/core/dream/validate.js` | 1 (empty, expected) |
+| 7 | Read `quarantinePreserve` function body, JSDoc, `@throws` block in `src/core/dream/validate.js` | 0 |
+| 8 | `grep -n 'deferred to\|byte-identity is established\|durable conjunct' src/core/dream/validate.js` | 0 |
+| 9 | `grep -n '| **P0b** |' / '| **B3b** |'` in the two Done specs; python cell-split counts | 0 |
+| 10 | `mktemp -d`; `git archive HEAD \| tar -x`; `git init -b main`; commit ("untouched snapshot") | 0 |
+| 11 | Extract V1/V2 bash block from spec to `vblock.sh`; `sh vblock.sh` on untouched scratch | **1** (RED, as expected) |
+| 12 | Hand-build correctly-placed P0b/B3b clauses in scratch; `sh vblock.sh` | 1 (V1 RED as expected, `V2 OK`) |
+| 13 | `rm src/core/dream/validate.js` in scratch; `sh vblock.sh` | 1 (`V1 MISSING DELIVERABLE`, expected) |
+| 14 | `grep -nE '^#{1,3} '` over `_TEMPLATE.md` and the spec | 0 |
+| 15 | `grep -n "patchFs('writeFileSync'"` / manual inspection of all 7 sites in `tests/unit/dream-validate.test.js` | 0 |
+| 16 | `node -e` measuring `F_FULLFSYNC`, `fsyncSync`, `openSync(dir)`, `writeFileSync` return, `process.version` | 0 |
+| 17 | `node -e` measuring `mkdirSync({recursive:true})` return in 3 states | 0 |
+| 18 | `grep -n` `evaluateRed`/`rollUp`/`occurrences`/substring-count logic in `scripts/red-proofs.js` | 0 |
+| 19 | `grep -n` win32-posture quotes in `src/core/private-fs.js`; explicit-branch idiom in `vault-write.js`/`workspace.js` | 0 |
+| 20 | `find docs/specs` for the cited logbook/banner-location files | 0 |
+| 21 | Read `WP-quarantine-banner-location.md` Dispatch-precondition item 3 and Out-of-scope section in full | 0 |
+| 22 | `grep -n '| Q4 |\|Q9\b'` / `'| **Q18** |'` in `WP-dream-promote-module.md` / `WP-secret-fence-ep2-redact-arm.md` | 0 |
+| 23 | Python: build candidate `flushOne`/`flushPreservation`/hoisted-`qdir` implementation in scratch `validate.js`; `node --check` | 0 |
+| 24 | Python: extract Table C JSON, count occurrences of each `find` in candidate file | 0 (all 5 = 1) |
+| 25 | Python: apply each `find`→`replace` mutation, check marker present-once/absent-pristine, `node --check` each mutant | 0 (all 5) |
+| 26 | `sh vblock.sh` + `npm run red-proofs` on the compliant candidate | 0 (`V1 OK`, `V2 OK`, `5/5 PROVEN`) |
+| 27 | `ls tests/red-proofs/*.proofs.json`; count existing declared proofs | 0 (5 total, matches baseline) |

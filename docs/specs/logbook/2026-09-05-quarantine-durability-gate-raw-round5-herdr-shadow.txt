@@ -1,0 +1,156 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 5, detached worktree at 7a2b8a57 (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 7a2b8a5719b955a011c93b7a20b4d0800ec2c932 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "NO-SHIP: F10 omits two destructive check-to-unlink windows at the temporary pathname, including one on the commit-failure path. Its proof suite and acceptance criterion can therefore pass the prescribed implementation while the disclosed residual set remains false. The canonical table also retains a contradictory pathname-write requirement from the superseded design.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-qd5.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1; git diff --name-status main...HEAD; git diff --stat main...HEAD; nl -ba docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "notes": "Initial porcelain was empty. Git emitted non-fatal xcrun cache warnings because temporary-file creation was denied."
+    },
+    {
+      "command": "rg -n '^## |^### |Deliverables|Table [A-Z]|\\| [A-Z][0-9]' docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,320p'; sed -n '218,760p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '223,430p' docs/specs/WP-quarantine-preserve-durability.md; sed -n '430,620p' docs/specs/WP-quarantine-preserve-durability.md; sed -n '1207,1472p' docs/specs/WP-quarantine-preserve-durability.md; nl -ba docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md for ranges 245-390, 430-615, and 1207-1408",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md for ranges 562-640, 1080-1206, 1473-1623, and 1624-1814",
+      "exit_status": 0
+    },
+    {
+      "command": "rg for TEMP_CREATE_FLAGS, helper functions, ownership helpers, flush helpers, and closeQuietly; sed -n '640,1082p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -i 'write stays|pathname (call|write)|writeFileSync\\(tmp|separate open|opened (on|before).*commit|reopen|one descriptor|exclusive create' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1,260p'; rg relevant quarantinePreserve and injection sites in tests/unit/dream-validate.test.js; nl -ba spec lines 1097-1170",
+      "exit_status": 0
+    },
+    {
+      "command": "rg quarantinePreserve/removeOwnedQuarantinePath locations; nl -ba src/core/dream/validate.js | sed -n '740,900p'; nl -ba spec lines 1468-1530",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '610,772p'; rg prior-round substitution findings and dispositions in the three round-four/design log files",
+      "exit_status": 0
+    },
+    {
+      "command": "Two heredoc-based Node probes: prescribed check-to-unlink race fixture and embedded proof-JSON parser",
+      "exit_status": 1,
+      "notes": "Neither Node program started. zsh could not create its heredoc temporary files; no fixture or worktree file was created."
+    },
+    {
+      "command": "node -e '<OS-temp check-to-unlink race probe>'; node -e '<embedded proof-JSON parser>'",
+      "exit_status": 0,
+      "subcommand_statuses": [
+        {
+          "subcommand": "OS-temp race probe using fs.mkdtempSync",
+          "exit_status": 1,
+          "result": "EPERM creating /var/folders/.../T/qd5-race-XXXXXX; no fixture was created."
+        },
+        {
+          "subcommand": "Embedded proof-JSON parser",
+          "exit_status": 0,
+          "result": "Parsed 16 declarations, all with unique IDs."
+        }
+      ],
+      "notes": "The compound shell status was 0 because the second Node command succeeded."
+    },
+    {
+      "command": "rg failure/ENOENT/close and proof mutation forms; cat package.json; sed -n '1,220p' .github/workflows/ci.yml",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate -8; git show --stat --oneline --decorate HEAD; git diff HEAD^..HEAD over the three design-scope files",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD; npm run lint; git status --porcelain=v1; git status --porcelain=v1 | wc -l",
+      "exit_status": 0,
+      "subcommand_statuses": [
+        {
+          "subcommand": "git diff --check main...HEAD",
+          "exit_status": 0
+        },
+        {
+          "subcommand": "npm run lint",
+          "exit_status": 1,
+          "result": "markdownlint attempted to fetch markdownlint-cli2 and failed with ENOTFOUND in the hermetic environment; frontmatter validation passed for 268 specs and 4 agents."
+        },
+        {
+          "subcommand": "git status --porcelain=v1",
+          "exit_status": 0,
+          "result": "empty"
+        },
+        {
+          "subcommand": "git status --porcelain=v1 | wc -l",
+          "exit_status": 0,
+          "result": "0"
+        }
+      ],
+      "notes": "The compound shell status was 0 because the final pipeline succeeded."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "empty; identical to the initial status"
+    },
+    {
+      "command": "git diff --check main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "test -x node_modules/.bin/markdownlint-cli2; print status; ls -ld node_modules node_modules/.bin",
+      "exit_status": 1,
+      "result": "The local markdownlint-cli2 executable and node_modules paths were absent."
+    }
+  ],
+  "findings": [
+    {
+      "materiality_band": "A",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 580,
+      "line_end": 580,
+      "confidence": 0.99,
+      "title": "F10 omits two destructive tmp check-to-unlink races that the prescribed implementation and proofs permit",
+      "body": "F10 says exactly three user-hand residuals remain and only residual (c), the dest gate-to-unlink window on failure, destroys anything. The prescribed source forms contain two additional instances of the same irreducible operation split. On a commit failure, lines 1271-1274 compute ownsName(tmp, fd), close the descriptor, and only then remove tmp by pathname. If the gate observes invocation-owned inode A and the user replaces tmp with B before removeOwnedQuarantinePath executes, the shipped primitive at src/core/dream/validate.js:625-638 calls rmSync on the name and deletes B. This is after a successful exclusive open, so it is not the adjudicated descriptor-less create-failure case. The post-commit cleanup at line 1282 has the same check-then-unlink window on a path that can still be substituted before rmSync. QPD-6 substitutes tmp before the relevant ownership gate, while tmp-removal-not-gated and d1-cleanup-not-gated only prove that a gate exists; the exact vulnerable implementation therefore passes criterion 7. The risk is also understated by F10's assertion that tmp is random: the shipped name at src/core/dream/validate.js:720 is deterministic, .tmp-${process.pid}-${stem}${ext}.",
+      "impact": "An in-scope shelf edit can cause a failed preservation, or an otherwise successful preservation, to delete a user's replacement at the temporary name while every declared proof remains green. The canonical claim that only one disclosed residual is destructive is false.",
+      "recommendation": "Without re-arguing the owner's choice to retain failure cleanup, expand F10, item 6, criterion 7, the proof-bound paragraph, security checklist, and round record to disclose and price every tmp and dest check-to-unlink window. Correct the false random-name premise. Narrow QPD-6/criterion 7 so they do not claim substitutions are safe at every point when they test only substitutions before the gates. If the desired contract remains that only one destructive residual exists, redesign both tmp removals so they cannot unlink by a pathname after a separable ownership check."
+    },
+    {
+      "materiality_band": "B",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 571,
+      "line_end": 571,
+      "confidence": 0.99,
+      "title": "Canonical F1 still requires the superseded pathname-write design",
+      "body": "Table F declares itself canonical, but F1 says the write remains pathname-based fs.writeFileSync. F8 on line 578 and the byte-exact source forms at lines 1245-1263 instead require the exclusive open itself to establish provenance and writeAllAt to write through that descriptor. The stale claim is repeated in Current state at lines 304-313 and in the implementation traps at lines 1786-1790, while lines 1801-1804 state the opposite correction. Following F1 recreates the create-to-open adoption window round 4 was meant to close.",
+      "impact": "A sonnet implementer cannot satisfy all of the document's purportedly canonical requirements. The provenance mutation and QPD-6 should catch the pathname-write implementation downstream, so this is Band B rather than an uncovered Band A path, but the spec is not dispatchable while its source of truth contradicts itself.",
+      "recommendation": "Rewrite F1 and sweep every pathname-write/reopen mirror to the round-four form: one O_RDWR|O_CREAT|O_EXCL descriptor, explicit-position write and read through that descriptor, no pathname reopen. Keep the provenance proof and exact source form authoritative."
+    }
+  ],
+  "routed_scope_objections": [],
+  "scope_notes": "No objection was counted against the six owner recommendations, A12, declined directory-inode pinning, Windows behavior, the disposal stub's value question, or the descriptor-less D1 create-failure disposition. Finding 1 challenges the factual completeness of F10's disclosed set after a successful open; it does not re-argue the recommendation to keep removals.",
+  "worktree_integrity": {
+    "initial_git_status_porcelain": "",
+    "final_git_status_porcelain": "",
+    "identical": true,
+    "writes": "No worktree, home-directory, or vault writes were performed. Both permitted-scope OS-temp probe attempts were rejected before fixture creation."
+  },
+  "verdict": "needs-attention"
+}

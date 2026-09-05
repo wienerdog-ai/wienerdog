@@ -1,0 +1,223 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 6, detached worktree at 1e38f90d (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 1e38f90d7f2c20b299c0da2b653b1f681c0a9e81 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "NO-SHIP. The prescribed success sequence does verify and flush the held inode before returning success, and the three pathname removals are disclosed. However, the ownership predicate is under-specified and under-tested, the O_EXCL provenance guarantee ignores Node's network-filesystem caveat, and round 5's promised mirror sweep remains incomplete.",
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,260p' ../focus-qd6.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "empty before review"
+    },
+    {
+      "command": "git diff --name-status main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --stat main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "wc -l docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "1963 lines"
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '<reviewed ranges>'",
+      "exit_status": 0,
+      "result": "read the complete 1-1963 line specification through successive ranges"
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1,220p;620,820p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '2350,2640p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"quarantinePreserve|patchFs\\\\('(readFileSync|writeFileSync|renameSync|openSync|readSync|writeSync|linkSync)'|preservation|redact|withheld\" tests/unit/dream-validate.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"\\\\| \\\\*\\\\*P0b\\\\*\\\\* \\\\||\\\\| \\\\*\\\\*B3b\\\\*\\\\* \\\\|\" docs/specs/done/WP-preservation-abort-widening.md docs/specs/done/WP-secret-fence-ep2-redact-arm.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"TEMP_CREATE_FLAGS|DIR_OPEN_FLAGS|DURABILITY_AVAILABLE|function writeAllAt|function readAllAt|function flushFd|function flushDir|function quarantineDirChain|function ownsName|function closeQuietly\" docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"removeOwnedQuarantinePath\\\\(\" src/core/dream/validate.js",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=3 main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate --max-count=12",
+      "exit_status": 0
+    },
+    {
+      "command": "git show 4269b447:docs/specs/WP-quarantine-preserve-durability.md | rg -n \"three DISCLOSED|three disclosed|FIVE-test|two-seams|SIX cases|six cases\"",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff 4269b447..1e38f90d -- docs/specs/WP-quarantine-preserve-durability.md docs/specs/WP-quarantine-disposal-durability.md docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "review_tmp=$(mktemp -d /tmp/wd-shadow-qpd6.XXXXXX) || exit 70; <filesystem probe>",
+      "exit_status": 70,
+      "result": "mktemp failed with Operation not permitted; the Node fixture probe and cleanup were not executed, and no alternate writable location was attempted"
+    },
+    {
+      "command": "node -e '<print fs constant types>'",
+      "exit_status": 0,
+      "result": "{\"node\":\"v25.9.0\",\"platform\":\"darwin\",\"O_NOFOLLOW\":\"number\",\"O_DIRECTORY\":\"number\",\"F_FULLFSYNC\":\"undefined\"}"
+    },
+    {
+      "command": "rg -n \"function evaluateRed|evaluateRed|own-body|expectRed|testNamePattern|observed\" scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '250,480p;1530,1678p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"A12|not a boundary against arbitrary software already running as the same user|keyed MAC|false guarantee\" docs/THREAT-MODEL.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"ubuntu-latest|macos-latest|matrix|node-version\" .github/workflows/ci.yml",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '686,1115p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<JSON.parse>'",
+      "exit_status": 1,
+      "result": "initial extraction included the opening Markdown fence and failed JSON.parse"
+    },
+    {
+      "command": "sed -n '687,1115p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<JSON.parse and group proof ids by criterion>'",
+      "exit_status": 0,
+      "result": "17 proof declarations parsed; criteria 1-7 grouped successfully"
+    },
+    {
+      "command": "rg -n \"three DISCLOSED residuals|three disclosed residuals|FOUR instances|THREE of them destroy|SIX cases|\\\\(e\\\\) the ordinary success|create FAILURE|FIVE-test|two-seams\" docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"\\\\{ bigint: true \\\\}|isFile\\\\(\\\\)|ownership-check-follows-symlinks|destination-ownership-gate-removed|destination-removal-not-gated|create-failure-removes-unowned\" docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '\"node\"|engines|Node.*18|node >= 18|Node ≥ 18' package.json README.md docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "package.json requires Node >=18"
+    },
+    {
+      "command": "rg -n \"openSync\\\\(tmp|TEMP_CREATE_FLAGS|O_EXCL|network file systems|filesystem|file system\" docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "no network-filesystem qualification found"
+    },
+    {
+      "command": "git rev-parse HEAD",
+      "exit_status": 0,
+      "result": "1e38f90d7f2c20b299c0da2b653b1f681c0a9e81"
+    },
+    {
+      "command": "git rev-parse main",
+      "exit_status": 0,
+      "result": "38562ec4979606801e43c89afeb19073784fc0fc"
+    },
+    {
+      "command": "git diff --check main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "empty after review; identical to the before snapshot"
+    }
+  ],
+  "external_documentation_checks": [
+    {
+      "operation": "Queried and opened official Node.js v18 filesystem documentation",
+      "status": "success",
+      "result": "Node 18 documents numeric open flags including O_DIRECTORY and O_NOFOLLOW, explicit-position reads, descriptor-based readFileSync beginning at the current position, and fsyncSync returning undefined with OS/device-specific behavior."
+    },
+    {
+      "operation": "Opened the Linux fsync(2) manual",
+      "status": "success",
+      "result": "The manual requires a separate directory fsync for the containing entry and scopes write-open requirements to System V/HP-UX/AIX rather than Linux."
+    }
+  ],
+  "findings": [
+    {
+      "title": "F8's required ownership predicate can be implemented unsafely while every declared proof remains green",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 592,
+      "line_end": 592,
+      "materiality_band": "A",
+      "confidence": 0.98,
+      "body": "F8 makes `ownsName` load-bearing at the post-commit temp gate, the final success gate, the shared catch, and destination disposal, but the exact form pins only the `lstatSync(..., {bigint:true})` line and Table C mutates only gate removal, ungated disposal, and `lstat`→`stat`. Nothing requires or tests failure-closed handling when `lstatSync`/`fstatSync` throws. A straightforward predicate with no catch therefore passes QPD-5/QPD-6 yet emits a raw ENOENT and can leak the held descriptor when the user deletes a name before a gate, contradicting the promised `null`/remove-nothing shape. The proof surface also does not discriminate a comparison that converts bigint stats back to Number; distinct inode values above `Number.MAX_SAFE_INTEGER` can then compare equal and authorize deletion of a replacement. This is exactly the band-A case of a wrong implementation passing the prescribed criterion.",
+      "recommendation": "Specify the complete failure-closed `ownsName` form: obtain both stats as bigint, require the named entry to be a regular file, compare bigint `dev`/`ino`, and return false on either stat failure. Add QPD cases for ENOENT at the temp and destination gates and injected above-MAX_SAFE inode values, plus RED mutations that remove the catch and degrade either stat/comparison to Number."
+    },
+    {
+      "title": "The atomic-create provenance guarantee is unscoped despite Node's network-filesystem warning",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 592,
+      "line_end": 594,
+      "materiality_band": "A",
+      "confidence": 0.9,
+      "body": "F8 and F10 assert without qualification that successful `openSync(O_CREAT|O_EXCL)` proves the descriptor names an inode this invocation created, and use that premise to guarantee overlapping runs cannot act on each other's objects. The supported Node floor's official documentation says the exclusive `x`/O_EXCL behavior might not work with network file systems. A user's core can reside on a network-mounted home directory, and this spec names no supported-filesystem boundary. If exclusivity is not reliable, a deterministic reused-pid temp name can be adopted and overwritten, invalidating provenance and potentially destroying another artifact. See [Node.js v18 filesystem flags](https://nodejs.org/docs/latest-v18.x/api/fs.html#file-system-flags).",
+      "recommendation": "Either establish and state a supported-filesystem precondition that guarantees atomic O_EXCL and hard-link semantics, with a fail-closed compatibility check where possible, or redesign provenance for filesystems where Node does not promise exclusivity. Route the support boundary as an owner item if excluding network-mounted cores is a product decision."
+    },
+    {
+      "title": "Canonical QPD-6 still declares six cases but specifies only five",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 661,
+      "line_end": 661,
+      "materiality_band": "B",
+      "confidence": 1,
+      "body": "The QPD-6 row says `SIX cases` but enumerates only `(a)` through `(e)`. The missing sixth case is the round-5 create-failure case where `fd < 0` and an unowned temp pathname must not be removed; criterion 7 mentions it later, and `create-failure-removes-unowned` expects QPD-6 to redden. An implementer following the canonical Table C row can omit that case. The RED lane will eventually reject the omission because the mutation produces no declared failure, but the canonical test contract and the round-5 disposition remain false.",
+      "recommendation": "Add an explicit `(f)` create-failure case to QPD-6, including the injected non-EEXIST open failure, foreign temp bytes, `null` result, and byte-identical survival assertion. Keep its wording aligned with criterion 7 and `create-failure-removes-unowned`."
+    },
+    {
+      "title": "Round 5's disclosure and mirror sweep is not genuinely closed",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1531,
+      "line_end": 1537,
+      "materiality_band": "B",
+      "confidence": 1,
+      "body": "The Security checklist still says there are `three disclosed residuals, one of which deletes a replacement`, while canonical F10 says one class has four instances and all three pathname-removal instances can delete replacements, including a silent-success temp deletion. The same stale round-4 count survives at lines 1140-1146, and the Mirrored Surface Checklist at lines 1203-1209 still describes a `FIVE-test`/`two-seams` blast radius despite Current state specifying thirteen tests and four seams. The recorded round-5 grep missed these because it did not search the words `three` or `four`. These are registered security/evidence mirrors, not stylistic prose; an implementer or reviewer using them is told a materially smaller destructive surface.",
+      "recommendation": "Sweep every registered mirror from F10 and Current state: state one check-then-unlink class with three destructive removal instances plus the non-destructive after-gate instance, and update the blast-radius checklist to thirteen tests/four seams or refer to Current state by shape. Extend the recorded mirror audit to include all cardinal words, especially `three` and `four`."
+    }
+  ],
+  "validated_points": [
+    "The prescribed success expression compares bytes, runs `flushPreservation`, and performs the final destination identity gate before returning success.",
+    "F1 flushes the same descriptor used for explicit-position write and read-back; the Node 18 documentation confirms explicit-position reads do not consume the descriptor's current position.",
+    "The fixed withheld and redacted directory chains include qdir, the intermediate shelf when distinct, stateDir, and the core anchor in bottom-up order.",
+    "The source forms contain exactly three pathname-removal paths: post-commit tmp, catch-path tmp, and failure-path dest. Each has a preceding ownership check, and no fourth destructive pathname act was found.",
+    "The create-failure source form short-circuits at `fd >= 0`, so a failed create removes nothing.",
+    "The disposal stub carries the routed D2 crash window, prune live-run ownership question, and identity-gated delete without making the success protocol depend on the successor.",
+    "The A12 citation matches docs/THREAT-MODEL.md's detection-not-prevention boundary.",
+    "Node 18 documents descriptor-based `readFileSync` as beginning at the current position; the prescribed `readAllAt` with explicit positions correctly avoids the observed EOF trap.",
+    "The Linux fsync manual confirms that directory-entry durability requires a separate directory fsync. It does not support the spec's explanatory claim that Linux itself requires a write-open descriptor; that premise is inaccurate, although the prescribed O_RDWR descriptor remains operationally safe because this function also writes through it."
+  ],
+  "routed_scope_objections": [],
+  "verdict": "needs-attention"
+}

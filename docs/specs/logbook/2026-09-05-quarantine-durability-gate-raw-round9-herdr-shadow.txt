@@ -1,0 +1,222 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 9, detached worktree at 66ca66b9 (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 66ca66b950dc72a78fd3dd0e6781c7f2cd18d769 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP. The prescribed ownership predicate can silently leave this invocation's secret-bearing paths behind, including on a reported success, while all declared proofs remain green. Round 8 also left contradictory byte-exact ordering instructions, an unscoped durability overclaim in the successor stub, and stale residual mirrors.",
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "Indeterminate stat failures are treated as absence or foreign ownership, allowing silent orphan paths",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 639,
+      "line_end": 639,
+      "confidence": 0.99,
+      "body": "F8 requires ownsName to catch every fstatSync/lstatSync exception and return false. That conflates ENOENT or an actual identity mismatch with EIO, EACCES, and other failures where the name may still reference this invocation's inode. At the post-commit temp gate, such an error skips removal and the prescribed sequence can return success with both dest and the unannounced secret-bearing tmp link present. At the destination gate and its cleanup recheck, a persistent stat error produces null while this invocation's dest remains. Both contradict the shipped D3/D4 contract quoted at lines 497-504: null must mean the owned path is absent, and an inability to complete required cleanup must fail loud. The in-memory execution of the prescribed branching produced success with [dest,tmp] for a temp-stat EIO and null with [dest] for a destination-stat EIO. Table C's QPD-5/QPD-6 cases cover ENOENT, substitution, and doctored successful stats, but the parsed 22-proof declaration contains no EIO or other indeterminate-stat case, so the prescribed defect can pass all declared evidence.",
+      "recommendation": "Make ownership checking tri-state: owned, demonstrably absent/foreign, or indeterminate error. ENOENT and a completed nonmatching stat may fail closed without removal; non-ENOENT stat failures must never permit success or an ordinary null return with an owned path possibly present. Close the descriptor and raise the existing fail-loud ownership/disposal error without unlinking an unverified name. Add QPD-5/QPD-6 cases and RED declarations for non-ENOENT failures at the temp cleanup, shared catch, last gate, and destination cleanup recheck."
+    },
+    {
+      "materiality_band": "B",
+      "title": "Round 8 left a byte-exact source form that still reads and compares before flushing",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1505,
+      "line_end": 1535,
+      "confidence": 1,
+      "body": "Source form (e), explicitly described as the whole verified-read-back gate, computes readBack first and then evaluates Buffer.compare before flushPreservation at line 1515. Source form (f) immediately afterward requires the opposite order. Following (e) recreates round 8's false-success window: an in-place write between comparison and fsync lets the call return the old buffer although the flush completed over newer bytes. F6 also retains the stale phrase read/compare/flush at line 637. The new read-before-flush RED proof should reject or fail to apply to this implementation, so this is caught downstream, but the implementer has two mutually exclusive byte-exact instructions.",
+      "recommendation": "Delete obsolete source form (e), retain one authoritative flush-then-read-then-compare block, and sweep F6/F10 and all registered mirrors so none says read/compare/flush or otherwise lists the reversed order."
+    },
+    {
+      "materiality_band": "A",
+      "title": "The disposal stub still claims universal durability despite the POSIX-only, platform-bounded contract",
+      "file": "docs/specs/WP-quarantine-disposal-durability.md",
+      "line_start": 24,
+      "line_end": 26,
+      "confidence": 0.99,
+      "body": "The stub says the predecessor makes a successful preservation durable and that Table F requires a completed platform flush before success. That is false on win32, where F5 explicitly issues no flush and claims no durability, and it omits the guarantee sentence's device-level limitation. This disproves round 8's assertion that every universal flushed/success mirror was made POSIX-only and is a durability claim beyond what the protocol provides.",
+      "recommendation": "Scope this pointer to POSIX and describe only that success follows completed fsync calls to the extent the platform provides. Cite F5/F7(c) rather than duplicating the spec-owned guarantee sentence."
+    },
+    {
+      "materiality_band": "C",
+      "title": "The canonical residual inventory and its registered mirrors still contradict the newly added sixth instance",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 641,
+      "line_end": 708,
+      "confidence": 0.98,
+      "body": "F10 says there are TWO non-destructive instances but enumerates three: (iv), (v), and the round-8 addition (vi). The QPD-5 contract name still says a substitution at dest at ANY point after commit fails, although F10 expressly permits success after the last gate and for a same-inode relink before the last gate. Exact Contracts at lines 551-556 and the Security checklist at lines 1731-1739 likewise retain the older inventory and omit the overwrite/relink cases. The residuals themselves are disclosed and therefore are not findings; the finding is that the canonical count and registered evidence mirrors claim a broader closure than that disclosure.",
+      "recommendation": "Change F10's count to THREE, scope the QPD-5 identity name to the substitution seams it actually tests, and update the Exact Contracts and Security checklist mirrors to include the in-place overwrite and same-inode relink."
+    }
+  ],
+  "routed_scope_objections": [],
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../../focus-qd9.txt",
+      "exit_status": 1,
+      "result": "The vendored prompt was read. The focus path was wrong and sed reported No such file or directory."
+    },
+    {
+      "command": "sed -n '1,320p' ../focus-qd9.txt; git status/diff inventory against main",
+      "exit_status": 0,
+      "result": "Read the focus file and inventoried the revision. Output was large and tool-truncated."
+    },
+    {
+      "command": "wc -l -w -c ../focus-qd9.txt docs/specs/WP-quarantine-preserve-durability.md && nl -ba ../focus-qd9.txt",
+      "exit_status": 0,
+      "result": "Focus: 4 lines, 15849 bytes. Target spec: 2192 lines, 163602 bytes."
+    },
+    {
+      "command": "rg headings, Deliverables, dispatch items, and canonical-table references in the target spec",
+      "exit_status": 0,
+      "result": "Located the seven owner items, five implementation deliverables, F0-F10, Table C, source forms, acceptance criteria, and verification block."
+    },
+    {
+      "command": "sed -n '1,550p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read."
+    },
+    {
+      "command": "sed -n '551,1100p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "result": "Read; display was tool-truncated, then narrowed in subsequent commands."
+    },
+    {
+      "command": "sed -n '620,760p' and '760,1100p' of the target spec",
+      "exit_status": 0,
+      "result": "Read Table F, Table C, and the first RED declarations."
+    },
+    {
+      "command": "nl -ba target spec | sed -n '636,820p'",
+      "exit_status": 0,
+      "result": "Read line-numbered F5-F10 and QPD-1 through QPD-6."
+    },
+    {
+      "command": "sed -n '821,1150p' target spec",
+      "exit_status": 0,
+      "result": "Read RED declarations."
+    },
+    {
+      "command": "sed -n '1151,1450p' target spec",
+      "exit_status": 0,
+      "result": "Read remaining RED declarations, evidence boundaries, and mirrored-surface checklist."
+    },
+    {
+      "command": "sed -n '1451,1760p' target spec",
+      "exit_status": 0,
+      "result": "Read byte-exact source forms, Done-row clauses, and security checklist."
+    },
+    {
+      "command": "sed -n '1761,2020p' target spec",
+      "exit_status": 0,
+      "result": "Read acceptance criteria and verification commands."
+    },
+    {
+      "command": "sed -n '2021,2192p' target spec && sed -n '1,260p' docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0,
+      "result": "Read the remainder of the target and the complete successor stub."
+    },
+    {
+      "command": "git diff scope inventory; git log; line-numbered target excerpts",
+      "exit_status": 0,
+      "result": "Confirmed the three non-raw in-scope files: target spec, disposal stub, and design-gate-rounds logbook."
+    },
+    {
+      "command": "line-numbered source-form helper excerpts and helper-name search",
+      "exit_status": 0,
+      "result": "Confirmed the exact-form locations and that helper bodies are left to implementation."
+    },
+    {
+      "command": "git show 29dae065 for the round-8 revision",
+      "exit_status": 0,
+      "result": "Confirmed round 8 intended to rederive the source forms but retained the stale read-before-flush block."
+    },
+    {
+      "command": "wc -l and tail -n 420 of the design-gate-rounds logbook",
+      "exit_status": 0,
+      "result": "Read the round 6-8 findings, dispositions, measurements, and closing statement."
+    },
+    {
+      "command": "rg stat-error, D4, orphan, and remove-nothing references across the three in-scope files",
+      "exit_status": 0,
+      "result": "Found no disposition for non-ENOENT ownership-stat failures."
+    },
+    {
+      "command": "rg the canonical P0b/D0-D4 and B3b rows in the two Done specs",
+      "exit_status": 0,
+      "result": "Confirmed D3 requires fail-loud cleanup failure and D4 requires null to mean the owned path is absent."
+    },
+    {
+      "command": "read relevant current validate.js and dream-validate.test.js sections",
+      "exit_status": 0,
+      "result": "Confirmed shipped disposal semantics and injection seams."
+    },
+    {
+      "command": "parse the embedded RED-proof JSON and search all readBack/flush ordering mirrors",
+      "exit_status": 0,
+      "result": "JSON parsed successfully with 22 new proofs; located both the stale and corrected ordering forms."
+    },
+    {
+      "command": "read scripts/red-proofs.js evaluateRed context and inspect predicate-related declarations",
+      "exit_status": 0,
+      "result": "Confirmed own-body equality enforcement; embedded declarations mention ENOENT but not EIO."
+    },
+    {
+      "command": "read complete evaluateRed body and search target for EIO/ENOENT stat cases",
+      "exit_status": 0,
+      "result": "No non-ENOENT indeterminate-stat test exists."
+    },
+    {
+      "command": "line-numbered excerpts for the disposal overclaim, F8/F10, source forms, clauses, and criteria",
+      "exit_status": 0,
+      "result": "Captured final finding locations."
+    },
+    {
+      "command": "git rev-parse HEAD main; git merge-base main HEAD; git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "HEAD 66ca66b950dc72a78fd3dd0e6781c7f2cd18d769; main and merge-base 38562ec4979606801e43c89afeb19073784fc0fc; status empty."
+    },
+    {
+      "command": "Node filesystem probe supplied through a shell heredoc",
+      "exit_status": 1,
+      "result": "Not executed: zsh could not create its heredoc temporary file under the read-only sandbox."
+    },
+    {
+      "command": "Inline Node mkdtemp filesystem probe",
+      "exit_status": 1,
+      "result": "Node reached mkdtemp but the sandbox denied creation under the Darwin OS temp directory with EPERM. No fixture or worktree file was created."
+    },
+    {
+      "command": "Inline, write-free Node state-machine execution of the prescribed ownership branches",
+      "exit_status": 0,
+      "result": "Normal: success with dest only. Temp lstat EIO: success with dest and tmp. Destination lstat EIO: null with dest. Destination ENOENT: null with no names."
+    },
+    {
+      "command": "Node platform/constants probe && git diff --check main...HEAD && npm run lint",
+      "exit_status": 1,
+      "result": "Node probe succeeded on v25.9.0/darwin with numeric O_NOFOLLOW, O_DIRECTORY, O_RDWR, O_CREAT, and O_EXCL; F_FULLFSYNC was undefined. git diff --check succeeded. npm lint failed because markdownlint-cli2 attempted registry access and DNS was unavailable; shellcheck, PSScriptAnalyzer, and frontmatter continued, with frontmatter passing 268 specs and 4 agents."
+    },
+    {
+      "command": "git diff --check plus static ordering/residual consistency script",
+      "exit_status": 0,
+      "result": "git diff --check passed. Script found stale read-before-flush at line 1515, corrected form at line 1528, and F10 saying TWO while containing instances (iv), (v), and (vi)."
+    },
+    {
+      "command": "V1/V2 structural-key extraction counts",
+      "exit_status": 0,
+      "result": "Exactly one guarantee sentence, one P0b clause, and one B3b clause were extracted."
+    },
+    {
+      "command": "final git status --porcelain=v1 comparison",
+      "exit_status": 0,
+      "result": "status_unchanged=yes; before and after were both empty."
+    }
+  ],
+  "verification_limits": [
+    "No implementation exists on this design branch, so implementation V1-V4 were not applicable as acceptance runs.",
+    "The full lint result is unavailable because the hermetic environment lacks the required installed markdownlint executable and network access.",
+    "Real filesystem probes could not be staged because the sandbox denied mkdtemp despite the requested OS-temp boundary; the ownership failure was instead traced statically and with a write-free execution of the exact branching."
+  ],
+  "worktree": {
+    "initial_status": "",
+    "final_status": "",
+    "unchanged": true
+  }
+}

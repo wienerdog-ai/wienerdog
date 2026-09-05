@@ -1,0 +1,161 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 8, detached worktree at 53e0c713 (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 53e0c7132c1e04edb9d1ee6ae7cf298fdde3fb74 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "NO-SHIP: the prescribed success sequence can return bytes that were compared before an overlapping same-inode overwrite while the completed flush covers the replacement contents. The final inode gate still passes, and the declared evidence does not exercise this interval.",
+  "verdict": "needs-attention",
+  "findings": [
+    {
+      "title": "The read-before-flush ordering does not prove that the returned bytes were flushed",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1491,
+      "line_end": 1503,
+      "confidence": 0.99,
+      "body": "The byte-exact source form evaluates readAllAt and Buffer.compare before flushPreservation, then performs ownsName as the final gate. An overlapping writer can overwrite the same inode after Buffer.compare but before fsyncSync. The flush can complete over those newer inode contents, and ownsName still passes because dev/ino and file type are unchanged, yet the function returns the older readBack buffer. This falsifies F0/F10's claim at line 637 that the returned buffer was flushed. F10's disclosed instance (v) does not cure the wording: it incorrectly treats the whole post-read interval as though the overwrite necessarily occurred after the flush. QPD-5 at line 703 stages its in-place overwrite only during the final gate, after flushPreservation, while returned-bytes-rereads-the-artifact merely forbids a later read. Consequently the prescribed wrong ordering can satisfy all declared proofs.",
+      "impact": "A preservation can report success while no completed flush establishes the exact bytes returned and subsequently represented as the preserved copy. This breaks the work package's central durability conjunct and is a false-SUCCESS path.",
+      "recommendation": "Flush the held artifact descriptor before the single read-back and comparison, while retaining readBack as the returned buffer; do not add a post-gate reread. Add a QPD case and RED mutation that distinguish fsync-before-read from read-before-fsync by placing an in-place same-inode overwrite at the artifact-flush seam. Re-derive F0, F6, F10, the return JSDoc, both Done-spec clauses, criteria 1/5/6, and the sequence/source forms around that ordering."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "route": "Dispatch-precondition item 1",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 479,
+      "line_end": 487,
+      "confidence": 0.98,
+      "objection": "The owner-recommended win32 behavior is no flush and no durability claim, but the prescribed return JSDoc says bytes are \"flushed, always\"; F0 at line 627 is likewise universal. This is internally inconsistent with F5 at line 632. Per the focus instructions, Windows issues are routed and do not affect this verdict.",
+      "recommendation": "If item 1 remains accepted, qualify every universal flushed/success mirror explicitly as POSIX-only, including the return JSDoc and amended Done-spec clauses."
+    }
+  ],
+  "owner_item_routing": {
+    "item_1": "Scope objection recorded above; not counted toward verdict.",
+    "item_2": "No separate objection. The prescribed flush-failure path reaches existing preservation-failure handling.",
+    "item_3": "No objection to declining the delivery stamp.",
+    "item_4": "The disposal stub carries the D2 crash window and overlapping-prune ownership question without becoming a dependency of the success protocol.",
+    "item_5": "No re-litigation of the A12 boundary.",
+    "item_6": "No re-litigation. The three proposed pathname removals were located at lines 1452, 1467, and 1477 and are gated in the prescribed forms.",
+    "item_7": "No re-litigation of the supported-filesystem precondition."
+  },
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,260p' ../../focus-qd8.txt",
+      "exit_status": 0,
+      "details": "Prompt read exited 0. The incorrect relative focus path exited 1; the wrapper's final printf made the compound script exit 0."
+    },
+    {
+      "command": "sed -n '1,320p' /private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/4d4ee17b-2abe-4e63-af52-c771567eb6da/scratchpad/focus-qd8.txt; status=$?",
+      "exit_status": 1,
+      "details": "sed completed and emitted the full focus file; zsh then rejected assignment to its read-only status parameter."
+    },
+    {
+      "command": "git status --porcelain; git rev-parse HEAD; git rev-parse main; sed -n '1,360p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "details": "Subcommands all exited 0. Initial porcelain status was empty. HEAD was 53e0c7132c1e04edb9d1ee6ae7cf298fdde3fb74; main was 38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "wc -l docs/specs/WP-quarantine-preserve-durability.md; nl -ba ... | sed -n '361,760p'",
+      "exit_status": 0,
+      "details": "Both subcommands exited 0; file length was 2159 lines. Tool output was truncated, so smaller complete chunks were subsequently read."
+    },
+    {
+      "command": "git diff --name-status main...HEAD; git diff --stat main...HEAD; git diff --check main...HEAD",
+      "exit_status": 0,
+      "details": "All three subcommands exited 0; diff-check reported no whitespace errors."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '361,600p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '601,820p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '821,1080p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1081,1340p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1341,1600p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1601,1860p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1861,2159p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'writeAllAt|readAllAt|flushFd|flushDir|flushPreservation|quarantineDirChain|TEMP_CREATE_FLAGS|ownsName|quarantinePreserve|removeOwnedQuarantinePath' docs/specs/WP-quarantine-preserve-durability.md src/core/dream/validate.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js over selected ranges 1-220, 560-820, 1040-1210, and 1280-1350",
+      "exit_status": 0,
+      "details": "The command exited 0; tool output was truncated, so the preservation range was reread separately."
+    },
+    {
+      "command": "mktemp OS-temp inode probe with a shell rm -rf cleanup trap",
+      "exit_status": null,
+      "details": "Rejected before process execution because the command policy forbids rm -rf-style commands."
+    },
+    {
+      "command": "Node OS-temp inode probe supplied through a shell heredoc",
+      "exit_status": 1,
+      "details": "zsh could not create its heredoc temporary file; Node did not start. The surrounding wrapper exited 0 after printing the captured probe status."
+    },
+    {
+      "command": "node -e '<mkdtempSync inode-race fixture; cleanup with fs.rmSync>'",
+      "exit_status": 1,
+      "details": "Node v25.9.0 failed at mkdtempSync with EPERM. No fixture or worktree file was created. The surrounding status-printing wrapper exited 0."
+    },
+    {
+      "command": "git log --oneline --decorate -8; git diff --unified=40 HEAD^ HEAD -- docs/specs/WP-quarantine-preserve-durability.md; nl -ba docs/specs/WP-quarantine-disposal-durability.md | sed -n '1,180p'",
+      "exit_status": 0,
+      "details": "All subcommands exited 0. The closing commit changes only F10's residual-count wording; the disposal stub was read in full."
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '616,775p'; rg relevant quarantinePreserve/test injection seams; rg P0/P0b/B3b/Q18 Done-spec rows",
+      "exit_status": 0,
+      "details": "All subcommands exited 0."
+    },
+    {
+      "command": "rg evaluateRed-related symbols in scripts/red-proofs.js; nl -ba scripts/red-proofs.js | sed -n '520,700p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1588,1675p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1675,1708p'",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '735,1249p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<JSON.parse and enumerate proof IDs>'; rg race/order surfaces",
+      "exit_status": 0,
+      "details": "Both subcommands exited 0. The declaration parsed as 21 proofs with 21 unique IDs."
+    },
+    {
+      "command": "rg proposed pathname-removal source forms; rg POSIX/win32 guarantee wording",
+      "exit_status": 0,
+      "details": "Both subcommands exited 0."
+    },
+    {
+      "command": "git status --porcelain; git diff --exit-code",
+      "exit_status": 0,
+      "details": "Both subcommands exited 0. Final porcelain status was empty and the working-tree diff was empty, identical to the initial state."
+    }
+  ],
+  "execution_notes": [
+    "Git repeatedly emitted non-fatal Darwin confstr/xcrun cache warnings because the sandbox denied cache-file creation; the reported git commands still exited 0.",
+    "No npm lane was run: this is a design-only revision with no candidate implementation, and the sandbox denied even isolated OS-temp fixture creation.",
+    "The review made no filesystem changes."
+  ]
+}

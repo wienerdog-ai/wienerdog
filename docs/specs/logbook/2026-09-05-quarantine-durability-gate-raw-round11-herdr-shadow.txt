@@ -1,0 +1,270 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 11, detached worktree at fa44462d (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision fa44462df7cad31521e154532e4afea18d0f76db vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "summary": "Ship the design. The round-10 dispositions are genuinely closed, the prescribed success path flushes and verifies the O_EXCL-created inode, all three pathname-removal windows are disclosed, and no material adversarial finding remains.",
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,260p' ../focus-qd11.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "note": "Baseline was empty."
+    },
+    {
+      "command": "git diff --stat main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --no-ext-diff --unified=80 main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^## |^### |^\\| \\*\\*[^|]+\\*\\* \\|' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'Deliverables|src/core/dream/validate|tests/unit/dream-validate|red-proofs|Table F|GUARANTEED|F10|QPD-|Proof|proof|identity' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '251,680p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '681,1100p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '699p' docs/specs/WP-quarantine-preserve-durability.md | fold -w 180",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '700,850p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n source-form and guarantee markers in docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1572,1855p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1855,2138p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,250p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1420,1571p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^```json$|^```$' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "Initial inline-proof JSON extraction command",
+      "exit_status": 1,
+      "note": "Review-command quoting error: shell interpreted Markdown backticks. No repository write occurred."
+    },
+    {
+      "command": "sed -n '801,1421p' docs/specs/WP-quarantine-preserve-durability.md | node -e <JSON validation>",
+      "exit_status": 0,
+      "note": "Parsed 26 proofs; 26 unique markers; every declared occurrence count is 1."
+    },
+    {
+      "command": "Extract and list all inline proof IDs and find strings",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1090,1421p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '620,790p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n 'function closeQuietly|closeQuietly\\(' src/core/dream/validate.js",
+      "exit_status": 1,
+      "note": "Expected on the unimplemented base source."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md | sed -n '1,180p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -C 4 'A12|arbitrary software already running as the same user|detection-not-prevention|detect' docs/THREAT-MODEL.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -C 3 'win32 posture|scanPrivateModes|insecure: 0' src/core/private-fs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -C 3 'ubuntu-latest|macos-latest|node-version|matrix' .github/workflows/ci.yml package.json",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -C 3 'mkdirSync\\(stateDir|deadline|steal|stale' src/core/dream/lock.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1060,1205p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '\"engines\"|\"node\"' package.json",
+      "exit_status": 0,
+      "note": "Confirmed Node floor >=18."
+    },
+    {
+      "command": "Node descriptor/link/read/directory-fsync probe using fs.mkdtempSync(os.tmpdir())",
+      "exit_status": 1,
+      "note": "Sandbox denied the OS-temporary fixture with EPERM before any file was created."
+    },
+    {
+      "command": "mktemp -d /tmp/wienerdog-qpd-review.XXXXXX",
+      "exit_status": 1,
+      "note": "Second OS-temporary location was also denied with EPERM; dependent Node probe was skipped with status 125."
+    },
+    {
+      "command": "node -e <print fs constants>",
+      "exit_status": 0,
+      "note": "Darwin Node v25.9.0: O_NOFOLLOW=256, O_DIRECTORY=1048576, and the combined open flags were numeric."
+    },
+    {
+      "command": "git diff --check main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD main",
+      "exit_status": 0,
+      "note": "HEAD=fa44462df7cad31521e154532e4afea18d0f76db; main=38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "sed -n '2138,2239p' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '2146,2237p' docs/specs/WP-quarantine-preserve-durability.md | sh",
+      "exit_status": 1,
+      "note": "Expected pre-implementation RED: no source flush or guarantee sentence and neither Done-spec amendment is present."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "note": "Infrastructure failure: markdownlint attempted registry.npmjs.org and failed ENOTFOUND; shellcheck and PSScriptAnalyzer ran, and frontmatter passed for 268 specs and 4 agents."
+    },
+    {
+      "command": "rg -n -i <durability-overclaim terms> docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n <exact guarantee sentence> docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "note": "One exact occurrence at line 1584."
+    },
+    {
+      "command": "rg -n 'removeOwnedQuarantinePath\\((tmp|dest)\\)' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "note": "The prescribed implementation has exactly the disclosed three removal sites."
+    },
+    {
+      "command": "rg -n -C 8 'function evaluateRed|evaluateRed|expectRed|testNamePattern|own-body' scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1633,1680p'",
+      "exit_status": 0,
+      "note": "Confirmed declared failures must be own-body ERR_ASSERTION failures and undeclared own-body failures are rejected."
+    },
+    {
+      "command": "git log --oneline --decorate -12 -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --unified=0 HEAD^ HEAD -- docs/specs/WP-quarantine-preserve-durability.md | rg <changed lines>",
+      "exit_status": 1,
+      "note": "No target-spec change in the final wrapper commit."
+    },
+    {
+      "command": "git diff --unified=8 5e291d80 b5165ca6 -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "note": "Inspected the complete round-10 revision."
+    },
+    {
+      "command": "Hash the fenced V1/V2 block at round 9, round 10, and HEAD",
+      "exit_status": 0,
+      "note": "All three hashes were 33053a27195765b4a6e79a884a5d6eb6f3b185fdfea19afdcb83e097ab9f09a1."
+    },
+    {
+      "command": "rg -n '^\\*\\*Item [1-8] ' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^\\*\\*Recommendation:' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '\\*\\*Cost of overruling:\\*\\*' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "note": "Eight owner items and eight overrule-cost statements are present; two recommendations are inline or line-wrapped rather than matching the anchored grep."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "note": "Final status was empty and byte-identical to baseline."
+    }
+  ],
+  "findings": [],
+  "round_10_dispositions": [
+    {
+      "id": "R10-A",
+      "status": "closed",
+      "evidence": "docs/specs/WP-quarantine-preserve-durability.md:693, 772-786, 1730-1751, 2091-2102",
+      "assessment": "F4 now requires closure of every directory descriptor; flushDir has one try covering open and fsync failures, a finally using closeQuietly, QPD-7 checks the still-open descriptor set on success and injected fsync failure, and criterion 7 carries the rule."
+    },
+    {
+      "id": "R10-B",
+      "status": "closed",
+      "evidence": "docs/specs/WP-quarantine-preserve-durability.md:691, 695, 699, 1584-1599",
+      "assessment": "The normative wording now claims completed flush calls and ordering only. F10 explicitly discloses the concurrent-writer and same-inode-relink counterexamples, and the exact guarantee sentence limits durability to what the platform flush provides."
+    },
+    {
+      "id": "R10-C",
+      "status": "closed",
+      "evidence": "docs/specs/WP-quarantine-preserve-durability.md:484, 1803, 2115-2126",
+      "assessment": "The Deliverables boundary and criterion 10 enumerate migrated injection seams, exactly two changed titles, and exactly one added assertion."
+    }
+  ],
+  "adversarial_trace": {
+    "success_path": "The only prescribed non-null return follows exclusive open of tmp, positional descriptor write, no-clobber link to dest, gated temp removal, artifact fsync through that same held descriptor, the complete fixed directory-chain flush, positional read-back through the same descriptor, byte comparison, and the final lstat/fstat identity gate. No alternative success return is prescribed.",
+    "removals": "Exactly three pathname removals are prescribed: tmp after commit, tmp in the write/commit failure catch, and dest on verification/flush failure. Each has an ownership gate; each unavoidable check-then-unlink window is disclosed in F10(i)-(iii). Create failure with fd < 0 removes nothing.",
+    "counterexamples": "All constructed residuals map to disclosed F10 instances: post-gate dest substitution (iv), concurrent same-inode writes (v), same-inode relink after directory flush (vi), the three check-then-unlink windows (i)-(iii), the stated local-filesystem precondition, or the A12 same-user-native-code boundary.",
+    "failure_routing": "Artifact or directory open/fsync failure makes flushPreservation false, prevents verification, reaches the existing D2 destination disposal, returns null, and follows existing P0/P3 call-site routing. A non-ENOENT ownership-stat failure raises the existing D3 WienerdogError instead of being swallowed.",
+    "proofs": "The inline declaration is valid JSON with 26 uniquely marked mutations. Its targeted identities and expected-red sets are compatible with evaluateRed's equality and own-body assertion requirements. The spec records 37 total proofs only after including the pre-existing proof set."
+  },
+  "routed_scope_objections": [],
+  "limitations": [
+    "Fresh syscall behavior could not be re-probed because the read-only sandbox denied both Darwin's configured temporary directory and /tmp with EPERM. The report therefore treats the spec's recorded rehearsal measurements as repository evidence, not as newly reproduced measurements.",
+    "Full lint did not complete because the unavailable markdownlint dependency attempted restricted network access. Frontmatter validation passed; this infrastructure failure is not a spec finding.",
+    "The V1/V2 block was intentionally run on the design-only revision and correctly returned RED because implementation deliverables do not exist on this branch."
+  ],
+  "verdict": "approve"
+}
