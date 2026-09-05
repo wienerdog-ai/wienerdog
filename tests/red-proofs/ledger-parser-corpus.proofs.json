@@ -1,0 +1,271 @@
+{
+  "suite": "tests/unit/dream-validate.test.js",
+  "proofs": [
+    {
+      "id": "lpc-a-trust-predicate-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "1",
+      "why": "the trust predicate is the whole of A1: reverting it back to a two-state test (val === 'true') makes every non-exact-literal value that boolFromRaw distinguishes as INVALID collapse to false (a wrongly-trusted state), so a schema check that used to refuse now passes and an authorization read that used to refuse now authorizes — reddening every case-variant, quoted, comment-carrying, numeric, empty, YAML-ish, homoglyph and interior-invisible witness",
+      "file": "src/core/dream/validate.js",
+      "find": "    else if (field === 'derived_from_untrusted') cur.untrusted = boolFromRaw(val);",
+      "replace": "    else if (field === 'derived_from_untrusted') cur.untrusted = val === 'true'; /* RP_MUT_LPC_A_TRUST_PREDICATE_REVERTED */",
+      "marker": "RP_MUT_LPC_A_TRUST_PREDICATE_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C(6|7|8|9|10|11|12|13|14|31|32|33|34|35)\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C6] case variant False, K refuses"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C7] case variant False, A refuses"
+          ],
+          "signal": "A path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C8] case variant TRUE, K refuses"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C9] case variant TRUE, A refuses"
+          ],
+          "signal": "A path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C10] quoted \"false\", K refuses (the ledger runs no coerceScalar)"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C11] the comment class, K refuses (no inline-comment stripping)"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C12] YAML-ish word yes, K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C13] numeric 1, K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C14] empty value, K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C31] the YAML-ish word class (on, off), K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C32] the YAML null class (~, null), K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C33] the YAML tag class (!!bool false), K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C34] the homoglyph class (fullwidth false), K and A refuse"
+          ],
+          "signal": "K path for"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C35] the interior-invisible class (U+200B inside false), K and A refuse"
+          ],
+          "signal": "K path for"
+        }
+      ]
+    },
+    {
+      "id": "lpc-b-collector-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "4",
+      "why": "parseLedgerEntries' collector reverted to {} restores the __proto__ accessor: a `## __proto__` heading no longer becomes an own key (its assignment is silently absorbed by the inherited setter), so C24/C25 keep instead of refusing the Pattern-Key check, and a bracket lookup on the CANDIDATE side for a heading-shaped key like `constructor` that the candidate never assigned resolves through the prototype chain to the built-in Object.prototype.constructor function instead of undefined, so C27's deleted-entry check never fires and a different (still-wrong) refusal reddens it; C28's `__proto__` sub-case reddens the same way as C24",
+      "file": "src/core/dream/validate.js",
+      "find": "  /** @type {Record<string, any>} */ const entries = Object.create(null);",
+      "replace": "  /** @type {Record<string, any>} */ const entries = {}; /* RP_MUT_LPC_B_COLLECTOR_REVERTED */",
+      "marker": "RP_MUT_LPC_B_COLLECTOR_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C24\\]|\\[C25\\]|\\[C27\\]|\\[C28\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C24] heading __proto__ alone, K refuses (Pattern-Key slug check)"
+          ],
+          "signal": "C24 proto heading"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C25] heading __proto__ plus one valid entry, K refuses (as C24)"
+          ],
+          "signal": "C25 proto plus valid"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C27] baseline constructor + a.b, candidate deleted constructor, K refuses (append-only)"
+          ],
+          "signal": "C27 constructor deleted"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C28] one shared pattern-key sample at both sites, 0 disagreements (A5)"
+          ],
+          "signal": "heading site refuse for"
+        }
+      ]
+    },
+    {
+      "id": "lpc-c-frontmatter-record-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "4",
+      "why": "parseFrontmatter's record reverted to {} restores the __proto__ accessor on the frontmatter collector: `__proto__: injected` in a SKILL.md promotion no longer becomes an own key (the inherited setter absorbs it), so the promotion-allowlist loop over Object.keys never sees an unauthorized extra field and the promotion is allowed with no qualifying learning, exactly the pre-fix hole C30 is the witness for",
+      "file": "src/core/dream/validate.js",
+      "find": "  const data = Object.create(null);",
+      "replace": "  const data = {}; /* RP_MUT_LPC_C_FRONTMATTER_RECORD_REVERTED */",
+      "marker": "RP_MUT_LPC_C_FRONTMATTER_RECORD_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C30\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C30] promotion adding __proto__: injected, A refuses (A2 fix — no longer invisible)"
+          ],
+          "signal": "C30 proto promotion"
+        }
+      ]
+    },
+    {
+      "id": "lpc-d-candidate-duplicate-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "2",
+      "why": "reverting the candidate-read duplicate-heading refusal (and only it) restores the last-wins collapse at the ONE read this mutation targets: a non-adjacent repeated `##` heading in the CANDIDATE ledger is no longer refused, so C17 keeps instead of refusing, and the candidate-read identity of the generated C40 matrix keeps for all 24 code points instead of refusing — while the two committed-baseline reads (C18, C19, C40 baseline/authorization) are untouched by this mutation and stay green",
+      "file": "src/core/dream/validate.js",
+      "find": "  if (curDuplicateKeys.length > 0) {\n    return `learnings ledger has a repeated entry heading (${curDuplicateKeys[0]}); each ## heading must appear once`;\n  }",
+      "replace": "  if (false && curDuplicateKeys.length > 0) { /* RP_MUT_LPC_D_CANDIDATE_DUPLICATE_REVERTED */\n    return `learnings ledger has a repeated entry heading (${curDuplicateKeys[0]}); each ## heading must appear once`;\n  }",
+      "marker": "RP_MUT_LPC_D_CANDIDATE_DUPLICATE_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C17\\]|\\[C40-candidate\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C17] non-adjacent CANDIDATE duplicate heading, K refuses"
+          ],
+          "signal": "C17 candidate duplicate"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C40-candidate] generated matrix, candidate read, K refuses (LPC-D)"
+          ],
+          "signal": "cp=U+"
+        }
+      ]
+    },
+    {
+      "id": "lpc-e-baseline-duplicate-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "2",
+      "why": "reverting the duplicate-heading refusal at BOTH committed-baseline reads (the append-only-comparison read in ledgerViolation and the authorization read in skillBodyViolation — the shared local name headDuplicateKeys occurs identically at both sites) restores a fail-open comparison against a last-wins collapse of a ledger nothing validated: C18 authorizes instead of refusing, C19 keeps instead of refusing, and the baseline/authorization identities of the generated C40 matrix keep/authorize for all 24 code points instead of refusing — while the candidate-read refusal (C17, C40 candidate) is untouched and stays green",
+      "file": "src/core/dream/validate.js",
+      "find": "    if (headDuplicateKeys.length > 0) {",
+      "replace": "    if (false && headDuplicateKeys.length > 0) { /* RP_MUT_LPC_E_BASELINE_DUPLICATE_REVERTED */",
+      "marker": "RP_MUT_LPC_E_BASELINE_DUPLICATE_REVERTED",
+      "occurrences": 2,
+      "testNamePattern": "\\[C18\\]|\\[C19\\]|\\[C40-baseline\\]|\\[C40-authorization\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C18] the same ledger as the COMMITTED baseline, A refuses"
+          ],
+          "signal": "C18 committed duplicate authorization"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C19] COMMITTED baseline duplicate, candidate carries both a.b and c.d, K refuses"
+          ],
+          "signal": "C19 committed duplicate append-only"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C40-baseline] generated matrix, committed-baseline read, K refuses (LPC-E)"
+          ],
+          "signal": "cp=U+"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C40-authorization] generated matrix, authorization read, A refuses (LPC-E)"
+          ],
+          "signal": "cp=U+"
+        }
+      ]
+    },
+    {
+      "id": "lpc-f-raise-only-invalid-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "1",
+      "why": "reverting the raise-only clause back to `he.untrusted === true` (dropping the `|| he.untrusted === INVALID` disjunct) makes A4 unreachable for an INVALID committed value: C21's baseline `False` (an INVALID committed value under A1) no longer triggers the raise-only comparison, so a candidate lowering it to the exact literal `false` keeps instead of refusing",
+      "file": "src/core/dream/validate.js",
+      "find": "      if ((he.untrusted === true || he.untrusted === INVALID) && ce.untrusted !== true) {",
+      "replace": "      if (he.untrusted === true && ce.untrusted !== true) { /* RP_MUT_LPC_F_RAISE_ONLY_INVALID_REVERTED */",
+      "marker": "RP_MUT_LPC_F_RAISE_ONLY_INVALID_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C21\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C21] baseline False, candidate false, K refuses (raise-only, INVALID fails closed)"
+          ],
+          "signal": "C21 raise-only invalid"
+        }
+      ]
+    },
+    {
+      "id": "lpc-g-bullet-key-match-reverted",
+      "wp": "WP-audit-e-ledger-parser-corpus",
+      "criterion": "2b",
+      "why": "reverting the bullet key match back to the shipped anchored form `/^-\\s*([A-Za-z_-]+):\\s*(.*)$/` restores A7's hole: `.` never matches CR, U+2028 or U+2029, so a bullet whose value contains one of them fails to match at all and the field reads as ABSENT rather than INVALID — C37's committed-baseline value is laundered into an absent bullet that A4 exempts, so the candidate's exact-literal `false` keeps instead of refusing (raise-only never fires), and C39's whole-CRLF ledger fails every bullet line (each ends in a bare `\\r` the anchored `(.*)$ ` cannot reach) so the entry reads as empty and the ledger refuses instead of keeping",
+      "file": "src/core/dream/validate.js",
+      "find": "    const b = raw.match(/^-\\s*([A-Za-z_-]+):/);\n    if (!b) continue;\n    const field = b[1].toLowerCase();\n    const val = raw.slice(b[0].length).trim();",
+      "replace": "    const b = raw.match(/^-\\s*([A-Za-z_-]+):\\s*(.*)$/);\n    if (!b) continue;\n    const field = b[1].toLowerCase();\n    const val = b[2].trim(); /* RP_MUT_LPC_G_BULLET_KEY_MATCH_REVERTED */",
+      "marker": "RP_MUT_LPC_G_BULLET_KEY_MATCH_REVERTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[C37\\]|\\[C39\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: ledger corpus [C37] same three values on the COMMITTED baseline, candidate false, K refuses (A7 makes it INVALID, A4 fires)"
+          ],
+          "signal": "cp=U+"
+        },
+        {
+          "test": [
+            "dream-validate: ledger corpus [C39] a whole ledger with CRLF line endings, otherwise valid, K keeps (A7 deliberate widening)"
+          ],
+          "signal": "C39 crlf ledger"
+        }
+      ]
+    }
+  ]
+}
