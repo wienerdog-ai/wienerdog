@@ -149,8 +149,12 @@ verb set is exactly:
   (+metadata get), `gmail_read` → `gmail.users.messages.get`, `calendar_list` →
   `calendar.events.list`, `calendar_show` → `calendar.events.get`, `drive_search` →
   `drive.files.list`, `drive_read` → `drive.files.get`/`export`.
-- **draft (`DRAFT` credential, `gmail.compose`, broker-only):** `create_draft` →
-  `gmail.users.drafts.create` (drafts never leave the account — ungated, safe).
+- **draft (`DRAFT` credential, `gmail.compose`, broker-only; also loads `READ`):**
+  `create_draft_to_self` → `gmail.users.drafts.create` (recipient = the
+  `getProfile`-resolved account owner) and `create_reply_draft` →
+  `gmail.users.drafts.create` (recipient/threading derived from the replied-to
+  message's `gmail.users.messages.get` metadata) — drafts never leave the
+  account, and neither verb takes an address argument (ungated, safe).
 - **send (`SEND` credential, broker-only):** `send_digest_to_self` →
   `gmail.users.messages.send` with the recipient **resolved server-side** to the
   authenticated self address (**zero address input**; §4).
@@ -518,3 +522,22 @@ broker:
 
 Implemented by **WP-broker-verb-allowlist-and-gws-gate** (parent gate + server-side
 allowlist) and **WP-gws-retire-dead-send-path** (the retired interactive path).
+
+### Amendment 2 (2026-09-05) — drafts are zero-address-input too
+
+§4 made the unattended SEND verb zero-address-input; the DRAFT class kept a free
+`to` field, ungated, on two routines whose input is untrusted (the audit's group
+D). **Decision:** `create_draft` is **deleted** and replaced by two verbs that
+take no address — `create_draft_to_self` (recipient = the `getProfile`-resolved
+account owner) and `create_reply_draft` (recipient derived from the replied-to
+message's headers). §4's zero-address-input rule therefore holds for **every**
+outward-addressing verb, DRAFT and SEND alike, and no free-address surface
+remains to gate — which is why the rejected alternative, gating DRAFT behind a
+grant, was not taken: a grant is one yes/no made months earlier, after which any
+address flows again. Both new verbs declare `extraClasses: ['READ']` because
+`getProfile` and `messages.get` route to the READ credential
+(Amendment 1's sibling decision, `src/cli/gws-broker.js:63-70`); the model's
+reachable surface is unchanged, since each routine's verb allowlist still names
+only its own verbs. Accepted residual: a reply draft's recipient is chosen by the
+replied-to message's author — see `docs/THREAT-MODEL.md` T4a.
+Implemented by **WP-audit-d-code-derived-recipients**.
