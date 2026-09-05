@@ -43,3 +43,38 @@ restated, as every status pass since 2026-09-02 has recorded.
 
 Appended as the design loop parks them (escalation (ii) items, if any), each
 with the recommendation adopted and the overrule cost as the spec states it.
+
+### Appended 2026-09-05 after the maturing pass (spec revision `88172a13`)
+
+Two items, both **recommendations adopted under the standing process above**, not
+direct rulings. **Their text and their enumerated overrule costs live in ONE
+place** — the spec's `## Dispatch precondition — owner items` — and are cited
+here rather than restated, because the last queue's record had to amend itself
+when the costs it quoted turned out understated. The owner reads them there
+before reversing either.
+
+1. **O1 — the product decision: PIN, by construction, at the pipeline seam.**
+   The run's own git calls get an environment built from the named allowlist in
+   the spec's **Table U**; every inherited `GIT_*` is thereby absent, and the
+   run's own `GIT_INDEX_FILE` is added for the private-index shapes exactly as
+   today. The principle drawn, and the reason it is not the hook suppression
+   `WP-dream-promote-in-workspace` Table W row W1 rejects: git's **config files
+   and hooks are the user's standing instructions and stay honoured** (`HOME` and
+   `XDG_CONFIG_HOME` are carried), while the **launching process's environment**
+   redirects our own act's target and is not a configuration surface. Measured
+   support for the asymmetry: an environment-injected `core.hooksPath` fires a
+   hook the user never configured, and an environment-injected `core.fsmonitor`
+   **executes an arbitrary script** inside the run's own `write-tree`. Reversing
+   this is the spec's overrule cost (a) or (b).
+2. **O2 — the second git spawn point stays with a successor.**
+   `assertGitRepo`'s call through `validate.js`'s own `git()` is a **named
+   residual** of that WP, owned by the new Draft stub
+   `WP-dream-git-env-validate-seam`, rather than folded in — which is what keeps
+   the package at S and inside the `≤ 8 files` sizing bound. Measured: with
+   `GIT_DIR` exported elsewhere that invocation exits 0 for a directory that is
+   not a repository. Reversing this is the spec's overrule cost (c).
+
+**No item was parked by the design loop under escalation (ii): round zero
+produced no finding that argues against the recommendation.** The six round-zero
+findings are all machinery or citations and are recorded, with what changed, in
+`2026-09-05-git-env-pinning-design-gate-rounds.md`.
