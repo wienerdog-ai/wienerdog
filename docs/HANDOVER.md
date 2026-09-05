@@ -26,7 +26,12 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
 | C | Dream write fence (machinery-controlling files) | **Open — one residual** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
 | D | Code-derived draft recipients (no verb accepts a model-named address) | **Done** — `WP-audit-d-code-derived-recipients` in `docs/specs/done/` |
-| E | Ledger-parser correctness + hostile corpus | **In review (PR #226)** — `WP-audit-e-ledger-parser-corpus` |
+| E | Ledger-parser correctness + hostile corpus | **Done** — `WP-audit-e-ledger-parser-corpus` in `docs/specs/done/` |
+
+**The five audit groups now read: A Done, B Done, C Open (one residual,
+`WP-dream-git-env-pinning`), D Done, E Done.** Only group C remains, and only its
+D2 (b) finding — the run's git calls inheriting `process.env` — which is an owner
+product decision, not unfinished work.
 
 Two known status anomalies at handover time:
 `docs/specs/WP-ep2-unscannable-preserve.md` was still In-Review after its PR
@@ -37,6 +42,58 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 #5 (owner-authorized merges).** Measured on `main`
+> at `54960a9d`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | E | `WP-audit-e-ledger-parser-corpus` | **Done** | design loop #225, implementation #226 (`54960a9d`), filed in this pass | **Design loop: round zero, two clean-context executors, and TWO double-channel rounds** (plugin + hermetic shadow; four raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md`). **The ADR-0031 breaker fired TWICE at round 2 and both were answered by EXTRACTION, not a third patch:** duplicate-heading normalisation became *detection on the key the parser CAPTURED*, witnessed by a **generated matrix over ECMAScript `\s` itself** (24 non-LF code points × three reads) after four hand-picked witnesses proved satisfiable by a wrong detector; and the RED-proof sets became a **proof-SELECTION contract** separating TOTAL REACH (measured, may vary by conforming implementation) from SELECTED WITNESSES (declared, graded), carried by the shipped `testNamePattern` facility. Round 2 returned **no product-verdict defect on either channel** and the loop closed under Weighted closure. Product: a **43-row hostile corpus**, **7 declared proofs**, and three live defects closed — trust washing (`TRUE`/`False` read as trusted on both paths), `__proto__` headings invisible to every schema and history loop, and a **duplicate heading in the COMMITTED ledger authorizing a Tier-3 body revision**. **Implementation: two rounds of the triple-channel PR gate** — round 1: plugin clean (52 focused tests), shadow *"patch is correct"*, wd-reviewer **REQUEST-CHANGES with the implementation judged correct** (140/140 Table C assertions) on two test-lane items; **erratum 2 (two Path-A fixtures that could not reach the `authorize` their Today column claims) landed on the branch at `3efcac1f`**; round 2 on that tip: plugin clean, shadow *"patch is correct"* (an in-memory LPC-E mutation confirmed the fail-open is now witnessed), wd-reviewer **APPROVE**, one band-C item routed to erratum 1. **Four dated errata** in the filed spec |
+>
+> **Measured numbers, and two corrections to the figures circulated with this
+> flip.** The merged tree at `54960a9d` is **2684/2672/0/12** with **60 declared
+> proofs, 60 selected, RUN: PROVEN**, lint clean. The gate's `2676/2664/0/12` and
+> the spec's `44` are both true **of different trees**: `2676/2664` is the branch
+> tip `3efcac1f` (re-measured here), and `37 → 44` is criterion 7 against this
+> WP's design base `8c52808f`. `WP-audit-d-code-derived-recipients` landed sixteen
+> declarations in between, so `main` reads 60, of which **exactly seven are this
+> WP's** (`lpc-a-…` through `lpc-g-…`). That gap is **erratum 4**: an acceptance
+> criterion phrased as an absolute repo-wide count goes stale without anyone
+> touching the spec.
+>
+> **The audit is effectively closed.** With D and E both Done the five groups read
+> **A Done, B Done, C Open (one residual), D Done, E Done** — the single remaining
+> item is group C's D2 (b), owned by `WP-dream-git-env-pinning`, and it is an owner
+> product decision rather than unfinished work.
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried
+> forward unchanged (the dot-segment spec's V2 B3 loop; the adopt-e2e Deliverables
+> cell; the basename WP's Table C position clause; the phase-environment contract
+> table for `scripts/red-proofs.js`; ADR-0010's "adopt requires the user to
+> confirm" sentence vs `--yes`; the orphaned `(ii)` sub-bullet at step 19 in
+> `src/cli/dream.js`; the durability WP's five; and audit-D's errata 3–6)
+> **plus this WP's errata 1, 3 and 4:** the fixture-helper header comment at
+> `tests/unit/dream-validate.test.js:3790-3791` that states the session-id
+> convention more broadly than C18 and C40-authorization follow it (erratum 1, band
+> C, non-blocking — it should say "on the section last-wins surfaces"); Table D not
+> stating that a RED proof's `signal` is a **literal substring of the assertion's
+> own message argument** as it reaches the TAP diagnostic, discoverable only by
+> running the RED phase (erratum 3); and criterion 7's absolute count (erratum 4).
+> **Also recorded, not defects:** the size-ceiling residual **F6** — 594 lines
+> against a ~400 ceiling, all contract and corpus, **zero gate machinery added in
+> any round** — and **C26's lookup-detector-only reach** as a stated property of
+> Table D. **Plus the OPEN owner question carried forward** from audit-D: whether
+> the input bound should be restated in UTF-8 octets to match the output bound — no
+> output-safety consequence either way, but availability differs, and the character
+> bound as ruled is the more permissive.
+>
+> **Next in the queue:** `WP-process-runbook-sweeps`, then
+> `WP-dream-git-env-pinning` (**owner product decision** — the maturing architect
+> records a recommendation with the cost of overruling it). After those, the
+> successors: `WP-quarantine-disposal-durability` (**Draft**), and unfiled —
+> `WP-quarantine-only-copy-shelf`, `WP-red-proofs-marker-audit`, the owner's named
+> option **(c)** (mid-trim of `References`), and the criterion-7 one-test follow-up
+> from audit-D's erratum 4.
+>
 > **Status pass, 2026-09-06 (day session of 2026-09-05, owner-authorized
 > merges).** Measured on `main`:
 >
