@@ -1,0 +1,166 @@
+# Design gate raw — round 2 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: a1b69cc1bbc11c114acb7057226e2647f91d2b74 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision a1b69cc1bbc11c114acb7057226e2647f91d2b74 vs main: docs/specs/WP-audit-e-ledger-parser-corpus.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: the corpus still permits a duplicate-heading detector that passes every declared witness while authorizing last-wins duplicates carrying untested whitespace. Table D also contradicts itself about whether C39 reddens LPC-G.",
+  "sandbox_note": "The brief required file-backed exotic-character drivers in an OS mkdtemp directory. Both /tmp and the process-reported TMPDIR rejected mkdtemp with EPERM, and apply_patch to TMPDIR was rejected by the read-only sandbox. No worktree, home, vault, or persistent file was written. Behavioral probes therefore ran through an in-memory module copy streamed to Node; exotic values were constructed numerically and their code points were printed before use. No literal exotic character crossed shell quoting.",
+  "executed_commands": [
+    {
+      "command": "sed -n '/VENDORED CONTENT/,$p' docs/runbooks/review-prompts/adversarial.md; sed -n '1,$p' ../focus-ae2.txt",
+      "exit_status": 0,
+      "result": "Loaded the complete vendored operating prompt and USER_FOCUS."
+    },
+    {
+      "command": "git status --porcelain; git rev-parse HEAD main; git diff --name-status main...HEAD; git diff --stat main...HEAD -- <two review files>",
+      "exit_status": 0,
+      "result": "Before-status was empty. HEAD=a1b69cc1bbc11c114acb7057226e2647f91d2b74; main=8c52808f5df9ebe281a5a15c49938b0d9097b99e."
+    },
+    {
+      "command": "nl -ba/sed reads over docs/specs/WP-audit-e-ledger-parser-corpus.md and docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Read both review documents with line numbers."
+    },
+    {
+      "command": "nl -ba/sed and rg reads over src/core/dream/validate.js, src/core/frontmatter.js, docs/adr/0020-skill-revision-lifecycle.md, tests/unit/dream-validate.test.js, tests/unit/frontmatter-unify.test.js, scripts/red-proofs.js, and tests/red-proofs/*.proofs.json",
+      "exit_status": 0,
+      "result": "Read the cited parser, consumers, fixture adapter, affected assertions, ADR insertion area, RED runner semantics, and existing proof declarations."
+    },
+    {
+      "command": "jq -s '[.[].proofs | length] ...' tests/red-proofs/*.proofs.json",
+      "exit_status": 0,
+      "result": "Confirmed 37 existing proofs, so seven additions produce 44."
+    },
+    {
+      "command": "rg -F '\\u2028' ...; rg -F '\\u2029' ...",
+      "exit_status": 1,
+      "result": "No existing cited file contained file-safe escaped fixtures for those characters."
+    },
+    {
+      "command": "mktemp -d /tmp/wd-ae2-review.XXXXXX",
+      "exit_status": 1,
+      "result": "EPERM."
+    },
+    {
+      "command": "node -p \"require('node:os').tmpdir()\"; test -d \"$TMPDIR\" /tmp /private/tmp",
+      "exit_status": 0,
+      "result": "TMPDIR resolved to /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/ and all candidate directories existed."
+    },
+    {
+      "command": "mktemp -d \"${TMPDIR}wd-ae2-review.XXXXXX\"",
+      "exit_status": 1,
+      "result": "EPERM."
+    },
+    {
+      "command": "apply_patch Add File: $TMPDIR/wd-ae2-probe.js",
+      "exit_status": "rejected before execution",
+      "result": "Read-only sandbox blocked the write."
+    },
+    {
+      "command": "printf %s '<base64 in-memory driver>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "Drove shipped makeGates(...).ledger and .skillBody across C1-C43; printed code points; exhaustively compared old and A7 prefix regexes over Unicode scalar values; tested heading normalization and parseFrontmatter observables. This first completed driver had an over-escaped simulated bullet regex and an extra empty revision_pattern_key in C30, so only its shipped Today matrix, exhaustive raw-regex boundary, heading-normalization, and observable outputs were retained."
+    },
+    {
+      "command": "printf %s '<base64 corrected full matrix driver>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "Corrected the fixture defects. Every shipped Today verdict matched Table C, including C29/C30 and C31-C43. The simulated ruled design matched REQUIRED verdicts. Lookup-, Set-, and third array-backed conforming detectors agreed. LPC-B changed C24/C25/C27/C28 for Set and array detectors; lookup additionally changed algorithm-dependent C26. LPC-G changed exactly C37/C39 for all three detectors."
+    },
+    {
+      "command": "printf %s '<base64 heading-whitespace adversarial driver>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "Drove correct and witness-hard-coded detectors through makeGates(...).skillBody over the full non-LF ECMAScript whitespace set. The wrong detector passed C40's four witnesses but authorized duplicates for 20 other normalized suffixes."
+    },
+    {
+      "command": "git diff --check main...HEAD -- <two review files>",
+      "exit_status": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "Environmental failure: markdownlint attempted registry.npmjs.org and failed ENOTFOUND because dependencies were unavailable and network is restricted. Shellcheck/PSScriptAnalyzer completed; frontmatter check passed 268 specs and 4 agents. This is not a product finding."
+    },
+    {
+      "command": "wc -l <two review files>",
+      "exit_status": 0,
+      "result": "Spec 575 lines; logbook 448 lines."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "After-status was empty, byte-for-byte identical to before-status."
+    }
+  ],
+  "verification_results": {
+    "R1_A": {
+      "status": "closed",
+      "evidence": "With A7+A1+A4, committed values containing CR, U+2028, or U+2029 became INVALID and C37 refused raise-only; C39 changed from the shipped Pattern-Key mismatch to keep. LPC-G reddened exactly C37/C39.",
+      "widening_boundary": "At raw-regex level the only differing scalar values were U+000A, U+000D, U+2028, and U+2029. U+000A is the parser's delimiter and cannot occur inside an LF-delimited raw line, leaving exactly CR/U+2028/U+2029 in the contract domain. No fourth in-domain character was found.",
+      "C39_ruling": "Not a finding or new owner item. Under A7, an LF-delimited CRLF line retains CR in its remainder, and the explicitly specified String.prototype.trim removes it. C39 is therefore a direct consequence of the stated line/value contract and the already-shipped CRLF tolerance, not an unstated policy choice."
+    },
+    "R1_B": {
+      "status": "not fully closed",
+      "evidence": "Interior whitespace runs, case variants, NFC/NFD forms, and interior zero-width characters remain distinct captures and fail PATTERN_KEY_RE, so they do not create a valid-key equivalence. However, the finite trailing-whitespace normalization class is incompletely consumed by C40-C42; see finding F1."
+    },
+    "R1_C": {
+      "status": "closed",
+      "evidence": "The third array-backed detector agreed with lookup and Set detectors on the compliant design. Under LPC-B, Set and array produced exactly C24/C25/C27/C28; lookup additionally produced C26, confirming why C26 must remain excluded. LPC-G produced exactly C37/C39 under all three."
+    },
+    "R1_D": {
+      "status": "closed",
+      "evidence": "The null-prototype implementation produced zero own keys for missing/unclosed blocks, exactly ['k'] with k='v' for the no-separator form, and deep equivalence between spaced/unspaced forms. That conforming implementation fails the old deepEqual-to-plain-object assertions solely because of the intentional prototype change; no value or key assertion is lost."
+    },
+    "R1_E": {
+      "status": "not fully closed",
+      "evidence": "The value rule itself is exhaustive: String.prototype.trim followed by exact true/false comparison decides every string. The named hostile interior/case/normalization forms are invalid and covered by that rule. The hostile-heading witness surface nevertheless omits members of the parser's actual trailing-whitespace equivalence class; see F1."
+    },
+    "new_material": {
+      "C31_C43_today": "All shipped Today outputs matched the table after correcting the probe fixture.",
+      "A7_CR_semantics": "Well-defined: LF splitting leaves a trailing CR in the raw line; CR is part of the remainder and is removed by String.prototype.trim.",
+      "table_D": "Both governing rules are meaningful. LPC-B and LPC-G are non-vacuous and their canonical declared row sets were reproduced, subject to finding F2's contradictory control prose.",
+      "dispatch_item_3": "It cites Current state's six-call/five-failure measurement and Implementation notes' three observables; it no longer substitutes its own repair technique.",
+      "ADR_0020": "The amendment is false before implementation and true only when A1-A3/A7 land, as specified. Its insertion point between the 2026-07-12 revision and Future work is unambiguous.",
+      "deliverables": "Complete for the new rows: all behavioral rows belong in dream-validate.test.js, the parseFrontmatter compatibility assertions belong in frontmatter-unify.test.js, seven declarations belong in the new proofs JSON, and the source/ADR files are listed."
+    }
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "line_start": 385,
+      "line_end": 387,
+      "confidence": 0.99,
+      "title": "C40-C42 test only four members of a much larger normalized-heading class, allowing an authorizing duplicate to escape",
+      "body": "A3 requires duplicate detection on the key captured by /^##\\s+(.+?)\\s*$/, but C40-C42 exercise only ASCII space, TAB, NBSP, and BOM. The shipped capture also removes trailing VT, FF, CR, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F, and U+3000. The executed adversarial implementation detected duplicates using raw heading lines while stripping exactly the four rowed suffixes. It passed all four C40 witnesses, yet makeGates(...).skillBody returned null—authorization—for the other 20 suffixes after the parser collapsed both headings to a.b and retained the final false section. By construction it also passes C17 and the C41/C42 forms, so the behavioral corpus and LPC-D/LPC-E can accept an implementation that violates A3 and preserves the original last-wins authorization hole.",
+      "impact": "A committed hostile ledger can authorize a Tier-3 skill-body revision even though the contract requires every normalized duplicate heading to fail closed.",
+      "recommendation": "Make C40-C42 consume the complete non-LF ECMAScript whitespace set recognized by the heading regex, preferably from one canonical behavioral matrix rather than four enumerated witnesses. This is the second consecutive round on the R1-B duplicate-normalization family, so apply the pinned ADR-0031 extraction escalation instead of landing a third textual patch."
+    },
+    {
+      "id": "F2",
+      "materiality_band": "B",
+      "file": "docs/specs/WP-audit-e-ledger-parser-corpus.md",
+      "line_start": 421,
+      "line_end": 435,
+      "confidence": 1,
+      "title": "Table D simultaneously requires C39 to redden LPC-G and says nothing reddens C39",
+      "body": "LPC-G's canonical row explicitly requires C37 and C39 to redden, which execution confirmed exactly. Thirteen lines later, C39 is included in a list of green controls followed by the categorical claim that nothing reddens them. An implementer following that latter instruction can omit C39 from expectRed or weaken its role, conflicting with the canonical proof set.",
+      "impact": "The resulting declaration is caught downstream by red-proofs exact-set equality, but it forces an avoidable implementation/review failure and leaves two mutually exclusive instructions in the design gate.",
+      "recommendation": "Remove C39 from the 'nothing reddens them' list or state precisely that it is green only on the compliant design and intentionally red under LPC-G."
+    }
+  ],
+  "routed_scope_objections": [],
+  "ruled_boundaries_not_counted": [
+    "The 575-line F6 residual was not reopened; line count alone was not treated as a finding.",
+    "No new script, grep, verification command, duplicate-detector shape mandate, authorization-specific INVALID message, coerceScalar use, Object.hasOwn guard, or __proto__ name check is recommended.",
+    "The C39 CRLF acceptance change was treated as an already-implied contract consequence, not an owner-policy objection.",
+    "The missing per-WP owner-rulings record was not raised because the Ready-flip timing is explicitly settled."
+  ],
+  "worktree_integrity": {
+    "before_git_status_porcelain": "",
+    "after_git_status_porcelain": "",
+    "identical": true
+  }
+}
