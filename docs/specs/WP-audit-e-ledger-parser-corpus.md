@@ -11,13 +11,27 @@ epic: audit-close
 
 # WP-audit-e-ledger-parser-corpus: Ledger-parser correctness — three-state trust reader, null-prototype records, contract-complete hostile corpus
 
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
 ## Dispatch precondition (FIVE owner items; accepting all five recommendations changes no Deliverables row)
 
 Each item gives the question, the recommendation, and the cost of overruling it.
-The owner's standing instruction of 2026-09-05
-(`docs/specs/logbook/2026-09-05-owner-rulings-durability-queue.md`) lets the
-session dispatch under these recommendations; any of them is reversible by dated
-amendment.
+What lets the session dispatch under them is the **process ruling** of
+2026-09-05, not any one queue's item list: the owner's standing instruction of
+that date — quoted verbatim in
+`docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`, whose §3
+generalises it, and restated in `docs/HANDOVER.md`'s 2026-09-05 status pass #3 —
+settles that *the maturing architect records a recommendation with the cost of
+overruling it, and the session may dispatch under that recommendation, the owner
+reversing any of them by dated amendment*.
+
+This work package's **own** rulings record,
+`docs/specs/logbook/2026-09-05-owner-rulings-audit-e-queue.md`, is written when
+this spec flips to `Ready` and before it is dispatched, listing the five items
+below with their recommendations as ruled-by-standing-instruction — so no
+implementer is ever dispatched without a record that names this work package. It
+does not exist yet: the design loop is open and the item list may still move.
 
 1. **The duplicate-heading refusal covers all THREE reads of a ledger, not only
    the candidate.** Recommendation: **yes** — measured on `8c52808f`, a committed
@@ -95,9 +109,11 @@ no new script.
 Measured on `8c52808f` (`origin/main`). Line numbers drift; each claim below names
 the **construct** and quotes its current line, which is what to re-run at
 dispatch. Baselines on that tree: `node tests/with-temp-root.js tests/run.js` →
-`tests 2630 / pass 2618 / fail 0 / skipped 12`, exit 0; `npm run lint` → exit 0
-(`640 file(s)`, `0 error(s)`, `268 spec(s), 4 agent(s)`); `npm run red-proofs` →
-`37 declared proof(s), 37 selected`, `RUN: PROVEN`, exit 0.
+`tests 2630 / pass 2618 / fail 0 / skipped 12`, exit 0; `npm run lint` → exit 0,
+`0 error(s)` (its *file count* is not pinned — it grows with every markdown file
+added, this spec and its rounds record included); `npm run red-proofs` →
+`37 declared proof(s), 37 selected`, `RUN: PROVEN`, exit 0. `red-proofs` refuses
+a symlinked `node_modules`, so it runs on a real checkout, not a docs worktree.
 
 `src/core/frontmatter.js` is the ONE strict flat-frontmatter lexer (ADR-0022). It
 already ships the three-state discipline this work package needs, but only at

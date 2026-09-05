@@ -203,8 +203,9 @@ Top-level-heading diff of the spec against `docs/specs/_TEMPLATE.md`: every temp
 section present, none silently absent; one addition, `## Dispatch precondition`,
 which the pipeline requires. `### Contract table(s)` is realised as the four
 named canonical tables, which is the template's own instruction and the worked
-example's shape. `npm run lint` passes with the spec in the tree (640 files,
-0 errors; 268 specs).
+example's shape. `npm run lint` passes with the spec in the tree — exit 0,
+`0 error(s)`. The FILE COUNT is deliberately not pinned here (executor finding
+X2): it grows with every markdown file added, this record included.
 
 ADR-0020's structure was measured before the amendment text was written: it has
 **no** `## Amendments` section but does carry
@@ -226,7 +227,7 @@ would be false until the code makes it so.
 | F3 | `ADR-0020:78` is a two-line sentence (78-79) | **fix** — the spec quotes the sentence |
 | F4 | The first C28 draft claimed the two pattern-key sites "agree"; measured, they disagree on `__proto__` today, and an empty key cannot reach the heading check at all | **fix** — row restated over a heading-shaped 19-key sample with measured counts (1 disagreement today, 0 under the design) |
 | F5 | The draft added a distinct authorization-path INVALID message and a 7th RED proof | **fix by removal** — one rule (INVALID ≡ `true` at every consumer, `frontmatter.js`'s own shipped stance) beats a special case; recorded in Table B as a dropped alternative so a re-proposal routes as a scope objection |
-| F6 | Spec length 470, over the pre-pinned ~400 ceiling | **fixed in part, residual accepted** — pruned to 458, then back to **472** when F9/F10 corrected Table D; the surplus is Table C (47 lines, and it *is* the deliverable), Table D's measured reddening sets, and the pipeline-required 40-line Dispatch precondition |
+| F6 | Spec length 470, over the pre-pinned ~400 ceiling | **fixed in part, residual accepted** — pruned to 458, then back to **488** as F9/F10 corrected Table D and the executor fix pass rewrote the dispatch basis; the surplus is Table C (47 lines, and it *is* the deliverable), Table D's measured reddening sets, and the pipeline-required 40-line Dispatch precondition |
 | F7 | The stub declared `size: S`; the deliverable is six files across two source modules, two test files, a proofs JSON and an ADR | **fix** — `size: M`, parked as owner item 4 with the reason a split is the archive's failure mode |
 | F8 | A third live defect exists that the stub does not list: a duplicate heading in the *committed* ledger authorizes a Tier-3 revision | **fix** — driven (§0.2), Table C row C18, and the duplicate rule now covers all three reads (owner item 1) |
 | F9 | Table D's first draft PREDICTED each mutation's reddening set instead of measuring it, and two predictions were wrong | **fix** — both mutations applied to scratch copies and run (§0.11). LPC-A also reaches C21; LPC-B also reaches C26. Table D now carries the measured sets, plus the identity-separation note LPC-A/LPC-F force |
@@ -295,6 +296,45 @@ identities, or LPC-F is indistinguishable from LPC-A.
 - Anything about the archive predecessor's branch beyond its spec and its
   round-1 log, both read read-only at `b07d4bc`. Nothing was built on it.
 
+## Round zero — orchestrator executors, 2026-09-05, on `269903d7`
+
+Two clean-context executors that took no part in drafting: a
+template-conformance read (spec + template only) and a coherence pass that
+**ran** rather than read.
+
+**Template conformance: CONFORMS**, with one non-blocking omission — the
+template's boilerplate line under the H1 (*"Authoring rules live in
+`docs/runbooks/spec-authoring.md` …"*) was absent. Restored in the fix pass
+below. Every top-level section is present or explicitly `N/A`;
+`## Dispatch precondition` is the one pipeline-required addition. (A fence-blind
+`grep -o '^## '` also reports a `## Amendment` heading; it is inside the
+```markdown fence holding the verbatim ADR-0020 amendment text, not a section of
+the spec. The executor's read, which is not fence-blind, did not report it.)
+
+**Coherence: behaviourally clean.** The executor reproduced **~25 of Table C's
+30 "Today" verdicts** against the shipped `makeGates` with exact refusal strings,
+verified every citation at both ends, and found every runnable criterion
+correctly **RED before the work** — so no criterion in this spec is vacuous.
+
+**V3 is not runnable in this worktree.** `npm run red-proofs` refuses a symlinked
+`node_modules`, which is what a docs worktree has; the executor skipped it by
+instruction. Round zero's own V3 number (§0.1) came from a `git archive` scratch
+copy with a COPIED `node_modules`, and **the implementer's dispatch will carry a
+real checkout**. Recorded so a reader can tell a skip-by-construction from a
+skipped gate.
+
+### Executor findings and dispositions — both LIGHT
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| X1 | The Dispatch precondition cited `2026-09-05-owner-rulings-durability-queue.md` as what lets the session dispatch under these recommendations. That record rules eight items of a **different** work package and never names this one | **fix** — the basis is the PROCESS ruling, not a queue's item list: the owner's standing instruction of 2026-09-05, quoted verbatim in `2026-09-05-owner-rulings-banner-queue.md` (its §3 generalises it) and restated in `docs/HANDOVER.md` status pass #3. The sentence now cites that, and adds the obligation that this package's **own** rulings record (`2026-09-05-owner-rulings-audit-e-queue.md`) is written at the `Ready` flip, before dispatch, naming these five items — so no implementer is dispatched without a record naming this WP. That record is deliberately **not** written yet: the loop is open and the item list may still move |
+| X2 | Current state pinned `Linting: 640 file(s)`, already stale at 641 on this branch — the rounds logbook is itself a markdown file | **fix** — stop predicting the count. The baseline now states exit 0 and `0 error(s)`, and says the file count is not pinned because it grows with every markdown file added, this spec and its rounds record included |
+
+Neither finding touches `src/` behaviour, the ADR contract, or anything a user or
+a consuming model observes, so both are LIGHT under "Weighted closure": the fixes
+land and are verified mechanically, and the loop proceeds to round 1 without a
+fresh external round for them.
+
 ## The stop criterion (pinned BEFORE round 1)
 
 - **Closes** on a round with no product finding on either channel. Machinery
@@ -308,4 +348,5 @@ identities, or LPC-F is indistinguishable from LPC-A.
   a recommendation and an overrule cost, not folded in.
 - **Size ceiling (learned from the archive):** if the spec passes ~400 lines, or
   a round adds gate machinery rather than a corpus row, **that is itself a
-  finding**. It is already open as F6 at 472 lines, with a recorded residual.
+  finding**. It is already open as F6, at 488 lines after the executor fix pass, with a
+  recorded residual.
