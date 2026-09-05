@@ -365,6 +365,7 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
+| 10 (`9047e954`) | needs-attention / needs-attention | `…gate-raw-round10-codex-plugin.txt`, `…gate-raw-round10-herdr-shadow.txt` (both `560e0411`) | Plugin 1 A + 1 B; shadow 1 A; no scope objections. **BOTH CHANNELS CONFIRMED EVERY ROUND-9 DISPOSITION GENUINELY CLOSED** — the ordering contract, the three-valued predicate with its two `finally` blocks, the contiguous forms (a)–(k), the mirrors — **and neither found a false-SUCCESS path.** What they found is one unspecified resource lifecycle and two wording overclaims. **[A, shadow] `flushDir`'s DESCRIPTOR was never specified.** The only prescribed directory-flush form is the loop's `if (!flushDir(dir)) return false;`, and the boolean is all the rest of the protocol sees — so `openSync(dir); fsyncSync(fd); return true` satisfies every row, produces the exact `fsync` sequence QPD-3 and QPD-4 assert, and passes every declared mutation while leaking one descriptor per chain member on EVERY successful preservation; a long enough run then exhausts the descriptor limit and the preservations that follow take the shipped only-copy abort. The closure proofs covered only the ARTIFACT descriptor. → **FIX: `flushDir`'s whole body becomes a byte-exact source form** — one `try` for both failure modes (F4's disposition is the same for a failed open and a failed `fsync`), the close in a `finally` through `closeQuietly` (a `close` that errors after a flush that COMPLETED must not fail a preservation; `close` is not a flush). Row **F4** gains the rule; new identity **QPD-7** proves closure on the steady-state path AND after an injected directory `fsync` failure; new proof `directory-descriptor-leaked` removes the finalizer. **The fixture's own design is a measured finding: descriptor numbers are REUSED** — with the protocol correct all four chain opens return the SAME `fd`, so a per-`fd` map or a count of closes reads identical for a leak and a non-leak. The first attempt did exactly that and saw ONE directory instead of four; what discriminates is the set of descriptors STILL OPEN at return. Recorded as trap (vii). **[A, plugin — wording] TWO crash-survival overclaims.** F6 said any artifact surviving a crash holds complete bytes; F10 (vi) said the bytes and inode *do survive*. Both exceed the package's own contract, which establishes completed flush CALLS and their ORDER and nothing about a medium. → **FIX: both rewritten in ORDER-only terms**, and the sweep found two more — F2's *the bytes then survive under no name* and the same phrase inside `containing-directory-not-flushed`'s `why`. **[B, plugin] TEST-CHANGE ACCOUNTING.** The Deliverables cell permitted ONE title change, but `post-commit-descriptor-leaked` selects a D3 test whose shipped title reads *after a failed rename fails LOUD* — a SECOND title change, plus an added assertion the cell's *no existing ASSERTION changes* did not admit. → **FIX: the cell now enumerates all THREE changes to shipped tests** (the migrated seams, TWO titles both forced by row F9's commit, ONE added assertion) and criterion 10 asserts the enumeration; a third title or a second added assertion is a finding. All FIX. **No escalation fires:** no new object, no reopened family, and the guarantee sentence is untouched. **Round 11 runs on both channels as the closing confirmation.** |
 | 9 (`66ca66b9`) | needs-attention / needs-attention | `…gate-raw-round9-codex-plugin.txt`, `…gate-raw-round9-herdr-shadow.txt` (both `c9ea05e8`) | Plugin 1 A + 1 B; shadow 2 A + 1 B + 1 C; no scope objections; nobody re-argued the seven items. **Both channels validated round 8's reorder and its disclosure, and then found the reorder's own limit and a defect in the predicate underneath it.** **[A, plugin] `fsync` AND `read` ARE SEPARABLE.** A same-UID writer to the held inode can write X, let the artifact `fsync` complete over X, and restore the judged bytes J before `readAllAt`: the read and the comparison see J, the identity matches, and the preservation reports SUCCESS although no protocol flush ever covered the final J write. Round 8's instance (v) limited itself to the interval after the comparison, so this was undisclosed. → **THE LAST NARROWING, taken: (v)'s window becomes THE WHOLE CALL**, and the guarantee's flush clause is restated as an ORDER rather than a COVERAGE — the returned bytes were read from the created inode AFTER a flush of it completed and compare equal to the judged bytes, which coincides with *a flush completed over these bytes* only **absent a concurrent writer of that inode**. Three outcomes exhaust (v): an overwrite that PERSISTS is caught (QPD-5 (g) pins it — behaviour the protocol controls), one REVERTED before the read-back is not, one after the comparison diverges the artifact. **No two-write test was added**, per the round-4 rule, and `read-before-flush` is kept because it tests the ordering the protocol DOES control. **[A, shadow] `ownsName` HAD TO BE THREE-VALUED.** Catching every stat error as `false` conflates `ENOENT` and a completed non-matching stat — demonstrably not ours, fail closed — with `EIO`/`EACCES`, where the name may still be OURS. At the post-commit temp gate an indeterminate stat skipped the removal and the run returned **SUCCESS with its own secret-bearing `tmp` link left at a deterministic pid-derived name**; at the last gate and the failure-path recheck it returned **`null` with this invocation's `dest` still present** — against Table D rows **D3** and **D4** as quoted in the spec. → **FIX, and it is PRODUCT BEHAVIOUR, so it is parked as Dispatch precondition item 8:** `ENOENT` and a completed mismatch stay `false`; every other stat failure RAISES row D3's own `WienerdogError` out of `quarantinePreserve` — same class, same route, one added reason, no new abort and nothing added to Table P. The predicate keeps its boolean shape so the four gates read unchanged; the shared `catch`'s close moves into a `finally` because that gate can now throw; the flush-then-verify block RE-THROWS a `WienerdogError` rather than fold it into a preservation failure. Four new cases (QPD-5 (h)(i), QPD-6 (h)(i)) and three new proofs pin detection, propagation and closure separately. **[B, CONVERGED] The superseded source form (e)** — read/compare before the flush — was left standing beside the new one, so `destination-ownership-gate-removed`'s `find` occurred TWICE and the implementer had two mutually exclusive byte-exact instructions. → **DELETED**, the forms re-lettered (a)–(k) with no gap, F6's `read/compare/flush` phrase swept, and the literal occurrence audit re-run and recorded. **[C, shadow] Mirrors** — the disposal stub claimed universal durability (now scoped to POSIX, citing F5/F7(c)); F10 said TWO non-destructive instances while enumerating three (the total is now not written at all, the by-shape rule); QPD-5's identity NAME still said *at ANY point after the commit* (renamed to the seams it tests, and QPD-6 with it); Exact contracts and the Security checklist carried the older inventory (both now name the overwrite and the relink). All FIX. **Escalation (i) FIRES and is answered with a contract, not a patch** — see below. HEAVY (a new failure disposition) → **round 10 runs as a FULL external round.** |
 | 8 (`53e0c713`) | needs-attention / needs-attention | `…gate-raw-round8-codex-plugin.txt`, `…gate-raw-round8-herdr-shadow.txt` (both `2a57897f`) | Plugin 1 A; shadow 1 A + 1 routed to item 1. **Both channels closed R7-B/C/D and the round-7 guarantee survived except at two edges of the same sentence.** **[A, shadow] READ-BEFORE-FLUSH.** The source form read back and compared BEFORE `flushPreservation`, so an overlapping same-inode write landing between the comparison and the `fsync` left the flush completing over newer contents while the call returned the older buffer — "the returned bytes were flushed" false for exactly that interval, and F10 (v) wrongly treated the whole post-read interval as after-the-flush. → **FIX, taken: the flush runs FIRST**, then the read-back and comparison through the held descriptor, `readBack` still the returned buffer, no post-gate re-read. **The directory chain stays contiguous with F1 rather than moving after the read** — an entry's durability does not depend on the content, and keeping the set in one call preserves F6's own internal rule; the only cost is a wasted directory flush on a path that aborts anyway. New QPD-5 case (g) and proof `read-before-flush` distinguish flush-then-read from read-then-flush by staging an in-place overwrite at the ARTIFACT-FLUSH seam. **[A, plugin] SAME-INODE RELINK before the last gate.** A hand holding a spare hard link can, after `qdir`'s flush, unlink `dest` and relink the spare there; `lstat` sees the right `(dev, ino)` and the gate passes, but the entry observed was created after the flush that covered its directory. → **DISCLOSURE, not redesign** (no primitive makes "the entry I flushed" and "the entry I observe" the same object): F10 instance **(vi)**, with the guarantee now saying the chain flushes covered the entries AS THEY STOOD WHEN THEY RAN and the last gate is an IDENTITY check, not a flush guarantee for the entry observed there; cost stated honestly — the NAME may not survive a crash, the BYTES and the INODE do, and the inode keeps a flushed entry only if the hand's spare link is itself durable. **Not pinned with a test**, per the round-4 rule. **[routed → item 1, taken as hygiene]** the return JSDoc said bytes are "flushed, always" and F0 was universal while F5 issues no flush on win32 → every universal flushed/success mirror is now explicitly POSIX-only, including both `Done`-spec clauses (re-derived; V2 re-run). All FIX. **Round 9 runs on both channels as the closing confirmation.** |
 | 7 (`a4d6be1b`) | needs-attention / needs-attention | `…gate-raw-round7-codex-plugin.txt`, `…gate-raw-round7-herdr-shadow.txt` (both `fc92939e`) | Plugin 1 A; shadow 1 A + 2 B; no scope objections. **Both channels validated every round-6 fix** — the complete `ownsName` body, the new QPD cases, item 7, the chains, three gated removals, create failure removing nothing, flush failure not swallowed. **[A, CONVERGED in substance, from two sides] GUARANTEED (2) OVERCLAIMED.** It said *no substitution, at any point, can make this invocation report SUCCESS over bytes it did not create, verify and flush*, and the design admits two counterexamples: the shadow's **after-gate replacement of `dest`** — `tmp` is already gone, closing the fd releases the created inode, and the returned `name`, which the caller publishes at `validate.js:1167`, now resolves to foreign bytes; and the plugin's **in-place overwrite of the SAME inode after the read-back** — identity passes because it IS this call's inode, so success is reported while the artifact holds bytes no completed flush covered. → FIX by stating the guarantee at its **LINEARIZATION POINT**: the RETURNED BYTES are exactly what this invocation created, wrote through its own descriptor, read back through that same descriptor and flushed — never a later re-read — and the NAME was bound to that inode **at the last gate and not after**. Both counterexamples become disclosed instances **(iv)** and **(v)** of F10, and the obvious "fix" is shown to be worse: a post-flush RE-READ would only narrow the window while making the returned bytes something the call never verified, which the new proof `returned-bytes-rereads-the-artifact` now forbids. Swept: F0, F10, the return JSDoc, both `Done`-spec clauses (re-derived, V2 re-run), Exact contracts, the Security checklist and the closing statement. **[A, shadow] Descriptor lifetime** — the post-commit temp removal raises Table D row D3 while `fd` must stay open, and no required form put it inside a finalizer, so the throw escaped with the descriptor open and F8's "closed in every case" was false. → FIX: ONE `try/finally` covers the whole post-create descriptor lifetime; the failure-path `dest` removal stays outside it, after the close. The shipped D3 temp test is extended to prove closure, and `post-commit-descriptor-leaked` mutates the finalizer away. **[C, shadow] A reversed negation** in the round-6 closing statement — "no removal shape whose ownership test is separable from its act" — inverted the stated reason the residual exists, in the very statement round 7 was asked to verify verbatim. → FIXED, and the phrase grepped everywhere. All FIX. **Round 8 runs on both channels as the closing confirmation.** |
@@ -1125,6 +1126,99 @@ against which no durability protocol can hold, and for which every added pin wou
 imply a false guarantee.
 
 ## Round 8 — architect's revision pass, 2026-09-05
+
+### Round 10 fixes
+
+**The first round in this loop where both channels agreed the DESIGN is closed.**
+Neither found a false-SUCCESS path; both verified every round-9 disposition; the
+shadow's own disposition check says so item by item. What remained was a resource
+lifecycle nobody had specified and wording that outran the contract. **No escalation
+fires** — no new object, no reopened family, and the guarantee sentence does not
+move.
+
+| # | Finding (channel) | Disposition |
+|---|---|---|
+| **A1** [shadow] | `flushDir`'s descriptor lifecycle was unspecified. Only the loop's `if (!flushDir(dir)) return false;` was byte-exact, and the boolean is all the protocol sees — so `openSync(dir); fsyncSync(fd); return true` satisfies every row, produces the exact `fsync` sequence QPD-3 and QPD-4 assert, and passes every declared mutation, while leaking one descriptor per chain member on EVERY successful preservation. The closure proofs covered the ARTIFACT descriptor only | **FIX.** `flushDir`'s WHOLE BODY becomes a byte-exact source form, inserted in code order as **(g)** with the later letters shifted (forms stay contiguous, (a)–(l)). **One `try` covers both failure modes** because row F4's disposition is the same for a failed `openSync` and a failed `fsyncSync`, and keeping them in one `catch` keeps that rule in one place. **The close sits in a `finally` and goes through `closeQuietly`**, so a `close` that errors after a flush that COMPLETED cannot turn a successful preservation into a failed one — `close` is not a flush, and F4's subject is the flush. Row **F4** gains the canonical rule; the Mirrored Surface Checklist registers it; criterion **7** widens from *every temp-name act is gated* to *and EVERY descriptor this protocol opens is CLOSED*, so the roll-up stays at seven lines. New identity **QPD-7** and new proof `directory-descriptor-leaked` |
+| **A2** [plugin, wording] | Two crash-survival overclaims: F6's *any artifact that survives a crash holds complete bytes*, and F10 (vi)'s *the BYTES and the INODE do survive*. Both exceed what the package establishes — completed flush CALLS and their ORDER — and a device may persist an entry while failing to persist data | **FIX, both rewritten ORDER-only.** F6 now argues from *which flush has COMPLETED at each instant while the protocol is still running* and says outright that neither half is a claim about what a crash leaves. F10 (vi)'s cost is now *the entry the gate observed was created AFTER the flush that covered its directory, so no completed flush of this call's covers it*, with the inode's fate stated as a dependency on the hand's own spare link. **The requested grep found two MORE**, both introduced long before round 10: row **F2**'s *the bytes then survive under no name*, and the same phrase inside `containing-directory-not-flushed`'s `why`. Both are now *the bytes have had a completed flush and the entry that names them has not* |
+| **B1** [plugin] | The Deliverables cell permitted exactly ONE shipped test-title change and said *no existing ASSERTION changes*, but `post-commit-descriptor-leaked` selects a D3 test titled *…and the held descriptor is CLOSED* while the shipped title reads *…after a failed rename fails LOUD* — a second title change AND an added assertion, permitted nowhere. The spec was not implementable exactly as written | **FIX.** The cell now enumerates **all three** changes it permits to shipped tests: the migrated seams; **TWO titles**, both forced by row F9 replacing the rename with a link — and the D3 one is a CORRECTION, not a rewording, because under F9 the commit SUCCEEDS and it is the post-commit gated removal that fails (Current state measures exactly that); and **ONE added assertion**, the D3 temp test's descriptor closure. Criterion **10** asserts the enumeration and says a third title or a second added assertion is a finding. The shipped-injection paragraph names both titles |
+
+### 10.1 Measurements
+
+```text
+THE CANDIDATE (round-9 form + flushDir's byte-exact body)
+  npm test                       tests 2630 / pass 2618 / fail 0 / skipped 12   exit 0
+    (2629/2617 + QPD-7 — one new top-level test, one per Table C identity)
+  npm run red-proofs (unfiltered)
+    37 declared proof(s), 37 selected — ALL PROVEN; RUN: PROVEN                 exit 0
+    criterion 7 — commit-clobbers-destination; tmp-removal-dropped; tmp-removal-not-gated;
+                  d1-cleanup-not-gated; provenance-adopted-not-created;
+                  create-failure-removes-unowned; post-commit-descriptor-leaked;
+                  shared-catch-descriptor-leaked; directory-descriptor-leaked
+  `directory-descriptor-leaked`'s expectRed correct on the first run.
+
+THE LITERAL OCCURRENCE AUDIT, re-run
+  OCCURRENCE AUDIT CLEAN: all 26 finds occur exactly once, all markers absent
+  pre-mutation and present in their replace, and every declared expectRed test
+  name occurs exactly once in the suite
+
+WHY QPD-7 NEEDED THREE ATTEMPTS, recorded because it is the finding's real content
+  attempt 1  keyed the record by `fd`      → saw ONE directory, not four
+             DESCRIPTOR NUMBERS ARE REUSED: with flushDir closing correctly, all
+             four chain opens return the SAME fd, so a per-fd map — and equally a
+             count of closes — reads identical for a leak and for a non-leak.
+  attempt 2  a stale `w.dirFds` reference   → TypeError
+  attempt 3  the set of descriptors STILL OPEN at return, plus a non-vacuity
+             guard on each case                                        → green
+
+V1/V2 re-run in SEVEN trees (no clause moved; run as a regression)
+  untouched RED rc=1 | compliant V1 OK / V2 OK rc=0 | wrapped compliant rc=0
+  over-claim fixture RED rc=1 | P0b clause in cell 2 RED rc=1 | unrelated line RED rc=1
+  differently worded over-claim  V1 OK / V2 OK  rc=0   ← still the measured bound
+  The V1/V2 block is BYTE-IDENTICAL to round 9's (diffed).
+
+npm run lint (worktree)   Linting: 639 file(s) — 0 error(s);
+                          frontmatter check passed: 268 spec(s), 4 agent(s)
+```
+
+### 10.2 The architect's own fresh read, after the edits and before the commit
+
+Two findings, both in text round 10 had just written — the same pattern §9.2 named.
+
+1. **Row F4 restated F3's chain count** (*three on the withheld arm, four on the
+   redacted*) inside a cell that does not own it, and asserted an unmeasured
+   threshold (*a run over enough secret-bearing notes reaches `EMFILE`*). → the
+   count defers to F3 by name, and the claim is narrowed to what is established:
+   the leak is one descriptor per chain member per SUCCESSFUL preservation and
+   unbounded; **the threshold is not stated because it was not measured**. The same
+   softening was applied to the proof's `why`.
+2. **The Mirrored Surface Checklist's Deliverables bullet** listed *the test row*
+   flatly, while that row had just acquired a three-item enumeration that criterion
+   10 asserts. → the bullet now names the enumeration, so the next pass sweeps it.
+
+The survival-phrase grep finding 2 asked for is in §10.1's terms: it found the two
+the plugin named plus two more nobody had (F2's cell and a proof's `why`), and
+confirmed that every remaining occurrence of *survive*, *crash*, *on the medium* is
+either a disclaimer of coverage, a quotation, a `linkSync` inode measurement, or
+part of the over-claim machinery V1 and Definition-of-done item 2 exist to run.
+
+### 10.3 What round 10 did NOT change
+
+- **The guarantee sentence and the whole GUARANTEED / DISCLOSED / OUTSIDE
+  statement** — §9.4 stands verbatim, re-checked for survival phrasing and carrying
+  none. The V1/V2 block is byte-identical to round 9's and neither `Done`-spec
+  clause moved, so V2 ran as a regression rather than a re-derivation.
+- **The protocol**: the flush set, the fixed chain, the order, the win32 branch, the
+  exclusive create, the no-clobber commit, the three gated removals, the
+  three-valued predicate and both `finally` blocks.
+- **The eight Dispatch-precondition items**, each with its recommendation.
+- **The roll-up shape** — seven criteria lines, because criterion 7 absorbed the
+  new proof rather than a criterion 8 being added and renumbering six others.
+
+### 10.4 The statement the closing round is asked to verify verbatim
+
+**Unchanged from §9.4** — round 10 touched no clause of it. It is not restated here,
+because a second copy is a mirror that will go stale: §9.4 is the text, and round 11
+verifies THAT.
 
 ### Round 9 fixes
 
