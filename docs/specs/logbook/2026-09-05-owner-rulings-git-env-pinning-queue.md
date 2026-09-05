@@ -118,9 +118,12 @@ sentence stands where it is and is corrected here.
 
 **The adopted state, and the primary spec's `## Dispatch precondition — owner
 items` governs it:** `HOME` is **carried, taken through `getPaths().home`** —
-the run's single authority for the home the vault, state directory and config
-roots all derive from, and the same value `buildCleanEnv` gives the scheduled
-child. `XDG_CONFIG_HOME` is **NOT carried** (owner item O3, appended above).
+the one function that decides that value, and the same value `buildCleanEnv`
+gives the scheduled child. (An earlier form of this sentence said the vault,
+state directory and config roots all derive from it; that is true only where
+their own overrides are absent, and the correction is in the spec's rationale
+section, which governs.) `XDG_CONFIG_HOME` is **NOT carried** (owner item O3,
+appended above).
 
 **Two claims in the O1 entry's own reasoning are also withdrawn**, with the
 measurements that falsified them recorded in the spec's *"Why Table U is what it

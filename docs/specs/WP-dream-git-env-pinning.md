@@ -152,14 +152,10 @@ re-opens a channel that ran an arbitrary script during `write-tree`.
 **(c) To a WIDER SCOPE** — see O2.
 
 **O3 — `XDG_CONFIG_HOME` is NOT carried. Recommendation adopted.** The
-constructed environment carries `HOME` (as `paths.home`) and not
-`XDG_CONFIG_HOME`, because `run-job`'s `ENV_PASSTHROUGH` does not carry it
-either — dropping it is exactly what makes *"a manual dream behaves like the
-scheduled one"* a true sentence rather than an aspiration. **The cost, named in
-row U3 and measured in both directions:** a user whose global git config is
-relocated *only* by `XDG_CONFIG_HOME` does not have it applied to the run's own
-git calls, in either mode — which is already the scheduled run's behaviour
-today. A `HOME`-resolved `~/.gitconfig` still applies. *Overrule cost* — the
+constructed environment carries `HOME` and not `XDG_CONFIG_HOME` (Table U rows
+U2 and U3). **The reasoning and the cost are "Why Table U is what it is"'s and
+are not restated here** — that section is the one prose mirror of the table, and
+this item states the decision and its overrule cost only. *Overrule cost* — the
 reversal is *"carry it in BOTH surfaces"*, never in this one alone, because
 carrying it here only would recreate the manual/scheduled divergence this
 decision removes: `src/cli/run-job.js` joins Deliverables with a new
@@ -243,10 +239,14 @@ documentation only.
   invents:** `HOME` is **set** to `paths.home`, not carried; and
   `XDG_CONFIG_HOME` is **not** carried at all.
 - **`src/core/paths.js:54` — `const home = env.HOME || os.homedir();`** inside
-  `getPaths()`. This is the run's **bound home**, and everything else the run
-  touches is derived from it — the core dir, the state dir, the config roots and
-  the vault. `spawnGitPinned` already calls `getPaths()` (`src/cli/dream.js:179`),
-  so the constructed environment has this value in hand without a new argument.
+  `getPaths()`. This is the run's **bound home**. The core dir, the state dir,
+  the config roots and the vault each default to a path under it **and each has
+  its own override** (`WIENERDOG_HOME`, `WIENERDOG_VAULT`, `CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`): measured, with all four set, changing `HOME` moves `home` and
+  nothing else. So "everything derives from `home`" is true only where an
+  override is absent, and row U2 does not rest on it. `spawnGitPinned` already
+  calls `getPaths()` (`src/cli/dream.js:179`), so the constructed environment
+  has this value in hand without a new argument.
 - **`src/core/dream/promote.js:387-418` — `constructMergeEnv`**, the precedent:
   the three-way merge already runs under an environment **built from nothing**,
   with a comment that states the direction — *"nothing is inherited, so
@@ -269,7 +269,7 @@ documentation only.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/dream/git-env.js | exports `buildGitEnv(indexFile?)` — the single site that decides the run's git environment, built from Table U's CARRIED rows and nothing else. No dependency outside `node:path` |
+| create | src/core/dream/git-env.js | exports `buildGitEnv(indexFile?)` — the single site that decides the run's git environment, built from Table U's CARRIED rows and nothing else. Dependencies: `node:path` and **`require('../paths')` for `getPaths`**, which row U2's source contract requires and which `spawnGitPinned` already calls (`src/cli/dream.js:179`). Nothing else |
 | modify | src/cli/dream.js | `gitIn` builds the child environment with `buildGitEnv` and takes `opts.indexFile` in place of `opts.env`; `commitNamedSet` passes `{ indexFile: tmpIndex }` where it built `indexEnv`. Nothing else changes — not the nine shapes, not their arguments, not their dispositions |
 | modify | tests/unit/dream-pipeline.test.js | assertions covering AC1–AC5 (the implementer designs the cases) |
 | modify | tests/red-proofs/dream-pipeline.proofs.json | re-target the existing `dream-private-index-dropped` declaration's `find`, `replace` and `marker` onto the new private-index site so the same mutation still drops the run's own `GIT_INDEX_FILE`. Its `id`, `wp`, `criterion`, `why` and `expectRed` set are UNCHANGED |
@@ -284,9 +284,11 @@ documentation only.
 ```js
 /**
  * The dream run's git environment: Table U's CARRIED rows and nothing else.
- * Values come from Table U, not from the launching environment: `HOME` is
- * `getPaths().home` (the run's BOUND home, row U2), `PATH` is inherited (row
- * U1), `XDG_CONFIG_HOME` is NOT carried (row U3, owner item O3).
+ * Values come from Table U, not from the launching environment: `HOME` is taken
+ * from `getPaths().home` AT CALL TIME — this module calls `getPaths()` itself,
+ * which is why it may `require('../paths')` and why neither this signature nor
+ * `gitIn`'s grows a paths parameter (row U2) — `PATH` is inherited (row U1),
+ * and `XDG_CONFIG_HOME` is NOT carried (row U3, owner item O3).
  * @param {string} [indexFile] absolute path for GIT_INDEX_FILE (Table U row U5).
  *   Omitted for every shape whose declared disposition is `unset`.
  * @returns {Record<string,string>} a FRESH object, built key by key — never
@@ -316,12 +318,25 @@ channel** and declares the assertions it must redden:
 
 | id | reintroduces | must redden |
 |----|--------------|-------------|
-| `git-env-inherits-git-dir` | `GIT_DIR` from `process.env` (Table U row U6) | the AC1 and AC2 assertions |
-| `git-env-inherits-object-directory` | `GIT_OBJECT_DIRECTORY` (row U7) | the AC1 and AC3 assertions |
-| `git-env-inherits-config-count` | the `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0` triple (row U10) | the AC1, AC4 **and AC5(b)** assertions |
+| `git-env-inherits-git-dir` | `GIT_DIR` from `process.env` (Table U row U6) | the **AC2** assertions |
+| `git-env-inherits-object-directory` | `GIT_OBJECT_DIRECTORY` (row U7) | the **AC3** assertions |
+| `git-env-inherits-config-count` | the `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0` triple (row U10) | the **AC4 and AC5(b)** assertions |
 
 `wp` is `WP-dream-git-env-pinning` on all three; `criterion` is the acceptance
 criterion's number.
+
+**AC1 IS DELIBERATELY NOT IN ANY OF THE THREE SETS, and that is a contract
+statement rather than an omission.** `scripts/red-proofs.js` requires the
+observed own-body failing set to EQUAL the declared set, so a criterion that
+*might* redden cannot be declared. AC1 is the **structural** assertion — the
+complete key→value map and the canary — and it runs in its own fixture, which
+exports the canary and `XDG_CONFIG_HOME` and not the three channels; under a
+single-channel reintroduction that fixture's map and canary both stay green.
+**The behavioural criteria are the mutation-sensitive ones**: AC2, AC3 and
+AC4/AC5(b) each export their own channel for the whole run, so each mutation
+reddens them deterministically. Declaring AC1 anyway would have forced the
+implementer either to invent extra fixture rules or to filter the run — the
+failure mode the next paragraph describes from the other direction.
 
 **AC5(b) is in the third declaration's set BY NECESSITY, not by choice**, and
 leaving it out would have been unbuildable: that mutation restores the very
@@ -384,28 +399,28 @@ rests on instead.
 | # | Variable | Class | Source / Disposition | Reach |
 |---|----------|-------|----------------------|-------|
 | U1 | `PATH` | resolution | **CARRIED** from `process.env.PATH` | n/a — not a git channel; see rationale |
-| U2 | `HOME` | config location | **CARRIED** from `getPaths().home` | **P1** — runs a configured program on shapes (3) and (7) |
-| U3 | `XDG_CONFIG_HOME` | config location | **NOT CARRIED** | **P2** — would reach (3) and (7); **P2n** — does not, unset |
+| U2 | `HOME` | config location | **CARRIED** from `getPaths().home` | **R2P1** — runs a configured program on shapes (3) and (7) |
+| U3 | `XDG_CONFIG_HOME` | config location | **NOT CARRIED** | **R2P2** — would reach (3) and (7); **R2P2n** — does not, unset |
 | U4 | win32 only: `SystemRoot`, `windir`, `SystemDrive`, `ComSpec`, `PATHEXT`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP` | platform | **CARRIED** from the launch environment | not measured |
 | U4b | win32 only: `USERPROFILE` | platform | **SET BY THE RUN** to `getPaths().home` | not measured |
 | U5 | `GIT_INDEX_FILE` | index selection | **SET BY THE RUN** to `<paths.state>/dream-index.<pid>.tmp`, on the three `private` shapes only | n/a — the run's own; see U13 for the inherited form |
-| U6 | `GIT_DIR` | write target + repository selection | **ABSENT** | **P3** — reaches (1)(2)(4)(5)(6)(7)(8)(9); **P3c** — chained, the decoy's HEAD moves and the vault's does not |
-| U7 | `GIT_OBJECT_DIRECTORY` | object-store write target | **ABSENT** | **P4** — reaches (1)(2)(4)(6)(7)(8)(9); **P4c** — chained, the run aborts at (6) |
-| U8 | `GIT_COMMON_DIR` | object store + refs | **ABSENT** | **P5**, **P5c** — as U7 |
-| U9 | `GIT_ALTERNATE_OBJECT_DIRECTORIES` | object store + read scope | **ABSENT** | **P6** — reaches (2) (the write lands in the alternate) and (6) |
-| U10 | `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_VALUE_n` | config injection; code | **ABSENT** | **P7** — runs a configured program on (3) and (7); **P7h** — fires a hook on (9) |
-| U11 | `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM` | config file selection; code | **ABSENT** | **P8** — runs a configured program on (3) and (7) |
-| U12 | `GIT_WORK_TREE` | working-tree location | **ABSENT** | **P9** — no reach |
-| U13 | `GIT_INDEX_FILE`, inherited | index selection | **ABSENT** as an inherited value | **P10** — no reach |
-| U14 | `GIT_NAMESPACE` | ref namespace | **ABSENT** | **P11** — no reach |
-| U15 | `GIT_CEILING_DIRECTORIES` | repository discovery | **ABSENT** | **P12** — no reach; **P12n** — discovery from a nested non-repository directory resolves the ancestor |
-| U16 | `GIT_EXEC_PATH` | code — subcommand dispatch | **ABSENT** | **P13** — no reach |
-| U17 | `GIT_ATTR_NOSYSTEM`, `GIT_ATTR_SOURCE` | attribute lookup; filter drivers | **ABSENT** | **P14** — no reach |
+| U6 | `GIT_DIR` | write target + repository selection | **ABSENT** | **R2P3** — reaches (1)(2)(4)(5)(6)(7)(8)(9); **R2P3c** — chained, the decoy's HEAD moves and the vault's does not |
+| U7 | `GIT_OBJECT_DIRECTORY` | object-store write target | **ABSENT** | **R2P4** — reaches (1)(2)(4)(6)(7)(8)(9); **R2P4c** — chained, the run aborts at (6) |
+| U8 | `GIT_COMMON_DIR` | object store + refs | **ABSENT** | **R2P5**, **R2P5c** — as U7 |
+| U9 | `GIT_ALTERNATE_OBJECT_DIRECTORIES` | object store + read scope | **ABSENT** | **R3P6** — reaches (2) and (6): a blob already in the alternate is NOT stored in the vault |
+| U10 | `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_VALUE_n` | config injection; code | **ABSENT** | **R2P7** — runs a configured program on (3) and (7); **R2P7h** — fires a hook on (9) |
+| U11 | `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM` | config file selection; code | **ABSENT** | **R2P8** — runs a configured program on (3) and (7) |
+| U12 | `GIT_WORK_TREE` | working-tree location | **ABSENT** | **R2P9** — no reach |
+| U13 | `GIT_INDEX_FILE`, inherited | index selection | **ABSENT** as an inherited value | **R2P10** — no reach |
+| U14 | `GIT_NAMESPACE` | ref namespace | **ABSENT** | **R2P11** — no reach |
+| U15 | `GIT_CEILING_DIRECTORIES` | repository discovery | **ABSENT** | **R2P12** — no reach; **R2P12n** — discovery from a nested non-repository directory resolves the ancestor |
+| U16 | `GIT_EXEC_PATH` | code — subcommand dispatch | **ABSENT** | **R2P13** — no reach |
+| U17 | `GIT_ATTR_NOSYSTEM`, `GIT_ATTR_SOURCE` | attribute lookup; filter drivers | **ABSENT** | **R2P14** — no reach |
 | U18 | `GIT_TEMPLATE_DIR` | new-repository template | **ABSENT** | not measured |
 | U19 | `GIT_TRACE` and the other `GIT_TRACE*` | diagnostics, with a file sink | **ABSENT** | not measured |
-| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, `GNUPGHOME`, `GPG_TTY`, `SSH_AUTH_SOCK` | transport, credential and signing helpers | **ABSENT** | **P15** — no reach (signing); **P16** — a user hook fired by (9) runs under the constructed environment; transport not measured |
-| U22 | `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, `GIT_COMMITTER_DATE` | commit identity and dates | **ABSENT** | **P17**, **P17d**, **P22** — reaches (8): the inherited identity WINS over the run's own `-c user.name` / `-c user.email` |
-| U23 | `GIT_NO_REPLACE_OBJECTS`, `GIT_REPLACE_REF_BASE` | object interpretation | **ABSENT** | **P18** — reaches (1)(4)(6): each switches the repository's own `refs/replace/` off |
+| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, `GNUPGHOME`, `GPG_TTY`, `SSH_AUTH_SOCK` | transport, credential and signing helpers | **ABSENT** | **R2P15** — no reach (signing); **R2P16** — a user hook fired by (9) runs under the constructed environment; transport not measured |
+| U22 | `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, `GIT_COMMITTER_DATE` | commit identity and dates | **ABSENT** | **R2P17**, **R2P17d**, **R2P22** — reaches (8): the inherited identity WINS over the run's own `-c user.name` / `-c user.email` |
+| U23 | `GIT_NO_REPLACE_OBJECTS`, `GIT_REPLACE_REF_BASE` | object interpretation | **ABSENT** | **R3P18** — reaches (1)(4)(6); not (5) or (8) |
 | U21 | **every other variable, `GIT_*` or not** | closure rule | **ABSENT** | n/a |
 
 ### Why Table U is what it is
@@ -423,29 +438,33 @@ drift check for the manual run. PATH selection is closed by the pinned absolute
 spawn and its verification, not by the PATH's contents — a residual inherited
 from WP-154 and not new here. **The cost is in the DESCENDANTS, and it is
 named:** `buildCleanEnv` reconstructs `PATH` for the scheduled child while this
-row carries the manual one (measured, **P19**), so a user hook or a lazy-fetch
+row carries the manual one (measured, **R2P19**), so a user hook or a lazy-fetch
 helper invoked by a pinned shape resolves bare command names differently in the
 two launch modes.
 
 **U2 — `HOME` is carried, and it is a TRUST DECISION, not a security boundary.**
 It is the location of the user's own git configuration files, and O1's principle
-is that those stay honoured; the value is taken through the run's single
-authority, `getPaths().home`, which is the same home the vault, the state
-directory and the config roots come from and the same value `buildCleanEnv`
-gives the scheduled child. **Two over-claims are withdrawn here rather than
-softened.** *"Never the launching shell's string"* — false: `getPaths()` is
-`env.HOME || os.homedir()` (`src/core/paths.js:53-54`) and on POSIX
-`os.homedir()` reads `$HOME` first, so with `HOME` set the value IS that string;
-what the single authority buys is that the run carries a `HOME` even when the
-shell has none, and that it is the same value every other root derives from.
-*"An environment that lies about `HOME` relocates the whole product"* — also
-false, and measured (**P20**): with `WIENERDOG_HOME`, `WIENERDOG_VAULT`,
-`CLAUDE_CONFIG_DIR` and `CODEX_HOME` set, changing `HOME` leaves every root
-identical except `home` itself, so a different `~/.gitconfig` can be selected
-while the run still targets the same vault. **So the honest statement is the
-narrow one:** `HOME` is trusted **by decision**, as the same trust a manual run
+is that those stay honoured; the value is taken through `getPaths()`, the one
+function that decides it, and is the same value `buildCleanEnv` gives the
+scheduled child. **THREE over-claims are withdrawn here rather than softened,
+each with the measurement that falsified it.** *"Never the launching shell's
+string"* — false: `getPaths()` is `env.HOME || os.homedir()`
+(`src/core/paths.js:53-54`) and on POSIX `os.homedir()` reads `$HOME` first, so
+with `HOME` set the value IS that string. *"An environment that lies about
+`HOME` relocates the whole product"* — false, measured (**R2P20**): with
+`WIENERDOG_HOME`, `WIENERDOG_VAULT`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME` set,
+changing `HOME` moves `home` and nothing else, so a different `~/.gitconfig` can
+be selected while the run still targets the same vault. *"The same home the
+vault, the state directory and the config roots come from"* — the same claim in
+a milder costume, and **conditionally** true only: each of those roots defaults
+to a path under `home` **and each has its own override**, so where an override
+is set the root does not follow `HOME` at all. **What taking the value through
+`getPaths()` actually buys, and it is not an authority claim:** one function
+decides it, the manual run and the scheduled child agree on it, and the run
+carries a `HOME` even when the launching shell has none. **So the honest
+statement is the narrow one:** `HOME` is trusted **by decision**, as the same trust a manual run
 already extends to the shell that launched it, and the run inherits whatever
-configuration that home selects — including, measured (**P1**), a
+configuration that home selects — including, measured (**R2P1**), a
 `core.fsmonitor` program that the pinned `update-index` and `write-tree` will
 execute. It is not claimed to be safe against a hostile `HOME`; it is claimed to
 be the user's own configuration, which O1 declines to override.
@@ -455,8 +474,8 @@ be the user's own configuration, which O1 declines to override.
 dream never had it; carrying it only in the manual path would recreate the
 divergence this WP exists to remove. **The cost:** a global git config relocated
 *only* by that variable does not apply to the run's own calls, in either mode.
-Measured in both directions — **P2** (carried: the same two shapes run the
-configured program) and **P2n** (not carried: none of the seven does).
+Measured in both directions — **R2P2** (carried: the same two shapes run the
+configured program) and **R2P2n** (not carried: none of the seven does).
 
 **U4 / U4b — the win32 keys.** Unmeasured here, no win32 host. Provenance is
 `src/cli/run-job.js:58-78`, the list the scheduled job child already carries for
@@ -472,22 +491,36 @@ must satisfy are Table W row W1(c)'s, cited not restated. The INHERITED form is
 what row U13 drops, and dropping it is what makes W1(c)'s `unset` disposition a
 property of the code rather than of the launching environment: today `gitIn`
 passes `opts.env || process.env`, so an exported value reaches the six `unset`
-shapes. Measured (**P10**), it changes nothing those six do — the exposure is a
+shapes. Measured (**R2P10**), it changes nothing those six do — the exposure is a
 contract defect, not a data-loss one.
 
 **What "the manual run becomes identical to the scheduled one" means, narrowed
 to what is actually equalized.** Three properties, and no others: **no inherited
 `GIT_*` reaches either**; **`HOME` is `getPaths().home` in both**; **neither
 carries `XDG_CONFIG_HOME`**. It is NOT a general equivalence: `PATH` differs
-(measured, **P19** — the scheduled child gets a reconstructed PATH, a manual run
+(measured, **R2P19** — the scheduled child gets a reconstructed PATH, a manual run
 carries the shell's), and so does everything else `buildCleanEnv` sets or omits
 for its own reasons.
 
 **The ABSENT rows that carry a cost, each stated once.**
 
+- **U9 alternates — the one ABSENT row whose channel corrupts the vault's own
+  history, and it took two probes to state correctly.** An earlier cell claimed
+  the pinned `hash-object -w --stdin` WRITES into the alternate. **Withdrawn**:
+  measured on a pristine pair with the blob absent from both stores (**R3P6**
+  arm (i)), the write lands in the **vault**, exactly as without the variable.
+  **The real reach is deduplication, and it is worse.** With the blob present
+  ONLY in the alternate (arm (ii)), `hash-object -w` stores **nothing** — the
+  object is already reachable, so the vault never gets its own copy — and the run
+  then builds a tree from it, commits it and advances `HEAD`. Once the alternate
+  is gone, which under the pin it always is, the vault cannot read its own
+  committed content: `cat-file` fails and `fsck --connectivity-only` reports
+  *broken link from tree … to blob …*. **So the cost of this row is borne by the
+  channel, not by the pin**: an inherited alternate makes the run publish a
+  commit the vault does not own, and the pin is what prevents it.
 - **U11 `GIT_CONFIG_GLOBAL`** — a user who relocates their global git config
   *only* by exporting it loses it for the run's own calls. Accepted rather than
-  excepted, because the same variable is a measured code channel (**P8**); the
+  excepted, because the same variable is a measured code channel (**R2P8**); the
   `HOME`-resolved `~/.gitconfig` still applies.
 - **U19 `GIT_TRACE*`** — `GIT_TRACE=1 wienerdog dream` no longer traces the
   run's own git calls. A debugging convenience, against carrying a variable
@@ -497,24 +530,30 @@ for its own reasons.
   configured through their config files, still fires on the pinned `update-ref`
   — **honoured means it RUNS** — but it runs under the constructed environment
   and so no longer sees `SSH_AUTH_SOCK`, `GNUPGHOME`, `GPG_TTY` or askpass
-  variables (measured, **P16**; its environment is dumped in the record).
+  variables (measured, **R2P16**; its environment is dumped in the record).
   **(ii)** In a partial-clone vault a pinned read can trigger a lazy fetch
   through a `git fetch` subprocess, which loses agent-only authentication — not
   measured, provenance `git help partial-clone`. Signing itself is not a
   channel: the pinned `commit-tree` does not sign from `commit.gpgsign`
-  (**P15**, with a live-config control).
+  (**R2P15**, with a live-config control).
 - **U22 identity and dates** — the inherited identity currently WINS over the
-  run's own `-c user.name` / `-c user.email` (measured, **P17d**: the recorded
+  run's own `-c user.name` / `-c user.email` (measured, **R2P17d**: the recorded
   author and committer become the exported ones). Dropping it makes every dream
   commit carry `wienerdog <wienerdog@localhost>` and the run's own clock. **The
   cost:** a user who tags dream commits by exporting `GIT_COMMITTER_*` in their
   shell loses that. This is a behaviour change with a user-visible effect and it
   is named rather than absorbed.
 - **U23 replacement objects** — `refs/replace/` refs are FILES in the user's own
-  repository and remain honoured (measured, **P18**: the pinned `show`,
-  `ls-tree` and `read-tree` all follow them). What the user loses is the ability
-  to switch them off *for this run* from the shell, since both variables that do
-  so are absent.
+  repository and remain honoured. Measured with the EXACT pinned argv
+  (**R3P18**), which is what the row rests on: the literal
+  `show HEAD:reports/warnings.md` returns the REPLACED content,
+  `ls-tree HEAD -- reports/warnings.md` and `read-tree HEAD` carry the
+  replacement's blob, and `GIT_NO_REPLACE_OBJECTS=1` or a redirected
+  `GIT_REPLACE_REF_BASE` reverts all three. `rev-parse HEAD` and `commit-tree`'s
+  recorded parent are **unaffected** in every arm — the row's Reach cell says
+  (1)(4)(6) and not (5) or (8) for that reason. What the user loses is the
+  ability to switch the replacement off *for this run* from the shell, since
+  both variables that do so are absent.
 
 **U21 — why the enumeration is closable.** The environment is BUILT from rows
 U1–U5; every other row records what that construction happens to close. A
@@ -554,6 +593,17 @@ in review is added here on the spot.
       which name the ABSENT rows, U11 and U13.
 - [ ] **Exact contracts** — `buildGitEnv`'s JSDoc and the three RED rows, which
       name rows U5, U6, U7 and U10.
+
+**Elsewhere in this spec — surfaces that carry a Table U fact and are NOT the
+prose mirror, registered so they move with it:**
+
+- [ ] **Owner item O3** — states the DECISION and its overrule cost only; its
+      reasoning and cost are the rationale section's and are cited, not
+      restated. A change to row U3 moves O3's decision sentence and the
+      rationale's `U3` paragraph together.
+- [ ] **The Security checklist's first bullet** — names `HOME` as the one
+      deliberate exception (row U2) and cites the rationale section for why that
+      is a trust decision rather than a safety claim.
 
 **Outside this spec — these move in the SAME commit as any change to Table U:**
 
@@ -597,7 +647,14 @@ in review is added here on the spot.
       are NOT re-numbered: they are pinned to the SHAs at which they were
       measured, and chasing them is the rot this row already ruled against.
 - [ ] **`src/core/dream/git-env.js`'s own comments** — the run's first-read
-      statement of Table U. It may summarise; it may not decide.
+      statement of Table U. It may summarise; it may not decide. Its `HOME`
+      sentence must say the value is taken from `getPaths().home` at call time
+      (row U2), which is what licenses the module's one non-`node:` dependency.
+- [ ] **`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`** —
+      the owner-rulings record restates O1's and O3's dispositions for the owner.
+      It is **append-only**: a Table U change that falsifies something there is
+      corrected by a dated amendment naming the primary spec as governing, never
+      by editing the entry in place.
 - [ ] **`tests/unit/dream-pipeline.test.js`'s AC1 assertion, and the unit-level
       `buildGitEnv` assertion beside it** — together they name the CARRIED
       key→value map, so they are an executable mirror of rows U1–U5 and move

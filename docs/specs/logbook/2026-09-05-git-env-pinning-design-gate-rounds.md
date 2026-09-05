@@ -2040,6 +2040,606 @@ frontmatter check passed: 269 spec(s), 4 agent(s)
 lint passed
 ```
 
+## Round 3 — external, double channel, tip `2ad1434c`
+
+Both channels ran on `2ad1434c`, both returned **needs-attention**, and
+`git status --porcelain` was byte-identical before and after in each. Raws
+committed before any of this was read:
+
+| Channel | Raw | Commit that introduced it |
+|---------|-----|---------------------------|
+| Codex plugin | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round3-codex-plugin.txt` | `c00f6f4b` |
+| Hermetic shadow | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round3-herdr-shadow.txt` | `3c2571a4` |
+
+**Neither channel found anything about the product's BEHAVIOUR.** Every finding
+is contract text, evidence, or the record. Both again disclosed that `npm test`
+and `node scripts/red-proofs.js` stopped before running on temp-directory EPERM,
+so their verdicts are readings on those points; what each DID execute — predicate
+counterexamples through the real `evaluateRed()`, a probe-id collision audit,
+`getPaths()` under fixed overrides, pinned-argv comparisons against
+`KNOWN_CALLS` — is what the findings below rest on, and each is reproduced here.
+
+**Round-2 status as the channels reported it:** R2-A partial (the equivalence and
+PATH halves fixed, an authority claim surviving), R2-C fixed for U12, R2-D and
+R2-E fixed; R2-B's two new rows accepted, with two evidence defects (below).
+
+### Findings, bands, criterion branch, disposition
+
+| # | Channels | Band | Branch (§0.1) | Disposition and what changed |
+|---|----------|------|---------------|------------------------------|
+| **R3-A** | shadow F1 | B | 4 → **HEAVY** | **FIX.** The Deliverables row allowed `git-env.js` no dependency outside `node:path`, while the exact contract requires `HOME = getPaths().home` and neither `buildGitEnv(indexFile)` nor `gitIn` receives a paths object — an implementer had to break the row or re-derive `HOME` and break row U2. The row now explicitly allows `require('../paths')` for `getPaths` (the module lives in `src/core/dream/`, and `spawnGitPinned` already calls it), and the JSDoc says `HOME` is taken from `getPaths().home` **at call time**. The signature is unchanged and no paths parameter is threaded through `gitIn` — that would touch every call site. This is the round's only HEAVY finding, and it is why a round 4 is owed |
+| **R3-B** | shadow F2 + plugin "extraction incomplete" — **CONVERGED** | B | 5/6 → **LIGHT** | **FIX, in three surfaces and then the extraction itself.** The falsified authority claim — *"the same home the vault, the state directory and the config roots come from"* — survived R2-A in the rationale section, in Current state and in the owner-record amendment. All three now carry the conditional truth: each root defaults under `home` **and each has its own override**, so where an override is set the root does not follow `HOME` at all; with the four overrides fixed, `HOME` selects only where the user's git config lives, and that selection is trusted **by decision**. What taking the value through `getPaths()` buys is stated without the authority claim: one function decides it, manual and scheduled agree, and a `HOME` is carried when the shell has none. **The extraction is then completed**: O3's reasoning is cut to a citation of the rationation section, and O3, the Security checklist and the owner-rulings record are **registered as mirrors** — the record with its append-only rule spelled out |
+| **R3-C** | shadow F3 + plugin F3 — **CONVERGED** | B/C | 2 (evidence) | **RE-MEASURED; the claim was FALSE and is withdrawn.** `R2P6` was contaminated: `R2P3`/`R2P4` had already written the identical blob into the shared decoy that `R2P6` then used as the alternate, so `storedInVault=no` showed lookup, not a write. Re-run on a pristine pair, two arms — and the row changes direction. See below |
+| **R3-D** | plugin F2 | C | 2 (evidence) | **RE-MEASURED; the claim HOLDS.** `R2P18` used `show <sha>:a.txt`, not the pinned literal. Re-run with a replacement commit differing in `reports/warnings.md` and the exact pinned argv. See below |
+| **R3-E** | shadow F4 | B | 6 → **LIGHT** | **FIX.** The corrected-method probes reused `P2`–`P16` for different channels than round zero's, so a bare `P9` resolved to contradicting output. The corrected-method probes are renamed into the **`R2P…`** namespace **in the driver itself and re-run**, so the pasted output carries the ids literally rather than through a mapping table; this round's re-runs are `R3P6` and `R3P18`; round zero's ids are untouched where they stand. Two collisions inside the R2 set were found while renaming and fixed as well — the alternates and inherited-index probes each appeared twice, now `R2P6`/`R2P6b` and `R2P10`/`R2P10b` |
+| **R3-F** | plugin F1 | B | 6 → **LIGHT** | **FIX.** All three declarations named AC1 in their must-redden sets, but AC1's fixture exports only the canary and `XDG_CONFIG_HOME`, so under a single-channel reintroduction AC1 stays green and the runner's set-equality fails — the plugin ran the counterexample through the real `evaluateRed()`. AC1 is **dropped from all three sets**: `git-env-inherits-git-dir` → AC2; `…-object-directory` → AC3; `…-config-count` → AC4 and AC5(b). The Exact-contracts section now states why: AC1 is the **structural** key→value assertion in its own fixture, while the **behavioural** criteria each export their channel for the whole run and redden deterministically |
+
+**Round outcome: HEAVY** (R3-A). Round 4 runs as the closing confirmation on the
+revised tip; under weighted closure it closes if it returns nothing about the
+product, with any remaining C-band evidence or record items fixed in place.
+
+### R3-C — the alternates row, re-measured on a pristine pair
+
+Driver `probes-r3.sh`, a repository pair built fresh for each arm, nothing
+written by any earlier probe.
+
+**Arm (i) — the blob absent from both stores.** The pinned
+`hash-object -w --stdin` stores it **in the vault**, exactly as it would without
+the variable. So *"the write lands in the alternate"* is **FALSE and is
+withdrawn**; the earlier cell had read a lookup as a write.
+
+**Arm (ii) — the blob present ONLY in the alternate.** The pinned
+`hash-object -w --stdin` stores **nothing**: the object is already reachable
+through the alternate, so the vault never gets its own copy. **And the run does
+not stop there** — the replay continues into `read-tree`, `update-index`,
+`write-tree`, `commit-tree` and `update-ref`, and the vault's `HEAD` advances
+onto a commit whose tree references that blob. With the alternate gone — which,
+under the pin, it always is — the vault cannot read its own committed content:
+`cat-file` fails and `fsck --connectivity-only` reports **`broken link from tree
+… to blob …`**.
+
+**So U9's Reach cell is now `R3P6 — reaches (2) and (6): a blob already in the
+alternate is NOT stored in the vault`**, and the interpretation lives in the
+rationale section, where it belongs: this is the one ABSENT row whose channel
+corrupts the vault's own history, and the pin is what prevents it.
+
+### R3-D — the replacement row, re-measured with the pinned literal
+
+Same driver. The scratch vault holds `reports/warnings.md`; a `git replace` ref
+maps `HEAD`'s commit to a replacement whose `reports/warnings.md` differs.
+
+With the replacement honoured, the literal `show HEAD:reports/warnings.md`
+returns the REPLACED content and `ls-tree HEAD -- reports/warnings.md` and
+`read-tree HEAD` carry the replacement's blob; `GIT_NO_REPLACE_OBJECTS=1` and a
+redirected `GIT_REPLACE_REF_BASE` each revert all three. `rev-parse HEAD` and
+`commit-tree`'s recorded parent are **unaffected in every arm**.
+
+**U23's Reach cell is now `R3P18 — reaches (1)(4)(6); not (5) or (8)`** — the
+claim holds on the pinned argv, and the two shapes it does NOT reach are stated
+rather than left implied.
+
+#### The round-3 driver's output
+
+```text
+ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.HqygHyaG2m
+git: git version 2.50.1 (Apple Git-155)
+
+############ R3P6 — GIT_ALTERNATE_OBJECT_DIRECTORIES, pristine per arm
+
+ARM (i): the blob is ABSENT from BOTH stores before the pinned hash-object.
+  target blob = 039688da6bfa6dbea40ecc6959aaa4ee644892d2
+  before:  in vault=no   in alternate=no
+  (2) hash-object -w --stdin  rc=0 -> 039688da6bfa6dbea40ecc6959aaa4ee644892d2
+  after:   in vault=yes   in alternate=no
+  loose object present under the VAULT's own objects dir:     yes
+  loose object present under the ALTERNATE's own objects dir: no
+
+ARM (ii): the blob is PRESENT ONLY IN THE ALTERNATE before the pinned hash-object.
+  target blob = 17bb7db4ec8e3dda7f16d450cd14f6ebbc55f6d2
+  before:  in vault=no   in alternate=yes
+  (2) hash-object -w --stdin  rc=0 -> 17bb7db4ec8e3dda7f16d450cd14f6ebbc55f6d2
+  after:   in vault=no   in alternate=yes
+  loose object present under the VAULT's own objects dir: no
+  and WITHOUT the alternate, can the vault still read it?  no
+
+  the run's own next step, on arm (ii)'s blob: does a commit built from it survive the alternate going away?
+  (7) write-tree -> 1ba7c25c9ddfdf780a387c0d46ae2f3ce0843ee8
+  (8) commit-tree -> 6b29c645d988920fd64347d3e7497d8fe67883ac
+  (9) update-ref rc=0  vault HEAD=6b29c645d988920fd64347d3e7497d8fe67883ac
+  now the alternate is gone (the variable is not set, as it will not be under the pin):
+    git -C <vault> cat-file -p <the committed blob>  -> fatal: Not a valid object name 17bb7db4ec8e3dda7f16d450cd14f6ebbc55f6d2
+    git -C <vault> fsck --connectivity-only          -> broken link from    tree 1ba7c25c9ddfdf780a387c0d46ae2f3ce0843ee8               to    blob 17bb7db4ec8e3dda7f16d450cd14f6ebbc55f6d2
+
+############ R3P18 — replacement objects against the EXACT pinned argv
+  HEAD = a664a16318bf7996ab7f8ec74aa95c2e320de040 ; a git-replace ref maps it to d6c146a7dcbdb4e177fc113e1a968147b6ab997a, whose reports/warnings.md differs
+  replacement ref: refs/replace/a664a16318bf7996ab7f8ec74aa95c2e320de040 -> d6c146a7dcbdb4e177fc113e1a968147b6ab997a
+  [replacement honoured (no variable)]
+    (4) show HEAD:reports/warnings.md   -> REPLACED-warnings
+    (1) ls-tree HEAD -- reports/warnings.md -> 100644 blob 7a9a4f0b8d1201dde5fd31cdcec4dda4076d7ac0 reports/warnings.md
+    (6) read-tree HEAD, index entry for reports/warnings.md -> 100644 7a9a4f0b8d1201dde5fd31cdcec4dda4076d7ac0 0 reports/warnings.md
+    (5) rev-parse HEAD                  -> a664a16318bf7996ab7f8ec74aa95c2e320de040
+    (8) commit-tree <tree> -p HEAD      -> 6d6bb7a413e8fc5a03611eb48b9d48d6609703e4  (recorded parent: a664a16318bf7996ab7f8ec74aa95c2e320de040)
+  [GIT_NO_REPLACE_OBJECTS=1]
+    (4) show HEAD:reports/warnings.md   -> ORIGINAL-warnings
+    (1) ls-tree HEAD -- reports/warnings.md -> 100644 blob b5c3dd285d06ff61d6dabbf7f30b53ac2017e749 reports/warnings.md
+    (6) read-tree HEAD, index entry for reports/warnings.md -> 100644 b5c3dd285d06ff61d6dabbf7f30b53ac2017e749 0 reports/warnings.md
+    (5) rev-parse HEAD                  -> a664a16318bf7996ab7f8ec74aa95c2e320de040
+    (8) commit-tree <tree> -p HEAD      -> 6d6bb7a413e8fc5a03611eb48b9d48d6609703e4  (recorded parent: a664a16318bf7996ab7f8ec74aa95c2e320de040)
+  [GIT_REPLACE_REF_BASE=refs/other/]
+    (4) show HEAD:reports/warnings.md   -> ORIGINAL-warnings
+    (1) ls-tree HEAD -- reports/warnings.md -> 100644 blob b5c3dd285d06ff61d6dabbf7f30b53ac2017e749 reports/warnings.md
+    (6) read-tree HEAD, index entry for reports/warnings.md -> 100644 b5c3dd285d06ff61d6dabbf7f30b53ac2017e749 0 reports/warnings.md
+    (5) rev-parse HEAD                  -> a664a16318bf7996ab7f8ec74aa95c2e320de040
+    (8) commit-tree <tree> -p HEAD      -> 6d6bb7a413e8fc5a03611eb48b9d48d6609703e4  (recorded parent: a664a16318bf7996ab7f8ec74aa95c2e320de040)
+
+ROOT kept at /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.HqygHyaG2m
+```
+
+### R3-E — the probe namespace, and the re-run that carries it
+
+The corrected-method driver was renamed and **re-executed**, so its output below
+carries the `R2P…` ids literally; nothing is mapped after the fact. Round zero's
+`P…` ids stay where they are, in round zero's own section, and no current
+citation uses a bare `P…` any more.
+
+```text
+ROOT=/var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.YtINwUFXEh
+git: git version 2.50.1 (Apple Git-155)
+template HEAD=65b3416e82aa5f7fd9e54daee3699e7ebed8e41a tree=f54bd691d4a8250ca67e2b84beb26a2e4924a7ee blob=de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b   fixed date: 1700000000 +0000
+decoy    HEAD=48ae36eb59d2dcab40e2448bdaaf626be037d83d  (a SEPARATE repository; no probe ever writes to the template)
+
+############ SECTION 1 — per-channel mechanical comparison of the nine shapes
+Every block below: a fresh copy under the baseline env vs a fresh copy under
+the channel env, transcripts diffed by the script.
+
+R2P0  control — the baseline env compared with ITSELF (must be 'no reach')
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+R2P3  GIT_DIR=<decoy>/.git
+    RESULT: REACHES — transcripts differ; the differing lines:
+      1,4c1,4
+      < (5) rev-parse HEAD                 rc=0  65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+      < (1) ls-tree <tree> -- a.txt        rc=0  100644 blob de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b a.txt
+      < (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=yes
+      < (6) read-tree <tree>               rc=0
+      ---
+      > (5) rev-parse HEAD                 rc=0  48ae36eb59d2dcab40e2448bdaaf626be037d83d
+      > (1) ls-tree <tree> -- a.txt        rc=128  fatal: not a tree object
+      > (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=no
+      > (6) read-tree <tree>               rc=128
+      6,10c6,11
+      < (7) write-tree                     rc=0  f54bd691d4a8250ca67e2b84beb26a2e4924a7ee
+      < (4) show HEAD:reports/warnings.md  rc=0  template-warnings
+      < (8) commit-tree <tree> -p <head>   rc=0  eb325f5247e9b19db9ea163da25ac50b0b461319
+      < (9) update-ref -m … HEAD <new> <old> rc=0
+      <     vault HEAD after: eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      > (7) write-tree                     rc=128  error: invalid object 100644 de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b for 'a.txt'
+      > fatal: git-write-tree: error building trees
+      > (4) show HEAD:reports/warnings.md  rc=0  DECOY-warnings
+      > (8) commit-tree <tree> -p <head>   rc=128  fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object
+      > (9) update-ref -m … HEAD <new> <old> rc=128  fatal: fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object: not a valid SHA1
+      >     vault HEAD after: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+
+R2P4  GIT_OBJECT_DIRECTORY=<decoy>/.git/objects
+    RESULT: REACHES — transcripts differ; the differing lines:
+      2,4c2,4
+      < (1) ls-tree <tree> -- a.txt        rc=0  100644 blob de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b a.txt
+      < (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=yes
+      < (6) read-tree <tree>               rc=0
+      ---
+      > (1) ls-tree <tree> -- a.txt        rc=128  fatal: not a tree object
+      > (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=no
+      > (6) read-tree <tree>               rc=128
+      6,10c6,11
+      < (7) write-tree                     rc=0  f54bd691d4a8250ca67e2b84beb26a2e4924a7ee
+      < (4) show HEAD:reports/warnings.md  rc=0  template-warnings
+      < (8) commit-tree <tree> -p <head>   rc=0  eb325f5247e9b19db9ea163da25ac50b0b461319
+      < (9) update-ref -m … HEAD <new> <old> rc=0
+      <     vault HEAD after: eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      > (7) write-tree                     rc=128  error: invalid object 100644 de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b for 'a.txt'
+      > fatal: git-write-tree: error building trees
+      > (4) show HEAD:reports/warnings.md  rc=128  fatal: path 'reports/warnings.md' exists on disk, but not in 'HEAD'
+      > (8) commit-tree <tree> -p <head>   rc=128  fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object
+      > (9) update-ref -m … HEAD <new> <old> rc=128  fatal: fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object: not a valid SHA1
+      >     vault HEAD after: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+
+R2P5  GIT_COMMON_DIR=<decoy>/.git
+    RESULT: REACHES — transcripts differ; the differing lines:
+      2,4c2,4
+      < (1) ls-tree <tree> -- a.txt        rc=0  100644 blob de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b a.txt
+      < (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=yes
+      < (6) read-tree <tree>               rc=0
+      ---
+      > (1) ls-tree <tree> -- a.txt        rc=128  fatal: not a tree object
+      > (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=no
+      > (6) read-tree <tree>               rc=128
+      6,10c6,11
+      < (7) write-tree                     rc=0  f54bd691d4a8250ca67e2b84beb26a2e4924a7ee
+      < (4) show HEAD:reports/warnings.md  rc=0  template-warnings
+      < (8) commit-tree <tree> -p <head>   rc=0  eb325f5247e9b19db9ea163da25ac50b0b461319
+      < (9) update-ref -m … HEAD <new> <old> rc=0
+      <     vault HEAD after: eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      > (7) write-tree                     rc=128  error: invalid object 100644 de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b for 'a.txt'
+      > fatal: git-write-tree: error building trees
+      > (4) show HEAD:reports/warnings.md  rc=128  fatal: path 'reports/warnings.md' exists on disk, but not in 'HEAD'
+      > (8) commit-tree <tree> -p <head>   rc=128  fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object
+      > (9) update-ref -m … HEAD <new> <old> rc=128  fatal: fatal: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a is not a valid object: not a valid SHA1
+      >     vault HEAD after: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+
+R2P9  GIT_WORK_TREE=<empty dir>
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+R2P11  GIT_NAMESPACE=evil
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+R2P12  GIT_CEILING_DIRECTORIES=<the vault's parent>
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+R2P13  GIT_EXEC_PATH=<dir holding a planted git-hash-object>
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+R2P17  GIT_AUTHOR_* / GIT_COMMITTER_* (identity)
+    RESULT: REACHES — transcripts differ; the differing lines:
+      8c8
+      < (8) commit-tree <tree> -p <head>   rc=0  eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      > (8) commit-tree <tree> -p <head>   rc=0  77a80b52ca91fb8502d7e8083b46c28e4236c28b
+      10c10
+      <     vault HEAD after: eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      >     vault HEAD after: 77a80b52ca91fb8502d7e8083b46c28e4236c28b
+
+R2P22  GIT_AUTHOR_DATE / GIT_COMMITTER_DATE (dates)
+    RESULT: REACHES — transcripts differ; the differing lines:
+      8c8
+      < (8) commit-tree <tree> -p <head>   rc=0  eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      > (8) commit-tree <tree> -p <head>   rc=0  a4d2c18a23d7e6bdf72e746b088863a0e69292db
+      10c10
+      <     vault HEAD after: eb325f5247e9b19db9ea163da25ac50b0b461319
+      ---
+      >     vault HEAD after: a4d2c18a23d7e6bdf72e746b088863a0e69292db
+
+R2P6  GIT_ALTERNATE_OBJECT_DIRECTORIES=<decoy>/.git/objects
+    RESULT: REACHES — transcripts differ; the differing lines:
+      3c3
+      < (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=yes
+      ---
+      > (2) hash-object -w --stdin         rc=0  ced0d24043540233faea11b8d511d4b4bc63f235  storedInVault=no
+
+R2P10  GIT_INDEX_FILE inherited (a copy of the user's index)
+    RESULT: no reach — the nine shapes' transcripts are IDENTICAL to the baseline
+
+############ SECTION 2 — the chained replay (write-target channels)
+commitNamedSet DERIVES every object name from its own earlier pinned calls,
+so a redirected run must be replayed as a chain, not shape by shape.
+
+R2P0c  control — the chain under the baseline env
+    (5) rev-parse HEAD  rc=0 -> VAULT
+    (6) read-tree <own head>  rc=0
+    (1) ls-tree <own head> -- a.txt  rc=0 mode=100644
+    (2) hash-object -w --stdin  rc=0 sha=ced0d24043540233faea11b8d511d4b4bc63f235  inVault=yes inDecoy=no
+    (3) update-index --add --cacheinfo  rc=0
+    (7) write-tree  rc=0
+    (8) commit-tree  rc=0
+    (9) update-ref  rc=0
+    => vault HEAD moved: YES   DECOY HEAD moved: no
+
+R2P3c  GIT_DIR=<decoy>/.git
+    (5) rev-parse HEAD  rc=0 -> DECOY
+    (6) read-tree <own head>  rc=0
+    (1) ls-tree <own head> -- a.txt  rc=0 mode=100644
+    (2) hash-object -w --stdin  rc=0 sha=ced0d24043540233faea11b8d511d4b4bc63f235  inVault=no inDecoy=yes
+    (3) update-index --add --cacheinfo  rc=0
+    (7) write-tree  rc=0
+    (8) commit-tree  rc=0
+    (9) update-ref  rc=0
+    => vault HEAD moved: no   DECOY HEAD moved: YES
+
+R2P4c  GIT_OBJECT_DIRECTORY=<decoy>/.git/objects
+    (5) rev-parse HEAD  rc=0 -> VAULT
+    (6) read-tree <own head>  rc=128
+    ABORTS at (6) — the run stops before it writes anything
+
+R2P5c  GIT_COMMON_DIR=<decoy>/.git
+    (5) rev-parse HEAD  rc=0 -> VAULT
+    (6) read-tree <own head>  rc=128
+    ABORTS at (6) — the run stops before it writes anything
+
+############ SECTION 3 — the code channel: which pinned shape RUNS a configured program
+R2P1  core.fsmonitor via the CARRIED HOME's ~/.gitconfig
+    ls-tree: program-invocations=0
+    hash-object: program-invocations=0
+    read-tree: program-invocations=0
+    update-index: program-invocations=2
+    write-tree: program-invocations=2
+    show: program-invocations=0
+    rev-parse: program-invocations=0
+
+R2P2  core.fsmonitor via XDG_CONFIG_HOME (carried) — the disposition this WP does NOT take
+    ls-tree: program-invocations=0
+    hash-object: program-invocations=0
+    read-tree: program-invocations=0
+    update-index: program-invocations=2
+    write-tree: program-invocations=2
+    show: program-invocations=0
+    rev-parse: program-invocations=0
+
+R2P2n  the SAME XDG config with XDG_CONFIG_HOME NOT carried — the adopted disposition
+    ls-tree: program-invocations=0
+    hash-object: program-invocations=0
+    read-tree: program-invocations=0
+    update-index: program-invocations=0
+    write-tree: program-invocations=0
+    show: program-invocations=0
+    rev-parse: program-invocations=0
+
+R2P7  core.fsmonitor injected via GIT_CONFIG_COUNT
+    ls-tree: program-invocations=0
+    hash-object: program-invocations=0
+    read-tree: program-invocations=0
+    update-index: program-invocations=2
+    write-tree: program-invocations=2
+    show: program-invocations=0
+    rev-parse: program-invocations=0
+
+R2P8  core.fsmonitor via a config selected by GIT_CONFIG_GLOBAL
+    ls-tree: program-invocations=0
+    hash-object: program-invocations=0
+    read-tree: program-invocations=0
+    update-index: program-invocations=2
+    write-tree: program-invocations=2
+    show: program-invocations=0
+    rev-parse: program-invocations=0
+
+R2P7h core.hooksPath injected via GIT_CONFIG_COUNT — does it fire a hook on the pinned update-ref?
+    update-ref rc=0  hook-invocations=2
+      HOOK RAN prepared
+      HOOK RAN committed
+
+R2P16 the USER's own hook (configured through the carried HOME's ~/.gitconfig) under the CONSTRUCTED env
+    update-ref rc=0  the user's hook fired 2 time(s); its environment:
+      --- hook fired (prepared); its environment: ---
+      CPATH=/usr/local/include
+      GIT_EXEC_PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core
+      GIT_PREFIX=
+      HOME=<ROOT>/uhome
+      HOOKENV_LOG=<ROOT>/c.3905.25322.henv
+      LIBRARY_PATH=/usr/local/lib
+      MANPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/share/man:/Library/Developer/CommandLineTools/usr/share/man:/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/share/man:
+      PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core:/usr/bin
+      PWD=/private<ROOT>/c.3905.25322
+      SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+      SHLVL=1
+      _=/usr/bin/env
+      __CF_USER_TEXT_ENCODING=0x1F5:0x0:0x0
+      --- end ---
+      --- hook fired (committed); its environment: ---
+      CPATH=/usr/local/include
+      GIT_EXEC_PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core
+      GIT_PREFIX=
+      HOME=<ROOT>/uhome
+      HOOKENV_LOG=<ROOT>/c.3905.25322.henv
+      LIBRARY_PATH=/usr/local/lib
+      MANPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/share/man:/Library/Developer/CommandLineTools/usr/share/man:/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/share/man:
+      PATH=/Library/Developer/CommandLineTools/usr/libexec/git-core:/usr/bin
+      PWD=/private<ROOT>/c.3905.25322
+      SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+      SHLVL=1
+      _=/usr/bin/env
+      __CF_USER_TEXT_ENCODING=0x1F5:0x0:0x0
+      --- end ---
+
+############ SECTION 4 — identity, replacement objects, signing
+R2P17d the pinned commit-tree's RECORDED author/committer, with and without inherited identity
+    baseline (no GIT_AUTHOR_*/GIT_COMMITTER_*):
+      author wienerdog <wienerdog@localhost> 1700000000 +0000
+      committer wienerdog <wienerdog@localhost> 1700000000 +0000
+    with GIT_AUTHOR_*/GIT_COMMITTER_* exported:
+      author Attacker <a@evil> 1700000000 +0000
+      committer Attacker <a@evil> 1700000000 +0000
+
+R2P18 replacement objects: a refs/replace/ ref in the vault, against the pinned reads and commit-tree
+    a refs/replace/<template head> ref now points at a commit whose a.txt is REPLACED-CONTENT
+    [honoured (no GIT_NO_REPLACE_OBJECTS)]
+      (4) show <head>:a.txt        -> REPLACED-CONTENT
+      (1) ls-tree <head> -- a.txt  -> 100644 blob 5871e2272698f4ba5f4b4bf34d4d80b56e5a48f4 a.txt
+      (6) read-tree <head>, then the index's blob for a.txt -> 100644 5871e2272698f4ba5f4b4bf34d4d80b56e5a48f4 0 a.txt
+      (8) commit-tree -p <head>    -> eb325f5247e9b19db9ea163da25ac50b0b461319  (its recorded parent: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a)
+    [GIT_NO_REPLACE_OBJECTS=1]
+      (4) show <head>:a.txt        -> template-a
+      (1) ls-tree <head> -- a.txt  -> 100644 blob de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b a.txt
+      (6) read-tree <head>, then the index's blob for a.txt -> 100644 de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b 0 a.txt
+      (8) commit-tree -p <head>    -> eb325f5247e9b19db9ea163da25ac50b0b461319  (its recorded parent: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a)
+    [GIT_REPLACE_REF_BASE=refs/other/]
+      (4) show <head>:a.txt        -> template-a
+      (1) ls-tree <head> -- a.txt  -> 100644 blob de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b a.txt
+      (6) read-tree <head>, then the index's blob for a.txt -> 100644 de5f8b4f4970f2a5179fc157e660c4e21f5c5a9b 0 a.txt
+      (8) commit-tree -p <head>    -> eb325f5247e9b19db9ea163da25ac50b0b461319  (its recorded parent: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a)
+
+R2P15 signing: does the pinned commit-tree honour commit.gpgsign from the carried HOME's config?
+    (8) commit-tree rc=0 -> eb325f5247e9b19db9ea163da25ac50b0b461319 ; gpg-program invocations=0
+    control: a real git-commit under the SAME home -> gpg-program invocations=1
+      GPG RAN --status-fd=2 -bsau t <t@e>
+
+############ SECTION 5 — attributes, alternates, inherited index, discovery
+R2P14 filter drivers (GIT_ATTR_* family) on the pinned show and hash-object
+    (4) show      rc=0 filter-invocations=0
+    (2) hash-object (no --path) rc=0 filter-invocations=0
+
+R2P6b GIT_ALTERNATE_OBJECT_DIRECTORIES on the pinned read-tree of a tree held only elsewhere
+    without alternates: rc=128
+    with alternates:    rc=0  index now holds: b.txt reports/warnings.md
+
+R2P10b an inherited GIT_INDEX_FILE on the six unset-disposition shapes
+    (5) rev-parse rc=0
+    (1) ls-tree rc=0
+    (2) hash-object rc=0
+    (4) show rc=0
+    (8) commit-tree rc=0
+    (9) update-ref rc=0
+    the pointed-at index's bytes changed across all six: no
+
+R2P12n discovery from a NON-repository directory inside a repository (the R1-E case)
+    rev-parse --git-dir  rc=0 -> /private<VAULT>/.git
+    rev-parse HEAD       rc=0 -> 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a  (the ANCESTOR repository)
+    with a ceiling at the parent: rc=128 -> fatal: not a git repository (or any of the parent directories): .git
+
+############ SECTION 6 — the two claims that are about OUR code, not git's
+R2P19 PATH: what the scheduled child gets vs what a manual run carries
+    scheduled PATH (buildCleanEnv): /opt/homebrew/Cellar/node/25.9.0_2/bin:/Users/gyulafeher/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+    manual PATH (process.env.PATH): /Users/gyulafeher/.grok/bin:/Users/gyulafeher/.antigravity-ide/antigravity-ide/bin:/Users/gyulafeher/.antigravity/antigr …
+    identical? false
+    scheduled HOME: /Users/gyulafeher   getPaths().home: /Users/gyulafeher   identical? true
+    scheduled XDG_CONFIG_HOME present? false
+
+R2P20 do the product roots move when HOME moves, with the four overrides fixed?
+    home       HOME=/tmp/home-a -> /tmp/home-a   HOME=/tmp/home-b -> /tmp/home-b   same? false
+    core       HOME=/tmp/home-a -> /tmp/wd-core   HOME=/tmp/home-b -> /tmp/wd-core   same? true
+    state      HOME=/tmp/home-a -> /tmp/wd-core/state   HOME=/tmp/home-b -> /tmp/wd-core/state   same? true
+    secrets    HOME=/tmp/home-a -> /tmp/wd-core/secrets   HOME=/tmp/home-b -> /tmp/wd-core/secrets   same? true
+    logs       HOME=/tmp/home-a -> /tmp/wd-core/logs   HOME=/tmp/home-b -> /tmp/wd-core/logs   same? true
+    claudeDir  HOME=/tmp/home-a -> /tmp/wd-claude   HOME=/tmp/home-b -> /tmp/wd-claude   same? true
+    codexDir   HOME=/tmp/home-a -> /tmp/wd-codex   HOME=/tmp/home-b -> /tmp/wd-codex   same? true
+    vault      HOME=/tmp/home-a -> /tmp/wd-vault   HOME=/tmp/home-b -> /tmp/wd-vault   same? true
+
+############ TEMPLATE INTEGRITY — the run is invalid if this moved
+    template HEAD at start: 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+    template HEAD now     : 65b3416e82aa5f7fd9e54daee3699e7ebed8e41a
+    unchanged: YES
+    decoy HEAD at start: 48ae36eb59d2dcab40e2448bdaaf626be037d83d
+    decoy HEAD now     : 48ae36eb59d2dcab40e2448bdaaf626be037d83d
+
+ROOT kept at /var/folders/3v/02rwx2m56_b270xrhlf020080000gn/T/tmp.YtINwUFXEh
+```
+
+### Size — a named residual, not a trim
+
+The spec is **908 lines** against `docs/specs/README.md`'s ~400-line
+heuristic. Recorded rather than trimmed, in the shape audit-E's F6 used, because
+trimming now would reopen surface the rounds have just frozen. **What the bulk
+is:** Table U (24 rows), its rationale section, the nine acceptance criteria and
+the two owner items with their enumerated overrule costs — every one of them
+added because a round demanded it. **Zero gate machinery has been added since
+round 1**: the verification steps are still V1–V6 and the RED declarations still
+three. The implementation the spec describes is unchanged at one ~30-line module,
+two call-site edits, one re-targeted declaration and three new ones — an **S**,
+and it still touches 8 files.
+
+### Revision — the tree after R3-A … R3-F
+
+`coherence.js` on the revised spec:
+
+```text
+spec line count                                = 909
+Table U rows                                   = 24  U1,U2,U3,U4,U4b,U5,U6,U7,U8,U9,U10,U11,U12,U13,U14,U15,U16,U17,U18,U19,U20,U22,U23,U21
+  id set U1..U23 + U4b complete, no duplicates, closure row last: ok
+U-ids mentioned anywhere but absent from table = none
+U-rows never referenced outside their own row  = U8,U12,U14,U15,U16,U17,U18 (informational)
+acceptance criteria                            = 9  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8,AC9
+verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
+deliverable rows                               = 7
+   create src/core/dream/git-env.js  exists=false
+   modify src/cli/dream.js  exists=true
+   modify tests/unit/dream-pipeline.test.js  exists=true
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true
+files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
+file:line citations in the spec                = 24
+   `src/cli/dream.js:587`
+      FIRST:   assertGitRepo(vaultDir);
+      LAST :   assertGitRepo(vaultDir);
+   `src/core/dream/validate.js:64-81`
+      FIRST: function git(vaultDir, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:166-175`
+      FIRST: function gitIn(spawnGit, cwd, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:178-186`
+      FIRST: function spawnGitPinned(o) {
+      LAST : }
+   `src/core/exec-identity.js:553`
+      FIRST: function spawnPinnedSync(name, paths, opts = {}) {
+      LAST : function spawnPinnedSync(name, paths, opts = {}) {
+   `src/cli/dream.js:562`
+      FIRST:   const spawnGit = opts.spawnGit || spawnGitPinned;
+      LAST :   const spawnGit = opts.spawnGit || spawnGitPinned;
+   `src/cli/dream.js:226-231`
+      FIRST:   const tmpIndex = path.join(o.stateDir, `dream-index.${process.pid}.tmp`);
+      LAST :   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
+   `src/cli/dream.js:1007`
+      FIRST:       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+      LAST :       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+   `tests/red-proofs/dream-pipeline.proofs.json:10-11`
+      FIRST:       "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
+      LAST :       "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+   `src/cli/run-job.js:150`
+      FIRST: function buildCleanEnv(paths, name, platform = process.platform) {
+      LAST : function buildCleanEnv(paths, name, platform = process.platform) {
+   `src/core/paths.js:54`
+      FIRST:   const home = env.HOME || os.homedir();
+      LAST :   const home = env.HOME || os.homedir();
+   `src/cli/dream.js:179`
+      FIRST:   return spawnPinnedSync('git', getPaths(), {
+      LAST :   return spawnPinnedSync('git', getPaths(), {
+   `src/core/dream/promote.js:387-418`
+      FIRST: function constructMergeEnv(root) {
+      LAST : }
+   `src/core/exec-identity.js:93-118`
+      FIRST: function resolveExecutable(name, env, platform) {
+      LAST : }
+   `src/core/paths.js:53-54`
+      FIRST: function getPaths(env = process.env) {
+      LAST :   const home = env.HOME || os.homedir();
+   `src/cli/run-job.js:47-50`
+      FIRST: const ENV_PASSTHROUGH = [
+      LAST : ];
+   `src/cli/run-job.js:58-78`
+      FIRST: const WIN_ENV_PASSTHROUGH = [
+      LAST : ];
+   `src/cli/run-job.js:155`
+      FIRST:       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+      LAST :       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+   `docs/specs/done/WP-criterion-red-harness.md:95-96`
+      FIRST:   builds the private index environment at exactly one site — the `indexEnv`
+      LAST :   constant, `{ ...process.env, GIT_INDEX_FILE: tmpIndex }`. This is stated as an
+   `docs/specs/done/WP-audit-c-close-disposition.md:130`
+      FIRST:   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+      LAST :   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+   `tests/unit/dream-pipeline.test.js:411-414`
+      FIRST:   Object.assign(process.env, {
+      LAST :   });
+RED ids named in the Exact-contracts table     = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+RED ids in V4's `want`  array                    = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+template sections absent                       = none
+
+COHERENCE: no failures
+```
+
+`npm run lint` on the revision commit's tree:
+
+```text
+$ npm run lint
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 651 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+--- frontmatter check ---
+frontmatter check passed: 269 spec(s), 4 agent(s)
+
+lint passed
+```
+
 ## External rounds
 
-Round 3 runs on this tip. Appended by the orchestrator below this line.
+Round 4 — the closing confirmation — runs on this tip. Appended by the
+orchestrator below this line.
