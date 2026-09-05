@@ -41,7 +41,14 @@ call sites remove such a file, all in `src/core/dream/validate.js`:
    a name no preservation record, no cleanup pass and no abort message reaches.
 2. `pruneRedactedOriginals` — the `REDACTED_RETENTION_CAP = 50` eviction loop.
    Shipped contract: *"Best-effort: a failed prune is ignored and the arm still
-   completes."*
+   completes."* **A second question rides on this call site, routed here by the
+   round-3 shadow channel of the predecessor's design gate (2026-09-05):** the pass
+   excludes only the basenames its OWN run created, so a lock-stealing overlapping
+   run can select another still-running invocation's freshly preserved `redacted/`
+   artifact for eviction once that invocation has returned. **Durable unlink does not
+   answer it** — the question is whether the artifact was safe to SELECT, which is
+   live-run ownership, and it belongs with this package's own value question rather
+   than with the preservation protocol.
 3. The identity-gated delete inside the gate's refusal arm, which removes the
    `redacted/` copy when a byte-identical withheld copy demonstrably exists.
    Shipped contract: *"best-effort: a stale duplicate, not a hazard."*
