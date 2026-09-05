@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-banner-location
 title: Stop the ledger-derived banners naming a quarantine shelf they cannot observe
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening]
@@ -10,6 +10,141 @@ epic: dream-promotion
 ---
 
 # WP-quarantine-banner-location: Stop the ledger-derived banners naming a quarantine shelf they cannot observe
+
+> **Archived 2026-09-05, post-merge — the closing record.** Nothing below this
+> blockquote is rewritten: the spec text is the text the reviewers read, and the
+> four corrections this pass owes it are stated here as dated errata instead.
+>
+> **Design loop — PR #217, merged `0fd50422`.** Round zero (architect
+> self-check, then the orchestrator's two clean-context executors: template
+> CONFORMANT, coherence 3 findings — 1 A, 2 C — all FIX) followed by **five
+> double-channel external rounds** (gate = Codex plugin, shadow = hermetic
+> Codex; raws committed before adjudication as
+> `docs/specs/logbook/2026-09-05-quarantine-banner-gate-raw-round<N>-<channel>.txt`,
+> round record `docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md`).
+> **The circuit breaker fired at round 2**: rounds 1 and 2 landed an A finding
+> on the same family — *is the pointer's destination real?* — which is
+> ADR-0031's escalation (i), so the third narrowing of the sentence was refused
+> and the defect was deleted instead. That is row **L7**: the undelivered-record
+> block moves to step **17b**, ahead of every durable write, which closes the
+> crash window that made the sentence conditional. Round 3 moved criterion 6's
+> fault-injection seam to the ledger boundary — the FIRST durable claim — after
+> measuring that the round-2 seam passed a placement that still left a window.
+> Round 4 surfaced the pre-upgrade legacy record no ordering can fix and parked
+> it as the third owner item; **its gate-channel verdict is void** (the
+> orchestrator wrote a file into the reviewed worktree mid-run, breaking the
+> runbook's read-only check), so round 5 ran both channels again on `005eed52`,
+> both valid, one converged wording finding, and the loop closed.
+>
+> **Implementation — PR #218, merged `4406ebdb`** (implementation tip
+> `0fc37e0e`, base `main` `0fd50422`). **One round of the triple-channel PR
+> gate, clean on the first tip:** wd-reviewer **APPROVE**, Codex plugin clean,
+> hermetic shadow *"patch is correct"*. Raws:
+> `docs/specs/logbook/2026-09-05-quarantine-banner-pr218-raw-round1-{wd-reviewer,codex-plugin,herdr-shadow}.txt`.
+> Measured on the merged tree: `npm test` 2623/2611/0/12, `npm run lint` 0
+> errors, `npm run red-proofs` 11 declared / 11 selected with **five** roll-up
+> lines for this WP, `RUN: PROVEN`. wd-reviewer's four findings were all **Band
+> C**, all spec-side, none blocking — they are the four errata below.
+>
+> **Owner rulings.** All three Dispatch-precondition items were dispatched under
+> the architect's recommendations, on the owner's standing *go with your
+> recommendations* of 2026-09-05; the record is
+> `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`. **The owner may
+> reverse any of the three by dated amendment**, and each reversal has a stated
+> cost: (1) *confirm the four surfaces* — rows L1–L4 and the byte-exact pointer
+> sentence stand; reversing re-derives the four renderings, the four
+> hand-written pins and Table C's six `find` literals. (2) *route L5, do not
+> absorb it* — `src/core/digest.js` stayed outside the boundary and the digest's
+> clearing sentence is `WP-quarantine-only-copy-shelf`'s together with the shelf
+> decision it depends on; reversing adds that file, one Table L row and one
+> updated pin. (3) *accept the legacy crash-window record as a named residual*
+> — decided in Table L row **L0**, registered under Out of scope; reversing
+> toward a durable per-record delivery stamp is
+> `WP-quarantine-preserve-durability`'s package and adds a ledger-schema row to
+> Deliverables.
+>
+> ---
+>
+> **Errata, 2026-09-05 (post-merge) — four, all from wd-reviewer's Band C
+> findings at PR #218 round 1, none of them a defect in what shipped.** Three of
+> the four are the same fault, and the reviewer named it under ADR-0031:
+> **prose restating a count or a size that a table already fixes.** "Eleven
+> lines" over a ten-line fence, "steps 18-20" over a table that had just moved
+> one of them, "two-line comment" in three registered places — each is a mirror
+> nobody would have had to maintain if the count had been left to the surface
+> that owns it. **The habit to break, stated for the successor:** when a
+> Deliverables cell or a Table L row already carries the artefact, prose about
+> it should point at the artefact, not re-measure it. A number written twice is
+> a mirror, and every mirror is a maintenance obligation — register it in the
+> Mirrored Surface Checklist by SHAPE ("any count of the L7 header's lines"),
+> or do not write it a second time at all.
+>
+> **Erratum 1 — Implementation notes, row L7's move: "becomes these eleven
+> lines, byte-exactly".** The fenced block that follows holds **ten** comment
+> lines, not eleven. What shipped is the correct reading and the only one under
+> which both halves of the instruction are true: the ten fenced lines replace
+> the old two-line header **byte-exactly**, and the pre-existing blank `//`
+> separator that already sat between that header and `(i) THE REFUSED REPORT
+> ARM.` is left untouched — it was never part of the header being replaced. The
+> implementer recorded exactly this under "Decisions made"; wd-reviewer verified
+> the ten lines present byte-for-byte at `src/cli/dream.js:1076` and the block
+> body after the header byte-identical to `main`. The sentence should have read
+> *"becomes these ten lines, byte-exactly, replacing the existing two-line
+> header; the blank `//` separator that follows it is untouched."* **A fifth,
+> unregistered mirror of the same count is in this spec too** — the Mirrored
+> Surface Checklist's "Mirrors outside this document" bullet says *"row L7's
+> eleven-line comment header"*. Both are wrong by one and both are stale for
+> the same reason.
+>
+> **Erratum 2 — Implementation notes, row L7's move: the orphaned `(ii)`
+> sub-bullet, disposition recorded.** The step-20 comment block enumerated
+> `(i)`, `(i-b)` and `(ii)`. The move carried `(i)` and `(i-b)` and their
+> statements to step 17b; `(ii)` — *"the out-of-vault records from row G12 reach
+> the SAME channel"* — stayed at `src/cli/dream.js:1174`, still documenting the
+> `for (const r of records)` loop it has always documented, but with no `(i)`
+> within ~50 lines and no numbered parent. **The implementer was right not to
+> touch it**: this spec said *"Move it; do not retype it. Nothing inside the
+> block changes except its two-line header"*, and renumbering `(ii)` is
+> retyping. **Disposition: the orphan is ACCEPTED on the record**, because
+> accepting it is what the spec's own instruction requires and the alternative
+> was outside the permission boundary. It is a cosmetic comment defect, not a
+> behavioural one. **A successor with an independent reason to be in that
+> block may renumber `(ii)` as part of step 19** — it is routed to wd-architect
+> as a residual and is named in the 2026-09-05 HANDOVER status pass. What this
+> spec should have carried is the disposition itself: an instruction that moves
+> part of an enumerated block owes a sentence about the part it leaves behind.
+>
+> **Erratum 3 — Implementation notes, row L7's move: "so the numbering stays
+> monotonic and steps 18-20 keep their ids".** There is no step 20 in
+> `src/cli/dream.js` after the move — moving the `// 20.` block is what removed
+> it. The step-comment ids now run **17, 17b, 18, 19, 21, 22** (measured on the
+> merged tree with `grep -nE '^\s*// [0-9]+[a-z]?\. ' src/cli/dream.js`). The
+> claim was unsatisfiable in combination with *"move it, do not retype it"*, so
+> the diff is right and the sentence is the stale mirror; it should have read
+> *"steps 18, 19 and 21 keep their ids."* This same wrong list is repeated in
+> the round-2 fixes entry of
+> `docs/specs/logbook/2026-09-05-quarantine-banner-location-design-gate-rounds.md`,
+> which is a historical record and is left as written.
+>
+> **Erratum 4 — the size of the `tests/unit/digest.test.js` comment, in three
+> registered places.** As shipped that comment is **six** lines
+> (`tests/unit/digest.test.js:765-770`), not two. The phrase *"the two-line
+> comment in `tests/unit/digest.test.js`"* appears in three places this spec
+> registered as mirrors: the Deliverables cell for that file, the Mirrored
+> Surface Checklist's "Mirrors outside this document" bullet, and the byte-exact
+> Q1 clause this package shipped into
+> `docs/specs/done/WP-secret-fence-ep2-redact-arm.md`. The implementer had no
+> room: the clause is spec-owned byte-exact text pinned by V5, while the
+> replacement comment's wording was explicitly left to them (*"prose, not
+> spec-owned text"*, recorded as a Decision). **The Q1 clause is NOT corrected
+> and must not be.** It describes the **pre-correction** state — the sentence
+> that *was* mirrored in a two-line comment — so it is not false, and V5's
+> byte-for-byte base-row-plus-clause comparison pins it; editing it would
+> falsify a shipped verification and reopen a `done/` spec for a cosmetic
+> reason. **The erratum lives here, in the spec that owns the change**, which is
+> where a reader who goes looking for a two-line comment and finds six will
+> land. The two mirrors inside this document are corrected by this erratum and
+> not by an edit to their text.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.

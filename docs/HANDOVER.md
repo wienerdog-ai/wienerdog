@@ -37,6 +37,31 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-05 (overnight continuation #2, owner-authorized
+> merges).** Measured on `main`:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 3b | `WP-quarantine-banner-location` | **Done** | design loop #217 (round zero + 5 double-channel rounds; **circuit breaker at round 2** — two consecutive A findings on "is the pointer's destination real?" were settled by DELETING the defect: row L7 reorders the undelivered-record print to step 17b, ahead of every durable write, which removes the crash window instead of narrowing the sentence a third time; round 3 moved the fault-injection seam to the ledger boundary, the first durable claim; **round 4's plugin run was voided by an orchestrator write into the reviewed worktree** and made good at round 5, where both channels were valid and returned one wording finding), implementation #218 (**one round** of the triple-channel PR gate, clean on the first tip: wd-reviewer APPROVE, plugin clean, shadow "patch is correct"; **four Band C findings → four dated errata** in the filed spec), filed in this pass | The four ledger-derived carriers (Table L rows L1–L4) now render one code-owned `PRESERVED_COPIES_POINTER` sentence naming no folder and instructing no delete; two RED-proof declaration files, four hand-written identities, five roll-up lines. **Dispatched under three architect recommendations the owner may reverse by dated amendment** (record: `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`): (1) confirm the four surfaces; (2) route L5's clearing sentence to `WP-quarantine-only-copy-shelf` rather than absorb it — `src/core/digest.js` stayed outside the boundary; (3) accept the pre-upgrade legacy crash-window record as a named residual, decided in Table L row **L0**, its durable half inherited by `WP-quarantine-preserve-durability` |
+> | 3c | `WP-quarantine-preserve-durability` | Draft → in design | — | wd-architect matured it to **1043 lines** at `284144db` on `docs/wp-quarantine-preserve-durability`. **SPLIT**: `WP-quarantine-disposal-durability` filed as a Draft stub on that branch. Four owner items, each carrying a recommendation. Round zero is done; the external double-channel rounds are next |
+> | 6–9 | unchanged | Draft | — | — |
+>
+> Round records and raws: `docs/specs/logbook/2026-09-05-quarantine-banner-*`.
+> **Residuals routed to wd-architect, not dispatched** — the earlier list,
+> carried forward unchanged, plus one new: the dot-segment spec's own V2 B3 loop
+> grades against the pre-filesystem spelling (state the B3 pre-step once —
+> `topLevelDirs`' `readdirSync`, then `pick`'s trim, then the `reports_dir` join
+> — with V2 and the test file as registered mirrors); the adopt-e2e Deliverables
+> cell's setup enumeration omits the PATH stub; the basename WP's Table C
+> position clause; the phase-environment contract table for
+> `scripts/red-proofs.js`; ADR-0010's "adopt requires the user to confirm"
+> sentence vs `--yes`; **NEW —** the orphaned `(ii)` sub-bullet left at step 19
+> in `src/cli/dream.js` by row L7's move (erratum 2 of the filed banner spec
+> accepts the orphan on the record; a successor with an independent reason to be
+> in that block may renumber it as part of step 19). The audit status table
+> above is unchanged by this pass — group C still has its one residual
+> (D2 (b), `WP-dream-git-env-pinning`).
+>
 > **Status pass, 2026-09-05 (overnight continuation of the 09-04 session,
 > owner-authorized merges).** Measured on `main`:
 >
