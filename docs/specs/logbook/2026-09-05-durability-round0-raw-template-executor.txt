@@ -1,0 +1,70 @@
+# Raw round-zero output — the orchestrator's clean-context TEMPLATE-CONFORMANCE executor (claude-sonnet-5, read-only), docs/wp-quarantine-preserve-durability at 284144db (base main = 0fd50422). Committed BEFORE adjudication.
+
+I now have full findings. Here's the report.
+
+## TEMPLATE: DEVIATIONS
+
+(Deviations found, but nearly all in the Draft spec are precedented, reviewed conventions elsewhere in the corpus; the stub carries real, substantial deviations that are also part of a repo-wide, undocumented "Draft stub" convention.)
+
+### 1. Deviations — `docs/specs/WP-quarantine-preserve-durability.md`
+
+1. **`docs/specs/WP-quarantine-preserve-durability.md:17`** — An extra top-level section `## Dispatch precondition (...)` is inserted between the boilerplate "Authoring rules" line (14–15) and `## Context` (115). `_TEMPLATE.md` has no such section, and its skeleton puts `## Context` immediately after the boilerplate line (`_TEMPLATE.md:14-17`). **Band: C.** This isn't a one-off invention — `docs/specs/WP-quarantine-banner-location.md:17` (status `Ready`, i.e. it passed maturation/review) uses the identical section, in the identical position, with the identical heading pattern (`"(N owner items; accepting all N recommendations changes no Deliverables row)"`). It's an established, precedented convention that the template text simply doesn't document — a template documentation gap, not an authoring violation.
+
+2. **`docs/specs/WP-quarantine-preserve-durability.md:287-290`** — The Deliverables permission-boundary comment drops the template's trailing sentence. Template (`_TEMPLATE.md:33-35`): `<!-- Always allowed without listing: ... docs/specs/logbook/. Everything else must be listed. -->`. This file's comment ends at "`docs/specs/logbook/.`" and omits "Everything else must be listed." **Band: C.** Corpus-wide this is normal: 184 specs carry the "Always allowed without listing" comment, only 35 keep the "Everything else must be listed" sentence verbatim — most customize/truncate it. Not a real deviation from practice, only from the literal template string.
+
+3. **`docs/specs/WP-quarantine-preserve-durability.md:300-321`** — An "**Explicitly NOT in the boundary**" bullet list is inserted between the Deliverables table (292-298) and `### Exact contracts` (323); the template goes straight from the table to `### Exact contracts` (`_TEMPLATE.md:41-43`). **Band: C.** Precedented in `WP-quarantine-banner-location.md` and in the `Done` specs `WP-ep2-unscannable-preserve.md` and `WP-preservation-abort-widening.md`.
+
+4. Headings that drop the template's parenthetical qualifier — `## Contract reference` (line 379, template: `## Contract reference (optional — mark N/A if this WP is not contract-dense)`) and `## Security checklist` (line 779, template: `## Security checklist (delete only if the WP touches no untrusted input)`). **Band: C, effectively not a deviation** — this is the corpus norm (e.g. `WP-dev-descriptor-no-tree-hash.md`, `WP-dream-report-run-skips.md`, dozens of `done/` specs use the bare heading).
+
+5. Canonical-table subheadings are `### Table F — canonical: ...` and `### Table C — canonical: ...` (390, 417) rather than the template's literal `### Contract table(s)` (`_TEMPLATE.md:78`). **Band: C, not a deviation in practice** — letter-named canonical tables (`Table A`, `Table L`, `Table P`, `Table R`, etc.) are the established repo idiom specifically to avoid row/table-id collisions across the spec family, and the file itself explains why it had to pick a fresh letter (Table D was already taken by `WP-preservation-abort-widening`).
+
+No other structural deviations found. Every remaining required template section is present, correctly named, and in template order: `## Context (read this, nothing else)` → `## Current state` → `## Deliverables ...` → `### Exact contracts` → `## Contract reference` → `### Mirrored Surface Checklist` → `## Implementation notes & constraints` → `## Security checklist` → `## Acceptance criteria` → `## Verification steps (run these; paste output in the PR)` → `## Out of scope (do NOT do these)` → `## Definition of done`. The boilerplate "Authoring rules live in..." line (14-15) is byte-identical to the template's (14-15).
+
+### 2. Deviations — `docs/specs/WP-quarantine-disposal-durability.md`
+
+This file is a self-declared "**Draft stub**" (line 14) and its shape departs from the template far more substantially:
+
+1. **Missing the boilerplate "Authoring rules live in..." line** entirely (template `_TEMPLATE.md:14-15`, a non-conditional element — not gated by any "N/A" allowance).
+2. **Missing `## Current state`** (template: `_TEMPLATE.md:25-29`) — no exact file paths/signatures given beyond the Context prose.
+3. **Missing `## Deliverables (permission boundary — touch ONLY these)`** and its table (`_TEMPLATE.md:31-42`) — no permission boundary is stated at all.
+4. **Missing `### Exact contracts`** (`_TEMPLATE.md:43-53`).
+5. **Missing `## Contract reference`**, its activation-trigger test, `### Contract table(s)`, and `### Mirrored Surface Checklist` (`_TEMPLATE.md:55-98`).
+6. **`## Implementation notes & constraints` renamed/replaced by `## Watch out`** (line 69) — different heading, and prose-only rather than the template's constraint-list shape.
+7. **`## What done means` (line 46) has no template counterpart** — it substitutes for, but is not, `## Acceptance criteria` (`_TEMPLATE.md:119-125`): it poses an open product question ("the value question FIRST... may answer 'no'") rather than binary criteria.
+8. **Missing `## Security checklist`** (`_TEMPLATE.md:106-118`) with no "delete only if..." justification or N/A stated.
+9. **Missing `## Verification steps (run these; paste output in the PR)`** (`_TEMPLATE.md:126-131`) — no fenced verification block exists at all.
+10. **Missing `## Out of scope (do NOT do these)`** (`_TEMPLATE.md:133-135`).
+11. **Missing `## Definition of done`** (`_TEMPLATE.md:137-146`).
+
+For every missing section above, `docs/runbooks/spec-authoring.md:25-27` states: *"A template section is never deleted silently: where a conditional section legitimately does not apply, one line stays in its place — `N/A — <one-line reason>` — so absence is always visible and checkable."* None of the eight missing template sections carry an `N/A — <reason>` placeholder in this file. **Band: literally A** (an implementer or reviewer reading only the template+runbook would expect these placeholders and their absence obscures which omissions are deliberate) **but functionally B/C in context**: the file's own blockquote (lines 14-18) states plainly it "has NOT been through spec review... mature it to Ready before implementing," and its status is `Draft`, so no implementer can dispatch it as-is (`docs/specs/README.md:6`: only `Ready` specs are pickable). Materially, this omission is caught downstream at the mandatory maturation-to-`Ready` gate, not at implementation time.
+
+**This shape is a systemic, repo-wide pattern, not an isolated deviation**: of 17 specs currently in `docs/specs/` with `status: Draft`, only 3 carry the "Authoring rules live in..." boilerplate line; the other 14 (including this one) follow the same "blockquote + partial sections" stub shape — e.g. `WP-process-runbook-sweeps.md`, `WP-dream-git-env-pinning.md`, `WP-audit-d-code-derived-recipients.md`, `WP-audit-e-ledger-parser-corpus.md`, `WP-scheduler-replay-manifest-independent.md` all use the identical blockquote-note + reduced-section convention. This "stub" convention is **not documented anywhere in `_TEMPLATE.md` or `spec-authoring.md`** (grepped both — no mention of "stub"), so it is a real, un-codified gap between written authoring rules and actual repo practice, applied consistently rather than invented here.
+
+### 3. Required sections — missing / out of order / renamed (summary)
+
+- **File 1** (`WP-quarantine-preserve-durability.md`): no template section is missing, out of order, or renamed. One non-template section (`Dispatch precondition`) is prepended before `Context`, precedented in a `Ready` sibling spec.
+- **File 2** (`WP-quarantine-disposal-durability.md`): `Current state`, `Deliverables`, `Exact contracts`, `Contract reference`, `Mirrored Surface Checklist`, `Security checklist`, `Acceptance criteria`, `Verification steps`, `Out of scope`, `Definition of done` are all **missing** with no `N/A` placeholders. `Implementation notes & constraints` is effectively **renamed** to `Watch out`, and `Acceptance criteria` is effectively **renamed/replaced** by `What done means` (a decision-still-open framing, not binary criteria).
+
+### 4. Frontmatter fields checked against `tests/schemas/spec.schema.json` (via `scripts/check-frontmatter.js`)
+
+Ran `node scripts/check-frontmatter.js` on the tree — result: `frontmatter check passed: 268 spec(s), 4 agent(s)`. Both files are schema-conformant.
+
+| Field | WP-quarantine-preserve-durability | WP-quarantine-disposal-durability |
+|---|---|---|
+| id | `WP-quarantine-preserve-durability` (matches `^WP-[a-z0-9]+(-[a-z0-9]+)*$`) | `WP-quarantine-disposal-durability` (matches) |
+| title | "Make a preserved quarantine artifact durable, and say honestly what that guarantees" | "Decide whether a disposed quarantine artifact must be durably gone, and enforce whatever is decided" |
+| status | `Draft` (valid enum) | `Draft` (valid enum) |
+| model | `sonnet` (valid enum) | `opus` (valid enum) |
+| size | `M` (valid enum) | `S` (valid enum) |
+| depends_on | `[WP-preservation-abort-widening, WP-quarantine-banner-location]` — both ids resolve (found in `docs/specs/done/` and `docs/specs/` respectively) | `[WP-quarantine-preserve-durability]` — resolves |
+| adrs | `[ADR-0004, ADR-0031, ADR-0034, ADR-0042]` — all four ADR files exist under `docs/adr/` | `[ADR-0004, ADR-0031, ADR-0034]` — all exist |
+| epic | `dream-promotion` (matches `^[a-z0-9]+(-[a-z0-9]+)*$`) | `dream-promotion` (matches) |
+
+No duplicate `id` and no unresolved `depends_on` were reported by the cross-file check across the whole repo.
+
+### 5. Fenced verification blocks — single extractable block?
+
+- **File 1**: Yes. `## Verification steps` (line 854) contains exactly **one** fenced block, ```` ```bash ```` opening at line 856 and closing at line 941, containing V1, V2, the "V1/V2 VERDICT" gate, V3 (`npm run red-proofs`), and V4 (`npm test`, `npm run lint`) as one continuous script. No stray fenced blocks interrupt it (the surrounding prose blocks at 943-996 are outside the Verification steps section, are commentary/evidence tables, and are correctly marked ```` ```text ```` / plain prose, not additional "verification" fences).
+- **File 2**: N/A — no `## Verification steps` section exists, so there is no fenced verification block to evaluate (this is itself covered under §2/§3 above as a missing required section).
+
+I have not modified any files or run any state-changing git commands; all commands executed were read-only (`grep`, `sed -n`, `ls`, `node scripts/check-frontmatter.js`).
