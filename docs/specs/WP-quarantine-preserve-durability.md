@@ -14,14 +14,14 @@ epic: dream-promotion
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
-## Dispatch precondition (SIX owner items; accepting all six recommendations changes no Deliverables row)
+## Dispatch precondition (SEVEN owner items; accepting all seven recommendations changes no Deliverables row)
 
 **Every item below carries a recommendation and the cost of overruling it.**
 The owner's standing instruction of 2026-09-05 —
 `docs/specs/logbook/2026-09-05-owner-rulings-banner-queue.md`, *"let us go with
 your recommendations"* — is what lets a dispatcher proceed under these
 recommendations; it is not a reason to skip stating them, and a dispatcher who
-records none of the six has not run this gate. **Accepting all six changes no
+records none of the seven has not run this gate. **Accepting all seven changes no
 Deliverables row.**
 
 **Item 1 — the platform scope, and it is the only one that changes what a user
@@ -171,14 +171,42 @@ and, for (i), a collision-recovery path for a temp name that is never freed. **I
 not a Deliverables change either way** — the removals are three gated lines in
 `src/core/dream/validate.js`.
 
-**Do not dispatch until all SIX are answered** (the standing instruction answers
+**Item 7 — THE SUPPORTED FILESYSTEM, which is a product boundary this package is
+the first to need.** GUARANTEED (1) — that two overlapping runs can never act on
+each other's objects — rests on two primitives being ATOMIC: `O_EXCL`'s exclusive
+create, which makes the descriptor provenance, and `link(2)`'s `EEXIST` refusal,
+which makes the commit no-clobber. **Node's own documentation warns that the
+exclusive flag "might not work with network file systems"**, and a user's core lives
+under `$WIENERDOG_HOME`, defaulting to `~/.wienerdog` — a network-mounted home puts
+it exactly there. Nothing in this repository states a filesystem assumption today;
+the nearest existing frame is `docs/THREAT-MODEL.md`'s **single-user-machine trust
+model**, which this boundary sits beside rather than inside.
+
+**Recommendation: STATE the precondition, DISCLOSE the residual, and add no runtime
+check.** The precondition is *a local POSIX filesystem with atomic `O_EXCL` and hard
+links* — APFS, HFS+, ext4, xfs, btrfs. The residual is a network-mounted core: **what
+fails there is exclusivity, and therefore provenance under overlapping runs; what
+still holds is everything that consults only the descriptor this call holds** — the
+byte verification, the flush sequence, its order and every failure disposition. **No
+check, and the reason is measurable rather than lazy:** a probe cheap enough to run
+per preservation cannot distinguish "this filesystem does not honour `O_EXCL`" from
+"nothing else raced me just now", so it would be a false-negative by construction;
+and a fail-closed check keyed on the mount type would abort dreams on filesystems
+that work. **Cost of overruling:** a compatibility probe with its own false-positive
+disposition (what does a dream do when the probe says "unsupported"? abort every
+preservation, or proceed and disclose anyway — which is where the recommendation
+already is), plus a supported-filesystem list to maintain across platforms. **It is
+not a Deliverables change either way.**
+
+**Do not dispatch until all SEVEN are answered** (the standing instruction answers
 them by adopting the recommendations; record that it did). Overruling item 1
 changes one constant and one sentence; item 2 has no honest alternative
 implementation and would send the package back to design; item 3 opens a new
 package and changes nothing here; item 4 re-widens this package and re-sizes it;
 item 5 adds the pinning machinery priced above and rewrites rows F8 and F10; item 6
-removes three gated lines and opens an amendment to two `Done`-spec rows.
-**None of the six changes any path in the Deliverables table.**
+removes three gated lines and opens an amendment to two `Done`-spec rows; item 7
+adds a compatibility probe and its disposition.
+**None of the seven changes any path in the Deliverables table.**
 
 ## Context (read this, nothing else)
 
@@ -379,9 +407,10 @@ injection (`patchFs('renameSync')`), and **eight that inject a pathname WRITE**
 (`patchFs('writeFileSync')`) — the D1 write-failure and post-create-failure tests,
 the two ENOSPC aborts, and the redact-arm R0/R0b/R1 and corrupted-redacted tests.
 All thirteen live in `tests/unit/dream-validate.test.js`, which is in the boundary.
-**With the injection points migrated onto three seams — the exclusive CREATE, the
-descriptor WRITE, and the descriptor READ matched by inode — and no assertion
-touched, the suite returns to `2623 / 2611 / 0 / 12`, exit 0**; Table C's identities
+**With the injection points migrated onto the seams Implementation notes enumerates
+— the exclusive CREATE, the descriptor WRITE, the descriptor READ matched by inode,
+and `linkSync` in place of `renameSync` — and no assertion touched, the suite returns
+to `2623 / 2611 / 0 / 12`, exit 0**; Table C's identities
 take it to `2629 / 2617 / 0 / 12`. Also measured. If a fourteenth breaks, something
 outside Table F moved and it is a finding, not a fixture to update.
 
@@ -504,11 +533,14 @@ it found. **Creating the descriptor and never looking the artifact up again remo
 both lookups**: there is nothing left to race between the create and the last gate.
 Measured — the descriptor's inode survives `linkSync` unchanged and `dest` names it
 (`nlink` 2 → 1 after the gated temp removal), so the bytes written, compared and
-flushed are one inode this invocation made. **What it does NOT buy is stated in row
-F10 rather than implied here:** three residuals remain against a user editing the
-shelf mid-run, one of which deletes a replacement, and none of them is a lookup this
-ordering could remove — the last one is a check and an unlink on the same NAME, which
-Node cannot fuse.
+flushed are one inode this invocation made. **What it does NOT buy is stated in row F10
+rather than implied here:** against a user editing the shelf mid-run there remains
+**one check-then-unlink class with an instance at each of this call's three pathname
+removals — all three destructive**, one of them silently, because the post-commit
+temp removal is followed by a reported SUCCESS; plus a fourth, non-destructive
+instance where `dest` is substituted after the last gate. None is a lookup this
+ordering could remove: each is a check and an unlink on the same NAME, which Node
+cannot fuse.
 
 **The observable difference, measured by driving `makeGates({stateDir}).secret(…)`
 on the rehearsal tree rather than predicted** — every flush resolved through its
@@ -586,12 +618,12 @@ this spec cites it. **Table D and Table P below are always
 | **F2** | the DIRECTORY ENTRY that names the artifact | never flushed | `qdir` — `state/quarantine/` or `state/quarantine/redacted/` — is flushed after the rename. Flushing F1 without F2 is the half-protocol that looks correct and is not: the bytes then survive under no name |
 | **F3** | the REST of the directory chain the artifact depends on | nothing is flushed, and **nothing in the product ever has been**, so no ancestor's entry is known durable at any depth | **the FIXED chain, bottom-up, ending at the ANCHOR**: `qdir`, then `state/quarantine/` when `qdir` is the `redacted/` shelf, then `stateDir`, then **`path.dirname(stateDir)` — the core directory, and that is the anchor.** A closed list of **three or four** paths, flushed on EVERY successful preservation whether or not this call created any of it. A created-set derivation misses an ancestor another step of the SAME RUN created, and `acquireLock(stateDir)` — `fs.mkdirSync(stateDir, {recursive:true})` in `src/core/dream/lock.js` — is exactly that step (measured, Current state). **Where the chain stops and why is decided below this table, with the road not taken and its cost** |
 | **F4** | disposition when a flush does not complete — **at ANY of F1, F2 or F3, and at either the `openSync` or the `fsyncSync`** | not reachable | **preservation FAILURE.** Return `null` — after Table D row **D2**'s existing removal of `dest`, which is the same disposal a failed read-back already takes, so no new disposal path is created and row D3 keeps its meaning. Table P row **P0** then carries it to the abort on the withhold arm, and row **P3** on the redact fall-through. **A flush error is never swallowed and never logged past, and this row is not about the artifact alone:** a directory flush has its own open, its own flags and its own failure modes, so an implementation that returns `false` correctly for the artifact while letting a directory's failure pass reports success over an unflushed entry |
-| **F5** | platform | — | **The artifact descriptor is `O_RDWR`, and that is a portability requirement, not a preference:** `fsync(2)` on Linux returns `EBADF` for a descriptor not open for writing, and `fs.fsyncSync` surfaces that. Row F8's create-open is writable, so the flush is valid on every POSIX platform rather than on the one this session could measure. **What was measured here is darwin only** — this pipeline has no Linux host — so the Linux half is asserted from `fsync(2)`'s documented requirement and **proved by CI**, whose `test` job runs a `[ubuntu-latest, macos-latest]` matrix (`.github/workflows/ci.yml`): a read-only descriptor would fail the ubuntu leg on every preserving test. **The FLUSHES are POSIX-only, branched EXPLICITLY.** `process.platform === 'win32'` selects a branch that issues no flush and claims no durability — today's behaviour there, unchanged — following `src/core/private-fs.js`'s owner-approved win32 posture. Deliberately NOT expressed as a swallowed error: a caught error cannot tell "this platform has no such call" from "this flush really failed", and F4 must keep the second one loud. **The reopen and row F8's identity check are NOT gated on the platform** — they are properties of the VERIFICATION, not of durability, and they run everywhere. Dispatch precondition item 1 |
+| **F5** | platform | — | **The artifact descriptor is `O_RDWR` because this function WRITES the artifact through it** (row F8's create-open is the same descriptor the content is written to), not because a platform demands it. **An earlier draft of this row claimed Linux `fsync(2)` requires a write-open descriptor and returns `EBADF` otherwise; that is FALSE and is corrected here** — the write-open requirement belongs to System V-derived systems (HP-UX, AIX), and Linux `fsync` accepts a read-only descriptor. Nothing in the design depended on the false premise, because the descriptor is writable either way. **What was measured is darwin only** — this pipeline has no Linux host — and the platform half is **proved by CI**, whose `test` job runs a `[ubuntu-latest, macos-latest]` matrix (`.github/workflows/ci.yml`), so every preserving test runs on Linux on every PR. **The FLUSHES are POSIX-only, branched EXPLICITLY.** `process.platform === 'win32'` selects a branch that issues no flush and claims no durability — today's behaviour there, unchanged — following `src/core/private-fs.js`'s owner-approved win32 posture. Deliberately NOT expressed as a swallowed error: a caught error cannot tell "this platform has no such call" from "this flush really failed", and F4 must keep the second one loud. **The reopen and row F8's identity check are NOT gated on the platform** — they are properties of the VERIFICATION, not of durability, and they run everywhere. Dispatch precondition item 1 |
 | **F6** | order | — | **the artifact's bytes (F1) before the directory entry that names them (F2), and F2 before the rest of F3's chain, bottom-up.** The whole protocol's order is fixed by row F8's identity: open `tmp` → commit → gated temp removal → read/compare/flush through that descriptor → the last gate. **The evidence asserts the artifact flush by INODE and the directory chain by PATH**, because the descriptor was opened under a name that is not `dest`. The reason is not the post-condition — at the moment success is reported every flush in the set has completed either way — it is what a crash MID-protocol leaves behind: with an entry flushed first, a crash can leave a durable, reachable artifact over bytes that were never flushed, i.e. a short file sitting on the shelf the user is told to restore from, which the next run's collision loop then preserves forever under a `-1` name. With F1 first, any artifact that survives a crash holds complete bytes |
 | **F7** | what this table does NOT cover, stated rather than implied | — | **(a)** the REMOVAL of an artifact — Table D rows D1/D2, `pruneRedactedOriginals`' evictions and the identity-gated delete are not made crash-durable here; a disposed artifact can still reappear after a crash, **including one removed by row F4 in the instant before this function returns**. `WP-quarantine-disposal-durability` (Draft), Dispatch precondition item 4. **(b)** anything outside `quarantinePreserve`: the transcript ledger, the digest, the vault write and the git index are untouched. **(c)** the platform's own behaviour — see the guarantee sentence under Implementation notes, which is this package's only statement about what a flush achieves and which V1 pins byte-for-byte |
-| **F8** | **WHICH INODE this invocation owns, and what it may act on** | the read-back is `fs.readFileSync(dest)`, **by pathname**; the commit is a replacing rename; the temp removal is unconditional. Nothing binds any of them to anything else, so every pathname act is an act on whatever happens to be at that name | **ACT ONLY ON THE INODE YOU CREATED — one predicate, used everywhere a pathname is acted on.** Provenance is established at the **exclusive create**: `tmp` is opened ONCE with `O_RDWR`, `O_CREAT` and `O_EXCL` (plus `O_NOFOLLOW` where the platform has it), the content is written through that descriptor at an explicit position, and the read-back and F1's flush go through the same one. **The descriptor is therefore the inode this invocation CREATED, not one it adopted from a name** — there is no second lookup between the write and the identity, so a substitution before the commit cannot be adopted. `ownsName(p, fd)` is `fs.lstatSync(p, {bigint:true})` against `fs.fstatSync(fd, {bigint:true})` on `dev` and `ino`, **plus `isFile()`**; three words are load-bearing and each answers a measured defeat — **`lstat`** (a FOLLOWING `stat` matches through a planted symlink), **`isFile()`** (only a regular file is what F9 committed), **`bigint`** (an inode number can exceed `Number.MAX_SAFE_INTEGER`). **The gated acts are: the temp removal after the commit; the temp removal in the shared `catch`; the last gate before success; and the failure path's removal of `dest`.** **And the catch's gate has TWO halves, because the create is ATOMIC.** `O_CREAT` with `O_EXCL` either allocates the entry and returns a descriptor or fails having created nothing, so **`fd < 0` means this invocation owns NO pathname and removes nothing** — the shipped `tmpOwned` disjunction is RETIRED with the call it reasoned about, `fs.writeFileSync`, which combined the create and the write and could therefore throw after allocating an entry. Where a descriptor DOES exist, the write or the commit is what threw and the gate is `ownsName(tmp, fd)`. A gate that fails means **remove NOTHING**. **The read-back needs no gate**, because it is not a pathname act at all. **What this row does NOT claim is decided in row F10** — it guarantees, discloses and prices separately, rather than asserting a window is closed |
+| **F8** | **WHICH INODE this invocation owns, and what it may act on** | the read-back is `fs.readFileSync(dest)`, **by pathname**; the commit is a replacing rename; the temp removal is unconditional. Nothing binds any of them to anything else, so every pathname act is an act on whatever happens to be at that name | **ACT ONLY ON THE INODE YOU CREATED — one predicate, used everywhere a pathname is acted on.** Provenance is established at the **exclusive create**: `tmp` is opened ONCE with `O_RDWR`, `O_CREAT` and `O_EXCL` (plus `O_NOFOLLOW` where the platform has it), the content is written through that descriptor at an explicit position, and the read-back and F1's flush go through the same one. **The descriptor is therefore the inode this invocation CREATED, not one it adopted from a name** — there is no second lookup between the write and the identity, so a substitution before the commit cannot be adopted. **That inference has a PRECONDITION, and row F10 states it as a boundary rather than assuming it:** `O_EXCL`'s exclusivity and `link(2)`'s no-clobber refusal are guaranteed on a local POSIX filesystem; Node's own documentation warns that the exclusive flag *"might not work with network file systems"*, and a user's core can sit on a network-mounted home. Dispatch precondition item **7**. `ownsName(p, fd)` is `fs.lstatSync(p, {bigint:true})` against `fs.fstatSync(fd, {bigint:true})` on `dev` and `ino`, **plus `isFile()`**, **and it FAILS CLOSED — either stat throwing returns `false`, never propagates.** Four properties are load-bearing and each answers a measured defeat: **`lstat`** (a FOLLOWING `stat` matches through a planted symlink); **`isFile()`** (only a regular file is what F9 committed); **`bigint`** (two DISTINCT inode numbers above `Number.MAX_SAFE_INTEGER` collapse to the SAME `Number`, so a narrowed comparison would match a substituted name and authorize its deletion); and **the `catch`** (the in-scope adversary can DELETE a name before a gate, and a predicate without one emits a raw `ENOENT` out of `quarantinePreserve` — a shape no caller expects and one that leaks the held descriptor). **The whole body is a byte-exact source form** for exactly that reason, not just its `lstat` line. **What `false` MEANS at each gate, so the fail-closed shape is a contract and not an implementation detail:** at the temp gate, the name is not unlinked and the preservation continues (it may still SUCCEED — `dest` is unaffected); at the last gate, the preservation FAILS; at the failure-path gate, `dest` is not removed. **In every case the descriptor is still closed**, because the close is unconditional and not on any gate's path. **The gated acts are: the temp removal after the commit; the temp removal in the shared `catch`; the last gate before success; and the failure path's removal of `dest`.** **And the catch's gate has TWO halves, because the create is ATOMIC.** `O_CREAT` with `O_EXCL` either allocates the entry and returns a descriptor or fails having created nothing, so **`fd < 0` means this invocation owns NO pathname and removes nothing** — the shipped `tmpOwned` disjunction is RETIRED with the call it reasoned about, `fs.writeFileSync`, which combined the create and the write and could therefore throw after allocating an entry. Where a descriptor DOES exist, the write or the commit is what threw and the gate is `ownsName(tmp, fd)`. A gate that fails means **remove NOTHING**. **The read-back needs no gate**, because it is not a pathname act at all. **What this row does NOT claim is decided in row F10** — it guarantees, discloses and prices separately, rather than asserting a window is closed |
 | **F9** | **HOW `dest` COMES INTO EXISTENCE — the commit** | `fs.renameSync(tmp, dest)`, which **REPLACES** whatever is at `dest`. The collision loop's `fs.existsSync(dest)` looked earlier and is not atomic with it, so two overlapping runs can both find the name free: one commits, the other REPLACES it — destroying a copy that run already reported successful — and then, on the byte mismatch that follows, deletes what is left | **A NO-CLOBBER commit: `fs.linkSync(tmp, dest)`, then the gated temp removal.** `link(2)` fails with `EEXIST` if anything holds `dest`, so this invocation can never commit over a name it did not create; `EEXIST` is an ordinary preservation FAILURE taking the shipped Table D row D1 cleanup — fail-closed, the direction the owner ruled on 2026-09-02. **This is what makes row F8's rule DECIDABLE for the SUCCESS path**: a `dest` that names the created inode at the last gate was linked there by this invocation. The temp removal sits outside the commit's `catch`, so a removal that cannot be completed is Table D row **D3** and not a second cleanup attempt. **Named residual:** a filesystem without hard links makes `linkSync` throw, which is a preservation failure — fail-closed, the workspace retained, no copy lost |
-| **F10** | **THE ADVERSARY — what this protocol GUARANTEES, what it DISCLOSES, and what is outside the boundary** | not stated anywhere, which is why FOUR consecutive review rounds each found another window in the same family | **GUARANTEED (1) — OVERLAPPING RUNS, which the product creates itself:** a lock stolen after its deadline while the superseded run still executes (`src/core/dream/lock.js`), and two same-day runs whose collision loops both see the same name free. **Closed by construction**: F9's commit refuses a name it did not create, and every verification is on an inode this invocation created, so two cooperating runs can never act on each other's objects. **GUARANTEED (2) — against the USER'S OWN HAND, in ONE direction:** no substitution, at any point, can make this invocation report SUCCESS over bytes it did not create, verify and flush. The gates are total on the success path. **DISCLOSED — one CLASS of residual against the user's own hand, with FOUR instances, and THREE of them destroy.** The class is a **check-then-unlink window**: every pathname removal this call makes is preceded by a separable ownership check, and Node exposes **no descriptor-relative unlink** — there is no `unlinkat`, and `fs.rmSync`/`fs.unlinkSync` take a NAME — so the check and the act are irreducibly two operations. **`quarantinePreserve` performs exactly three pathname removals, and each is one instance:** **(i) `tmp` after a successful commit** — a substitution landing between `ownsName(tmp, fd)` and the removal is deleted, **and the run then reports SUCCESS**, because `dest` and the descriptor are both intact; this is the only instance whose damage is silent; **(ii) `tmp` on a commit or write failure after a successful create** — the catch computes the gate, closes the descriptor, then removes by name; a substitution in between is deleted; **(iii) `dest` on the failure path** — the same window, the same cost. **The fourth instance is not a removal and does not destroy: (iv) `dest` substituted after the last gate on the SUCCESS path**, where success is reported for a name that no longer resolves to the artifact. **One non-destructive outcome completes the picture:** `tmp` substituted BEFORE the commit is caught by the gates — the preservation fails, nothing is deleted, and one spare directory entry to the user's own inode is left at `dest`. **Why none of (i)–(iii) is closed:** there is **no removal shape in Node ≥18 whose ownership test is not separable from its act** — every candidate (`rmSync`, `unlinkSync`, a re-`lstat` immediately before, a second gate) is another name lookup followed by another name-based unlink. The one mechanism that removes the class is to stop removing, and that is **Dispatch precondition item 6**. **The bound is the run's shape, and one earlier premise here was FALSE and is corrected:** the run holds the dream lock and `quarantinePreserve` executes in milliseconds — but **the temp name is NOT random and NOT unpublished.** It is `.tmp-${process.pid}-${stem}${ext}` (`src/core/dream/validate.js:720`), deterministic and predictable. **That same determinism is what keeps GUARANTEED (1) true**: two overlapping runs are two processes with distinct pids, so they never select the same temp name, and the only name they can contend for is `dest`, which F9's commit refuses. **OUTSIDE THE BOUNDARY, as a NAMED RESIDUAL: arbitrary same-user native code.** `docs/THREAT-MODEL.md` classes this as **A12** and says Wienerdog is *"not a boundary against arbitrary software already running as the same user"*. The reason is decisive rather than economic: a process that can swap `qdir` aside during its flush can also delete the preserved copy one instruction after this function returns, so **no durability protocol can hold against it** — and every pin added for it is machinery that, in the threat model's own phrase about a keyed MAC, *"would only imply a false guarantee"*. Dispatch precondition item **5** |
+| **F10** | **THE ADVERSARY — what this protocol GUARANTEES, what it DISCLOSES, and what is outside the boundary** | not stated anywhere, which is why FOUR consecutive review rounds each found another window in the same family | **GUARANTEED (1) — OVERLAPPING RUNS, which the product creates itself:** a lock stolen after its deadline while the superseded run still executes (`src/core/dream/lock.js`), and two same-day runs whose collision loops both see the same name free. **Closed by construction**: F9's commit refuses a name it did not create, and every verification is on an inode this invocation created, so two cooperating runs can never act on each other's objects. **GUARANTEED (2) — against the USER'S OWN HAND, in ONE direction:** no substitution, at any point, can make this invocation report SUCCESS over bytes it did not create, verify and flush. The gates are total on the success path. **DISCLOSED — one CLASS of residual against the user's own hand, with FOUR instances, and THREE of them destroy.** The class is a **check-then-unlink window**: every pathname removal this call makes is preceded by a separable ownership check, and Node exposes **no descriptor-relative unlink** — there is no `unlinkat`, and `fs.rmSync`/`fs.unlinkSync` take a NAME — so the check and the act are irreducibly two operations. **`quarantinePreserve` performs exactly three pathname removals, and each is one instance:** **(i) `tmp` after a successful commit** — a substitution landing between `ownsName(tmp, fd)` and the removal is deleted, **and the run then reports SUCCESS**, because `dest` and the descriptor are both intact; this is the only instance whose damage is silent; **(ii) `tmp` on a commit or write failure after a successful create** — the catch computes the gate, closes the descriptor, then removes by name; a substitution in between is deleted; **(iii) `dest` on the failure path** — the same window, the same cost. **The fourth instance is not a removal and does not destroy: (iv) `dest` substituted after the last gate on the SUCCESS path**, where success is reported for a name that no longer resolves to the artifact. **One non-destructive outcome completes the picture:** `tmp` substituted BEFORE the commit is caught by the gates — the preservation fails, nothing is deleted, and one spare directory entry to the user's own inode is left at `dest`. **Why none of (i)–(iii) is closed:** there is **no removal shape in Node ≥18 whose ownership test is not separable from its act** — every candidate (`rmSync`, `unlinkSync`, a re-`lstat` immediately before, a second gate) is another name lookup followed by another name-based unlink. The one mechanism that removes the class is to stop removing, and that is **Dispatch precondition item 6**. **The bound is the run's shape, and one earlier premise here was FALSE and is corrected:** the run holds the dream lock and `quarantinePreserve` executes in milliseconds — but **the temp name is NOT random and NOT unpublished.** It is `.tmp-${process.pid}-${stem}${ext}` (`src/core/dream/validate.js:720`), deterministic and predictable. **That same determinism is what keeps GUARANTEED (1) true**: two overlapping runs are two processes with distinct pids, so they never select the same temp name, and the only name they can contend for is `dest`, which F9's commit refuses. **DISCLOSED, SECOND — A FILESYSTEM PRECONDITION, not an adversary.** GUARANTEED (1) rests on two primitives being atomic: `O_EXCL`'s exclusive create and `link(2)`'s `EEXIST` refusal. **Both hold on a local POSIX filesystem — APFS, HFS+, ext4, xfs, btrfs — and Node's own documentation warns that the exclusive flag "might not work with network file systems."** A user's core is `$WIENERDOG_HOME`, defaulting to `~/.wienerdog`, and a network-mounted home puts it on such a filesystem. **What fails there:** exclusivity, and therefore provenance under overlapping runs — two runs could adopt one temp name. **What still holds:** everything that depends only on the descriptor this call holds — the byte verification, the flush sequence, its order and the failure dispositions — because none of them consults a name. **Dispatch precondition item 7** states the boundary and proposes no runtime check: probing atomicity cheaply and without false positives is not possible, and a check that wrongly refused a working filesystem would abort dreams that are fine. **OUTSIDE THE BOUNDARY, as a NAMED RESIDUAL: arbitrary same-user native code.** `docs/THREAT-MODEL.md` classes this as **A12** and says Wienerdog is *"not a boundary against arbitrary software already running as the same user"*. The reason is decisive rather than economic: a process that can swap `qdir` aside during its flush can also delete the preserved copy one instruction after this function returns, so **no durability protocol can hold against it** — and every pin added for it is machinery that, in the threat model's own phrase about a keyed MAC, *"would only imply a false guarantee"*. Dispatch precondition item **5** |
 
 Three things this table does **not** change, stated so no one infers them.
 **One:** the trigger class, the message taxonomy, the artifact-ownership contract
@@ -657,8 +689,8 @@ writes rather than a guess about a diagnostic nobody has produced yet.
 | **QPD-2** | `dream-validate: [QPD-2] a flush that does not complete at ANY required target, on EITHER arm, is a preservation failure and takes the shipped abort` | same | `[QPD-2]` | **THE COMPLETE DISTINCT-SITE MATRIX.** The flush protocol has ONE artifact site — its `fsync`, through the descriptor already held, which is why there is no separate artifact open — and TWO sites per directory in the chain (`openSync`, `fsyncSync`), over BOTH arms. Each asserts `null`, `dest` absent, and no temp left. **Then the three shipped abort ROUTES**: a withheld-arm artifact failure → Table P row P1/P2; an ANCHOR failure on the redact arm, which is on BOTH chains, so both preserves fail → row **P3**; a REDACTED-ONLY failure → **no abort**, the withhold arm succeeding on its own shelf | F4 |
 | **QPD-3** | `dream-validate: [QPD-3] the withheld arm flushes the exact fixed chain, bottom-up, ending at the anchor` | same | `[QPD-3]` | the artifact's INODE is flushed FIRST, then the flushed sequence **equals** `[state/quarantine, state, <core>]` — an ordered `deepEqual`, pinning membership, completeness AND order | F2, F3, F6 |
 | **QPD-4** | `dream-validate: [QPD-4] the redacted arm flushes the two-level chain, with the intermediate shelf, on a tree where neither directory exists` | same | `[QPD-4]` | the same, on the **redact arm** with neither directory present: `[state/quarantine/redacted, state/quarantine, state, <core>]`. The only identity that can see the intermediate shelf | F2, F3, F6 |
-| **QPD-5** | `dream-validate: [QPD-5] a substitution at dest, at ANY point after the commit, FAILS the preservation and is never removed` | same | `[QPD-5]` | **THREE substitutions.** (a) **from inside the commit itself** — the post-commit/pre-read window, where the bytes still compare EQUAL because the read goes through the held descriptor, so only the ownership gate can see it; (b) a regular file renamed over `dest` from inside the artifact flush; (c) a **hard link of the held inode into a directory the chain never flushes, then a symlink at `dest`** — the case a following `stat` accepts. Each asserts `null` **and that the substituted entry is still there, byte-unchanged** | F8 |
-| **QPD-6** | `dream-validate: [QPD-6] the commit is no-clobber, every temp-name act is gated on the inode this invocation CREATED, and exactly one name is left` | same | `[QPD-6]` | **SIX cases, one per act row F8 gates plus the commit's own rule.** (a) a competing `dest` planted after the collision loop looked and before the commit: `null`, the other invocation's bytes intact, no temp left; (b) the temp name substituted **between the exclusive create and the commit**: the preservation FAILS and the user's file is untouched — provenance is the CREATED inode, so the substitute is caught rather than adopted; (c) the same substitution **with the commit then throwing**: the shared D1 `catch` must NOT delete it, because identity exists there; (d) the temp name substituted **after the commit, before its removal**: the preservation still SUCCEEDS and the name is NOT unlinked; (e) the ordinary success post-condition — exactly ONE name holds the artifact | F8, F9 |
+| **QPD-5** | `dream-validate: [QPD-5] a substitution at dest, at ANY point after the commit, FAILS the preservation and is never removed` | same | `[QPD-5]` | **FIVE cases — three substitutions and two predicate failure modes.** (a) **from inside the commit itself** — the post-commit/pre-read window, where the bytes still compare EQUAL because the read goes through the held descriptor, so only the ownership gate can see it; (b) a regular file renamed over `dest` from inside the artifact flush; (c) a **hard link of the held inode into a directory the chain never flushes, then a symlink at `dest`** — the case a following `stat` accepts. Each asserts `null` **and that the substituted entry is still there, byte-unchanged**. Then row F8's fail-closed shape: (d) **`dest` DELETED before the last gate** — `null`, **no raw error escapes**, and nothing is recreated or removed in its place; (e) **doctored stats whose inodes are DISTINCT as `BigInt` and collapse to the SAME `Number`** — `null`, because a comparison narrowed to `Number` would have reported SUCCESS | F8 |
+| **QPD-6** | `dream-validate: [QPD-6] the commit is no-clobber, every temp-name act is gated on the inode this invocation CREATED, and exactly one name is left` | same | `[QPD-6]` | **SEVEN cases, and every substitution lands BEFORE a gate — which is exactly what this identity claims and no more.** (a) a competing `dest` planted after the collision loop looked and before the commit: `null`, the other invocation's bytes intact, no temp left; (b) the temp name substituted **between the exclusive create and the commit**: the preservation FAILS and the user's file is untouched — provenance is the CREATED inode, so the substitute is caught rather than adopted; (c) the same substitution **with the commit then throwing**: the shared `catch` must NOT delete it, because identity exists there; (d) the temp name substituted **after the commit and before its gate**: the preservation still SUCCEEDS and the name is NOT unlinked; (e) the ordinary success post-condition — exactly ONE name holds the artifact; (f) **a non-EEXIST create FAILURE with foreign bytes then planted at the temp name**: `fd < 0`, so this invocation created nothing, returns `null`, and the foreign file survives byte-identical; (g) **the temp name DELETED before its gate**: row F8's predicate fails closed, **no raw error escapes**, nothing is removed, and the preservation still SUCCEEDS. **What it does NOT cover, per row F10:** a substitution landing AFTER a gate and before the removal it protects. Those are the disclosed check-then-unlink windows, and they are deliberately untested | F8, F9 |
 
 Every identity above lives in ONE suite, so one declaration file carries them all
 (`suite` is a top-level field and one declaration names one suite). A proof's `criterion` field
@@ -1110,6 +1142,52 @@ property that the held inode is the one this invocation MADE.
           "signal": "[QPD-6]"
         }
       ]
+    },
+    {
+      "id": "ownership-check-not-failure-closed",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "6",
+      "why": "THE ROUND-6 EVIDENCE FINDING. `ownsName` is load-bearing at four gates, but nothing required it to fail CLOSED. A predicate with no catch passes every earlier identity and then emits a raw ENOENT — leaking the held descriptor — the moment a user deletes a name before a gate, which is precisely the in-scope adversary. Only the two ENOENT cases can see it: every other case runs against a name that exists",
+      "file": "src/core/dream/validate.js",
+      "find": "    return named.isFile() && named.dev === open.dev && named.ino === open.ino;\n  } catch {\n    return false;\n  }",
+      "replace": "    return named.isFile() && named.dev === open.dev && named.ino === open.ino;\n  } finally { /* RP_MUT_QPD_NO_CATCH */ }",
+      "marker": "RP_MUT_QPD_NO_CATCH",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[56]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-5] a substitution at dest, at ANY point after the commit, FAILS the preservation and is never removed"
+          ],
+          "signal": "[QPD-5]"
+        },
+        {
+          "test": [
+            "dream-validate: [QPD-6] the commit is no-clobber, every temp-name act is gated on the inode this invocation CREATED, and exactly one name is left"
+          ],
+          "signal": "[QPD-6]"
+        }
+      ]
+    },
+    {
+      "id": "ownership-check-narrows-to-number",
+      "wp": "WP-quarantine-preserve-durability",
+      "criterion": "6",
+      "why": "THE ROUND-6 PRECISION FINDING. `bigint` is in the exact form for a reason an implementer cannot see from the line alone: two DISTINCT inode numbers above Number.MAX_SAFE_INTEGER collapse to the SAME Number, so a comparison narrowed to Number matches a substituted name and authorizes its deletion. Only QPD-5 doctored-stat case can see it; every ordinary inode compares the same either way",
+      "file": "src/core/dream/validate.js",
+      "find": "    return named.isFile() && named.dev === open.dev && named.ino === open.ino;",
+      "replace": "    return named.isFile() && Number(named.dev) === Number(open.dev) && Number(named.ino) === Number(open.ino); /* RP_MUT_QPD_NUMBER */",
+      "marker": "RP_MUT_QPD_NUMBER",
+      "occurrences": 1,
+      "testNamePattern": "\\[QPD-[5]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [QPD-5] a substitution at dest, at ANY point after the commit, FAILS the preservation and is never removed"
+          ],
+          "signal": "[QPD-5]"
+        }
+      ]
     }
   ]
 }
@@ -1122,7 +1200,7 @@ its own `replace` and absent from the pristine file, and each mutated file passe
 `node --check` — a mutation that does not parse is a proof that can never run.
 **And every one was then RUN**: with Table C's identities and the migrated
 injections written on a rehearsal tree and this declaration in place, the
-unfiltered lane reported `28 declared proof(s), 28 selected`, all twenty-eight
+unfiltered lane reported `30 declared proof(s), 30 selected`, all thirty
 `PROVEN`, seven `PROVEN` criteria lines for this WP and `RUN: PROVEN`, exit 0 — so
 every declared `expectRed` set is measured and not predicted, `evaluateRed`'s
 own-body equality included. If a `find` does not match, the source form was not
@@ -1137,9 +1215,13 @@ detected and left alone; that a substituted TEMP name is not unlinked in any of 
 three states that can reach one; and that a destination another invocation holds is
 never committed over. **They do not
 establish that anything survives a crash**, and no test in `npm test` can — see the
-evidence paragraph under Implementation notes. **They also do not — and cannot — cover row F10's three DISCLOSED residuals**, and
-that is deliberate rather than a gap. Residuals (a) and (b) are outcomes the gates
-produce correctly, and QPD-5 and QPD-6 pin them. **Every instance of the check-then-unlink CLASS is untested BY DESIGN** — all three
+evidence paragraph under Implementation notes. **They also do not — and cannot — cover row F10's DISCLOSED check-then-unlink
+class**, and that is deliberate rather than a gap. The class has an instance at each
+of the three pathname removals and ALL THREE can delete a replacement — the
+post-commit temp one while the run still reports SUCCESS; the fourth, non-destructive
+instance is a substitution at `dest` after the last gate. The outcomes the gates
+produce CORRECTLY — a substitution caught BEFORE a gate, and a name deleted before a
+gate — are pinned by QPD-5 and QPD-6. **Every instance of the check-then-unlink CLASS is untested BY DESIGN** — all three
 pathname removals, not only the one on the failure path: a test could stage each,
 but pinning a disclosed residual would enshrine the behaviour the package would
 rather be rid of. **QPD-6 substitutes only BEFORE a gate, and its row and criterion
@@ -1204,9 +1286,10 @@ added here on the spot.
       AND the `acquireLock` measurement that makes it non-load-bearing, the
       `dirname(stateDir)`-is-the-core measurement, the five observability
       measurements, the seam census (two call sites, no `private-fs`), the
-      two-false-mirrors paragraph, the FIVE-test blast-radius claim with its
-      two-seams reason and its two non-breaking `renameSync` injections, and the
-      shipped write path's `existsSync`/`renameSync` annotations.
+      two-false-mirrors paragraph, **the blast-radius claim — its test count, its
+      seam count and its two non-breaking `renameSync` injections, all of which
+      Current state MEASURES and no other surface may restate** — and the shipped
+      write path's `existsSync`/`renameSync` annotations.
 - [ ] **Operative prose** — the Dispatch precondition's items, its "changes
       no Deliverables row" claim and its round-1/round-2 item checks (**the section
       HEADING carries the item COUNT and goes stale the moment an item is added**);
@@ -1346,11 +1429,20 @@ added here on the spot.
   if (owned) removeOwnedQuarantinePath(dest);
 ```
 
-  **(g)** `ownsName`'s identity read, at **four-space** indent. `lstat`, not `stat`;
-  `bigint`, not the default; and the `isFile()` guard beside it in the comparison:
+  **(g)** `ownsName`'s WHOLE BODY, at **two-space** indent for the statements and
+  **four-space** for the ones inside the `try`. It is byte-exact in full, not in its
+  `lstat` line alone: `lstat` and not `stat`; `bigint` and not the default;
+  `isFile()` beside the comparison; and **the `catch` that makes it fail closed**,
+  without which a deleted name emits a raw `ENOENT` out of `quarantinePreserve`:
 
 ```js
+  try {
+    const open = fs.fstatSync(fd, { bigint: true });
     const named = fs.lstatSync(p, { bigint: true });
+    return named.isFile() && named.dev === open.dev && named.ino === open.ino;
+  } catch {
+    return false;
+  }
 ```
 
   **(h)** `flushPreservation`'s artifact flush and its chain loop, contiguous and in
@@ -1413,11 +1505,13 @@ added here on the spot.
 - **ONE descriptor for the artifact, and it is WRITABLE for a portability reason,
   not a stylistic one.** The create-open is `O_RDWR|O_CREAT|O_EXCL` plus
   `O_NOFOLLOW` where the platform has it: `O_CREAT|O_EXCL` because provenance is the
-  create, and `O_RDWR` because **`fsync(2)` on Linux returns `EBADF` for a
-  descriptor not open for writing** (row **F5**). Only darwin was measured here;
-  CI's `test` job runs `[ubuntu-latest, macos-latest]`, so the ubuntu leg is where
-  the Linux half is proved. The directory handles stay `O_RDONLY` and add
-  `O_DIRECTORY`.
+  create, and `O_RDWR` because **this function writes the artifact through that
+  descriptor** (row **F5**). It is NOT because Linux requires a write-open
+  descriptor for `fsync` — an earlier draft said so and it is false; that
+  requirement is System V's, and row F5 carries the correction. Only darwin was
+  measured here; CI's `test` job runs `[ubuntu-latest, macos-latest]`, so the ubuntu
+  leg is where the Linux half is proved. The directory handles stay `O_RDONLY` and
+  add `O_DIRECTORY`.
 
 - **Positions are EXPLICIT on both the write and the read.** `writeAllAt` writes at
   an offset and `readAllAt` reads from position 0, so the descriptor's own file
@@ -1531,9 +1625,14 @@ added here on the spot.
       after round 4 it GUARANTEES, DISCLOSES and PRICES separately** rather than
       calling a class closed: overlapping runs are closed by construction; the user's
       own hand is guaranteed in ONE direction — no substitution can produce a false
-      SUCCESS — and carries **three disclosed residuals**, one of which deletes a
-      replacement and which Node's lack of a descriptor-relative unlink makes
-      unclosable; arbitrary same-user native code is OUT, citing
+      SUCCESS — and carries **one disclosed check-then-unlink class with an instance
+      at each of this call's three pathname removals, ALL THREE of which can delete a
+      replacement** (the post-commit temp one silently, the run still reporting
+      success), plus a fourth non-destructive instance after the last gate; Node's
+      lack of a descriptor-relative unlink is what makes the class unclosable. **A
+      filesystem precondition is disclosed beside it** — `O_EXCL` and `link(2)`
+      atomicity, hence a network-mounted core as a named residual (item 7). Arbitrary
+      same-user native code is OUT, citing
       `docs/THREAT-MODEL.md`'s class **A12**. This bullet cites that row and decides
       nothing of its own — the round-2 correction, sharpened by round 4: a security
       checklist that asserts an exclusion the product does not have is the assumption
@@ -1603,8 +1702,13 @@ added here on the spot.
       cannot catch: the read goes through the held descriptor, so the bytes still
       match and only the gate sees it. The check is `lstat` + `isFile()` + bigint
       `(dev, ino)`; a FOLLOWING stat is a defect, and so is an UNGATED removal.
-      Evidence: **QPD-5**, proofs `destination-ownership-gate-removed`,
-      `destination-removal-not-gated` and `ownership-check-follows-symlinks`.
+      **And the predicate FAILS CLOSED:** with `dest` deleted before the last gate,
+      `quarantinePreserve` returns `null` and **no raw error escapes**; with stats
+      whose inodes are distinct as `BigInt` but equal as `Number`, it returns `null`
+      — a narrowed comparison would have reported SUCCESS. Evidence: **QPD-5**,
+      proofs `destination-ownership-gate-removed`, `destination-removal-not-gated`,
+      `ownership-check-follows-symlinks`, `ownership-check-not-failure-closed` and
+      `ownership-check-narrows-to-number`.
       **This criterion does not claim the class is closed, and it says so in row
       F10's own vocabulary:** what is GUARANTEED is that no substitution produces a
       false SUCCESS; what is DISCLOSED is one CLASS of check-then-unlink window with
@@ -1622,7 +1726,9 @@ added here on the spot.
       adopted); with the commit then throwing (the shared `catch` is gated, because
       identity exists there); after the commit and before its gate (the preservation
       still succeeds); and after a create FAILURE, where `fd < 0` means this
-      invocation created nothing and therefore removes nothing. On the ordinary path
+      invocation created nothing and therefore removes nothing. **A temp name
+      DELETED before its gate is likewise not an error path**: the predicate fails
+      closed, no raw error escapes, and the preservation still succeeds. On the ordinary path
       exactly one name holds the artifact afterwards, the temp being removed under
       Table D row **D3**'s fail-loud rule. **THIS CRITERION IS SCOPED TO
       SUBSTITUTIONS BEFORE A GATE and claims nothing about one landing after it** —
@@ -1652,7 +1758,7 @@ added here on the spot.
       file.** Measured on the full rehearsal tree. A fourteenth changed assertion is
       a finding, not a fixture to update.
 - [ ] **11.** **Machine-run RED (ADR-0042).** `npm run red-proofs` reports
-      `28 declared proof(s), 28 selected`, `RUN: PROVEN`, and a Criteria roll-up
+      `30 declared proof(s), 30 selected`, `RUN: PROVEN`, and a Criteria roll-up
       carrying **seven** lines for this WP — criteria `1` to `7` — each `PROVEN` and
       each naming its Table C proof id(s). Seven roll-up lines, not one per proof:
       criteria 2, 3, 4, 6 and 7 each carry more than one proof sharing a
@@ -1809,7 +1915,7 @@ npm run lint
 - **EVERY RED proof was RUN, not designed, and so were V3 and V4.** With the six
   identities and the migrated injections written on a rehearsal tree and the
   declaration file in place, the unfiltered lane reported
-  `28 declared proof(s), 28 selected`, **all twenty-eight `PROVEN`**, seven `PROVEN`
+  `30 declared proof(s), 30 selected`, **all thirty `PROVEN`**, seven `PROVEN`
   criteria lines for this WP and `RUN: PROVEN`, exit 0 — so each mutation reddens
   exactly its declared `expectRed` set under its `testNamePattern`, `evaluateRed`'s
   own-body equality included, and the pre-existing proofs are undisturbed.
