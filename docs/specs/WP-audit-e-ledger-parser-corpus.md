@@ -45,13 +45,16 @@ does not exist yet: the design loop is open and the item list may still move.
    not be lowered; an absent bullet is no assertion at all, and firing on it would
    permanently mark every legacy entry lacking the bullet as untrusted.
    **Overrule cost:** either direction opens a hole (Table C rows C21/C23).
-3. **`parseFrontmatter`'s record gains a null prototype, changing three shipped
-   assertions.** Recommendation: **yes** — measured, a promotion adding
-   `__proto__: injected` to a SKILL.md is **allowed with no qualifying learning
-   today** while any other added key is refused (rows C29/C30), and the whole cost
-   is three `assert.deepEqual(x, {})` assertions comparing keys instead.
-   **Overrule cost:** ADR-0020's "ANY other frontmatter change requires learning
-   authorization" stays false for one key name.
+3. **`parseFrontmatter`'s record gains a null prototype, restating five shipped
+   assertions across three test identities.** Recommendation: **yes** — measured,
+   a promotion adding `__proto__: injected` to a SKILL.md is **allowed with no
+   qualifying learning today** while any other added key is refused (rows
+   C29/C30). The cost is bounded and Current state measures it: of six
+   `assert.deepEqual` calls on `parseFrontmatter`, five fail and are restated to
+   the three observables in Implementation notes — not to a keys-only comparison,
+   which would drop one assertion's value check. **Overrule cost:** ADR-0020's
+   "ANY other frontmatter change requires learning authorization" stays false for
+   one key name.
 4. **Size class `M`, one package, rather than a chain of three `S` packages.**
    Recommendation: **M** — all five fixes edit `parseLedgerEntries`'s return shape
    and its three call sites in one file, so a split would serialise three design
@@ -172,23 +175,25 @@ versus `HEAD`…"*. That claim is **false today** for the heading `__proto__`.
 
 The harness that already drives both gates over hand-built inputs is the
 `gates.ledger` / `gates.skillBody` adapter in `tests/unit/dream-validate.test.js`.
-Three shipped assertions compare a `parseFrontmatter` result to a plain `{}` and
-fail under a null prototype — `dream-validate: parseFrontmatter returns {} without
-a leading block` in that file, and in `tests/unit/frontmatter-unify.test.js`
-`a no-separator-space line agrees with the spaced form on both consumers` and
-`validator semantics preserved: quoted booleans stay strings, absent block is {}`.
-Measured on a scratch copy carrying the ruled design: those three, and only those
-three, fail.
+Six `assert.deepEqual` calls take a `parseFrontmatter` result, across **three**
+test identities — `dream-validate: parseFrontmatter returns {} without a leading
+block` (two calls) in that file, and in `tests/unit/frontmatter-unify.test.js`
+`a no-separator-space line agrees with the spaced form on both consumers` (two)
+and `validator semantics preserved: quoted booleans stay strings, absent block is
+{}` (two). Measured on a scratch copy carrying the ruled design: **five of the six
+calls fail, and exactly those three test identities**. The sixth survives because
+it compares two `parseFrontmatter` results to *each other*, so both sides are
+null-prototype.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/frontmatter.js | Table A row **A1** — add `boolFromRaw`, re-express `readBool` through it, export it. No other behaviour moves |
-| modify | src/core/dream/validate.js | Table A rows **A1–A5** — the trust predicate, the three null-prototype records, the duplicate-heading rule with its return-shape change and all three call sites, the raise-only INVALID clause, the regex unification |
+| modify | src/core/dream/validate.js | Table A rows **A1–A5 and A7** — the trust predicate, the three null-prototype records, the duplicate-heading rule with its return-shape change and all three call sites, the raise-only INVALID clause, the regex unification, and the bullet key match |
 | modify | tests/unit/dream-validate.test.js | Table C, under the identities Table D names; plus the one shipped assertion Current state lists |
-| modify | tests/unit/frontmatter-unify.test.js | The two shipped assertions Current state lists. Nothing else in this file changes |
-| create | tests/red-proofs/ledger-parser-corpus.proofs.json | Table D — six declarations, `suite` = `tests/unit/dream-validate.test.js` |
+| modify | tests/unit/frontmatter-unify.test.js | The failing `deepEqual` calls Current state measures, repaired to the OBSERVABLES in Implementation notes — **not** by comparing keys, which would drop `:61`'s value check. Nothing else in this file changes |
+| create | tests/red-proofs/ledger-parser-corpus.proofs.json | Table D — seven declarations, `suite` = `tests/unit/dream-validate.test.js` |
 | modify | docs/adr/0020-skill-revision-lifecycle.md | Table A row **A6** — append the amendment verbatim from "Exact contracts". Nothing above it is edited |
 
 ### Exact contracts
@@ -208,6 +213,16 @@ function boolFromRaw(raw)
 
 The export becomes `{ parse, coerceScalar, readBool, boolFromRaw, readNumber, INVALID }`.
 `src/core/dream/validate.js` imports `boolFromRaw` **and** `INVALID` from it.
+
+**The bullet key match** (`parseLedgerEntries`, Table A row **A7**). Deciding
+that a line names a field must not depend on `.` consuming the rest of it. Match
+the key prefix; the raw value is the remainder of the LF-delimited line, trimmed:
+
+```text
+line  "- derived_from_untrusted: <anything, including CR / U+2028 / U+2029>"
+key    the `[A-Za-z_-]+` before the first `:`   → the field
+value  the rest of that line, trimmed           → A1's three-state reader
+```
 
 **The parser's return shape** (`parseLedgerEntries`). It returns
 `{entries, duplicateKeys}` — `entries` a null-prototype record keyed by heading
@@ -269,9 +284,10 @@ them.
 |----|-----|-----|
 | **A1** | Trust is granted only by the exact literal `false` | `derived_from_untrusted`'s value goes through `boolFromRaw` (Exact contracts): `'true'`→`true`, `'false'`→`false`, **anything else**→`INVALID`. An absent bullet is untouched by this and keeps its `null` initialiser, so the two states stay distinguishable and today's correct absent-field behaviour is pinned rather than changed (Table B). **Do not lowercase, trim further, or coerce a value into acceptance** — accepting `TRUE` as `true` would be a second, opposite defect |
 | **A2** | Every heading-keyed record is null-prototype | `parseLedgerEntries`' collector, `ledgerViolation`'s `headEntries` initialiser and `parseFrontmatter`'s record all become `Object.create(null)`. **Do not add a `__proto__` check by name** — the fix is the construction, and routing the heading into the existing `PATTERN_KEY_RE` is what makes it general. **Do not add `Object.hasOwn` guards** at `cur[key]` / `headEntries[key]`: a null prototype removes the chain those lookups traverse, so a guard would be redundant machinery |
-| **A3** | A repeated `##` heading refuses, at all three reads | `parseLedgerEntries` reports `duplicateKeys`; the candidate read, the committed-baseline read and the authorization read each refuse on a non-empty list, with the three reasons in Exact contracts. Rejected alternative: a *warn*. The gates' entire vocabulary is one refusal string, so a warn channel is new machinery — and a silent last-wins overwrite destroys exactly the data the append-only and raise-only comparisons depend on. Last-wins **field** semantics inside one section are unchanged and out of scope |
+| **A3** | A repeated `##` heading refuses, at all three reads | `parseLedgerEntries` reports `duplicateKeys`; the candidate read, the committed-baseline read and the authorization read each refuse on a non-empty list, with the three reasons in Exact contracts. Rejected alternative: a *warn*. The gates' entire vocabulary is one refusal string, so a warn channel is new machinery — and a silent last-wins overwrite destroys exactly the data the append-only and raise-only comparisons depend on. Detection is on the **NORMALISED heading key** — what `/^##\s+(.+?)\s*$/` captures — never on the raw line, so two headings differing only in trailing whitespace are one key and therefore a repeat. Measured: ASCII space, TAB, NBSP (U+00A0) and BOM (U+FEFF) all normalise away (rows C40-C42). **The detector's shape is the implementer's** — lookup-based and Set-based both conform (Table D). Last-wins **field** semantics inside one section are unchanged and out of scope |
 | **A4** | Raise-only fails closed on an INVALID committed value | The comparison fires when the baseline entry's value is `true` **or** `INVALID`; an absent (`null`) baseline value is unchanged (owner item 2) |
 | **A5** | One pattern-key regex | `skillBodyViolation`'s inline literal becomes `PATTERN_KEY_RE`. The declaration stays where it is: the inline use sits in a function body evaluated long after module initialisation, so no hoisting problem exists. The property that matters is behavioural, and Table C row C28 pins it — the two sites accept exactly the same key set |
+| **A7** | A bullet that NAMES a field is never read as ABSENT | The key match must not depend on `.` consuming the rest of the line: `.` never matches CR, U+2028 or U+2029, so an anchored `(.*)$` made a bullet that names the field read as **absent**, and absent is what A4 exempts. Match the key prefix only; the raw value is the remainder of the LF-delimited line, trimmed, and it goes to A1's reader — so an unparseable value is **INVALID**, never absent. **The widening is exactly this and no more** (measured): the only lines the shipped anchored form rejects and this one accepts are lines whose value contains CR, U+2028 or U+2029. One visible consequence, deliberate and rowed (C39): an otherwise-valid CRLF ledger now validates instead of being refused, which is the shipped `src/core/frontmatter.js` CRLF tolerance applied to the ledger rather than a new leniency |
 | **A6** | ADR-0020 gains one additive amendment | The verbatim text in Exact contracts, appended. Rows A1–A3 are what make its three clauses true; it ships *with* them, never ahead of them |
 
 ### Table B — canonical: `entry.untrusted`'s four states, and what each consumer does
@@ -285,7 +301,7 @@ the sentinel, applied here rather than re-decided.
 | `null` | the bullet is absent | **refuse** `missing/invalid derived_from_untrusted` (unchanged) | no constraint (unchanged) | **refuse** `…is untrusted-derived (never promotable)` (unchanged) |
 | `true` | exactly `true` | pass | candidate must be `true` (unchanged) | **refuse** `…is untrusted-derived (never promotable)` (unchanged) |
 | `false` | exactly `false` (after the bullet's own trim) | pass | no constraint (unchanged) | **authorize** (unchanged) |
-| `INVALID` | the bullet is present and is neither literal | **refuse** `missing/invalid derived_from_untrusted` (**new reach, no new code** — `typeof INVALID !== 'boolean'`) | candidate must be `true` (**A4**) | **refuse** `…is untrusted-derived (never promotable)` (**new reach, no new code** — `INVALID !== false`) |
+| `INVALID` | the bullet is present and its value, after the trim in Table C's class rule, is neither literal — **including a value the shipped anchored regex could not capture at all** (CR / U+2028 / U+2029; **A7**) | **refuse** `missing/invalid derived_from_untrusted` (**new reach, no new code** — `typeof INVALID !== 'boolean'`) | candidate must be `true` (**A4**) | **refuse** `…is untrusted-derived (never promotable)` (**new reach, no new code** — `INVALID !== false`) |
 
 Considered and dropped, so a re-proposal routes as a scope objection rather than
 reopening the design. A **distinct refusal message** for INVALID on the
@@ -307,8 +323,23 @@ contract here is the input, the path and the verdict.
 `gates.skillBody(…)` on a Tier-3 SKILL.md **body** revision whose
 `revision_pattern_key` names the entry, with the row's ledger as
 `baselineLedgerBytes`. `keep` / `authorize` means the gate returned no reason.
-Rows C1–C16 vary ONE thing: the `- derived_from_untrusted:` bullet of an
-otherwise-valid entry keyed `a.b`.
+Rows C1–C16 and C31–C38 vary ONE thing: the `- derived_from_untrusted:`
+bullet of an otherwise-valid entry keyed `a.b`.
+
+**The class rule — this is what makes the table complete against the contract,
+and the rows below are WITNESSES of its classes, not an enumeration of
+spellings.** The bullet's raw value is the remainder of its LF-delimited line
+(**A7**), trimmed. `String.prototype.trim` removes ECMAScript *WhiteSpace* and
+*LineTerminator*, so ASCII space, TAB, NBSP (U+00A0), BOM (U+FEFF), U+2028 and
+U+2029 **padding** all normalise away. What survives is `true`, `false`, or
+INVALID: there is **no case folding, no quote stripping, no comment stripping, no
+YAML type coercion, no Unicode normalisation and no homoglyph folding**, so every
+other spelling is INVALID. The classes the rows witness are exactly: exact
+literal (C1–C4), padding-normalises (C5), case variant (C6–C9), quoted (C10),
+comment (C11), YAML-ish word (C12, C31), YAML null (C32), YAML tag (C33), homoglyph
+(C34), interior invisible character (C35), numeric (C13), empty (C14),
+unparseable line (C36–C38), and absent (C15/C16) — which is not the same state
+(Table B).
 
 | id | Input | Path | Today (`8c52808f`) | REQUIRED |
 |----|-------|------|--------------------|----------|
@@ -316,13 +347,13 @@ otherwise-valid entry keyed `a.b`.
 | C2 | `true` | A | refuse `authorizing learning a.b is untrusted-derived (never promotable)` | unchanged |
 | C3 | `false` | K | keep | keep |
 | C4 | `false` | A | authorize | authorize |
-| C5 | `‹space›false‹space›` | K | keep | keep — the bullet's own trim, not a new leniency |
+| C5 | the PADDING class: `false` padded with ASCII space, TAB, NBSP (U+00A0) or BOM (U+FEFF) — measured, all four | K | keep | keep — padding normalises to the exact literal (class rule); this is not a new leniency and not INVALID |
 | C6 | `False` | K | **keep** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` |
 | C7 | `False` | A | **authorize** | refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
 | C8 | `TRUE` | K | **keep** | refuse (as C6) |
 | C9 | `TRUE` | A | **authorize** — a ledger that literally says TRUE authorizes a Tier-3 body revision | refuse (as C7) |
 | C10 | `"false"` (quoted) | K | **keep** | refuse (as C6) — the ledger runs no `coerceScalar` |
-| C11 | `false # ok` | K | **keep** | refuse (as C6) — and no inline-comment stripping either |
+| C11 | the COMMENT class: `false # ok` and `false‹tab›# ok` — measured, both | K | **keep** | refuse (as C6) — the ledger strips no inline comment, unlike frontmatter's `coerceScalar` |
 | C12 | `yes` | K / A | **keep** / **authorize** | refuse (as C6) / refuse (as C7) |
 | C13 | `1` | K / A | **keep** / **authorize** | refuse (as C6) / refuse (as C7) |
 | C14 | empty value | K / A | **keep** / **authorize** | refuse (as C6) / refuse (as C7) |
@@ -330,7 +361,7 @@ otherwise-valid entry keyed `a.b`.
 | C16 | bullet ABSENT | A | refuse `authorizing learning a.b is untrusted-derived (never promotable)` | **unchanged — regression pin** |
 | C17 | `## a.b`(true), `## c.d`, `## a.b`(false) — a non-adjacent duplicate, as the candidate | K | **keep** | refuse `learnings ledger has a repeated entry heading (a.b); each ## heading must appear once` |
 | C18 | the same ledger as the COMMITTED baseline | A | **authorize** | refuse `skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)` |
-| C19 | the same ledger as the committed baseline, with a clean candidate | K | refuse `learnings ledger deleted an existing entry (c.d); ledger is append-only` — a wrong reason for a real problem | refuse `learnings ledger's committed version has a repeated entry heading (a.b); the append-only history cannot be compared (fail closed)` |
+| C19 | the same ledger as the committed baseline, candidate carrying **both** `a.b` and `c.d` so the ONLY complaint can be the baseline duplicate | K | **keep** — a committed ledger whose shadowed first section is invisible passes the append-only comparison unnoticed | refuse `learnings ledger's committed version has a repeated entry heading (a.b); the append-only history cannot be compared (fail closed)` |
 | C20 | a clean baseline and a clean candidate | K | keep | keep — the green control for C17–C19 |
 | C21 | baseline `False`, candidate `false` | K | **keep** | refuse `learnings ledger lowered derived_from_untrusted of a.b (raise-only)` |
 | C22 | baseline `False`, candidate `true` | K | keep | keep — the green control for C21 |
@@ -339,9 +370,22 @@ otherwise-valid entry keyed `a.b`.
 | C25 | `## __proto__` plus one valid entry | K | **keep — the `__proto__` entry is invisible to every loop** | refuse (as C24) |
 | C26 | `## constructor`, a fully valid entry | K / A | keep / authorize | unchanged — `constructor` is the only `Object.prototype` name the pattern-key regex admits, and a valid entry may legitimately be called that |
 | C27 | baseline `## constructor` + `## a.b`; candidate deleted `constructor` | K | refuse `learnings ledger changed First-Seen of constructor (immutable)` — the append-only check was skipped and the next comparison refused by accident | refuse `learnings ledger deleted an existing entry (constructor); ledger is append-only` |
-| C28 | one shared sample of **heading-shaped** keys, at both pattern-key sites: the `##` heading check and `revision_pattern_key` (`a.b`, `a`, `0`, `a-b`, `a.b-c.d`, `A.b`, `_x`, `__proto__`, `constructor`, `toString`, `.a`, `-a`, `a b`, `a/b`, `a..b`, 64×`z`, 65×`z`, `a#b`, `a:b` — the empty key is excluded because `^##\s+(.+?)\s*$` never forms a heading from it) | K + A | **1 disagreement** — `__proto__` is refused as a `revision_pattern_key` but accepted as a heading, because the heading never becomes a key | 0 disagreements (**A5**) |
+| C28 | one shared sample of **heading-shaped** keys, at both pattern-key sites: the `##` heading check and `revision_pattern_key` (`a.b`, `a`, `0`, `a-b`, `a.b-c.d`, `A.b`, `_x`, `__proto__`, `constructor`, `toString`, `.a`, `-a`, `a b`, `a/b`, `a..b`, 64×`z`, 65×`z`, `a#b`, `a:b` — the empty key is excluded because `^##\s+(.+?)\s*$` never forms a heading from it) | K + A | **1 disagreement** — `__proto__` is refused as a `revision_pattern_key` but accepted as a heading, because the heading never becomes a key | 0 disagreements (**A5**). **Assert each key's exact verdict, not the agreement count alone** — Table D's LPC-B moves individual verdicts, and an agreement-only assertion cannot see that |
 | C29 | promotion `incubating`→`active` adding `tags: injected` | A | refuse `skill change needs a qualifying learning but has no valid revision_pattern_key` | unchanged — the green control for C30 |
 | C30 | promotion `incubating`→`active` adding `__proto__: injected` | A | **allowed with no qualifying learning** | refuse (as C29) |
+| C31 | the YAML-ISH WORD class: `on`, `off` (`yes` is C12) | K / A | **keep** / **authorize** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` / refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
+| C32 | the YAML NULL class: `~`, `null` | K / A | **keep** / **authorize** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` / refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
+| C33 | the YAML TAG class: `!!bool false` | K / A | **keep** / **authorize** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` / refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
+| C34 | the HOMOGLYPH class: fullwidth `ｆａｌｓｅ` (U+FF46 U+FF41 U+FF4C U+FF53 U+FF45) | K / A | **keep** / **authorize** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` / refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
+| C35 | the INTERIOR-INVISIBLE class: `fal​se` with U+200B, which is NOT trimmable whitespace | K / A | **keep** / **authorize** | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` / refuse `authorizing learning a.b is untrusted-derived (never promotable)` |
+| C36 | the UNPARSEABLE-LINE class as the CANDIDATE: the value contains CR, U+2028 or U+2029 (`fal se`) — measured, all three | K | refuse `learnings ledger entry a.b: missing/invalid derived_from_untrusted` | **unchanged — regression pin.** The schema check already refuses; the hole is C37, not here |
+| C37 | the same three values on the **committed baseline**, with the candidate saying `false` | K | **keep — and the round-ZERO design kept it too**: the bullet is skipped, the field reads ABSENT, and A4 exempts absent, so the malformed assertion is laundered into `false`, and the laundered ledger authorizes on a later run | refuse `learnings ledger lowered derived_from_untrusted of a.b (raise-only)` (**A7** makes it INVALID, so **A4** fires) — measured for all three characters |
+| C38 | the same three values on the **committed** ledger | A | refuse `authorizing learning a.b is untrusted-derived (never promotable)` | **unchanged — regression pin.** `null !== false` already refuses; A7 changes the state, not the verdict |
+| C39 | a whole ledger with CRLF line endings, otherwise valid | K | refuse `learnings ledger entry a.b: Pattern-Key bullet does not match the heading` — every bullet is skipped, so the entry is empty | **keep** — **A7**'s one deliberate widening: a trailing CR is padding under the class rule, which is `src/core/frontmatter.js`'s shipped CRLF tolerance applied to the ledger |
+| C40 | a non-adjacent duplicate whose repeat differs ONLY in trailing whitespace — ASCII space, TAB, NBSP (U+00A0) or BOM (U+FEFF); measured, all four normalise to the same key | K | **keep** | refuse `learnings ledger has a repeated entry heading (a.b); each ## heading must appear once` |
+| C41 | the same ledger as the **committed** ledger | A | **keep** — authorizes a Tier-3 body revision | refuse `skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)` |
+| C42 | the same ledger as the **committed baseline**, candidate carrying both entries | K | **keep** | refuse `learnings ledger's committed version has a repeated entry heading (a.b); the append-only history cannot be compared (fail closed)` |
+| C43 | `## prototype`, a fully valid entry | K / A | keep / authorize | unchanged — the green control for the inherited-name class: `prototype` is not an own property of `Object.prototype`, so it was never hazardous. Measured over `Object.getOwnPropertyNames(Object.prototype)`, `constructor` is still the only admitted name that is |
 
 ### Table D — canonical: the RED proofs
 
@@ -352,45 +396,66 @@ never widened into. Each declaration's `find` / `replace` pair is the shipped
 form and the ruled form of the same construct, and both are already given — in
 Current state and in Table A. `suite` is `tests/unit/dream-validate.test.js`.
 
+Two rules govern this table, and both were learned by running it.
+
 **Every corpus row asserts its EXACT refusal string, never merely "refused".**
-That is not style: LPC-B leaves rows C24/C25/C27 *refusing*, with a different
-reason — a row asserting only that something was refused would stay green and
-red-proofs would then reject the declaration as non-discriminating (measured).
+LPC-B leaves rows C24/C25/C27 *refusing*, with a different reason — a row
+asserting only that something was refused stays green, and `evaluateRed` then
+rejects the declaration as non-discriminating.
+
+**A declared set may contain only rows that are stable across CONFORMING
+implementations.** `evaluateRed` demands exact equality, so a row whose reddening
+depends on an implementation choice this spec deliberately leaves open would make
+criterion 7 reject a correct implementation. Measured on two conforming duplicate
+detectors — lookup-based (`entries[key] !== undefined`) and Set-based — which
+agree on every corpus row when the collector is null-prototype.
 
 | id | Reverts | Corpus rows it must redden (measured on scratch copies) |
 |----|---------|--------------------------------------------------------|
-| **LPC-A** | the trust predicate, back to `cur.untrusted = val === 'true'` | C6–C14 **and C21** — reverting it makes INVALID unreachable, so the raise-only clause has nothing to fire on |
-| **LPC-B** | `parseLedgerEntries`' collector, back to `{}` | C24, C25, **C26**, C27 — with a plain object, `entries['constructor']` and `entries['__proto__']` are already non-`undefined`, so a first-and-only such heading is misreported as a repeat |
+| **LPC-A** | the trust predicate, back to `cur.untrusted = val === 'true'` | C6–C14, C31–C35 **and C21** — reverting it makes INVALID unreachable, so the raise-only clause has nothing to fire on |
+| **LPC-B** | `parseLedgerEntries`' collector, back to `{}` | C24, C25, C27, **C28**. **C26 is EXCLUDED as algorithm-dependent:** measured, a lookup-based detector reddens it (a first-and-only `## constructor` is misreported as a repeat) while a Set-based one leaves it green, and both conform |
 | **LPC-C** | `parseFrontmatter`'s record, back to `{}` | C30 |
-| **LPC-D** | the duplicate-heading refusal at the candidate read only | C17 |
-| **LPC-E** | the duplicate-heading refusal at the two committed-baseline reads only | C18, C19 |
+| **LPC-D** | the duplicate-heading refusal at the candidate read only | C17, **C40** |
+| **LPC-E** | the duplicate-heading refusal at the two committed-baseline reads only | C18, C19, **C41**, **C42** |
 | **LPC-F** | the raise-only `INVALID` clause, back to `he.untrusted === true` | C21 |
+| **LPC-G** | the bullet key match, back to the shipped anchored `/^-\s*([A-Za-z_-]+):\s*(.*)$/` (**A7**) | C37, C39. C36 and C38 stay green — they already refuse today, which is why they are regression pins rather than proofs |
 
 LPC-A and LPC-F both reach C21, so the trust-value rows and the raise-only rows
 must sit under **separate** test identities — `evaluateRed`'s equality is
-two-sided, and one identity spanning both would make LPC-F indistinguishable
-from LPC-A.
+two-sided, and one identity spanning both would make LPC-F indistinguishable from
+LPC-A. The same separation is needed between C17/C40 and C18/C19/C41/C42
+(LPC-D vs LPC-E).
 
 Two ruled changes carry **no** declaration, stated rather than omitted.
 `headEntries`' initialiser (A2) is measured behaviourally inert, so no mutation of
 it can redden anything. Reverting the regex unification (A5) changes no verdict
 either — the two literals are byte-identical today — so C28 guards only against
-future divergence, which is the only thing it can guard.
+future divergence, which is the only thing it can guard. And the green controls
+(C5, C20, C22, C23, C26, C29, C39, C43) are green by design: nothing reddens them,
+which is what makes them controls.
 
 ### Mirrored Surface Checklist
 
 - **Table A** — Deliverables rows for `src/core/frontmatter.js`,
   `src/core/dream/validate.js` and `docs/adr/0020-*.md`; "Exact contracts"
-  (`boolFromRaw`, the return shape, the three reasons, the amendment text);
-  acceptance criteria 1–6 (A4 lands in criterion 1 via Table C row C21);
-  Current state's quoted constructs; Out of scope's "do not add" list.
-- **Table B** — Table A rows A1 and A4; Table C rows C1–C16 and C21–C23;
-  acceptance criterion 1; the amendment's clause (b).
-- **Table C** — acceptance criteria 1–5; Table D's reddening column;
-  verification step 1; Dispatch-precondition items 1–3.
+  (`boolFromRaw`, the bullet key match, the return shape, the three reasons, the
+  amendment text); acceptance criteria 1–6, 2b and 3b (A4 lands in criterion 1 via
+  Table C row C21; A7 in criterion 2b); Current state's quoted constructs; Out of
+  scope's "do not add" list.
+- **Table B** — Table A rows A1, A4 and A7; Table C's class rule; Table C rows
+  C1–C16, C21–C23 and C31–C38; acceptance criterion 1; the amendment's clause (b).
+- **Table C** — the class rule that closes it (in its own preamble, which is the
+  surface that owns it); acceptance criteria 1–5, 2b and 3b; Table D's reddening
+  column; verification step 1; Dispatch-precondition items 1–3.
+- **The three `parseFrontmatter` observables** (Implementation notes owns them) —
+  Current state's measured six-calls/five-failures/three-identities split; the
+  `tests/unit/frontmatter-unify.test.js` Deliverables cell; acceptance criterion
+  3b; **Dispatch-precondition item 3**, which round 1 found stale precisely
+  because it was an unregistered mirror.
 - **Table D** — the Deliverables row creating
-  `tests/red-proofs/ledger-parser-corpus.proofs.json`; acceptance criterion 7;
-  verification step 3.
+  `tests/red-proofs/ledger-parser-corpus.proofs.json`; acceptance criterion 7 (its
+  proof count and the 37 → 44 total); verification step 3; Table C row C28's
+  "assert the exact verdict" clause, which LPC-B depends on.
 
 ## Implementation notes & constraints
 
@@ -398,9 +463,16 @@ future divergence, which is the only thing it can guard.
 - `parseLedgerEntries`' return shape changes — move all three call sites in the
   same commit; there is no consumer outside `src/core/dream/validate.js`.
 - **A null-prototype record is not `deepEqual` to `{}`.** That is A2's whole cost
-  on the test side: exactly the three shipped assertions named in Current state.
-  Repair them by comparing keys (or by spreading into a plain object); do not
-  weaken what they assert, and change nothing else in
+  on the test side, and Current state measures it exactly. **What must stay true
+  is the OBSERVABLE, not any particular repair** — a keys-only rewrite is a trap:
+  at `frontmatter-unify.test.js:61` the assertion is about a VALUE, and comparing
+  keys alone would accept `{k: 'wrong'}`. The three observables to preserve:
+  (i) a document with no frontmatter block, and one with an unclosed block, yield
+  a record with **zero own keys**; (ii) the no-separator-space document
+  (`---\nk:v\n---`) yields a record whose own keys are exactly `['k']` **with
+  `k === 'v'`**; (iii) the spaced and unspaced forms remain **deeply equivalent**
+  to each other — that assertion needs no repair at all (both sides are
+  null-prototype) and must not be weakened by one. Change nothing else in
   `tests/unit/frontmatter-unify.test.js`.
 - The ledger deliberately runs no `coerceScalar` (rows C10, C11). If you find
   yourself adding it so a quoted value passes, stop — that is the opposite of A1.
@@ -422,13 +494,22 @@ value at every security consumer, never as the safe one and never silently.
 ## Acceptance criteria
 
 - [ ] 1. Every Table C row's REQUIRED verdict is observed by running the gate its
-      Path column names — including the `unchanged` rows and the green controls
-      (C5, C20, C22, C23, C26, C29).
+      Path column names — including the `unchanged` regression pins (C15, C16,
+      C36, C38) and the green controls (C5, C20, C22, C23, C26, C29, C39, C43).
+      Each refusing row asserts its **exact** reason string (Table D).
 - [ ] 2. `parseLedgerEntries` returns `{entries, duplicateKeys}`, and all three
       call sites refuse on a non-empty `duplicateKeys` with the reasons in Exact
-      contracts.
+      contracts. Duplicates are decided on the **normalised** heading key (A3),
+      which rows C40–C42 observe; the detector's shape is not constrained.
+- [ ] 2b. A bullet naming a field is consumed as that field whatever follows the
+      colon (**A7**), so an unparseable value is INVALID and never absent — rows
+      C36–C38, with C39 as the one deliberate widening.
 - [ ] 3. `src/core/frontmatter.js` exports `boolFromRaw`, and `readBool`'s shipped
       tests are byte-unmodified and green.
+- [ ] 3b. The three `parseFrontmatter` observables in Implementation notes hold:
+      zero own keys for a missing/unclosed block; exactly `['k']` **with value
+      `'v'`** for the no-separator document; spaced and unspaced deeply
+      equivalent.
 - [ ] 4. The three heading-keyed records of Table A row A2 are built with
       `Object.create(null)`, and no `__proto__`-by-name check and no
       `Object.hasOwn` guard was added.
@@ -439,8 +520,8 @@ value at every security consumer, never as the safe one and never silently.
 - [ ] 6. `docs/adr/0020-skill-revision-lifecycle.md` carries the amendment
       verbatim, and nothing above it changed.
 - [ ] 7. `tests/red-proofs/ledger-parser-corpus.proofs.json` declares Table D's
-      six proofs, and `npm run red-proofs` reports every one PROVEN with the
-      totals rising from 37 to 43.
+      **seven** proofs, and `npm run red-proofs` reports every one PROVEN with the
+      totals rising from 37 to 44.
 - [ ] 8. Idempotence: `N/A — this work package ships no command and writes nothing
       outside the repository.`
 
@@ -453,7 +534,7 @@ the pinned base; their baselines are quoted in Current state.
 ```bash
 node tests/with-temp-root.js tests/run.js   # expect fail 0; the total rises from 2630
 npm run lint                                # expect exit 0
-npm run red-proofs                          # expect 43 declared, 43 selected, RUN: PROVEN
+npm run red-proofs                          # expect 44 declared, 44 selected, RUN: PROVEN
 ```
 
 ## Out of scope (do NOT do these)
@@ -474,6 +555,12 @@ npm run red-proofs                          # expect 43 declared, 43 selected, R
   guards, a warn channel, a distinct authorization-path INVALID message, or any
   source-shape grep gate. Each was considered and rejected with its reason in
   Table A, Table B or Table D.
+- Narrowing **A7** to `derived_from_untrusted` alone, or constraining the
+  duplicate detector's shape (**A3**). Both were considered: A7's widening is
+  measured and bounded to exactly three characters with one rowed consequence
+  (C39), and a special-cased field would be a second parsing rule for no measured
+  gain; A3 is stated as an observable precisely so two conforming detectors both
+  pass (Table D).
 
 ## Definition of done
 

@@ -335,7 +335,103 @@ a consuming model observes, so both are LIGHT under "Weighted closure": the fixe
 land and are verified mechanically, and the loop proceeds to round 1 without a
 fresh external round for them.
 
-## The stop criterion (pinned BEFORE round 1)
+## Round 1 — external double channel, 2026-09-05, on `87b51216`
+
+Raws committed BEFORE adjudication, each with the SHA of the commit that
+introduced it:
+
+| Channel | Raw | Introduced by |
+|---------|-----|---------------|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-e-gate-raw-round1-codex-plugin.txt` | `0dea0727` |
+| Hermetic shadow | `docs/specs/logbook/2026-09-05-audit-e-gate-raw-round1-herdr-shadow.txt` | `eb3ebf1d` |
+
+Both channels: needs-attention. **Zero scope objections counted** — three were
+routed, all of them already-recorded residuals or alternatives Table A/B/D had
+rejected with reasons. **Every finding is a corpus ROW or a proof-set defect, not
+gate machinery: the archive's lesson held.** Two are HEAVY (they move the
+contract's accepted/refused set), so round 2 is a full external round.
+
+### Findings, dispositions, and what changed
+
+| # | Channel | Band | Disposition — and what changed |
+|---|---------|------|-------------------------------|
+| **R1-A** | plugin A | **HEAVY** | **fix.** A bullet that NAMES the field could read as ABSENT: the parser splits on LF, but the bullet regex anchors `(.*)$`, and `.` matches neither CR nor U+2028/U+2029 — so the line is skipped, `untrusted` stays `null`, and A4 exempts `null`. New Table A row **A7** (match the key prefix; the raw value is the remainder of the LF-delimited line), Table B's INVALID reach widened, rows **C36–C39** added |
+| **R1-B** | shadow A | **HEAVY** | **fix.** The spec permitted a raw-line duplicate detector, which passes C17 yet keeps `## a.b`, `## c.d`, `## a.b␠␠␠`. Table A row **A3** now states the observable — detection is on the NORMALISED heading key — and rows **C40–C42** pin it on all three reads. The detector's shape stays the implementer's |
+| **R1-C** | plugin B + shadow B | LIGHT | **fix.** Table D's `LPC-B` omitted C28 and included C26, which is algorithm-dependent. Set restated to **C24, C25, C27, C28**; C26 excluded with its reason; a second governing rule added to Table D (a declared set may contain only rows stable across conforming implementations); C28 now requires exact per-key verdicts rather than an agreement count |
+| **R1-D** | shadow A | LIGHT | **fix.** The permitted "compare keys" repair would let `{k:'wrong'}` pass at `frontmatter-unify.test.js:61`. Implementation notes now state three OBSERVABLES instead of a technique, Current state carries the measured six-calls/five-failures/three-identities split, and criterion **3b** asserts them |
+| **R1-E** | plugin | LIGHT | **fix.** Table C now opens with a **class rule** that closes it against the contract — after the trim, the value is `true`, `false`, or INVALID, with no case folding, quote stripping, comment stripping, YAML coercion, Unicode normalisation or homoglyph folding — and the rows are witnesses of its classes. Missing classes added as rows **C31–C35** (YAML-ish word, YAML null, YAML tag, homoglyph, interior invisible) and **C43** (`## prototype`); C5 and C11 widened to name their whole class |
+
+Two findings this pass raised against **itself**, both fixed:
+
+| # | Finding | Disposition |
+|---|---------|-------------|
+| **S1** | C19's fixture did not ISOLATE the property: its clean candidate also dropped `c.d`, so the shipped tree refused with `deleted an existing entry (c.d)` and the row proved nothing about the baseline duplicate | **fix** — the candidate now carries both entries. Re-measured, the shipped tree **KEEPS** it, which is a truer and sharper "Today": a committed ledger whose shadowed first section is invisible passes the append-only comparison unnoticed |
+| **S3** | Dispatch-precondition item 3 restated R1-D's fact ("three shipped assertions … comparing keys") and went stale the moment R1-D landed | **fix** — item 3 now cites Current state's measurement and Implementation notes' observables. The reason it went stale is the finding: the Dispatch precondition was an **unregistered mirror**. The Mirrored Surface Checklist now carries the three `parseFrontmatter` observables as their own entry, naming that item explicitly (ADR-0031 register-new-mirrors, applied in the same pass) |
+| **S2** | Two round-1 drivers written through a shell heredoc silently LOST their U+2028 literals and measured a plain space instead, producing a verdict that contradicted the other driver | **fix** — exotic characters are now written as JS escapes (`\u2028`), which survive any transport, and every driver self-checks its codepoints at startup. This is the same defect class the round-zero brief warned about, arriving through a different door: the file was fine, the transport was not. The four affected rows were re-measured; the corrected results are what Table C carries |
+
+### Measurements this round
+
+```text
+R1-A  shipped + round-ZERO design, baseline U+2028 / U+2029 / CR, candidate false
+        -> KEEP on both  (the hole; the round-zero design did not close it)
+      under A7           -> "learnings ledger lowered derived_from_untrusted of a.b (raise-only)" for all three
+      candidate side     -> already refuses on both trees (regression pin, not a proof)
+      committed side (A) -> already refuses on both trees (regression pin, not a proof)
+      A7's widening, measured and bounded: the ONLY lines the anchored form
+      rejects and the prefix form accepts are those whose value contains CR,
+      U+2028 or U+2029. One visible consequence: an otherwise-valid CRLF ledger
+      goes from "Pattern-Key bullet does not match the heading" to KEEP (C39).
+      Full suite under A7: 2630 / 2615 / fail 3 — the same three Deliverables
+      repairs as round zero, and every round-zero corpus row byte-identical.
+
+R1-B  heading normalisation, measured: trailing ASCII space, TAB, NBSP (U+00A0)
+      and BOM (U+FEFF) all map "## a.b<suffix>" to the key "a.b".
+      The round-zero design already refuses all of them on all three reads —
+      the defect was the SPEC permitting a detector that would not.
+
+R1-C  LPC-B across two conforming detectors:
+        row   lookup-based      Set-based        stable?
+        C24   RED (wrong str)   RED (wrong str)  yes
+        C25   RED               RED              yes
+        C26   RED               GREEN            NO -> excluded
+        C27   RED               RED              yes
+        C28   RED (2 disagr.)   RED (1 disagr.)  yes
+      LPC-D -> C17, C40.   LPC-E -> C18, C19, C41, C42.   LPC-G -> C37, C39.
+
+R1-D  six deepEqual calls on parseFrontmatter, five fail under the design;
+      the sixth (frontmatter-unify.test.js:62) survives because both sides are
+      null-prototype. A keys-only repair at :61 accepts {k:'wrong'} — measured.
+
+R1-E  every class in the plugin's list has a row; the classes with none were
+      YAML-ish word, YAML null, YAML tag, homoglyph, interior invisible, and
+      `prototype`. NBSP/BOM padding is NOT a new class: it normalises to the
+      exact literal under the trim, so it joins C5.
+      Heading universal re-measured: `constructor` remains the ONLY name in
+      Object.getOwnPropertyNames(Object.prototype) the pattern-key regex admits.
+```
+
+`npm run lint` passes with both documents in the tree, exit 0, `0 error(s)`.
+
+### Size ceiling, re-measured (F6 stays open)
+
+Spec **488 → 575 lines**, against the pre-pinned ~400. **The entire growth is
+contract and corpus** — thirteen new rows, the class rule that closes Table C,
+Table D's two governing rules and its seventh proof, and the A7 contract. **No
+gate, script or grep was added this round**, which is the half of the ceiling
+rule that actually guards against the archive's failure mode. F6's residual is
+therefore re-accepted rather than re-opened: Table C alone is now ~60 lines and
+it *is* the deliverable.
+
+## The stop criterion (pinned BEFORE round 1; RESTATED after round 1's HEAVY fixes)
+
+**Restatement, 2026-09-05 after round 1.** The criterion below is unchanged in
+substance and is re-stated because round 1 landed two HEAVY fixes, which under
+"Weighted closure" trigger a full fresh external round rather than a mechanical
+verification. Round 2 is that round. Two things it inherits: R1-A and R1-B both
+moved the accepted/refused set, so round 2 must verify each round-1 fix is closed
+**by execution** rather than by re-reading; and both HEAVY findings were corpus
+rows, not machinery, so the size ceiling continues to fire as a finding on line
+count while explicitly not firing on this round's growth.
 
 - **Closes** on a round with no product finding on either channel. Machinery
   findings at that point are fixed inside the existing surface or accepted as
@@ -348,5 +444,5 @@ fresh external round for them.
   a recommendation and an overrule cost, not folded in.
 - **Size ceiling (learned from the archive):** if the spec passes ~400 lines, or
   a round adds gate machinery rather than a corpus row, **that is itself a
-  finding**. It is already open as F6, at 488 lines after the executor fix pass, with a
-  recorded residual.
+  finding**. It is open as F6, re-measured at 575 lines after round 1, with a re-accepted
+  residual: this round added thirteen corpus rows and zero machinery.
