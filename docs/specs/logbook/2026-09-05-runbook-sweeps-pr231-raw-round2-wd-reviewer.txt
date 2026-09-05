@@ -1,0 +1,56 @@
+# PR gate raw — round 2 — wd-reviewer (opus) on a detached copy at 3ce5ba57 with COPIED node_modules — WP-process-runbook-sweeps
+# tip reviewed: 3ce5ba57cab5ceafe053b14edc2b90f83dde9db0 ; base main = e119b607 ; porcelain before/after byte-identical ; committed pre-adjudication
+
+APPROVE
+
+All four round-1 findings are genuinely fixed, not re-worded; the fix commit is inside the boundary; every gate is green; the re-read of the full diff surfaces no new defect.
+
+## Round-1 finding verification
+
+| # | Round-1 finding | State on `3ce5ba57` |
+|---|---|---|
+| 1 | band B — dangling "this WP" at `codex-review.md:104-107` | **Fixed substantively.** Now reads `WP-process-runbook-sweeps' criterion in docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md`. File confirmed present on `main` (`git cat-file -e main:…` rc=0, added by `86cbf714`). I followed the citation per the PR's own new R16 rule: that logbook's canonical criterion (line 1695, "The criterion — canonical text (amended after round 2)") does open with **"Step 0 — the band gate"** and its ladder is `CLOSE < LIGHT < HEAVY < EXTRACTION < DESIGN` — so the claim the sentence makes is true of the record it now names. Anchor `maps each band to an outcome` intact at `:99-100` (screen PASS); provenance `` `docs/HANDOVER.md:371-372` `` intact. |
+| 2 | band C — R14 bullet hard-wrapped | **Fixed.** `.claude/agents/wd-architect.md:25` is one unwrapped line, matching every sibling bullet at `:17-24`. numstat for that file moved `5/0` → `1/0`. Anchor `enumerate your own good` still PASS. |
+| 3 | band C — `**C: hygiene**` | **Fixed.** `codex-review.md:40` now `**B**: caught downstream; **C**: hygiene`, matching the `**A**:`/`**B**:` pattern. Screen still flattens to `C: hygiene` → PASS. |
+| 4 | band C — R17 condition stated twice | **Fixed.** `codex-review.md:329-332` now `The obligation is symmetric: **nothing writes into a worktree a gate is reading** — one untracked file voids the verdict, however clean the diff (…)`. The redundant `while a gate is reading a worktree,` clause is gone; anchor verbatim, provenance unchanged. |
+
+## Findings
+
+1. **[quality] band C — `docs/runbooks/codex-review.md:106`: the new logbook path is the only unbackticked file path in the file.** `grep -nE '(^|[^`/[:alnum:]])docs/[A-Za-z0-9_./-]+\.md' docs/runbooks/codex-review.md | grep -v '`docs/'` returns exactly one hit — this line. Every other path in the runbook, including the `` `docs/HANDOVER.md:371-372` `` three lines below it, is in backticks. Fix: wrap it — `` `docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md` ``. No anchor crosses that line (the R12 anchor ends at `:100`), lint is unaffected (the line is 79 cols; the file already contains 79-col lines), and the screen is untouched. Purely cosmetic — under this repo's own stop criterion (all-C → close, hygiene fixed in place) this does not owe a fresh round; apply it on the next touch of the file or fold it into the merge, at the maintainer's discretion.
+
+No band A or B findings. No `[boundary]`, `[criteria]`, `[contract]` or `[convention]` findings.
+
+Two non-findings worth recording rather than fixing:
+- The cited logbook holds three copies of the criterion (§0.1 superseded, the round-2 head copy superseded, and the canonical text at `:1695`). The citation names the file, not the section — but `whose step 0 is the band gate` uniquely picks out the canonical one (§0.1 has no step 0), so the reference resolves unambiguously. `whose ladder is LIGHT/HEAVY` names two rungs of a five-rung ladder; that is the runbook's own two-value vocabulary from "Weighted closure" and the sentence is flagged non-normative, so it is accurate for its purpose.
+- The PR **body**'s numstat block still shows the round-1 numbers (`5 0 wd-architect`, `60 5 codex-review`); the dispositions comment posts the current `1/0` and `61/5`. The comment is the live record and matches my own run, so this is superseded evidence rather than wrong evidence — but if the body is what gets read at merge, refresh that one block.
+
+## Contract-density / closed-contract drift (ADR-0031), one paragraph
+
+Tables A and B are untouched by the fix commit; only prose the spec explicitly assigns to the implementer moved, so no settled contract was reinterpreted and no mirror was promoted to primary. The two mirrors I re-walked still agree with their tables: the Deliverables Notes cell for `codex-review.md` ("R01–R07, R11–R13, R16–R18") matches Table B's File column, and the DATA block's 21 anchors still match Table B's anchor column one-for-one with `DECLARED=21`. Round 2's single finding is a different family from round 1's (typography vs. a dangling referent), so no repeat family and no canonical-extraction pass is indicated. The one drift-shaped item from round 1 stands unchanged and remains out of scope by the spec's own ruling: `_TEMPLATE.md:88-93` now says "in one pass **and in the same commit**" while ADR-0031 says only "in one pass" and `wd-architect.md:22` says "in the same pass" — one contract, three surfaces, two of them now weaker. Worth handing to wd-architect whenever ADR-0031 is next opened; nothing to do in this PR.
+
+## Porcelain check
+
+`git status --porcelain` in `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/reviewer-wt-pr231`: **empty (0 bytes) before and after**; HEAD still `3ce5ba57`. All scratch went to `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/79411e87-5f1a-4572-a4f9-aa44e38bbd30/scratchpad/reviewer-scratch-r2/`; the screen's own `mktemp` lives outside the checkout and is removed by the script.
+
+## Commands executed, with exit codes
+
+| # | Command | rc |
+|---|---------|-----|
+| 1 | `git status --porcelain` (before) | 0, empty |
+| 2 | `git rev-parse HEAD` / `main` | 0 — `3ce5ba57` / `e119b607` |
+| 3 | `git diff --name-only f59e3f69 3ce5ba57` | 0 — exactly `.claude/agents/wd-architect.md`, `docs/runbooks/codex-review.md`, and the 3 orchestrator-committed `docs/specs/logbook/…-raw-round1-*.txt`. Nothing else. |
+| 4 | `git diff --name-only main HEAD` | 0 — 9 files: 5 Deliverables + spec + 3 logbook raws |
+| 5 | `git cat-file -e main:docs/specs/logbook/2026-09-05-process-runbook-sweeps-design-gate-rounds.md` | **0** (exists on `main`) |
+| 6 | `node scripts/boundary-check.js docs/specs/WP-process-runbook-sweeps.md $(git diff --name-only main)` | **0** |
+| 7 | `sed -n '430,518p' docs/specs/WP-process-runbook-sweeps.md > verify.sh; bash verify.sh` (spec's fence, run from a FILE) | **0** — **21 PASS, 0 FAIL**, `anchors processed=21 declared=21`, `sentinels exit=0`, `anchor screen rc=0` |
+| 8 | 3 already-bound greps (`Loop circuit-breaker (ADR-0031)`, `A cited RANGE is checked at BOTH ends`, `Contract-density detector (ADR-0031)`) — inside the block | 0, 0, 0 |
+| 9 | `git diff --stat main -- memory/lessons/inbox.md` — inside the block | 0, **empty output** |
+| 10 | `git diff --numstat main -- <5 deliverables>` — inside the block | 0 — `1/0`, `1/1`, `61/5`, `7/1`, `4/2` (matches the dispositions comment; `+1` on codex-review and `−4` on wd-architect are exactly findings 1 and 2) |
+| 11 | `npm run lint` — inside the block | **0** — markdownlint **0 error(s)** / 648 files; frontmatter **268 spec(s), 4 agent(s)** |
+| 12 | `git diff --check main HEAD` | **0** |
+| 13 | `git log --format='%H %s' main..HEAD` | 0 — 5 commits, all conventional, fix commit `docs(process): apply PR-gate round 1 findings (WP-process-runbook-sweeps)` |
+| 14 | `git diff -U4 main HEAD -- <6 files>` (full re-read) | 0 |
+| 15 | `git show main:<logbook>` + greps for `Step 0`, `LIGHT`, `HEAVY` (citation followed, per R16) | 0 — canonical criterion at `:1695`, step 0 = band gate, ladder contains LIGHT/HEAVY |
+| 16 | `grep -nE '…docs/…\.md' docs/runbooks/codex-review.md | grep -v '`docs/'` (backtick sweep) | 0 — 1 hit, `:106` |
+| 17 | `gh pr view 231 --repo wienerdog-ai/wienerdog --json title,body,comments` | 0 |
+| 18 | `git status --porcelain` (after) | 0, empty — byte-identical to the before capture |
