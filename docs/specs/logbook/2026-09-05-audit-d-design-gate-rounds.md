@@ -688,6 +688,158 @@ genuinely closed rather than re-worded — with R1-D as the standing example tha
   now item 8. No grant, allowlist, cap, scope set, or the deletion moved.
 - **(iii) Scope objections** stay routed. Rounds 1 and 2 produced zero.
 
+## Round 3 — external double channel, 2026-09-05, on `937bae59`
+
+Both channels **needs-attention**, **zero scope objections**; plugin 1A + 2B + 2
+LIGHT, shadow 4A + 2B; **five of six CONVERGED**. Raws committed pre-adjudication:
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-codex-plugin.txt` | `12e5ed44` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-herdr-shadow.txt` | `7fd20a32` |
+
+**No finding against the recipient GRAMMAR outside the executed table — the
+breaker's answer held where it was aimed.**
+
+### The pinned stop criterion FIRED, and how it was ruled
+
+Two Table B rows admitted cases the 39-case table did not refuse: step 1
+trimmed and selected *before* the bound (a 4 MB whitespace-only `Reply-To` beside a
+valid `From` was scanned and trimmed unbounded), and step 5 truncated the Subject
+to 512 *after* acceptance (breaking Gmail's documented Subject-match threading
+condition and splitting a surrogate pair into `U+FFFD`). The criterion said: owner
+ruling on the recipient design. **The orchestrator's judgment under the owner's
+standing instruction, recorded verbatim as the disposition and as owner item 9:**
+
+> These two are the ORDER contract not yet applied to two of its own rows — the
+> same "parsing before bounding" defect the pass named, surviving in step 1 and
+> step 5 — not evidence against deriving the recipient from the message.
+> Item 9: *keep `create_reply_draft` as a code-derived-recipient verb;
+> recommendation: keep; cost of overruling: inbox-triage loses its only outward
+> action (drafts nothing), and the audit's group D ruling is reopened.*
+
+The owner may reverse by dated amendment.
+
+| # | Channel(s) | Band | Finding | Disposition |
+|---|---|---|---|---|
+| **R3-A** | CONVERGED | HEAVY | Steps 1–2: trim/select ran before the bound, so an oversized value was processed unbounded. | **fix** — **ONE rule, applied to EVERY raw value the verb reads**, and moved to **step 0**: each of the five raw values must be ≤998 **before any other operation**. The invariant is now absolute — *nothing whose cost grows with input length runs before the bound* — which is why the bound precedes even the CR/LF scan (see the reorder note). Two cases added to the executed table: an oversized whitespace-only `Reply-To` beside a valid `From` → refused at the bound; a ≤998 whitespace-only `Reply-To` beside a valid `From` → falls through to `From`, **accepted**. Item 8 is now "the 998 bound on every raw header value the verb reads". |
+| **R3-B** | CONVERGED | HEAVY | Step 5 truncated the derived Subject to 512 after acceptance — breaking Gmail's Subject-match threading requirement and splitting astral characters. | **fix** — **the truncation is removed entirely.** The source Subject is bounded at 998 by step 0, so the derived subject is `Re:` + space + the source **unmodified**, ≤1002 characters. Verified by measurement that nothing downstream re-imposes a cap: `src/gws/gmail.js` enforces **no** length on any header — `buildMime` (`:150-160`) asserts CR/LF-freedom and nothing else, `draft` (`:131-142`) passes the MIME through untouched. The 512 ceiling remains **only** on the model-supplied `subject` of `create_draft_to_self`. Gmail's three threading requirements are cited in a restored Table B bullet; criterion 5 and `[AUD-D4]` re-derived; long-Subject and boundary-astral cases added. |
+| **R3-C** | CONVERGED | HEAVY | Table C's `reply-headers-unasserted` is **unkillable through `create_reply_draft`** — the CR/LF step refuses first, identically for correct and mutant code, for every field. The round-2 trap note naming `Message-ID`/`References` as discriminating was wrong. | **fix, by splitting the property from its proof site.** `[AUD-D5]` becomes the **step-1 proof**: it asserts the refusal is step 1's, by its fixed `WienerdogError` text (distinct from `assertHeaderSafe`'s), plus zero `drafts.create`; its mutation deletes one named field from step 1's scan, so the mutant falls through to step 7 and refuses with a *different* message. A new `[AUD-D7]` in `tests/unit/gws-gmail.test.js` takes `reply-headers-unasserted` by calling `buildMime` **directly**. Table C now spans **three suites / three declaration files**. Fixture ownership is stated so the sets cannot overlap: `[AUD-D5]` owns every CR/LF case arriving through the verb, `[AUD-D7]` owns only direct `buildMime` calls, `[AUD-D3]` owns the **non-CR/LF** refusals and carries no CR/LF fixture. |
+| **R3-D** | CONVERGED | HEAVY | V5 omitted `inputSchema.type`, so `type:'string'` passed; and it never compared the schema's top-level key set. | **fix** — V5 now compares `type` **and** the complete top-level schema key set, and its success line names exactly what it verifies and what it does not (handlers, descriptions, `apiMethod`). Re-proved against nine mutants including the three new countermodels. |
+| **R3-E** | shadow A | HEAVY | The default-loader pin proved only that `loadServices` resolves to `loadCredentialServices`. A consumer using `requiredClassesFor` **only when `deps.loadServices` was supplied** passes everything while production stays broken. | **fix** — criterion 8's requested-class and missing-class assertions must hold on the **no-`deps` path** too. Seam chosen and stated in Exact contracts: the default is resolved **once at entry** (`deps.loadServices ?? loadCredentialServices`), every later line uses that binding, there is **no branch on `deps` anywhere** in `assembleRegistry`, and both consumer sites call `requiredClassesFor` unconditionally — so the tested path and the production path are one body. New mutation `required-classes-gated-on-deps` declared. |
+| **R3-F** | CONVERGED | LIGHT→HEAVY (item premise) | Item 8's "unreachable by conforming mail" is **false**: Gmail's API returns unfolded values, RFC 5322 §2.2.3 permits unfolded fields of any length, and a conforming phrase folded at ≤81 chars/line unfolds to 1 239 characters with no CR/LF. | **fix** — item 8 now states plainly that **the bound can refuse conforming mail**, names the cost (a legitimate long `Subject`, `References` chain or display name gets no reply drafted), and keeps the recommendation. The false premise is retracted in place. |
+
+### Re-executed as the NEW pipeline — 44 cases, 0 mismatches
+
+```text
+ok   refuse:step0-raw-over-998    R3-A: 4M whitespace-only Reply-To + VALID From -> refused AT THE BOUND
+ok   refuse:step0-raw-over-998    R3-A: 4M Subject / 4M Message-ID / 4M References -> refused at the bound
+ok   alice@example.org            R3-A: <=998 whitespace-only Reply-To + valid From -> falls through to From
+ok   refuse:step1-crlf            CR/LF in Subject beyond char 512 (and every other CR/LF family)
+ok   refuse:step0-raw-over-998    999-char From — one over the bound
+
+--- R3-B: the derived subject is NOT truncated ---
+  900-char Subject: accepted=true, derived length=904, equals "Re: "+source? true   (old rule truncated to 512)
+  boundary-emoji Subject: contains U+FFFD? false, round-trips? true
+  OLD rule on the same input would give: ..."xxx\ud83d"        <- a lone high surrogate
+  idempotent /^re:/i: "Re: already"
+  max derived subject length = 4 + 998 = 1002
+
+44 cases, 0 mismatch(es)
+```
+
+### Two measurements that did NOT come out as instructed — reported, not quietly followed
+
+Round 2's lesson was that a non-reproduction carries the same burden as any other
+claim, so both of these were run from a FILE, across six shapes and a 16× size
+range, before being written down.
+
+**1. The quadratic trim did not reproduce; `htrim` is LINEAR on this engine.**
+
+```text
+htrim  all spaces                        0.2      0.3      0.7      1.8      2.8   (n = 0.25M 0.5M 1M 2M 4M, ms)
+htrim  spaces + ONE trailing X           0.2      0.3      0.7      1.3      2.7
+htrim  X + spaces (trailing run)         0.2      0.3      0.7      1.3      2.8
+htrim  spaces + X + spaces               0.2      0.3      0.7      1.3      2.9
+htrim  alternating " X"                  1.2      1.3      2.6      5.2     10.4
+htrim  tabs + ONE trailing X             0.2      0.4      0.8      1.3      2.6
+```
+
+Every row scales with `n`, not `n²`. The plugin measured 74/299/1179 ms; I get
+0.7/1.8/2.8 ms at the same sizes. **This changes nothing about the fix** — the
+defect is *unbounded work on attacker-controlled input*, and linear is still
+unbounded; a 4 MB value costs ~3 ms of trim plus ~0.6 ms of CR/LF scan, against
+**0.012 ms** for the length comparison that now precedes both.
+
+**2. The instructed "linear predicate" is SLOWER than the trim it replaces**, so it
+is not prescribed:
+
+```text
+pred   all spaces                        1.5      1.0      2.1      4.2      8.4   (vs htrim 0.2 … 2.8)
+pred   tabs + ONE trailing X             0.5      0.9      1.8      3.8      7.2   (vs htrim 0.2 … 2.6)
+```
+
+Table B therefore fixes the **order** and says explicitly that, both operands being
+≤998 by step 0, **how the content test is written is not a contract question** —
+which is the same principle the whole contract rests on, applied one level down: a
+spec states the contract, never the implementation, and prescribing a measurably
+slower implementation on the strength of an unreproduced complexity claim is
+exactly the move the contract pass existed to stop.
+
+### One deliberate deviation from the instructed order — flagged
+
+The instruction was "after step 0's CR/LF scan, the 998 bound applies". **The bound
+is instead step 0, before the CR/LF scan.** Reason: a CR/LF scan of a 4 MB value is
+itself an unbounded operation (measured 0.61 ms, linear), so with the scan first the
+invariant would have to read "nothing unbounded before the bound, except this one
+scan". Bound-first makes it absolute and costs nothing. The only observable
+difference is which refusal a value that is both oversized *and* CR/LF-bearing
+receives; both refuse with zero `drafts.create` calls. Easily reverted if the
+orchestrator prefers the stated order.
+
+### V5 re-proved — nine mutants, from the block extracted VERBATIM
+
+```text
+COMPLIANT                                 exit=0  V5 OK: the verb table is exactly Table A's 9 names; exactly 5 …
+MUTANT type:'string'          (R3-D new)  exit=1  record differs from Table A
+MUTANT type:'array'           (R3-D new)  exit=1  record differs from Table A
+MUTANT extra top-level key    (R3-D new)  exit=1  record differs from Table A
+MUTANT id pattern removed                 exit=1  record differs from Table A
+MUTANT required emptied                   exit=1  record differs from Table A
+MUTANT capabilityClass changed            exit=1  record differs from Table A
+MUTANT extraClasses dropped               exit=1  record differs from Table A
+MUTANT cap 3->99                          exit=1  record differs from Table A
+MUTANT additionalProperties true          exit=1  record differs from Table A
+PINNED BASE                               exit=1  verb table is [… "create_draft" …]
+DELIVERABLE ABSENT                        exit=1  Cannot find module
+```
+
+### An editing accident found while applying R3-B
+
+Table B's **"no claim of measured Gmail acceptance"** bullet had been **silently
+dropped** by round 2's wholesale Table B rewrite — a deliberate non-claim lost to a
+section replacement, which no mirror checklist can catch because the mirror was the
+section itself. It is restored, now carrying the Gmail threads-guide citation, and
+labelled as restored. **Recorded as a recurrence of round 2's R2-D lesson at a
+larger granularity: after replacing a SECTION, re-read the section it replaced.**
+
+### STOP CRITERION — sharpened and FINAL for this contract
+
+**The loop closes** when one full round returns no product finding on either
+channel. All of round 3's findings were HEAVY, so **round 4 is a full fresh
+external round**, asked additionally to verify each round-3 fix is genuinely
+closed.
+
+- **(i) Table B — final form.** **Any Table B finding in round 4 that the executed
+  44-case table does not already refuse → STOP.** No further
+  dispatch-under-recommendation on Table B; the session waits for the owner. A
+  round-4 Table B finding that the executed table *does* already refuse is a
+  presentation finding and is LIGHT.
+- **(ii) Owner-boundary findings PARK.** Round 3 produced item 9 (the escalation's
+  disposition) and corrected item 8's premise. No grant, allowlist, cap, scope set,
+  or the deletion moved. The list is now **nine**.
+- **(iii) Scope objections** stay routed. Rounds 1, 2 and 3 produced zero.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -699,3 +851,6 @@ genuinely closed rather than re-worded — with R1-D as the standing example tha
 | 2 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-codex-plugin.txt` | `b2d987eb` | needs-attention, 0 scope objections — R2-A (A), R2-B (B), R2-C (A), R2-D (B, converged), R2-E (A, converged), R2-G |
 | 2 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-herdr-shadow.txt` | `dda7aaaa` | needs-attention, 0 scope objections — CR/LF-before-refusal (A, folded into the Table B contract pass), R2-D (B, converged), R2-E (A, converged), R2-F (B) |
 | 2 | **ADR-0031 breaker** | — | — | **FIRED on Table B** (2 findings round 1 + 3 round 2) → contract pass: Table B restated as an ORDER with bounds before parsing; 39-case pipeline executed, 0 mismatches |
+| 3 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-codex-plugin.txt` | `12e5ed44` | needs-attention, 0 scope objections — 1A + 2B + 2 LIGHT; no grammar finding outside the executed table |
+| 3 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-herdr-shadow.txt` | `7fd20a32` | needs-attention, 0 scope objections — 4A + 2B; five of six findings CONVERGED across channels |
+| 3 | **Stop criterion** | — | — | **FIRED** on two Table B rows → ruled by the orchestrator under the standing instruction as owner **item 9**: keep the code-derived-recipient verb; the two rows are the ORDER contract not yet applied to itself. Round-4 criterion sharpened to STOP |
