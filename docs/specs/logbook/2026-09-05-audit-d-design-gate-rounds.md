@@ -356,8 +356,115 @@ untouched, and no owner item or Table A/B value moved in this pass.**
 | E7 | "Criteria 1, 7, 9 and 11 carry no declaration" omits criterion 10. | **fix** (not left) — 10 is added with its reason: it is the meta-check over Table C and cannot declare a proof of itself; V3 is its check. |
 | E8 | Mirrored Surface Checklist said "the four test rows" without naming them. | **fix** — the four verb-name-pinning test files are spelled out. |
 
+## Round 1 — external double channel, 2026-09-05, on `f1db2f12`
+
+Both channels returned **needs-attention** with **zero scope objections** — the
+boundaries stated up front (no grant, no scope change, `send_digest_to_self` and
+the E2E harness out of scope, the reply-recipient residual accepted by ruling)
+were not contested by either reviewer. Every finding was reproduced by execution
+before adjudication, and the raws were committed **before** anyone read them:
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-codex-plugin.txt` | `6ca9f75f` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-herdr-shadow.txt` | `c8222247` |
+
+Five findings, **all FIX, all HEAVY** — Table B, criterion 8 and V5 are product and
+gate contracts, so the fixes change what the implementer builds.
+
+| # | Channel(s) | Band | Finding | Disposition — what changed |
+|---|---|---|---|---|
+| **R1-A** | plugin high/A **+** shadow A — **CONVERGED** | HEAVY | Table B's "harvest the `<…>` groups" candidate extraction is wrong three ways: `alice@example.org (backup <old@example.net>)` selects the **comment's** address; `victim@example.com, Attacker <attacker@example.com>` yields ONE candidate — the bracketed one — silently dropping the bare mailbox, so criterion 4's exactly-one refusal never fires; and the valid `"Team <east>" <alice@example.org>` is refused. | **fix** — extraction and count rows replaced by an **anchored whole-value single-mailbox grammar**: the entire trimmed header value must match `^(ADDR)$` or `^(?:(?:<quoted-string>\|<plain atoms>)[ \t]+)?<[ \t]*(ADDR)[ \t]*>$`, nothing after the `>`. A grammar anchored over the whole value cannot ignore part of it, which is the property harvesting lacked. The four refused families are now stated in Table B, in criterion 4, and in the `[AUD-D3]` identity name; criterion 3 and the `[AUD-D2]` identity name carry the accepted forms (bare, plain display name, quoted display name containing `<`/`,`, `Reply-To` precedence). |
+| **R1-B** | plugin medium/B | HEAVY | The round-0 pattern `^[^\s<>,;:"\\]+@[^\s<>,;:"\\]+\.[^\s<>,;:"\\]+$` **accepts** `user@[192.0.2.1]` and `alice@relay@example.org`, while the prose and owner item 7 both claim address literals are refused. | **fix** — `ADDR` now excludes `@`, `[` and `]` from both sides, so exactly-one-`@` is structural and an address literal cannot match; both cases are named as required `[AUD-D3]` fixtures. **Owner item 7's RECOMMENDATION stands unchanged — only its premise was misstated**, and the spec now says so in place. |
+| **R1-C** | plugin high/A **+** shadow A — **CONVERGED** | HEAVY | `extra-classes-dropped` mutates only `requiredClassesFor`; both production consumers (`gws-broker.js:95` derivation, `:121-128` pre-dispatch refusal) can stay on the old single-class derivation with `[AUD-D6]` still PROVEN. The plugin reproduced in memory that with DRAFT unavailable, `getProfile` ran and the model saw the masked `broker verb … failed` instead of the fixed class-unavailable refusal. | **fix** — criterion 8 now drives the **real** `assembleRegistry` for **both** new verbs in **three** credential states (READ missing / DRAFT missing / both present), asserting the exact fixed sentence and **zero** Google calls on a missing class, and the handler reached when both load. Seam chosen: **injected credential loading** (`assembleRegistry(paths, profile, deps)` with `deps.loadServices`, exported beside `compositeServices`) over an exported pure "assembly plan" — a pure plan is one more API a consumer can simply stop calling, which is the exact failure this finding is. `[AUD-D6]` moves to `tests/unit/gws-broker.test.js` (which already drives that file, `:12,:34,:54`), and Table C gains **two** more mutations, one per consumer site. **Table C now spans two suites, so two declaration files** — its "one suite" sentence and both Deliverables rows changed with it. |
+| **R1-D** | plugin medium/B | HEAVY | The residual's provenance claim "the recipient must already have mailed the user" is **false** under `Reply-To` precedence: `From: attacker` with `Reply-To: third-party@example.net` addresses someone who never wrote. | **fix** — swept as a CLAIM, whitespace-flattened, not as a wording: three sites carried it (Context's "Named residual", the T4a paragraph quoted in Exact contracts, and Table A's cap-10 rationale). All three now say the recipient is **nominated by the selected message's author** (`Reply-To`, else `From`) and **may be an unrelated third party**; what is bounded is that the model cannot choose it. Re-swept afterwards: zero hits. **Owner item 4's recommendation (Reply-To first) is unchanged.** |
+| **R1-E** | shadow A | HEAVY | V5 was a **denylist**: the shadow executed a synthetic schema declaring `destination` and V5 exited **0**. It also selected its set through the mutable `service` field, so a reclassified verb drops out of the check entirely. | **fix** — V5 now enumerates the intended shape instead of the forbidden one: it pins the exact nine-name verb table, the exact five gmail-service names, and for each of those five its `service`, `additionalProperties: false`, and its **exact** input property set from Table A. Criterion 1's universal quantifies over that asserted set. This is the repo's own lesson — enumerating your OWN GOOD is closable, enumerating the BAD is not — and V5 has now been wrong twice in exactly the two ways a one-directional run cannot see. |
+
+### R1-A / R1-B validated by EXECUTION, not by reading
+
+The grammar was run against 21 cases, side by side with the round-0 rule, before it
+entered the spec. Exit 0, 21/21 as intended; **7 rows CHANGED**, and every change is
+a round-1 defect closing:
+
+```text
+result   | new                  | old (round 0)        | input
+ok       | alice@example.org    | null                 | "\"Team <east>\" <alice@example.org>" <-- CHANGED
+ok       | null                 | old@example.net      | "alice@example.org (backup <old@example.net>)" <-- CHANGED
+ok       | null                 | old@example.net      | "alice@example.org (backup <old@example.net>" <-- CHANGED
+ok       | null                 | attacker@example.com | "victim@example.com, Attacker <attacker@example.com>" <-- CHANGED
+ok       | null                 | attacker@example.com | "Attacker <attacker@example.com> more" <-- CHANGED
+ok       | null                 | user@[192.0.2.1]     | "user@[192.0.2.1]" <-- CHANGED
+ok       | null                 | alice@relay@example.org | "alice@relay@example.org" <-- CHANGED
+
+21 cases, 0 mismatch(es)
+```
+
+Unchanged and still correct: bare addr-spec, `<addr>`, plain display name, quoted
+display name containing a comma, punctuation in a display name, surrounding
+whitespace, multiple bracketed mailboxes, two bare mailboxes, groups, trailing text
+on a bare value, `user@localhost`, the empty value, and a CR/LF smuggling attempt
+(refused by the grammar **before** `assertHeaderSafe` is reached).
+
+### R1-E re-proved in four directions, the block taken VERBATIM from the spec
+
+The V5 text was extracted from the spec's own fenced block and executed as written —
+the escaping inside a single-quoted `node -e` is a gate-shape risk the repo has been
+bitten by, so it was run rather than read.
+
+```text
+COMPLIANT        exit 0  V5 OK: 9 verbs, 5 with service===gmail, each with exactly Table A's
+                         input properties and additionalProperties:false
+MUTANT           exit 1  V5 FAIL: create_draft_to_self input properties are
+ (`destination`)         ["body","destination","subject"], Table A says ["body","subject"]
+PINNED BASE      exit 1  V5 FAIL: verb table is [… "create_draft" …], Table A is [… ];
+ (create_draft)          service==='gmail' is [… "create_draft" …]; create_draft_to_self is absent;
+                         create_reply_draft is absent
+DELIVERABLE      exit 1  require of ./src/gws/broker/verbs.js throws
+ ABSENT
+```
+
+The MUTANT column is the finding itself: that schema passed the round-1 V5 with
+exit 0.
+
+### STOP CRITERION — restated, because HEAVY fixes trigger a fresh round
+
+Unchanged in substance from round zero, restated as the rule requires:
+
+**The loop closes** when one full round returns **no product finding on either
+channel** — product being `src/` behaviour, the ADR contract, or anything a user or
+a consuming model observes. Machinery findings open at that point are fixed within
+the existing surface or accepted as named residuals; they do not extend the loop,
+and verification machinery grows only to guard a product behaviour, in the smallest
+form that guards it. **All five round-1 findings were HEAVY, so round 2 is a full
+fresh external round on both channels**, asked additionally to verify each round-1
+fix is genuinely closed rather than re-worded.
+
+**Escalation:**
+
+- **(i) Repeat-kind → contract extraction, never a third patch. CIRCUIT-BREAKER
+  WATCH IS ARMED ON TABLE B.** Round 1 landed **two** Table B findings (R1-A and
+  R1-B) from **two** channels in a single round. Round 2 is therefore the second
+  consecutive round in which a Table B finding would make this a repeat kind: **if
+  round 2 lands any further Table B finding, that is escalation (i)** — the next
+  step is an ADR-0031 contract-extraction pass on the recipient-derivation
+  contract (pull every scattered fact into Table B, re-register every mirror), not
+  another textual patch. Say so explicitly in that round's record.
+- **(ii) Owner-boundary findings PARK.** A finding whose only honest fix would
+  change an owner-ruled value (Table A's caps), add a grant, widen a `brokerVerbs`
+  allowlist or an OAuth scope set, or reopen a rejected alternative
+  (mandatory-self; gating DRAFT behind a grant) becomes a new
+  Dispatch-precondition item with a recommendation and its overrule cost. **Round 1
+  forced none**: item 7's premise was corrected while its recommendation stood, and
+  item 4's recommendation is untouched by R1-D. **No new owner item; the list stays
+  at seven.**
+- **(iii) Scope objections** stay routed rather than counted. Round 1 produced
+  zero.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
 |---|---|---|---|---|
 | 0 | architect (this record) | — | — | template-conformant; 12 coherence findings dispositioned; V4/V5 proven in three states; 7 owner items parked; stop criterion pinned |
+| 0 | orchestrator executors | — | — | template CONFORMS; 8 coherence findings, all LIGHT, folded before round 1 |
+| 1 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-codex-plugin.txt` | `6ca9f75f` | needs-attention, 0 scope objections — R1-A (high/A), R1-B (medium/B), R1-C (high/A), R1-D (medium/B) |
+| 1 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-herdr-shadow.txt` | `c8222247` | needs-attention, 0 scope objections — R1-A (A, converged), R1-C (A, converged), R1-E (A) |
