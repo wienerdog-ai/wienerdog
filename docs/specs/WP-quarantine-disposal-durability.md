@@ -75,8 +75,9 @@ synchronous call that has returned before the function containing it does.
 ## Watch out
 
 - **Do not re-open the success path.** `WP-quarantine-preserve-durability`'s Table
-  F owns the flush protocol, its order, its created-ancestor walk, its POSIX-only
-  scope and the byte-exact guarantee sentence. Cite it; restate none of it. In
+  F owns the flush protocol, its order, its **fixed directory chain ending at the
+  core anchor**, its POSIX-only scope, the no-clobber commit, the descriptor-bound
+  identity check and the byte-exact guarantee sentence. Cite it; restate none of it. In
   particular the guarantee sentence is spec-owned there and pinned by that
   package's V1 — a second copy of it in this file would fail that check.
 - **Do not re-litigate the abort.** `WP-preservation-abort-widening`'s Table P and
