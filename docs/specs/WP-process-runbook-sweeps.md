@@ -1,7 +1,7 @@
 ---
 id: WP-process-runbook-sweeps
 title: Codify the paid-for review and sweep disciplines into the runbooks
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -562,7 +562,7 @@ here rather than growing polarity or insertion-point parsing (`codex-review.md:1
   contract, which is `codex-review.md` itself.
 - **Any product change, test, script or tooling to enforce these rules.**
   Nothing enforces them automatically and nothing should: each is one more line
-  in a record that is already being written (`codex-review.md:79-81`).
+  in a record that is already being written (`codex-review.md:80-81`).
 
 ## Definition of done
 

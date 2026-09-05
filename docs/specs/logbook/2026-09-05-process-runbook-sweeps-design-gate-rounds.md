@@ -1706,9 +1706,11 @@ hygiene.
 
 **Then, applied PER FINDING, first match wins:**
 
-1. **Scope** — the finding argues a rule should not land at all, or should land
-   outside the Deliverables table → **OWNER item**, carrying a recommendation and
-   the enumerated overrule cost. The loop continues on the remaining findings.
+1. **Scope** — the finding argues that a rule Table A does **not** land (UNPAID,
+   ALREADY BOUND) should land after all, or that a landed rule should not, or that
+   one should land outside the Deliverables table → **OWNER item**, carrying a
+   recommendation and the enumerated overrule cost. The loop continues on the
+   remaining findings. (The first arm is exactly O4's reopen path for R19.)
 2. **Disposition** — it changes a Table A disposition → **DESIGN**: re-derive the
    whole set mechanically with the sweep's ids aligned to Table A's, and update
    every registered mirror in the same commit. Never a row patch.
@@ -1766,6 +1768,77 @@ previous text now each land on exactly one branch: a change to the global
 operative/provenance contract → **5**; a repeated screen finding → **7**, whose
 FALLBACK is an action while the round still aggregates LIGHT; a
 FALLBACK-plus-LIGHT round → **LIGHT**, with no unrankable outcome.
+
+## Closure — mechanical verification on `7f617dcb`
+
+A clean-context mechanical verifier re-ran every runnable claim on `7f617dcb`.
+Quoting what it confirmed:
+
+- HEAD `7f617dcb`, porcelain empty, diff scope = the spec + 6 logbook files only.
+- Screen on the untouched tree: **21 FAIL / 0 PASS**, `anchors processed=21
+  declared=21`, `sentinels exit=1`.
+- Dirty-tree **REFUSED** (untracked file, then porcelain back to empty);
+  bad-index **REFUSED** naming rc=128.
+- Hand-built compliant scratch copy: **21 PASS, exit 0**. One reworded anchor →
+  **exactly 1 FAIL**. Uncommitted anchor → **REFUSED, not PASS**.
+- `npm run lint` **rc=0** (0 errors, 268 spec(s) / 4 agent(s));
+  `git diff --check main HEAD` **rc=0**.
+- Mirror walk: Table A **19 rows** with 1/9/8/1; Table B **17 rows** with 9 EXTEND
+  / 8 NEW rows over **14 edit points**; anchor set Table B ↔ DATA **equal in both
+  directions at 21**; Table B files ↔ Deliverables `modify` rows equal; O3's list
+  = ALREADY BOUND ∪ PARTIAL; the Implementation-notes aggregate recomputed
+  exactly.
+- All nine round-1/round-2 "what changed" spot checks present; **44 of 45** spec
+  citations exact at both ends; **six of seven** synthetic findings routed to
+  exactly one branch.
+
+Three items came back, **all band C**. Under **step 0** of the canonical
+criterion — a round whose findings are all band C closes, hygiene fixed in place,
+no branch consulted — **the loop is CLOSED**.
+
+| # | Band | Disposition | Reason / what changed |
+|---|------|-------------|-----------------------|
+| V1 | C | **DROP — not a defect** | See below |
+| V2 | C | fix | Implementation notes cited `codex-review.md:79-81` for "one more line in a record that is already being written"; the phrase begins at `:80`. Corrected to `:80-81`. Swept the spec and this record: one citation, now right (the record's other hit is a range-dump paste, not a citation) |
+| V3 | C | fix (record only) | Branch 1 widened so a "this rule should land after all" finding routes: it now reads "a rule Table A does **not** land (UNPAID, ALREADY BOUND) should land after all, or a landed rule should not, or one should land outside the Deliverables". Applied to the **canonical text only** — the superseded round-2 copy is left verbatim, as a record of what round 2 was judged against |
+
+**V1 — why the fence's process exit is not a defect.** The verifier ran the whole
+Verification-steps fence as one script and observed its process exit is 0 even in
+RED and REFUSED states, because the fence continues past the screen (`grep`,
+`git diff`, `npm run lint`) and never ends in `exit "$rc"`. That is what the fence
+is: **a list of commands whose OUTPUT the implementer pastes**, exactly like
+`_TEMPLATE.md`'s own fence (`npm test …` then `npm run lint`) and every other spec
+in this repo. The screen's own status is captured on the very next line as
+`rc=$?` and printed as `anchor screen rc=…`, which is the evidence Definition of
+done item 1 asks for. An `exit` there would skip every remaining check and make
+the fence worse.
+
+**And V1 is not a screen finding**, so branch 7's standing FALLBACK note does not
+fire. The screen script itself exited **1 in every red and refused state** — the
+verifier's own table above shows exactly that. V1 is about the surrounding fence's
+aggregate process status, which no rule of this WP ever claimed. A reader arriving
+at the FALLBACK note will ask; this paragraph is the answer.
+
+### The seven synthetic findings, re-routed through the amended branch 1
+
+| # | Synthetic finding | Branch | Outcome |
+|---|-------------------|--------|---------|
+| i | Changes Table B's operative content but not its disposition or landing file | 4 | HEAVY |
+| ii | Argues a landed rule should be dropped | 1 | OWNER item |
+| iii | A repeated screen-only finding | 7 | LIGHT + FALLBACK action |
+| iv | Changes the spec's global operative/provenance contract, no Table A/B row touched | 5 | HEAVY |
+| v | A FALLBACK finding alongside a LIGHT one | 7 + round rule | LIGHT |
+| vi | A registered mirror disagrees with a correct canonical table | 6 | LIGHT |
+| vii | **"R19 should land after all"** | **1** (was: none) | OWNER item — O4's reopen path |
+
+**Seven of seven now route to exactly one branch.** (vii) previously matched
+nothing: branch 1 covered a rule that should *not* land, never the reverse, and no
+later branch reaches a rule that Table A does not land at all.
+
+### Closing state
+
+The loop is closed under step 0, and the spec's `status:` is flipped
+`Draft → Ready` in the same commit as these two fixes — the architect's act.
 
 ## External rounds (round 3 onward, if any)
 
