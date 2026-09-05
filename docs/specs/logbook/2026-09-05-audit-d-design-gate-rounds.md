@@ -1276,6 +1276,62 @@ question. What the loop actually converged on, in one line: *bound what you read
 bound what you build, in the unit the consumer counts, and prove each check where
 the property lives.*
 
+## Implementation — erratum 1: the skill-digest anchor was not a Deliverables row
+
+**2026-09-05, found at implementation on PR #224 (branch
+`wp/audit-d-code-derived-recipients`, head `e66783b8`), before the PR gate.**
+
+**What.** The spec's Deliverables table listed the two vendored
+`skills/*/SKILL.md` files this WP rewrites, but **not**
+`src/core/runtime-skill-digests.json` — the checked-in integrity anchor that
+records the sha256 of each operating skill's raw bytes
+(`src/core/runtime-settings.js:25-34`: *"Regenerated in the same PR whenever a
+vendored operating skill legitimately changes"*). Editing either `SKILL.md` moves
+its digest, so the WP as specified **could not be implemented in a green state**:
+13 tests failed — the drift guard
+`runtime-settings: every shipped operating skill matches its checked-in digest`
+plus everything that loads the two skills. Merged as written, weekly-review and
+inbox-triage would have refused to run at all: *"refusing to run tampered skill
+text"*.
+
+Measured on the implementation branch — the drift is exactly the two edited
+skills, and only those two:
+
+```text
+wienerdog-inbox-triage     dbb82b44…  (checked in: e9f05dd8…)   MOVED
+wienerdog-weekly-review    cf242bf4…  (checked in: e335d4fe…)   MOVED
+wienerdog-dream            60fde183…  (checked in: 60fde183…)   identical
+wienerdog-daily-digest     18035545…  (checked in: 18035545…)   identical
+```
+
+**The boundary worked.** The implementer did not touch the unlisted file — it
+stopped and reported, which is exactly what the permission boundary is for. The
+cost of the omission was one red PR, not a silently broken integrity anchor.
+
+**Why six rounds missed it.** Every round attacked the *recipient* contract —
+the grammar, the ordered steps, the bounds, the proofs. **No round ever drove a
+`SKILL.md` edit through the runtime loader**, and no round asked the question that
+would have caught it: *what else does editing this file move?* The two `SKILL.md`
+rows were reviewed for their **content** (does the prose name the right verb?) and
+never for their **consequences**. Adversarial review is bounded by the surface the
+focus text points at, and every focus text this loop wrote pointed at the
+derivation.
+
+**Fixed in the spec** (docs-only, on the implementation branch, status stays
+`In-Review`): the Deliverables row is added — nineteen rows to twenty — with the
+exact regeneration rule in Exact contracts (lowercase sha256 hex of the raw bytes,
+no normalisation; exactly four keys; the other two byte-identical), acceptance
+criterion **10a** whose observable is the already-shipped drift guard, a note on
+V1, and a **Mirrored Surface Checklist** entry that ties the digest row to the
+`SKILL.md` rows so the pair cannot drift apart again.
+
+**This is the same class the durability WP's round-1 reviewer caught**: a
+Deliverables table that lists the file a change *edits* but not the file that
+change *invalidates*.
+
+**The lesson, one line: a spec that edits a vendored operating skill lists the
+digest anchor as a Deliverables row.**
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -1294,6 +1350,7 @@ the property lives.*
 | 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
 | 6 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-codex-plugin.txt` | `67b04075` | needs-attention — R6-A (converged), R6-C, R6-D; **111 pipeline cases executed; no product finding** |
 | 6 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round6-herdr-shadow.txt` | `41a51070` | needs-attention — R6-A (converged), R6-B (converged), R6-D (converged), R6-E; **full pipeline + boundary probes; no product finding** |
+| impl | **ERRATUM 1** | PR #224 @ `e66783b8` | — | `src/core/runtime-skill-digests.json` missing from Deliverables; editing a vendored `SKILL.md` moves its digest. 13 tests red. Spec fixed docs-only on the implementation branch; rows 19 → 20 |
 | 6 | **WEIGHTED CLOSURE** | — | — | **LOOP CLOSED.** Zero product findings on both channels; machinery fixed in-surface; no round 7. Spec → `Ready` |
 | 5 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-codex-plugin.txt` | `3d80d955` | needs-attention — R5-A (A, converged), R5-B (B, **unlicensed change caught**); two objections routed |
 | 5 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-herdr-shadow.txt` | `6b3857a2` | needs-attention — R5-A (A, converged), R5-C (A, product), R5-D (dissolved), R5-E (C) |

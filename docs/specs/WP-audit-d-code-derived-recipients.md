@@ -173,6 +173,18 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+> **Erratum 1 — 2026-09-05, found at implementation, before the PR gate.**
+> `src/core/runtime-skill-digests.json` was missing from this table. Editing a
+> vendored operating skill changes its sha256, and that file is the checked-in
+> integrity anchor (`src/core/runtime-settings.js:25-34`), so the two `SKILL.md`
+> rows below could not be satisfied without it: the drift guard fails, and a merge
+> would leave weekly-review and inbox-triage refusing to run with *"refusing to run
+> tampered skill text"*. The implementer correctly did **not** touch it and
+> reported it instead — the boundary worked. **This is a permission-boundary
+> overrun of the same class the durability WP's round-1 reviewer caught**: a
+> Deliverables table that lists the file a change edits but not the file that
+> change invalidates.
+
 <!-- Always allowed without listing: this spec file itself (the status flip),
      package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
 
@@ -184,6 +196,7 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 | modify | src/core/runtime-profile.js | `inbox-triage` → `['gmail_search','gmail_read','create_reply_draft']`; `weekly-review` → `['create_draft_to_self']`; update the `:113` comment to name the new verb |
 | modify | skills/wienerdog-inbox-triage/SKILL.md | name `create_reply_draft`; the Draft section says the reply goes to the message id, not to an address |
 | modify | skills/wienerdog-weekly-review/SKILL.md | name `create_draft_to_self`; delete "with the user's own address as `to`" |
+| modify | src/core/runtime-skill-digests.json | regenerate the two entries whose `SKILL.md` this WP edits (`wienerdog-inbox-triage`, `wienerdog-weekly-review`) — the ADR-0021-style integrity anchor; the other two entries are byte-identical and must not move |
 | modify | docs/GLOSSARY.md | line 36's example list: `create_draft` → `create_draft_to_self` |
 | modify | docs/THREAT-MODEL.md | T4a only: `:138` gains the drafts sentence; the named residual is added as its own paragraph after `:140`'s (Exact contracts) |
 | modify | docs/adr/0026-gws-capability-broker.md | §2's draft bullet (`:152-153`) and a new **Amendment 2** appended after the Amendment 1 block (Exact contracts) |
@@ -290,6 +303,23 @@ ruling requires a refusal that did not previously exist. Neither is
 never be the message a `create_reply_draft` refusal produces** — that is the
 property `[AUD-D5]` asserts. It never reads the message body, and it never accepts
 an address from its caller.
+
+**`src/core/runtime-skill-digests.json` — how to regenerate.** Each value is the
+**lowercase sha256 hex of the RAW bytes** of `skills/<skillId>/SKILL.md` exactly as
+committed — **no newline, whitespace or encoding normalisation of any kind**
+(`src/core/runtime-settings.js:25-34`). Regenerate **only** the two entries whose
+skill this WP edits:
+
+```bash
+shasum -a 256 skills/wienerdog-inbox-triage/SKILL.md
+shasum -a 256 skills/wienerdog-weekly-review/SKILL.md
+```
+
+The file keeps **exactly four** keys — `wienerdog-dream`,
+`wienerdog-daily-digest`, `wienerdog-inbox-triage`, `wienerdog-weekly-review` — and
+the first two values must be **byte-identical** to their current entries, because
+this WP does not touch those skills. A test pins both facts (the key set and the
+64-hex-digit shape), so an added, removed or renamed key fails.
 
 **`create_draft_to_self`'s handler** mirrors `verbs.js:197-201` exactly: resolve
 via `getProfile`, and when the result carries no `@`, throw
@@ -679,6 +709,7 @@ added here on the spot.
 - [ ] **Table B** ← the Gmail-threading bullet (step 5's no-truncation rule is what satisfies the Subject-match condition)
 - [ ] **Table B** ← Table C's `[AUD-D3]` / `[AUD-D5]` / `[AUD-D7]` fixture-ownership paragraph
 - [ ] **Table B** ← the T4a residual paragraph quoted in Exact contracts (the `Reply-To`-else-`From` sentence)
+- [ ] **Erratum 1** ← the Deliverables row for `src/core/runtime-skill-digests.json`, the Exact-contracts regeneration rule, acceptance criterion 10a, and V1's drift-guard note — **whenever a `skills/*/SKILL.md` row is added to or removed from Deliverables, this set moves with it**
 - [ ] **Table C** ← the Deliverables rows for **all three** `.proofs.json` files and for `tests/unit/gws-broker.test.js` and `tests/unit/gws-gmail.test.js`, acceptance criterion 10, and verification step V3
 - [ ] **Table B** ← the two "consequences" bullets under Table B (the whole-value-grammar rationale and the fail-closed narrowing)
 - [ ] **Table B** ← the `[AUD-D2]` and `[AUD-D3]` identity names in Table C, and the masking-trap note beneath it
@@ -824,13 +855,26 @@ added here on the spot.
        and, for `weekly-review`, `mcp__wienerdog-broker__create_draft_to_self` —
        exact names, no wildcard. (V1)
 10. [ ] Every declaration in Table C reports `PROVEN`. (V3)
+10a. [ ] **The vendored-skill integrity anchor is back in step with the two edited
+        skills**: `src/core/runtime-skill-digests.json` carries the regenerated
+        sha256 of each edited `SKILL.md`, still holds exactly the four operating
+        skills, and leaves `wienerdog-dream` and `wienerdog-daily-digest`
+        byte-identical. **Observable — already shipped, no new test:**
+        `runtime-settings: every shipped operating skill matches its checked-in
+        digest (drift guard)` and `runtime-settings: the digest map covers EXACTLY
+        the 4 fixed operating skills` both pass, and nothing anywhere reports
+        *"refusing to run tampered skill text"*. (V1) *(Erratum 1.)*
 11. [ ] Idempotence — `N/A — this WP ships no command and writes nothing outside
         the repo; it changes broker verb definitions and their callers only.`
 
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# V1 — full suite (baseline at 8c52808f: tests 2630 / pass 2618 / fail 0 / skipped 12)
+# V1 — full suite (baseline at 8c52808f: tests 2630 / pass 2618 / fail 0 / skipped 12).
+# This is also where the vendored-skill drift guard runs (Erratum 1): editing a
+# SKILL.md without regenerating src/core/runtime-skill-digests.json fails
+# `runtime-settings: every shipped operating skill matches its checked-in digest
+# (drift guard)` and every test that loads either edited skill.
 node tests/with-temp-root.js tests/run.js
 
 # V2 — lint
