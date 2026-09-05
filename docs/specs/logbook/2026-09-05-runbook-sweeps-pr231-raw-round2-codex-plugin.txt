@@ -1,0 +1,30 @@
+# PR gate raw — Codex plugin review (review --wait --scope branch --base main) — WP-process-runbook-sweeps
+# tip reviewed: 3ce5ba57cab5ceafe053b14edc2b90f83dde9db0 ; base main = e119b607e2f9304ccafbdc714c67431d333b7b25 ; committed pre-adjudication
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0731a-ead5-77b2-b1ce-55992f28b6aa).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'git diff --stat e119b607e2f9304ccafbdc714c67431d333b7b25; find .. -name AGENTS....
+[codex] Command completed: /bin/zsh -lc 'git diff --stat e119b607e2f9304ccafbdc714c67431d333b7b25; find .. -name AGENTS.... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; git diff e119b607e2f9304ccafbdc714c67431d333b7b25; cat docs/spec...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; git diff e119b607e2f9304ccafbdc714c67431d333b7b25; cat docs/spec... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,210p' docs/specs/WP-process-runbook-sweeps.md; git diff e119b607e2f93...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,210p' docs/specs/WP-process-runbook-sweeps.md; git diff e119b607e2f93... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git diff e119b607e2f9304ccafbdc714c67431d333b7b25 -- do...
+[codex] Command completed: /bin/zsh -lc 'git status --porcelain; git diff e119b607e2f9304ccafbdc714c67431d333b7b25 -- do... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,re; s=pathlib.Path(\"docs/specs/WP-proces... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,175p' docs/runbooks/codex-review.md; grep -n -A30 -B3 'STOP CRITERION...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,175p' docs/runbooks/codex-review.md; grep -n -A30 -B3 'STOP CRITERION... (exit 0)
+[codex] Command completed: /bin/zsh -lc 'npm run lint' (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: Reviewed tip 3ce5ba57cab5ceafe053b14edc2b90f83dde9db0 against the supplied merge base. The do...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+Reviewed tip 3ce5ba57cab5ceafe053b14edc2b90f83dde9db0 against the supplied merge base. The documentation changes match the work-package contract without actionable defects. Lint passed, and a read-only equivalent check verified all 21 committed anchors; product tests were not run.
+# plugin exit=0 ; porcelain before/after: identical
