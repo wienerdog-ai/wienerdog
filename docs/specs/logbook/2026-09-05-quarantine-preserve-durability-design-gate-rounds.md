@@ -292,6 +292,46 @@ splits round-trip byte-exactly, which is what V2's reconstruction depends on.
 - **The disposal half is scoped out, not analysed.** `WP-quarantine-disposal-durability`
   is a stub whose first job is the value question, which may answer "no".
 
+## Round zero — orchestrator's executors, 2026-09-05, on `284144db`
+
+Two clean-context executors (claude-sonnet-5, read-only; raws
+`2026-09-05-durability-round0-raw-template-executor.txt` and
+`…-coherence-executor.txt`, committed pre-adjudication in `f000d006`):
+
+- **Template conformance: CONFORMANT in practice.** Every template section is
+  present, named and ordered as the template has it; the frontmatter passes
+  `scripts/check-frontmatter.js` (268 specs, 4 agents, both `depends_on` and all
+  ADR ids resolve); the verification block is one extractable fence. The five
+  deviations listed are each a precedented corpus convention (the `Dispatch
+  precondition` section and the "Explicitly NOT in the boundary" bullets, both
+  shipped by the Ready `WP-quarantine-banner-location`; bare `Contract reference`
+  / `Security checklist` headings; letter-named canonical tables). The executor's
+  one substantive observation is about the REPO, not this spec: the Draft-stub
+  shape `WP-quarantine-disposal-durability` follows (blockquote + partial
+  sections, no `N/A —` placeholders) is what fourteen of the seventeen Draft
+  stubs in `docs/specs/` use and is documented nowhere in `_TEMPLATE.md` or
+  `spec-authoring.md` → **routed to `WP-process-runbook-sweeps`** as a runbook
+  gap, not counted.
+- **Coherence: 1 finding, C, DROPPED.** Under Implementation notes the five
+  byte-exact source forms sit inside one bulleted list item, so fences (b)–(d)
+  carry a two-space list margin over their real two-space indent while (a)'s raw
+  bytes happen to equal the real form. Measured to have zero contract effect:
+  `scripts/red-proofs.js` counts unanchored substrings, every `find` still occurs
+  exactly once in a candidate built from the forms, every marker is absent
+  pre-mutation and present once post-mutation, all five mutants pass
+  `node --check`; the prose beside each fence and the top-level Table C JSON both
+  state the real indent. Everything else the executor re-derived matched the
+  architect's round zero: the empty `fsync` grep, the one-function seam, the
+  Node measurements (`F_FULLFSYNC` undefined, `fsyncSync` → `undefined`,
+  `mkdirSync({recursive:true})`'s three return states), the seven string-path
+  `patchFs('writeFileSync')` injections, P0b (6 cells, clause in cell 5) and B3b
+  (3 cells, clause in cell 2), the V-block untouched → `rc=1` byte-identical to
+  the spec's claimed output, deliverable-absent → `MISSING DELIVERABLE`, the
+  compliant candidate → `V1 OK / V2 OK` and `5/5 PROVEN` red-proofs, and item 3's
+  scoping against the banner spec's Out of scope (no gap).
+
+Round zero is closed with no change to the spec. External rounds follow.
+
 **STOP CRITERION (pinned before round 1):** the loop closes when an external round
 returns no material design finding on either channel — a preserved artifact that
 can still be reported successful without a completed flush; a directory entry the
