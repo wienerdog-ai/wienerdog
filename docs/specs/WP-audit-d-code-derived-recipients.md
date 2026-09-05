@@ -473,8 +473,10 @@ still holds and these two properties must be re-measured.
 
 #### The executed case table (criteria 3, 4, 5 and 6 quantify over this)
 
-**44 cases, executed as the ordered pipeline — not as a regex — with 0 mismatches
-before this table entered the spec.** The run is in
+**47 cases, executed with 0 mismatches before this table entered the spec** — 44
+driven through the ordered pipeline end to end, plus the 3 step-5 subject rows
+asserted directly on the derived subject. (An earlier draft said "44", counting
+only the pipeline array; the table has always listed 47.) The run is in
 `docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md`. The implementer's
 tests must cover every row; Table C names the identity that owns each family.
 
@@ -549,8 +551,8 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 | ″ | `[AUD-D6]` | `extra-classes-dropped-refusal` | 8 | at consumer site `gws-broker.js:121-128`, gate the pre-dispatch refusal on the verb's own `capabilityClass` alone — the mutant then dispatches and the model sees the masked `broker verb … failed` |
 | ″ | `[AUD-D6]` | `required-classes-gated-on-deps` | 8 | make both consumer sites consult `requiredClassesFor` **only when `deps.loadServices` was supplied**, keeping the single-class derivation otherwise — the mutant passes every injected case and reddens only the no-`deps` assertions |
 
-The three `[AUD-D6]` declarations are one per SITE — the helper and each of its two
-consumers — because round 1's finding was precisely that a correct helper does not
+The `[AUD-D6]` declarations are one per SITE — the helper, each of its two
+consumers, and the `deps`-conditional shape — because round 1's finding was precisely that a correct helper does not
 constrain its callers. All three redden the same identity, which is what makes the
 identity's three-state assertion the thing being proved rather than the helper's
 return value.
@@ -595,7 +597,7 @@ added here on the spot.
 
 - [ ] **Table A** ← Deliverables rows for `verbs.js`, `runtime-profile.js`, both `SKILL.md`s, `docs/GLOSSARY.md`, `docs/adr/0026-…` (Amendment 2's verb names), and the four verb-name-pinning test rows (`broker-registry.test.js`, `broker-wiring.test.js`, `routine-runtime.test.js`, `routines-skill-structure.test.js`)
 - [ ] **Table A** ← acceptance criteria 1 (the full-record compare), 2, 7, 8, 9
-- [ ] **Table A** ← verification steps V4 (the deleted name) and V5, which pins the nine names, the five gmail names, and each gmail verb's exact input property set
+- [ ] **Table A** ← verification steps V4 (the deleted name) and V5, which pins the nine names, the key-equals-name tie, and all nine complete records
 - [ ] **Table A** ← Current state's "The verb table" and "The allowlists" paragraphs
 - [ ] **Table A** ← Exact contracts' `extraClasses` and `create_draft_to_self` paragraphs
 - [ ] **Table B** ← Deliverables row for `src/gws/gmail.js`; Exact contracts' `replyTarget` (the step order), `buildMime` and `draft` paragraphs
@@ -603,7 +605,7 @@ added here on the spot.
 - [ ] **Table B** ← the Gmail-threading bullet (step 5's no-truncation rule is what satisfies the Subject-match condition)
 - [ ] **Table B** ← Table C's `[AUD-D3]` / `[AUD-D5]` / `[AUD-D7]` fixture-ownership paragraph
 - [ ] **Table B** ← the T4a residual paragraph quoted in Exact contracts (the `Reply-To`-else-`From` sentence)
-- [ ] **Table C** ← the Deliverables rows for **both** `.proofs.json` files and for `tests/unit/gws-broker.test.js`, acceptance criterion 10, and verification step V3
+- [ ] **Table C** ← the Deliverables rows for **all three** `.proofs.json` files and for `tests/unit/gws-broker.test.js` and `tests/unit/gws-gmail.test.js`, acceptance criterion 10, and verification step V3
 - [ ] **Table B** ← the two "consequences" bullets under Table B (the whole-value-grammar rationale and the fail-closed narrowing)
 - [ ] **Table B** ← the `[AUD-D2]` and `[AUD-D3]` identity names in Table C, and the masking-trap note beneath it
 - [ ] **Table B** ← Context's "Named residual" paragraph (the `Reply-To`-else-`From` nomination claim)
@@ -655,13 +657,15 @@ added here on the spot.
 ## Acceptance criteria
 
 1. [ ] `Object.keys(VERBS)` is exactly Table A's nine live names, `create_draft`
-       absent; the set of verbs with `service: 'gmail'` is exactly Table A's five;
-       and each of those five matches Table A **completely** — capability class,
-       `extraClasses`, `maxCallsPerRun`, `required`, `additionalProperties: false`,
-       and every property's full schema including its `pattern`. An enumerated
-       record, not a list of forbidden names and not a list of key names, so
-       neither a new address-bearing key of any spelling nor a **weakened** value
-       schema can pass. (V1, V4, V5)
+       absent; **every table key equals its own record's `name`**; and **all nine**
+       records match Table A completely — `service`, capability class,
+       `extraClasses`, the whole `limits` object, the input schema's complete
+       top-level key set, `type`, `required`, `additionalProperties: false`, and
+       every property's full schema including its `pattern`. An enumerated record
+       over the whole table, not a list of forbidden names, not a list of key
+       names, and not a gmail-only subset — so a new address-bearing key of any
+       spelling, a **weakened** value schema, a **swapped** pair of names, and a
+       renamed-and-reclassified non-gmail verb all fail. (V1, V4, V5)
 2. [ ] `create_draft_to_self` addresses the draft to the `getProfile`-resolved
        account address and to nothing else; an argument object carrying any
        address key is schema-rejected with zero Google calls; a `getProfile`
@@ -763,55 +767,56 @@ rc=$?; echo "V4 presence guard exit: $rc"   # 0 required
   docs/GLOSSARY.md
 rc=$?; echo "V4 sweep exit: $rc"            # 1 required (0 = a live surface still names it)
 
-# V5 — criterion 1's universal. Compares the COMPLETE canonical record of every
-# gmail verb against a literal derived from Table A. A name-only or key-only check
-# is not enough, measured: with `id`'s pattern dropped, `id` = "attacker@example.net"
-# was forwarded as `to` and a draft was created, and a round-2 countermodel emptied
-# every `required`, every property schema, every `capabilityClass` and every
-# `extraClasses` while the check still passed. Table A owns these values; this
-# literal mirrors it. MUST exit 0.
+# V5 — criterion 1's universal. Compares the COMPLETE canonical record of ALL NINE
+# verbs against a literal derived from Table A, and pins that each table KEY equals
+# its record's `name`. Both are load-bearing, measured: a name-only check passes a
+# weakened schema; a gmail-only check passes `calendar_list` renamed and reclassed
+# to DRAFT; and comparing records without the key/name tie passes the two new verbs
+# with their names SWAPPED, which silently advertises each one's schema under the
+# other's name. MUST exit 0.
 node -e 'const { VERBS } = require("./src/gws/broker/verbs.js");
 const KB = 1024, NO_CRLF = "^[^\\r\\n]*$";
-const TABLE_A = ["calendar_list","calendar_show","create_draft_to_self","create_reply_draft",
-                 "drive_read","drive_search","gmail_read","gmail_search","send_digest_to_self"];
-const GMAIL = {
-  gmail_search: { capabilityClass:"READ", extraClasses:[], maxCallsPerRun:50, required:["query"],
+const ISO_TS = "^\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:?\\d{2})?)?$";
+const TABLE_A = {
+  gmail_search: { service:"gmail", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50}, required:[ "query" ],
     properties:{ query:{type:"string",maxLength:512}, max:{type:"integer",min:1,max:20} } },
-  gmail_read: { capabilityClass:"READ", extraClasses:[], maxCallsPerRun:50, required:["id"],
+  gmail_read: { service:"gmail", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50,maxResultBytes:64*KB}, required:["id"],
     properties:{ id:{type:"string",maxLength:128,pattern:"^[A-Za-z0-9_-]+$"} } },
-  create_draft_to_self: { capabilityClass:"DRAFT", extraClasses:["READ"], maxCallsPerRun:3, required:["subject","body"],
+  calendar_list: { service:"calendar", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50}, required:[],
+    properties:{ from:{type:"string",maxLength:40,pattern:ISO_TS}, to:{type:"string",maxLength:40,pattern:ISO_TS}, max:{type:"integer",min:1,max:20} } },
+  calendar_show: { service:"calendar", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50}, required:["id"],
+    properties:{ id:{type:"string",maxLength:1024} } },
+  drive_search: { service:"drive", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50}, required:["term"],
+    properties:{ term:{type:"string",maxLength:512}, raw:{type:"boolean"}, max:{type:"integer",min:1,max:20} } },
+  drive_read: { service:"drive", capabilityClass:"READ", extraClasses:[], limits:{maxCallsPerRun:50,maxResultBytes:256*KB}, required:["id"],
+    properties:{ id:{type:"string",maxLength:128} } },
+  create_draft_to_self: { service:"gmail", capabilityClass:"DRAFT", extraClasses:["READ"], limits:{maxCallsPerRun:3}, required:["subject","body"],
     properties:{ subject:{type:"string",maxLength:512,pattern:NO_CRLF}, body:{type:"string",maxLength:64*KB} } },
-  create_reply_draft: { capabilityClass:"DRAFT", extraClasses:["READ"], maxCallsPerRun:10, required:["id","body"],
+  create_reply_draft: { service:"gmail", capabilityClass:"DRAFT", extraClasses:["READ"], limits:{maxCallsPerRun:10}, required:["id","body"],
     properties:{ id:{type:"string",maxLength:128,pattern:"^[A-Za-z0-9_-]+$"}, body:{type:"string",maxLength:64*KB} } },
-  send_digest_to_self: { capabilityClass:"SEND", extraClasses:[], maxCallsPerRun:2, required:["subject","body"],
+  send_digest_to_self: { service:"gmail", capabilityClass:"SEND", extraClasses:[], limits:{maxCallsPerRun:2}, required:["subject","body"],
     properties:{ subject:{type:"string",maxLength:512,pattern:NO_CRLF}, body:{type:"string",maxLength:64*KB} } },
 };
 const key = (o) => JSON.stringify(o, (k,v) => (v && typeof v === "object" && !Array.isArray(v))
   ? Object.keys(v).sort().reduce((a,n)=>(a[n]=v[n],a),{}) : v);
 const fail = [];
-const names = Object.keys(VERBS).sort();
-if (key(names) !== key(TABLE_A)) fail.push("verb table is " + JSON.stringify(names) + ", Table A is " + JSON.stringify(TABLE_A));
-const gmailNames = Object.values(VERBS).filter((v)=>v.service==="gmail").map((v)=>v.name).sort();
-if (key(gmailNames) !== key(Object.keys(GMAIL).sort())) fail.push("service=gmail is " + JSON.stringify(gmailNames) + ", Table A says " + JSON.stringify(Object.keys(GMAIL).sort()));
-for (const [name, want] of Object.entries(GMAIL)) {
-  const v = VERBS[name];
-  if (!v) { fail.push(name + " is absent from the verb table"); continue; }
-  if (v.service !== "gmail") fail.push(name + ".service is " + JSON.stringify(v.service));
+const names = Object.keys(VERBS).sort(), want = Object.keys(TABLE_A).sort();
+if (key(names) !== key(want)) fail.push("verb table is " + JSON.stringify(names) + ", Table A is " + JSON.stringify(want));
+for (const [k, w] of Object.entries(TABLE_A)) {
+  const v = VERBS[k];
+  if (!v) { fail.push(k + " is absent from the verb table"); continue; }
+  if (v.name !== k) fail.push("VERBS[" + JSON.stringify(k) + "].name is " + JSON.stringify(v.name) + " — the table KEY and the record name must be the same string");
   const s = v.inputSchema || {};
-  const got = { capabilityClass: v.capabilityClass, extraClasses: [...(v.extraClasses || [])].sort(),
-    maxCallsPerRun: v.limits && v.limits.maxCallsPerRun, schemaKeys: Object.keys(s).sort(),
-    type: s.type, required: [...(s.required || [])].sort(),
-    additionalProperties: s.additionalProperties, properties: s.properties || {} };
-  const exp = { capabilityClass: want.capabilityClass, extraClasses: [...want.extraClasses].sort(),
-    maxCallsPerRun: want.maxCallsPerRun,
-    schemaKeys: ["additionalProperties","properties","required","type"],
-    type: "object", required: [...want.required].sort(),
-    additionalProperties: false, properties: want.properties };
-  if (key(got) !== key(exp)) fail.push(name + " record differs from Table A:\n      got  " + key(got) + "\n      want " + key(exp));
+  const got = { service:v.service, capabilityClass:v.capabilityClass, extraClasses:[...(v.extraClasses||[])].sort(),
+    limits: v.limits, schemaKeys: Object.keys(s).sort(), type: s.type,
+    required: [...(s.required||[])].sort(), additionalProperties: s.additionalProperties, properties: s.properties || {} };
+  const exp = { service:w.service, capabilityClass:w.capabilityClass, extraClasses:[...w.extraClasses].sort(),
+    limits: w.limits, schemaKeys: ["additionalProperties","properties","required","type"], type: "object",
+    required: [...w.required].sort(), additionalProperties: false, properties: w.properties };
+  if (key(got) !== key(exp)) fail.push(k + " record differs from Table A:\n      got  " + key(got) + "\n      want " + key(exp));
 }
 if (fail.length) { console.error("V5 FAIL:\n  - " + fail.join("\n  - ")); process.exit(1); }
-console.log("V5 OK: the verb table is exactly Table A\u0027s " + names.length + " names; exactly " + gmailNames.length +
-  " have service=gmail; and each of those matches Table A on capabilityClass, extraClasses, maxCallsPerRun, the inputSchema\u0027s complete top-level key set, type, required, additionalProperties, and every property schema. It verifies NOTHING about handlers, descriptions or apiMethod strings.");'
+console.log("V5 OK: the verb table is exactly Table A\u0027s " + names.length + " names, each table key equals its record name, and every record matches Table A on service, capabilityClass, extraClasses, limits, the inputSchema\u0027s complete top-level key set, type, required, additionalProperties and every property schema. It verifies NOTHING about handlers, descriptions or apiMethod strings.");'
 rc=$?; echo "V5 exit: $rc"                  # 0 required
 ```
 

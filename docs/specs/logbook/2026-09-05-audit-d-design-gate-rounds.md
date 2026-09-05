@@ -840,6 +840,94 @@ closed.
   or the deletion moved. The list is now **nine**.
 - **(iii) Scope objections** stay routed. Rounds 1, 2 and 3 produced zero.
 
+## Round 4 — external double channel, 2026-09-05, on `f276cbfe`
+
+Both channels **needs-attention**, converged on the main finding. Raws committed
+pre-adjudication:
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-codex-plugin.txt` | `08eec164` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` |
+
+### THE FINAL STOP CRITERION FIRED — Table B is FROZEN
+
+Round 4 raised two accepted classes the executed 47-case table does not refuse, on
+a contract that had already fired the ADR-0031 breaker, so the criterion pinned at
+the end of round 3 applies exactly as written: **STOP.** Table B, its derived
+forms, its case table, the step-referencing text in criteria 3–6, and owner items 8
+and 9 are **frozen and untouched in this pass**; **there is no further
+dispatch-under-recommendation on this contract**; the work package **stays
+`status: Draft`, parked on an owner ruling.** The ruling brief is
+`docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md`.
+**Resuming looks like:** one architect pass applying the ruling, then round 5 as a
+closing confirmation on both channels.
+
+| # | Channel(s) | Band | Finding | Disposition |
+|---|---|---|---|---|
+| **R4-A** | plugin B **+** shadow A — **CONVERGED** | HEAVY | The raw 998 bound does not bound the **physical header lines built after steps 5 and 6**. A 998-character source `Subject` → `Re:` + space + it = 1002 characters → a **1011-character `Subject:` line**. Twenty 47-character Message-IDs → a 959-character `References` that passes step 0, after which step 6 appends the parent id → **1007 characters, a 1019-character line**. `buildMime` (`gmail.js:150-160`) emits single physical lines with no folding and no RFC 2047, so RFC 5322 §2.1.1 is violated **by accepted inputs**, and the stubbed-client assertions pass while Gmail would receive non-conforming MIME. | **PARKED — owner ruling.** Options (a) refuse at the output, (b) fold/encode in `buildMime`, (c) trim `References` from the middle then (a) for `Subject`, each with its cost, are in the brief. Orchestrator's recommendation, recorded as such: **(a) plus the two small fixes**, with (c) named as the successor if dogfooding shows deep threads matter. |
+| **R4-B** | plugin A | HEAVY | "The bound makes the content test's form irrelevant" is **false**. `!/^(?:[ \t]+)*$/.test(value)` is a semantically correct blank-check that backtracks **exponentially**: 30 spaces followed by an address — 47 characters, far under the bound — exceeded **1.5 s**. Bounded input does not make an arbitrary regex safe. | **PARKED — owner ruling** (it lives in a frozen Table B row). The intended fix is one line: prescribe the blank-check as a single non-backtracking scan, `/[^ \t]/.test(v)`, linear by construction. **This finding also corrects the round-3 record**, where the content test was deliberately left unspecified on the strength of the bound; the bound bounds the *input*, not the *pattern*, and round 3 conflated the two. |
+| **R4-C** | shadow B | HEAVY | An empty or whitespace-only source `Subject` derives `Re:` followed by a space, which on the next application trims to `Re:`, matches `/^re:/i`, and is left alone — **non-idempotent across a chain**. The only idempotence fixture was `Re: already`. | **PARKED — owner ruling** (frozen row). Intended fix: an empty trimmed source subject derives an **empty** subject — no `Re:` on nothing — which is a fixed point and still satisfies Gmail's subject-**equality** condition. Fixtures: empty, spaces, tabs, two applications. |
+| — | both channels | scope objection, **excluded from the verdict** | With representative 47-character Message-IDs, an ordinary thread about **21 messages deep** arrives unfolded over 998 characters and is refused outright by step 0. | **Not a defect** — this is owner item 8's admitted cost, now **quantified**, and it is carried into the owner brief so the ruling can weigh it. |
+
+### Non-Table-B machinery fixes — applied in this pass (LIGHT)
+
+None of these touch a Table B row.
+
+| Fix | What was wrong | What changed |
+|---|---|---|
+| **V5, key ≡ name** | Both channels executed wrong verb tables that V5 passed. Swapping the two new verbs' `name` fields leaves each schema advertised under the **other** verb's name; renaming `calendar_list` internally and reclassing it to `DRAFT` was invisible because V5 only inspected gmail verbs. | V5 now asserts `VERBS[key].name === key` for all nine, and compares the **complete canonical record of ALL NINE** verbs — `service`, `capabilityClass`, `extraClasses`, the whole `limits` object, the schema's top-level key set, `type`, `required`, `additionalProperties`, every property schema. Criterion 1 and its mirrors re-derived. |
+| **Mirror rot — proofs files** | The Table C mirror said "**both** `.proofs.json` files"; there are three since round 3. | Names all three, plus both new test suites. |
+| **Mirror rot — `[AUD-D6]`** | "The **three** `[AUD-D6]` declarations"; there are four since R3-E added `required-classes-gated-on-deps`. | The sentence no longer predicts a count. |
+| **Case-table count** | The document said **44**; the plugin rendered **47**. | The table has always listed **47**. The 44 was the pipeline array's length — the 3 step-5 subject rows were asserted separately. The prose now says 47 and explains the split, so the number stops disagreeing with the table above it. |
+
+### V5 re-proved — eleven mutants, from the block extracted VERBATIM
+
+```text
+COMPLIANT                                            exit=0  V5 OK: … 9 names, each table key equals its record name …
+MUTANT names of the two new verbs SWAPPED  (R4 new)  exit=1  the table KEY and the record name must be the same string
+MUTANT calendar_list renamed + reclassed   (R4 new)  exit=1  the table KEY and the record name must be the same string
+MUTANT type:'string'                                 exit=1  record differs from Table A
+MUTANT id pattern removed                            exit=1  record differs from Table A
+MUTANT required emptied                              exit=1  record differs from Table A
+MUTANT capabilityClass changed                       exit=1  record differs from Table A
+MUTANT extraClasses dropped                          exit=1  record differs from Table A
+MUTANT cap 3->99                                     exit=1  record differs from Table A
+MUTANT additionalProperties true                     exit=1  record differs from Table A
+MUTANT extra top-level schema key                    exit=1  record differs from Table A
+PINNED BASE                                          exit=1  verb table is [… "create_draft" …]
+DELIVERABLE ABSENT                                   exit=1  Cannot find module
+```
+
+The two new rows are the finding: both of those tables passed the round-3 V5.
+
+### The pattern across four rounds, stated once
+
+V5 has now been wrong **four** times — over-strict (round 0), a denylist (round 1),
+names-only (round 2), and gmail-only without a key/name tie (round 4) — and every
+time a both-directions run is what caught it. Each fix moved the check one step
+further toward *enumerating the intended object completely* rather than checking a
+property of it. That is the same move the Table B contract pass made, and R4-B is
+the same lesson arriving from the other side: **a bound on the input is not a bound
+on the machine that processes it.** Round 3 wrote that the bound made the content
+test's form irrelevant; it does not, and that sentence is now a parked correction
+rather than a standing claim.
+
+### STOP CRITERION — fired; no successor is pinned by this session
+
+The criterion pinned at the end of round 3 was final for this contract and it has
+fired. **This session does not pin a round-5 criterion**, because what round 5
+checks depends on which option the owner picks. When the ruling lands, the applying
+pass restates the criterion in the same place, before round 5 runs.
+
+- **(i) Table B — STOPPED.** Frozen pending the ruling. Nothing on this contract is
+  dispatched under a recommendation.
+- **(ii) Owner items** stand at **nine**; round 4 added none. R4-A/B/C are parked
+  against item 9's question rather than as new items, because all three are
+  consequences of the same ruling.
+- **(iii) Scope objections** — round 4 produced one (the 21-deep thread), excluded
+  from the verdict by both channels and carried into the owner brief as a cost.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -854,3 +942,6 @@ closed.
 | 3 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-codex-plugin.txt` | `12e5ed44` | needs-attention, 0 scope objections — 1A + 2B + 2 LIGHT; no grammar finding outside the executed table |
 | 3 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round3-herdr-shadow.txt` | `7fd20a32` | needs-attention, 0 scope objections — 4A + 2B; five of six findings CONVERGED across channels |
 | 3 | **Stop criterion** | — | — | **FIRED** on two Table B rows → ruled by the orchestrator under the standing instruction as owner **item 9**: keep the code-derived-recipient verb; the two rows are the ORDER contract not yet applied to itself. Round-4 criterion sharpened to STOP |
+| 4 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-codex-plugin.txt` | `08eec164` | needs-attention — R4-A (B, converged), R4-B (A); one scope objection, excluded from the verdict |
+| 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
+| 4 | **Stop criterion (final)** | — | — | **FIRED — Table B FROZEN.** R4-A/B/C PARKED for the owner; brief at `docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md`. WP stays `Draft`. Non-Table-B machinery fixes applied |
