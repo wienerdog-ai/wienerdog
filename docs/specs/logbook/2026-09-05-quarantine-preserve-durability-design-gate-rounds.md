@@ -365,4 +365,101 @@ row below cites the raw file's path AND the SHA of the commit that introduced it
 
 | Round | Verdicts (gate / shadow) | Raw files (committed in) | Findings → dispositions |
 |-------|--------------------------|--------------------------|--------------------------|
-| — | *(not yet run)* | — | — |
+| 1 (`cb18367a`) | needs-attention / needs-attention | `…gate-raw-round1-codex-plugin.txt`, `…gate-raw-round1-herdr-shadow.txt` (both `e4012314`) | Plugin 3 A, shadow 3 A, one scope objection routed to the disposal stub and not counted; both runs valid (porcelain empty before and after). **Converged (A) — the inode:** the shipped read-back is `readFileSync(dest)` by pathname and the prescribed flush reopened the pathname, so a same-UID rename between them makes the function flush one inode and report bytes from another; `O_NOFOLLOW` does not refuse a regular file, and neither mode 0700 nor the steal-able dream lock excludes the user's own processes → FIX: row **F8** — ONE descriptor carries the read-back, the comparison and F1's flush, and `dest` must still name its `(dev, ino)` as the LAST gate before success; a mismatch fails and removes NOTHING. **Converged (A) — F4's evidence:** QPD-2 injected only at the artifact, so an implementation whose directory flush swallows its failure passed every declared mutation → FIX: QPD-2 now injects at five sites (artifact `fsync`; `qdir` `fsync` and `open`; anchor `fsync` and `open`), each asserting `null`, `dest` absent and the shipped abort, plus a new `directory-flush-failure-swallowed` proof. **Plugin (A) — the anchor, settled as a DESIGN question:** F3's created-set derivation misses an ancestor an EARLIER STEP OF THE SAME RUN created, and `acquireLock`'s `mkdirSync(stateDir, {recursive:true})` is that step (measured: created-set → 3 flushes stopping at `state/`; fixed chain → 4 ending at the core) → FIX: F3 becomes a FIXED chain to an anchor, `path.dirname(stateDir)`, deleting the `mkdirSync`-return derivation entirely; road not taken and its cost recorded. **Shadow (A) — QPD-4/QPD-5:** neither forced the two-level redacted chain nor a bottom-up order → FIX: QPD-3 and QPD-4 assert the exact ORDERED sequence on each arm, with `intermediate-shelf-not-flushed` and `anchor-not-flushed` as their narrow mutations. **Routed, not counted (shadow):** a crash after D2's removal before return — confirmed covered and now named in the disposal stub. All FIX, applied in this commit. Escalation (i) does not fire (four kinds, one round); escalation (ii) checked against all four and fires on none, so no fifth owner item. HEAVY (the shipped read-back shape and the flush set both change) → **round 2 runs as a full external round on both channels.** |
+
+## Round 1 — architect's revision pass, 2026-09-05
+
+### Round 1 fixes
+
+| # | Finding (channel) | Fix |
+|---|---|---|
+| **1** [A, both] | Path-based reopen can flush a different inode than the one read back | **Row F8, new.** `dest` is opened ONCE after the rename; the read-back, the byte comparison and F1's flush all go through that descriptor; `dest` must still name its `(dev, ino)` as the last gate before success — the latest observable moment, hence the narrowest window. A mismatch removes NOTHING (Table D row D1's ownership rule applied to `dest`), which the Security checklist states a second time because disposing of a replacement would hand a same-UID process a way to make this run delete a file at a name they control. **Two bounds are stated IN the row rather than implied:** the check narrows the window and cannot close it, and it is only as strong as the platform's `(dev, ino)`. Identity **QPD-5**, proofs `inode-pin-removed` and `replacement-removed-on-mismatch`, criterion 6 |
+| **2** [A, both] | F4's evidence covered only the artifact flush | **QPD-2 now injects at FIVE sites** — the artifact's `fsyncSync`, and both `openSync` and `fsyncSync` for `qdir` and for the anchor — each asserting `null`, `dest` absent, and the exact shipped P1/P2 abort. New proof `directory-flush-failure-swallowed`; row **F4** rewritten to say the row is not about the artifact alone |
+| **3** [A, plugin] | Pre-existing, never-flushed ancestors are outside F3's set | **Row F3 is now a FIXED chain to an ANCHOR**: `qdir`, the shelf when distinct, `stateDir`, `path.dirname(stateDir)`. The `mkdirSync`-return derivation, source form (e) and the loop's root guard are all deleted — the fixed chain is strictly stronger AND simpler, and it is what makes QPD-3/QPD-4's exact-sequence assertions possible (finding 4). New proof `anchor-not-flushed` |
+| **4** [A, shadow] | QPD-4/QPD-5 did not force the redacted chain or the F6 order | **QPD-3 and QPD-4 assert the exact ORDERED sequence**, one per arm; QPD-4 is pinned to the redact arm with neither directory present, which is the only state that can see the intermediate shelf. New proof `intermediate-shelf-not-flushed`; `flush-order-inverted` retargeted at both sequence identities; criterion 5 now covers all of F6 |
+| — | Routed (shadow): a crash after D2's removal before return | **Confirmed covered** and now named explicitly in `WP-quarantine-disposal-durability`'s call-site list, with why it cannot make this call report success |
+
+### 1.1 Measurements
+
+Every "after" number below is a run on a `git archive` scratch copy of
+`0fd50422`; the worktree holds only the documents.
+
+```text
+src fix alone                    npm test  2618 / 2602 / fail 4      exit 1
+  the four:  quarantinePreserve (P0b, Table D row D2) × 2
+             quarantinePreserve (Table D row D3)
+             quarantinePreserve (Table D row D4)
+  — all four inject through patchFs('readFileSync') on a STRING path, which
+    row F8 makes a descriptor. NO ASSERTION CHANGES; one shared fd→path helper
+    moves the injection point.
++ migrated injections            npm test  2618 / 2606 / fail 0      exit 0
++ the five identities            npm test  2623 / 2611 / fail 0      exit 0
+npm run red-proofs (unfiltered)  14 declared proof(s), 14 selected
+                                 all 14 PROVEN; RUN: PROVEN          exit 0
+  six criteria roll-up lines for this WP:
+    criterion 1 — preservation-flush-removed=PROVEN
+    criterion 2 — artifact-flush-failure-swallowed=PROVEN; directory-flush-failure-swallowed=PROVEN
+    criterion 3 — containing-directory-not-flushed=PROVEN; intermediate-shelf-not-flushed=PROVEN
+    criterion 4 — anchor-not-flushed=PROVEN
+    criterion 5 — flush-order-inverted=PROVEN
+    criterion 6 — inode-pin-removed=PROVEN; replacement-removed-on-mismatch=PROVEN
+```
+
+**The anchor decision, measured on three tree states rather than argued.** Driven
+over `makeGates({stateDir}).secret(…)` with every flush resolved through its
+descriptor:
+
+```text
+tree state                                   created-set (round 0)   fixed chain (round 1)
+quarantine/ + redacted/ already exist        2 flushes               4 / 5
+nothing under the core exists yet            3 / 4                   4 / 5
+state/ created by acquireLock THIS RUN       3 flushes, stops at     4 flushes, ends at
+                                             <T>/.wienerdog/state    <T>/.wienerdog
+```
+
+The last row is the plugin's finding reproduced: the core directory holds the
+`state/` entry `acquireLock` had just created, and only the fixed chain flushes it.
+**The fixed chain is invariant across all three states**, which is what lets QPD-3
+and QPD-4 assert an exact ordered sequence at all. **Cost:** one directory
+`open`+`fsync`+`close` is **0.018 ms** on this machine's APFS volume (200
+iterations, 3.7 ms), so the chain adds under a tenth of a millisecond per preserved
+note. **Road not taken:** walking above the core to `$HOME` and `/` — it would close
+one further condition (a user who deletes the install between scheduling and the
+run) at the price of flushing directories this product does not own, on every
+preservation. Named as a residual in the spec rather than closed.
+
+**V1/V2 re-extracted from the revised spec and re-run in the same TEN trees**, each
+a scratch git repo whose `main` is a pristine `0fd50422` carrying this spec:
+untouched → 6 findings, `rc=1`; **compliant → `V1 OK / V2 OK`, `rc=0`**; **compliant
+with the guarantee sentence hard-wrapped over four JSDoc lines → `rc=0`**;
+`validate.js` removed → `MISSING DELIVERABLE`; sentence reworded → `APPEARS 0
+TIME(S)`; sentence retyped → `APPEARS 2 TIME(S)`; `fs.fsyncSync` removed → `NO FLUSH
+IS ISSUED AT ALL`; P0b's clause in cell 2 → `NOT ITS BASE ROW PLUS ITS CLAUSE IN
+CELL 5`; one unrelated edited line → `DIFF IS 2/2`; P0b's cell 5 reauthored →
+`NOT ITS BASE ROW PLUS ITS CLAUSE IN CELL 5`. Both byte-exact `Done`-spec clauses
+were rewritten this round (the chain wording and the identity condition), so V2's
+extraction was re-verified rather than assumed.
+
+### 1.2 What round 1 did NOT change
+
+- **The four Dispatch-precondition items.** Escalation (ii) was checked against all
+  four findings: none adds durable state beyond the artifact, none changes either
+  shipped `best-effort` removal posture, none changes an owner-ruled value, and none
+  needs a Windows measurement. **No fifth owner item**, and the check is recorded in
+  the spec so its absence is visible.
+- **The guarantee sentence**, byte for byte, and the evidence line it draws. Row F8
+  is a verification property, not a durability claim, and nothing in this round
+  widened what a flush is said to achieve.
+- **Table P and Table D.** No new abort, no new message, no new field, no new
+  disposal path. Row F8's mismatch arm is a NEW state Table D never had — the
+  shipped rows are about `tmp` and `dest` under the shipped code — so Table F owns
+  it, and the spec says why it is not D2 rather than re-authoring D2.
+- **The split.** The disposal half stays in `WP-quarantine-disposal-durability`;
+  the one case the shadow routed there is now named in that stub.
+- **`src/core/dream/lock.js`.** `acquireLock`'s unflushed `mkdirSync` is the
+  measurement that settled the anchor, not a defect this package fixes: the fixed
+  chain makes the preservation independent of what any earlier step did.
+
+**Round 2 runs as a FULL external round on both channels**, per weighted closure:
+finding 1 changes the shipped read-back's shape and findings 2–4 change the flush
+set and its evidence, so every fix is HEAVY.
