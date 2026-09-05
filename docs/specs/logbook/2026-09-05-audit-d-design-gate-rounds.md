@@ -781,6 +781,9 @@ pred   tabs + ONE trailing X             0.5      0.9      1.8      3.8      7.2
 
 Table B therefore fixes the **order** and says explicitly that, both operands being
 ≤998 by step 0, **how the content test is written is not a contract question** —
+**[SUPERSEDED 2026-09-05 by round-4 finding R4-B: this was wrong. A bound on the
+INPUT is not a bound on the machine that reads it; the test's form is now
+prescribed in Table B step 2.]** —
 which is the same principle the whole contract rests on, applied one level down: a
 spec states the contract, never the implementation, and prescribing a measurably
 slower implementation on the strength of an unreproduced complexity claim is
@@ -928,6 +931,96 @@ pass restates the criterion in the same place, before round 5 runs.
 - **(iii) Scope objections** — round 4 produced one (the 21-deep thread), excluded
   from the verdict by both channels and carried into the owner brief as a cost.
 
+## The owner's ruling, and the pass that applied it — 2026-09-05
+
+Round 4 froze Table B and produced
+`docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md` at
+`197cd797`. The owner read it and answered **in session**:
+
+```text
+go with a) as you recommended
+```
+
+**This is the tenth decision of the loop and the FIRST DIRECT one** — items 1–9
+were dispatched under the standing instruction. Full provenance and disposition:
+`docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`. Ruled:
+**(a) refuse at the output**, plus R4-B's prescribed blank-check and R4-C's
+empty-subject fixed point. **(c)** named as successor, not filed. **(b)** rejected
+for this package. Table B was unfrozen for exactly this pass.
+
+### What was applied
+
+| Ruling | Where |
+|---|---|
+| (a) the output bound | **Table B step 7** — for each header line `buildMime` will emit whose length is not fixed by an earlier step (`Subject`, `In-Reply-To`, `References`), `<name>: <value>` must be ≤998 **UTF-8 octets**. `To:` (4 + ≤320 by step 4) and the fixed `Content-Type` are bounded by construction and are stated as not checked, so the rule quantifies over a closed set |
+| the measure | **UTF-8 octets**, because RFC 5322 counts octets of the transmitted line and `buildMime` calls `Buffer.from(mime)` — UTF-8 is what Gmail receives |
+| R4-B | **Table B step 2** — the blank-check is the derived form `/[^ \t]/.test(v)`, prescribed, not left open |
+| R4-C | **Table B step 5** — an empty trimmed source subject derives the **empty string**; the derivation is a fixed point |
+| the messages | **Exact contracts** — three distinct fixed refusals (input/grammar, CR/LF, output bound), none of them `assertHeaderSafe`'s |
+| the record | **Dispatch precondition item 10**, `RULED (a)`, marked as the first direct ruling; the section heading now says "ten: nine recommendations, one direct ruling" |
+
+### Executed, from a FILE, before any of it was written down
+
+```text
+=== the three prefixes, measured (UTF-8 octets) ===
+  "Subject: "      9 octets  -> value budget 989
+  "References: "  12 octets  -> value budget 986
+  "In-Reply-To: " 13 octets  -> value budget 985
+  "To: "           4 octets  -> value budget 994   (bounded by step 4 at 320; not checked)
+
+ok   ok                          989-octet Re:-prefixed subject -> line is exactly 998 -> ACCEPT
+ok   refuse:step7-line-over-998  990-octet Re:-prefixed subject -> line is 999 -> REFUSE
+ok   ok                          985-octet plain subject -> derived 989 -> line 998 -> ACCEPT
+ok   refuse:step7-line-over-998  986-octet plain subject -> derived 990 -> line 999 -> REFUSE
+ok   refuse:step7-line-over-998  329 euro signs = 987 octets, derived 991 -> line 1000 -> REFUSE
+     (as UTF-16 code units that subject is 329 long and would have PASSED a length check)
+ok   refuse:step7-line-over-998  References 974 + " " + 46-octet parent = 1021 -> REFUSE
+ok   ok                          References 939 + " " + 46 = 986 -> line 998 -> ACCEPT
+ok   refuse:step7-line-over-998  986-octet Message-ID passes step 0, In-Reply-To line = 999 -> REFUSE
+ok   ok                          985-octet Message-ID -> In-Reply-To line = 998 -> ACCEPT
+
+=== R4-C: the empty-subject fixed point ===
+ok   ""          source empty / spaces / tabs -> derived subject is the EMPTY string
+ok   ""          two successive applications on empty are identical
+ok   "Re: Hello" two successive applications on "Hello" are identical
+
+=== R4-B: the blank-check is linear by construction ===
+  input: 30 spaces + a 17-char address (47 chars, far under the bound)
+  /[^ \t]/.test(v)          : 0.0015 ms
+  !/^(?:[ \t]+)*$/.test(v)  : 33962.1 ms   <- the round-4 finding
+
+ALL CHECKS PASSED
+```
+
+### Two corrections the execution forced on the instruction
+
+1. **`In-Reply-To` CAN exceed 998; the instruction said it could not.** The
+   accompanying instruction read *"In-Reply-To alone cannot exceed it given step
+   0 — say so"*. It can: the prefix costs 13 octets, so a **986-octet `Message-ID`
+   passes step 0 and still yields a 999-octet line**. Step 7 therefore checks all
+   **three** headers, and the spec says so rather than repeating the claim. Had the
+   sentence been written as instructed, the spec would have carried a false
+   universal over exactly the header the check exists for.
+2. **R4-B is an order of magnitude worse than reported.** The brief cited "over
+   1.5 s"; executed here on a 47-octet input, the pathological form took
+   **33 962 ms**. The number in Table B step 2 is the measured one.
+
+Both are the round-2 lesson still holding: *an instruction is a claim like any
+other, and applying it without running it is how a false universal reaches a
+contract.*
+
+### STOP CRITERION — restated for round 5, the CLOSING CONFIRMATION
+
+Round 5 runs on **both channels** as the closing confirmation.
+
+- **Closes** on **zero product findings**. Machinery findings at that point are
+  fixed **in-surface, without another round**, or accepted as named residuals.
+- **Any product finding** → one more architect pass and a round 6.
+- **A Table B finding the executed case table does not refuse → STOP again for the
+  owner.** The ruling covers **(a)**; it does not license re-deriving anything else
+  in Table B. If that happens, the successor question is already named: option (c).
+- Owner items stand at **ten** — nine recommendations plus item 10, `RULED`.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -944,4 +1037,5 @@ pass restates the criterion in the same place, before round 5 runs.
 | 3 | **Stop criterion** | — | — | **FIRED** on two Table B rows → ruled by the orchestrator under the standing instruction as owner **item 9**: keep the code-derived-recipient verb; the two rows are the ORDER contract not yet applied to itself. Round-4 criterion sharpened to STOP |
 | 4 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-codex-plugin.txt` | `08eec164` | needs-attention — R4-A (B, converged), R4-B (A); one scope objection, excluded from the verdict |
 | 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
+| 4→5 | **OWNER RULING (direct)** | `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md` | ruled on `197cd797` | **(a) refuse at the output**, plus R4-B and R4-C. (c) successor, not filed; (b) rejected. Table B unfrozen for one pass; applied as steps 2, 5 and 7 and item 10. Round 5 = closing confirmation |
 | 4 | **Stop criterion (final)** | — | — | **FIRED — Table B FROZEN.** R4-A/B/C PARKED for the owner; brief at `docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md`. WP stays `Draft`. Non-Table-B machinery fixes applied |

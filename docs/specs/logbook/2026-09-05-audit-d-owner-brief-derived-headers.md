@@ -6,6 +6,15 @@ related_wps: [WP-audit-d-code-derived-recipients]
 
 # Owner brief — derived reply headers can exceed the RFC line limit
 
+> **RULED 2026-09-05 — option (a), plus the two small fixes.** The owner answered
+> *"go with a) as you recommended"* after reading this brief. Provenance and the
+> full disposition are in
+> `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md`; the
+> ruling is applied in `WP-audit-d-code-derived-recipients` (Table B steps 2, 5 and
+> 7, and Dispatch-precondition item 10). **The body below is left exactly as the
+> owner read it** — including its "The loop is stopped" section, which described
+> the state at the moment of the ruling and is now history rather than status.
+
 ## The question
 
 `create_reply_draft` builds a reply's `Subject` and `References` headers from the
