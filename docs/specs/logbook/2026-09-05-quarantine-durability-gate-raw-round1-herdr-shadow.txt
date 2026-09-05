@@ -1,0 +1,270 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 1, detached worktree at cb18367a (base main). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision cb18367ad5dc09e426e118de780a7a53e77ea138 vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "verdict": "needs-attention",
+  "summary": "NO-SHIP: the design permits a successful preservation to flush an inode other than the one verified, and its RED evidence does not force failure handling or the complete ordered directory-flush chain for all required targets.",
+  "findings": [
+    {
+      "materiality_band": "A",
+      "title": "The post-verification reopen does not pin the inode whose bytes were verified",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 654,
+      "line_end": 701,
+      "confidence": 0.94,
+      "body": "The required source form verifies `dest` through the shipped pathname-based `fs.readFileSync(dest)` and later calls `flushPreservation(dest, ...)`, whose artifact flush opens the pathname again. Those are separate descriptors with a replacement window between them. A same-UID process, including a user manually managing the quarantine shelf, can rename a regular replacement over `dest`; `O_NOFOLLOW` does not reject regular-file replacement. The second open and both flushes can then succeed while the function returns the earlier `readBack`, so the named artifact does not contain the bytes whose verification justified success. The security assertion at lines 781-792 does not close this: mode 0700 excludes other users, and the dream lock excludes cooperating dream runs, but neither prevents another process owned by the same user.",
+      "impact": "A preservation can be reported successful without the verified artifact receiving the completed flush, violating F0/F1 and the only-copy invariant.",
+      "recommendation": "Pin verification and F1 to one descriptor: open `dest` once after rename, read and compare through that descriptor, and fsync that same descriptor. Before accepting the directory flush, verify that `dest` still names that descriptor's `(dev, ino)` and handle a mismatch without deleting a replacement the invocation does not own. Add a race injection that replaces `dest` between verification and the planned reopen."
+    },
+    {
+      "materiality_band": "A",
+      "title": "F4 evidence covers only artifact-flush failure, not directory-flush failure",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 444,
+      "line_end": 444,
+      "confidence": 0.99,
+      "body": "F4 applies to every required flush, but QPD-2 and acceptance criterion 2 inject failure only in the artifact flush. The directory paths exercise distinct open flags and filesystem behavior. An implementation can return `false` correctly for an artifact fsync failure while allowing `openSync` or `fsyncSync` for `qdir` or a created ancestor to throw past the D2 cleanup. It would pass all five declared mutations because `flush-failure-swallowed` mutates only `flushOne(dest, false)`, yet `dest` would remain and the shipped Table-P abort would not be reached in the required shape.",
+      "impact": "A directory-flush failure can bypass D2 and the shipped only-copy abort while the specified verification lane remains green.",
+      "recommendation": "Make QPD-2 exercise failure of the artifact, `qdir`, and at least one F3 parent, covering both `openSync` and `fsyncSync` failure where relevant. For every case assert `null`, `dest` absent, and the exact existing P1/P2 or P3 abort. Add mutations that make the directory branches propagate or swallow failure so the RED lane proves those cases are load-bearing."
+    },
+    {
+      "materiality_band": "A",
+      "title": "QPD-4/QPD-5 do not force the complete redacted directory chain or F2-before-F3 order",
+      "affected_file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 441,
+      "line_end": 447,
+      "confidence": 0.99,
+      "body": "F3 requires every created directory entry and F6 requires F1 -> F2 -> F3 bottom-up. QPD-4 merely says a shelf is absent and that 'the PARENT' is flushed; it does not require a redacted preservation with both `quarantine/` and `redacted/` initially absent or enumerate both `quarantine` and `state`. An implementation tested only on the withheld arm can flush `state` there but skip `quarantine` in the two-level redacted case and still pass. QPD-5 checks only `index(dest) < index(qdir)`; it does not assert `qdir` precedes the created-parent walk or that the parent walk itself is bottom-up. The `created-parents-not-flushed` mutation removes the whole walk and cannot expose a partial walk.",
+      "impact": "An implementation that omits an intermediate directory entry or flushes the created-parent chain in the wrong order satisfies every declared identity despite violating F3/F6.",
+      "recommendation": "Pin QPD-4 to the redacted arm with neither directory present and assert the exact required path sequence: `dest`, `quarantine/redacted`, `quarantine`, `state`. Add narrow mutations for omitting the intermediate `quarantine` flush and for swapping `qdir` with the first F3 parent; update criterion 5 so its evidence covers all of F6, not only F1-before-F2."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "route": "WP-quarantine-disposal-durability",
+      "location": "docs/specs/WP-quarantine-disposal-durability.md:28",
+      "objection": "A crash after D2 removes `dest` but before `quarantinePreserve` returns can allow that removed artifact to reappear because the unlink is not directory-flushed.",
+      "disposition": "Excluded from this verdict. It can create an orphaned extra artifact but cannot make the current call report preservation success or destroy the only copy; Table F7(a) and the successor stub correctly own disposal durability."
+    }
+  ],
+  "executed_commands": [
+    {
+      "command": "sed -n '/VENDORED CONTENT/,$p' docs/runbooks/review-prompts/adversarial.md",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,$p' ../focus-qd1.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "empty before review"
+    },
+    {
+      "command": "git diff --name-status main...HEAD -- <three in-scope files>",
+      "exit_status": 0,
+      "result": "disposal stub added; preservation spec modified; logbook added"
+    },
+    {
+      "command": "git diff --stat main...HEAD -- <three in-scope files>",
+      "exit_status": 0,
+      "result": "1478 insertions, 68 deletions"
+    },
+    {
+      "command": "rg -n '<section/frontmatter patterns>' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,400p'",
+      "exit_status": 0,
+      "note": "The original zsh status marker was blank because `$PIPESTATUS[0]` was used with zsh; the exact pipeline was rerun under bash and returned 0."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '401,800p'",
+      "exit_status": 0,
+      "note": "Confirmed by an exact bash rerun."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '287,520p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '801,1095p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '1,220p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '221,420p'",
+      "exit_status": 0
+    },
+    {
+      "command": "wc -l src/core/dream/validate.js tests/unit/dream-validate.test.js docs/specs/done/WP-preservation-abort-widening.md docs/specs/done/WP-secret-fence-ep2-redact-arm.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '<quarantine seam and writeFileSync injection patterns>' src/core/dream/validate.js tests/unit/dream-validate.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1,260p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '261,560p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '580,780p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '880,1230p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '1231,1331p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '<evaluateRed/expectRed patterns>' scripts/red-proofs.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1,280p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba tests/unit/dream-validate.test.js | sed -n '2280,2660p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1540,1665p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '<P0b/B3b/Q18 and durability paragraph patterns>' docs/specs/done/WP-preservation-abort-widening.md docs/specs/done/WP-secret-fence-ep2-redact-arm.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD -- <three in-scope files>",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba scripts/red-proofs.js | sed -n '1660,1698p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/done/WP-preservation-abort-widening.md | sed -n '350,445p'",
+      "exit_status": 0
+    },
+    {
+      "command": "node - <<'NODE' <OS-temp mkdir/rename/open/fsync probe> NODE",
+      "exit_status": 1,
+      "result": "bash could not create its here-document temporary file; Node did not execute"
+    },
+    {
+      "command": "node -e '<same probe using fs.mkdtempSync(\"/private/tmp/qpd-shadow-\")>'",
+      "exit_status": 1,
+      "result": "EPERM creating the OS-temp fixture under the enforced read-only sandbox"
+    },
+    {
+      "command": "node -e '<open /tmp read-only, fsync its directory descriptor, close it, print constants>'",
+      "exit_status": 0,
+      "result": "darwin, Node v25.9.0; directory open and fsync succeeded; fsync returned undefined; F_FULLFSYNC undefined; O_DIRECTORY and O_NOFOLLOW present"
+    },
+    {
+      "command": "rg -n '<win32 posture/O_NOFOLLOW/O_DIRECTORY patterns>' src/core/private-fs.js src/core/dream/vault-write.js src/core/dream/workspace.js",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<extract and JSON.parse the inlined quarantine RED-proof declaration>'",
+      "exit_status": 0,
+      "result": "five declarations parsed with the stated IDs, criteria, patterns and expectRed identities"
+    },
+    {
+      "command": "node -e '<first source-form occurrence counter>'",
+      "exit_status": 1,
+      "result": "JavaScript syntax error caused by incorrect quote escaping; no writes"
+    },
+    {
+      "command": "node -e '<retry: parse declaration and count each find string in the spec text>'",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD",
+      "exit_status": 0,
+      "result": "cb18367ad5dc09e426e118de780a7a53e77ea138"
+    },
+    {
+      "command": "git rev-parse main",
+      "exit_status": 0,
+      "result": "38562ec4979606801e43c89afeb19073784fc0fc"
+    },
+    {
+      "command": "git merge-base main HEAD",
+      "exit_status": 0,
+      "result": "0fd50422ed84681b4af804e73f232f971049d003"
+    },
+    {
+      "command": "git diff --quiet main...HEAD -- src tests scripts",
+      "exit_status": 0,
+      "result": "no product-code or test diff"
+    },
+    {
+      "command": "rg -n 'fsyncSync|fdatasync|F_FULLFSYNC' src/core/dream/validate.js",
+      "exit_status": 1,
+      "result": "no matches, as expected for the spec-only revision"
+    },
+    {
+      "command": "rg -n '<F2/F3, failure, QPD-4, QPD-5 and bottom-up patterns>' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "git log --oneline --decorate --left-right --cherry-pick --max-count=20 main...HEAD",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --name-status 0fd50422ed84681b4af804e73f232f971049d003..main -- <implementation deliverables>",
+      "exit_status": 0,
+      "result": "only docs/specs/done/WP-secret-fence-ep2-redact-arm.md drifted"
+    },
+    {
+      "command": "git diff --unified=4 0fd50422ed84681b4af804e73f232f971049d003..main -- docs/specs/done/WP-secret-fence-ep2-redact-arm.md",
+      "exit_status": 0,
+      "result": "main changed Q1, Q2 and Q9, not B3b"
+    },
+    {
+      "command": "git show main:docs/specs/done/WP-secret-fence-ep2-redact-arm.md | rg -n '<B3b/banner amendment patterns>'",
+      "exit_status": 0,
+      "note": "An unescaped backtick in the shell regex also attempted command substitution of `WP-quarantine-banner-location`, which exited 127; the outer read-only pipeline still exited 0 and found B3b."
+    },
+    {
+      "command": "git status --porcelain=v1",
+      "exit_status": 0,
+      "result": "empty after review; identical to before"
+    },
+    {
+      "command": "git diff --name-status main...HEAD -- <three in-scope files>",
+      "exit_status": 0,
+      "result": "same three-file scope as before"
+    }
+  ],
+  "sandbox_notes": [
+    "No worktree, vault, or home-directory write was attempted.",
+    "The requested mkdtemp fixture could not be created because the effective sandbox denied OS-temp creation with EPERM. A read-only directory-open/fsync probe against /tmp succeeded.",
+    "Git repeatedly emitted Darwin xcrun cache warnings because cache creation under /tmp was denied; all listed git commands nevertheless returned the recorded statuses."
+  ],
+  "worktree_integrity": {
+    "before_status": "",
+    "after_status": "",
+    "identical": true
+  }
+}
