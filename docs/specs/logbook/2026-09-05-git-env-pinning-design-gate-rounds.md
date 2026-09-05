@@ -676,7 +676,11 @@ every template section is present.
 
 ### 0.6 Size
 
-The spec is **551 lines**, above the ~400-line heuristic in
+The spec is **550 lines** by `wc -l` — 0.5's pasted `coherence.js` output says
+551 because it counts `split('\n')`'s array, whose last element is the empty
+string after the trailing newline. The two numbers are the same file; the
+convention is stated here so a reader does not read them as a disagreement.
+It is above the ~400-line heuristic in
 `docs/specs/README.md`. The overage is one 21-row canonical table whose rows
 carry their own measured evidence, plus the two owner items with their
 enumerated overrule costs. **It touches 8 files (7 Deliverables + the spec
