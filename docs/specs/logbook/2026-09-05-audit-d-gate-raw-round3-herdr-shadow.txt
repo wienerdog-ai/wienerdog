@@ -1,0 +1,189 @@
+# Design gate raw — round 3 — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — WP-audit-d-code-derived-recipients
+# tip reviewed: 937bae59c84f5989cba7e37b1c3aab098db7a055 (detached worktree) ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+{
+  "target": "spec revision 937bae59c84f5989cba7e37b1c3aab098db7a055 vs main: docs/specs/WP-audit-d-code-derived-recipients.md",
+  "summary": "NO-SHIP. The Table B contract pass failed its own stop criterion: two material cases absent from the 39-case table remain possible. Three round-2 verification fixes are also not genuinely closed.",
+  "verdict": "needs-attention",
+  "executed": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-ad3.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "git status --porcelain && git diff --no-ext-diff --unified=80 main...937bae59c84f5989cba7e37b1c3aab098db7a055 -- docs/specs/WP-audit-d-code-derived-recipients.md docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n '^#{1,4} |^\\| [0-9]+ \\||^\\*\\*V[0-9]|^```' <two reviewed files> && wc -l <two reviewed files>",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '1,430p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-audit-d-code-derived-recipients.md | sed -n '431,838p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba over src/gws/broker/verbs.js, registry.js, limits.js, src/gws/gmail.js, src/cli/gws-broker.js, src/core/runtime-profile.js, tests/unit/gws-broker.test.js",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba src/gws/gmail.js && nl -ba src/cli/gws-broker.js",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n -i '<provenance-claim patterns>' docs/specs/WP-audit-d-code-derived-recipients.md docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md",
+      "exit_status": 0,
+      "result": "Only corrected historical quotations and the new author-nomination wording remain; no live provenance claim survived."
+    },
+    {
+      "command": "node <<'NODE' <ordered-pipeline harness> NODE",
+      "exit_status": 1,
+      "result": "The shell could not create its heredoc temporary file. No worktree write occurred."
+    },
+    {
+      "command": "echo '<base64 encoded ordered-pipeline harness>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "39 cases, 0 mismatches. Whitespace-only Reply-To padding of 1M, 2M and 4M characters with a valid From was accepted after unbounded preprocessing. The surrogate-boundary probe produced a lone high surrogate which UTF-8 encoding replaced with U+FFFD."
+    },
+    {
+      "command": "echo '<base64 encoded V5 countermodel using the verb records from Table A but create_reply_draft.inputSchema.type=array>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "V5 printed OK despite the wrong top-level schema type."
+    },
+    {
+      "command": "echo '<base64 encoded literal V5 extractor against the pinned base>' | base64 -d | node",
+      "exit_status": 1,
+      "result": "Expected deliverable-absent red: create_draft remained and both replacement verbs were absent."
+    },
+    {
+      "command": "echo '<base64 encoded criterion-8/default-loader countermodel>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "All injected singleton three-state checks requested DRAFT,READ and produced the required outcomes; the no-deps path resolved the default loader but requested only DRAFT and dispatched. Both production consumer sites remained wrong."
+    },
+    {
+      "command": "echo '<base64 encoded AUD-D5 masking probe>' | base64 -d | node",
+      "exit_status": 0,
+      "result": "For both Message-ID and References, correct and buildMime-assertion-bypassed variants stopped at step 0 with zero drafts; their observables were identical."
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md | sed -n '359,701p'",
+      "exit_status": 0
+    },
+    {
+      "command": "node -e '<derived mailbox forms; test \"Alice\"<alice@example.org> and Alice \"Team <east>\" <alice@example.org>>'",
+      "exit_status": 0,
+      "result": "Both resolved to alice@example.org."
+    },
+    {
+      "command": "node --version && git rev-parse HEAD && git rev-parse main && git diff --check main...937bae59c84f5989cba7e37b1c3aab098db7a055 -- <two reviewed files>",
+      "exit_status": 0,
+      "result": "Node v25.9.0; HEAD 937bae59c84f5989cba7e37b1c3aab098db7a055; main 8c52808f5df9ebe281a5a15c49938b0d9097b99e; diff check clean."
+    },
+    {
+      "command": "git status --porcelain",
+      "exit_status": 0,
+      "result": "Empty before and after. The read-only worktree state was identical."
+    }
+  ],
+  "findings": [
+    {
+      "id": "AD3-1",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 625,
+      "line_end": 640,
+      "confidence": 0.99,
+      "title": "The default-loader pin still permits both production consumer sites to use the old single-class logic",
+      "body": "Criterion 8 applies the requested-class and three-state assertions only through an injected loader. Its separate no-deps requirement proves only that loadServices resolves to loadCredentialServices. The executed countermodel used requiredClassesFor at both sites only when deps.loadServices was supplied, retained the old DRAFT-only derivation and refusal on the real no-deps path, and still satisfied every stated injected assertion plus the default-loader identity pin. Production would load DRAFT without READ, dispatch the verb, and expose the masked 'broker verb … failed' result instead of the fixed READ-credential refusal.",
+      "recommendation": "Apply the requested-class and missing-class assertions to the no-deps path as well. The default-loader test must observe that both DRAFT and READ are requested for singleton profiles and that both consumer sites use requiredClassesFor unconditionally.",
+      "table_b_39_case_already_refuses": null
+    },
+    {
+      "id": "AD3-2",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 683,
+      "line_end": 726,
+      "confidence": 1,
+      "title": "V5 still does not compare the complete input schema it claims to pin",
+      "body": "V5 projects required, additionalProperties and properties but omits inputSchema.type. The literal block extracted from the spec exited 0 for a countermodel whose create_reply_draft schema had type:'array'. Therefore R2-E is not closed: a wrong canonical schema still passes the verification step advertised as a complete-record comparison.",
+      "recommendation": "Include type:'object' in both the expected and observed schema records and compare the complete intended top-level schema key set. Adjust the V5 success claim so it names exactly what is verified.",
+      "table_b_39_case_already_refuses": null
+    },
+    {
+      "id": "AD3-3",
+      "materiality_band": "B",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 480,
+      "line_end": 512,
+      "confidence": 1,
+      "title": "The reply-headers-unasserted RED proof remains completely masked by step 0",
+      "body": "The mutation removes buildMime's In-Reply-To/References assertions, but criterion 6 drives create_reply_draft and requires step 0 to reject CR/LF in those same raw values first. The executed probe showed identical step-0 refusals and zero drafts for correct and mutant code for both fields. Contrary to lines 508-511, Message-ID and References do not discriminate this mutation. This is the fourth masking shape requested by the focus, and an honest implementation cannot make this declaration PROVEN through the stated identity.",
+      "recommendation": "Keep AUD-D5 as the step-0 proof, but add a separate direct buildMime identity for defence-in-depth and attach reply-headers-unasserted to it. Alternatively, change the mutation to target step 0 if criterion 6—not buildMime—is what the proof is intended to establish.",
+      "table_b_39_case_already_refuses": null
+    },
+    {
+      "id": "AD3-4",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 374,
+      "line_end": 376,
+      "confidence": 0.98,
+      "title": "Step 1 performs attacker-sized trimming before the selected-value bound",
+      "body": "Selection horizontally trims Reply-To before step 2 and can then fall back to From. A whitespace-only Reply-To of arbitrary size plus a valid short From is scanned and trimmed without ever being subject to the 998-character bound. The executed pipeline accepted this shape at 1M, 2M and 4M characters. Thus the bound is not before every parse-like transformation and the attacker still controls preprocessing allocation and time.",
+      "recommendation": "After the mandatory raw CR/LF scan, apply the 998-character bound independently to both raw recipient candidate values before any trim or selection. Add a whitespace-only oversized Reply-To with a valid From to the refused table.",
+      "table_b_39_case_already_refuses": false,
+      "contract_effect": "CONTRACT FAIL under the round-3 stop criterion; route to the required owner ruling on the recipient design."
+    },
+    {
+      "id": "AD3-5",
+      "materiality_band": "A",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 378,
+      "line_end": 378,
+      "confidence": 0.99,
+      "title": "The subject truncation contract does not prevent splitting a Unicode surrogate pair",
+      "body": "The spec requires the first 512 characters but provides no Unicode-boundary rule or case. A natural Node implementation using slice(0,512) on 'Re: ' plus 507 ASCII characters and an emoji retains only the emoji's high surrogate. The executed probe confirmed the resulting 512-code-unit string ends in 0xD83D and Buffer UTF-8 encoding silently replaces it with U+FFFD. A compliant-looking implementation therefore corrupts a derived subject while all 39 cases and criterion 5 pass.",
+      "recommendation": "Define truncation in Unicode code points, or explicitly remove a trailing unmatched high surrogate after the 512-unit cut, and add a boundary case to the executed and implementer test tables.",
+      "table_b_39_case_already_refuses": false,
+      "contract_effect": "CONTRACT FAIL under the round-3 stop criterion; route to the required owner ruling on the recipient design."
+    },
+    {
+      "id": "AD3-6",
+      "materiality_band": "B",
+      "file": "docs/specs/WP-audit-d-code-derived-recipients.md",
+      "line_start": 812,
+      "line_end": 822,
+      "confidence": 1,
+      "title": "Owner item 8 rests on a false claim that conforming folded headers reach step 0 with CR/LF",
+      "body": "The item first calls long unfolded values legal, then says they are unreachable by conforming mail because they would arrive folded and retain CRLF. Gmail's API returns unfolded header values, so folding CRLF is absent before replyTarget sees the value. A conforming logical field assembled from folded wire lines can therefore exceed 998 and be refused. The same false premise is mirrored in the logbook at lines 658-662.",
+      "recommendation": "Do not change the owner-ruled cap here. Correct the rationale to acknowledge that the API supplies unfolded values and that 998 is a deliberate compatibility refusal which can reject conforming mail; record that actual cost in owner item 8.",
+      "table_b_39_case_already_refuses": true,
+      "contract_effect": "LIGHT presentation/premise correction under the stop criterion; the 999-character case already refuses."
+    }
+  ],
+  "closure_checks": {
+    "R2-A": "Not fully closed: the grammar is bounded before step 3 and the stated at-bound measurement is consistent, but step 1 still trims unbounded raw Reply-To before the selected-value bound.",
+    "R2-B": "Closed. Both required mailbox forms were executed and accepted.",
+    "R2-C": "Not closed. The executed conditional-default countermodel passes the stated assertions while both production consumer sites remain wrong.",
+    "R2-D": "Closed. The live contract consistently states author nomination and permits an unrelated third party; remaining old wording is explicitly corrected historical material.",
+    "R2-E": "Not closed. The literal V5 block accepts a wrong top-level schema type.",
+    "R2-F": "Not closed. The stated mutation is masked for all five raw fields, including Message-ID and References.",
+    "R2-G": "The body-derived mutation is now located at the handler. No additional defensible expectRed-set expansion was found, but AUD-D5 has the separate masking defect above.",
+    "table_b_pipeline": "The reconstructed 39-row ordered pipeline executed with 0 mismatches. It does not cover oversized nonselected whitespace padding or Unicode-safe subject truncation.",
+    "step_0_completeness": "The five named source header fields cover every fetched value that the design places into an outgoing header. threadId reaches the drafts.create request body rather than a header and is Gmail-generated; the model-written body remains MIME content. No step-7-only header-injection path exists if step 0 is implemented as specified.",
+    "steps_5_6_consistency": "The no-Message-ID and no-threadId behavior is consistent across Table B, Exact contracts and criterion 5. The Unicode truncation gap remains.",
+    "owner_item_8": "The recommendation may remain owner-ruled, but its conforming-mail premise is false because Gmail returns unfolded values."
+  },
+  "routed_scope_objections": [],
+  "read_only_integrity": {
+    "before_status": "",
+    "after_status": "",
+    "identical": true,
+    "worktree_writes": 0
+  }
+}
