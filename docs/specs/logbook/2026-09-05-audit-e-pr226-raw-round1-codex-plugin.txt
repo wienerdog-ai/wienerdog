@@ -1,0 +1,27 @@
+# PR gate raw — PR #226 round 1 — Codex plugin native review — WP-audit-e-ledger-parser-corpus
+# tip reviewed: e4be97333800995e1322f2c3b625a7b32edf344b ; base main = 881f0d81 ; porcelain before/after identical ; committed pre-adjudication ; 52 focused tests executed by the reviewer; full suite not run in its sandbox (disclosed)
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a07238-b57d-78a0-a599-d11b41e27088).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat 881f0d818fc43abc0ea84064b73d0d7a86ec2b...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat 881f0d818fc43abc0ea84064b73d0d7a86ec2b... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-audit-e-ledger-parser-corpus.md; git diff 881f...
+[codex] Running command: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- tests/unit/dream-validate....
+[codex] Command completed: /bin/zsh -lc 'git diff 881f0d818fc43abc0ea84064b73d0d7a86ec2b2c -- tests/unit/dream-validate.... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '270,410p' src/core/dream/validate.js; sed -n '470,670p' src/core/dream/...
+[codex] Command completed: /bin/zsh -lc "sed -n '270,410p' src/core/dream/validate.js; sed -n '470,670p' src/core/dream/... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,85p' tests/unit/dream-validate.test.js; sed -n '315,457p' docs/specs/...
+[codex] Running command: /bin/zsh -lc "node --test --test-name-pattern='ledger corpus|parseFrontmatter|no-separator-sp...
+[codex] Command completed: /bin/zsh -lc "node --test --test-name-pattern='ledger corpus|parseFrontmatter|no-separator-sp... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: No actionable regressions were found. The parser changes consistently handle invalid trust va...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+No actionable regressions were found. The parser changes consistently handle invalid trust values, duplicate headings, and prototype-sensitive keys across all three ledger reads. All 52 focused tests passed; the full suite was not run.
+rc=0
+PORCELAIN: identical
