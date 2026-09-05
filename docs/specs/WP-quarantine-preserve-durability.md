@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-preserve-durability
 title: Make a preserved quarantine artifact durable, and say honestly what that guarantees
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening, WP-quarantine-banner-location]
