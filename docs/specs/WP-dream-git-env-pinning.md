@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-pinning
 title: Build the dream run's git environment from a named allowlist at the pipeline seam
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -291,8 +291,11 @@ documentation only.
  * and `XDG_CONFIG_HOME` is NOT carried (row U3, owner item O3).
  * @param {string} [indexFile] absolute path for GIT_INDEX_FILE (Table U row U5).
  *   Omitted for every shape whose declared disposition is `unset`.
- * @returns {Record<string,string>} a FRESH object, built key by key — never
- *   `process.env`, and never a spread or a filtered copy of it.
+ * @returns {Record<string,string>} a FRESH object, built KEY BY KEY — never
+ *   `process.env` itself, never a spread of it, and never a DENYLIST over it
+ *   (spread, then delete named keys). Key-by-key construction is the required
+ *   SOURCE FORM, not merely a way of reaching the right map: see AC1's canary
+ *   paragraph for what a runtime check can and cannot tell apart.
  */
 function buildGitEnv(indexFile)
 ```
@@ -404,22 +407,22 @@ rests on instead.
 | U4 | win32 only: `SystemRoot`, `windir`, `SystemDrive`, `ComSpec`, `PATHEXT`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP` | platform | **CARRIED** from the launch environment | not measured |
 | U4b | win32 only: `USERPROFILE` | platform | **SET BY THE RUN** to `getPaths().home` | not measured |
 | U5 | `GIT_INDEX_FILE` | index selection | **SET BY THE RUN** to `<paths.state>/dream-index.<pid>.tmp`, on the three `private` shapes only | n/a — the run's own; see U13 for the inherited form |
-| U6 | `GIT_DIR` | write target + repository selection | **ABSENT** | **R2P3** — reaches (1)(2)(4)(5)(6)(7)(8)(9); **R2P3c** — chained, the decoy's HEAD moves and the vault's does not |
+| U6 | `GIT_DIR` | write target + repository selection | **ABSENT** | **R2P3** — reaches (1)(2)(4)(5)(6)(7)(8)(9); **R2P3c** — chained, the decoy's HEAD moves |
 | U7 | `GIT_OBJECT_DIRECTORY` | object-store write target | **ABSENT** | **R2P4** — reaches (1)(2)(4)(6)(7)(8)(9); **R2P4c** — chained, the run aborts at (6) |
 | U8 | `GIT_COMMON_DIR` | object store + refs | **ABSENT** | **R2P5**, **R2P5c** — as U7 |
-| U9 | `GIT_ALTERNATE_OBJECT_DIRECTORIES` | object store + read scope | **ABSENT** | **R3P6** — reaches (2) and (6): a blob already in the alternate is NOT stored in the vault |
+| U9 | `GIT_ALTERNATE_OBJECT_DIRECTORIES` | object store + read scope | **ABSENT** | **R3P6** — reaches (2); **R2P6b** — reaches (6) |
 | U10 | `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_VALUE_n` | config injection; code | **ABSENT** | **R2P7** — runs a configured program on (3) and (7); **R2P7h** — fires a hook on (9) |
 | U11 | `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM` | config file selection; code | **ABSENT** | **R2P8** — runs a configured program on (3) and (7) |
 | U12 | `GIT_WORK_TREE` | working-tree location | **ABSENT** | **R2P9** — no reach |
 | U13 | `GIT_INDEX_FILE`, inherited | index selection | **ABSENT** as an inherited value | **R2P10** — no reach |
 | U14 | `GIT_NAMESPACE` | ref namespace | **ABSENT** | **R2P11** — no reach |
-| U15 | `GIT_CEILING_DIRECTORIES` | repository discovery | **ABSENT** | **R2P12** — no reach; **R2P12n** — discovery from a nested non-repository directory resolves the ancestor |
+| U15 | `GIT_CEILING_DIRECTORIES` | repository discovery | **ABSENT** | **R2P12** — no reach; **R2P12n** — discovery reaches the ancestor |
 | U16 | `GIT_EXEC_PATH` | code — subcommand dispatch | **ABSENT** | **R2P13** — no reach |
 | U17 | `GIT_ATTR_NOSYSTEM`, `GIT_ATTR_SOURCE` | attribute lookup; filter drivers | **ABSENT** | **R2P14** — no reach |
 | U18 | `GIT_TEMPLATE_DIR` | new-repository template | **ABSENT** | not measured |
 | U19 | `GIT_TRACE` and the other `GIT_TRACE*` | diagnostics, with a file sink | **ABSENT** | not measured |
-| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, `GNUPGHOME`, `GPG_TTY`, `SSH_AUTH_SOCK` | transport, credential and signing helpers | **ABSENT** | **R2P15** — no reach (signing); **R2P16** — a user hook fired by (9) runs under the constructed environment; transport not measured |
-| U22 | `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, `GIT_COMMITTER_DATE` | commit identity and dates | **ABSENT** | **R2P17**, **R2P17d**, **R2P22** — reaches (8): the inherited identity WINS over the run's own `-c user.name` / `-c user.email` |
+| U20 | `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, `GNUPGHOME`, `GPG_TTY`, `SSH_AUTH_SOCK` | transport, credential and signing helpers | **ABSENT** | **R2P15** — no reach; **R2P16** — reaches (9)'s hook environment; transport not measured |
+| U22 | `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`, `GIT_COMMITTER_DATE` | commit identity and dates | **ABSENT** | **R2P17**, **R2P17d**, **R2P22** — reaches (8) |
 | U23 | `GIT_NO_REPLACE_OBJECTS`, `GIT_REPLACE_REF_BASE` | object interpretation | **ABSENT** | **R3P18** — reaches (1)(4)(6); not (5) or (8) |
 | U21 | **every other variable, `GIT_*` or not** | closure rule | **ABSENT** | n/a |
 
@@ -518,6 +521,12 @@ for its own reasons.
   *broken link from tree … to blob …*. **So the cost of this row is borne by the
   channel, not by the pin**: an inherited alternate makes the run publish a
   commit the vault does not own, and the pin is what prevents it.
+- **U15 discovery, and why the row says only "reaches the ancestor".** Git
+  discovers the repository upward from the `-C <vault>` directory, so a vault
+  directory that is not itself a repository but lies inside one resolves that
+  ancestor — measured (**R2P12n**), present today, unchanged by this WP and
+  independent of the environment. Owner item **O2** owns the consequence and
+  `WP-dream-git-env-validate-seam` owns the question.
 - **U11 `GIT_CONFIG_GLOBAL`** — a user who relocates their global git config
   *only* by exporting it loses it for the run's own calls. Accepted rather than
   excepted, because the same variable is a measured code channel (**R2P8**); the
@@ -676,8 +685,9 @@ prose mirror, registered so they move with it:**
   convenient would regress that. The tests exercise the pin by exporting the
   real variable around the run, which the pipeline fixture's existing
   save/overwrite/restore of a named `ENV_KEYS` list already does.
-- **Zero new dependencies** (CLAUDE.md). `git-env.js` needs `node:path` at
-  most.
+- **Zero new PACKAGE dependencies** (CLAUDE.md). `git-env.js` may require
+  `node:path` and the existing `../paths` module (`getPaths`), exactly as its
+  Deliverables row specifies — nothing else.
 - **Do not "fix" the merge path.** `promote.js`'s `spawnGitForMerge` builds its
   own, stricter environment for its own reasons; unifying the two is
   prohibited — see Out of scope.
@@ -714,12 +724,15 @@ prose mirror, registered so they move with it:**
       and it is taken through `getPaths().home` so the run and its scheduled twin
       agree on it. That is a TRUST DECISION, not a safety claim — "Why Table U is
       what it is" states plainly, and measures, that a hostile `HOME` selects a
-      config the pinned shapes will obey. It is handled by
-      **construction, not by filtering**: no
-      code path may build the child environment by copying `process.env` and
-      deleting keys, because a delete-list over git's variable grammar cannot be
-      closed (Table U row U21). Every key present in the child environment must
-      be there because a row of Table U put it there by name.
+      config the pinned shapes will obey. It is handled by **construction, and
+      what that forbids is precise: a DENYLIST** — spreading `process.env` and
+      deleting the keys someone thought to name — because a denylist over git's
+      variable grammar cannot be closed (Table U row U21), and because it leaks
+      every key nobody listed. Every key present in the child environment must be
+      there because a row of Table U put it there by name. **An allowlist-driven
+      filter reaches the same map** (measured) and is therefore not a safety
+      question; key-by-key construction is nonetheless the exact contract's
+      required source form, and the reviewer's read is what enforces it.
 - [ ] `indexFile` reaches a child process's environment as `GIT_INDEX_FILE`.
       Its value is code-derived — `<stateDir>/dream-index.<pid>.tmp` — and never
       user-supplied; the clauses it must satisfy are Table W row W1(c)'s, which
@@ -764,14 +777,25 @@ prose mirror, registered so they move with it:**
       **Non-vacuity:** the run invoked git at least once.
       **AND A CANARY, because even a complete key→value map is host-dependent
       on the ABSENCE side:** an implementation that spreads `process.env` and
-      deletes the names Table U lists satisfies every clause above on a host
-      that exports no `GIT_*` — the delete-list shape row U21 and the Security
-      checklist forbid. So for the whole run the test exports one variable **no
-      Table U row names** (`WIENERDOG_ENV_CANARY`, a name the pipeline fixture's
-      `ENV_KEYS` list can carry through its existing save/overwrite/restore) and
-      asserts it appears in **no** observed `env`. A spread, a filtered copy or
-      a delete-list fails that on every host, whatever the ambient environment
-      holds.
+      deletes the **named bad keys** — a DENYLIST — satisfies every clause above
+      on a host that exports none of them, which is most hosts. That shape is
+      what row U21 and the Security checklist forbid, and it is what the canary
+      catches: for the whole run the test exports one variable **no Table U row
+      names** (`WIENERDOG_ENV_CANARY`, a name the pipeline fixture's `ENV_KEYS`
+      list can carry through its existing save/overwrite/restore) and asserts it
+      appears in **no** observed `env`. A denylist leaks it on every host,
+      whatever the ambient environment holds.
+      **WHAT THE CANARY DOES NOT DO, stated because an earlier draft claimed it
+      did.** It does not distinguish key-by-key construction from a spread
+      followed by deleting every key NOT in the allowlist: measured, that
+      allowlist-driven filter produces a map deeply equal to the constructed one,
+      canary absent and `GIT_DIR` absent, so **no runtime criterion can tell the
+      two apart** — they are the same map. The PRODUCT property is unaffected and
+      is fully asserted above: the child environment IS exactly the allowlist
+      map. Key-by-key construction is the **required source form** of the exact
+      contract, and the surface that checks a source form is the reviewer's read
+      of `git-env.js`, not a test. No structural gate is added for it: that would
+      be machinery guarding no product behaviour.
 - [ ] **AC2 — an exported `GIT_DIR` does not redirect the run** (row U6). With
       `GIT_DIR` exported to a decoy repository for the whole run, the vault's
       HEAD advances by the run's commit and the decoy repository's HEAD and

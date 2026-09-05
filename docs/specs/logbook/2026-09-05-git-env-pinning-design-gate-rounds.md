@@ -2639,7 +2639,263 @@ frontmatter check passed: 269 spec(s), 4 agent(s)
 lint passed
 ```
 
-## External rounds
+## Round 4 — the closing confirmation, tip `edec229d`
 
-Round 4 — the closing confirmation — runs on this tip. Appended by the
-orchestrator below this line.
+Both channels ran on `edec229d`; `git status --porcelain` was byte-identical
+before and after in each. Raws committed before any of this was read:
+
+| Channel | Verdict | Raw | Commit that introduced it |
+|---------|---------|-----|---------------------------|
+| Codex plugin | **approve — no material findings** | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round4-codex-plugin.txt` | `8776cace` |
+| Hermetic shadow | needs-attention — three findings | `docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round4-herdr-shadow.txt` | `f07c1210` |
+
+The plugin confirms R3-A, R3-B, R3-D, R3-E and R3-F fixed, and R3-C
+*"substantively corrected"* with an evidence-presentation note; it resolved all
+28 probe ids to exactly one definition each and ran the three RED failure sets
+through the real `evaluateRed()`. The shadow's three findings are below. **Both
+again disclosed** that `npm test` and `node scripts/red-proofs.js` stopped before
+running on sandbox EPERM, so both verdicts are readings on those points.
+
+### Findings, bands, criterion branch, disposition
+
+| # | Channels | Band | Branch (§0.1) | Disposition, and why it does not change what is built |
+|---|----------|------|---------------|------------------------------------------------------|
+| **R4-A** | shadow F1 | B | 5/6 → **LIGHT (mirror drift)** | **FIX.** The Implementation-notes bullet still said `git-env.js` *"needs `node:path` at most"*, contradicting R3-A's Deliverables row. That bullet is a MIRROR of the row and R3-A's sweep missed it. Replaced with the row's own constraint — zero new **package** dependencies; `node:path` and the existing `../paths` (`getPaths`), nothing else. **Nothing the implementer builds changes**: the Deliverables row, which is the permission boundary, already said this; the contradiction was between two statements of one decision, which is exactly the class the round-2 extraction was meant to end and one surface it had not reached |
+| **R4-B** | shadow F2 | B | 6 → **LIGHT (a false claim, corrected)** | **FIX the claim, not the machinery.** The shadow executed the counterexample: spreading `process.env` and deleting every key NOT in the positive allowlist yields a map **deeply equal** to key-by-key construction — canary absent, `GIT_DIR` absent — so the sentence *"a spread, a filtered copy or a delete-list fails that on every host"* was FALSE for the allowlist-driven filter. **The PRODUCT property is untouched and fully asserted**: AC1 requires the child environment to BE exactly the allowlist map, and both constructions satisfy it because they produce the same map. What is genuinely forbidden is a **DENYLIST** — spread, then delete the names someone thought of — which leaks every key nobody listed and which the canary does catch. AC1's canary paragraph, the Security-checklist bullet and `buildGitEnv`'s JSDoc now say that precisely, and add what a runtime check CANNOT do: it cannot distinguish two source forms that produce the same map. Key-by-key construction remains the exact contract's **required source form**, enforced by the reviewer's read of `git-env.js`. **No structural gate was added** — machinery guarding no product behaviour, against a frozen surface (`codex-review.md`, "The loop converges by freezing surface") |
+| **R4-C** | shadow F3 + the plugin's note — **CONVERGED** | C | 6 → **LIGHT (evidence cell)** | **FIX.** `R3P6`'s output proves shape (2) — the deduplication result — but does not print a discriminating shape-(6) comparison; `R2P6b` is what proves the `read-tree` reach. U9's Reach cell is now `**R3P6** — reaches (2); **R2P6b** — reaches (6)`, and the deduplication/broken-history consequence lives only in the rationale section and round 3's record. **A mechanical re-check of every Reach cell** then found four more carrying interpretation rather than a probe id and a result: U6, U15, U20 and U22 are trimmed the same way, and U15's discovery fact gains a rationale bullet so nothing is lost. U9's ABSENT disposition is unchanged |
+
+**Round outcome: CLOSE.** No finding is about the product's behaviour.
+
+## Closure
+
+**The decision, and the rule it rests on.** `docs/runbooks/codex-review.md`,
+weighted closure: *"The loop is DONE when a round finds nothing about the
+product. Machinery findings at that point are fixed or accepted as named
+residuals; they do not extend the loop."* Round 4 is that round. One channel
+returned **approve, no material findings**; the other returned three, and every
+one is a mirror sentence, a false claim about what a test discriminates, or an
+evidence citation — none changes what the implementer builds, and all three are
+fixed in place rather than carried. **No further external round is owed.** A
+clean-context mechanical verification follows on this tip, then the PR.
+
+### The rounds
+
+| Round | Tip | Raws (introducing SHA) | Verdicts | Outcome (§0.1 round rule) |
+|-------|-----|------------------------|----------|---------------------------|
+| 0 | `4b629ec6` (base) | architect's own; executor passes `T1`–`T2`, `X1`–`X7` | — | criterion pinned; 7 findings fixed |
+| 1 | `4cb6259f` | plugin `8b47487d`, shadow `9c7d25a9` | needs-attention / needs-attention | **DESIGN** (branch 2 on R1-D) |
+| 2 | `235af369` | plugin `f69eee7b`, shadow `5251057e` | needs-attention / needs-attention | **DESIGN + EXTRACTION** (branch 3 fired) |
+| 3 | `2ad1434c` | plugin `c00f6f4b`, shadow `3c2571a4` | needs-attention / needs-attention | **HEAVY** (branch 4 on R3-A) |
+| 4 | `edec229d` | plugin `8776cace`, shadow `f07c1210` | **approve** / needs-attention | **CLOSE** |
+
+Between rounds 1 and 4 the spec's Table U grew from 21 rows to 24 and every
+Reach cell was re-derived twice; **no verification machinery was added after
+round 1** — still V1–V6, still three RED declarations.
+
+### Named residuals carried OUT of the loop
+
+Each is stated here so the next reader finds them together, and each already has
+its home in the spec or a successor.
+
+1. **Nested-vault discovery.** `assertGitRepo` establishes that the vault is
+   INSIDE a repository, not that it IS one; a non-repository vault directory
+   within a repository is targeted at the ancestor by discovery, today and
+   independent of this pin. Owner item **O2**; owned by
+   `docs/specs/WP-dream-git-env-validate-seam.md`, which carries the three
+   candidate answers and the cost of each.
+2. **The second git spawn point.** `validate.js`'s module-private `git()` keeps
+   inheriting `process.env`. Same owner item, same successor.
+3. **Size.** The spec is **932 lines** against `docs/specs/README.md`'s
+   ~400-line heuristic. Recorded, not trimmed — trimming would reopen surface
+   the loop has just frozen. It still touches 8 files and the implementation is
+   an **S**.
+4. **U8 and U9 have no dedicated RED proof.** Both are measured to reach a
+   pinned shape; what they rest on is row U21 plus AC1's canary — the
+   environment is built rather than filtered — not a per-channel proof. Adding
+   two more declarations would grow the verification surface to guard something
+   the construction already gives.
+5. **AC8's greps prove PRESENCE, not content.** A copied heading over a wrong
+   body passes V5. The content obligations are the Mirrored Surface Checklist's,
+   read whole-cell by wd-reviewer.
+6. **The partial-clone lazy fetch is NOT MEASURED** (row U20, provenance
+   `git help partial-clone`), and the **win32 rows U4/U4b are NOT MEASURED** —
+   no win32 host in this loop; their provenance is `run-job.js`'s existing
+   passthrough list.
+7. **Three named costs the pin charges**, each in the rationale section:
+   `GIT_CONFIG_GLOBAL` (a config relocated only by that variable stops applying
+   to the run's calls), `GIT_TRACE*` (no tracing of the run's own git calls),
+   and `XDG_CONFIG_HOME` (owner item **O3**). Plus U22's — a user who tags dream
+   commits through `GIT_COMMITTER_*` loses that — and U23's, that replacement
+   refs can no longer be switched off from the shell for the run.
+8. **Three owner items, none a direct ruling.** **O1** (pin, by construction),
+   **O2** (the successor split) and **O3** (`XDG_CONFIG_HOME` not carried) are
+   recommendations adopted under the standing authorization of 2026-09-05. Their
+   enumerated overrule costs live in the spec's
+   `## Dispatch precondition — owner items`; the owner-rulings record
+   (`2026-09-05-owner-rulings-git-env-pinning-queue.md`) records the adoption and
+   cites those costs rather than restating them.
+
+### Dispatch-time re-verification — the checklist the dispatch message ticks
+
+`docs/runbooks/codex-review.md` requires the orchestrator to re-run every
+executable Current-state claim against `main` immediately before dispatch, and to
+record the run and the SHA it ran against. Every such claim in this spec,
+enumerated so the dispatch message can tick them:
+
+- [ ] `src/cli/dream.js:166-175` resolves to `gitIn`, first line to last brace.
+- [ ] `src/cli/dream.js:178-186` resolves to `spawnGitPinned`.
+- [ ] `src/cli/dream.js:226-231` resolves to the private-index block, and its
+      first line is still `const tmpIndex = …`.
+- [ ] `src/cli/dream.js:179` is still the `spawnPinnedSync('git', getPaths(), {`
+      line (row U2's licence for the module's one non-`node:` dependency).
+- [ ] `src/cli/dream.js:562` is still `const spawnGit = opts.spawnGit || spawnGitPinned;`.
+- [ ] `src/cli/dream.js:587` is still `assertGitRepo(vaultDir);`.
+- [ ] `src/cli/dream.js:1007` is still the `show HEAD:${WARNINGS_REL}` call.
+- [ ] **The `indexEnv` literal** — `const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };`
+      — is still byte-exact in `src/cli/dream.js`. It is the line the WP edits AND
+      the `find` of an existing RED declaration.
+- [ ] **`tests/red-proofs/dream-pipeline.proofs.json:10-11`** still carries that
+      literal as `dream-private-index-dropped`'s `find`/`replace` pair.
+- [ ] `src/core/dream/validate.js:64-81` resolves to the module-private `git()`,
+      and `:88-93` to `assertGitRepo`.
+- [ ] `src/core/exec-identity.js:93-118` resolves to `resolveExecutable`,
+      `:451-461` to `verifyPin`'s resolve-and-compare block, `:553` to
+      `spawnPinnedSync`.
+- [ ] `src/core/dream/promote.js:387-418` resolves to `constructMergeEnv`.
+- [ ] `src/cli/run-job.js:47-50` is still `ENV_PASSTHROUGH`, `:58-78`
+      `WIN_ENV_PASSTHROUGH`, `:150` `buildCleanEnv`, `:155`
+      `USERPROFILE: paths.home`.
+- [ ] **`src/core/paths.js:53-54`** still reads
+      `function getPaths(env = process.env) {` / `const home = env.HOME || os.homedir();`
+      — row U2's source contract rests on it.
+- [ ] **`tests/unit/dream-pipeline.test.js:411-414`** is still the fixture's
+      `Object.assign(process.env, { … })` block, and **`ENV_KEYS`** still exists
+      as the save/overwrite/restore list AC1's canary and unset fixtures use.
+- [ ] `tests/unit/dream-pipeline.test.js:185` is still `watchIndexWrites`.
+- [ ] `docs/specs/done/WP-criterion-red-harness.md:95-96` and
+      `docs/specs/done/WP-audit-c-close-disposition.md:130` still quote the
+      `indexEnv` literal (the two records this WP deliberately does not amend).
+- [ ] **V5's third grep** — `NEITHER SUPPRESSED NOR DETECTED` — is still present
+      in `docs/specs/done/WP-dream-promote-in-workspace.md`, so the guard that
+      proves row W1's hook residual was left intact is not vacuous.
+- [ ] `node scripts/red-proofs.js --wp WP-dream-git-env-pinning` still exits 1
+      with `VACUOUS: V2` (the deliverable-absent red), and
+      `node scripts/red-proofs.js --wp WP-show-slot-own-value-kind` still reports
+      both of its proofs `PROVEN`.
+
+**A stale claim blocks the dispatch and routes the spec back to wd-architect** —
+it is not the implementer's to work around, and most of the citations above point
+into files inside this WP's own Deliverables, which is precisely the window that
+gate exists for.
+
+### Revision — the tree at closure
+
+`coherence.js`:
+
+```text
+spec line count                                = 933
+Table U rows                                   = 24  U1,U2,U3,U4,U4b,U5,U6,U7,U8,U9,U10,U11,U12,U13,U14,U15,U16,U17,U18,U19,U20,U22,U23,U21
+  id set U1..U23 + U4b complete, no duplicates, closure row last: ok
+U-ids mentioned anywhere but absent from table = none
+U-rows never referenced outside their own row  = U8,U12,U14,U16,U17,U18 (informational)
+acceptance criteria                            = 9  AC1,AC2,AC3,AC4,AC5,AC6,AC7,AC8,AC9
+verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
+deliverable rows                               = 7
+   create src/core/dream/git-env.js  exists=false
+   modify src/cli/dream.js  exists=true
+   modify tests/unit/dream-pipeline.test.js  exists=true
+   modify tests/red-proofs/dream-pipeline.proofs.json  exists=true
+   create tests/red-proofs/dream-git-env-pinning.proofs.json  exists=false
+   modify docs/adr/0012-dream-run-lifecycle.md  exists=true
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true
+files touched (deliverables + the spec itself)  = 8  (README heuristic: <= 8)
+file:line citations in the spec                = 24
+   `src/cli/dream.js:587`
+      FIRST:   assertGitRepo(vaultDir);
+      LAST :   assertGitRepo(vaultDir);
+   `src/core/dream/validate.js:64-81`
+      FIRST: function git(vaultDir, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:166-175`
+      FIRST: function gitIn(spawnGit, cwd, args, opts = {}) {
+      LAST : }
+   `src/cli/dream.js:178-186`
+      FIRST: function spawnGitPinned(o) {
+      LAST : }
+   `src/core/exec-identity.js:553`
+      FIRST: function spawnPinnedSync(name, paths, opts = {}) {
+      LAST : function spawnPinnedSync(name, paths, opts = {}) {
+   `src/cli/dream.js:562`
+      FIRST:   const spawnGit = opts.spawnGit || spawnGitPinned;
+      LAST :   const spawnGit = opts.spawnGit || spawnGitPinned;
+   `src/cli/dream.js:226-231`
+      FIRST:   const tmpIndex = path.join(o.stateDir, `dream-index.${process.pid}.tmp`);
+      LAST :   const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
+   `src/cli/dream.js:1007`
+      FIRST:       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+      LAST :       const headWarnings = gitIn(spawnGit, vaultDir, ['show', `HEAD:${WARNINGS_REL}`], { allowFail: true });
+   `tests/red-proofs/dream-pipeline.proofs.json:10-11`
+      FIRST:       "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
+      LAST :       "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+   `src/cli/run-job.js:150`
+      FIRST: function buildCleanEnv(paths, name, platform = process.platform) {
+      LAST : function buildCleanEnv(paths, name, platform = process.platform) {
+   `src/core/paths.js:54`
+      FIRST:   const home = env.HOME || os.homedir();
+      LAST :   const home = env.HOME || os.homedir();
+   `src/cli/dream.js:179`
+      FIRST:   return spawnPinnedSync('git', getPaths(), {
+      LAST :   return spawnPinnedSync('git', getPaths(), {
+   `src/core/dream/promote.js:387-418`
+      FIRST: function constructMergeEnv(root) {
+      LAST : }
+   `src/core/exec-identity.js:93-118`
+      FIRST: function resolveExecutable(name, env, platform) {
+      LAST : }
+   `src/core/paths.js:53-54`
+      FIRST: function getPaths(env = process.env) {
+      LAST :   const home = env.HOME || os.homedir();
+   `src/cli/run-job.js:47-50`
+      FIRST: const ENV_PASSTHROUGH = [
+      LAST : ];
+   `src/cli/run-job.js:58-78`
+      FIRST: const WIN_ENV_PASSTHROUGH = [
+      LAST : ];
+   `src/cli/run-job.js:155`
+      FIRST:       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+      LAST :       USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+   `docs/specs/done/WP-criterion-red-harness.md:95-96`
+      FIRST:   builds the private index environment at exactly one site — the `indexEnv`
+      LAST :   constant, `{ ...process.env, GIT_INDEX_FILE: tmpIndex }`. This is stated as an
+   `docs/specs/done/WP-audit-c-close-disposition.md:130`
+      FIRST:   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+      LAST :   (`indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex }`).
+   `tests/unit/dream-pipeline.test.js:411-414`
+      FIRST:   Object.assign(process.env, {
+      LAST :   });
+RED ids named in the Exact-contracts table     = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+RED ids in V4's `want`  array                    = git-env-inherits-config-count,git-env-inherits-git-dir,git-env-inherits-object-directory
+template sections absent                       = none
+
+COHERENCE: no failures
+```
+
+`npm run lint`:
+
+```text
+$ npm run lint
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 651 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+--- frontmatter check ---
+frontmatter check passed: 269 spec(s), 4 agent(s)
+
+lint passed
+```
+
+The spec's `status:` is flipped to **`Ready`** in the same commit.
