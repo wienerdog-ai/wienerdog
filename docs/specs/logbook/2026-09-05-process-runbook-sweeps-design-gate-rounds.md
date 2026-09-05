@@ -25,12 +25,25 @@ deliverable-absent states are scratch copies of the five target files under the
 session scratchpad (`state-green/`, `state-violating/`, `state-absent/`); the
 untouched-tree run is read-only.
 
+**Pasted tool output in this record is normalized in one respect only:**
+trailing whitespace was stripped from 35 lines so `git diff --check` exits 0
+(round-1 finding R1-G). The stripped characters were line-end spaces inside
+quoted excerpts and blank neighbour lines in range dumps; no visible character
+of any pasted output was changed.
+
 **Every measurement was run FROM A FILE**, never through a shell one-liner with
 nested quotes (`codex-review.md:350-357`). The drivers are `measure-bound.js`,
 `find-provenance.js`, `find-missing.js`, `check-ranges.js`,
 `prove-sentinels.sh`, `run-rest.sh` and `coherence.js`.
 
-### 0.1 STOP CRITERION — pinned BEFORE round 1
+### 0.1 STOP CRITERION — pinned BEFORE round 1 (SUPERSEDED after round 1)
+
+> **Round 1 ran under the text below, and it is kept verbatim for that
+> reason.** Finding R1-D then measured it as neither exhaustive nor
+> exclusive, so it is superseded by the ordered decision list under
+> "Round 2 — criterion pinned in advance". The criterion has ONE canonical
+> text at a time; this block is the historical record of what round 1 was
+> judged against, not a second live authority.
 
 Pinned here per `codex-review.md:72-81`, before any adversarial round runs.
 Materiality bands are HANDOVER's: **A** = silent wrong behavior with a data-loss
@@ -239,7 +252,7 @@ Table A's R01–R19 are the atomic rules they expand into.
       - WP-show-slot-own-value-kind: a canary that differs from its exploit in ARITY proves nothing about the exploit — it dies on length equality before reaching the slot under test. The show vector is two tokens BECAUSE the pinned shape is two tokens; a three-token probe would have certified a rejection the set never made. Same lesson the read-tree gap cost, one shape over.
   --- R6 claim sweeps: 1 hit(s)
     memory/lessons/inbox.md:1246  /whitespace-?flatten/
-      - WP-dream-promote-in-workspace: **A line-oriented grep certifies a false all-clear on exactly the surfaces that matter.** A claim sweep found 12 occurrences and reported all swept; whitespace-flattened it found 15, two unswept. Then a noun-only pattern returned ZERO for the product's own statement, which is pronominal — so that file was swept by hand but was never inside its own proof. Flattened 
+      - WP-dream-promote-in-workspace: **A line-oriented grep certifies a false all-clear on exactly the surfaces that matter.** A claim sweep found 12 occurrences and reported all swept; whitespace-flattened it found 15, two unswept. Then a noun-only pattern returned ZERO for the product's own statement, which is pronominal — so that file was swept by hand but was never inside its own proof. Flattened
   --- R7 mirrors same commit: 4 hit(s)
     memory/lessons/inbox.md:313  /same commit/
       - WP-dream-plaintext-trigger (process): the maintainer-amendment loop (implementer flags a Deliverables gap under Discovered issues → maintainer amends the table with a provenance note → implementer applies in the same commit) is now the standard remedy for the recurring "shared constant literal-matched in an unlisted test file" spec under-scope.
@@ -320,7 +333,7 @@ Table A's R01–R19 are the atomic rules they expand into.
     docs/HANDOVER.md:151  /circuit.?break/
       > | 3b successor | `WP-quarantine-preserve-durability` | **Done** | design loop #220 (`bb58e398`), implementation #221 (`c891e0b6`), filed in this pass | **Design loop: round zero plus ELEVEN double-channel rounds** (plugin gate + hermetic shadow on every one, twenty-two raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md`). *
     docs/HANDOVER.md:190  /circuit.?break/
-      > | 3b | `WP-quarantine-banner-location` | **Done** | design loop #217 (round zero + 5 double-channel rounds; **circuit breaker at round 2** — two consecutive A findings on "is the pointer's destination real?" were settled by DELETING the defect: row L7 reorders the undelivered-record print to step 17b, ahead of every durable write, which removes the crash window instead of narrowing the sentence 
+      > | 3b | `WP-quarantine-banner-location` | **Done** | design loop #217 (round zero + 5 double-channel rounds; **circuit breaker at round 2** — two consecutive A findings on "is the pointer's destination real?" were settled by DELETING the defect: row L7 reorders the undelivered-record print to step 17b, ahead of every durable write, which removes the crash window instead of narrowing the sentence
     docs/HANDOVER.md:215  /circuit.?break/
       > | 4→ | `WP-dot-segment-denial` | **Done** | design loop #214 (round zero + 3 double-channel rounds; circuit breaker at round 2 — two hand-shaped sample families replaced by EQUALITY with a one-line reference predicate over a seeded full-alphabet generator; round 3 hardened the grading's inputs), implementation #215 (three-round triple-channel PR gate: PATH stub for the adopt round-trip test, `re
     docs/HANDOVER.md:236  /circuit.?break/
@@ -372,9 +385,9 @@ Targeted follow-up for the three claims the first pass could not place:
     memory/lessons/inbox.md:119 /anchor/
       - PowerShell engine facts now institutional: .NET regex `$` matches before a trailing newline — use \A...\z for untrusted-identifier anchors (^...$ is NOT a full anchor there); `exit` anywhere in an irm|iex-evaluated script kills the USER'S host window — return an [int] from Main and centralize exit at one dot-source disposition point keyed on $MyI
     memory/lessons/inbox.md:270 /anchor/
-      - A7 spec phase (Felho side): before designing ANY content-hash gate over a third-party binary, observe its real update mechanism live — claude's native installer shipped four version files in three days (new version-named file + symlink repoint), so a sha256/size/exact-realpath pin would alarm on every legitimate auto-update and train the user to 
+      - A7 spec phase (Felho side): before designing ANY content-hash gate over a third-party binary, observe its real update mechanism live — claude's native installer shipped four version files in three days (new version-named file + symlink repoint), so a sha256/size/exact-realpath pin would alarm on every legitimate auto-update and train the user to
     memory/lessons/inbox.md:272 /anchor/
-      - A7 spec phase (Felho side, owner-caught): state trust anchors precisely — the out-of-tree launcher lives on the SAME write surface (~/.wienerdog) as the app tree it guards, so "needs OS entry AND launcher to defeat" was false (launcher alone suffices). Walk the actual who-interprets-what chain before writing any boundary sentence; the honest fix 
+      - A7 spec phase (Felho side, owner-caught): state trust anchors precisely — the out-of-tree launcher lives on the SAME write surface (~/.wienerdog) as the app tree it guards, so "needs OS entry AND launcher to defeat" was false (launcher alone suffices). Walk the actual who-interprets-what chain before writing any boundary sentence; the honest fix
     memory/lessons/inbox.md:308 /anchor/
       - WP-dream-plaintext-trigger: the whole-output discriminator ("the diagnostic IS the entire output", ANSI-stripped + trimmed) beats any substring/anchored marker for CLI-diagnostic detection — it kills the false-positive and false-negative classes simultaneously.
     memory/lessons/inbox.md:315 /anchor/
@@ -402,7 +415,7 @@ Targeted follow-up for the three claims the first pass could not place:
     memory/lessons/inbox.md:1284 /positional/
       - WP-index-guard-residuals: **a comment-only edit is not a no-op if the file is cited by line.** Rewriting two comments in `src/cli/dream.js` added seven lines and would have rotted ~15 `cli/dream.js:NNN` citations inside row W1(c) — the nine pinned-set call sites among them, i.e. the entries this WP was editing. The check is cheap: `git show origi
     memory/lessons/inbox.md:1377 /anchor/
-      - WP-quarantine-preserve-durability: prefer a FIXED CHAIN derived from two known anchors over a set derived from what the call happened to create. A derived set is a list somebody maintains — it grows a member the day the code creates one more directory, and no reviewer can tell a missing member from an intentional one. A closed list computed from 
+      - WP-quarantine-preserve-durability: prefer a FIXED CHAIN derived from two known anchors over a set derived from what the call happened to create. A derived set is a list somebody maintains — it grows a member the day the code creates one more directory, and no reviewer can tell a missing member from an intentional one. A closed list computed from
     memory/lessons/inbox.md:1391 /anchor/
       - WP-audit-d-code-derived-recipients: editing a vendored operating skill BREAKS THE CHECKED-IN DIGEST ANCHOR. `src/core/runtime-skill-digests.json` records the sha256 of each `skills/*/SKILL.md`, so a spec that edits one and does not list the anchor as a Deliverables row cannot be implemented green — 13 tests red, and a merge leaves the routine ref
     memory/lessons/inbox.md:1401 /anchor/
@@ -461,7 +474,7 @@ Targeted follow-up for the three claims the first pass could not place:
     docs/HANDOVER.md:191 /double-channel/
       > | 3c | `WP-quarantine-preserve-durability` | Draft → in design | — | wd-architect matured it to **1043 lines** at `284144db` on `docs/wp-quarantine-preserve-durability`. **SPLIT**: `WP-quarantine-disposal-durability` filed as a Draft stub on that branch. Four owner items, each carrying a recommendation. Round zero is done; the external double-cha
     docs/HANDOVER.md:215 /double-channel/
-      > | 4→ | `WP-dot-segment-denial` | **Done** | design loop #214 (round zero + 3 double-channel rounds; circuit breaker at round 2 — two hand-shaped sample families replaced by EQUALITY with a one-line reference predicate over a seeded full-alphabet generator; round 3 hardened the grading's inputs), implementation #215 (three-round triple-channel PR 
+      > | 4→ | `WP-dot-segment-denial` | **Done** | design loop #214 (round zero + 3 double-channel rounds; circuit breaker at round 2 — two hand-shaped sample families replaced by EQUALITY with a one-line reference predicate over a seeded full-alphabet generator; round 3 hardened the grading's inputs), implementation #215 (three-round triple-channel PR
     docs/HANDOVER.md:236 /double-channel/
       > | 4→ | `WP-instruction-basename-currency` | **Done** | design loop #210 (round zero + 3 double-channel rounds, circuit breaker at round 2 — the loop closed by DELETING machinery: whole-artifact byte compares + one hand-written literal set), implementation #211 (two-round triple-channel PR gate), filed #212 | `INSTRUCTION_BASENAMES` is nine names;
     docs/HANDOVER.md:370 /same tip/
@@ -494,9 +507,9 @@ docs/runbooks/codex-review.md:14-17  (both gates run)
    after : 3. **Dispatch-time re-verification (mandatory): every WP, at the moment it is
 
 docs/runbooks/codex-review.md:35-36  (Finding disposition heading + first bullet)
-   before: 
+   before:
    FIRST : ### Finding disposition
-   LAST  : 
+   LAST  :
    after : - Every finding gets exactly one disposition: **fix** (a genuine defect),
 
 docs/runbooks/codex-review.md:58-69  (value question + aggregate question)
@@ -533,19 +546,19 @@ docs/runbooks/codex-review.md:133-138  (cited RANGE both ends)
    before:   the spec itself provides.
    FIRST : - A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must
    LAST  :   successor's first draft it caught three more, one wrong at both ends.)
-   after : 
+   after :
 
 docs/runbooks/codex-review.md:154-164  (freezing surface)
-   before: 
+   before:
    FIRST : ### The loop converges by freezing surface, not by patience
    LAST  :   not the error rate.
-   after : 
+   after :
 
 docs/runbooks/codex-review.md:186-190  (dispatch gate: which claims)
    before: **Which claims. The boundary is RUNNABILITY — not file ownership, and not a
    FIRST : heading.** Re-run **every executable claim the spec makes about the tree the
    LAST  : claim and this gate does not cover it.
-   after : 
+   after :
 
 docs/runbooks/codex-review.md:290-295  (report states what was EXECUTED)
    before: - PR review input: the PR branch's diff against its merge base with
@@ -581,7 +594,7 @@ docs/runbooks/codex-review.md:391-399  (zero-hit sweep)
    before:   produced, not the value the pipeline last touched.
    FIRST : - **A zero-hit sweep is evidence only if the sweep demonstrably read its
    LAST  :   reason.
-   after : 
+   after :
 
 docs/runbooks/codex-review.md:358-367  (claim to be RUN not read)
    before:   literal there.
@@ -626,37 +639,37 @@ docs/runbooks/spec-authoring.md:56-63  (sweep for the CLAIM)
    after : - CLAUDE.md's `feat|fix|docs|test|chore(scope): message (WP-<slug>)` governs
 
 docs/specs/_TEMPLATE.md:86-97  (Mirrored Surface Checklist)
-   before: 
+   before:
    FIRST : ### Mirrored Surface Checklist
    LAST  : - [ ] Operative prose steps that apply it
-   after : 
+   after :
 
 docs/specs/_TEMPLATE.md:88-91  (one pass / register-new-mirrors sentence)
-   before: 
+   before:
    FIRST : For each canonical table above, name **every surface in this spec that mirrors
    LAST  : spot (register-new-mirrors):
-   after : 
+   after :
 
 .claude/agents/wd-reviewer.md:21-21  (contract-density detector paragraph)
-   before: 
+   before:
    FIRST : **Contract-density detector (ADR-0031).** Also flag contract-dense inline prose that should be one canonical reference table, find
    LAST  : **Contract-density detector (ADR-0031).** Also flag contract-dense inline prose that should be one canonical reference table, find
-   after : 
+   after :
 
 .claude/agents/wd-architect.md:16-23  (Rules list)
-   before: 
+   before:
    FIRST : Rules:
    LAST  : - Use GLOSSARY.md terms exactly.
-   after : 
+   after :
 
 docs/HANDOVER.md:336-366  (What to watch for)
-   before: 
+   before:
    FIRST : ## What to watch for (the compressed discipline)
    LAST  :   without bands are not decision-grade.
-   after : 
+   after :
 
 docs/HANDOVER.md:342-343  (proof of a fix)
-   before: 
+   before:
    FIRST : - **The proof of a fix is the re-grep/re-run, never the edit.** Report what
    LAST  :   the tool printed, not what you intended.
    after : - **Read the tool's own summary, not your regex's match count.**
@@ -713,31 +726,31 @@ docs/HANDOVER.md:364-366  (materiality bands)
    before:   family-wide; a file swept by hand is not inside its own proof.
    FIRST : - **Materiality bands on every review round** (A: silent wrong behavior with
    LAST  :   without bands are not decision-grade.
-   after : 
+   after :
 
 docs/HANDOVER.md:368-373  (Process notes / review-gate flow)
-   before: 
+   before:
    FIRST : ## Process notes
    LAST  :   pinned in advance for repeated same-family findings.
    after : - CI runs are billing-blocked on this fork at handover time; the local gate
 
 memory/lessons/inbox.md:1241-1253  (the 13 promote-in-workspace bullets)
-   before: 
+   before:
    FIRST : - WP-dream-promote-in-workspace: **Enumerating the BAD is unclosable when the grammar isn't ours; enumerating our OWN GOOD is clos
    LAST  : - WP-dream-promote-in-workspace: **Relaunch a dead gate fresh, never resumed, and re-verify the freeze first.** Agents died mid-ru
    after : - WP-smoke-live-scheduler-preflight: verifying an outcome×override matrix's "must proceed" cells aga
 
 memory/lessons/inbox.md:1230-1230  (quarantine-surface whole cells)
-   before: - quarantine-surface: the same-kind escalation rule paid off twice — the design answer (commit-time 
+   before: - quarantine-surface: the same-kind escalation rule paid off twice — the design answer (commit-time
    FIRST : - quarantine-surface: grep-based mirror walks are blind to intra-cell falsification and vocabulary-shifted restatement — the PR-ga
    LAST  : - quarantine-surface: grep-based mirror walks are blind to intra-cell falsification and vocabulary-shifted restatement — the PR-ga
-   after : 
+   after :
 
 memory/lessons/inbox.md:1284-1284  (index-guard positional citations)
    before: - WP-audit-c-close-disposition: **the two-round rule matters as a routing signal, not just a courtes
    FIRST : - WP-index-guard-residuals: **a comment-only edit is not a no-op if the file is cited by line.** Rewriting two comments in `src/cl
    LAST  : - WP-index-guard-residuals: **a comment-only edit is not a no-op if the file is cited by line.** Rewriting two comments in `src/cl
-   after : - WP-index-guard-residuals: **"derive both sides independently" is about where the data comes from, 
+   after : - WP-index-guard-residuals: **"derive both sides independently" is about where the data comes from,
 
 memory/lessons/inbox.md:1366-1366  (banner-location: never write into a worktree mid-gate)
    before: - WP-quarantine-banner-location: line-number citations in `done/` specs are trustworthy for EXISTENC
@@ -752,7 +765,7 @@ memory/lessons/inbox.md:1273-1273  (show-slot canary arity)
    after : - WP-show-slot-own-value-kind: a stated invariant that one of its own members falsifies cannot decid
 
 memory/lessons/inbox.md:1403-1403  (audit-d enumerate the good)
-   before: - WP-audit-d-code-derived-recipients: AFTER REPLACING A SECTION, RE-READ THE SECTION IT REPLACED. A 
+   before: - WP-audit-d-code-derived-recipients: AFTER REPLACING A SECTION, RE-READ THE SECTION IT REPLACED. A
    FIRST : - WP-audit-d-code-derived-recipients: a verification that ENUMERATES THE FORBIDDEN is unclosable; one that enumerates YOUR OWN INT
    LAST  : - WP-audit-d-code-derived-recipients: a verification that ENUMERATES THE FORBIDDEN is unclosable; one that enumerates YOUR OWN INT
    after : - WP-audit-d-code-derived-recipients: THE PERMISSION BOUNDARY IS WORTH ITS FRICTION. Hitting an unli
@@ -1041,7 +1054,7 @@ codex-review 57-70
 ===== X4: HANDOVER 368-373 =====
 
   368: ## Process notes
-  369: 
+  369:
   370: - The review-gate flow that converged: two independent gates on the SAME tip,
   371:   both verdicts on that tip, a pinned reading before each round ("clean or
   372:   C-only → proceed; anything above C returns banded"), and a stop criterion
@@ -1050,7 +1063,7 @@ codex-review 57-70
 ===== X5/X6: spec lines 195-210 (checklist) and 298-308 (acceptance) =====
 checklist
   193: spot (register-new-mirrors).
-  194: 
+  194:
   195: - [ ] Deliverables-table cells — each `modify` row's Notes names the rule ids
   196:       landing in that file; Table B's File column decides which
   197: - [ ] Acceptance criteria — the anchor-literal criterion quantifies over Table B;
@@ -1062,9 +1075,9 @@ checklist
   203: - [ ] Out of scope — Table A's ALREADY BOUND (R10) and UNPAID (R19) rows
   204: - [ ] Implementation notes and owner items O1–O4 — they mirror Table B's File
   205:       column for R14 and R15, and Table A's disposition for R19
-  206: 
+  206:
   207: ## Implementation notes & constraints
-  208: 
+  208:
 
 acceptance
   296: - [ ] Every `EXTEND` row leaves its insertion point's existing claim intact: the
@@ -1114,7 +1127,394 @@ Read-only confirmed mechanically: `git status --porcelain` is byte-identical
 before and after the run (`codex-review.md:296-298`). Result agrees with §0.6's
 STATE 1 row.
 
-## External rounds
+## Round 1 — external, double channel, tip `d2cb7aca`
+
+Both channels ran on `d2cb7aca`, both verdicts name that tip, and both reported
+`porcelain before/after: identical`. Raws were committed **before** adjudication,
+each cited with the SHA of the commit that introduced it
+(`codex-review.md:82-91`):
+
+| Channel | Raw | Introduced by |
+|---------|-----|---------------|
+| Codex plugin adversarial review | `docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round1-codex-plugin.txt` | `5d131c7e` |
+| Hermetic Codex shadow (`codex exec`, read-only sandbox) | `docs/specs/logbook/2026-09-05-runbook-sweeps-gate-raw-round1-herdr-shadow.txt` | `c1b8b377` |
+
+Both verdicts: **needs-attention**. Four findings converged across the channels;
+two were shadow-only. Every citation was re-verified against the files here
+before anything was applied.
+
+### Findings, bands, and the branch each hit
+
+Bands are A/B/C as `docs/HANDOVER.md:364-366` defines them; LIGHT/HEAVY is
+`codex-review.md:140-152`. The §0.1 branch column applies the criterion that was
+pinned before this round.
+
+| # | Channel(s) | Band | Weight | §0.1 branch | Disposition | What changed |
+|---|-----------|------|--------|-------------|-------------|--------------|
+| R1-A | plugin + shadow (converged) | A | LIGHT | machinery | fix, as a **re-cut** | The screen now reads the **committed blob** (`git show HEAD:<path>`; a missing blob is `FAIL(absent)`) and **refuses a dirty tree**. The spec labels it honestly as an anchor-presence screen that is blind to meaning, placement and polarity, in all five places it is described. No polarity or insertion-point parsing was added (`codex-review.md:154-164`) |
+| R1-B | plugin + shadow (converged) | A | LIGHT | machinery | fix | The DATA heredoc now fails closed (`done <<'DATA' \|\| exit 1`) and the run is rejected unless `anchors processed` equals the declared count, which closes both the transport failure and the zero-anchors shape in one guard |
+| R1-C | plugin + shadow (converged) | A/B | **HEAVY** | Table B operative content | fix | R13's landed text contradicted the unconditional `codex-review.md:70-71` and the ADR-0031 breaker. Its Table B row now requires the bullet to **open by naming the precedence** — see below |
+| R1-D | plugin + shadow (converged) | B | LIGHT | record | fix | §0.1 replaced by an ordered, first-match-wins decision list; see "Round 2 — criterion pinned in advance" |
+| R1-E | shadow only | B | LIGHT to fix, but **DESIGN** to answer | **Table A disposition** | fix + full re-derivation | R12 was mis-measured as UNBOUND. Per §0.1's DESIGN branch the whole set was re-derived mechanically rather than the row patched — see below |
+| R1-F | shadow only | B | LIGHT | mirror vs canonical | fix | O1, O2 and O3 now enumerate every canonical and mirrored edit an overrule implies |
+| R1-G | shadow only | C | LIGHT | record | fix | Trailing whitespace stripped. **Larger than reported:** the shadow named 3 lines; `git diff --check` found **35**. Normalization disclosed above |
+
+**Round outcome.** The most escalating branch any finding hit is **DESIGN**
+(R1-E), and R1-C is **HEAVY**. Both mean the loop does not close: the set was
+re-derived, and a full fresh external round 2 is owed on the revision.
+
+**Not findings.** The shadow's `npm run lint` exited 1 because its sandbox
+blocked a registry fetch (its own note says frontmatter passed); the host run on
+`d2cb7aca` is rc=0, 0 errors, 268 spec(s) / 4 agent(s). The plugin recorded "No
+product-scope objections."
+
+**One consequence for the owner, surfaced not fixed.** The owner items O1-O4 were
+adopted on 2026-09-05 (`2026-09-05-owner-rulings-runbook-sweeps-queue.md`), and
+that record quotes the overrule costs as the spec then stated them — the costs
+R1-F measured as understated. The **recommendations** are unchanged and the
+adoption stands on them; but the corrected costs are materially larger (O3 alone
+moves from "roughly six lines in `codex-review.md`" to order 20-30 lines across
+four files, one of them `_TEMPLATE.md`, inherited by every future spec). That
+dated ruling record is not rewritten — rulings records are append-only here — so
+this note is where a reader learns the figures it quotes are superseded by the
+spec's owner items.
+
+### R1-E — the re-derivation (DESIGN branch), and why it was needed
+
+Round zero's §0.3 sweep used **the stub's thirteen bullet ids**, while Table A
+uses nineteen atomic ids. §0.3 disclosed the mismatch, but disclosure is not
+alignment: a Table A row whose id shifted was never swept as its own claim. The
+evidence was in fact present in §0.3's output — its "R13" probe set hit
+`codex-review.md:72` on `/stop criterion/` — and was read as "the stop criterion
+is bound" without being connected to Table A's R12.
+
+The re-derivation runs **one probe set per Table A row, ids aligned R01..R19**,
+claim-shaped and whitespace-flattened, over the same 18 surfaces
+(`rederive-dispositions.js`):
+
+```text
+SURFACES READ: 18 of 18  (total flattened chars: 147158)
+SWEEP IDS ARE TABLE A IDS — one probe set per Table A row, R01..R19
+
+==== R01  proof of a fix is the re-grep/re-run, never the edit  — 3 hit(s)
+    [docs/runbooks/codex-review.md] /claim to be RUN, not read/
+        …nd compare against the literal there. - **A claim about how a tool behaves is a claim to be RUN, not read.** Four instances on PR #124 alone: a spec citing a shell fence's options that …
+    [docs/runbooks/codex-review.md] /Reading is not evidence/
+        … cannot discriminate — or cannot be satisfied at all — is a round-zero finding. Reading is not evidence: measured in one package, a non-discriminating fixture survived four read-only …
+    [docs/runbooks/codex-review.md] /the missing run/
+        … under-claimed a capability, so the bias is not in one direction: the defect is the missing run. **Paste the reproduction or do not state the behaviour** — and when someone el…
+
+==== R02  read the tool's own summary, never your own recount  — 1 hit(s)
+    [docs/runbooks/codex-review.md] /read the VALUE the tool produced/
+        …e check (PR #22's boundary run) before the pattern was named. The general form: read the VALUE the tool produced, not the value the pipeline last touched. - **A zero-hit sweep is evidence only…
+
+==== R03  +0 test delta on a test that dies before your change  — ZERO HITS across all 18 surfaces
+
+==== R04  +0/-0 is a failure signature; prove the commit not the worktree  — ZERO HITS across all 18 surfaces
+
+==== R05  prove a mutation was applied before believing its matrix  — ZERO HITS across all 18 surfaces
+
+==== R06  a guard must notice its own death  — ZERO HITS across all 18 surfaces
+
+==== R07  a canary differing by arity proves nothing  — ZERO HITS across all 18 surfaces
+
+==== R08  claim sweeps are pronoun-aware; scope citation adjacent to the claim  — ZERO HITS across all 18 surfaces
+
+==== R09  registered mirrors move in the SAME COMMIT  — 2 hit(s)
+    [docs/runbooks/codex-review.md] /lockstep/
+        …red Surface Checklist is the stronger day-to-day mechanism (it keeps mirrors in lockstep up front); this breaker is the backstop for when scattered contract prose slipp…
+    [docs/specs/_TEMPLATE.md] /in one pass/
+        …ec that mirrors it**, so a review finding updates the table and all its mirrors in one pass (update-all-mirrors) and any new mirror found in review is added here on the sp…
+
+==== R10  two consecutive rounds on one contract family -> extraction  — 5 hit(s)
+    [docs/runbooks/codex-review.md] /circuit.?break/
+        …a gate which will punish the implementer for doing the work correctly. - **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a finding on the *same* c…
+    [docs/runbooks/codex-review.md] /two consecutive[^.]{0,110}(round|contract|family|kind)/
+        …hat each looked defensible alone and never faced the aggregate question. - When two consecutive rounds land findings of the same kind, the next step is a design question, never another textual patch. - A design lo…
+    [docs/runbooks/codex-review.md] /two consecutive[^.]{0,110}(round|contract|family|kind)/
+        …ementer for doing the work correctly. - **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a finding on the *same* contract family, stop fixing finding-by-finding and do a contract-**extraction** pass instead: pull that contract into one canonical reference ta…
+    [docs/runbooks/codex-review.md] /contract-\*\*extraction\*\*/
+        … finding on the *same* contract family, stop fixing finding-by-finding and do a contract-**extraction** pass instead: pull that contract into one canonical reference table and registe…
+    [.claude/agents/wd-reviewer.md] /extraction pass/
+        …t keep landing on the same contract family across rounds (recommend a canonical-extraction pass), and mirror drift — a Deliverables cell, acceptance criterion, verification gr…
+
+==== R11  every review round carries materiality bands A/B/C  — ZERO HITS across all 18 surfaces
+
+==== R12  the reading the bands trigger is pinned BEFORE the round  — 5 hit(s)
+    [docs/runbooks/codex-review.md] /STOP CRITERION/
+        …p is a design question, never another textual patch. - A design loop states its STOP CRITERION in the round record BEFORE the first adversarial round, and re-states it whenev…
+    [docs/runbooks/codex-review.md] /stop criterion/
+        …p is a design question, never another textual patch. - A design loop states its STOP CRITERION in the round record BEFORE the first adversarial round, and re-states it whenev…
+    [docs/runbooks/codex-review.md] /before the first adversarial round/
+        …er textual patch. - A design loop states its STOP CRITERION in the round record BEFORE the first adversarial round, and re-states it whenever a HEAVY fix triggers a fresh round: which outcome cl…
+    [docs/runbooks/codex-review.md] /before the first adversarial round/
+        …themselves are fine. ### Template conformance (round zero, before any review) - Before the first adversarial round, the relay diffs the spec against `docs/specs/_TEMPLATE.md`'s section list and …
+    [docs/runbooks/codex-review.md] /which outcome closes/
+        …dversarial round, and re-states it whenever a HEAVY fix triggers a fresh round: which outcome closes the loop, and which outcome escalates — to a design question, a fallback, or an…
+
+==== R13  form insufficiency vs predicate defect  — ZERO HITS across all 18 surfaces
+
+==== R14  enumerate your own good, not the bad  — ZERO HITS across all 18 surfaces
+
+==== R15  a reviewer judges the WHOLE CELL, not the grep window  — 3 hit(s)
+    [docs/runbooks/spec-authoring.md] /cell WHOLE/
+        …as no content cannot go stale. - After rewriting a canonical cell, re-read that cell WHOLE for a sentence the rewrite just falsified. The edit habit that survives every c…
+    [docs/runbooks/spec-authoring.md] /intra-cell/
+        … just falsified. The edit habit that survives every cross-surface discipline is intra-cell: the new sentence goes in, the old one stays, and no mirror checklist can see i…
+    [docs/runbooks/spec-authoring.md] /re-?read that cell/
+        …ints — what has no content cannot go stale. - After rewriting a canonical cell, re-read that cell WHOLE for a sentence the rewrite just falsified. The edit habit that survives e…
+
+==== R16  follow a citation by GREPPING the cited text; line number disambiguates  — 3 hit(s)
+    [docs/runbooks/codex-review.md] /cited RANGE/
+        …means runnable now, on the pinned base, with what the spec itself provides. - A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must begin and end whe…
+    [docs/runbooks/codex-review.md] /line-number citation/
+        …ery executable claim the spec makes about the tree the implementer will find**: line-number citations, `grep` sentinels, digests, quoted code shapes, "today's behaviour" descriptio…
+    [docs/runbooks/codex-review.md] /checked at BOTH ends/
+        …now, on the pinned base, with what the spec itself provides. - A cited RANGE is checked at BOTH ends, mechanically — `file:START-END` must begin and end where its construct does. R…
+
+==== R17  the tip is frozen: nothing writes into a worktree a gate is reading  — 3 hit(s)
+    [docs/runbooks/codex-review.md] /porcelain/
+        …ither disclosed it.) - Review is read-only, checked mechanically: `git status --porcelain` in the reviewed checkout is byte-identical before and after the run, or the ru…
+    [docs/runbooks/codex-review.md] /byte-identical before and after/
+        …nly, checked mechanically: `git status --porcelain` in the reviewed checkout is byte-identical before and after the run, or the run is invalid. - Output is relayed verbatim (see Rules). ### B…
+    [docs/runbooks/codex-review.md] /read-only, checked mechanically/
+        …able TMPDIR; both verdicts were readings and neither disclosed it.) - Review is read-only, checked mechanically: `git status --porcelain` in the reviewed checkout is byte-identical before and…
+
+==== R18  both gates run on the SAME TIP and each verdict names it  — 3 hit(s)
+    [docs/runbooks/codex-review.md] /independent second opinion on the same diff/
+        …iewer.** wd-reviewer remains the merge gate (spec-fidelity review); Codex is an independent second opinion on the same diff. Both run; Gyula merges only when both are clean or every finding is dispositio…
+    [docs/runbooks/codex-review.md] /Both run/
+        …spec-fidelity review); Codex is an independent second opinion on the same diff. Both run; Gyula merges only when both are clean or every finding is dispositioned. 3. **…
+    [docs/runbooks/codex-review.md] /Both run/
+        …e by the value it protects, named at the moment of adding — or it is not added. Both runaway loops this repo has survived were additions that each looked defensible alo…
+
+==== R19  declined owner grants surface loudly  — 1 hit(s)
+    [docs/runbooks/gws-broker.md] /refus[^.]{0,50}grant/
+        …ker checks for tampering before every send; if that file is altered, the broker refuses to send and tells you to re-grant at the keyboard. ## Turning access off / revoking - **Remove a grant locally:**…
+```
+
+**Rows whose disposition moved: exactly one.**
+
+| Row | Was | Now | Bound half |
+|-----|-----|-----|------------|
+| R12 | UNBOUND | **PARTIAL** | `codex-review.md:72-81` binds the pinning half — a STOP CRITERION in the round record BEFORE the first adversarial round, stating which outcome closes and which escalates. The missing delta is the band→outcome mapping |
+
+Two further corrections the re-derivation forced, neither a disposition change:
+
+- **R18's bound half was cited too weakly.** `codex-review.md:14-17` does not
+  merely say both gates run; it calls Codex "an independent second opinion on the
+  **same diff**". The cell now says so. The delta R18 lands is still one *tip* and
+  a verdict that names it — a diff is not a tip, and nothing there requires the
+  verdict to name anything.
+- **R19's sweep is no longer zero-hit.** The tightened probe returns one hit, in
+  `gws-broker.md`: the capability broker refusing to send and telling you to
+  re-grant. That is a **product** behaviour, not a review-round rule, so it binds
+  nothing here and R19 stays UNPAID. Recorded because a sweep that now returns a
+  hit must say why the hit is not a binding.
+
+Everything else held, including two that the looser round-zero probes had made
+noisy: **R14** returns ZERO under a probe requiring `enumerat…` together with
+own/good/bad/forbidden (round zero's bare `/enumerat/` had produced unrelated
+hits, correctly read as noise), and **R09**, **R15**, **R16**, **R17** confirm the
+exact bound halves Table A already cited.
+
+**R12's landing changed with its disposition.** It no longer shares R11's new
+bullet — which would have split ownership of the stop criterion across two
+constructs — and instead **EXTENDs `codex-review.md:72-81`**. Its anchor moves
+from `pinned before the round` to `maps each band to an outcome`, since the
+pinning half is already bound and only the mapping is the delta.
+
+**The two taxonomies, reconciled in place** (R1-E's second half). A/B/C bands
+grade a finding's **consequence**; LIGHT/HEAVY grades whether its **fix** changes
+the product, and therefore whether a fresh round is owed. They are orthogonal —
+this round is the worked example: R1-A is band A and LIGHT (an A-grade defect in
+machinery, whose fix changes nothing an implementer builds), while R1-C is HEAVY
+at a lower band. Both R11's and R12's Table B content now say this.
+
+### R1-C — the R13 wording and insertion choice
+
+**Choice: the insertion point stays `after :71`, mode NEW, and the bullet must
+open by naming the precedence.** The alternative — EXTENDing `:70-71` itself —
+was rejected on the acceptance criterion this WP already carries: an EXTEND must
+leave the existing claim intact, and `:70-71` is the very rule R13 was found to
+weaken. Folding a single-finding routing rule into the unconditional repeat rule
+puts a qualifier inside the sentence being protected, and costs more words than
+placing it after. Keeping it a NEW bullet leaves `:70-71` byte-identical.
+
+Table B's R13 operative content now requires the bullet to state, before the
+distinction: this routes a SINGLE finding and never suspends the repeat rules —
+two consecutive rounds on the same kind still escalate under `:70-71`, and two on
+the same contract family still fire the ADR-0031 breaker at `:376-383`, however
+each finding was classified. A third anchor, `never suspends the repeat rules`,
+was added so the screen can see the precedence clause; without it an implementer
+could land the distinction and drop the precedence and still read green. The DATA
+block and `DECLARED` move from 20 to 21.
+
+### The re-cut screen, proved on six states plus one disclosed limit
+
+The gate text below was **extracted from the spec**, not retyped, so the proof
+runs exactly what the spec ships.
+
+```text
+#!/usr/bin/env bash
+# ANCHOR-PRESENCE SCREEN over the COMMITTED tree. Proves each Table B anchor
+# literal is present in the committed file. Proves NOTHING about meaning,
+# placement or polarity — an inverted sentence containing an anchor PASSES.
+DECLARED=21
+if [ -n "$(git status --porcelain)" ]; then
+  echo 'REFUSED: the working tree is dirty. This screen reads the COMMITTED blob,'
+  echo 'so a result now would describe files nobody will merge. Commit, then re-run.'
+  git status --porcelain
+  exit 1
+fi
+rc=0
+n=0
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  n=$((n + 1))
+  f=${line%% :: *}
+  lit=${line#* :: }
+  if ! blob=$(git show "HEAD:$f" 2>/dev/null); then
+    printf 'FAIL(absent)  %s :: %s\n' "$f" "$lit"
+    rc=1
+    continue
+  fi
+  # Flatten: drop * _ ` , join every line, squeeze runs of spaces.
+  if printf '%s' "$blob" | tr -d '*_`' | tr '\n' ' ' | tr -s ' ' | grep -qF -- "$lit"; then
+    printf 'PASS  %s :: %s\n' "$f" "$lit"
+  else
+    printf 'FAIL  %s :: %s\n' "$f" "$lit"
+    rc=1
+  fi
+done <<'DATA' || exit 1
+docs/runbooks/codex-review.md :: the proof of a fix is the re-run
+docs/runbooks/codex-review.md :: not your own recount
+docs/runbooks/codex-review.md :: dies relative to what you touched
+docs/runbooks/codex-review.md :: prove the commit, not the working tree
+docs/runbooks/codex-review.md :: grep the injected marker
+docs/runbooks/codex-review.md :: notice its own death
+docs/runbooks/codex-review.md :: arity proves nothing
+docs/runbooks/spec-authoring.md :: pronoun-aware
+docs/runbooks/spec-authoring.md :: adjacent to the claim
+docs/specs/_TEMPLATE.md :: in the same commit
+docs/runbooks/codex-review.md :: materiality band
+docs/runbooks/codex-review.md :: C: hygiene
+docs/runbooks/codex-review.md :: maps each band to an outcome
+docs/runbooks/codex-review.md :: never suspends the repeat rules
+docs/runbooks/codex-review.md :: form insufficiency
+docs/runbooks/codex-review.md :: predicate defect
+.claude/agents/wd-architect.md :: enumerate your own good
+.claude/agents/wd-reviewer.md :: the whole cell, never the grep window
+docs/runbooks/codex-review.md :: grep for the cited text
+docs/runbooks/codex-review.md :: nothing writes into a worktree a gate is reading
+docs/runbooks/codex-review.md :: on the same tip
+DATA
+printf 'anchors processed=%s declared=%s\n' "$n" "$DECLARED"
+if [ "$n" -ne "$DECLARED" ]; then
+  printf 'FAIL: processed %s of %s declared anchors — the input transport failed\n' "$n" "$DECLARED"
+  exit 1
+fi
+printf 'sentinels exit=%s\n' "$rc"
+exit "$rc"
+```
+
+| State | Expected | Observed | exit |
+|-------|----------|----------|------|
+| compliant commit | green | 21 PASS, `anchors processed=21 declared=21` | 0 |
+| violating commit (one anchor reworded) | red, exactly 1 | 1 FAIL (`arity proves nothing`) | 1 |
+| deliverable absent from the commit | red | `FAIL(absent)` on `wd-architect.md` | 1 |
+| anchor added but NOT committed | red | `REFUSED` — and the OLD worktree-reading matcher returned **PASS** on the identical state | 1 |
+| dirty tree | refuse | `REFUSED`, no verdict issued | 1 |
+| untouched tree, committed | red, 21 FAIL | run post-commit, below | 1 |
+| **anchor-preserving inversion** | — | **21 PASS** — a committed sentence reading "It is NOT required that both gates run on the same tip" passes | 0 |
+
+The last row is **a disclosed limit, not a proof**. It is what an
+anchor-presence screen is, and it is why the spec now says in five places that
+PASS means an anchor landed and nothing more.
+
+**R1-B's failure mode, recorded honestly.** Both review channels reproduced it in
+their sandboxes — the plugin raw records `cannot create temp file for here
+document` followed by `sentinels exit=0`, and the shadow raw records the same
+with zero anchors processed. **Neither the orchestrator nor this author could
+reproduce it on the host** (bash 3.2.57, `TMPDIR` set to a nonexistent directory
+and to `/var/empty`: 20 FAIL, rc=1 both times; a direct heredoc probe under the
+same `TMPDIR` succeeded). So the fix is not validated by a local red — it is
+validated by the two sandbox reproductions in the committed raws, plus the
+processed-count assertion, which fails closed on the shape regardless of cause.
+Stating this rather than implying a local reproduction is the point.
+
+```text
+===== bash version =====
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+
+===== R1-A(i): the matcher against an INVERTED sentence =====
+  PASS (matcher accepts the INVERTED form) :: nothing writes into a worktree a gate is reading
+  PASS (matcher accepts the INVERTED form) :: the proof of a fix is the re-run
+
+===== R1-A(ii): an UNSTAGED anchor passes a working-tree read, fails a HEAD read =====
+  git status (file is now dirty/unstaged):
+     M docs/runbooks/spec-authoring.md
+    WORKING-TREE read : PASS  :: pronoun-aware   <-- false green
+    COMMITTED  read   : FAIL  :: pronoun-aware   <-- the commit read catches it
+  restored; porcelain now:
+  (empty above = restored)
+
+===== R1-B: attempt to reproduce the heredoc transport failure on this host =====
+  --- TMPDIR=/nonexistent-dir-xyz ---
+    rc=1 ; PASS=0 FAIL=20
+    sentinels exit=1
+  --- TMPDIR=/var/empty ---
+    rc=1 ; PASS=0 FAIL=20
+    sentinels exit=1
+
+  --- direct probe: does 'done <<HEREDOC' fail on this host with an unwritable TMPDIR? ---
+    read:one
+    inner rc=0
+```
+
+## Round 2 — criterion pinned in advance
+
+Re-stated before round 2 because R1-C is HEAVY (`codex-review.md:72-81` requires
+the criterion to be re-stated whenever a HEAVY fix triggers a fresh round). This
+list supersedes §0.1 and is the criterion's single canonical text.
+
+**Applied PER FINDING, first match wins:**
+
+1. **Scope** — the finding argues a rule should not land at all, or should land
+   outside the Deliverables table → **OWNER item**, carrying a recommendation and
+   the enumerated overrule cost. The loop continues on the remaining findings.
+2. **Disposition** — it changes a Table A disposition → **DESIGN**: re-derive the
+   whole set mechanically with the sweep's ids aligned to Table A's, and update
+   every registered mirror in the same commit. Never a row patch.
+3. **Same-family repeat** — it is the second consecutive round landing a finding
+   on a Table A or Table B row, in any registered mirror → **ADR-0031
+   extraction** (`codex-review.md:376-383`), never a third row patch.
+4. **Operative content** — it changes Table B's operative content, insertion
+   point, mode, or anchor literals → **HEAVY fix**, then a full fresh external
+   round.
+5. **Mirror drift** — a registered mirror disagrees with a canonical table that
+   is itself right → **LIGHT fix**: correct every mirror the checklist names, in
+   the same commit, and re-run the mirror walk. No new round.
+6. **Machinery or record only** — it is about the anchor-presence screen or this
+   round record and nothing else → **LIGHT fix**, mechanically re-verified, no new
+   round. If this is the **second consecutive** round of screen-only findings →
+   **FALLBACK**: drop the per-rule screen; `npm run lint` plus the reviewer's read
+   against Table B carry it (`codex-review.md:154-164`).
+7. **Nothing about the product** → **CLOSE**.
+
+**Round rule.** A round's outcome is the **most escalating** outcome any single
+finding produced, on the ladder `CLOSE < LIGHT < HEAVY < EXTRACTION < DESIGN`.
+OWNER items are raised alongside and do not by themselves hold the loop open.
+
+**Why this replaces the round-1 bullets.** Both channels built the same three
+counter-cases against them, and each is now decided by exactly one branch: a
+finding changing Table B's operative content but not its disposition or file was
+barred from CLOSE and matched nothing — it is now #4; a "drop this rule" finding
+matched DESIGN and OWNER at once — first-match-wins sends it to #1; a second
+screen-only round matched CLOSE and FALLBACK with no precedence — #6 is reached
+before #7 and carries the fallback itself.
+
+## External rounds (round 2 onward)
 
 <!-- orchestrator: Codex plugin adversarial review + hermetic shadow; raws
      committed BEFORE adjudication, each round citing the raw file's path AND
