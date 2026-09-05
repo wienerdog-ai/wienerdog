@@ -226,7 +226,7 @@ would be false until the code makes it so.
 | F3 | `ADR-0020:78` is a two-line sentence (78-79) | **fix** — the spec quotes the sentence |
 | F4 | The first C28 draft claimed the two pattern-key sites "agree"; measured, they disagree on `__proto__` today, and an empty key cannot reach the heading check at all | **fix** — row restated over a heading-shaped 19-key sample with measured counts (1 disagreement today, 0 under the design) |
 | F5 | The draft added a distinct authorization-path INVALID message and a 7th RED proof | **fix by removal** — one rule (INVALID ≡ `true` at every consumer, `frontmatter.js`'s own shipped stance) beats a special case; recorded in Table B as a dropped alternative so a re-proposal routes as a scope objection |
-| F6 | Spec length 470, over the pre-pinned ~400 ceiling | **fixed in part, residual accepted** — pruned to 462; the surplus is Table C (47 lines, and it *is* the deliverable) and the pipeline-required 40-line Dispatch precondition |
+| F6 | Spec length 470, over the pre-pinned ~400 ceiling | **fixed in part, residual accepted** — pruned to 458, then back to **472** when F9/F10 corrected Table D; the surplus is Table C (47 lines, and it *is* the deliverable), Table D's measured reddening sets, and the pipeline-required 40-line Dispatch precondition |
 | F7 | The stub declared `size: S`; the deliverable is six files across two source modules, two test files, a proofs JSON and an ADR | **fix** — `size: M`, parked as owner item 4 with the reason a split is the archive's failure mode |
 | F8 | A third live defect exists that the stub does not list: a duplicate heading in the *committed* ledger authorizes a Tier-3 revision | **fix** — driven (§0.2), Table C row C18, and the duplicate rule now covers all three reads (owner item 1) |
 | F9 | Table D's first draft PREDICTED each mutation's reddening set instead of measuring it, and two predictions were wrong | **fix** — both mutations applied to scratch copies and run (§0.11). LPC-A also reaches C21; LPC-B also reaches C26. Table D now carries the measured sets, plus the identity-separation note LPC-A/LPC-F force |
@@ -308,4 +308,4 @@ identities, or LPC-F is indistinguishable from LPC-A.
   a recommendation and an overrule cost, not folded in.
 - **Size ceiling (learned from the archive):** if the spec passes ~400 lines, or
   a round adds gate machinery rather than a corpus row, **that is itself a
-  finding**. It is already open as F6 at 462 lines, with a recorded residual.
+  finding**. It is already open as F6 at 472 lines, with a recorded residual.
