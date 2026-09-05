@@ -37,6 +37,45 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-05 (overnight continuation #3, owner-authorized
+> merges).** Measured on `main`:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 3b successor | `WP-quarantine-preserve-durability` | **Done** | design loop #220 (`bb58e398`), implementation #221 (`c891e0b6`), filed in this pass | **Design loop: round zero plus ELEVEN double-channel rounds** (plugin gate + hermetic shadow on every one, twenty-two raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md`). **The ADR-0031 circuit breaker fired TWICE and both times the answer was a CONTRACT, not a third patch** — round 2, the same-UID substitution family → Table F row **F10, THE ADVERSARY** (GUARANTEED / DISCLOSED / OUTSIDE, on `docs/THREAT-MODEL.md`'s A12); round 9, the flushed-bytes clause → **"an ORDER, not a COVERAGE"**. **Escalation (ii) parked FOUR owner items** (5 at round 2, 6 at round 4, 7 at round 6, 8 at round 9), taking the Dispatch precondition to **eight**, all eight ruled under the owner's standing *"go with your recommendations"* (record: `docs/specs/logbook/2026-09-05-owner-rulings-durability-queue.md`; the owner may reverse any by dated amendment, each with a stated cost). **Implementation: three rounds of the triple-channel PR gate** — round 1 wd-reviewer REQUEST-CHANGES **with no `src/` change requested** (a permission-boundary overrun it judged a SPEC defect, plus six declined V1/V2 states the reviewer ran itself), plugin P2 (win32 flush assumption), shadow two C; round 2 APPROVE with the census escalated, **one P2 converged across plugin and shadow**; round 3 APPROVE / *"patch is correct"* / one AIX P2. Merged tree: `npm test` `2630/2618/0/12`, `npm run red-proofs` 37/37 `RUN: PROVEN` with seven roll-up lines, lint clean. **Five dated errata** in the filed spec |
+> | 3c | `WP-quarantine-disposal-durability` | **Draft** (stub) | — | The SPLIT (owner item 4). `depends_on` the durability spec; inherits the protocol, and with it the D1/D2 removals and `pruneRedactedOriginals`' eviction, which are still not crash-durable |
+>
+> **The audit status table's group C row is unchanged by this pass** — still its
+> one residual (D2 (b), `WP-dream-git-env-pinning`).
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried
+> forward unchanged (the dot-segment spec's V2 B3 loop grading against the
+> pre-filesystem spelling; the adopt-e2e Deliverables cell's setup enumeration
+> omitting the PATH stub; the basename WP's Table C position clause; the
+> phase-environment contract table for `scripts/red-proofs.js`; ADR-0010's
+> "adopt requires the user to confirm" sentence vs `--yes`; the orphaned `(ii)`
+> sub-bullet at step 19 in `src/cli/dream.js`) **plus this WP's errata:** the
+> Deliverables prose census extracted into a canonical table with criterion 10
+> asserting the table (erratum 1, and the THIRD stale test title at
+> `tests/unit/dream-validate.test.js:2442` that the two-title boundary forbade
+> fixing); the missing **F3 chain-membership** bullet in the Mirrored Surface
+> Checklist (erratum 2); `O_DIRECTORY` OR'd unguarded at
+> `src/core/dream/validate.js:672-675` (erratum 3, cosmetic); row **F5**'s
+> platform wording — name `darwin` and `linux` as the supported POSIX platforms
+> and record other POSIX as neither measured nor supported (erratum 4); the D3
+> observer comment saying "by INODE" over a fixture that keys on the fd number
+> (erratum 5).
+>
+> **Next in the queue:** `WP-audit-d-code-derived-recipients`,
+> `WP-audit-e-ledger-parser-corpus`, `WP-process-runbook-sweeps`,
+> `WP-dream-git-env-pinning`. **Product decision, settled by the 2026-09-05
+> rulings record — it settled the PROCESS, not just the eight items:** the
+> maturing architect records a recommendation with the cost of overruling it,
+> and the session may dispatch under that recommendation, the owner reversing
+> any of them by dated amendment. Two proposed successors stand behind the
+> queue: `WP-quarantine-only-copy-shelf` (**not filed**) and
+> `WP-quarantine-disposal-durability` (**filed, Draft**).
+>
 > **Status pass, 2026-09-05 (overnight continuation #2, owner-authorized
 > merges).** Measured on `main`:
 >

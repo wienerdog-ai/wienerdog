@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-preserve-durability
 title: Make a preserved quarantine artifact durable, and say honestly what that guarantees
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-preservation-abort-widening, WP-quarantine-banner-location]
@@ -10,6 +10,254 @@ epic: dream-promotion
 ---
 
 # WP-quarantine-preserve-durability: Make a preserved quarantine artifact durable, and say honestly what that guarantees
+
+> **Archived 2026-09-05, post-merge — the closing record.** Nothing below this
+> blockquote is rewritten: the spec text is the text the reviewers read, and the
+> five corrections this pass owes it are stated here as dated errata instead.
+>
+> **Design loop — PR #220, merged `bb58e398`** (design tip `a4be34aa`, base
+> `main` `0fd50422`). **Round zero plus ELEVEN double-channel external rounds** —
+> a Codex plugin gate and a hermetic Codex shadow on every one, raws committed
+> BEFORE adjudication as
+> `docs/specs/logbook/2026-09-05-quarantine-durability-gate-raw-round<N>-<channel>.txt`
+> (twenty-two files), round record
+> `docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md`.
+> Round zero itself was the architect's coherence pass plus the orchestrator's
+> two clean-context executors, run against `0fd50422` with every "after" number
+> produced by a RUN on a `git archive` scratch copy rather than predicted.
+>
+> **ADR-0031's escalation (i) — the circuit breaker — fired TWICE, and both
+> times the answer was a CONTRACT rather than a third patch.** At **round 2**,
+> on the same-UID substitution family for the second consecutive round, the
+> answer was **Table F row F10, THE ADVERSARY**: the loop stopped closing
+> windows one at a time and started stating what is GUARANTEED, what is
+> DISCLOSED and what is OUTSIDE, on `docs/THREAT-MODEL.md`'s A12 class. At
+> **round 9**, on the flushed-bytes clause for the second consecutive round, the
+> answer was **"an ORDER, not a COVERAGE"**: the clause stopped trying to be
+> true and started saying what it claims, because `fsync` and `read` are
+> separable operations on a mutable inode and Node fuses nothing.
+>
+> **Escalation (ii) — the park-to-the-owner rule — fired FOUR times**, and those
+> four parks are Dispatch-precondition items **5** (round 2, where the adversary
+> is pinned), **6** (round 4, whether this call removes by pathname at all),
+> **7** (round 6, the supported filesystem) and **8** (round 9, an ownership
+> check that cannot complete). Escalation (iii) never had to be invoked: no
+> channel in eleven rounds re-argued a recommendation. **What actually changed
+> under review, in order:** the flush set became a fixed chain to an anchor; the
+> read-back moved onto a held descriptor; the commit became no-clobber;
+> provenance moved to the exclusive create; the adversary became a three-tier
+> contract; the guarantee moved to a linearization point; the flush clause
+> became an order; the ownership predicate became three-valued; and a helper's
+> descriptor got a lifecycle. **Not one of those was in the round-zero draft.**
+> The loop closed at **round 11** on two independent grounds — the shadow
+> returned `approve` with zero findings on that exact tip, and the plugin's only
+> item was verification-machinery wording inside the frozen surface, which the
+> pinned stop criterion disposes of as a wording finding.
+>
+> **Implementation — PR #221, merged `c891e0b6`** (implementation tip
+> `bf5333bd`, reviewed tip `85514b9a`, base `main` `bb58e398`). **Three rounds
+> of the triple-channel PR gate.** Raws:
+> `docs/specs/logbook/2026-09-05-quarantine-durability-pr221-raw-round{1,2,3}-{wd-reviewer,codex-plugin,herdr-shadow}.txt`.
+>
+> - **Round 1** (`ad8c62dc`) — wd-reviewer **REQUEST-CHANGES** while explicitly
+>   requesting **no change to `src/core/dream/validate.js`**: the three blocking
+>   items were a permission-boundary overrun it judged a SPEC defect, plus a
+>   Definition-of-done evidence gap in the PR body (six declined V1/V2 states,
+>   which the reviewer then ran itself, all six reproducing the spec's predicted
+>   message at rc 1). Plugin: one **P2** — the new identities assume a flush on
+>   win32, which row F5 forbids. Shadow: *"patch is incorrect"*, **two C
+>   findings** — fold the D3 non-vacuity guard, and qualify the flush-coverage
+>   comment.
+> - **Round 2** (`6b6c5596`) — wd-reviewer **APPROVE**, with the census item
+>   escalated to wd-architect under the two-round rule rather than left for the
+>   implementer. The two round-1 dispositions landed and nothing else moved: six
+>   `test(...)` declarations gained a win32 skip, and the flush-coverage comment
+>   at `validate.js:948-950` was qualified — **outside all thirteen byte-exact
+>   source forms**, verified by computing every form's matched range. **One P2
+>   converged across the plugin and the shadow**: fold the non-vacuity guard
+>   into the single permitted closure assertion. The plugin's other P2 — that
+>   the win32 skips would make `npm run red-proofs` error on Windows — was
+>   dispositioned, not actioned: the RED lane refuses at LOAD with `UNSUPPORTED`
+>   on win32 so it never runs there, a skipped selected identity would fail to
+>   redden a mutation and read `UNPROVEN` (the loud direction), and CI's `test`
+>   matrix is `[ubuntu-latest, macos-latest]` with `red-proofs` not a CI job at
+>   all.
+> - **Round 3** (`85514b9a`) — wd-reviewer **APPROVE**, shadow *"patch is
+>   correct"* with zero findings, plugin one **P2** about AIX (erratum 4 below).
+>   The converged P2 was resolved by **folding**: `heldFd >= 0 && …` became one
+>   conjunction inside the one permitted assertion, so the shipped diff carries
+>   exactly ONE added `assert` statement. wd-reviewer's three findings were all
+>   band 4 / informational, and they are errata 3, 1 and 5 below.
+>
+> **Measured on the merged tree:** `npm test` `2630 / 2618 / 0 / 12`,
+> `npm run red-proofs` `37 declared / 37 selected` with `RUN: PROVEN` and
+> **seven** roll-up lines for this WP (criteria 1–7), `npm run lint` 640 files /
+> 0 errors, frontmatter 268 specs / 4 agents. Boundary check clean; V1/V2 `OK`;
+> all thirteen byte-exact source forms present exactly once; the declaration
+> file byte-identical to Table C's inlined object (621 lines); all seven QPD
+> identities present exactly once with every assertion carrying its band marker.
+>
+> **Owner rulings.** All **eight** Dispatch-precondition items were dispatched
+> under the architect's recommendations, on the owner's standing *"let us go
+> with your recommendations"* of 2026-09-05; the record is
+> `docs/specs/logbook/2026-09-05-owner-rulings-durability-queue.md`. **Items 1–4
+> existed when the ruling was given; items 5–8 did not** — they were parked by
+> escalation (ii) at rounds 2, 4, 6 and 9, all after the owner's message, and
+> the orchestrator applied the standing instruction to them on the same
+> authority and recorded that it did so. **The owner may reverse any of the
+> eight by dated amendment**, and each reversal has a cost stated in that
+> record: (1) *the flushes are POSIX-only* — reversing makes an unmeasured Node
+> behaviour load-bearing and fail-closed on a platform this pipeline cannot
+> test. (2) *a flush failure is a preservation FAILURE* — reversing re-opens the
+> silent-success arm the whole package exists to close. (3) *the per-record
+> delivery stamp routed here by the banner package* — reversing adds durable
+> state beyond the artifact and a ledger-schema row to Deliverables. (4) *the
+> SPLIT* — reversing folds `WP-quarantine-disposal-durability` (Draft) back in
+> and takes this package out of S/M. (5) *the adversary is pinned at A12, not at
+> descriptor-pinned directories* — reversing adds a descriptor per chain
+> directory held to the last gate, against an actor the threat model puts
+> outside the boundary. (6) *this call still removes by pathname, gated on
+> identity* — reversing rewrites every removal site. (7) *a LOCAL POSIX
+> filesystem is the supported one* — reversing requires network-filesystem
+> measurements nobody has. (8) *an ownership check that cannot complete raises
+> loud* — reversing chooses between acting unverified and skipping silently.
+>
+> ---
+>
+> **Errata, 2026-09-05 (post-merge) — five, routed by the PR gate, none of them
+> a defect in what shipped, none rewriting the original text.** One of them
+> (erratum 1) is an ADR-0031 finding the reviewer named explicitly and it is the
+> one a successor must act on; the other four are hygiene or wording.
+>
+> **Erratum 1 — the Deliverables cell's PROSE CENSUS of shipped-test changes,
+> extracted here into the canonical table it should have been.** The cell for
+> `tests/unit/dream-validate.test.js` enumerated the three permitted changes in
+> prose — *"(1) the seam each migrated injection intercepts at. (2) TWO test
+> TITLES… (3) ONE shipped test GAINS one assertion"* — and acceptance criterion
+> 10 asserted that prose. **That census mispredicted the diff in two independent
+> directions across two review rounds**, which is exactly ADR-0031's activation
+> signal for a dense contract with no canonical home:
+>
+> - **Round 1 and round 2, the assertion count.** The D3 temp test needs a
+>   non-vacuity guard — without `heldFd >= 0` the permitted assertion is
+>   VACUOUS, because `fs.fstatSync(-1)` also throws `EBADF`, so it passes on a
+>   leaking implementation. The spec **mandates that same pattern in Table C row
+>   QPD-7** ("with a non-vacuity guard that four directories really were
+>   opened") while counting it a violation here. Resolved in the PR at round 3
+>   by **folding**: one `assert.ok` whose predicate is
+>   `heldFd >= 0 && (…EBADF…)`, one added `assert` statement,
+>   `tests/unit/dream-validate.test.js:2619-2622`. The fold is the right shipped
+>   answer; the census is still the surface that was wrong.
+> - **Rounds 1, 2 and 3, a THIRD stale title the census missed.**
+>   `tests/unit/dream-validate.test.js:2442` still reads *"the write fails
+>   before any rename"*. Under row **F9** there is no rename in that path, and
+>   the migrated injection is `patchFs('openSync')` on a `.tmp-` basename, so it
+>   is the exclusive CREATE that fails, not the write. **The two-title boundary
+>   forbade fixing it**, so leaving it is the correct implementer behaviour and
+>   the census is the defect. Coverage is intact: the post-create write-failure
+>   contract lives at `2562-2571` (an `openSync` observer then a `writeSync`
+>   throw), and QPD-6 case (f) covers the create-failure branch.
+>
+> **The canonical table this cell should have carried — one row per permitted
+> shipped-test change.** It is the single place these facts are decided;
+> criterion 10 should assert **this table** rather than a prose enumeration, and
+> every other surface that mentions a permitted shipped-test change defers to
+> it. Measured on the merged tree at `c891e0b6`:
+>
+> | # | Permitted change | Scope, as decided | Shipped |
+> |---|---|---|---|
+> | **S1** | **Seam migration** — the injection point a shipped test intercepts at, with no assertion changed | FOUR seams, by seam because that is what an implementer acts on: the exclusive CREATE (`openSync` on a `.tmp-` basename), the descriptor WRITE (`writeSync`), the descriptor READ (`readSync`, matched by the INODE `dest` names), and `linkSync` in place of `renameSync` for the single commit injection | Migrated. Two `renameSync` injections deliberately NOT migrated (`2507`, `2595`) because Current state measured that they no longer fire; both now carry a comment saying why |
+> | **S2** | **Title change** — D1's commit test | Forced by row **F9** replacing the rename with a link | `2472`: *"the commit fails after a successful write — tmp is removed, dest was never created"* |
+> | **S3** | **Title change** — D3's temp test | Forced by F9: the commit SUCCEEDS and it is the post-commit gated removal that fails, so *"after a failed rename"* was factually wrong. Named byte-exactly by `post-commit-descriptor-leaked`'s `expectRed` | `2588`: *"a tmp that cannot be removed after the commit fails LOUD, and the held descriptor is CLOSED"* |
+> | **S4** | **Assertion change** — ONE added *behavioural* assertion **together with its non-vacuity guard**, in ONE `assert` statement | The D3 temp test only. The guard is load-bearing and is NOT a second assertion: fold it into the permitted one | `2619-2622`, `assert.ok(heldFd >= 0 && (…EBADF…), …)`. Every pre-existing `assert` in the file byte-identical (measured: zero removed lines contain `assert`) |
+> | **S5** | **Title change — PERMITTED BUT NOT TAKEN**, held open for a successor | D1's write-failure test at `2442` is stale under F9 for the same reason S3 was: the migrated seam fails the exclusive CREATE, not the write. It was outside the two-title boundary this package shipped under | Left byte-unchanged. **A successor with an independent reason to be in that test may retitle it** to name the create; it changes no declaration, because no `expectRed` names this title |
+>
+> **The habit to break, stated for the successor:** a Deliverables cell that
+> must fix a contract should fix it in a TABLE, not in a numbered sentence. A
+> prose census is a mirror of the diff it predicts, and a mirror that predicts
+> is worse than one that restates — it fails in both directions, by counting a
+> change that is not there and by missing one that is.
+>
+> **Erratum 2 — the P0b clause mirrors Table F row F3's chain membership, and
+> the Mirrored Surface Checklist has no F3 bullet. Registered here.** The
+> byte-exact clause this package appended to row **P0b** of
+> `docs/specs/done/WP-preservation-abort-widening.md` restates F3's chain
+> MEMBERSHIP verbatim — *"the containing directory, the shelf above it on the
+> redacted arm, the state directory, and the core directory that names it"*.
+> F3's membership therefore has four homes: Table F row F3, `quarantineDirChain`
+> in `src/core/dream/validate.js`, QPD-3's and QPD-4's ordered `deepEqual`s, and
+> that `Done` cell. Rows F4, F8 and F10 each have their own checklist bullet;
+> **F3 has none**, so the fourth home is unregistered. The clause's own closing
+> sentence — *"this clause restates no member of Table P or Table D"* — is true
+> and sidesteps this, because Table F is neither. **The registration, stated
+> here in place of an edit to the checklist:**
+>
+> > **Row F3's CHAIN MEMBERSHIP** — decided in F3 and mirrored in FOUR places:
+> > `quarantineDirChain`'s construction, the ordered `deepEqual`s of identities
+> > **QPD-3** and **QPD-4**, and the byte-exact P0b clause in
+> > `docs/specs/done/WP-preservation-abort-widening.md`. **A change to the chain
+> > changes all four in one pass**, and the `Done` cell is the one that will be
+> > missed, because it is byte-exact, pinned by V2, and outside the successor's
+> > Deliverables boundary. `WP-quarantine-disposal-durability` (Draft) inherits
+> > this protocol and inherits this bullet with it.
+>
+> **The clause itself is NOT edited and must not be.** It is byte-exact
+> spec-owned text that V2 proves was applied exactly; editing it would falsify a
+> shipped verification and reopen a `done/` spec for a registration that a
+> checklist bullet carries just as well.
+>
+> **Erratum 3 — `src/core/dream/validate.js:672-675`: `O_DIRECTORY` is OR'd in
+> unguarded while `O_NOFOLLOW` on the same expression uses the guarded idiom.**
+> `DIR_OPEN_FLAGS` reads
+> `fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0)`,
+> so the Implementation-notes sentence *"Both flag sets follow the same
+> explicit-branch idiom for `O_NOFOLLOW`/`O_DIRECTORY`"* is true of `O_NOFOLLOW`
+> and false of `O_DIRECTORY`. **Cosmetic, with no behaviour** — measured twice
+> by the reviewer: JS bitwise OR coerces `undefined` to `0`, so on a platform
+> lacking the constant the flag degrades silently rather than producing `NaN`,
+> and `DURABILITY_AVAILABLE` (`validate.js:647`) short-circuits `flushPreservation`
+> so `flushDir` is unreachable on the one platform that lacks it. The constant's
+> definition sits outside every byte-exact source form, so it was
+> implementer-authored code and correctly listed under Discovered issues rather
+> than fixed on a non-behavioural finding. A successor in that file may apply
+> the guard; nothing depends on it.
+>
+> **Erratum 4 — row F5's platform wording names win32 and POSIX, and it should
+> name the POSIX platforms it means.** The plugin's round-3 P2 is a correct
+> reading of the row as written: `DURABILITY_AVAILABLE` is
+> `process.platform !== 'win32'`, so **every non-win32 platform enables the
+> flushes**, while `DIR_OPEN_FLAGS` opens each directory `O_RDONLY` — and row F5
+> itself records that a write-open descriptor for `fsync` is a **System
+> V-derived** requirement (HP-UX, AIX). On such a platform the first directory
+> flush would fail, the artifact would be removed, and the withhold preservation
+> would abort the dream. **This is a wording defect, not a shipped one, because
+> those platforms are not the product's.** `README.md` states the supported
+> platforms — **macOS, Linux and Windows** — and CI's `test` matrix is
+> `[ubuntu-latest, macos-latest]`. **The corrected reading:** the SUPPORTED
+> POSIX platforms are **`darwin` and `linux`**; darwin is what this package
+> measured, linux is what CI proves on every PR; **win32 issues no flush and
+> claims no durability**; and **every other POSIX platform is NEITHER MEASURED
+> NOR SUPPORTED** — the branch admits it, nothing here claims what it does, and
+> a System V-derived host would fail loud on the first directory flush rather
+> than silently. A successor that widens the product's platform list owes either
+> a write-open directory descriptor or an allow-list branch here; naming the two
+> supported POSIX platforms is what makes that obligation visible.
+>
+> **Erratum 5 — the D3 observer's comment says "by INODE" while the fixture keys
+> on the fd NUMBER.** At `tests/unit/dream-validate.test.js:2604-2606` the
+> comment reads *"Observe the artifact descriptor by INODE (descriptor numbers
+> are REUSED, so a bare number would read the same for a leak and a non-leak
+> alike)"*, but `heldFd` is the return of `openSync` and `fstatSync(heldFd)`
+> keys on that number — so the fixture does exactly what its own comment warns
+> against. **Harmless on this path, and measured as such:** `quarantinePreserve`
+> opens nothing between the finalizer's `closeQuietly(fd)` and the throw, so
+> there is no reuse window, and `post-commit-descriptor-leaked` is PROVEN
+> against exactly this identity. The comment states the hazard correctly and
+> then names the wrong mitigation; the mitigation it describes is the one
+> **QPD-7** actually implements, by tracking the open SET rather than a number.
+> Raised at round 3 as informational precisely because changing it then would
+> have been churn in a closing round. Noted here so a successor reading that
+> comment does not trust it as a description of the fixture.
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
