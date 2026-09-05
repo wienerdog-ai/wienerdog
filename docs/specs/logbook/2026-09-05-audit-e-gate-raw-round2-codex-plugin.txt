@@ -1,0 +1,73 @@
+# Design gate raw — round 2 — Codex plugin adversarial review — WP-audit-e-ledger-parser-corpus
+# tip reviewed: a1b69cc1bbc11c114acb7057226e2647f91d2b74 ; base main = 8c52808f ; porcelain before/after identical ; committed pre-adjudication
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a071ba-2029-7230-acde-73c22a3bc68d).
+[codex] Turn started (01a071ba-2170-7fd2-9eea-a0ac5a4a81ee).
+[codex] Assistant message captured: I’ll inspect the two-file diff and cited code, then drive the gates against the round-1 fixes...
+[codex] Running command: /bin/zsh -lc 'git status --porcelain; git rev-parse HEAD; git diff main -- docs/specs/WP-audi...
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md'
+[codex] Running command: /bin/zsh -lc 'cat src/core/dream/validate.js; cat src/core/frontmatter.js'
+[codex] Command completed: /bin/zsh -lc 'cat src/core/dream/validate.js; cat src/core/frontmatter.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/unit/frontmatter-unify.test.js; rg -n 'parseFrontmatter|makeGates|led...
+[codex] Command completed: /bin/zsh -lc "cat tests/unit/frontmatter-unify.test.js; rg -n 'parseFrontmatter|makeGates|led... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '281,575p' docs/specs/WP-audit-e-ledger-parser-corpus.md"
+[codex] Assistant message captured: Table D’s exact-set rule may still conflict with excluding C26: a lookup-based detector can f...
+[codex] Running command: /bin/zsh -lc "sed -n '1,115p' src/core/dream/validate.js; sed -n '225,560p' src/core/dream/va...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,115p' src/core/dream/validate.js; sed -n '225,560p' src/core/dream/va... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md | sed -n '1,...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-audit-e-design-gate-rounds.md | sed -n '1,... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '550,605p' src/core/dream/validate.js; rg -n 'function makeGates|ledger:...
+[codex] Command completed: /bin/zsh -lc "sed -n '550,605p' src/core/dream/validate.js; rg -n 'function makeGates|ledger:... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1630,1695p' scripts/red-proofs.js; sed -n '1259,1275p' src/core/dream/v...
+[codex] Command completed: /bin/zsh -lc "sed -n '1630,1695p' scripts/red-proofs.js; sed -n '1259,1275p' src/core/dream/v... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul... (exit 0)
+[codex] Assistant message captured: The gate runs reproduced every “Today” verdict in C31–C43, and three conforming detectors agr...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --test --test-name-pattern='parseFrontmatter|validator semantics preserved...
+[codex] Command completed: /bin/zsh -lc "node --test --test-name-pattern='parseFrontmatter|validator semantics preserved... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --stat 8c52808f HEAD -- src/core/dream/validate.js src/core/frontmatte...
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 8c52808f HEAD -- src/core/dream/validate.js src/core/frontmatte... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const cp=require(\"node:child_process\"), rp=require(\"./scripts/red-...
+[codex] Command completed: /bin/zsh -lc "node -e ' const cp=require(\"node:child_process\"), rp=require(\"./scripts/red-... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const cp=require('\\''node:child_process'\\''); const r=cp.spawnSync(p...
+[codex] Command completed: /bin/zsh -lc "node -e 'const cp=require('\\''node:child_process'\\''); const r=cp.spawnSync(p... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'function isFailure|function flattenTap|function parseTap|function unique...
+[codex] Command completed: /bin/zsh -lc "rg -n 'function isFailure|function flattenTap|function parseTap|function unique... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1308,1350p' scripts/red-proofs.js; sed -n '1570,1605p' scripts/red-proo...
+[codex] Command completed: /bin/zsh -lc "sed -n '1308,1350p' scripts/red-proofs.js; sed -n '1570,1605p' scripts/red-proo... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const cp=require(\"node:child_process\"), rp=require(\"./scripts/red-...
+[codex] Command completed: /bin/zsh -lc "node -e ' const cp=require(\"node:child_process\"), rp=require(\"./scripts/red-... (exit 0)
+[codex] Assistant message captured: The shipped proof evaluator confirmed the extra failures from actual `node:test` TAP output. ...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require(\"node:fs\"), path = require(\"node:path\"), Modul... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '401,450p'; git s...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-audit-e-ledger-parser-corpus.md | sed -n '401,450p'; git s... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet: the product fixes reproduced...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Do not dispatch yet: the product fixes reproduced correctly, but Table D can reject a conforming implementation.
+
+EXECUTED: git status --porcelain before/after, git rev-parse HEAD, git diff main -- <two review files>, git diff --check main -- <two review files>, and git diff --stat 8c52808f HEAD -- <cited code/test paths>: exit 0. All cat/sed/nl/rg inspections: exit 0. Six node -e driver invocations—corpus/mutations, Unicode/observables/proof evaluator, initial reporter attempt, reporter diagnosis, corrected TAP evaluation, promotion controls—each exited 0. Mutated node:test children exited 1 as expected. The initial reporter attempt produced no TAP and was discarded; the corrected run asserted nonempty parsed results. node --test --test-name-pattern='parseFrontmatter|validator semantics preserved|no-separator-space|coerceScalar reproduces|skill-body split' tests/unit/dream-validate.test.js tests/unit/frontmatter-unify.test.js: exit 0, seven passed.
+
+C31–C43 reproduced their Today and REQUIRED verdicts. Lookup, Set and a third array/includes duplicate detector agreed before mutation. LPC-G reddened exactly C37/C39 for all three. Sweeping every Unicode codepoint in three value positions found only CR/U+2028/U+2029 newly matched and no newly refused character. Interior whitespace, case variants, NFC/NFD and interior U+200B headings were refused. The six old deepEqual calls produced five failures; all three replacement observables held. No counterexample beyond the intended prototype change survived A2. Dispatch item 3 references those observables correctly; the ADR insertion point and Deliverables were sufficient.
+
+LIMITATION: filesystem writes were prohibited, so drivers ran in memory, not the requested file. Exotic characters used JS escapes and were codepoint-checked. Full verification commands were not run. Git status remained exactly '?? node_modules'.
+
+Findings:
+- [medium] [A] Define executable proof selections before requiring exact failure sets (docs/specs/WP-audit-e-ledger-parser-corpus.md:406-420)
+  R1-C remains open: excluding an algorithm-dependent row from expectRed does not exclude its failure from the runner. With separate corpus-row identities and an unfiltered declaration—both permitted here—the conforming lookup detector's LPC-B fails C24/C25/C26/C27/C28. The shipped evaluateRed rejected actual TAP with 'C26 failed in its OWN BODY but is not declared'; Set and array detectors passed the four-row declaration. The new rows also invalidate other advertised sets: LPC-A additionally fails C36–C38, and LPC-F additionally fails C37, under all three detectors. Actual TAP evaluation rejected those undeclared failures too. Consequently, a correct implementation following Table D can fail criterion 7. The shipped testNamePattern mechanism could isolate stable witnesses, but this spec does not require that selection or distinguish selected witnesses from total mutation reach.
+  Recommendation: Specify proof selection using the existing testNamePattern facility, or permit implementation-specific measured complete failure sets. Correct LPC-A/LPC-F's reach to include C36–C38/C37, and distinguish total reach from selected witnesses. Apply the pinned ADR-0031 extraction rule because this repeats R1-C's contract family; update the logbook mirror without adding a gate or constraining detector shape.
+
+Next steps:
+- Routed scope objections: none counted. C39 follows from A7's explicit LF-delimited remainder plus trim contract, so it needs no separate owner ruling. A trailing CR is initially part of the remainder and then trimmed. Frontmatter tolerates CR on field lines, although an entirely CRLF frontmatter block remains undelimited. Trailing CR/U+2028/U+2029 padding on an LF ledger also becomes accepted under the same class rule.
+- No undecided derived-value class was found. Unicode-bearing hostile headings lack dedicated witness rows, but the specified regex already decides them and execution confirmed refusal; this is not a blocking finding.
+- Resolve the proof-contract finding within the existing surface. No independent product-verdict defect was established, so machinery repair alone should not extend the external review loop.
+rc=0
+PORCELAIN: identical
