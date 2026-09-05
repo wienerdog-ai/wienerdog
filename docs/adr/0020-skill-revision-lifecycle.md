@@ -378,6 +378,25 @@ no manifest entry, no uninstall change. **Migration:** no dream-created skills
 exist in any field vault yet, so there is nothing to backfill; a pre-registry
 dream-created skill is un-revisable (fail closed), which is acceptable.
 
+## Amendment (2026-09-05): ledger-parser correctness (WP-audit-e-ledger-parser-corpus)
+
+Three additive corrections to the ledger keep-conditions above. Nothing above
+this amendment is edited; it stands as the historical record.
+
+(a) The keep-condition "every `##` entry validates against the schema" was
+    FALSE for the heading `__proto__`, which set the collector's prototype
+    instead of becoming a key and was therefore skipped by every schema and
+    history loop. It is true as of this work package.
+(b) `derived_from_untrusted` is honoured only as the exact literals `true` and
+    `false`. Any other value — a case variant, a quoted form, a number, an
+    empty value — is a schema violation on the keep/revert path, and is treated
+    as untrusted (fail closed) on the authorization path and by the raise-only
+    comparison.
+(c) A repeated `##` heading is a schema violation and a refusal reason at ALL
+    THREE reads of a ledger: the candidate, the committed baseline used for the
+    append-only comparison, and the committed read on the authorization path,
+    which never runs the schema loop.
+
 ## Future work (parked, not specced)
 
 - **Dormancy / staleness aging.** Hermes's curator auto-archives skills unused
