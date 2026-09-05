@@ -377,7 +377,7 @@ gate contracts, so the fixes change what the implementer builds.
 | **R1-A** | plugin high/A **+** shadow A — **CONVERGED** | HEAVY | Table B's "harvest the `<…>` groups" candidate extraction is wrong three ways: `alice@example.org (backup <old@example.net>)` selects the **comment's** address; `victim@example.com, Attacker <attacker@example.com>` yields ONE candidate — the bracketed one — silently dropping the bare mailbox, so criterion 4's exactly-one refusal never fires; and the valid `"Team <east>" <alice@example.org>` is refused. | **fix** — extraction and count rows replaced by an **anchored whole-value single-mailbox grammar**: the entire trimmed header value must match `^(ADDR)$` or `^(?:(?:<quoted-string>\|<plain atoms>)[ \t]+)?<[ \t]*(ADDR)[ \t]*>$`, nothing after the `>`. A grammar anchored over the whole value cannot ignore part of it, which is the property harvesting lacked. The four refused families are now stated in Table B, in criterion 4, and in the `[AUD-D3]` identity name; criterion 3 and the `[AUD-D2]` identity name carry the accepted forms (bare, plain display name, quoted display name containing `<`/`,`, `Reply-To` precedence). |
 | **R1-B** | plugin medium/B | HEAVY | The round-0 pattern `^[^\s<>,;:"\\]+@[^\s<>,;:"\\]+\.[^\s<>,;:"\\]+$` **accepts** `user@[192.0.2.1]` and `alice@relay@example.org`, while the prose and owner item 7 both claim address literals are refused. | **fix** — `ADDR` now excludes `@`, `[` and `]` from both sides, so exactly-one-`@` is structural and an address literal cannot match; both cases are named as required `[AUD-D3]` fixtures. **Owner item 7's RECOMMENDATION stands unchanged — only its premise was misstated**, and the spec now says so in place. |
 | **R1-C** | plugin high/A **+** shadow A — **CONVERGED** | HEAVY | `extra-classes-dropped` mutates only `requiredClassesFor`; both production consumers (`gws-broker.js:95` derivation, `:121-128` pre-dispatch refusal) can stay on the old single-class derivation with `[AUD-D6]` still PROVEN. The plugin reproduced in memory that with DRAFT unavailable, `getProfile` ran and the model saw the masked `broker verb … failed` instead of the fixed class-unavailable refusal. | **fix** — criterion 8 now drives the **real** `assembleRegistry` for **both** new verbs in **three** credential states (READ missing / DRAFT missing / both present), asserting the exact fixed sentence and **zero** Google calls on a missing class, and the handler reached when both load. Seam chosen: **injected credential loading** (`assembleRegistry(paths, profile, deps)` with `deps.loadServices`, exported beside `compositeServices`) over an exported pure "assembly plan" — a pure plan is one more API a consumer can simply stop calling, which is the exact failure this finding is. `[AUD-D6]` moves to `tests/unit/gws-broker.test.js` (which already drives that file, `:12,:34,:54`), and Table C gains **two** more mutations, one per consumer site. **Table C now spans two suites, so two declaration files** — its "one suite" sentence and both Deliverables rows changed with it. |
-| **R1-D** | plugin medium/B | HEAVY | The residual's provenance claim "the recipient must already have mailed the user" is **false** under `Reply-To` precedence: `From: attacker` with `Reply-To: third-party@example.net` addresses someone who never wrote. | **fix** — swept as a CLAIM, whitespace-flattened, not as a wording: three sites carried it (Context's "Named residual", the T4a paragraph quoted in Exact contracts, and Table A's cap-10 rationale). All three now say the recipient is **nominated by the selected message's author** (`Reply-To`, else `From`) and **may be an unrelated third party**; what is bounded is that the model cannot choose it. Re-swept afterwards: zero hits. **Owner item 4's recommendation (Reply-To first) is unchanged.** |
+| **R1-D** | plugin medium/B | HEAVY | The residual's provenance claim "the recipient must already have mailed the user" is **false** under `Reply-To` precedence: `From: attacker` with `Reply-To: third-party@example.net` addresses someone who never wrote. | **fix** — swept as a CLAIM, whitespace-flattened, not as a wording: three sites carried it (Context's "Named residual", the T4a paragraph quoted in Exact contracts, and Table A's cap-10 rationale). All three now say the recipient is **nominated by the selected message's author** (`Reply-To`, else `From`) and **may be an unrelated third party**; what is bounded is that the model cannot choose it. Re-swept afterwards: zero hits. **Owner item 4's recommendation (Reply-To first) is unchanged.** **CORRECTION 2026-09-05 (round 2, finding R2-D): the "zero hits" claim in this row was FALSE.** The T4a paragraph still contained "the recipient must already have mailed the user — but …"; the round-1 sweep pattern was built around the wording the same pass had just rewritten, so it could not see the clause it had left standing. Closed in the round-2 pass by deleting the clause and re-reading the whole cell. |
 | **R1-E** | shadow A | HEAVY | V5 was a **denylist**: the shadow executed a synthetic schema declaring `destination` and V5 exited **0**. It also selected its set through the mutable `service` field, so a reclassified verb drops out of the check entirely. | **fix** — V5 now enumerates the intended shape instead of the forbidden one: it pins the exact nine-name verb table, the exact five gmail-service names, and for each of those five its `service`, `additionalProperties: false`, and its **exact** input property set from Table A. Criterion 1's universal quantifies over that asserted set. This is the repo's own lesson — enumerating your OWN GOOD is closable, enumerating the BAD is not — and V5 has now been wrong twice in exactly the two ways a one-directional run cannot see. |
 
 ### R1-A / R1-B validated by EXECUTION, not by reading
@@ -460,6 +460,158 @@ fix is genuinely closed rather than re-worded.
 - **(iii) Scope objections** stay routed rather than counted. Round 1 produced
   zero.
 
+## Round 2 — external double channel, 2026-09-05, on `0fbbb2c7`
+
+Both channels **needs-attention**, **zero scope objections**, every claim
+reproduced before adjudication. Raws committed pre-adjudication:
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-codex-plugin.txt` | `b2d987eb` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-herdr-shadow.txt` | `dda7aaaa` |
+
+### ESCALATION (i) FIRED — this pass is a CONTRACT pass on Table B, not a third regex patch
+
+Round 1 landed two Table B findings from both channels; round 2 landed three more
+(quadratic backtracking — plugin A; valid single mailboxes refused — plugin B;
+CR/LF erased before the refusal check — shadow A), so under ADR-0031 and the
+pinned stop criterion the next step was a contract pass, and the durability loop's
+precedent applies: **the breaker's answer is a contract ("an ORDER, not a
+COVERAGE"), never a fourth fix.**
+
+**What the contract turned out to be: an ORDER of operations over RAW header
+values, with bounds BEFORE parsing.** Every one of the five Table B findings across
+both rounds is the same defect wearing different clothes — *parsing before
+bounding*. Unbounded input made the grammar's cost the attacker's choice; trimming
+before the CR/LF check erased a leading or trailing `\r\n`; prefixing and
+truncating the Subject to 512 erased a CR/LF sitting beyond character 512 and a
+draft was created. A longer list of accepted and refused shapes could not have
+fixed any of them, because none of them is about which shapes are accepted. Table B
+is now eight ordered steps, each with its input and its invariant, with the
+regexes demoted to **derived source forms** validated by an executed case table.
+Step 0 (CR/LF on all five RAW values, untrimmed, before anything) settles both
+CR/LF findings; step 2 (a 998-character bound before the grammar) settles the
+cost finding by construction; step 7 keeps `assertHeaderSafe` as **defence in
+depth**, explicitly not the check the contract relies on.
+
+| # | Channel(s) | Band | Finding | Disposition |
+|---|---|---|---|---|
+| **R2-A** | plugin A | HEAVY | Quadratic backtracking in the round-1 regexes. | **fix, via the contract** — step 2 bounds the raw value at 998 *before* the grammar runs, so the cost is bounded by a constant on any engine; and the derived forms remove the two backtracking shapes anyway (`DLABEL` excludes `.`, making the domain's dot structure deterministic; `PHRASE`'s three alternatives start on disjoint characters, so the alternation never backtracks between them). **See the reproduction note below — I could not reproduce the timing, and the contract does not rest on it.** |
+| **R2-B** | plugin B | HEAVY | Valid single mailboxes refused: `"Alice"<alice@…>` (no whitespace before `<`) and `Alice "Team <east>" <alice@…>` (atom + quoted word). | **fix** — the grammar now states whitespace between words and before `<` as OPTIONAL, and `phrase = 1*word` with `word = atom / quoted-string`. Both are ACCEPTED fixtures in the executed case table and in criterion 3. |
+| **R2-C** | plugin A | HEAVY | A READ **sibling** masks `extra-classes-dropped-derivation`: with `brokerVerbs: ['gmail_read', newVerb]` the old single-class derivation still loads READ and all six states pass. And the injected-deps cases never exercise the DEFAULT loader — an implementation that drops the fallback passes them while production calls `assembleRegistry` with no `deps`. | **fix** — criterion 8 now requires **SINGLETON** profiles (`brokerVerbs: [verb]`, one per new verb), an **instrumented** loader asserting the set of classes actually **REQUESTED** rather than only the dispatch outcome, and a separate pin that `assembleRegistry` with no `deps` resolves `loadServices` to `loadCredentialServices`. The `[AUD-D6]` identity name carries all three. |
+| **R2-D** | plugin B **+** shadow B — **CONVERGED** | HEAVY | **R1-D was not closed.** Spec `:285` still read "the recipient must already have mailed the user — but …", and the round-1 record's "re-swept afterwards: zero hits" was false. | **fix** — the clause is deleted; the residual now states only author-nomination (`Reply-To` else `From`) and that the recipient may be a third party who never wrote. The round-1 row above carries a **dated correction line** rather than a silent rewrite. **Lesson, recorded:** the round-1 sweep pattern was built around the wording that same pass had just rewritten, so it was structurally blind to the clause it left standing — a sweep must be for the CLAIM, and after rewriting a cell the whole cell is re-read. This is the repo's existing intra-cell rule failing in the one place no mirror checklist can see. |
+| **R2-E** | plugin A **+** shadow A — **CONVERGED** | HEAVY | V5 pinned **names only**, so weakened value schemas passed: dropping `id`'s `pattern` let `id = "attacker@example.net"` be forwarded as `to` and a draft was created (plugin countermodel); the shadow emptied every `required`, every property schema, every `capabilityClass` and every `extraClasses` and V5 still passed. | **fix** — V5 now compares the **COMPLETE canonical record** of each gmail verb against a literal derived from Table A: `capabilityClass`, `extraClasses`, `maxCallsPerRun`, `required`, `additionalProperties`, and every property's full schema including its `pattern`. Criterion 1 quantifies over that. Re-proved from the block extracted verbatim from the spec — green on compliant, red on **six** distinct weakenings plus the pinned base and the absent tree (table below). |
+| **R2-F** | shadow B | HEAVY | Third masking trap on `reply-headers-unasserted`: a CR/LF in `To` or `Subject` is refused **identically** by correct and mutant code, because `buildMime` still asserts those two; only `Message-ID`/`In-Reply-To` or `References` discriminate. | **fix** — the third trap is named beneath Table C, and criterion 6 now requires injection **one field at a time** across all five raw fields, asserting zero `drafts.create` per case. |
+| **R2-G** | plugin (follow-through) | HEAVY | (i) `reply-recipient-not-derived` was stated "in `replyTarget`, use the first address in the caller-supplied `body`" — but `replyTarget`'s only input is `id`, so the mutation cannot live there. (ii) A naive first-angle-candidate mutation also reddens `[AUD-D2]`'s quoted-display-name row, so its failing set exceeds `[AUD-D3]`. | **fix** — (i) the mutation is restated at the `create_reply_draft` **handler**, where `args.body` is in scope. (ii) Table C now states that `expectRed` sets are **MEASURED after implementation, never predicted**, and that a mutation whose measured set exceeds its declaration is **restated, not widened into the declaration** — widening would make the pair stop distinguishing the identities, which is why `evaluateRed`'s comparison is two-sided. |
+
+### Table B validated by EXECUTION — as the ORDERED PIPELINE, not as a regex
+
+39 cases, run through the full step-0 → step-6 order before the table entered the
+spec. **Exit 0, 0 mismatches.** Every refusal is attributed to the step that made
+it, which is the property a regex-only harness cannot show:
+
+```text
+ok   refuse:step0-crlf              R2 plugin: LEADING CR/LF — trim would have erased it
+ok   refuse:step0-crlf              R2 plugin: TRAILING CR/LF — trim would have erased it
+ok   refuse:step0-crlf              R2 shadow: CR/LF in Subject BEYOND char 512 — truncation would have ERASED it
+ok   refuse:step0-crlf              CR/LF in the NON-selected-by-default header still refuses (step 0 reads all five)
+ok   refuse:step2-raw-over-998      999 raw chars — one over the pre-parse bound
+ok   refuse:step3-not-one-mailbox   R1-A: comment — old rule picked the COMMENT address
+ok   refuse:step3-not-one-mailbox   R1-A: mixed bare+angle — old rule DROPPED the bare mailbox
+ok   refuse:step3-not-one-mailbox   R1-B: address literal   /   R1-B: two @   /   quoted local part
+ok   refuse:step4-addr-over-320     captured address over 320 (step 4)
+ok   alice@example.org              R2 plugin: NO whitespace before < — was wrongly REFUSED
+ok   alice@example.org              R2 plugin: atom + quoted word — was wrongly REFUSED
+ok   alice@example.org              exactly 998 raw chars — the bound is inclusive
+ok   third@example.net              Reply-To precedence (the residual: a third party who never wrote)
+
+39 cases, 0 mismatch(es)
+```
+
+**Worst-case match time AT the 998 bound**, over five adversarial shapes (unclosed
+quote, unterminated atom run, phrase with no `<`, phrase with an unclosed angle,
+dot-heavy domain):
+
+```text
+  domain dots, no @-terminator     len= 803  0.0011 ms/match
+  atext run, unterminated          len= 998  0.0045 ms/match
+  phrase run then no <             len= 998  0.0044 ms/match
+  phrase + unclosed angle          len= 991  0.0030 ms/match
+  quoted, unterminated             len= 997  0.0026 ms/match
+```
+
+### Reproduction note on R2-A — stated honestly, because the burden is on the run
+
+**I could not reproduce the quadratic timing.** On Node 25.9.0 I ran the round-1
+`BARE` and `MAILBOX` forms against the shapes that should exhibit it — `a@` +
+`"b."`×n + a character outside `ATEXT` (forcing failure at every dot position), up
+to 32 003 characters; `"P "`×n followed by a bare `<` and by `<not-an-addr>`; and a
+long atom run with no `<` — up to 1 601 characters. Every measurement stayed under
+0.06 ms and did not grow super-linearly; V8 appears to fail these out before the
+backtracking materialises. The orchestrator re-ran the timing and **did** reproduce
+it, so the finding stands on that run and not on mine.
+
+**The contract deliberately does not depend on which of us is right.** Step 2's
+998-character bound is what makes the cost a non-question — on any engine, for any
+input, whatever the pattern is next revised to. That is precisely why the bound is
+the contract-level answer and a faster regex would not have been: a regex fix would
+have left "is it linear?" as an input-dependent claim to be re-argued after every
+change, and two of the five Table B findings were exactly that argument. The
+derived forms' determinism is recorded as an honest property of the derivation,
+not as the thing the invariant rests on.
+
+### R2-E re-proved, block extracted VERBATIM from the spec
+
+```text
+COMPLIANT                          exit=0  V5 OK: 9 verbs; 5 gmail verbs, each matching Table A COMPLETELY
+MUTANT id pattern removed          exit=1  create_reply_draft record differs from Table A
+MUTANT required emptied            exit=1  create_reply_draft record differs from Table A
+MUTANT capabilityClass changed     exit=1  create_reply_draft record differs from Table A
+MUTANT extraClasses dropped        exit=1  create_draft_to_self record differs from Table A
+MUTANT cap 3->99                   exit=1  create_draft_to_self record differs from Table A
+MUTANT additionalProperties true   exit=1  create_reply_draft record differs from Table A
+PINNED BASE                        exit=1  verb table is [… "create_draft" …]
+DELIVERABLE ABSENT                 exit=1  require throws
+```
+
+The first six columns are the finding: every one of those mutants passed the
+round-2 V5.
+
+### Owner items — one added
+
+**Item 8 (NEW): Table B step 2's 998-character pre-parse bound is a new refusal of
+pathological-but-legal headers.** *Recommendation: take the bound* — it makes the
+grammar's cost a non-question on any engine rather than a claim to be re-argued
+after every pattern change, and it is unreachable by conforming mail (a value that
+long would have arrived folded, and folding means CRLF, which step 0 refuses).
+*Cost of overruling:* the worst case reverts to an input-dependent claim needing
+re-measurement on every engine after every change — which is what the two Table B
+cost findings were. **No other owner item's RULING changed:** item 7's narrowing is
+restated to name the grammar's full refusal set, and item 4 is untouched. The list
+is now **eight**.
+
+### STOP CRITERION — restated
+
+**The loop closes** when one full round returns **no product finding on either
+channel**. All seven round-2 findings were HEAVY, so **round 3 is a full fresh
+external round on both channels**, asked additionally to verify each round-2 fix is
+genuinely closed rather than re-worded — with R1-D as the standing example that
+"closed" must be re-measured, not asserted.
+
+**Escalation, with the breaker already fired once:**
+
+- **(i) The Table B breaker has FIRED and been answered by a contract pass.** The
+  test for round 3 is therefore sharper than "another Table B finding": **a round-3
+  Table B finding that is NOT a case the executed 39-case table already refuses
+  means the contract pass FAILED** — and the next step is then an **owner ruling on
+  the recipient design itself** (whether `create_reply_draft` should derive a
+  recipient at all), not a fourth attempt at the derivation. A round-3 Table B
+  finding that IS already refused by the executed table is a documentation finding
+  about the table's presentation, and is LIGHT.
+- **(ii) Owner-boundary findings PARK.** Round 2 forced exactly one: the 998 bound,
+  now item 8. No grant, allowlist, cap, scope set, or the deletion moved.
+- **(iii) Scope objections** stay routed. Rounds 1 and 2 produced zero.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -468,3 +620,6 @@ fix is genuinely closed rather than re-worded.
 | 0 | orchestrator executors | — | — | template CONFORMS; 8 coherence findings, all LIGHT, folded before round 1 |
 | 1 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-codex-plugin.txt` | `6ca9f75f` | needs-attention, 0 scope objections — R1-A (high/A), R1-B (medium/B), R1-C (high/A), R1-D (medium/B) |
 | 1 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round1-herdr-shadow.txt` | `c8222247` | needs-attention, 0 scope objections — R1-A (A, converged), R1-C (A, converged), R1-E (A) |
+| 2 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-codex-plugin.txt` | `b2d987eb` | needs-attention, 0 scope objections — R2-A (A), R2-B (B), R2-C (A), R2-D (B, converged), R2-E (A, converged), R2-G |
+| 2 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round2-herdr-shadow.txt` | `dda7aaaa` | needs-attention, 0 scope objections — CR/LF-before-refusal (A, folded into the Table B contract pass), R2-D (B, converged), R2-E (A, converged), R2-F (B) |
+| 2 | **ADR-0031 breaker** | — | — | **FIRED on Table B** (2 findings round 1 + 3 round 2) → contract pass: Table B restated as an ORDER with bounds before parsing; 39-case pipeline executed, 0 mismatches |

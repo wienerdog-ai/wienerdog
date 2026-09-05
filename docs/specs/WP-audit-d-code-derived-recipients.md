@@ -179,8 +179,8 @@ the DRAFT verb; `docs/GLOSSARY.md:36` names it as an example broker verb.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/gws/broker/verbs.js | delete the `create_draft` record; add `create_draft_to_self` and `create_reply_draft` exactly per **Table A**; add the `extraClasses` field and export `requiredClassesFor` (Exact contracts) |
-| modify | src/gws/gmail.js | extend `buildMime` and `draft` and add `replyTarget`, all per Exact contracts; extend the `module.exports` list |
-| modify | src/cli/gws-broker.js | `:95` and `:121-128` route through `requiredClassesFor`; `assembleRegistry` gains the injected `loadServices` and is exported (Exact contracts) |
+| modify | src/gws/gmail.js | extend `buildMime` and `draft`; add `replyTarget`, which performs **Table B's ordered steps 0–6**; extend `module.exports` (Exact contracts) |
+| modify | src/cli/gws-broker.js | `:95` and `:121-128` route through `requiredClassesFor`; `assembleRegistry` gains an injected `loadServices` **defaulting to `loadCredentialServices`** and is exported (Exact contracts) |
 | modify | src/core/runtime-profile.js | `inbox-triage` → `['gmail_search','gmail_read','create_reply_draft']`; `weekly-review` → `['create_draft_to_self']`; update the `:113` comment to name the new verb |
 | modify | skills/wienerdog-inbox-triage/SKILL.md | name `create_reply_draft`; the Draft section says the reply goes to the message id, not to an address |
 | modify | skills/wienerdog-weekly-review/SKILL.md | name `create_draft_to_self`; delete "with the user's own address as `to`" |
@@ -258,12 +258,14 @@ request body becomes `{ message: { raw, threadId } }`, otherwise it is unchanged
 
 **`gmail.replyTarget(services, { id })`** — new, exported. Calls
 `services.gmail.users.messages.get({ userId:'me', id, format:'metadata',
-metadataHeaders: ['Reply-To','From','Subject','Message-ID','References'] })` and
-returns `{ to, subject, threadId, inReplyTo, references }` derived per **Table B**.
-It throws a `WienerdogError` with the fixed message
+metadataHeaders: ['Reply-To','From','Subject','Message-ID','References'] })`, then
+performs **Table B's steps 0 → 6 IN THAT ORDER** and returns
+`{ to, subject, threadId, inReplyTo, references }`. The order is the contract: step
+0 runs on the raw values before any trim, and step 2's bound runs before the
+grammar. It throws a `WienerdogError` with the fixed message
 `could not determine one reply address on that message — no draft was created`
-when Table B's recipient rule is not satisfied. It never reads the message body,
-and it never accepts an address from its caller.
+at every refusal in Table B. It never reads the message body, and it never accepts
+an address from its caller.
 
 **`create_draft_to_self`'s handler** mirrors `verbs.js:197-201` exactly: resolve
 via `getProfile`, and when the result carries no `@`, throw
@@ -277,18 +279,17 @@ recipient — `create_draft_to_self` resolves the account owner server-side, and
 it replies to. No broker verb accepts an address from the model."* Then add, as
 its own paragraph immediately after `:140`'s residual paragraph:
 
-> **Residual (accepted) — a reply draft's recipient is the message it replies to.**
-> `create_reply_draft` derives its one recipient from the replied-to message's
-> `Reply-To` (else `From`) header, both of which the message's author chooses. An
-> attacker who can mail the user can therefore obtain a *draft* addressed to
-> themselves, with content the hijacked model wrote. This is inherent to replying
-> and is strictly narrower than a free `to` field: the recipient must already have
-> mailed the user — but the address itself is **nominated by that message's
-> author**, through `Reply-To` when present, so it may be an unrelated third party
-> who never wrote. What is bounded is that the model cannot choose it: exactly one
-> address, no `Cc`/`Bcc`, the routines hold no send verb, and every draft passes
-> the user's eyes in Gmail before it can leave. Revisit only if a routine ever gains an unattended send to
-> a non-self address.
+> **Residual (accepted) — a reply draft's recipient is nominated by the author of
+> the message it replies to.** `create_reply_draft` derives its one recipient from
+> that message's `Reply-To`, else its `From` — both of which the message's author
+> chooses. So an attacker who can mail the user can obtain a *draft* addressed to
+> themselves, **or, via `Reply-To`, to an unrelated third party who never wrote to
+> the user at all**, carrying content the hijacked model composed. This is inherent
+> to replying. What the design bounds is the *model*, not the author: the model
+> chooses only WHICH message is replied to and can write no address anywhere; the
+> draft carries exactly one address and no `Cc`/`Bcc`; the routines hold no send
+> verb; and every draft passes the user's eyes in Gmail before it can leave.
+> Revisit if a routine ever gains an unattended send to a non-self address.
 
 `docs/THREAT-MODEL.md:140` and `:142` both already claim a hijacked model cannot
 "name a new recipient". **Neither sentence needs editing** — this WP is what makes
@@ -349,49 +350,104 @@ callers anywhere in the tree (see the sweep in Current state), and a record left
 the frozen table is a free-address surface one allowlist edit away from reachable.
 Criterion 1's universal is only true of the deleted state.
 
-### Table B — canonical: how `create_reply_draft` derives everything from the source message
+### Table B — canonical: the ORDER of operations `create_reply_draft` performs
 
-Every value below comes from the fetched message; **nothing in this table can be
-influenced by the verb's arguments except which message is fetched.**
+**The contract is an ORDER, not a coverage list.** Round 1 and round 2 landed five
+findings on this contract from both channels, and every one of them was a
+consequence of the same shape: **parsing before bounding**. Unbounded input let the
+grammar's cost depend on the attacker; trimming before the CR/LF check erased a
+leading or trailing `\r\n`; prefixing and truncating the Subject to 512 erased a
+CR/LF that sat beyond character 512, and a draft was created. Stating a longer list
+of accepted and refused shapes cannot fix that, because none of those defects is
+about which shapes are accepted. So Table B states the ORDER, each step with its
+input and its invariant, and the regexes below are **derived source forms**
+validated by an executed case table — not the contract itself.
 
-| Fact | Rule | On violation |
-|---|---|---|
-| Header precedence | `Reply-To` if its value is non-empty after trimming, else `From` | both empty → refuse |
-| addr-spec (`ADDR`) | `[^\s<>,;:"\\@\[\]()]+@[^\s<>,;:"\\@\[\]()]+\.[^\s<>,;:"\\@\[\]()]+` — `@` is excluded from the character class, so **exactly one `@`** is structural; `[` and `]` are excluded, so an address literal is refused; a dot after the `@` is required | — |
-| **Recipient grammar.** The WHOLE trimmed header value must match ONE of two anchored patterns; the capture group is the address | **bare** `^(ADDR)$` — or **mailbox** `^(?:(?:"(?:[^"\\\r\n]\|\\.)*"\|[^\s<>,;:"\\@()]+(?:[ \t]+[^\s<>,;:"\\@()]+)*)[ \t]+)?<[ \t]*(ADDR)[ \t]*>$`: one optional display name — a quoted string, which MAY contain `<` `>` `,` `;`, or plain atoms, which may not and may not contain `@` or parentheses — then exactly one `<addr-spec>`, with **nothing after the `>`** | anything else → refuse |
-| What the grammar refuses, by family | (1) a second mailbox, bare or bracketed (`victim@example.com, Attacker <attacker@example.com>`); (2) several bracketed mailboxes; (3) a comment or any trailing text (`alice@example.org (backup <old@example.net>)`); (4) a group (`undisclosed-recipients:;`) | refuse |
-| Extracted length | the captured address must be ≤320 characters | over → refuse |
-| Recipient (`to`) | that one address, and only it. **No `Cc`, no `Bcc`, ever** | — |
-| Subject | the source `Subject`, prefixed with `Re:` and one space unless it already matches `/^re:/i`; then truncated to the first 512 characters (the same ceiling as a model-supplied subject, Table A) | — |
-| `threadId` | the fetched message's `threadId`, passed to `drafts.create` | absent → omit it; still draft |
-| `In-Reply-To` | the source `Message-ID`, verbatim | absent → omit |
-| `References` | the source `References` (when non-empty) followed by the source `Message-ID`, space-joined | no `Message-ID` → omit both this and `In-Reply-To` |
-| Any CR/LF in a derived value | `assertHeaderSafe` (`gmail.js:18-23`) throws before the request is built | zero `drafts.create` calls |
-| "Refuse" means | throw the fixed `WienerdogError` named in Exact contracts, **with zero `drafts.create` calls** | — |
+**Everything below reads only the fetched message. Nothing in this table can be
+influenced by the verb's arguments except WHICH message is fetched.** "Refuse"
+always means: throw the fixed `WienerdogError` from Exact contracts, with **zero
+`drafts.create` calls**.
 
-Two consequences worth stating, because a reviewer will ask:
+| Step | Input | Operation | Invariant it establishes | On violation |
+|---|---|---|---|---|
+| **0. CR/LF, on RAW values, before anything else** | every raw header value this verb reads: `Reply-To`, `From`, `Subject`, `Message-ID`, `References` — **untrimmed**, all five, whether or not the step-1 selection will use them | test each for `\r` or `\n` **anywhere** | no CR or LF survives into any later step, so no later trim, prefix or truncation can erase one | refuse |
+| **1. Recipient selection** | the raw `Reply-To` and `From` | select `Reply-To` when it is non-empty after horizontal trimming, else `From`. The **raw** selected value carries forward | exactly one header value is under consideration | both empty → refuse |
+| **2. BOUND, before any parsing** | the **raw** selected value | its length must be ≤ **998** characters (RFC 5322 §2.1.1's line limit) | the grammar's cost is bounded by a constant the attacker cannot raise — **this is what makes step 3's cost a non-question, on any engine** | over → refuse |
+| **3. Grammar** | the selected value, horizontally trimmed | must match the single-mailbox grammar below, whole | the value is exactly one mailbox; no part of it is ignored | no match → refuse |
+| **4. Address bound** | the grammar's capture group | ≤ **320** characters | the recipient fits the field | over → refuse |
+| **5. Subject** | the raw `Subject` (CR/LF-clean since step 0) | horizontally trim; prefix `Re:` and one space unless it already matches `/^re:/i`; then truncate to the first 512 characters | truncation is safe **because** step 0 already ran | — |
+| **6. Threading** | raw `Message-ID`, `References`, and the message's `threadId` | `threadId` → `drafts.create`; `In-Reply-To` = `Message-ID`; `References` = existing `References` (when non-empty) then `Message-ID`, space-joined | the draft threads to its source | no `Message-ID` → omit both headers, still draft; no `threadId` → omit it, still draft |
+| **7. `assertHeaderSafe` at `buildMime`** | every header value | `gmail.js:18-23` | **defence in depth only** — step 0 is the check this contract relies on; if step 7 is ever the thing that catches a CR/LF, step 0 has a hole | throws; zero `drafts.create` calls |
 
-- **Why a whole-value grammar and not "harvest the `<…>` groups".** Harvesting is
-  what round 1 broke, three ways at once, and an anchored whole-value grammar
-  closes all three because it cannot ignore part of its input:
-  `alice@example.org (backup <old@example.net>)` harvested the **comment's**
-  address; `victim@example.com, Attacker <attacker@example.com>` harvested exactly
-  one candidate — the bracketed one — silently dropping the bare mailbox, so the
-  exactly-one refusal never fired; and the valid
-  `"Team <east>" <alice@example.org>` was refused.
-- **The grammar is deliberately fail-closed and narrower than RFC 5322.** A quoted
-  local part, an address literal (`user@[192.0.2.1]`), a second `@`
-  (`alice@relay@example.org`), a dotless domain, and every obsolete comment or
-  folding form are refused, with no draft. This is the one field an attacker fully
-  controls; a value the broker cannot reason about does not get a draft. The
-  round-0 pattern *claimed* this and did not do it — it ACCEPTED both the address
-  literal and the double-`@` form. **Owner item 7's recommendation is unchanged;
-  only its premise was misstated.**
-- **This package makes no claim about how Google *accepts* a threaded draft.** The
-  contract is the request the broker *builds*; Gmail's own threading acceptance
-  rules were not measured here and are not asserted anywhere in this spec.
-  Acceptance criterion 5 is about the request, against a stubbed client — the
-  posture every existing broker test already uses.
+**Trimming, stated once so it cannot drift:** trimming is **horizontal whitespace
+only** (`[ \t]`), never CR/LF — which cannot reach a trim, because step 0 already
+refused it. It is applied in exactly two places: to the selected recipient value
+before step 3, and to the Subject in step 5.
+
+#### The single-mailbox grammar (step 3)
+
+Stated as a grammar; the regexes are derived from it and are validated by the case
+table, not the other way round.
+
+```abnf
+mailbox     = addr-spec / [ phrase ] angle-addr
+phrase      = 1*word              ; whitespace BETWEEN words is optional,
+                                  ; and so is whitespace before the "<"
+word        = atom / quoted-string
+atom        = 1*( %any - SPECIALS - WSP )        ; SPECIALS = < > , ; : " \ @ ( )
+quoted-string = DQUOTE *( qtext / "\" CHAR ) DQUOTE   ; MAY contain < > , ;
+angle-addr  = "<" [WSP] addr-spec [WSP] ">"      ; and NOTHING after the ">"
+addr-spec   = 1*ATEXT "@" 1*DLABEL 1*( "." 1*DLABEL )
+ATEXT       = %any - WSP - < > , ; : " \ @ [ ] ( )      ; "." allowed
+DLABEL      = ATEXT - "."                               ; so the domain's dots are DETERMINISTIC
+```
+
+**Not accepted, by construction and by ruling:** comments, groups, obsolete
+forms, address literals (`ATEXT` excludes `[` `]`), more than one `@` (`ATEXT`
+excludes `@`, so this is structural, not a check), a dotless domain, and quoted
+local parts. That last set is owner item 7's narrowing, unchanged.
+
+**Derived source forms** (`ATEXT`, `DLABEL` and `ADDR` are named above):
+
+| Name | Regex |
+|---|---|
+| `ATEXT` | `[^\s<>,;:"\\@\[\]()]` |
+| `DLABEL` | `[^\s<>,;:"\\@\[\]().]` |
+| `ADDR` | `ATEXT+@DLABEL+(?:\.DLABEL+)+` |
+| `PHRASE` | `(?:[^\s<>,;:"\\@()]\|[ \t]\|"(?:[^"\\\r\n]\|\\.)*")+` |
+| **bare** | `^(ADDR)$` |
+| **mailbox** | `^(?:PHRASE)?<[ \t]*(ADDR)[ \t]*>$` |
+
+Two properties of these forms are deliberate and are what the derivation buys:
+`DLABEL` excludes `.`, so the domain's dot structure is **deterministic** rather
+than a greedy split that can be re-tried at every dot; and `PHRASE`'s three
+alternatives begin on **disjoint** characters (atom-char, horizontal space, `"`),
+so the alternation never backtracks between them. Neither property is what the
+contract *relies* on — step 2 is — but both make the derived forms honest.
+
+#### The executed case table (criterion 4's stated coverage lives here)
+
+**39 cases, executed as the ordered pipeline — not as a regex — with 0 mismatches
+before this table entered the spec.** The run is in
+`docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md`. The implementer's
+tests must cover every row; the identities that carry them are named in Table C.
+
+| Refused at | Cases |
+|---|---|
+| **step 0** | leading `\r\n`; trailing `\r\n`; embedded `\n`; a bare `\r` smuggling `Bcc:`; a CR/LF in `Subject` **beyond character 512**; a CR/LF in `Message-ID`; a CR/LF in `References`; a CR/LF in a header step 1 will not even select |
+| **step 1** | empty `From` with no `Reply-To`; a whitespace-only value |
+| **step 2** | a 999-character raw value (one over the bound) |
+| **step 3** | a comment (`alice@example.org (backup <old@example.net>)`); mixed bare + angle (`victim@example.com, Attacker <attacker@example.com>`); several bracketed mailboxes; two bare mailboxes; trailing text after `>`; trailing text on a bare value; a group (`undisclosed-recipients:;`); a named group; an address literal (`user@[192.0.2.1]`); two `@` (`alice@relay@example.org`); a dotless domain (`user@localhost`); a quoted local part (`"john doe"@example.org`) |
+| **step 4** | a captured address of 321 characters |
+
+| Accepted | Cases |
+|---|---|
+| bare and angle | `alice@example.org`; `<alice@example.org>` |
+| phrases | `Alice Example <…>`; `"Team <east>" <…>`; `"Doe, Jane" <…>`; **`"Alice"<…>` (no whitespace before `<`)**; **`Alice "Team <east>" <…>` (atom + quoted word)**; `"" <…>`; `"a\"b" <…>`; `Dr. Alice O'Brien <…>`; `Alice\t<…>` |
+| other | surrounding horizontal whitespace; a many-dot domain; `Reply-To` taking precedence over `From`; a raw value of **exactly** 998 characters |
+
+The two bold rows are round 2's false refusals — both are valid single mailboxes
+and both must be accepted.
 
 ### Table C — canonical: the RED proofs
 
@@ -412,13 +468,13 @@ does not exist yet; the implementer writes the byte-exact `find`/`replace`.
 |---|---|---|---|---|
 | `broker-verbs: [AUD-D1] create_draft_to_self addresses the server-resolved account and refuses when it cannot resolve one` | `[AUD-D1]` | `self-recipient-from-args` | 2 | in `create_draft_to_self`'s handler, use an address taken from `args` (falling back to a literal) instead of the `getProfile`-resolved one |
 | ″ | `[AUD-D1]` | `self-resolve-failure-swallowed` | 2 | replace the fail-loud throw on an unusable `getProfile` result with a literal fallback address |
-| `broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address derived from the replied-to message, over every accepted mailbox form` | `[AUD-D2]` | `reply-recipient-not-derived` | 3 | in `replyTarget`, replace the header-derived recipient with the first address found in the caller-supplied `body` |
-| `broker-verbs: [AUD-D3] create_reply_draft creates no draft when the message cannot be fetched, or its header is not exactly one acceptable mailbox` | `[AUD-D3]` | `reply-candidate-count-ungated` | 4 | replace Table B's exactly-one-candidate requirement with "take the first candidate" |
+| `broker-verbs: [AUD-D2] create_reply_draft addresses exactly the one address Table B's order produces, over every accepted case` | `[AUD-D2]` | `reply-recipient-not-derived` | 3 | **in the `create_reply_draft` HANDLER**, where `args.body` is in scope — override `replyTarget`'s `to` with the first address found in `args.body`. (`replyTarget` takes only `id`, so the mutation cannot live there) |
+| `broker-verbs: [AUD-D3] create_reply_draft creates no draft at any refusal in Table B's order — steps 0, 1, 2, 3 and 4` | `[AUD-D3]` | `reply-candidate-count-ungated` | 4 | replace Table B's exactly-one-candidate requirement with "take the first candidate" |
 | ″ | `[AUD-D3]` | `reply-address-pattern-dropped` | 4 | remove Table B's address-acceptance test from `replyTarget` |
 | ″ | `[AUD-D3]` | `reply-fetch-failure-drafts-anyway` | 4 | catch the `messages.get` failure and continue with a **literal fallback recipient and subject**, so the mutant DRAFTS where the correct code refuses. (Continuing with an *empty* header set would not do: Table B then refuses on "both empty", producing the same zero-draft observable as correct code — a vacuous proof) |
 | `broker-verbs: [AUD-D4] a reply draft is threaded to its source message, and carries no reply headers when the source has no Message-ID` | `[AUD-D4]` | `threading-dropped` | 5 | drop `threadId` from the `drafts.create` request body |
-| `broker-verbs: [AUD-D5] a CR/LF in any code-derived header value produces zero drafts.create calls` | `[AUD-D5]` | `reply-headers-unasserted` | 6 | bypass `assertHeaderSafe` on `buildMime`'s new `In-Reply-To` / `References` lines |
-| `gws-broker: [AUD-D6] every class a verb requires must have loaded before it dispatches — the real assembly path, in three credential states` | `[AUD-D6]` | `extra-classes-dropped-helper` | 8 | in `requiredClassesFor`, union only each verb's own `capabilityClass` and ignore `extraClasses` |
+| `broker-verbs: [AUD-D5] a CR or LF anywhere in any of the five RAW header values, one field at a time, produces zero drafts.create calls` | `[AUD-D5]` | `reply-headers-unasserted` | 6 | bypass `assertHeaderSafe` on `buildMime`'s new `In-Reply-To` / `References` lines |
+| `gws-broker: [AUD-D6] on a SINGLETON profile, every class a verb requires is REQUESTED and must have loaded before it dispatches — the real assembly path, three credential states, and the default loader` | `[AUD-D6]` | `extra-classes-dropped-helper` | 8 | in `requiredClassesFor`, union only each verb's own `capabilityClass` and ignore `extraClasses` |
 | ″ | `[AUD-D6]` | `extra-classes-dropped-derivation` | 8 | at consumer site `gws-broker.js:95`, derive the classes to load from `VERBS[v].capabilityClass` alone, ignoring `requiredClassesFor` |
 | ″ | `[AUD-D6]` | `extra-classes-dropped-refusal` | 8 | at consumer site `gws-broker.js:121-128`, gate the pre-dispatch refusal on the verb's own `capabilityClass` alone — the mutant then dispatches and the model sees the masked `broker verb … failed` |
 
@@ -428,15 +484,28 @@ constrain its callers. All three redden the same identity, which is what makes t
 identity's three-state assertion the thing being proved rather than the helper's
 return value.
 
+**`expectRed` sets are MEASURED after implementation, never predicted — and a
+mutation whose measured set EXCEEDS its declaration is restated, not widened into
+the declaration.** The worked case: a "take the first `<…>` candidate" mutation of
+step 3 also reddens `[AUD-D2]`'s quoted-display-name row, so its set exceeds
+`[AUD-D3]`; the fix is a narrower mutation, because widening the declaration would
+make the pair stop distinguishing the two identities — which is the whole reason
+`evaluateRed`'s comparison is two-sided.
+
 **Every mutation above must produce a DIFFERENT observable than correct code under
 its identity** — `evaluateRed` compares failing sets, so a mutant that lands on the
 same refusal the correct code already makes is a vacuous proof, not a red one. Two
 traps this contract creates, named so the identity's inputs avoid them: (a) for
 `reply-address-pattern-dropped`, the value must fail Table B's grammar **without
 containing CR/LF** — `user@[192.0.2.1]` and `alice@relay@example.org` both
-qualify — or `assertHeaderSafe` refuses the mutant too and the observable
-collapses; (b) for `reply-recipient-not-derived`, the `body` must name a
-**different** address from the header, or both arms draft to the same recipient.
+qualify — or step 0 refuses the mutant too and the observable collapses; (b) for
+`reply-recipient-not-derived`, the `body` must name a **different** address from
+the header, or both arms draft to the same recipient; (c) for
+`reply-headers-unasserted`, the CR/LF must be injected into `Message-ID` or
+`References` — a CR/LF in `To` or `Subject` is refused **identically** by correct
+and mutant code, because `buildMime` still asserts those two, so those fields
+cannot discriminate. This is why criterion 6 requires per-field injection rather
+than one combined case.
 
 **Criteria 1, 7, 9, 10 and 11 carry no declaration, deliberately.** 1 is a
 structural pin over the verb table, checked mechanically and non-vacuously by V5;
@@ -453,12 +522,12 @@ the table **and** every mirror below in one pass; any new mirror found in review
 added here on the spot.
 
 - [ ] **Table A** ← Deliverables rows for `verbs.js`, `runtime-profile.js`, both `SKILL.md`s, `docs/GLOSSARY.md`, `docs/adr/0026-…` (Amendment 2's verb names), and the four verb-name-pinning test rows (`broker-registry.test.js`, `broker-wiring.test.js`, `routine-runtime.test.js`, `routines-skill-structure.test.js`)
-- [ ] **Table A** ← acceptance criteria 1, 2, 7, 8, 9
+- [ ] **Table A** ← acceptance criteria 1 (the full-record compare), 2, 7, 8, 9
 - [ ] **Table A** ← verification steps V4 (the deleted name) and V5, which pins the nine names, the five gmail names, and each gmail verb's exact input property set
 - [ ] **Table A** ← Current state's "The verb table" and "The allowlists" paragraphs
 - [ ] **Table A** ← Exact contracts' `extraClasses` and `create_draft_to_self` paragraphs
-- [ ] **Table B** ← Deliverables row for `src/gws/gmail.js`; Exact contracts' `replyTarget`, `buildMime` and `draft` paragraphs
-- [ ] **Table B** ← acceptance criteria 3 (accepted forms) and 4 (the four refused families + the two R1-B cases), 5, 6
+- [ ] **Table B** ← Deliverables row for `src/gws/gmail.js`; Exact contracts' `replyTarget` (the step order), `buildMime` and `draft` paragraphs
+- [ ] **Table B** ← acceptance criteria 3 and 4 (which QUANTIFY over Table B's case tables rather than restating them), 5, 6 (step 0's five raw fields)
 - [ ] **Table B** ← the T4a residual paragraph quoted in Exact contracts (the `Reply-To`-else-`From` sentence)
 - [ ] **Table C** ← the Deliverables rows for **both** `.proofs.json` files and for `tests/unit/gws-broker.test.js`, acceptance criterion 10, and verification step V3
 - [ ] **Table B** ← the two "consequences" bullets under Table B (the whole-value-grammar rationale and the fail-closed narrowing)
@@ -466,7 +535,7 @@ added here on the spot.
 - [ ] **Table B** ← Context's "Named residual" paragraph (the `Reply-To`-else-`From` nomination claim)
 - [ ] **Table A** ← Table A's cap-10 rationale, which restates the nomination claim
 - [ ] **Table A** ← Dispatch-precondition items 1 (`extraClasses: ['READ']`), 3 (the deletion) and 5 (the two caps)
-- [ ] **Table B** ← Dispatch-precondition items 4 (header precedence) and 7 (the address rule)
+- [ ] **Table B** ← Dispatch-precondition items 4 (step 1's header precedence), 7 (the grammar's narrowing) and 8 (step 2's 998 bound)
 
 ## Implementation notes & constraints
 
@@ -513,46 +582,58 @@ added here on the spot.
 
 1. [ ] `Object.keys(VERBS)` is exactly Table A's nine live names, `create_draft`
        absent; the set of verbs with `service: 'gmail'` is exactly Table A's five;
-       and each of those five declares `additionalProperties: false` and **exactly**
-       Table A's input properties for that verb — an enumerated shape, not a list of
-       forbidden names, so no address-bearing key of any spelling can be added
-       without failing. (V1, V4, V5)
+       and each of those five matches Table A **completely** — capability class,
+       `extraClasses`, `maxCallsPerRun`, `required`, `additionalProperties: false`,
+       and every property's full schema including its `pattern`. An enumerated
+       record, not a list of forbidden names and not a list of key names, so
+       neither a new address-bearing key of any spelling nor a **weakened** value
+       schema can pass. (V1, V4, V5)
 2. [ ] `create_draft_to_self` addresses the draft to the `getProfile`-resolved
        account address and to nothing else; an argument object carrying any
        address key is schema-rejected with zero Google calls; a `getProfile`
        result with no usable address creates no draft and raises the fixed message
        from Exact contracts. (V1 — identity `[AUD-D1]`)
-3. [ ] `create_reply_draft` addresses the draft to the one recipient derived per
-       Table B, over the happy paths — a bare addr-spec, a plain display name, a
-       **quoted** display name containing `<`/`,` (`"Team <east>" <a@x.org>`), and
-       `Reply-To` taking precedence over `From`; the MIME carries exactly one `To`
-       and no `Cc`/`Bcc`; an address written into `body` reaches no header.
+3. [ ] `create_reply_draft` addresses the draft to the one recipient Table B's
+       order produces, over **every** row of Table B's ACCEPTED case table —
+       including the two round-2 false refusals, `"Alice"<…>` with no whitespace
+       before the `<` and `Alice "Team <east>" <…>`; the MIME carries exactly one
+       `To` and no `Cc`/`Bcc`; an address written into `body` reaches no header.
        (V1 — `[AUD-D2]`)
 4. [ ] Zero `drafts.create` calls and the fixed refusal message when
-       `messages.get` fails, when both `Reply-To` and `From` are empty, and for
-       each of Table B's four refused families — **(a)** a mixed bare + angle
-       value (`victim@example.com, Attacker <attacker@example.com>`), **(b)**
-       several bracketed mailboxes, **(c)** a comment or trailing text
-       (`alice@example.org (backup <old@example.net>)`), **(d)** a group
-       (`undisclosed-recipients:;`) — plus an address literal
-       (`user@[192.0.2.1]`) and a double-`@` value
-       (`alice@relay@example.org`). (V1 — `[AUD-D3]`)
+       `messages.get` fails, and for **every** row of Table B's REFUSED case
+       table — each of the step-0, step-1, step-2, step-3 and step-4 rows. The
+       criterion quantifies over that table; it does not carry its own list.
+       (V1 — `[AUD-D3]`)
 5. [ ] The reply draft's `drafts.create` request carries the source `threadId`,
        and its MIME carries `In-Reply-To` and `References` per Table B when the
        source has a `Message-ID`; with no `Message-ID` the MIME is byte-identical
        to a non-reply draft's. (V1 — `[AUD-D4]`)
-6. [ ] A CR/LF in any Table B-derived value produces zero `drafts.create` calls.
-       (V1 — `[AUD-D5]`)
+6. [ ] A CR or LF **anywhere** in **any** of the five raw header values Table B
+       step 0 reads — `Reply-To`, `From`, `Subject`, `Message-ID`, `References`,
+       injected **one field at a time**, including at the leading and trailing
+       boundary and beyond the Subject's 512-character truncation point, and
+       including a header step 1 will not select — produces zero `drafts.create`
+       calls. Step 7's `assertHeaderSafe` is defence in depth and is **not** what
+       this criterion measures. (V1 — `[AUD-D5]`)
 7. [ ] Both new verbs are `CAPABILITY_CLASS.DRAFT` and are never grant-gated:
        `registry.js:71`'s gate still fires only for SEND, and a `grantCheck` that
        always returns `false` does not change either verb's outcome. (V1)
-8. [ ] Driven through the REAL `assembleRegistry` with an injected loader, for
-       **each** of `create_draft_to_self` and `create_reply_draft`, in **three
-       credential states**: READ unavailable → the exact fixed
+8. [ ] Driven through the REAL `assembleRegistry`, for **each** of
+       `create_draft_to_self` and `create_reply_draft`, on a **SINGLETON profile**
+       whose `brokerVerbs` is exactly `[verb]` — a READ sibling such as
+       `gmail_read` on the same profile makes the old single-class derivation load
+       READ anyway, and every state then passes while the defect is still there.
+       In three credential states: READ unavailable → the exact fixed
        `the READ credential is not available in this run` and **zero** Google
        calls; DRAFT unavailable → the same sentence naming `DRAFT`, zero Google
-       calls; both loaded → the call reaches the verb's handler. An unknown verb
-       name makes `requiredClassesFor` throw. (V1 — `[AUD-D6]`)
+       calls; both loaded → the call reaches the verb's handler. The injected
+       loader is **instrumented**: the criterion asserts the **set of classes
+       actually REQUESTED** is `{DRAFT, READ}`, not only the dispatch outcome — an
+       outcome-only assertion is what the sibling masked. Separately, the
+       **default** loader path is pinned: `assembleRegistry` called with no `deps`
+       resolves `loadServices` to `loadCredentialServices`, so an implementation
+       that drops the fallback cannot pass on the injected cases alone. An unknown
+       verb name makes `requiredClassesFor` throw. (V1 — `[AUD-D6]`)
 9. [ ] `composeClaudeArgs` emits, for `inbox-triage`,
        `mcp__wienerdog-broker__gmail_search,mcp__wienerdog-broker__gmail_read,mcp__wienerdog-broker__create_reply_draft`
        and, for `weekly-review`, `mcp__wienerdog-broker__create_draft_to_self` —
@@ -595,52 +676,63 @@ rc=$?; echo "V4 presence guard exit: $rc"   # 0 required
   docs/GLOSSARY.md
 rc=$?; echo "V4 sweep exit: $rc"            # 1 required (0 = a live surface still names it)
 
-# V5 — criterion 1's universal, ENUMERATED from Table A. Never a denylist: a
-# forbidden-name list is unclosable (a schema declaring `destination` passes one),
-# so V5 pins the EXACT property set, `service` and `additionalProperties` of every
-# gmail verb, plus both name sets, so nothing can be added, renamed or
-# reclassified out of the check. MUST exit 0.
+# V5 — criterion 1's universal. Compares the COMPLETE canonical record of every
+# gmail verb against a literal derived from Table A. A name-only or key-only check
+# is not enough, measured: with `id`'s pattern dropped, `id` = "attacker@example.net"
+# was forwarded as `to` and a draft was created, and a round-2 countermodel emptied
+# every `required`, every property schema, every `capabilityClass` and every
+# `extraClasses` while the check still passed. Table A owns these values; this
+# literal mirrors it. MUST exit 0.
 node -e 'const { VERBS } = require("./src/gws/broker/verbs.js");
+const KB = 1024, NO_CRLF = "^[^\\r\\n]*$";
 const TABLE_A = ["calendar_list","calendar_show","create_draft_to_self","create_reply_draft",
                  "drive_read","drive_search","gmail_read","gmail_search","send_digest_to_self"];
-const GMAIL_SHAPES = {
-  gmail_search:         ["max","query"],
-  gmail_read:           ["id"],
-  create_draft_to_self: ["body","subject"],
-  create_reply_draft:   ["body","id"],
-  send_digest_to_self:  ["body","subject"],
+const GMAIL = {
+  gmail_search: { capabilityClass:"READ", extraClasses:[], maxCallsPerRun:50, required:["query"],
+    properties:{ query:{type:"string",maxLength:512}, max:{type:"integer",min:1,max:20} } },
+  gmail_read: { capabilityClass:"READ", extraClasses:[], maxCallsPerRun:50, required:["id"],
+    properties:{ id:{type:"string",maxLength:128,pattern:"^[A-Za-z0-9_-]+$"} } },
+  create_draft_to_self: { capabilityClass:"DRAFT", extraClasses:["READ"], maxCallsPerRun:3, required:["subject","body"],
+    properties:{ subject:{type:"string",maxLength:512,pattern:NO_CRLF}, body:{type:"string",maxLength:64*KB} } },
+  create_reply_draft: { capabilityClass:"DRAFT", extraClasses:["READ"], maxCallsPerRun:10, required:["id","body"],
+    properties:{ id:{type:"string",maxLength:128,pattern:"^[A-Za-z0-9_-]+$"}, body:{type:"string",maxLength:64*KB} } },
+  send_digest_to_self: { capabilityClass:"SEND", extraClasses:[], maxCallsPerRun:2, required:["subject","body"],
+    properties:{ subject:{type:"string",maxLength:512,pattern:NO_CRLF}, body:{type:"string",maxLength:64*KB} } },
 };
+const key = (o) => JSON.stringify(o, (k,v) => (v && typeof v === "object" && !Array.isArray(v))
+  ? Object.keys(v).sort().reduce((a,n)=>(a[n]=v[n],a),{}) : v);
 const fail = [];
-const eq = (a,b) => a.length===b.length && a.every((x,i)=>x===b[i]);
 const names = Object.keys(VERBS).sort();
-if (!eq(names, TABLE_A)) fail.push("verb table is " + JSON.stringify(names) + ", Table A is " + JSON.stringify(TABLE_A));
+if (key(names) !== key(TABLE_A)) fail.push("verb table is " + JSON.stringify(names) + ", Table A is " + JSON.stringify(TABLE_A));
 const gmailNames = Object.values(VERBS).filter((v)=>v.service==="gmail").map((v)=>v.name).sort();
-const wantGmail = Object.keys(GMAIL_SHAPES).sort();
-if (!eq(gmailNames, wantGmail)) fail.push("service===\u0027gmail\u0027 is " + JSON.stringify(gmailNames) + ", Table A says " + JSON.stringify(wantGmail));
-for (const [name, want] of Object.entries(GMAIL_SHAPES)) {
+if (key(gmailNames) !== key(Object.keys(GMAIL).sort())) fail.push("service=gmail is " + JSON.stringify(gmailNames) + ", Table A says " + JSON.stringify(Object.keys(GMAIL).sort()));
+for (const [name, want] of Object.entries(GMAIL)) {
   const v = VERBS[name];
   if (!v) { fail.push(name + " is absent from the verb table"); continue; }
-  if (v.service !== "gmail") fail.push(name + ".service is " + JSON.stringify(v.service) + ", Table A says gmail");
-  const s = v.inputSchema || {};
-  if (s.additionalProperties !== false) fail.push(name + ".inputSchema.additionalProperties is not false");
-  const got = Object.keys(s.properties || {}).sort();
-  if (!eq(got, want.slice().sort())) fail.push(name + " input properties are " + JSON.stringify(got) + ", Table A says " + JSON.stringify(want));
+  if (v.service !== "gmail") fail.push(name + ".service is " + JSON.stringify(v.service));
+  const got = { capabilityClass: v.capabilityClass, extraClasses: [...(v.extraClasses || [])].sort(),
+    maxCallsPerRun: v.limits && v.limits.maxCallsPerRun, required: [...((v.inputSchema||{}).required || [])].sort(),
+    additionalProperties: (v.inputSchema||{}).additionalProperties, properties: (v.inputSchema||{}).properties || {} };
+  const exp = { capabilityClass: want.capabilityClass, extraClasses: [...want.extraClasses].sort(),
+    maxCallsPerRun: want.maxCallsPerRun, required: [...want.required].sort(),
+    additionalProperties: false, properties: want.properties };
+  if (key(got) !== key(exp)) fail.push(name + " record differs from Table A:\n      got  " + key(got) + "\n      want " + key(exp));
 }
 if (fail.length) { console.error("V5 FAIL:\n  - " + fail.join("\n  - ")); process.exit(1); }
-console.log("V5 OK: " + names.length + " verbs, " + gmailNames.length +
-  " with service===gmail, each with exactly Table A\u0027s input properties and additionalProperties:false");'
+console.log("V5 OK: " + names.length + " verbs; " + gmailNames.length + " gmail verbs, each matching Table A COMPLETELY (class, extraClasses, cap, required, additionalProperties, every property schema)");'
 rc=$?; echo "V5 exit: $rc"                  # 0 required
 ```
 
-V4 and V5 were each observed in every state at design time — deliverable-absent,
-compliant, and violating in more than one direction; the outputs are in
-`docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md`. V5 has been wrong
-twice and both times the both-directions run caught it: round zero's draft was
-over-strict (it red-flagged `calendar_list`'s ISO-timestamp `from`/`to`), and
-round 1's was a **denylist**, which a schema declaring `destination` walked
-straight past. The form above enumerates the intended shape instead — the repo's
-own lesson that enumerating your OWN GOOD is closable and enumerating the BAD is
-not.
+V4 and V5 were each observed in every state at design time; the outputs are in
+`docs/specs/logbook/2026-09-05-audit-d-design-gate-rounds.md`, where V5's current
+form is proved green on the compliant tree and red on **six** distinct weakenings
+plus the pinned base and the deliverable-absent tree. V5 has now been wrong three
+times, and every time a both-directions run is what caught it: round zero's draft
+was over-strict (it red-flagged `calendar_list`'s ISO-timestamp `from`/`to`);
+round 1's was a **denylist**, which a schema declaring `destination` walked past;
+round 2's pinned only names, which a **weakened** schema walked past. The lesson
+is one the repo already owns — enumerating your OWN GOOD is closable, enumerating
+the BAD is not — and the form above extends it from names to whole records.
 
 ## Out of scope (do NOT do these)
 
@@ -706,12 +798,25 @@ reverse any of them by dated amendment.
    `docs/THREAT-MODEL.md` deliverable, landing with the code that makes it true.
    *Cost of overruling:* one interim docs commit, and the same two lines rewritten
    again when this WP merges.
-7. **Table B's address rule is narrower than RFC 5322** (it refuses quoted local
-   parts, address literals and dotless domains, with no draft).
+7. **Table B's grammar is narrower than RFC 5322** (it refuses quoted local parts,
+   address literals, dotless domains, comments, groups and obsolete forms, with no
+   draft).
    *Recommendation: accept the narrowing.* This is the one field an attacker fully
    controls; fail closed.
-   *Cost of overruling:* a looser pattern admits addresses the broker cannot reason
+   *Cost of overruling:* a looser grammar admits addresses the broker cannot reason
    about, on the exact field this package exists to constrain.
+8. **Table B step 2's 998-character pre-parse bound is a NEW refusal of
+   pathological-but-legal headers** — a single unfolded header value longer than
+   RFC 5322 §2.1.1's line limit is refused with no draft, before the grammar sees
+   it. *Recommendation: take the bound.* It is what makes the grammar's cost a
+   non-question on any engine and any input, rather than a property that has to be
+   re-argued each time the pattern changes — which is what round 1 and round 2 both
+   spent a finding on. It is also unreachable by conforming mail: a value that long
+   would have arrived folded, and folding means CRLF, which step 0 already refuses.
+   *Cost of overruling:* without a pre-parse bound the grammar's worst case becomes
+   an input-dependent claim that must be re-measured on every engine after every
+   change to the pattern, and the two Table B findings that fired the
+   ADR-0031 breaker were both of exactly that kind.
 
 ## Definition of done
 
