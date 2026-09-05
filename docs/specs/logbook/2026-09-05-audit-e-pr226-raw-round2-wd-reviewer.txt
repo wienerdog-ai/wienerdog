@@ -1,0 +1,69 @@
+# PR gate raw — PR #226 round 2 — wd-reviewer (claude-opus-5 agent, detached checkout with real node_modules) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: 3efcac1f75565bd2a51db1299f4155694a84bbe2 ; base main = 881f0d81 ; porcelain before/after identical (reported) ; committed pre-adjudication
+
+# APPROVE
+
+Round-2 review of PR #226 at `3efcac1f`, base main `881f0d81`. Both round-1 dispositions are closed by execution, and every gate is green on a re-run.
+
+---
+
+## Round-1 item closure
+
+**1. [contract] Band B — C18 / C40-authorization fixtures cannot reach `authorize`. → CLOSED.**
+
+Executed: copied the head tree with `git archive 3efcac1f` into a scratch dir, applied LPC-E's declared mutation (`find: "    if (headDuplicateKeys.length > 0) {"`, `occurrences: 2`) to the scratch `src/core/dream/validate.js` only — **2 occurrences found, 2 `RP_MUT_LPC_E_BASELINE_DUPLICATE_REVERTED` markers written**; the checkout's own `src/` was never touched. A driver (`/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr226r2-scratch/drive-lpce.js`) then loaded `makeGates().skillBody` from **both** trees and drove the two committed fixtures, transcribed from `tests/unit/dream-validate.test.js:4008-4013` and `:4270-4277`:
+
+| Fixture | Real tree (`3efcac1f`) | LPC-E mutant |
+|---|---|---|
+| C18 committed duplicate | `"skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)"` | **`null`** — genuine authorize |
+| C40-authorization, all 24 code points | **24/24** the same exact refusal | **24/24 `null`** — genuine authorize |
+| C18, the *round-1* (pre-fix) fixture | — | `"authorizing learning a.b has 0 distinct Claude-invoked sessions (needs >= 3 distinct sessions; Codex sessions do not authorize in v1)"` |
+| C40-auth, the pre-fix fixture | — | **0/24 null**, same Codex-floor string |
+
+`FAILS=0`, exit 0. The pre-fix rows are the control: they prove the Codex floor really was refusing first, and that the three-`claude:`-session change on the *last* `a.b`-keyed section is what makes the row witness the fail-open its Today column claims. The last section is the right one — C40's heading is `a.b<cp>`, which `/^##\s+(.+?)\s*$/` normalizes to `a.b`, so last-wins surfaces exactly that section. `\s` minus LF re-derived over the full 0–0x10FFFF range in the driver: **24** code points, matching the spec's list byte for byte. C19 correctly keeps its clean candidate (`:4020-4031`).
+
+**2. [contract] Band C — PR title. → CLOSED.** `gh pr view 226 --json title` returns `fix(dream): ledger-parser correctness and hostile corpus (WP-audit-e-ledger-parser-corpus)`, byte-equal to the spec's Definition of done item 2 (`docs/specs/WP-audit-e-ledger-parser-corpus.md:585-586`).
+
+**3. Test-only round. → CONFIRMED.** `git diff e4be9733 3efcac1f -- src` is **empty**. The four changed files are the three round-1 gate raws under `docs/specs/logbook/` (`…-codex-plugin.txt`, `…-herdr-shadow.txt`, `…-wd-reviewer.txt`) and `tests/unit/dream-validate.test.js` (+13/−2: the two fixture lines plus two explanatory comment blocks).
+
+---
+
+## What I executed (exit statuses)
+
+| Command | Result |
+|---|---|
+| `node tests/with-temp-root.js tests/run.js` | **rc=0** — `tests 2676 / pass 2664 / fail 0 / skipped 12` (expected exactly) |
+| `npm run lint` | **rc=0** — `lint passed`, `frontmatter check passed: 268 spec(s), 4 agent(s)` |
+| `npm run red-proofs` (whole tree, real `node_modules`) | **rc=0** — `44 declared proof(s), 44 selected`, `RUN: PROVEN`, all seven `lpc-*` PROVEN |
+| `node scripts/boundary-check.js docs/specs/WP-audit-e-ledger-parser-corpus.md <10 changed files>` | **rc=0**, no offenders |
+| LPC-E mutation driver (above) | **rc=0**, FAILS=0 |
+| Table C driver (round-1 driver, re-pointed at the r2 tree, drives `gates.ledger`/`gates.skillBody` directly) | **rc=0** — **140/140 assertions match the spec's REQUIRED column**, 0 mismatches, `ALL TABLE C ROWS MATCH SPEC REQUIRED` |
+| Seven `testNamePattern` selectors vs declared witnesses (`node --test --test-name-pattern` per declaration, skips excluded) | **all 7 MATCH**: 14/4/1/2/4/1/2 declared = selected, `BAD=0` |
+| ADR byte-compare (spec's fenced `markdown` block vs `docs/adr/0020-skill-revision-lifecycle.md:381-398`) | `diff` empty — **byte-identical**; 0 deletion lines in the ADR diff (pure insertion, between `## Revision (2026-07-12)` at :206 and `## Future work (parked, not specced)` at :400) |
+| A7 widening bound, re-measured over 0–0x10FFFF | exactly **U+000D, U+2028, U+2029** — 3 code points, matching Table A row A7's "bounded to exactly three characters" |
+| Criterion 4/5 greps | `/^[a-z0-9][a-z0-9.-]{0,63}$/` occurs **once**; four `Object.create(null)` sites (`validate.js:133,136,432,578`); the only `Object.hasOwn` is pre-existing at `:1247` and absent from the diff; no `__proto__`-by-name check |
+| Corpus identity tags | 45 individually selectable `[Cnn]` identities covering C1–C43 with C40 split three ways (criterion 1) |
+
+`git status --porcelain` in `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226r2`: **empty before, empty after**; HEAD still `3efcac1f`. All probes live under `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr226r2-scratch/`.
+
+---
+
+## Findings
+
+1. **[boundary] Band —, clean.** All ten changed files are inside the permitted set: six Deliverables rows (`src/core/frontmatter.js`, `src/core/dream/validate.js`, `tests/unit/dream-validate.test.js`, `tests/unit/frontmatter-unify.test.js`, `tests/red-proofs/ledger-parser-corpus.proofs.json`, `docs/adr/0020-skill-revision-lifecycle.md`), the spec itself, and three `docs/specs/logbook/` raws. `boundary-check.js` agrees, rc=0.
+
+2. **[quality] Band C — `tests/unit/dream-validate.test.js:3789-3791`, non-blocking, no change required.** The file-header convention block still reads "Session-IDs are deliberately `codex:*` on every Path-K fixture and `claude:s1,s2,s3` on every Path-A fixture." C18 and C40-authorization are now Path-A fixtures built through `ledgerK` whose *first two* sections keep `codex:` ids and only the last carries `claude:s1, claude:s2, claude:s3`. The header is therefore slightly broader than the code. I am not asking for an edit: the two inline comments added at `:4002-4007` and `:4268-4270` state the narrower rule precisely at the sites where it matters, and they name the reason (last-wins is what surfaces under the mutant), which is the load-bearing fact. Flagging it only so a future round does not read the header as the canonical statement.
+
+No band-A or band-B findings.
+
+---
+
+## Contract-density and Closed-Contract Drift Check
+
+Clean, and this round is the drift being *closed* rather than created. The spec diff versus `881f0d81` is the `status: Ready → In-Review` flip and nothing else, so no canonical table was edited, no mirror was promoted to primary, and no settled contract was reinterpreted. The round-2 change moves a **fixture** into agreement with a canonical table that was already stated correctly — Table C's C18 "Today: authorize" and C40's "keep / authorize for all 24" — which is the right direction of repair: the table stays authoritative and the test now instantiates it. Criterion 7's `37 → 44` mirror is true (measured 44/44). Current state's `2630/2618` and `37 declared` remain pinned historical measurements on `8c52808f`, correctly untouched. The Mirrored Surface Checklist's Table D entry (proof count, `testNamePattern` selection contract, the 37→44 total) is verified against execution rather than prose. No canonical table is missing and no registered mirror has drifted, so nothing routes to wd-architect. The spec is not at fault in either round: round 1's finding was a fixture that diverged from a table the spec states correctly, and it is now fixed.
+
+## Conventions (CLAUDE.md)
+
+Zero new runtime dependencies — `package.json` is not in the diff and the only new import is `boolFromRaw`/`INVALID` from an in-repo module. JSDoc types only, no TypeScript; `parseLedgerEntries`' return type correctly widened to `{{entries: Record<…>, duplicateKeys: string[]}}` with `untrusted: boolean|null|typeof INVALID`. No process, socket or telemetry (ADR-0004). Installer idempotence/reversibility is N/A per criterion 8. Glossary terms (ledger, dream, work package, vault) used canonically. All five commits are conventional, correctly scoped, and carry the WP id; the round-2 commit `test(dream): C18/C40-A duplicate ledgers carry three claude sessions so the authorize fail-open is witnessed (WP-audit-e-ledger-parser-corpus)` is accurate about what it does.
+
+Files of interest: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226r2/tests/unit/dream-validate.test.js`, `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226r2/src/core/dream/validate.js`, `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226r2/docs/specs/WP-audit-e-ledger-parser-corpus.md`.
