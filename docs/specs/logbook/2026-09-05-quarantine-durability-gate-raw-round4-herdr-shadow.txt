@@ -1,0 +1,152 @@
+# Raw gate output — hermetic Codex shadow (codex exec, CODEX_HOME=~/.codex-review-home, -s read-only, no approvals), round 4, detached worktree at 80cf27de (base main = 38562ec4). Committed BEFORE adjudication. git status --porcelain identical before and after (both empty). Same focus text as the plugin raw.
+
+{
+  "target": "spec revision 80cf27de1817f1bbb5719fe4236969f02763812b vs main: docs/specs/WP-quarantine-preserve-durability.md",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch. The round-3 ownership closure still permits deletion of user-owned replacements, and the prescribed read-only flush descriptor is incompatible with Linux fsync semantics.",
+  "worktree": {
+    "before_status_porcelain": "",
+    "after_status_porcelain": "",
+    "identical": true,
+    "writes_performed": false,
+    "temp_probe_result": "All three attempted OS-mkdtemp probes were rejected by the read-only sandbox with EPERM before creating fixtures."
+  },
+  "executed_commands": [
+    {
+      "command": "sed -n '1,260p' docs/runbooks/review-prompts/adversarial.md && sed -n '1,260p' ../focus-qd4.txt",
+      "exit_status": 0
+    },
+    {
+      "command": "pwd; git status --porcelain; git diff --name-status main...HEAD; git diff --stat main...HEAD; git diff --unified=80 main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0,
+      "note": "Output was tool-truncated; name-status established the revision surface."
+    },
+    {
+      "command": "rg -n '^## |^### |^\\| [A-Z0-9]|^\\| \\*\\*[A-Z0-9]' docs/specs/WP-quarantine-preserve-durability.md; rg -n 'Deliverables|Boundary|logbook|disposal' docs/specs/WP-quarantine-preserve-durability.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '152,410p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '411,760p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '760,1126p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1127,1491p'",
+      "exit_status": 0
+    },
+    {
+      "command": "rg -n \"function quarantinePreserve|removeOwnedQuarantinePath|patchFs\\('readFileSync'\\)|patchFs\\('renameSync'\\)|ARTIFACT_OPEN_FLAGS|flushPreservation|ownsName\" src/core/dream/validate.js tests/unit/dream-validate.test.js; nl -ba src/core/dream/validate.js | sed -n '180,330p'; man 2 fsync | col -b | sed -n '1,180p'; node -p \"process.version + ' ' + process.platform\"",
+      "exit_status": 0,
+      "note": "The man subcommand could not create its temporary file and emitted Operation not permitted; the final node command succeeded and reported v25.9.0 darwin."
+    },
+    {
+      "command": "nl -ba src/core/dream/validate.js | sed -n '600,790p'; nl -ba tests/unit/dream-validate.test.js | sed -n '3820,4300p'",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-disposal-durability.md; rg -n '^##|^###|Round 3|R3-|Dispos|scope|finding|Finding|verdict|Verdict|ownership|tmp|dest' docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md",
+      "exit_status": 0
+    },
+    {
+      "command": "nl -ba docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md | sed -n '576,681p'",
+      "exit_status": 0
+    },
+    {
+      "command": "Three node -e probes using fs.mkdtempSync(os.tmpdir()): read-only-fd fsync, post-open D1 replacement cleanup, and replacement between ownsName and removal",
+      "exit_status": 1,
+      "note": "Each probe independently failed at mkdtempSync with EPERM; no fixture or other file was created."
+    },
+    {
+      "command": "rg --files /usr/share/man /Library/Developer/CommandLineTools/SDKs 2>/dev/null | rg '/fsync\\.(2|3)(\\.gz)?$' | head -20",
+      "exit_status": 0
+    },
+    {
+      "command": "sed -n '1,220p' /Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/usr/share/man/man2/fsync.2",
+      "exit_status": 0
+    },
+    {
+      "command": "git rev-parse HEAD main; sed -n '643,1012p' docs/specs/WP-quarantine-preserve-durability.md | sed '1d;$d' | node -e '<JSON parse and proof-id listing>'; rg -n \"\\b(FIVE|five|SIX|six|SEVEN|seven|NINE|nine|TWELVE|twelve|[0-9]+)\\b\" docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,240p'",
+      "exit_status": 0,
+      "note": "rev-parse and rg succeeded. The intermediate JSON parse exited 1 because this first extraction accidentally removed the closing brace. HEAD was 80cf27de1817f1bbb5719fe4236969f02763812b; main was 38562ec4979606801e43c89afeb19073784fc0fc."
+    },
+    {
+      "command": "sed -n '644,1012p' docs/specs/WP-quarantine-preserve-durability.md | node -e '<JSON parse and proof-id listing>'",
+      "exit_status": 0,
+      "note": "Parsed successfully: 14 declarations, matching the recorded 25 total after the 11-proof baseline."
+    },
+    {
+      "command": "nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1,151p'; nl -ba docs/specs/WP-quarantine-preserve-durability.md | sed -n '1492,1769p'",
+      "exit_status": 0
+    },
+    {
+      "command": "git diff --check main...HEAD; git diff --numstat main...HEAD -- docs/specs/WP-quarantine-preserve-durability.md docs/specs/WP-quarantine-disposal-durability.md docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md; git status --porcelain",
+      "exit_status": 0,
+      "note": "diff --check was clean; final porcelain was empty."
+    }
+  ],
+  "findings": [
+    {
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 554,
+      "line_end": 555,
+      "confidence": 0.99,
+      "title": "Opening tmp after the write can adopt and delete a foreign inode",
+      "body": "F8 explicitly permits substitution between the exclusive create/write and the identity open, but its claim that a byte mismatch therefore cannot cost a copy is false. If a user renames a foreign file over tmp before openSync, the descriptor binds to that foreign inode. linkSync then gives it a dest link; ownsName(tmp, fd) passes and removes its original name; a byte mismatch follows; ownsName(dest, fd) also passes and D2 removes its remaining link. The user's replacement is destroyed. If its bytes happen to match, it is instead silently relocated under dest and reported as this invocation's artifact. This is the in-scope user's-own-hand adversary, so the round-3 closure is not genuine.",
+      "recommendation": "Establish provenance at the exclusive create itself: retain an O_EXCL writable descriptor, perform the write through it, and read from an explicit position before linking. Accept and migrate the affected write-path injections. Add a QPD case that replaces tmp after creation but before commit and proves the foreign inode is neither linked as the artifact nor removed."
+    },
+    {
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1710,
+      "line_end": 1717,
+      "confidence": 0.98,
+      "title": "The D1 exception path conflates open failure with post-open commit failure",
+      "body": "The out-of-scope rationale applies only when openSync itself fails. The same catch also handles linkSync failure after fd was successfully established. In that state identity is available, yet the specified sequence closes fd and performs the shipped unconditional tmp cleanup. If tmp is replaced after open and linkSync then throws EEXIST or another error, the catch removes the replacement. This is a pathname act without the claimed ownsName gate and can delete an in-scope user's file.",
+      "recommendation": "Separate open failure from commit failure. When fd exists, evaluate tmp ownership while it is valid, close it, and remove only on a positive ownership result; add an injection that replaces tmp inside the failing linkSync seam and proves the replacement survives. Revisit the create-time provenance issue from the first finding as well, because a post-open comparison cannot prove who created the inode."
+    },
+    {
+      "materiality_band": "A",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1191,
+      "line_end": 1201,
+      "confidence": 0.96,
+      "title": "The failure-removal ownership gate still has a destructive check-to-unlink race",
+      "body": "The mandated sequence computes owned, closes fd, and only then removes dest by pathname. A replacement can land after ownsName returns true and before removeOwnedQuarantinePath executes, causing the replacement to be deleted. QPD-5 claims substitution at ANY point after commit fails and is never removed, but its three cases all occur before the gate; the after-gate case is absent. Thus the declared criterion passes an implementation that still has the data-loss path. F8 acknowledges an after-last-gate success window, but does not disclose this materially different destructive failure window.",
+      "recommendation": "Do not claim the pathname check makes deletion ownership-safe. Add an after-gate/before-removal injection. Then either change D2 to retain a failed artifact when conditional unlink cannot be made atomic, or specify and prove a platform primitive/protocol that cannot unlink a replacement. If this cannot be closed for the user's-own-hand adversary, revise F10 and obtain an explicit disposition rather than calling that adversary closed."
+    },
+    {
+      "materiality_band": "B",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1267,
+      "line_end": 1271,
+      "confidence": 0.99,
+      "title": "O_RDONLY makes the POSIX flush protocol fail on Linux",
+      "body": "The prescribed artifact descriptor is O_RDONLY based only on a Darwin measurement, while F5 scopes the feature to all non-win32 platforms. Linux fsync requires the file descriptor to be open for writing and returns EBADF for a read-only descriptor. Node fs.fsyncSync exposes that system call behavior. Consequently successful quarantine preservation on ordinary Linux filesystems would take F4 and abort every affected dream run. A Linux implementation lane would likely catch this downstream, but the design as written cannot satisfy its POSIX scope.",
+      "recommendation": "Open the artifact descriptor O_RDWR with O_NOFOLLOW, or retain the writable descriptor established during exclusive creation. Add a Linux verification case at the repository's Node >=18 floor before claiming POSIX-wide support."
+    },
+    {
+      "materiality_band": "C",
+      "file": "docs/specs/WP-quarantine-preserve-durability.md",
+      "line_start": 1094,
+      "line_end": 1120,
+      "confidence": 1.0,
+      "title": "The round-3 count-mirror disposition is not closed",
+      "body": "The checklist says prose must name the owning table instead of a number and lists only verification totals and the dispatch heading as exceptions, yet it still refers to a nonexistent nine-proofs paragraph at line 1100. The inlined JSON parses to 14 new declarations, not nine. Other mutable prose counts remain, including six identities and five migrated injections. This directly contradicts the round-3 logbook's statement that every prose count was removed.",
+      "recommendation": "Replace the dangling nine-proofs label and other mutable table-derived prose counts with Table C or Deliverables pointers, leaving only the expressly enumerated assertion counts."
+    }
+  ],
+  "routed_scope_objections": [],
+  "scope_routing_notes": [
+    "The disposal stub genuinely carries the routed live-run pruning ownership question at docs/specs/WP-quarantine-disposal-durability.md:42-51.",
+    "The D1 issue above is counted as a finding rather than a scope objection because it demonstrates that the disposition's stated premise is incomplete: identity is unavailable after open failure, but it is available when the newly prescribed linkSync throws.",
+    "The five dispatch recommendations, A12 boundary, declined directory-inode pinning, Windows behavior, disposal value question, and earlier adjudicated findings were not re-argued."
+  ]
+}
