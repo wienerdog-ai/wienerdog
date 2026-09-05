@@ -21,9 +21,14 @@ epic: dream-promotion
 
 The dream's EP2 secret gate (ADR-0034) preserves the bytes it is judging into
 `state/quarantine/` or `state/quarantine/redacted/` before refusing to promote
-them. `WP-quarantine-preserve-durability` makes a SUCCESSFUL preservation durable:
-its **Table F** requires the platform's flush to have completed for the artifact
-and for every directory entry it depends on before success is reported.
+them. `WP-quarantine-preserve-durability` makes a SUCCESSFUL preservation durable **to
+the extent that package's own guarantee sentence allows, and this stub restates
+neither the sentence nor the guarantee**: its **Table F** requires the platform's
+flush to have completed for the artifact and for every directory entry it depends
+on before success is reported, and **rows F5 and F7(c) are where that requirement is
+SCOPED** — the flushes are POSIX-only, on win32 the protocol issues none and claims
+no durability at all, and nothing in that package says a preserved copy has reached
+the medium.
 
 **Table F row F7(a) is what this stub owns.** A REMOVAL is not made durable there,
 so a quarantine artifact this product deleted can reappear after a crash. Three
