@@ -1,0 +1,78 @@
+# PR gate raw — PR #226 round 1 — wd-reviewer (claude-opus-5 agent, detached checkout with real node_modules) — WP-audit-e-ledger-parser-corpus
+# tip reviewed: e4be97333800995e1322f2c3b625a7b32edf344b ; base main = 881f0d81 ; porcelain before/after identical (reported) ; committed pre-adjudication
+
+## REQUEST-CHANGES
+
+The implementation is correct — I independently reproduced every Table C REQUIRED verdict — but two of the corpus's authorization-path rows are built on a fixture that can never produce the `authorize` verdict their own Today column claims, so they cannot exhibit the hole they exist to witness.
+
+### What I executed (in the detached checkout, absolute paths)
+
+| Command | Result |
+|---|---|
+| `node tests/with-temp-root.js tests/run.js` | rc=0 — `tests 2676 / pass 2664 / fail 0 / skipped 12` (matches expected) |
+| `npm run lint` | rc=0 — `0 error(s)`, `frontmatter check passed: 268 spec(s), 4 agent(s)`, `lint passed` |
+| `npm run red-proofs` (whole tree) | rc=0 — `44 declared proof(s), 44 selected`, all 7 `lpc-*` PROVEN, `RUN: PROVEN` |
+| `node scripts/boundary-check.js docs/specs/WP-audit-e-ledger-parser-corpus.md <7 changed files>` | rc=0, no offenders |
+| My own Table C driver (`/private/tmp/.../review-pr226-scratch/drive.js`, drives `makeGates().ledger/.skillBody` directly, written from the spec, all exotic code points via `String.fromCodePoint`) | rc=0 — **140/140 assertions match the spec's REQUIRED column**, C1–C43 including C40's 24×3 matrix |
+| `node --test --test-name-pattern=<each of the 7 patterns> tests/unit/dream-validate.test.js` | each pattern selects **exactly** its declared SELECTED WITNESSES, nothing else |
+| ADR byte-compare (spec's fenced block vs `docs/adr/0020-skill-revision-lifecycle.md`) | verbatim, inserted between `## Revision (2026-07-12)…` and `## Future work (parked, not specced)` |
+| `git diff 881f0d81 HEAD -- docs/specs/WP-audit-e-ledger-parser-corpus.md` | status flip only (`Ready` → `In-Review`) |
+
+`git status --porcelain` in the checkout: **empty before, empty after.** No tracked file modified; probes live only under `review-pr226-scratch/`.
+
+Independent confirmations worth recording: my `\s`-minus-LF enumeration over the full 0–0x10FFFF range is exactly the 24 code points the spec names; `/^[a-z0-9][a-z0-9.-]{0,63}$/` occurs exactly once in `src/core/dream/validate.js` (criterion 5); no `__proto__`-by-name check and no new `Object.hasOwn` guard (the only `Object.hasOwn` is pre-existing at `validate.js:1247` and untouched by the diff, criterion 4); `readBool`'s shipped tests live in `tests/unit/frontmatter.test.js` and `tests/unit/frontmatter-digest-differential.test.js`, neither of which is in the changed set (criterion 3); the five failing `deepEqual` calls were repaired to the three observables with the value check preserved at `frontmatter-unify.test.js` (criterion 3b); all three `parseLedgerEntries` call sites take `{entries, duplicateKeys}` and there is no consumer outside the file.
+
+---
+
+### Findings
+
+**1. [contract] Band B — `tests/unit/dream-validate.test.js:3941` (C18) and `:4235` (C40-authorization): the Path-A fixture uses Codex sessions, so the row can never observe `authorize` and cannot exhibit the hole it witnesses.**
+
+Both rows build their committed ledger with `ledgerK(...)`, whose sections carry `sessionIds: 'codex:s1, codex:s2'` / `recurrence: '2'`. `skillBodyViolation` refuses any such ledger on its own Codex floor, measured on the branch:
+
+```
+codex x2 (the C18/C40-auth fixture shape), NO duplicate:
+  "authorizing learning a.b has 0 distinct Claude-invoked sessions (needs >= 3 distinct sessions; Codex sessions do not authorize in v1)"
+claude x3 (spec fixture shape),            NO duplicate: null
+```
+
+So with the A3 duplicate refusal removed, these two fixtures still refuse — just with a different string. Consequences:
+
+- Table C's Path definition says "`authorize` means the gate returned no reason", and C18's Today column reads **`authorize`**, C40's reads **`keep / authorize for all 24`**. Neither fixture can produce that verdict under any implementation, so the rows do not instantiate the state the canonical table records.
+- Dispatch-precondition item 1's load-bearing security claim — "a committed ledger carrying `## a.b` twice **authorizes a Tier-3 skill-body revision today**" — is left unwitnessed at the exact two rows written to carry it.
+- The test file's own header comment at `tests/unit/dream-validate.test.js:3796` states the rule that was not applied here: *"three distinct `claude:` ids clear `skillBodyViolation`'s own >=3-session floor so a VALID entry actually reaches 'authorize' rather than refusing for an unrelated reason."* `ledgerA` exists for precisely this and is used correctly by C2/C4/C7/C9/C12A/C13A/C14A/C16/C26A/C31–C35/C38/C43A — only C18 and C40-authorization skip it.
+
+Not band A: the REQUIRED verdicts are still correct (my driver reproduces `skill change needs a qualifying learning but the committed ledger has a repeated entry heading (fail closed)` for both, all 24 code points), and LPC-E still discriminates because both rows assert the exact refusal string, so `red-proofs` legitimately reports PROVEN. No `src/` change is needed.
+
+**Fix:** build the duplicate ledger in C18 and C40-authorization from sections carrying `sessionIds: 'claude:s1, claude:s2, claude:s3'` and `recurrence: '3'` (at minimum on the *last* `a.b`-keyed section, since last-wins is what the pre-fix collapse yields). Then removing the A3 refusal makes the row genuinely authorize, which is what the Today column asserts. Note C19 reuses the same `dup` value as its baseline on the K path; the duplicate refusal returns before the Session-IDs append-only comparison, so C19 stays green either way — but keep its clean candidate as-is rather than "fixing" it to match.
+
+**2. [contract] Band C — PR title does not match the spec's pinned title.**
+
+`docs/specs/WP-audit-e-ledger-parser-corpus.md:588` (Definition of done item 2) pins:
+
+```
+fix(dream): ledger-parser correctness and hostile corpus (WP-audit-e-ledger-parser-corpus)
+```
+
+The PR is titled `fix(dream): harden the skill-learnings ledger parser — three-state trust, null-prototype collectors, hostile corpus (WP-audit-e-ledger-parser-corpus)`. Retitle the PR. (The five commits are conventional, correctly scoped and all carry the WP id — no commit change needed.)
+
+---
+
+### The two "Decisions made", judged
+
+Both are legitimate: the spec genuinely left each open, and each took the simpler option.
+
+- **Shared `headDuplicateKeys` local at both committed-baseline reads** — I verified the two lines are byte-identical (`    if (headDuplicateKeys.length > 0) {`, four-space indent at `validate.js:391` and `:585`), which is what lets LPC-E move both with one `occurrences: 2` mutation instead of two declarations. Pure naming; no behaviour moves. Spec never pinned local names.
+- **Candidate-read duplicate check placed before the "no valid entries" and schema-loop checks** — the spec pins the refusal and its string but not its position among the three early checks, and no Table C row can distinguish the orderings. Simpler option, correctly recorded.
+
+Decision 3 (red-proof `signal` values re-measured to real TAP substrings; nine assertions gained a message argument) is a correction rather than an ambiguity, is honestly reported, and changed no assertion logic — I confirmed the nine added messages are pure third arguments to `assert.equal`.
+
+### Contract-density / Closed-Contract Drift Check
+
+Clean. The spec diff is the status flip and nothing else, so no canonical table was edited and no mirror was promoted to primary. The ADR-0020 amendment landed byte-identical to the spec's "Exact contracts" block at the stated insertion point, with nothing above it touched — an additive amendment, which is the correct shape for a settled contract. Criterion 7's `37 → 44` mirror is now true (measured 44). Current state's `2630/2618` and `37 declared` baselines are correctly left alone: they are pinned historical measurements on `8c52808f`, not mirrors that drift. The seven `why` fields in `ledger-parser-corpus.proofs.json` restate Table A/D reasoning at length, but `scripts/red-proofs.js` requires `why` per declaration, so that is the format's own shape rather than contract-dense prose wanting extraction. No routing to wd-architect needed — the spec is not at fault here; finding 1 is a fixture that diverged from a table the spec states correctly.
+
+### Conventions
+
+Zero new runtime dependencies; no new `require` outside the repo. JSDoc only, no TypeScript — `parseLedgerEntries`' return type was widened correctly to `{{entries: Record<…>, duplicateKeys:string[]}}` with `untrusted:boolean|null|typeof INVALID`. No process, socket or telemetry (ADR-0004). Installer idempotence/reversibility is N/A per criterion 8. Glossary terms (ledger, dream, work package, vault) used canonically.
+
+Files: `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226/tests/unit/dream-validate.test.js`, `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226/src/core/dream/validate.js`, `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-wt-pr226/docs/specs/WP-audit-e-ledger-parser-corpus.md`. My driver and captured gate output are under `/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/0a5c0402-a14b-46f2-8f2d-9f6a0e123cdd/scratchpad/review-pr226-scratch/`.
