@@ -1,0 +1,70 @@
+# raw — Codex plugin adversarial review — design-r4
+# tip reviewed: edec229dfb6f7768ecfd7d4683e5bf186da2c9b5 ; base main = 4b629ec6d1173c3724f9bc0e3d7c658eed062541 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a073e6-36ad-7ee1-9619-893cc6118f7c).
+[codex] Turn started (01a073e6-3776-7292-897c-e5de9cf8ffec).
+[codex] Assistant message captured: I’ll check the round-3 fixes against the diff and source, then test whether the acceptance cr...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 4b629ec6d1173c3724f9bc0e3d7c658eed062541 && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-dream-git-env-pinning.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-dream-git-env-pinning.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '278,585p'"
+[codex] Running command: /bin/zsh -lc "rg -n 'R3-|P6|U23|U9|namespace|deduplic|###|"'^##'"' docs/specs/logbook/2026-09...
+[codex] Command completed: /bin/zsh -lc "rg -n 'R3-|P6|U23|U9|namespace|deduplic|###|"'^##'"' docs/specs/logbook/2026-09... (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '278,585p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff edec229d''^ edec229d -- docs/specs/WP-dream-git-env-pinning.md'
+[codex] Command completed: /bin/zsh -lc 'git diff edec229d''^ edec229d -- docs/specs/WP-dream-git-env-pinning.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,240p' src/core/paths.js; sed -n '140,290p' src/cli/dream.js; sed -n '...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,240p' src/core/paths.js; sed -n '140,290p' src/cli/dream.js; sed -n '... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,260p' tests/unit/dream-pipeline.test.js; sed -n '375,445p' tests/unit...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,260p' tests/unit/dream-pipeline.test.js; sed -n '375,445p' tests/unit... (exit 0)
+[codex] Assistant message captured: The main contract now permits `getPaths()` in `git-env.js` and preserves the one-argument sig...
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '267,280p;563,614p;665,6...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-dream-git-env-pinning.md | sed -n '267,280p;563,614p;665,6... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '2081,2517p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-r...
+[codex] Command completed: /bin/zsh -lc "sed -n '2081,2517p' docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-r... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat tests/unit/dream-pipeline.known-calls.js; sed -n '500,550p' docs/specs/done...
+[codex] Command completed: /bin/zsh -lc "cat tests/unit/dream-pipeline.known-calls.js; sed -n '500,550p' docs/specs/done... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-dream-git-env-validate-seam.md; cat docs/specs/logbook/2026-0...
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-dream-git-env-validate-seam.md; cat docs/specs/logbook/2026-0... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"); for (const p of [\"/var/folders/3v/02rw...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"); for (const p of [\"/var/folders/3v/02rw... (exit 0)
+[codex] Assistant message captured: The two-arm alternates record now shows the actual failure: Git can reuse a blob from the alt...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),cp=require('\\''node:child_proces...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),cp=require('\\''node:child_proces... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-herdr-shadow....
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/logbook/2026-09-06-git-env-pinning-gate-raw-round1-herdr-shadow.... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),assert=require('\\''node:assert/s...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''node:fs'\\''),assert=require('\\''node:assert/s... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check 4b629ec6d1173c3724f9bc0e3d7c658eed062541; git diff --unified=0...
+[codex] Command completed: /bin/zsh -lc 'git diff --check 4b629ec6d1173c3724f9bc0e3d7c658eed062541; git diff --unified=0... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '2026-08-30|Table W|idempot|index|hooks' docs/adr/0012-dream-run-lifecycl...
+[codex] Command completed: /bin/zsh -lc "rg -n '2026-08-30|Table W|idempot|index|hooks' docs/adr/0012-dream-run-lifecycl... (exit 0)
+[codex] Running command: /bin/zsh -lc "tail -47 scripts/red-proofs.js; sed -n '276,309p' docs/adr/0012-dream-run-lifec...
+[codex] Command completed: /bin/zsh -lc "tail -47 scripts/red-proofs.js; sed -n '276,309p' docs/adr/0012-dream-run-lifec... (exit 0)
+[codex] Assistant message captured: I haven’t found a product-behaviour blocker. The read-only checks reproduce the recorded miss...
+[codex] Running command: /bin/zsh -lc "node -e ' const assert=require('\\''node:assert/strict'\\''); const {evaluateRe...
+[codex] Command completed: /bin/zsh -lc "node -e ' const assert=require('\\''node:assert/strict'\\''); const {evaluateRe... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const cp=require('\\''node:child_process'\\''),fs=require('\\''node:f...
+[codex] Command completed: /bin/zsh -lc "node -e ' const cp=require('\\''node:child_process'\\''),fs=require('\\''node:f... (exit 0)
+[codex] Assistant message captured: { "verdict": "approve", "summary": "Approve design dispatch. No material product-contract blo...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 4b629ec6d1173c3724f9bc0e3d7c658eed062541
+Verdict: approve
+
+Approve design dispatch. No material product-contract blocker or demonstrated acceptance-passing wrong build remains. R3-A/B/D/E/F are fixed; R3-C is substantively corrected but retains nonblocking evidence-presentation issues. No scope objection to O1–O3.
+
+No material findings.
+
+Next steps:
+- R3-A — fixed: the Deliverables row permits require('../paths'); buildGitEnv(indexFile) is unchanged; HOME must come from getPaths().home at call time.
+- R3-B — fixed: operative HOME claims are conditional on overrides, and the remaining rationale surfaces are registered. Executed getPaths() comparisons confirmed only home changes when the four overrides are fixed.
+- R3-C — partial, evidence/record only: both pristine-arm results and the missing-blob consequence are recorded. Read-only checks of the retained repositories reproduced the object locations, missing blob and fsck failure. At WP-dream-git-env-pinning.md:410, reduce Reach to the requested format and cite R2P6b for shape (6); R3P6 establishes the hash-object consequence.
+- R3-D — fixed: the record uses the pinned show literal and a real replacement. Executed show, SHA-based ls-tree and rev-parse in all three retained-fixture arms; results matched.
+- R3-E — fixed: mechanically resolved all 28 current probe IDs to exactly one output definition; no bare P-number citations remain in the primary spec.
+- R3-F — fixed: the actual evaluateRed() accepted synthetic failure sets AC2, AC3 and AC4+AC5 with AC1 green. AC1 predicate checks rejected spread-and-delete, constant-HOME and unset-HOME copying examples.
+- Implementation verification remains required: preserve the existing private-index proof's three test identities when placing AC1 assertions, then run the full pipeline and RED gates. This review executed read-only source, diff, probe and predicate checks—not full pipeline or mutation runs. U6/U10/U22 records support their claims; repository-selection and identity precedence were independently reproduced. Working tree is clean.
