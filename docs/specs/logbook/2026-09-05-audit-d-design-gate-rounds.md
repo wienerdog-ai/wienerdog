@@ -1021,6 +1021,108 @@ Round 5 runs on **both channels** as the closing confirmation.
   in Table B. If that happens, the successor question is already named: option (c).
 - Owner items stand at **ten** — nine recommendations plus item 10, `RULED`.
 
+## Round 5 — external double channel, 2026-09-05, on `d3041ba0`
+
+Both channels **needs-attention**; plugin 1A + 1B, shadow 3A + 1C; **zero scope
+objections counted** (two routed). **Not closed** — one revision pass, then round 6
+is the closing confirmation. Raws committed pre-adjudication:
+
+| Channel | Raw file | Raw-commit SHA |
+|---|---|---|
+| Codex plugin (adversarial) | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-codex-plugin.txt` | `3d80d955` |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-herdr-shadow.txt` | `6b3857a2` |
+
+| # | Channel(s) | Band | Finding | Disposition |
+|---|---|---|---|---|
+| **R5-A** | CONVERGED A | HEAVY | The refused `References` row was **1033** octets, not the stated 1021 (1021 is the *value*; the line adds the 12-octet prefix), and there was **no 999-octet `References` boundary at all** — a checker capping `Subject` and `In-Reply-To` at 998 but `References` at 1021 passed every listed row. Both channels executed it. | **fix** — the missing one-octet boundary is added (**940** + space + 46-octet parent = value 987 → line **999**, refused) beside the 998 accepted row; the 1021/1033 arithmetic is corrected; the 974 row is kept but **relabelled as a non-boundary accumulation case**, with the mislabelling called out in place. |
+| **R5-B** | plugin B | HEAVY | **UNLICENSED CHANGE, confirmed by `git diff 197cd797 d3041ba0`.** Step 0's input bound had been moved from "998 characters" to "998 UTF-8 octets" while applying the ruling. The ruling licensed (a) at the **output** plus R4-B and R4-C — nothing at step 0 — and item 8 as ruled says characters. | **fix — reverted.** Step 0 is restored **byte-for-byte** to its `197cd797` wording (verified: `git diff 197cd797` shows no change to that row). Octets stay at step 7, and the spec now says plainly why the two bounds are in different units and that this is not a gap. The unit question is recorded as an **OPEN owner question** in the rulings record — *not* an item and *not* dispatched under the standing instruction, since the architect had just been caught making that exact change without a licence. |
+| **R5-C** | shadow A | HEAVY (product) | Step 7 excluded `To` as "4 + ≤320 by construction", but **step 4's 320 is CHARACTERS and step 7 is OCTETS**. A grammar-accepted address of 247 astral characters + `aa@b.co` is 254 characters but **995 octets** → a **999-octet `To` line**. | **fix** — `To` joins step 7's checked set. This **implements** ruling (a) ("every built header line") rather than extending it. Step 7 now quantifies over every line `buildMime` emits for this verb except the fixed `Content-Type`, and `From` is excluded **with its reason and citation**: `buildMime` emits `From` only when its argument carries one (`gmail.js:152`), and `replyTarget`'s result shape has no `from`. The "bounded by construction" sentence is deleted. Accepted-998 / refused-999 `To` rows added. |
+| **R5-D** | shadow (step-0 octet fixtures) | dissolved | Fixtures written for an octet-based step 0. | **dissolved by R5-B** — step 0 counts characters again, so those fixtures have no subject. The 329-`€` row is now explicitly labelled a **step-7 (output)** fixture. |
+| **R5-E** | both channels | LIGHT | Stale "step 7's `assertHeaderSafe`" (now step 8); the "nothing caps the derived subject" claim (it now has an output bound); "only the *recipient* rules fail loud"; criterion 4's step list; Table C's declaration counts. | **fix** — all corrected, and every step-number mirror re-swept after the step-7 insertion. Both count sentences (Table C's identities/declarations and the case table's total) now **point at their tables instead of predicting a number** — each had gone stale twice. |
+
+### Routed scope objections — recorded, not acted on
+
+- **`U+00A0` under the ruled ASCII predicate.** `U+00A0` is Unicode horizontal
+  whitespace, but R4-B's ruled `/[^ \t]/` treats it as content, so a
+  `U+00A0`-only `Reply-To` is selected and then **grammar-refused** rather than
+  falling through to `From`. Executed and confirmed: the outcome is
+  `refuse:step3-not-one-mailbox` — **a refusal, never a wrong recipient.** Recorded
+  as a named residual under owner item 4. Widening the predicate to Unicode
+  whitespace would reopen R4-B's cost question on the one test the owner just ruled
+  must stay linear.
+- **`buildMime`'s optional `From` has no length bound.** Pre-existing; it is not on
+  this verb's data path. Recorded as a "Discovered issues" item for the
+  implementer's PR, not fixed here.
+
+### Executed from a FILE — every new boundary row, in octets
+
+```text
+=== R5-A: the References LINE arithmetic, corrected ===
+  parent id is 46 octets; the References prefix is 12 octets
+    refs 939 -> value  986 octets -> LINE  998 octets     ACCEPT
+    refs 940 -> value  987 octets -> LINE  999 octets     REFUSE   <- the missing boundary
+    refs 974 -> value 1021 octets -> LINE 1033 octets     REFUSE   (non-boundary; 1021 was mislabelled a line)
+
+=== R5-C: can a To line exceed 998 octets? It depends on how step 4 counts. ===
+    BMP 3-octet     under code units   : max To line   950 octets
+    BMP 3-octet     under code points  : max To line   950 octets
+    astral 4-octet  under code units   : max To line   635 octets
+    astral 4-octet  under code points  : max To line  1263 octets   <-- CAN EXCEED
+  the shadow's address: 254 code points, 501 code units, 995 octets -> To line 999
+ok   refuse:step4-addr-over-320       under CODE-UNIT step 4 it never reaches step 7
+ok   refuse:step7-line-over-998[To]   under CODE-POINT step 4 it passes step 4 and STEP 7 catches it
+ok   ok                               code-point boundary 246 astral -> To line 995 -> ACCEPT
+
+=== R5-B: step 0 is CHARACTERS again (the ruled item 8, restored) ===
+ok   refuse:step7-line-over-998[Subject]      998 EUR characters = 2994 octets: passes step 0, refused by step 7
+ok   refuse:step0-raw-over-998-CHARS[Subject] 999 characters -> refused at step 0
+
+=== unchanged rows still hold ===
+ok   ok                                       989-octet Re:-prefixed subject -> ACCEPT
+ok   refuse:step7-line-over-998[Subject]      990 -> REFUSE
+ok   ok                                       985-octet Message-ID -> In-Reply-To line 998 -> ACCEPT
+ok   refuse:step7-line-over-998[In-Reply-To]  986-octet Message-ID -> a 999-octet line -> REFUSE
+ok   ""                                       empty subject -> empty derived
+
+=== routed: U+00A0 under the ruled ASCII predicate ===
+ok   refuse:step3-not-one-mailbox   a U+00A0-only Reply-To beside a valid From -> selected, then grammar-REFUSED
+
+ALL CHECKS PASSED
+```
+
+### What the R5-C measurement changed about the finding as filed
+
+The shadow's numbers are **right, and my first attempt to reproduce them was
+wrong** — I built the address from 3-octet BMP characters, which cannot reach the
+boundary under either reading (max `To` line 950 octets), and briefly had four
+failing checks that were my construction, not the finding. With **astral**
+characters, which is what the shadow used, the arithmetic is exact: 247 astral +
+`aa@b.co` = 254 code points / 501 code units / 995 octets → a 999-octet line.
+
+The finding is therefore **conditional on how step 4's "320 characters" is read**:
+under `.length` (code units) a `To` line cannot exceed 950 octets and the case is
+unreachable; under code points it reaches 1263. **The spec does not pin that unit,
+and step 7 is the right fix precisely because it does not depend on resolving it** —
+a check that is correct either way beats one that needs an ambiguity settled
+elsewhere first. Both readings are now in the record.
+
+**One thing this pass deliberately does NOT do:** pin step 4's unit. That would be
+a second unlicensed change on a ruled row, which is the mistake R5-B just caught.
+Step 7 makes it safe either way.
+
+### STOP CRITERION — round 6 is the CLOSING CONFIRMATION
+
+- **Closes** on **zero product findings on both channels**. Machinery findings at
+  that point are fixed **in-surface, without another round**, or accepted as named
+  residuals.
+- **Any product finding** → one more architect pass and a round 7.
+- **A Table B finding the executed case table does not refuse → STOP for the
+  owner.** The ruling covers (a); it licenses nothing else in Table B, and R5-B is
+  the evidence that this boundary needs enforcing against the architect too.
+- Owner items stand at **ten**. Round 5 added none: R5-C implements the existing
+  ruling, R5-B reverts to it, and the unit question is recorded as **open**, not as
+  an item.
+
 ### Round table
 
 | Round | Channel | Raw file | Raw-commit SHA | Verdict |
@@ -1037,5 +1139,7 @@ Round 5 runs on **both channels** as the closing confirmation.
 | 3 | **Stop criterion** | — | — | **FIRED** on two Table B rows → ruled by the orchestrator under the standing instruction as owner **item 9**: keep the code-derived-recipient verb; the two rows are the ORDER contract not yet applied to itself. Round-4 criterion sharpened to STOP |
 | 4 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-codex-plugin.txt` | `08eec164` | needs-attention — R4-A (B, converged), R4-B (A); one scope objection, excluded from the verdict |
 | 4 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round4-herdr-shadow.txt` | `62710758` | needs-attention — R4-A (A, converged), R4-C (B) |
+| 5 | Codex plugin | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-codex-plugin.txt` | `3d80d955` | needs-attention — R5-A (A, converged), R5-B (B, **unlicensed change caught**); two objections routed |
+| 5 | Hermetic Codex shadow | `docs/specs/logbook/2026-09-05-audit-d-gate-raw-round5-herdr-shadow.txt` | `6b3857a2` | needs-attention — R5-A (A, converged), R5-C (A, product), R5-D (dissolved), R5-E (C) |
 | 4→5 | **OWNER RULING (direct)** | `docs/specs/logbook/2026-09-05-owner-rulings-audit-d-derived-headers.md` | ruled on `197cd797` | **(a) refuse at the output**, plus R4-B and R4-C. (c) successor, not filed; (b) rejected. Table B unfrozen for one pass; applied as steps 2, 5 and 7 and item 10. Round 5 = closing confirmation |
 | 4 | **Stop criterion (final)** | — | — | **FIRED — Table B FROZEN.** R4-A/B/C PARKED for the owner; brief at `docs/specs/logbook/2026-09-05-audit-d-owner-brief-derived-headers.md`. WP stays `Draft`. Non-Table-B machinery fixes applied |

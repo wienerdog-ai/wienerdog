@@ -96,6 +96,25 @@ in the round-4→ruling section of
 2. **R4-B is far worse than reported.** The brief cited "over 1.5 s"; executed
    here, the pathological blank-check took **33 962 ms on a 47-octet input**.
 
+## OPEN — one question put to the owner, not ruled and not dispatched under
+
+**Should item 8's INPUT bound (Table B step 0) be restated in UTF-8 octets to match
+step 7's output bound?** Round 5 caught the architect silently changing step 0 from
+"998 characters" to "998 UTF-8 octets" while applying this ruling — an **unlicensed
+change**: the ruling licensed a bound at the OUTPUT, and item 8 as ruled says
+characters. Step 0 has been restored byte-for-byte to its `197cd797` wording, and
+the two bounds now stand in different units on purpose.
+
+**There is no product consequence either way, once step 7 covers every emitted
+line** — a 998-character subject of `€` is 2994 octets, passes step 0, and is
+refused by step 7 (measured). *Cost of unifying:* one word in item 8, and step 0's
+case rows re-measured in octets.
+
+**This is deliberately NOT filed as an owner item and NOT dispatched under the
+standing instruction**, because the architect has just been caught making exactly
+this change without a licence; recording it as an open question the owner answers
+directly is the honest correction.
+
 ## What happens next
 
 One architect pass — this one — applies the ruling. Then **round 5 runs as the
