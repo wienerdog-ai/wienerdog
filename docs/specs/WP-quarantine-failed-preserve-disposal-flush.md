@@ -113,9 +113,10 @@ is Table I rows **I1** and **I2**'s sixth column and nothing wider: on the paths
 where the flush COMPLETES, the artifact a completed, published run removed can no
 longer come back — and each row states its own case, which are not the same. What
 it costs is one `flushDir` per failure path — one `fsync` of a directory with a
-pending unlink, re-measured on this base at a **median of 2.9 ms** (min 1.25, p90 3.54,
-max 5.46 over 200 samples, darwin/APFS, Node v25.9.0 — `FP-P5`, corroborating the
-**2.0–2.7 ms** band `QD-P2` measured), on an arm that is already heading for a
+pending unlink, re-measured on this base at a **median of 2.9–3.0 ms** (two runs
+of 200 samples, darwin/APFS, Node v25.9.0: medians 2.95 and 3.04, p90 3.54 and
+3.67 — `FP-P5`, the same order as the **2.0–2.7 ms** band `QD-P2` measured
+against a clean directory's 0.02–0.20 ms), on an arm that is already heading for a
 preservation failure. The success path pays nothing (`FP-P3`). **Cost of
 overruling:** this package is withdrawn; `WP-quarantine-preserve-durability` row
 **F7(a)**'s 2026-09-06 clause needs a further dated clause returning rows **M2**

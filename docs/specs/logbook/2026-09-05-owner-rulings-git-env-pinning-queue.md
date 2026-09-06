@@ -452,3 +452,27 @@ for the measurements (`QD-P1`…`QD-P12`) and the closure call.
 Two `Draft` successors were filed by this loop and neither has run its own design
 gate: `docs/specs/WP-quarantine-only-copy-shelf.md` (**O9**) and
 `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (**O11**).
+
+### Appended 2026-09-06 after `WP-quarantine-failed-preserve-disposal-flush`'s design-gate ROUND ZERO — two new items, **O12** and **O13**
+
+**Both are adopted under the standing process of 2026-09-05, as recommendations
+and not direct owner rulings**, and the owner may reverse either by dated
+amendment. **This entry is CITATION-ONLY and restates neither item's text nor its
+overrule cost** — both live in ONE place,
+`docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`'s
+`## Dispatch precondition — owner items`, which governs.
+
+- **O12 — the value question this package was filed to ask.** Recommendation
+  recorded, adopted, reversible by dated amendment.
+- **O13 — the disposition of a flush that does not complete.** Recommendation
+  recorded, adopted, reversible by dated amendment.
+
+**Status the owner has in front of them, and not contract:** the `Draft` stub
+`WP-quarantine-disposal-durability`'s owner item **O11** routed to is now a
+matured `Draft` spec whose round zero has run; its adversarial rounds have not.
+**O11 itself is unchanged**, and **O8**, **O9** and **O10** are untouched.
+
+The measurements, the STOP CRITERION pinned before round 1, and the both-directions
+proof of the new verification step are
+`docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate-rounds.md`
+(probe ids `FP-P1`…`FP-P7`).
