@@ -1,0 +1,27 @@
+# raw — Codex plugin review review — pr2
+# tip reviewed: c68635af0fceee778c827bef086a05af1d4560f9 ; base main = 489f981eb9b43b6955b3f150cbd330ae84e987b1 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a074d9-ff70-7ef2-9db5-155054ac5884).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat 489f981eb9b43b6955b3f150cbd330ae84e987...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat 489f981eb9b43b6955b3f150cbd330ae84e987... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; git diff 489f981eb9b43b6955b3f150cbd330ae84e987b1; cat docs/spec...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; git diff 489f981eb9b43b6955b3f150cbd330ae84e987b1; cat docs/spec... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff 489f981eb9b43b6955b3f150cbd330ae84e987b1 -- src tests; sed -n '1,215p'...
+[codex] Command completed: /bin/zsh -lc "git diff 489f981eb9b43b6955b3f150cbd330ae84e987b1 -- src tests; sed -n '1,215p'... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat src/core/dream/git-env.js; sed -n '1,125p' src/core/dream/validate.js; sed ...
+[codex] Command completed: /bin/zsh -lc "cat src/core/dream/git-env.js; sed -n '1,125p' src/core/dream/validate.js; sed ... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import subprocess,difflib; p=\"docs/specs/done/WP-dream-promote-in-...
+[codex] Running command: /bin/zsh -lc "git diff --word-diff=porcelain 489f981eb9b43b6955b3f150cbd330ae84e987b1 -- docs...
+[codex] Command completed: /bin/zsh -lc "git diff --word-diff=porcelain 489f981eb9b43b6955b3f150cbd330ae84e987b1 -- docs... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The change consistently applies the existing constructed Git environment without changing inv...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The change consistently applies the existing constructed Git environment without changing invocation shapes or guard behavior. The regression tests and documentation match the specification. Syntax checks passed; runtime tests were not run because the sandbox is read-only.
