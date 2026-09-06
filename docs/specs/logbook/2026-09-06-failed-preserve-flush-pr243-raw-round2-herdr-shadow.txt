@@ -1,0 +1,82 @@
+# raw — hermetic Codex shadow, PR gate (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, vendored pr-rubric) — pr3b
+# tip reviewed: ae164823f377986ac9a98c45c7b029613b639c8a (detached worktree) ; base main = fdbeb9f2 ; committed pre-adjudication
+# codex exec rc=0 ; porcelain before/after: identical
+
+{
+  "target": "ae164823f377986ac9a98c45c7b029613b639c8a (merge base fdbeb9f2)",
+  "verdict": "patch is correct",
+  "executed": [
+    {
+      "command": "V1 byte-exact checker via the spec's heredoc",
+      "exit_status": 1,
+      "result": "Blocked by the read-only sandbox: zsh could not create /tmp/fpdf-v1.js."
+    },
+    {
+      "command": "V1 byte-exact checker via equivalent node -e invocation",
+      "exit_status": 0,
+      "result": "Both exact comment-and-flush blocks, occurrence counts, and placement checks passed."
+    },
+    {
+      "command": "npm test -- --test-name-pattern '\\[FPDF-Z[12]\\]'",
+      "exit_status": 1,
+      "result": "Tests did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "node tests/with-temp-root.js scripts/red-proofs.js --wp WP-quarantine-failed-preserve-disposal-flush",
+      "exit_status": 1,
+      "result": "RED proofs did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm run red-proofs",
+      "exit_status": 1,
+      "result": "The unfiltered V2 gate did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush",
+      "exit_status": 1,
+      "result": "The filtered companion did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm test",
+      "exit_status": 1,
+      "result": "The suite did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "Blocked by the known sandbox registry artefact: markdownlint-cli2 could not be fetched from registry.npmjs.org. Frontmatter checks passed."
+    },
+    {
+      "command": "node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush",
+      "exit_status": 0,
+      "result": "All extracted mirrors resolved; documented table-name ambiguities were non-failing."
+    },
+    {
+      "command": "node scripts/boundary-check.js with the spec and all changed paths",
+      "exit_status": 0,
+      "result": "The change stays within the work package boundary."
+    },
+    {
+      "command": "git diff --check fdbeb9f2..ae164823f377986ac9a98c45c7b029613b639c8a",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "node --check src/core/dream/validate.js",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "node --check tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "Parse the new RED-proof JSON and statically resolve declarations",
+      "exit_status": 0,
+      "result": "Valid JSON; 66 declarations found, and both new find literals, occurrence counts, and expected test names resolve."
+    }
+  ],
+  "summary": "Reading-based correct verdict because the runtime and mutation tests could not start in the read-only sandbox. The production changes match the byte-exact contract, the first-round forced-Windows non-vacuity gap is fully addressed, and all available static, boundary, syntax, and mirror checks pass.",
+  "findings": []
+}

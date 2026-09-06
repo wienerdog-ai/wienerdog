@@ -1,0 +1,89 @@
+# raw — hermetic Codex shadow, PR gate (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, vendored pr-rubric) — pr3
+# tip reviewed: 22aacfaceeb8c5ae7ddeb2c5a5172e2870547fe9 (detached worktree) ; base main = fdbeb9f2 ; committed pre-adjudication
+# codex exec rc=0 ; porcelain before/after: identical
+
+{
+  "target": "22aacfaceeb8c5ae7ddeb2c5a5172e2870547fe9 (merge base fdbeb9f2)",
+  "verdict": "needs-attention",
+  "executed": [
+    {
+      "command": "V1 byte-exact checker via the spec's heredoc",
+      "exit_status": 1,
+      "result": "Blocked by the read-only sandbox: zsh could not create its temporary heredoc file."
+    },
+    {
+      "command": "V1 byte-exact checker via equivalent node -e invocation",
+      "exit_status": 0,
+      "result": "Both exact comment-and-flush blocks and their placement passed."
+    },
+    {
+      "command": "npm test -- --test-name-pattern '\\[FPDF-Z[12]\\]'",
+      "exit_status": 1,
+      "result": "Tests did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "node tests/with-temp-root.js scripts/red-proofs.js --wp WP-quarantine-failed-preserve-disposal-flush",
+      "exit_status": 1,
+      "result": "RED proofs did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush",
+      "exit_status": 1,
+      "result": "RED proofs did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm test",
+      "exit_status": 1,
+      "result": "Suite did not run: the sandbox rejected mkdtemp with EPERM."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "Blocked by the known sandbox network artefact: markdownlint-cli2 could not be fetched from registry.npmjs.org. Frontmatter checks passed."
+    },
+    {
+      "command": "node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush",
+      "exit_status": 0,
+      "result": "All extracted mirrors resolved; the documented Table Z ambiguities were reported but non-failing."
+    },
+    {
+      "command": "git diff --check fdbeb9f2..22aacfaceeb8c5ae7ddeb2c5a5172e2870547fe9",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "node --check src/core/dream/validate.js",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "node --check tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "Parse quarantine-failed-preserve-disposal-flush.proofs.json",
+      "exit_status": 0,
+      "result": "Valid JSON."
+    },
+    {
+      "command": "Static RED declaration occurrence and expected-test-name check",
+      "exit_status": 0,
+      "result": "Both find literals have their declared occurrence count and both expected test names exist."
+    }
+  ],
+  "summary": "The production call sites match the byte-exact spec and all available static and mirror checks pass. The runtime and mutation suites could not run in this read-only sandbox, and reading found one acceptance-criterion non-vacuity gap in the forced-Windows tests.",
+  "findings": [
+    {
+      "title": "[P2] Track the forced-Windows fault before counting fsyncs",
+      "file": "tests/unit/dream-validate.test.js",
+      "line_start": 3625,
+      "line_end": 3625,
+      "priority": "P2",
+      "materiality_band": "B",
+      "confidence": 0.96,
+      "body": "This injection, and the Z1 `failCommit` peer, expose only restorers, so neither forced-Windows test can assert that its intended fault actually fired before accepting zero fsyncs. If an injection stops matching while another failure still reaches cleanup, the test can pass without exercising the specified act; the work package explicitly requires fault-fired, path-removed, and null-result checks before the count ([AC4](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/5aacc823-45ec-41c6-81f1-7a9912a80656/scratchpad/shadow-wt-pr3/docs/specs/WP-quarantine-failed-preserve-disposal-flush.md:352)), under the repository's spec-driven rule ([AGENTS.md](/private/tmp/claude-501/-Users-gyulafeher-Documents-Claude-Projects-wienerdog/5aacc823-45ec-41c6-81f1-7a9912a80656/scratchpad/shadow-wt-pr3/AGENTS.md:14)).",
+      "recommendation": "Instrument both injected callbacks with a fired flag and assert it before the existing removal, result, and fsync-count assertions."
+    }
+  ]
+}

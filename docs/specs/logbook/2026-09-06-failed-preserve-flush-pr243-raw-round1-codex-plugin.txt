@@ -1,0 +1,28 @@
+# raw — Codex plugin review review — pr3
+# tip reviewed: 22aacfaceeb8c5ae7ddeb2c5a5172e2870547fe9 ; base main = fdbeb9f2e4d322c1fc2d1a84921b4873faa493f7 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a07627-e70b-7072-87fe-cd34d0b37509).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "pwd; git status --short; git diff --stat fdbeb9f2e4d322c1fc2d1a84921b4873faa493...
+[codex] Command completed: /bin/zsh -lc "pwd; git status --short; git diff --stat fdbeb9f2e4d322c1fc2d1a84921b4873faa493... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; sed -n '650,110...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; sed -n '650,110... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '280,520p' docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; s...
+[codex] Command completed: /bin/zsh -lc "sed -n '280,520p' docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; s... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --version; node --check src/core/dream/validate.js; node --check tests/uni...
+[codex] Command completed: /bin/zsh -lc "node --version; node --check src/core/dream/validate.js; node --check tests/uni... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''); const vm = require('\\''node:v...
+[codex] Command failed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''); const vm = require('\\''node:v... (exit 1)
+[codex] Running command: /bin/zsh -lc "sed -n '1390,1505p' tests/unit/dream-validate.test.js; rg -n 'function (freshSt...
+[codex] Command completed: /bin/zsh -lc "sed -n '1390,1505p' tests/unit/dream-validate.test.js; rg -n 'function (freshSt... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The two best-effort flush calls match the specified contract and preserve existing return val...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The two best-effort flush calls match the specified contract and preserve existing return values, error handling, and platform gating. Syntax and static contract checks passed; npm test was blocked by the read-only sandbox’s temporary-directory restrictions.
