@@ -50,8 +50,8 @@ position on the success path.
 can inflate it.** A **BEST-EFFORT** directory flush after each of the two
 removals. **A COMPLETED POSIX flush means that ON THAT PATH, once the run has
 completed and published its record, the removed artifact can no longer come
-back** — for row **I2** an entry that record omits, for row **I1** a `.tmp-`
-leftover no record names at all; the two differ and Table I keeps them apart.
+back** — for row **Z2** an entry that record omits, for row **Z1** a `.tmp-`
+leftover no record names at all; the two differ and Table Z keeps them apart.
 **A flush that does not complete, and every win32 run, RETAIN the residual** —
 the same class `WP-quarantine-disposal-durability`'s owner item **O10** parks.
 Nothing here closes that class.
@@ -59,17 +59,17 @@ Nothing here closes that class.
 ## Current state
 
 Measured at `b1d20ce0`. Two removals in `src/core/dream/validate.js` are D4's
-owned paths on `quarantinePreserve`'s FAILURE arms, and Table I decides what each
+owned paths on `quarantinePreserve`'s FAILURE arms, and Table Z decides what each
 one gets:
 
 - **`validate.js:984`** — `if (ownedTmp) removeOwnedQuarantinePath(tmp);` (four
   spaces of indent) in the shared `catch`, after the gate
   `ownedTmp = fd >= 0 && ownsName(tmp, fd)` (`:979`), followed by `return null;`
-  at `:985`. Table I row **I1**.
+  at `:985`. Table Z row **Z1**.
 - **`validate.js:1020`** — `if (ownedDest) removeOwnedQuarantinePath(dest);` (two
   spaces of indent) on the post-commit failure path, after
   `ownedDest = ownsName(dest, fd)` (`:1014`), followed by `return null;` at
-  `:1021`. Table I row **I2**.
+  `:1021`. Table Z row **Z2**.
 
 **Neither is followed by any flush** — measured, `FP-P1` on the pristine tree:
 driving the shipped `quarantinePreserve` through the shared catch (the commit
@@ -78,7 +78,7 @@ post-commit failure (the artifact flush made to throw) issues only the artifact
 `fsync` that threw and **no directory flush**. `flushPreservation` (`:857-864`)
 runs only on the success path and returns before every `fsync` on win32
 (`DURABILITY_AVAILABLE`, `:696`). **`flushDir` (`:806-817`) carries no platform
-gate of its own** — only `flushPreservation` does — which is Table I row **I4**.
+gate of its own** — only `flushPreservation` does — which is Table Z row **Z4**.
 
 **Both removed paths sit in `qdir`** — `tmp = path.join(qdir, '.tmp-…')` (`:964`)
 and `dest = path.join(qdir, name)` (`:959`) — and `qdir` is
@@ -109,14 +109,14 @@ proceeds under it, and the owner reverses it by dated amendment. This section is
 the ONE place their text and their costs live; the rulings record cites it.**
 
 **O12 — THE VALUE QUESTION: YES, build it. Recommendation: accept.** What it buys
-is Table I rows **I1** and **I2**'s sixth column and nothing wider: on the paths
+is Table Z rows **Z1** and **Z2**'s sixth column and nothing wider: on the paths
 where the flush COMPLETES, the artifact a completed, published run removed can no
 longer come back — and each row states its own case, which are not the same. What
 it costs is one `flushDir` per failure path — one `fsync` of a directory with a
-pending unlink, re-measured on this base at a **median of 2.9–3.0 ms** (two runs
-of 200 samples, darwin/APFS, Node v25.9.0: medians 2.95 and 3.04, p90 3.54 and
-3.67 — `FP-P5`, the same order as the **2.0–2.7 ms** band `QD-P2` measured
-against a clean directory's 0.02–0.20 ms), on an arm that is already heading for a
+pending unlink, re-measured on this base at a **median of 2.6–3.0 ms** (three runs
+of 200 samples, darwin/APFS, Node v25.9.0: medians 2.57, 2.95, 3.04 — `FP-P5`, the
+same order as the **2.0–2.7 ms** band `QD-P2` measured, against a clean
+directory's 0.05–0.20 ms), on an arm that is already heading for a
 preservation failure. The success path pays nothing (`FP-P3`). **Cost of
 overruling:** this package is withdrawn; `WP-quarantine-preserve-durability` row
 **F7(a)**'s 2026-09-06 clause needs a further dated clause returning rows **M2**
@@ -147,9 +147,9 @@ the run continues or stops.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | **exactly two inserted lines plus their two comments, and nothing else** — Table I rows **I1** and **I2**, byte-exact under "Exact contracts". No helper is added, no existing line is edited, `flushDir` is reused |
+| modify | src/core/dream/validate.js | **exactly two inserted lines plus their two comments, and nothing else** — Table Z rows **Z1** and **Z2**, byte-exact under "Exact contracts". No helper is added, no existing line is edited, `flushDir` is reused |
 | modify | tests/unit/dream-validate.test.js | new assertions only — one per act, per acceptance criteria **2**, **3** and **4**. **No existing assertion changes** (`FP-P3`) |
-| create | tests/red-proofs/quarantine-failed-preserve-disposal-flush.proofs.json | two proofs, ids `failed-preserve-tmp-flush-dropped` (row **I1**) and `failed-preserve-dest-flush-dropped` (row **I2**) — both measured free against the 64 existing ids |
+| create | tests/red-proofs/quarantine-failed-preserve-disposal-flush.proofs.json | two proofs, ids `failed-preserve-tmp-flush-dropped` (row **Z1**) and `failed-preserve-dest-flush-dropped` (row **Z2**) — both measured free against the 64 existing ids |
 
 **`WP-quarantine-preserve-durability` is NOT in this table, and that is a
 decision.** Its Table F row **F7(a)**'s 2026-09-06 clause already states this
@@ -168,26 +168,26 @@ are TEXTUALLY DISTINCT, which is what lets each declaration mutate one act
 without touching the other (`find` is a plain substring match with a declared
 occurrence count).**
 
-Row **I1**, after `src/core/dream/validate.js:984`:
+Row **Z1**, after `src/core/dream/validate.js:984`:
 
 ```js
-    // Best-effort (Table I row I3): a COMPLETED flush closes this removal's
+    // Best-effort (Table Z row Z3): a COMPLETED flush closes this removal's
     // post-completion window. The boolean is IGNORED — a flush that does not
     // complete must not turn a preservation failure into a run-stopping one.
     if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);
 ```
 
-Row **I2**, after `src/core/dream/validate.js:1020`:
+Row **Z2**, after `src/core/dream/validate.js:1020`:
 
 ```js
-  // Best-effort (Table I row I3): a COMPLETED flush closes this removal's
+  // Best-effort (Table Z row Z3): a COMPLETED flush closes this removal's
   // post-completion window. The boolean is IGNORED — a flush that does not
   // complete must not turn a preservation failure into a run-stopping one.
   if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);
 ```
 
 Both comments are byte-identical apart from their indentation; both are
-registered mirrors of row **I3**.
+registered mirrors of row **Z3**.
 
 ## Contract reference
 
@@ -197,16 +197,28 @@ contract appears in six mirrored surfaces — the comment at each of the two cal
 sites, the Deliverables cells, the acceptance criteria, the RED declarations, and
 Table F row **F7(a)**'s external clause. Two of seven.
 
-**This spec's canonical table is `I`, and the letter is FREE, not a collision.**
-Measured at `b1d20ce0` over `docs/specs/` (including `done/` and `logbook/`) and
-`docs/adr/` with `grep -rlE "Table I([^A-Za-z0-9]|$)"`: **zero files**. Every
-other table this family cites belongs elsewhere and is cited, never restated —
-Table **D** and Table **P** are `WP-preservation-abort-widening`'s, Table **F**
-and Table **C** are `WP-quarantine-preserve-durability`'s, Table **M** is
+**This spec's canonical table is `Z`, a documented collision chosen on ROW IDS
+rather than on the heading**, as
+`docs/specs/done/WP-dream-promote-report.md:356-372` settled for a tree whose
+letter space is exhausted. `Z` was chosen because **`Z<n>` appears nowhere in
+THIS family** — measured at `b1d20ce0` over the four specs this package cites,
+`WP-quarantine-only-copy-shelf` and `src/core/dream/validate.js`, with a positive
+control on the same sweep. **What it DOES collide with, stated rather than
+implied:** `WP-dream-promote-report`'s own **Table Z** (rows Z1–Z5), plus the
+heading in `WP-dream-promote-in-workspace` and `WP-dot-segment-denial`. None is in
+this family and none decides anything this spec relies on.
+`node scripts/mirror-walk.js` therefore reports this spec's row ids as AMBIGUOUS
+against that spec and **never fails on it** — prose qualification resolves a
+collision and no parser can check one. **This paragraph is that qualification:
+every `Z<n>` in this spec means a row of THIS spec's Table Z unless a path is
+given.** Every other table this family cites belongs
+elsewhere and is cited, never restated — Table **D** and Table **P** are
+`WP-preservation-abort-widening`'s, Table **F** and Table **C** are
+`WP-quarantine-preserve-durability`'s, Table **M** is
 `WP-quarantine-disposal-durability`'s, Table **N** is
 `WP-secret-fence-ep2-redact-arm`'s.
 
-### Table I — canonical: each act, its flush, and exactly what that flush reaches
+### Table Z — canonical: each act, its flush, and exactly what that flush reaches
 
 This table is the single place these facts are decided; every other surface in
 this spec cites it. **It decides nothing about the SUCCESS path** (Table F) and
@@ -215,29 +227,29 @@ permanently excluded by row **F7(a)**'s dated clause).
 
 | # | The act — the removal it follows | The line inserted after it | The directory flushed | Platform scope | What a COMPLETED flush closes | What a flush that does not complete, and win32, RETAIN | The evidence that reaches this row |
 |---|---|---|---|---|---|---|---|
-| **I1** | the shared-`catch` removal of `tmp`, `src/core/dream/validate.js:984` — reached when the create, the write or the commit threw and `tmp` still names this call's inode | `if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);`, gated on the SAME boolean as the removal so a flush is issued only where a removal happened, and placed immediately before `return null;` | **`qdir`** — the removal's own parent: `state/quarantine/redacted/` on the redact arm, `state/quarantine/` on the withheld arm. Measured, `FP-P2` | POSIX only, row **F5**'s posture. On win32 no flush is issued, which is today's behaviour and is never called durable — row **I4** | the post-completion window for THIS removal on THIS path: after the run has completed and published its record, a resurrected `.tmp-<pid>-<stem>` — secret-bearing bytes that no record, no banner and no cleanup pass names — can no longer appear. **That is all it closes** | the residual, unchanged from today: that same leftover, which the pending-review banner does not list (`listSecretQuarantine` skips dot-prefixed entries) and which makes the NEXT preserve of that name return `null` without removing it (`QD-P12`). Same class as owner item **O10**'s | `FP-P1` (zero flushes on the pristine tree, on both arms; exactly one `fsync` of `qdir` after the insertion, and zero on forced win32) and `FP-P2` (the parent). **The crash itself is not evidence and is not claimed** — see Implementation notes |
-| **I2** | the post-commit failure removal of `dest`, `src/core/dream/validate.js:1020` — reached when the flush set, the read-back or the byte comparison failed and `dest` still names this call's inode | `if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);`, same gating and same placement, and TEXTUALLY DISTINCT from **I1**'s line | **`qdir`**, same two directories, measured the same way. The flush is of the DIRECTORY, so it also covers the `tmp` unlink `:995` performed in that same directory on this path — an incidental consequence this package claims nothing about and which changes no Table M row | as **I1** | the post-completion window for this removal: the measured case is `WP-quarantine-disposal-durability` row **M3** — the run completes, publishes `[{artifact, location: "quarantine"}]` (the withheld copy alone) and commits it, while a resurrected `<date>-<stem>` sits on a shelf that record does not name | as **I1**, and on the `redacted/` shelf the residual is additionally unbounded in time: Table **N** makes a prune happen only when a future run completes a redaction and only above the cap | as **I1**, plus `WP-quarantine-disposal-durability`'s `QD-P11` for the published record this row's window sits after |
-| **I3** | — **the rule, not an act: the disposition of a flush that does not complete** | — the boolean `flushDir` returns is IGNORED at both call sites, and the reason is the comment both sites carry verbatim | — | — | — | — | **BEST-EFFORT, owner item O13.** `flushDir` catches its own `open` and `fsync` failures and returns `false`; the caller carries on and the run publishes and commits exactly as it does today. Measured indistinguishable at the interface across 16 runs (`FP-P6`). Fail-loud is priced in **O13** and rejected: it would abort a run that today falls through to the withhold arm, and it would leave the same residual |
-| **I4** | — **the rule, not an act: WHERE the platform gate lives** | — the `&& DURABILITY_AVAILABLE` conjunct in both inserted lines | — | — | — | — | **AT THE CALL SITE, and it is NOT optional.** `flushDir` has no platform gate; only `flushPreservation` does. Measured, `FP-P1`: with the conjunct dropped, a forced-`win32` run of the shared-catch arm issues **one** directory `fsync` on both arms — row **F5**'s posture violated. With the conjunct, forced `win32` issues **zero** |
+| **Z1** | the shared-`catch` removal of `tmp`, `src/core/dream/validate.js:984` — reached when the create, the write or the commit threw and `tmp` still names this call's inode | `if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);`, gated on the SAME boolean as the removal so a flush is issued only where a removal happened, and placed immediately before `return null;` | **`qdir`** — the removal's own parent: `state/quarantine/redacted/` on the redact arm, `state/quarantine/` on the withheld arm. Measured, `FP-P2` | POSIX only, row **F5**'s posture. On win32 no flush is issued, which is today's behaviour and is never called durable — row **Z4** | the post-completion window for THIS removal on THIS path: after the run has completed and published its record, a resurrected `.tmp-<pid>-<stem>` — secret-bearing bytes that no record, no banner and no cleanup pass names — can no longer appear. **That is all it closes** | the residual, unchanged from today: that same leftover, which the pending-review banner does not list (`listSecretQuarantine` skips dot-prefixed entries) and which makes the NEXT preserve of that name return `null` without removing it (`QD-P12`). Same class as owner item **O10**'s | `FP-P1` (zero flushes on the pristine tree, on both arms; exactly one `fsync` of `qdir` after the insertion, and zero on forced win32) and `FP-P2` (the parent). **The crash itself is not evidence and is not claimed** — see Implementation notes |
+| **Z2** | the post-commit failure removal of `dest`, `src/core/dream/validate.js:1020` — reached when the flush set, the read-back or the byte comparison failed and `dest` still names this call's inode | `if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);`, same gating and same placement, and TEXTUALLY DISTINCT from **Z1**'s line | **`qdir`**, same two directories, measured the same way. The flush is of the DIRECTORY, so it also covers the `tmp` unlink `:995` performed in that same directory on this path — an incidental consequence this package claims nothing about and which changes no Table M row | as **Z1** | the post-completion window for this removal: the measured case is `WP-quarantine-disposal-durability` row **M3** — the run completes, publishes `[{artifact, location: "quarantine"}]` (the withheld copy alone) and commits it, while a resurrected `<date>-<stem>` sits on a shelf that record does not name | as **Z1**, and on the `redacted/` shelf the residual is additionally unbounded in time: Table **N** makes a prune happen only when a future run completes a redaction and only above the cap | as **Z1**, plus `WP-quarantine-disposal-durability`'s `QD-P11` for the published record this row's window sits after |
+| **Z3** | — **the rule, not an act: the disposition of a flush that does not complete** | — the boolean `flushDir` returns is IGNORED at both call sites, and the reason is the comment both sites carry verbatim | — | — | — | — | **BEST-EFFORT, owner item O13.** `flushDir` catches its own `open` and `fsync` failures and returns `false`; the caller carries on and the run publishes and commits exactly as it does today. Measured indistinguishable at the interface across 16 runs (`FP-P6`). Fail-loud is priced in **O13** and rejected: it would abort a run that today falls through to the withhold arm, and it would leave the same residual |
+| **Z4** | — **the rule, not an act: WHERE the platform gate lives** | — the `&& DURABILITY_AVAILABLE` conjunct in both inserted lines | — | — | — | — | **AT THE CALL SITE, and it is NOT optional.** `flushDir` has no platform gate; only `flushPreservation` does. Measured, `FP-P1`: with the conjunct dropped, a forced-`win32` run of the shared-catch arm issues **one** directory `fsync` on both arms — row **F5**'s posture violated. With the conjunct, forced `win32` issues **zero** |
 
 ### Mirrored Surface Checklist
 
-Every surface that mirrors **Table I**, so a review finding updates the table and
+Every surface that mirrors **Table Z**, so a review finding updates the table and
 all its mirrors in one pass and in the same commit:
 
 - [ ] The three Deliverables rows, each restating a row's target
-- [ ] The "Exact contracts" block — rows **I1** and **I2**'s byte-exact lines
-- [ ] **In `src/core/dream/validate.js`: the comment above I1's flush** — row
-      **I3**'s reason, copied verbatim
-- [ ] **In `src/core/dream/validate.js`: the comment above I2's flush** — the
+- [ ] The "Exact contracts" block — rows **Z1** and **Z2**'s byte-exact lines
+- [ ] **In `src/core/dream/validate.js`: the comment above Z1's flush** — row
+      **Z3**'s reason, copied verbatim
+- [ ] **In `src/core/dream/validate.js`: the comment above Z2's flush** — the
       same text, a second copy, a second mirror
 - [ ] Current state's enumeration of the two removals, the flushed directory,
       and the declaration count
-- [ ] Owner item **O12** (the value verdict, citing I1/I2's sixth column) and
-      owner item **O13** (row **I3**'s disposition and its priced alternative)
+- [ ] Owner item **O12** (the value verdict, citing Z1/Z2's sixth column) and
+      owner item **O13** (row **Z3**'s disposition and its priced alternative)
 - [ ] Acceptance criteria **1**–**5** and the steps V1–V3 that assert them
 - [ ] Implementation notes' statement of what the evidence reaches, and the
-      block/declaration trap I1's and I2's line shape rests on
+      block/declaration trap Z1's and Z2's line shape rests on
 - [ ] The Security checklist's third item, which names the retained residual
 - [ ] Out of scope's list of what this package does NOT decide
 - [ ] **External, and it needs NO change while O12 is YES and O13 is
@@ -271,14 +283,14 @@ all its mirrors in one pass and in the same commit:
   `fsyncSync` to the path its descriptor was opened under; `patchFs`
   (`:1433-1438`) patches one `node:fs` method and returns its restorer. Both acts
   are reachable from a direct `quarantinePreserve` call: make `fs.linkSync` throw
-  for **I1**, make the artifact `fsyncSync` throw for **I2**.
+  for **Z1**, make the artifact `fsyncSync` throw for **Z2**.
 - **`scripts/red-proofs.js` refuses a symlinked `node_modules`**, and refuses a
   `node_modules` on any ancestor of its sandbox. Where the worktree's is a
   symlink, run it against an export — `git archive HEAD | tar -x -C <dir>`, then
   `--root <dir>` — with `TMPDIR` under no `node_modules`.
 - **Each `find` literal must include its leading indentation**, and the two must
   differ by more than indentation or the shorter matches inside the longer and
-  `occurrences` drifts. I1's and I2's differ by identifier too; measured
+  `occurrences` drifts. Z1's and Z2's differ by identifier too; measured
   non-overlapping (`FP-P4`).
 
 ## Security checklist
@@ -291,13 +303,13 @@ all its mirrors in one pass and in the same commit:
       AFTER `removeOwnedQuarantinePath` returned having confirmed the path is gone
       (Table D row **D3**), and its boolean is discarded, so no branch of the
       preservation depends on it (`FP-P6`).
-- [ ] **The retained residual is named, not omitted:** rows **I1** and **I2**,
+- [ ] **The retained residual is named, not omitted:** rows **Z1** and **Z2**,
       column seven — the class owner item **O10** of
       `docs/specs/done/WP-quarantine-disposal-durability.md` parks and prices.
 
 ## Acceptance criteria
 
-- [ ] **1.** Rows **I1** and **I2** each carry exactly one flush line, byte-exact
+- [ ] **1.** Rows **Z1** and **Z2** each carry exactly one flush line, byte-exact
       as under "Exact contracts", placed after that act's removal with only
       comments between, and immediately before `return null;`; and
       `src/core/dream/validate.js` contains exactly four lines mentioning
@@ -313,7 +325,7 @@ all its mirrors in one pass and in the same commit:
       `null` and throws nothing on both acts and both arms — the same observable
       as with the flush working (V3).
 - [ ] **4.** When `DURABILITY_AVAILABLE` is false, neither act issues a flush
-      (row **I4**) — asserted by V1's conjunct check, and in the suite by whatever
+      (row **Z4**) — asserted by V1's conjunct check, and in the suite by whatever
       form the implementer chooses; a run on win32 is not available here and is
       not claimed.
 - [ ] **5.** Two RED declarations, one per act, sharing one `testNamePattern`
@@ -341,8 +353,8 @@ const L = fs.readFileSync(P, 'utf8').split('\n');
 const die = (m) => { console.error('V1: ' + m); process.exit(1); };
 const n = (s) => L.filter((l) => l === s).length;
 const ACTS = [
-  ['I1', '    if (ownedTmp) removeOwnedQuarantinePath(tmp);', '    if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);'],
-  ['I2', '  if (ownedDest) removeOwnedQuarantinePath(dest);', '  if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);'],
+  ['Z1', '    if (ownedTmp) removeOwnedQuarantinePath(tmp);', '    if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);'],
+  ['Z2', '  if (ownedDest) removeOwnedQuarantinePath(dest);', '  if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);'],
 ];
 for (const [row, removal, flush] of ACTS) {
   if (n(removal) !== 1) die(row + ': the removal line occurs ' + n(removal) + ' time(s), want 1');
@@ -353,8 +365,8 @@ for (const [row, removal, flush] of ACTS) {
   if ((L[j + 1] || '').trim() !== 'return null;') die(row + ': the flush is not immediately before `return null;`');
 }
 const sites = L.filter((l) => l.includes('flushDir(')).length;
-if (sites !== 4) die('lines containing "flushDir(": ' + sites + ' (want 4 — the declaration, the call inside flushPreservation, and I1 and I2)');
-console.log('V1 OK: I1 and I2 each carry one gated flush, after their removal and immediately before `return null;`');
+if (sites !== 4) die('lines containing "flushDir(": ' + sites + ' (want 4 — the declaration, the call inside flushPreservation, and Z1 and Z2)');
+console.log('V1 OK: Z1 and Z2 each carry one gated flush, after their removal and immediately before `return null;`');
 PROGRAM
 node /tmp/fpdf-v1.js
 
