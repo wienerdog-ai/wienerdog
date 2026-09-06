@@ -12,7 +12,7 @@ epic: dream-promotion
 # WP-quarantine-failed-preserve-disposal-flush: a best-effort flush after a failed preservation's removal
 
 > **Design gate round zero ran 2026-09-06 against `b1d20ce0`;** the measurements
-> (`FP-P1`…`FP-P6`), the pinned STOP CRITERION and the both-directions proof of
+> (`FP-P1`…`FP-P7`), the pinned STOP CRITERION and the both-directions proof of
 > V1 are
 > `docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate-rounds.md`.
 > The value question this stub was filed to ask is answered **YES** — owner item
@@ -48,11 +48,13 @@ position on the success path.
 
 **What this package delivers, stated before any measurement so no later sentence
 can inflate it.** A **BEST-EFFORT** directory flush after each of the two
-removals. **A COMPLETED POSIX flush means a completed run's published record can
-no longer be contradicted by a resurrected entry ON THAT PATH.** **A flush that
-does not complete, and every win32 run, RETAIN the residual** — the same class
-`WP-quarantine-disposal-durability`'s owner item **O10** parks. Nothing here
-closes that class.
+removals. **A COMPLETED POSIX flush means that ON THAT PATH, once the run has
+completed and published its record, the removed artifact can no longer come
+back** — for row **I2** an entry that record omits, for row **I1** a `.tmp-`
+leftover no record names at all; the two differ and Table I keeps them apart.
+**A flush that does not complete, and every win32 run, RETAIN the residual** —
+the same class `WP-quarantine-disposal-durability`'s owner item **O10** parks.
+Nothing here closes that class.
 
 ## Current state
 
@@ -108,10 +110,10 @@ the ONE place their text and their costs live; the rulings record cites it.**
 
 **O12 — THE VALUE QUESTION: YES, build it. Recommendation: accept.** What it buys
 is Table I rows **I1** and **I2**'s sixth column and nothing wider: on the paths
-where the flush COMPLETES, a run that finished and published a preservation
-record can no longer be contradicted by an entry that record omits. What it costs
-is one `flushDir` per failure path — one `fsync` of a directory with a pending
-unlink, re-measured on this base at a **median of 2.9 ms** (min 1.25, p90 3.54,
+where the flush COMPLETES, the artifact a completed, published run removed can no
+longer come back — and each row states its own case, which are not the same. What
+it costs is one `flushDir` per failure path — one `fsync` of a directory with a
+pending unlink, re-measured on this base at a **median of 2.9 ms** (min 1.25, p90 3.54,
 max 5.46 over 200 samples, darwin/APFS, Node v25.9.0 — `FP-P5`, corroborating the
 **2.0–2.7 ms** band `QD-P2` measured), on an arm that is already heading for a
 preservation failure. The success path pays nothing (`FP-P3`). **Cost of
@@ -190,9 +192,9 @@ registered mirrors of row **I3**.
 
 Activation (ADR-0031, 2-of-7): **(iv)** the disposition of a flush that does not
 complete is decided — a fallback behaviour on a failure arm; **(vii)** the same
-contract appears in five mirrored surfaces — two source comments, the Deliverables
-cells, the acceptance criteria, the RED declarations, and Table F row **F7(a)**'s
-external clause. Two of seven.
+contract appears in six mirrored surfaces — the comment at each of the two call
+sites, the Deliverables cells, the acceptance criteria, the RED declarations, and
+Table F row **F7(a)**'s external clause. Two of seven.
 
 **This spec's canonical table is `I`, and the letter is FREE, not a collision.**
 Measured at `b1d20ce0` over `docs/specs/` (including `done/` and `logbook/`) and
