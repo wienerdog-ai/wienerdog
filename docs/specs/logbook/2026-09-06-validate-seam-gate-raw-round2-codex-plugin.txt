@@ -1,0 +1,60 @@
+# raw — Codex plugin adversarial review — vs2
+# tip reviewed: 382faefbed4b73caac5a3813735bfb736e06081e ; base main = 8358655d41f997e8da05a39ec6b2851d05785480 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a07480-9530-7910-a1ab-ecf56400e824).
+[codex] Turn started (01a07480-9621-7940-aedb-347460cac8c9).
+[codex] Assistant message captured: I’ll inspect the diff, verify the round-1 fixes against the cited code and records, then try ...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 8358655d41f997e8da05a39ec6b2851d05785480; git status --short; n...
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 8358655d41f997e8da05a39ec6b2851d05785480; git status --short; n... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-git-env-validate-seam-design-gate-rounds.m...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-git-env-validate-seam-design-gate-rounds.m... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff 8358655d41f997e8da05a39ec6b2851d05785480 -- docs/specs/WP-dream-git-en...
+[codex] Command completed: /bin/zsh -lc 'git diff 8358655d41f997e8da05a39ec6b2851d05785480 -- docs/specs/WP-dream-git-en... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,150p' src/core/dream/validate.js; tail -55 src/core/dream/validate.js...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,150p' src/core/dream/validate.js; tail -55 src/core/dream/validate.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'VS-P7|R1-[A-G]|stale|1ac82ac|W1 \\|' docs/specs/logbook/2026-09-06-git-e...
+[codex] Command completed: /bin/zsh -lc "rg -n 'VS-P7|R1-[A-G]|stale|1ac82ac|W1 \\|' docs/specs/logbook/2026-09-06-git-e... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '645,818p' docs/specs/logbook/2026-09-06-git-env-validate-seam-design-ga...
+[codex] Command completed: /bin/zsh -lc "sed -n '645,818p' docs/specs/logbook/2026-09-06-git-env-validate-seam-design-ga... (exit 0)
+[codex] Assistant message captured: The cited source supports the round-1 inventory and caller corrections. VS-P7 also describes ...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md | s...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md | s... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require(\"fs\"); const s=fs.readFileSync(\"docs/specs/done/WP...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require(\"fs\"); const s=fs.readFileSync(\"docs/specs/done/WP... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'assertCleanTree|restoreVaultToHead|assertGitRepo|spawnGitForMerge|constr...
+[codex] Command completed: /bin/zsh -lc "rg -n 'assertCleanTree|restoreVaultToHead|assertGitRepo|spawnGitForMerge|constr... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require(\"fs\"); const s=fs.readFileSync(\"docs/specs/done/WP...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require(\"fs\"); const s=fs.readFileSync(\"docs/specs/done/WP... (exit 0)
+[codex] Assistant message captured: V4 still has a confirmed false green. Its prefix filter discards `/* explanatory comment */ g...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),Module=requir...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),Module=requir... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'stubSpawn\\(|failGitOnce\\(|EXEC_IDENTITY_ID|VALIDATE_ID' tests/unit/dre...
+[codex] Command completed: /bin/zsh -lc "rg -n 'stubSpawn\\(|failGitOnce\\(|EXEC_IDENTITY_ID|VALIDATE_ID' tests/unit/dre... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''); c...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''); c... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not dispatch yet: V4 still certifies a forbidd...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 8358655d41f997e8da05a39ec6b2851d05785480
+Verdict: needs-attention
+
+Do not dispatch yet: V4 still certifies a forbidden added spawn. Round-1 status: R1-A fixed; R1-B partial; R1-C/D/E/F fixed; R1-G partial—O4/O5 are withdrawn into citations, but the new O6 entry again restates its contract and cost. No scope objection to O4–O6.
+
+Findings:
+- [medium] V4 treats executable lines beginning with comments as comment-only (docs/specs/WP-dream-git-env-validate-seam.md:534-537)
+  Band B; criterion/machinery. EXECUTED the exact V4 JavaScript against in-memory diff inputs: adding `/* explanatory comment */ git(vaultDir, ['status', '--porcelain']);` inside assertGitRepo returned rc 0. Compiling that modified module in memory with spawnPinnedSync intercepted captured both the added status invocation and the original rev-parse. A multiline block containing `// x */ git(...); /*` also passed and executed. The filter checks prefixes without JavaScript lexical context, so AC5 and the amendment's mechanical no-added-shape claim remain false. This permits an index-refreshing invocation outside the pipeline's enforcement seam.
+  Recommendation: Replace prefix-based filtering with a lexical comparison that preserves executable tokens after comment terminators and respects multiline context. Permit only the prescribed code changes and two authorized comment edits. Re-prove both hidden-spawn cases red, legitimate edits green, and update AC5 and its registered mirrors.
+
+Next steps:
+- Repair V4 before dispatch. Executed controls confirmed: untouched tree red; prescribed implementation green; legitimate JSDoc/export-comment edits green; ordinary multiline fifth call, direct spawn and changed -C prefix red. R1-F's existing standalone comment needs no non-comment-line edit.
+- R1-A: the exact amendment opening, restricted Deliverables row and guarded V5 are present. Under adopted O6, the specified amendment does not otherwise contradict W1(a), COVERAGE, (c)(ii), (e), or the predecessor's dated amendment. VS-P7 describes changed mtime with unchanged tracked content, matching the original stale-stat condition; its pasted index hashes and positive control discriminate. The probe was not independently rerun.
+- AC2: executed the actual stubCollaborators helper against an in-memory compliant module; complete argv and buildGitEnv equality passed with exported GIT_INDEX_FILE excluded. This is JavaScript require-cache substitution, not an environment-variable seam. stubSpawn already implements the interception mechanism, although no current test calls that helper.
+- V4 uses the actual merge-base, currently 8358655d, rather than origin/main's tip. Rebasing recomputes that baseline and excludes upstream changes; Table J must be revalidated if upstream validate.js changes.
+- The conditional GIT_DIR-inheritance mutation also made V4 red, as expected. The runner applies mutations in isolated suite copies; V4 is a separate working-tree command, so the specified sequence runs it unmutated. State that explicitly when revising V4.
+- R1-G remains partial at owner-rulings lines 214–242: O6 duplicates the amendment obligations and overrule cost despite claiming citation-only treatment. Reduce that new entry to citations. Counts verified: four Deliverables, four git call sites, seven ACs.
+- Executed scoped diff inspection, git diff --check, source/declaration/runner citation checks, in-memory gate and spawn probes, and read-only Git discovery probes. npm test, red-proofs, and write-dependent stale-stat/adopt reproductions were not run because this sandbox prohibits filesystem writes.
