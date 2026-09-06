@@ -87,6 +87,11 @@ behaviour, in the smallest form that guards it (`codex-review.md:186-196`).
 
 ### 0.2 The probes — `FP-P1` … `FP-P7`, and V1 in both directions
 
+**These are ROUND ZERO's runs, against round zero's comment text.** Round 1
+re-ran every probe and added `FP-P8` and `FP-P9`; **the current output — and the
+corrected `FP-P5` and `FP-P6` figures — are in the Round 1 section, which
+supersedes this fence wherever the two differ.**
+
 `run-probes.sh` runs all of them in one pass. Its output below is that run's,
 line for line, with **exactly four departures, all named under the fence** —
 three blocks abridged and one re-flowed. The untruncated capture is `PROBES.txt`
@@ -207,8 +212,9 @@ establishes only that a PROCESS crash is not the hazard.
 ### 0.4 The three questions this gate settled
 
 - **The value question — YES** (owner item **O12**). One `flushDir` per failure
-  path at 2.9–3.0 ms median, on an arm already heading for a preservation failure,
-  buys exactly this: on the paths where the flush COMPLETES, the artifact a
+  path, single-digit milliseconds on this host (Round 1's recorded pass: medians
+  **2.65, 2.50, 1.26 ms** over three runs of 200), on an arm already heading for
+  a preservation failure, buys exactly this: on the paths where the flush COMPLETES, the artifact a
   completed and published run removed can no longer come back. The success path
   pays nothing (`FP-P3`). It is an ADDITION — `WP-preservation-abort-widening.md:419-433`
   already states that no D1/D2 removal is crash-durable — so no existing guarantee
@@ -298,7 +304,8 @@ and the compliant tree (`FP-P3`), and `npm run lint` is green on this worktree
 
 ### 0.7 Size, and the lint run
 
-- The spec is **455 lines** (**423** at `bee6514f`, the tip round zero was adjudicated on; the four LIGHT fixes below added 32) — over the 400 aimed for and stated rather than
+- The spec was **455 lines** at `d8d14372`; Round 1's line count is in that
+  section. Over the 400 aimed for and stated rather than
   rounded. The 4-row × 8-column Table Z, the two byte-exact code blocks, V1's
   21-line program and the template's own section list account for it; nothing was
   cut that a Sonnet implementer needs under the One-Document Rule (ADR-0005).
@@ -389,3 +396,100 @@ touch only this spec's prose, its criteria and its verification steps. None
 changes the two inserted lines, so the compliant, ungated and five broken states
 under the scratchpad are unchanged and `FP-P1`…`FP-P6`'s results stand as pasted
 in 0.2.
+
+## Round 1 — two channels, both `needs-attention`, on `d8d14372`
+
+**The criterion of §0.1 is unchanged and is restated here because a HEAVY fix
+fired** (`docs/runbooks/codex-review.md:90-108`): **R1-B is a Table Z CONTRACT
+cell, so it is HEAVY under rung 4 and round 2 owes a fresh external round on the
+revised tip.** The other four are LIGHT — criterion/machinery, mirror and record
+— and land inside the existing surface. **No finding touched O12 or O13**, and
+neither channel proposed a scope reversal.
+
+| Channel | Raw | Commit that introduced it |
+|---|---|---|
+| Codex plugin | `docs/specs/logbook/2026-09-06-failed-preserve-flush-gate-raw-round1-codex-plugin.txt` | `95e75ff9` |
+| hermetic shadow | `docs/specs/logbook/2026-09-06-failed-preserve-flush-gate-raw-round1-herdr-shadow.txt` | `a6815d5d` |
+
+Both committed pre-adjudication; porcelain identical before and after each run.
+**Both channels reported that `npm test`, `npm run red-proofs` and (for the
+shadow) `npm run lint` did NOT run** — `mkdtemp` denied with `EPERM` in the
+read-only sandbox, and markdownlint's dependency lookup needed blocked network.
+Their verdicts are therefore readings on those three, and say so; the runs that
+DID execute are listed in each raw.
+
+### The findings and their dispositions
+
+| # | Band | Weight | Finding | Disposition |
+|---|---|---|---|---|
+| **R1-A** | B | LIGHT (criterion/machinery) | **The forced-win32 row Z2 recipe was VACUOUS.** On win32 `flushPreservation` returns before issuing any flush, so the prescribed artifact-`fsync` fault never reaches `:1020` — the preservation SUCCEEDS. `FP-P1`'s own round-zero output shows `ret=object` there for the pristine, compliant AND ungated trees, so an ungated Z2 would have passed the advertised check | **FIX, and the replacement is measured.** New probe **`FP-P8`**: a POST-FLUSH VERIFICATION failure (the read-back corrupted through the artifact's own descriptor) reaches `:1020` on both arms under forced `win32`, and the probe asserts `fault_fired`, `dest_removed` and `returned_null` **before** it reports a flush count. Discrimination measured on both arms: the Z2-ungated variant issues **one** `qdir` `fsync` (`dir:quarantine` / `dir:redacted`), the gated one **zero**. Criterion 4 and the Implementation notes now carry the per-act recipes and name the vacuous one |
+| **R1-B** | B | **HEAVY (product/contract, Table Z row Z3)** | **Row Z3 said unconditionally that after the flush "the caller carries on and the run publishes and commits".** True of the measured redacted→withheld fallback; FALSE for a failed WITHHELD preservation, where `quarantinePreserve` returns `null` and the gate throws at `validate.js:1442-1459` — that run publishes nothing | **FIX.** Z3 now states the exact observable contract — the flush result does not change what `quarantinePreserve` RETURNS (`null`, nothing thrown), measured over 12 fault cases and 4 baselines — and says that downstream behaviour is BRANCH-SPECIFIC and unchanged, naming both branches with their line ranges. Swept: **O13**'s FP-P6 sentence, the two source comments (whose third line now reads *"it does not change what this function returns, and what the caller then does is its own branch"*), and the Context predicate, which was already conditional and stays |
+| **R1-C** | B | LIGHT (mirror) | **Row Z2's residual cell said "as Z1"**, importing the dot-prefixed temp's consequences — unlisted, and the next preservation returns `null`. `dest` differs on every count | **FIX, written independently and measured.** New probe **`FP-P9`**: the `<date>-<stem>` leftover IS listed by the shipped `listSecretQuarantine` on the withheld shelf and is NOT on `redacted/`; and the next preservation does not fail — the collision loop (`validate.js:960-963`) commits as `2026-07-02-fp-1.md` on both arms and the leftover stays. Z1's own cell is unchanged and now cites `FP-P9` too |
+| **R1-D** | C | LIGHT (mirror) | **The two verbatim comment mirrors had no owner.** V1 only checked that intervening lines began with `//`; the shadow executed V1-equivalent logic against a source with both comments replaced by `// WRONG COMMENT` and it PASSED | **FIX, in the smallest form and with no new step.** V1 now matches each act's WHOLE four-line block — removal line, three comment lines, flush call — byte-for-byte and requires it exactly once. New Table Z row **Z5** decides the ownership; acceptance criterion **1** asserts it; both checklist entries cite it. V1's eighth direction, `bad-comment`, is red |
+| **R1-E** | C | LIGHT (record) | **`FP-P5` held one median while §0.4 claimed a band and the spec claimed three medians, two of which were nowhere in the repository**; and `FP-P6`'s "16 runs = 2 acts × 2 arms × 3 faults" is 12, not 16 | **FIX.** `FP-P5` now runs three times in ONE pass and records all three: medians **2.65 / 2.50 / 1.26 ms**, clean-directory medians 0.03–0.07. **The claim is narrowed to what survives a re-run: single-digit milliseconds, the same order as `QD-P2`'s 2.0–2.7, with the figure moving with machine load between passes and the decision not turning on its precise value.** `FP-P6` is now stated as **12 fault cases (2 acts × 2 arms × {none, open, fsync}) + 4 pristine baselines**, with the eight fault rows printed |
+| **size audit** | C | LIGHT | Seven rationale paragraphs outside Table Z and the owner items | **FIX for six, and the seventh is superseded rather than cut.** Compressed to one sentence each: the predecessor-exclusion note, the Exact-contracts preamble, the table-letter paragraph, the unbraced-removal note, the substring-matching note, and the security-improvement item. **The seventh (the test-seam paragraph) was replaced by R1-A's required per-act recipe contract, which is longer and is not rationale.** The spec is **469 lines** — up from 455, because R1-A's recipe, R1-C's independent Z2 cell and R1-D's row Z5 are all additions the round required |
+
+### The re-measurement — `run-probes.sh` on the revised comment text
+
+Every state was REBUILT (the comment's third line changed under R1-B) and every
+probe re-run. `FP-P8`, `FP-P9` and a `tree-ungated-z2` variant are new. Each exit
+code its own statement, nothing piped through `tail`:
+
+```text
+### FP-P1 tree / win32  rc=0
+  post-commit-failure  withheld  fsyncs=0 [] ret=object      <- R1-A: the OLD recipe never reaches Z2
+  post-commit-failure  redacted  fsyncs=0 [] ret=object
+
+### FP-P8 tree-compliant / win32  rc=0   (rc 3 would mean Z2 was NOT reached)
+  Z2_REACHED_ON_BOTH_ARMS: true
+  withheld  fault_fired=true dest_removed=true returned_null=true -> fsyncs=0 []
+  redacted  fault_fired=true dest_removed=true returned_null=true -> fsyncs=0 []
+### FP-P8 tree-ungated-z2 / win32  rc=0
+  Z2_REACHED_ON_BOTH_ARMS: true
+  withheld  fault_fired=true dest_removed=true returned_null=true -> fsyncs=1 [dir:quarantine]
+  redacted  fault_fired=true dest_removed=true returned_null=true -> fsyncs=1 [dir:redacted]
+
+### FP-P9  rc=0
+  Z1 withheld  leftover=.tmp-<pid>-fp.md  banner_lists=false next_preserve=null                leftover_still_there=true
+  Z1 redacted  leftover=.tmp-<pid>-fp.md  banner_lists=false next_preserve=null                leftover_still_there=true
+  Z2 withheld  leftover=2026-07-02-fp.md  banner_lists=true  next_preserve=2026-07-02-fp-1.md  leftover_still_there=true
+  Z2 redacted  leftover=2026-07-02-fp.md  banner_lists=false next_preserve=2026-07-02-fp-1.md  leftover_still_there=true
+
+### FP-P3a  node tests/run.js  PRISTINE   rc=0   tests 2693 pass 2681 fail 0 skipped 12
+### FP-P3b  node tests/run.js  COMPLIANT  rc=0   tests 2693 pass 2681 fail 0 skipped 12
+### FP-P4  rc=0   proofs_checked=64 across 12 files; re-targeted=[]; Z1=1 Z2=1 distinct=true one-inside-other=false
+### FP-P5  rc=0   run 1 dirty median=2.652  run 2 =2.4985  run 3 =1.2613   clean medians 0.0339 / 0.0603 / 0.0749
+### FP-P6  rc=0   16 rows = 12 COMPLIANT fault cases + 4 PRISTINE baselines; every row returned=null threw=null qdir empty
+### FP-P7  rc=0   ALL 27 RANGES RESOLVE AT BOTH ENDS   (24 -> 27: the three code ranges R1-B and R1-C cite)
+
+== V1 IN EIGHT DIRECTIONS ==
+### V1 on bad-absent      rc=1   V1: src/core/dream/validate.js is absent
+### V1 on tree            rc=1   V1: Z1: the removal, its three-line comment and its flush do not appear as one byte-exact block exactly once (found 0)
+### V1 on bad-ungated     rc=1   V1: Z2: … (found 0)
+### V1 on bad-before      rc=1   V1: Z1: … (found 0)
+### V1 on bad-third-site  rc=1   V1: lines containing "flushDir(": 5 (want 4 — the declaration, the call inside flushPreservation, and Z1 and Z2)
+### V1 on bad-half        rc=1   V1: Z2: … (found 0)
+### V1 on bad-comment     rc=1   V1: Z1: … (found 0)          <- R1-D's state: one comment mirror replaced by `// WRONG COMMENT`
+### V1 on tree-compliant  rc=0   V1 OK: Z1 and Z2 each carry their byte-exact comment-and-flush block after their removal and immediately before `return null;`
+```
+
+**Abridged here and named:** `FP-P1`'s darwin rows and its compliant/ungated
+blocks, `FP-P8`'s two darwin blocks, `FP-P2`, and `FP-P6`'s per-row listing. The
+untruncated capture is `PROBES.txt` in the session scratchpad, and the drivers
+are the files named in §0's preamble plus `fp-p8.js` and `fp-p9.js`.
+
+**One thing the `bad-comment` state teaches, recorded because it is the same
+hazard the spec warns about:** the builder replaced the **2-space** comment line,
+which is a SUBSTRING of the 4-space one, so the edit landed inside row **Z1**'s
+block and V1 named Z1 rather than Z2. The state is still a correct
+deliberately-broken state and V1 is still red on it — but it is the third time in
+this package that a 2-space literal matched inside a 4-space one, and it is why
+row **Z5** matches whole blocks rather than fragments.
+
+### Re-verification after the round-1 pass
+
+```text
+npm run lint                                            rc=0
+node scripts/mirror-walk.js --scope quarantine-…-flush   rc=0
+diff <spec's V1 program> <the proven scratch v1.js>      rc=0   (the spec ships the program that was proved)
+```
