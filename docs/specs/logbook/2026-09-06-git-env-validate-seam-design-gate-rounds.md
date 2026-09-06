@@ -550,6 +550,13 @@ Recorded here rather than fixed, per CLAUDE.md's "Discovered issues" rule.
   This WP does not touch ADR-0012 (Out of scope) and ADR-0012 is deliberately NOT
   added to its boundary. **Routing:** the next touch of ADR-0012; the
   orchestrator notes it in the done-flip.
+- **`tests/unit/dream-validate.test.js:15` imports `restoreVaultToHead` and
+  nothing calls it** (VS-P8, round 1). Its tests were retired with the EP2
+  enforcement half at `WP-dream-promote-in-workspace` row G7 and the import
+  stayed. That file IS a Deliverable here, but removing the import is neither of
+  the two code lines V4 admits nor anything round 1 asked for, so it is recorded
+  rather than folded in. **Routing:** the next work package that edits that
+  suite for its own reasons.
 
 ## Executor pass — template conformance
 
@@ -604,3 +611,208 @@ X2) are machinery, category-splitting and citation precision — branch 6 — so
 fresh external round is owed by them and **round 1 runs on the revised tip**. No
 owner item was raised by either executor, and neither recommendation (O4, O5) was
 argued against.
+
+## Round 1 — external, double channel, tip `e96f761d`
+
+| Channel | Raw | Introducing SHA | Verdict |
+|---------|-----|-----------------|---------|
+| Codex plugin | `docs/specs/logbook/2026-09-06-validate-seam-gate-raw-round1-codex-plugin.txt` | `ad1fa653` | needs-attention |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-06-validate-seam-gate-raw-round1-herdr-shadow.txt` | `e9e21e9a` | needs-attention |
+
+Both raws were committed **pre-adjudication**; `git status --porcelain` was
+identical before and after each run. **No band A. Neither channel challenged O4
+or O5** — the shadow says so in as many words about O4, and both left the
+nested-vault recommendation alone.
+
+**Round outcome under §0.1's round rule: HEAVY** (branch 4). R1-A changes the
+Deliverables permission boundary and adds an out-of-spec canonical mirror, so a
+full fresh external round is owed: **round 2 runs on the revised tip.**
+
+### Findings, bands, criterion branch, disposition
+
+| # | Source | Band | Branch | Finding | What changed |
+|---|--------|------|--------|---------|--------------|
+| R1-A | shadow F1 | B | 4 (operative content) → **HEAVY** | The spec narrowed row W1(c)(i)'s *"any change to what `validate.js` spawns"* to argv and call-site count **on its own authority**. The environment handed to `spawnPinnedSync` IS part of what is spawned; the row's tenth-shape discussion describes the required RESPONSE but does not redefine "any change". The implementation could pass every gate while the default-deny contract stayed undisposed | **FIX — the trigger is DISPOSED OF as an act, not re-read.** `docs/specs/done/WP-dream-promote-in-workspace.md` joins Deliverables for **one dated amendment inside row W1(c)(i) and nowhere else** (precedent: the predecessor's 2026-09-05 amendment inside row W1, byte-intact surroundings). Its opening sentence is fixed byte-exact under Exact contracts, registered in the Mirrored Surface Checklist, grepped by the new **V5** and asserted by the new **AC6**. Its load-bearing content is a RE-MEASUREMENT rather than an argument: **VS-P7** below. Owner item **O6** carries the alternative — that the owner rules the trigger fires — with the largest overrule cost in this queue |
+| R1-B | shadow F2 **+** plugin F1, **CONVERGED** | B | 6 (machinery) → LIGHT, folded into the HEAVY pass | **V4's literal count was a false green.** Both channels executed a fifth spawn and V4 passed: the shadow's was multi-line, the plugin's spelled `git (vaultDir, …`. Neither is matched by `grep -c "git(vaultDir, ["`. The check also ignored `git()`'s own `args: ['-C', vaultDir, ...args]` assembly and a direct `spawnPinnedSync` call | **RE-CUT as a DIFF, the smallest form that guards the behaviour.** V4 compares `git diff $(git merge-base origin/main HEAD) -- src/core/dream/validate.js`: the ADDED non-comment lines must be exactly the two prescribed under Exact contracts, the REMOVED exactly `env: process.env,`. The four-argv grep survives as **V4a**, labelled a **presence screen** in the step, in AC5 and in the mirror list. **Proved in five states below.** AC5 is rewritten and is now RED on the untouched tree (a completion check as well as an invariance one). Second half: **AC2 now captures the COMPLETE spawned argv** through `stubCollaborators` / `stubSpawn`, which the plugin confirmed by execution intercepts this spawn |
+| R1-C | plugin F2 | C | 6 → LIGHT | The trigger rationale claimed the constructed environment "can only narrow what they may reach". The plugin **falsified it by measurement**: from this checkout's `src`, `rev-parse --git-dir` returns 128 with `GIT_CEILING_DIRECTORIES` set and **0, resolving the ancestor, under `buildGitEnv()`** — dropping an inherited ceiling WIDENS discovery | **FIX.** The monotonicity sentence is **withdrawn in the spec, by name**. Argv invariance (V4) and environment effects are now argued separately, and the safety argument rests on VS-P7's re-measurement alone |
+| R1-D | shadow F3 | C | 5 (mirror drift) → LIGHT | The Current-state `buildGitEnv` bullet enumerated `PATH`, `HOME`, the nine win32 keys, `USERPROFILE` and the `GIT_INDEX_FILE` rule — a partial restatement of the channel set whose canonical Table U the spec says must be cited and never restated, and an **unregistered** Table U mirror | **FIX.** The bullet now cites Table U rows **U1, U2, U4/U4b, U5** and keeps only this WP's local fact: `buildGitEnv()` is called with **no argument**, so by row U5 the call carries no `GIT_INDEX_FILE`. The measured `{HOME, PATH}` map is kept as an OBSERVATION of this host, labelled as one |
+| R1-E | shadow F4 | C | 6 → LIGHT | *"The dream run makes git calls from two places"* is false: `src/core/dream/promote.js`'s `spawnGitForMerge` is a third, and canonical Table W row W1(c)(ii) names it a dream-path spawn outside the pipeline seam | **FIX.** The Context now says **three**, names all three modules, and marks promote's already-constructed merge spawn out of scope **with the W1(c)(ii) citation**; the Out-of-scope bullet carries the same citation and the reason the two constructions are not unified |
+| R1-F | shadow F5 | C | 6 → LIGHT | Table J row J2's *"exported for tests only, by the owner ruling of 2026-08-30"* is false on the tree: no test calls or imports `assertCleanTree` | **FIX, and wider than the finding after measurement.** **VS-P8** below separates MENTIONS from CALLS and finds neither function has a caller anywhere: `assertCleanTree` appears only in one comment, and `restoreVaultToHead` is **imported by `tests/unit/dream-validate.test.js:15` and never called** — its tests were retired at row G7. Rows J2/J3/J4 now state the measured fact narrowly. Because `validate.js` is already a Deliverable, the **stale export-block sentence is authorized for correction in the same commit** (one clause in its Deliverables row) rather than routed |
+| R1-G | shadow F6 | C | 5 → LIGHT | The owner-rulings append **says** O4/O5 live in one place and are cited, then restates J0's construction rule and J5's nested-vault verdict, in an entry the Mirrored Surface Checklist did not register | **FIX, by the append-only route R2-E used for the predecessor.** A dated amendment paragraph in that record **withdraws** the restating sentences in favour of the citation, and the spec's Mirrored Surface Checklist now **registers the record as an external Table J mirror** with the dated-amendment procedure named |
+
+### The two new probes
+
+Both run FROM A FILE, rc captured as its own statement, in `mktemp -d` scratch.
+
+#### VS-P7 — the election's admissibility, RE-MEASURED under the constructed environment (`vs-p7-stale-stat.js`, rc 0)
+
+Row W1(c)(i)'s election is admissible *"only on that measurement"* —
+`rev-parse` index-safe from a **stale-stat** state, which is the state that makes
+an index-refreshing command rewrite `.git/index`. Carrying that measurement
+forward across an environment change would be exactly the "a precedent's
+existence is not its adoption" move `spec-authoring.md` warns about, so it is
+taken again. A repository is built, committed, and a tracked file's mtime moved
+without changing its content; `.git/index` is hashed before and after.
+
+```text
+== VS-P7 — the assertGitRepo argv under buildGitEnv(), from a stale-stat index ==
+  SUBJECT — the election's measured argv
+    argv=[-C <vault> rev-parse --git-dir]  env keys=[HOME,PATH]  status=0
+    .git/index sha256[0:16]  before=a79d674436cd764d  after=a79d674436cd764d  UNCHANGED
+== positive control — a command W1(e) measured to REFRESH, same env, same state ==
+  CONTROL — status --porcelain
+    argv=[-C <vault> status --porcelain]  env keys=[HOME,PATH]  status=0
+    .git/index sha256[0:16]  before=a79d674436cd764d  after=3706ab40cb2a63e8  CHANGED
+
+RESULT: subject index-safe = true ; control discriminates (moved the index) = true
+```
+
+**The positive control is not decoration.** Without it a green subject would
+establish only that the probe cannot see an index write; with it, the same
+environment and the same stale-stat state are shown to move the hash for a
+command row W1's `(e)` sub-bullet measured as refreshing. This is the
+measurement the Table W amendment cites.
+
+#### VS-P8 — who actually calls `assertCleanTree` and `restoreVaultToHead` (`vs-p8-test-callers.sh`, rc 0)
+
+MENTIONS and CALLS separated, because a comment naming a function is not a
+caller — which is precisely how the false rationale survived.
+
+```text
+-- assertCleanTree: every MENTION outside validate.js --
+tests/integration/dream.test.js:738:// unknown-command guard's `assertCleanTree` probe must RETHROW rather than read
+   grep rc=0  (rc 1 = no hit at all)
+-- assertCleanTree: every CALL outside validate.js --
+   grep rc=1  (rc 1 = no call anywhere)
+-- restoreVaultToHead: every MENTION outside validate.js --
+tests/unit/dream-pipeline.test.js:886:  // The retired `restoreVaultToHead` here was a `reset --hard` + `clean -fd`.
+tests/unit/dream-validate.test.js:15:  restoreVaultToHead,
+tests/unit/dream-validate.test.js:493:// ── restoreVaultToHead ─────────────────────────────────────────────────────
+tests/unit/dream-validate.test.js:501:// restoreVaultToHead clean mechanics and its ignored-file exception. Promotion never
+   grep rc=0  (rc 1 = no hit at all)
+-- restoreVaultToHead: every CALL outside validate.js --
+   grep rc=1  (rc 1 = no call anywhere)
+```
+
+**`tests/unit/dream-validate.test.js:15` is an import with no call** — the
+`restoreVaultToHead` tests were retired at row G7 and the import stayed. Noted as
+a discovered issue in 0.7; **not** fixed, because removing it is not one of the
+two lines V4 admits and is not what R1-F asked for.
+
+### Both-directions proof of the RE-CUT V4 — five states (`prove-v4-diff.sh`)
+
+Each state is a fresh `git clone --no-hardlinks` of the repository checked out at
+the design tip (where `validate.js` equals the merge-base), then edited. The
+compliant edit is exactly the two prescribed lines; the three evasions are the
+ones the two round-1 channels executed or named.
+
+```text
+=== STATE 1 — untouched tree (the two prescribed lines are ABSENT) ===
+  V4 rc=1
+    BASE    8358655d
+    ADDED   []
+    REMOVED []
+    FAIL: an unprescribed code line was added or removed
+=== STATE 2 — compliant: the require line, env: buildGitEnv(), and nothing else ===
+  V4 rc=0
+    BASE    8358655d
+    ADDED   ["const { buildGitEnv } = require('./git-env');","env: buildGitEnv(),"]
+    REMOVED ["env: process.env,"]
+    V4 OK — the only code lines this WP adds or removes are the two prescribed and the one replaced
+=== STATE 3 — evasion (i): a FIFTH call, multi-line AND spelled `git (vaultDir` ===
+  V4 rc=1
+    BASE    8358655d
+    ADDED   [");","['status', '--porcelain']","const { buildGitEnv } = require('./git-env');","env: buildGitEnv(),","git (","vaultDir,"]
+    REMOVED ["env: process.env,"]
+    FAIL: an unprescribed code line was added or removed
+=== STATE 4 — evasion (ii): a DIRECT spawnPinnedSync call, bypassing git() ===
+  V4 rc=1
+    BASE    8358655d
+    ADDED   ["const { buildGitEnv } = require('./git-env');","env: buildGitEnv(),","spawnPinnedSync('git', getPaths(), { args: ['-C', vaultDir, 'status', '--porcelain'], env: buildGitEnv() });"]
+    REMOVED ["env: process.env,"]
+    FAIL: an unprescribed code line was added or removed
+=== STATE 5 — evasion (iii): git()'s own `-C` prefix assembly changed ===
+  V4 rc=1
+    BASE    8358655d
+    ADDED   ["args: ['-C', vaultDir, '--no-optional-locks', ...args],","const { buildGitEnv } = require('./git-env');","env: buildGitEnv(),"]
+    REMOVED ["args: ['-C', vaultDir, ...args],","env: process.env,"]
+    FAIL: an unprescribed code line was added or removed
+```
+
+**State 3 is the exact mutation both channels used against the old form, and it
+is red here.** State 1 is red where the old form was green, which is the
+criterion changing character: the diff check is a completion check too. State 5
+is why the check reads the whole file's diff rather than the four call lines —
+a changed `-C` assembly moves what is spawned without touching any of them.
+
+**What V4 still cannot see, named rather than implied:** a change to
+`src/core/exec-identity.js` or `src/core/paths.js` would move what this spawn
+does without appearing in `validate.js`'s diff at all. Neither is in
+Deliverables, so `scripts/boundary-check.js` (V6) is what refuses it — the two
+guards are complementary and neither is claimed to be total. **AC2's runtime
+argv capture is the third leg**, and it is the only one that observes what
+`git()` actually hands `spawnPinnedSync`.
+
+### Both-directions proof of the NEW V5 — four states (`prove-v5.sh`)
+
+```text
+=== STATE absent — the untouched base, the amendment not written ===
+  V5 rc=1  FAIL: the row W1(c)(i) amendment is missing
+=== STATE file-absent — the target file deleted ===
+  V5 rc=1  FAIL: the row W1(c)(i) amendment is missing
+=== STATE compliant — the byte-exact opening sentence present ===
+  V5 rc=0  V5 OK
+=== STATE violating — amendment present, hook residual reworded ===
+  V5 rc=1  FAIL: row W1's hook residual was not left intact
+```
+
+The `test -f && grep -qF` guard is what makes the file-absent state red rather
+than green. The violating state moves only the hook-residual sentence, so the
+third guard is shown to fire on its own — the amendment being present does not
+license rewriting the row around it.
+
+### Revision — the tree after R1-A … R1-G
+
+`coherence.js`, rc 0:
+
+```text
+spec line count                                 = 602
+Table J rows                                    = 6  J0,J1,J2,J3,J4,J5
+J-ids mentioned but absent from Table J         = none
+J-ids contiguous J0..J5                         = ok
+acceptance criteria                             = 7  AC1,AC2,AC3,AC4,AC5,AC6,AC7
+verification steps (commented V-headers)        = 6  V1,V2,V3,V4,V5,V6
+owner items                                     = 3  O4,O5,O6
+deliverable rows                                = 4
+   modify src/core/dream/validate.js  exists=true
+   modify tests/unit/dream-validate.test.js  exists=true
+   create tests/red-proofs/dream-git-env-validate-seam.proofs.json  exists=false
+   modify docs/specs/done/WP-dream-promote-in-workspace.md  exists=true
+files touched (deliverables + the spec itself)  = 5  (README heuristic: <= 8)
+RED ids named in the Exact-contracts table      = validate-git-inherits-git-dir
+RED ids in V3's `want` array                    = validate-git-inherits-git-dir
+V4's argv literals                              = 4
+actual `git(vaultDir, [` occurrences            = 4  (matches V4a and Table J rows J1-J4)
+file:line citations in the spec                 = 10
+amendment sentence occurrences in the spec      = 2  (Exact contracts + V5, byte-identical)
+template sections absent                        = none
+
+COHERENCE: no failures
+```
+
+`check-ranges.js`, rc 0 over 16 ranges — the three added this round
+(`tests/unit/dream-validate.test.js:1485-1502` `stubCollaborators`,
+`:1506-1513` `stubSpawn`, `:15` the unused import) resolve at both ends.
+
+**Size, and it moved.** The spec is **601 lines** by `wc -l` (602 by
+`coherence.js`'s array convention), up from 424 — a **~50% overage** on
+`docs/specs/README.md`'s ~400-line heuristic, and it is recorded rather than
+trimmed. Every added line is a round-1 requirement: the third owner item with the
+largest overrule cost in the queue (O6), the amendment's four required
+statements, the re-cut V4 with its rationale, AC2's second half and AC6, and the
+three findings that replaced a false claim with a measured one. Trimming now
+would reopen surface the round just froze
+(`docs/runbooks/codex-review.md`, "The loop converges by freezing surface").
+**It touches 5 files (4 Deliverables + the spec itself)**, still inside the
+README's `≤ 8` bound, and the code change is still **two lines and two comments**:
+an **S**.

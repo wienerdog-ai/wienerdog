@@ -31,14 +31,19 @@ and starts nothing that outlives its job. The **dream** is its nightly run —
 recent session transcripts in a workspace outside the vault, promotes approved
 notes into the user's markdown vault, and publishes **one git commit** there.
 
-The dream run makes git calls from **two** places. The pipeline's nine pinned
-shapes go through `gitIn` in `src/cli/dream.js`; since
+The dream run spawns git from **three** modules, and naming all three is the
+point — an inventory that says "two" is what a reviewer catches. **(1)** The
+pipeline's nine pinned shapes go through `gitIn` in `src/cli/dream.js`; since
 `WP-dream-git-env-pinning` landed those run under an environment built key by
 key from a named allowlist — **that spec's Table U is canonical for the channel
-set, and this spec restates none of it.** The other place is
-`src/core/dream/validate.js`'s module-private `git()`, which still passes
-`env: process.env`. `assertGitRepo(vaultDir)` (`src/cli/dream.js:587`) reaches
-it on **every** dream and is the dream path's only caller of it (Table J).
+set, and this spec restates none of it.** **(2)** `src/core/dream/promote.js`'s
+`spawnGitForMerge` runs the three-way merge under `constructMergeEnv`, an
+environment already **built from nothing** for its own reasons; Table W row
+W1(c)(ii) names it as the second un-seamed dream-path spawn, and it is **out of
+scope here** (see Out of scope). **(3)** `src/core/dream/validate.js`'s
+module-private `git()`, which still passes `env: process.env`, is this WP's
+subject. `assertGitRepo(vaultDir)` (`src/cli/dream.js:587`) reaches it on
+**every** dream and is the dream path's only caller of it (Table J).
 
 **So the guard's verdict is currently the launching shell's, not the vault's.**
 Measured on the real code path (VS-P1): with `GIT_DIR` exported to a real
@@ -67,11 +72,14 @@ Measured on `8358655d` (`origin/main`), the tree this spec is drafted against.
   process.env` is the one line this WP changes. Its four call sites, and who
   calls each on the dream path: Table J.
 - **`src/core/dream/git-env.js:26-41` — `buildGitEnv(indexFile?)`**, created by
-  `WP-dream-git-env-pinning`: a fresh object built key by key — `PATH` from
-  `process.env.PATH`, `HOME` from `getPaths().home`, nine carried keys plus a
-  set `USERPROFILE` on win32, and `GIT_INDEX_FILE` **only** when `indexFile` is
-  passed. With no argument it carries none — measured, the whole map on this
-  host is `{HOME, PATH}` (VS-P2).
+  `WP-dream-git-env-pinning`: a fresh object built key by key from **Table U's
+  CARRIED rows — U1, U2, U4/U4b and U5 — which are canonical there and are NOT
+  reproduced here** (an earlier draft copied the key set and was a Table U mirror
+  nobody had registered). **This WP's own local fact is the call**:
+  `buildGitEnv()` is invoked with **no argument**, which by row U5 means the call
+  carries no `GIT_INDEX_FILE`. Measured on this host the resulting map is
+  `{HOME, PATH}` (VS-P2) — an observation of this host's Table U, not a
+  restatement of it.
 - **`src/core/exec-identity.js:554-558`** — `spawnPinnedSync` uses the `env` it
   is given both to resolve the pinned executable (`:556`) and as the child's
   environment (`:558`, through `passthroughSpawnOpts`).
@@ -81,6 +89,12 @@ Measured on `8358655d` (`origin/main`), the tree this spec is drafted against.
 - **`src/cli/dream.js:29` and `:587`** — `assertGitRepo` is imported and called
   once, before the lock, as a read-only fail-fast check. The three names
   imported beside it reach no git.
+- **`tests/unit/dream-validate.test.js:1485` — `stubCollaborators(patches)`**,
+  and **`:1506-1513` — `stubSpawn(handler)`**, which is already built on it and
+  already patches `spawnPinnedSync` on `EXEC_IDENTITY_ID`, re-requiring
+  `validate.js` through the cache and handing the stub `opts.args`. **AC2's
+  complete-argv capture needs no new seam** — this is the one it uses, and a
+  round-1 channel confirmed by execution that it intercepts this spawn.
 - **`tests/red-proofs/*.proofs.json` — a declaration file is per WORK PACKAGE,
   not per suite.** Measured: `ledger-parser-corpus.proofs.json` and
   `quarantine-preserve-durability.proofs.json` both already declare
@@ -100,9 +114,10 @@ Measured on `8358655d` (`origin/main`), the tree this spec is drafted against.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | `git()` builds its child environment with `buildGitEnv()` from `src/core/dream/git-env.js` (Table J, row J0) instead of passing `process.env`; `assertGitRepo`'s JSDoc gains the decided precondition (row J5). **No argv changes and no call site is added or removed** — rows J1–J4 |
+| modify | src/core/dream/validate.js | Exactly **two added code lines and one removed** (Exact contracts, "The two lines"; V4 is the gate): the `require('./git-env')` line, and `env: buildGitEnv(),` replacing `env: process.env,` in `git()` (Table J, row J0). Comment-only changes are additionally allowed and are exactly two: `assertGitRepo`'s JSDoc gains the decided precondition (row J5), and **the stale sentence in the `module.exports` block that says the tests use `assertCleanTree` to build fixtures is corrected** — measured false (VS-P8), and correcting it here rather than routing it is authorized because this file is already in the boundary. **No argv changes and no call site added or removed** — rows J1–J4 |
 | modify | tests/unit/dream-validate.test.js | assertions covering AC1–AC3 (the implementer designs the cases) |
 | create | tests/red-proofs/dream-git-env-validate-seam.proofs.json | this WP's ONE RED declaration (Exact contracts below); `suite` is `tests/unit/dream-validate.test.js` |
+| modify | docs/specs/done/WP-dream-promote-in-workspace.md | a dated amendment **INSIDE Table W row W1(c)(i) and nowhere else**, opening with the exact sentence fixed in the Mirrored Surface Checklist. Row W1's surrounding text — the hook residual, both named rejections, (c)'s COVERAGE clause and every existing line citation — stays **byte-intact and un-renumbered** |
 
 ### Exact contracts
 
@@ -121,6 +136,43 @@ establishes. A vault directory that is not itself a repository but lies within
 one PASSES, and the run then targets that ancestor. Decided by owner item O5,
 reachable through `wienerdog adopt` today, and named here rather than left
 implied by what the guard happens to check.*
+
+**The two lines, and they are the whole code change.** V4 compares the diff
+against the branch's merge-base with `origin/main` and admits **exactly** these,
+after comment-only lines are filtered out:
+
+```text
+ADDED    const { buildGitEnv } = require('./git-env');
+ADDED    env: buildGitEnv(),
+REMOVED  env: process.env,
+```
+
+Anything else added or removed — a fifth call however spelled or wrapped, a
+direct `spawnPinnedSync`, a change to `git()`'s own `args: ['-C', vaultDir,
+...args]` assembly — is a **red**, and all four were proved red (round-1 record,
+R1-B). The old form of this check counted occurrences of a literal and **passed
+a fifth spawn**, which is why the check is a diff and not a grep.
+
+**The Table W amendment** (Deliverables row 4). It opens with this sentence,
+byte-exact:
+
+```text
+**AMENDED 2026-09-06 — THE STANDING TRIGGER'S SUBJECT IS THE SHAPE, AND THE SUCCESSOR CHANGES NO SHAPE.**
+```
+
+and must state, nothing more being required of it: that this clause's standing
+trigger has as its subject the **SHAPE** — the argv and the call-site set, which
+is what the row's own tenth-shape reasoning is about; that
+`WP-dream-git-env-validate-seam` changes **no shape and adds no call**, and that
+its V4 asserts this against the merge-base rather than by assurance; that the
+**environment** of the existing invocation is now constructed rather than
+inherited, per ADR-0012's amendment of 2026-09-05, which is the decision this
+successor extends and not a new one; and that **the election's admissibility
+measurement was RE-MEASURED under that constructed environment and holds** —
+`rev-parse --git-dir` issued from a stale-stat index leaves `.git/index`
+byte-identical, with a `status --porcelain` positive control in the same state
+moving it (probe **VS-P7**, `WP-dream-git-env-validate-seam`'s design-gate
+record). **Nothing else in row W1 is rewritten.**
 
 **The one RED declaration.** Its `id` and `criterion` are fixed here so AC4 can
 name them without a repo-wide count; the mutation literal, the marker and the
@@ -145,7 +197,8 @@ precedence behaviour changes — which environment this spawned call obeys; (v) 
 task crosses an authority boundary — the launching environment versus the run's
 own act, and the guard's verdict versus the vault's actual shape; (vii) the same
 contract appears in mirrored surfaces — this spec, `assertGitRepo`'s JSDoc, the
-RED declaration's `why`, and the verification greps.
+RED declaration's `why`, the verification greps, and the dated amendment inside
+`WP-dream-promote-in-workspace` Table W row W1(c)(i).
 
 ### Table J — `validate.js`'s git call sites, and the guard's precondition
 
@@ -157,27 +210,49 @@ spec defers here. It is deliberately *not* about the channel set: that is
 |---|------|----------------------------|--------------------------|-----|---------------|
 | J0 | `validate.js:64-81`, the module-private `git()` | — | the four rows below | — | `env: buildGitEnv()`, one construction, no second allowlist |
 | J1 | `:89`, in `assertGitRepo` | `-C <vault> rev-parse --git-dir` | `src/cli/dream.js:587`, **every dream run** | READ | runs under the constructed environment; this is the row the WP exists for |
-| J2 | `:103`, in `assertCleanTree` | `-C <vault> status --porcelain -uall` | **none in `src/`** — exported for tests only, by the owner ruling of 2026-08-30 recorded at `validate.js`'s export block | READ that also REFRESHES the user's index — a write to `.git/index` | same construction; **inert on the dream path**, because no dream run reaches it |
-| J3 | `:118`, in `restoreVaultToHead` | `-C <vault> reset --hard HEAD` | **none in `src/`** — same export block | WRITE (working tree and index) | same construction; **inert on the dream path** |
-| J4 | `:119`, in `restoreVaultToHead` | `-C <vault> clean -fd` | **none in `src/`** — same export block | WRITE (removes untracked non-ignored files) | same construction; **inert on the dream path** |
+| J2 | `:103`, in `assertCleanTree` | `-C <vault> status --porcelain -uall` | **none anywhere in the repo** — measured: exported, and neither `src/` nor `tests/` calls or imports it (VS-P6, VS-P8) | READ that also REFRESHES the user's index — a write to `.git/index` | same construction; **inert on the dream path**, because no dream run reaches it |
+| J3 | `:118`, in `restoreVaultToHead` | `-C <vault> reset --hard HEAD` | **none anywhere in the repo** — measured: imported by `tests/unit/dream-validate.test.js:15` and never called, its tests retired at row G7 (VS-P8) | WRITE (working tree and index) | same construction; **inert on the dream path** |
+| J4 | `:119`, in `restoreVaultToHead` | `-C <vault> clean -fd` | **none anywhere in the repo** — same function as J3 | WRITE (removes untracked non-ignored files) | same construction; **inert on the dream path** |
 | J5 | the guard's precondition | — | — | — | **"inside a repository", not "is a repository root"** — accepted and NAMED in `assertGitRepo`'s JSDoc (owner item O5) |
 
-**Why the standing trigger of `WP-dream-promote-in-workspace` Table W row
-W1(c)(i) does NOT fire, stated with its reasoning.** That row elects to leave
-this spawn point un-seamed and closes with: *"THE ELECTION CARRIES A STANDING
-TRIGGER: any change to what `validate.js` spawns falsifies it, and the answer is
-then to close the seam AND bring the new shape to the owner."* The clause's own
-subject is the SHAPE — it says closing the seam "reddens the suite on its own,
-because it surfaces a TENTH shape, and admitting that shape is an addition to
-the pinned set" — and the election's admissibility rests on `rev-parse` having
-been measured index-safe from a stale-stat state, a property of the command.
-This WP changes **no argv** (rows J1–J4 are byte-identical before and after) and
-**adds no call site**, so no tenth shape is surfaced and the measurement the
-election rests on is untouched. What it changes is the environment those same
-invocations run under, which can only *narrow* what they may reach: today an
-exported `GIT_INDEX_FILE` reaches row J1's call; after this WP none does. The
-non-firing is not left to a reader's confidence — **V4 asserts it mechanically**
-by enumerating the four argv we intend to accept and refusing a fifth call site.
+**How `WP-dream-promote-in-workspace` Table W row W1(c)(i)'s standing trigger is
+DISPOSED OF — by a dated amendment inside that row, not by reading it narrowly
+here.** The row elects to leave this spawn point un-seamed and closes:
+*"THE ELECTION CARRIES A STANDING TRIGGER: any change to what `validate.js`
+spawns falsifies it, and the answer is then to close the seam AND bring the new
+shape to the owner."* **The environment handed to `spawnPinnedSync` is part of
+what is spawned**, so a successor may not decide on its own authority that
+"any change" means argv only — an earlier draft of this spec did exactly that
+and round 1 caught it. The disposition is therefore an act, not a reading:
+**Deliverables row 4 writes a dated amendment INSIDE row W1(c)(i)**, whose
+required content is fixed under Exact contracts and whose opening sentence V5
+greps. What that amendment records is what this WP can actually show:
+
+- **The trigger's subject is the SHAPE.** The row's own consequence clause is
+  about a shape — closing the seam "reddens the suite on its own, because it
+  surfaces a TENTH shape, and admitting that shape is an addition to the pinned
+  set". The remedy the trigger names is *bring the new shape to the owner*; with
+  no new shape there is nothing to bring.
+- **This WP changes no shape.** Rows J1–J4 are byte-identical before and after
+  and no call site is added — asserted by **V4** against the branch's
+  merge-base, not by assurance.
+- **The admissibility measurement was RE-MEASURED, not carried forward.** The
+  election is admissible *"only on that measurement"* — `rev-parse` index-safe
+  from a stale-stat state. Under the constructed environment that measurement
+  **holds**: probe **VS-P7** issues the exact argv from a stale-stat index and
+  `.git/index` is byte-identical afterwards, with a `status --porcelain`
+  positive control in the same state moving it.
+
+**No monotonicity is claimed, and an earlier draft's claim is withdrawn.** That
+draft said a constructed environment "can only *narrow* what these invocations
+may reach"; round 1 falsified it by measurement — dropping an inherited
+`GIT_CEILING_DIRECTORIES` **widens** repository discovery, turning a 128 into a 0
+that resolves an ancestor. Argv invariance (V4) and environment effects are
+separate things and are argued separately: the safety argument this WP rests on
+is VS-P7's re-measurement above, and nothing else.
+
+**Owner item O6 carries the alternative**: the owner may instead rule that the
+trigger fires on an environment change, at the cost enumerated there.
 
 **Row J2's `status --porcelain -uall` and Table W row W1(a).** W1(a)'s scope is
 a total over *the run's own acts*. A function no dream run calls performs no act
@@ -200,25 +275,41 @@ review is added here on the spot.
 - [ ] **Acceptance criteria** — AC1 asserts row J1, AC2 rows J0/J1, AC3 row J5,
       AC5 rows J1–J4's invariance.
 - [ ] **Current state** — the `git()` bullet and the `buildGitEnv` bullet.
-- [ ] **Verification commands / greps** — V3 and **V4, the executable mirror of
-      rows J1–J4**: the argv literals it greps and the call-site count it asserts
-      ARE those cells, so a row that changes without moving V4 is a table and a
-      mirror disagreeing inside one commit.
+- [ ] **Verification commands / greps** — V3, V5, and **V4, the executable mirror
+      of rows J1–J4**: the diff V4 admits IS those cells, so a row that changes
+      without moving V4 is a table and a mirror disagreeing inside one commit.
+      Its four-argv grep is a **presence screen only**, labelled as such in the
+      step: the diff comparison is what enforces the invariance.
 - [ ] **Operative prose** — the W1(c)(i) non-firing paragraph and the row-J2
       paragraph above; owner items O4 and O5.
 - [ ] **Outside this spec** — `assertGitRepo`'s JSDoc in
       `src/core/dream/validate.js` (row J5's one code-side statement: it may
       summarise, it may not decide) and the RED declaration's `why` field (it
       names row J1's behaviour).
+- [ ] **Outside this spec, and it moves in the SAME commit as any change to rows
+      J1–J4: the dated amendment inside `docs/specs/done/WP-dream-promote-in-workspace.md`
+      Table W row W1(c)(i)**, whose opening sentence is fixed byte-exact under
+      Exact contracts and grepped by **V5**. It carries rows J1–J4's no-shape
+      claim and VS-P7's re-measurement into the row whose trigger they dispose
+      of; a change to those rows that does not move the amendment is a canonical
+      table and a registered mirror disagreeing across two specs. **V5 proves
+      PRESENCE, not content** — the amendment's four required statements are the
+      reviewer's read, judged over the whole cell and never over the grep window.
+- [ ] **Outside this spec — the owner-rulings record's O4/O5/O6 entries**
+      (`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`).
+      They are **citations of this spec's owner-items section, never restatements**
+      (round 1, R1-G); the record is append-only, so a change here is carried
+      there by a dated amendment paragraph naming this spec as governing.
 
 ## Dispatch precondition — owner items
 
-Both calls below are the owner's. Each is **adopted under the standing
+The three calls below are the owner's. Each is **adopted under the standing
 authorization of 2026-09-05**
 (`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`: the
 maturing architect records a recommendation with the cost of overruling it, and
 the session may dispatch under it) — **never as a direct owner ruling.** The
-owner may reverse either by dated amendment, at the cost enumerated with it.
+owner may reverse any of them by dated amendment, at the cost enumerated with
+it. The owner-rulings record cites this section; it does not restate it.
 
 **O4 — EXTEND THE CONSTRUCTED ENVIRONMENT TO THIS SPAWN POINT. Recommendation
 adopted.** `validate.js`'s `git()` builds its child environment with the same
@@ -266,6 +357,29 @@ therefore to `WP-dream-git-env-pinning`'s canonical surface. **Neither is taken
 here**: a hardening proposal with a user-visible cost becomes text only on an
 explicit owner yes (`docs/runbooks/codex-review.md`, "Finding disposition"), and
 the measurement says the cost is real rather than hypothetical.
+
+**O6 — DISPOSE OF TABLE W ROW W1(c)(i)'s STANDING TRIGGER BY A DATED AMENDMENT
+INSIDE THAT ROW, RATHER THAN BY READING IT NARROWLY. Recommendation adopted.**
+The row's trigger is *"any change to what `validate.js` spawns"*, and the
+environment handed to `spawnPinnedSync` **is** part of what is spawned — so a
+successor may not decide on its own authority that the phrase means argv only.
+The disposition is an act: `docs/specs/done/WP-dream-promote-in-workspace.md`
+joins Deliverables for **one dated amendment inside row W1(c)(i) and nowhere
+else**, whose required content is fixed under Exact contracts and whose opening
+sentence V5 greps. Its load-bearing statement is the one this WP can show rather
+than argue: the election is admissible *"only on that measurement"*, and the
+measurement was **RE-MEASURED under the constructed environment** and holds
+(VS-P7).
+
+*Overrule cost, and it is the largest here.* The owner may instead rule that
+**the trigger FIRES on an environment change**. Then this WP stops and is
+superseded, because the remedy row W1(c)(i) itself names is *close the seam AND
+bring the new shape to the owner*: threading the pipeline's `spawnGit` into
+`assertGitRepo` and admitting `rev-parse --git-dir` as a **TENTH pinned shape**
+both become owner business and a change to Table W row W1(c) itself;
+`tests/unit/dream-pipeline.known-calls.js` joins Deliverables; the pinned-shape
+count moves from nine to ten in every surface that states it; and the package is
+no longer an S.
 
 ## Implementation notes & constraints
 
@@ -318,12 +432,21 @@ the measurement says the cost is real rather than hypothetical.
       git repository … run `npx wienerdog init` first"* message. Measured
       before-state on `8358655d`, so this criterion is not vacuous: it
       **accepts** that case today (VS-P1 arm (b)).
-- [ ] **AC2 — the call carries the constructed environment, key and value**
-      (row J0). What `git()` hands the spawn is exactly what `buildGitEnv()`
-      returns for the same process — asserted against `buildGitEnv` itself, never
-      a copied key list, so a Table U row added or removed cannot make the two
-      disagree — and it carries **no `GIT_INDEX_FILE`**, asserted with one
-      exported around the call.
+- [ ] **AC2 — the call carries the constructed environment AND the unchanged
+      argv, both captured at the spawn** (rows J0, J1). Through the suite's
+      existing require-cache substitution — `stubCollaborators`
+      (`tests/unit/dream-validate.test.js:1485`), which `stubSpawn` already uses
+      to intercept `spawnPinnedSync` — one `assertGitRepo` call is observed and
+      the intercepted `opts` assert **both** halves:
+      **(a) the environment** is exactly what `buildGitEnv()` returns for the
+      same process — compared against `buildGitEnv` itself, never a copied key
+      list, so a Table U row added or removed cannot make the two disagree — and
+      carries **no `GIT_INDEX_FILE`**, asserted with one exported around the call;
+      **(b) the COMPLETE spawned argv** is `['-C', <vault>, 'rev-parse',
+      '--git-dir']`. Half (b) is the **runtime** half of "no shape changed", and
+      it is required rather than optional: V4 reads the diff, so only this
+      observes what `git()` actually assembles and hands over — the gap a
+      round-1 channel demonstrated by mutating the `-C` prefix.
 - [ ] **AC3 — the nested-vault pair, asserted rather than inherited** (row J5).
       Both halves, one test: a vault that **is** a repository root passes
       `assertGitRepo`; a directory that is **not** a repository but lies inside
@@ -335,12 +458,26 @@ the measurement says the cost is real rather than hypothetical.
       `node scripts/red-proofs.js` exits 0 with `RUN: PROVEN`, and within it
       `validate-git-inherits-git-dir` has a `PROVEN` per-proof line and every
       roll-up line for this WP reads `PROVEN`.
-- [ ] **AC5 — the standing trigger did not fire, mechanically** (rows J1–J4).
-      V4 exits 0: the four argv literals are byte-exact and `git(vaultDir, [` has
-      exactly four occurrences, so no shape changed and no fifth spawn was added.
-      **Green on the untouched tree too, deliberately** — an INVARIANCE check,
-      not a completion check; completion is AC1's and AC4's.
-- [ ] **AC6 — idempotence:** `N/A — this WP ships no command and writes nothing
+- [ ] **AC5 — no shape changed and no spawn was added, mechanically** (rows
+      J1–J4, and the claim the Table W amendment carries). V4 exits 0: against
+      the branch's merge-base with `origin/main`, the **only** non-comment lines
+      `src/core/dream/validate.js` adds are the two prescribed under Exact
+      contracts and the only one it removes is `env: process.env,`. **An earlier
+      literal-count form of this criterion was a false green** — both round-1
+      channels passed a fifth spawn through it — so the check is a diff, and the
+      four-argv grep beside it is a **presence screen, not the enforcement**.
+      **Unlike the old form this criterion is RED on the untouched tree** (the
+      two added lines are absent), so it is a completion check as well as an
+      invariance one.
+- [ ] **AC6 — the registered out-of-spec mirror moved in the same commit**:
+      `docs/specs/done/WP-dream-promote-in-workspace.md` Table W row W1(c)(i)
+      carries the dated amendment with the byte-exact opening sentence (V5), and
+      row W1's hook-residual sentence is still present, so the amendment was
+      placed beside the row's existing text rather than over it. **NAMED
+      RESIDUAL, stated rather than closed:** V5 is a presence grep, so a copied
+      sentence over a wrong body passes it — the four content obligations under
+      Exact contracts are the reviewer's read, judged over the whole cell.
+- [ ] **AC7 — idempotence:** `N/A — this WP ships no command and writes nothing
       outside the repo; a dream run is deliberately not idempotent (ADR-0012),
       and this WP changes only the environment of an existing call.`
 
@@ -365,9 +502,10 @@ const want = ["validate-git-inherits-git-dir"];
 console.log(ids.join(","));
 process.exit(JSON.stringify(ids) === JSON.stringify(want) ? 0 : 1)'
 
-# V4 — AC5, Table J rows J1-J4. Enumerates the argv we INTEND to accept (never a
-# forbidden set — git's grammar is not ours to close), refuses a fifth call site,
-# and is guarded so a missing file is RED rather than silently green.
+# V4a — the PRESENCE SCREEN, and it is only that: the four argv of Table J rows
+# J1-J4 are still spelled byte-exact. It enumerates the argv we INTEND to accept
+# (never a forbidden set — git's grammar is not ours to close) and is guarded so
+# a missing file is RED. It does NOT establish the invariance; V4b does.
 F=src/core/dream/validate.js
 test -f "$F" || { echo "FAIL: $F is missing"; exit 1; }
 while IFS= read -r a; do
@@ -378,11 +516,45 @@ git(vaultDir, ['status', '--porcelain', '-uall'])
 git(vaultDir, ['reset', '--hard', 'HEAD'])
 git(vaultDir, ['clean', '-fd'])
 ARGV
-n=$(grep -c "git(vaultDir, \[" "$F")
-[ "$n" = 4 ] || { echo "FAIL: expected 4 call sites of git(), found $n"; exit 1; }
-echo "V4 OK — Table J's four argv literals byte-exact, and no fifth call site"
+echo "V4a OK — presence screen only"
 
-# V5 — the repo gates. The boundary check takes the spec and the changed set as
+# V4 — AC5, THE INVARIANCE GATE. A DIFF, not a count: the only non-comment lines
+# this file gains are the two prescribed under Exact contracts, and the only one
+# it loses is `env: process.env,`. A fifth call however spelled or wrapped, a
+# direct spawnPinnedSync, or a changed `-C` assembly is therefore red — all four
+# were proved red, and the previous literal-count form passed the first of them.
+node -e '
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const q = String.fromCharCode(39);
+const F = "src/core/dream/validate.js";
+if (!fs.existsSync(F)) { console.log("FAIL: " + F + " is missing"); process.exit(1); }
+const BASE = execFileSync("git", ["merge-base", "origin/main", "HEAD"], { encoding: "utf8" }).trim();
+const d = execFileSync("git", ["diff", BASE, "--", F], { encoding: "utf8" });
+const code = (s) => d.split("\n")
+  .filter((l) => l.startsWith(s) && !l.startsWith(s + s + s))
+  .map((l) => l.slice(1).trim())
+  .filter((l) => l !== "" && !/^(\*|\/[\/*])/.test(l));
+const added = code("+").sort();
+const removed = code("-").sort();
+const wantAdded = ["const { buildGitEnv } = require(" + q + "./git-env" + q + ");", "env: buildGitEnv(),"].sort();
+const wantRemoved = ["env: process.env,"];
+console.log("BASE    " + BASE.slice(0, 8));
+console.log("ADDED   " + JSON.stringify(added));
+console.log("REMOVED " + JSON.stringify(removed));
+const ok = JSON.stringify(added) === JSON.stringify(wantAdded) && JSON.stringify(removed) === JSON.stringify(wantRemoved);
+console.log(ok ? "V4 OK — the only code lines this WP adds or removes are the two prescribed and the one replaced"
+               : "FAIL: an unprescribed code line was added or removed");
+process.exit(ok ? 0 : 1)'
+
+# V5 — AC6, the registered out-of-spec mirror, guarded so an absent file is RED.
+# PRESENCE only; the amendment's four required statements are the reviewer's read.
+W=docs/specs/done/WP-dream-promote-in-workspace.md
+test -f "$W" && grep -qF "**AMENDED 2026-09-06 — THE STANDING TRIGGER'S SUBJECT IS THE SHAPE, AND THE SUCCESSOR CHANGES NO SHAPE.**" "$W" || { echo "FAIL: the row W1(c)(i) amendment is missing"; exit 1; }
+test -f "$W" && grep -qF "NEITHER SUPPRESSED NOR DETECTED" "$W" || { echo "FAIL: row W1's hook residual was not left intact"; exit 1; }
+echo "V5 OK"
+
+# V6 — the repo gates. The boundary check takes the spec and the changed set as
 # `.github/workflows/ci.yml` invokes it, but WITHOUT `mapfile` (absent from macOS
 # /bin/bash 3.2.57). No tracked path in this repo carries a space.
 npm run lint
@@ -398,12 +570,17 @@ node scripts/boundary-check.js docs/specs/WP-dream-git-env-validate-seam.md $(gi
   `GIT_CEILING_DIRECTORIES` to the constructed environment. That table is
   canonical elsewhere and this WP restates and amends none of it.
 - **Editing `docs/specs/done/WP-dream-git-env-pinning.md`** (its O2 is the record
-  of this split), **ADR-0012**, or
-  **`docs/specs/done/WP-dream-promote-in-workspace.md`**. This WP surfaces no
-  tenth pinned shape (Table J), so row W1(c) is unchanged and needs no amendment,
-  and the ADR's 2026-09-05 amendment already carries the decision this extends.
+  of this split) or **ADR-0012** (its 2026-09-05 amendment already carries the
+  decision this extends). **`docs/specs/done/WP-dream-promote-in-workspace.md` IS
+  a Deliverable, but for ONE amendment inside row W1(c)(i) and nothing else** —
+  no other row, and none of W1's surrounding text. This WP surfaces no tenth
+  pinned shape (Table J), so row **W1(c)'s pinned set is unchanged** and the
+  amendment records that rather than widening it.
 - **`src/core/dream/promote.js`'s `spawnGitForMerge` / `constructMergeEnv`** —
-  already constructed, deliberately stricter, outside these Deliverables.
+  the dream's THIRD git spawn surface, named by Table W row W1(c)(ii). Its
+  environment is already built from nothing, deliberately stricter than
+  `buildGitEnv` because it operates on temp copies outside any repository, and
+  unifying the two is prohibited by that row. Out of these Deliverables.
 - **`src/cli/adopt.js` and `src/core/vault.js`** — the init and adopt paths.
   VS-P4 measures adopt as evidence for O5; changing it is a different work
   package on Table W row W6's finding.

@@ -186,3 +186,57 @@ produced no finding that argues against either recommendation.** Its six
 findings (Y1–Y6) are machinery, citations or an id collision, and are recorded
 with what changed in
 `2026-09-06-git-env-validate-seam-design-gate-rounds.md`.
+
+### Amendment, 2026-09-06 (after `WP-dream-git-env-validate-seam`'s design-gate round 1) — the O4/O5 entries are reduced to citations, and O6 is added
+
+Round 1's hermetic shadow (finding F6, band C) found that the 2026-09-06 append
+**says** O4 and O5 live in one place and are cited here, and then **restates**
+them — J0's construction rule and J5's nested-vault behaviour — in an entry the
+primary spec's Mirrored Surface Checklist did not register. Table J and every
+listed mirror could therefore move while this record silently disagreed. This
+record is append-only, so the restating sentences stand where they are and are
+corrected here, exactly as this queue's 2026-09-06 amendment did for the
+predecessor's O1 entry.
+
+**WITHDRAWN, in favour of the citation:** every sentence of the entry above that
+states what O4 or O5 *decides* — the construction rule, the no-argv-change
+claim, the nested-vault verdict and its cost. **The governing text is
+`docs/specs/WP-dream-git-env-validate-seam.md`'s
+`## Dispatch precondition — owner items`**, together with its Table J for the
+facts and its design-gate record for the probes. The append's remaining function
+is to say, for the owner, that **O4 and O5 were adopted under the standing
+process of 2026-09-05 and not as direct rulings, and that their enumerated
+overrule costs are in that section.** That spec now registers this record as an
+external Table J mirror, so a change to J0 or J5 is carried here by a dated
+amendment paragraph naming the spec as governing — never by editing an entry in
+place.
+
+**O6 — DISPOSE OF TABLE W ROW W1(c)(i)'s STANDING TRIGGER BY A DATED AMENDMENT
+INSIDE THAT ROW, RATHER THAN BY READING IT NARROWLY. Recommendation adopted
+under the standing process above.** Round 1's shadow (finding F1, band B) found
+that the successor was narrowing *"any change to what `validate.js` spawns"* to
+argv and call-site count **on its own authority** — and the environment handed to
+`spawnPinnedSync` is part of what is spawned. The finding did not challenge O4;
+it challenged the unapproved conclusion that O4 leaves the prior trigger
+undisposed. The answer adopted is to dispose of it as an act:
+`docs/specs/done/WP-dream-promote-in-workspace.md` joins that WP's Deliverables
+for **one dated amendment inside row W1(c)(i) and nowhere else**, recording that
+the trigger's subject is the SHAPE, that the successor changes no shape and adds
+no call (asserted mechanically against the branch's merge-base), that the
+environment is constructed per ADR-0012's 2026-09-05 amendment, and that **the
+election's admissibility measurement was RE-MEASURED under that environment and
+holds** — the exact `rev-parse --git-dir` argv issued from a stale-stat index
+leaves `.git/index` byte-identical, with a `status --porcelain` control in the
+same state moving it.
+
+*Overrule cost, and it is the largest in this queue.* The owner may instead rule
+that **the trigger FIRES on an environment change**. Then this work package
+stops and is superseded: the remedy row W1(c)(i) names is *close the seam AND
+bring the new shape to the owner*, so threading the pipeline's `spawnGit` into
+`assertGitRepo` and admitting `rev-parse --git-dir` as a **TENTH pinned shape**
+both become owner business and a change to Table W row W1(c) itself.
+`tests/unit/dream-pipeline.known-calls.js` joins Deliverables, the pinned-shape
+count moves from nine to ten in **every** surface that states it, and the
+package is no longer an S. The text and the full statement of this item live in
+the spec's `## Dispatch precondition — owner items`; this entry cites them and
+does not restate them.
