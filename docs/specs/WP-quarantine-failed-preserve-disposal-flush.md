@@ -135,11 +135,13 @@ before writing, not after.
 ## What this package must settle
 
 1. **The value question first, and it may still answer "no".** What the fix buys
-   is one thing, stated narrowly: **a run that COMPLETES and publishes a record
-   cannot later be contradicted by a resurrected artifact it deleted.** Weigh that
-   against one best-effort call per failure path. *"Not worth solving"* remains a
-   legitimate outcome (`docs/runbooks/codex-review.md`), and the predecessor
-   reached it for three sibling acts.
+   is exactly the acceptance predicate above and nothing wider: **only a COMPLETED
+   supported-POSIX directory flush closes that act's post-completion window; a
+   flush that does not complete, and every win32 run, RETAIN the priced
+   post-completion residual.** Weigh that against one best-effort call per failure
+   path. *"Not worth solving"* remains a legitimate outcome
+   (`docs/runbooks/codex-review.md`), and the predecessor reached it for three
+   sibling acts.
 2. **The disposition of a flush that does not complete, which is the one genuinely
    open question.** `removeOwnedQuarantinePath` is fail-loud (Table D row **D3**),
    but D3 is about a REMOVAL that cannot be completed, not about a flush. **Raising

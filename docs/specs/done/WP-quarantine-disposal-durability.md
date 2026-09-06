@@ -68,57 +68,25 @@ one. **O10 was added by design-gate round 1 and O11 by round 2**
 (`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`),
 whose findings R1-B and R2-A each falsified a sentence these rows had rested on.
 
-**O8 — THE VALUE QUESTION, AND ITS ANSWER IS NOW A COLUMN RATHER THAN A
-SENTENCE. Recommendation: accept Table M's per-act decisions as they stand.
-VERDICT AFTER ROUND 2: the disposition SURVIVES for three acts and is WITHDRAWN
-for two.**
+**O8 — THE VALUE QUESTION: accept Table M's per-act decisions as they stand.
+Recommendation: accept. VERDICT AFTER ROUNDS 2 AND 3: the universal sentence this
+item once opened with is WITHDRAWN, not reworded** — three consecutive rounds
+landed findings on it, and the runbook's repeat-kind rule made the answer a design
+change rather than a fourth patch.
 
-**THE DESIGN ANSWER, and it is why this item no longer states a rule.** Three
-consecutive rounds landed findings on the SENTENCE this item used to open with —
-round 1 on its coverage clause and its "designed response" clause, round 2 on its
-pricing and on the temporal equivalence itself. The runbook's repeat-kind rule
-says that when two consecutive rounds land findings of the same kind the next step
-is a design question, never another textual patch. **The design question is
-whether a claim spanning five removal acts can be true at all, and round 2
-answered it: it cannot.** So the universal sentence is WITHDRAWN, not reworded,
-and **the disposition of this package is exactly Table M's last column** — each
-act decided on its own comparison of the crash-before and crash-after states, with
-no claim spanning them. The F7(a) clause and this file's header cite that column.
+**Only Table M's decision column governs; no rule spans the acts.** Each act's
+decision, the two states it compares, and the evidence that does or does not reach
+them are in that act's own row — **M1**, **M2**, **M3**, **M4**, **M6**. **This
+item asserts no fact about any of them**, and round 4 deleted the recap that used
+to sit here: a summary outside the rows is a second copy of the contract, and four
+consecutive rounds found a defect in one.
 
-**What survives, per act, and each stands on its own row's measurement.**
-**M1** — the window closes inside the call wherever the flush completes, so there
-is no post-completion state; where it does not, the act becomes M2's. **M4** — the
-prune runs after `promote()` has returned, so the record is already produced in
-both states and neither falsifies it. **M6** — the duplicate is present in both
-states and the record omits it in both, because the `if (identical)` branch never
-records it. **Those three are the permanent exclusion.**
+**Cost of overruling, per act, as pointers and not as a rationale.** Rows **M1**
+and **M4**: each row's own cell. Row **M6**: owner item **O10**, which carries the
+acceptance and its price. Rows **M2** and **M3**: owner item **O11**, which
+carries the choice and prices both options. **Adopting this item changes no `src/`
+line and no shipped contract.**
 
-**What does NOT survive: M2 and M3, and the reason is a shipped contract rather
-than a preference.** Round 2 measured (`QD-P11`) that a failed preservation's
-removal can be followed by a run that COMPLETES and publishes a record, with no
-`tmp` and `dest` are the two paths
-Table D row **D4** calls *the owned path*, which is why the scope is both and not
-one. **What the resurrection produces is a POST-COMPLETION residual nothing in the
-product prices today**, and round 3's finding **R3-B** is why this paragraph no
-longer calls it a contract violation: the paragraph after D4
-(`docs/specs/done/WP-preservation-abort-widening.md:419-433`) says outright that
-*"Neither P0b's read-back nor D1/D2's removal is crash-durable"*. Those two acts
-are decided **(b)** — a BEST-EFFORT flush, which closes the window where it
-completes and retains the residual where it does not — and move to a successor;
-owner item **O11** carries that choice and prices both options.
-
-**No crash can be staged** (`QD-P1`), so nothing here — in this package or its
-successor — may assert what a power loss leaves. What the evidence reaches is
-stated under Table M.
-
-**Cost of overruling this item** is now per act, because the item is. Overruling
-the three permanent exclusions re-opens a flush protocol over acts whose two
-states are measured identical, and at `pruneRedactedOriginals` and the
-identity-gated delete a flush must stay best-effort to leave Table N row **N7**
-and the shipped *"a stale duplicate, not a hazard"* posture standing — which is a
-contract change and the owner's act, and the runbook's *diff size does not measure
-contract impact* rule is why. Overruling M2/M3's move is **O11**'s cost, stated
-there.
 **O9 — THE PRUNE'S SELECTION RULE: ACCEPT AND NAME the residual now; the answer
 belongs to `WP-quarantine-only-copy-shelf`, which already owns the class.
 Recommendation: accept.** The finding is real and reachable, and both halves are
@@ -298,13 +266,12 @@ exclusion was deferred to this package.
 
 Removal durability is a different invariant from preservation durability, which
 is why the split happened at all. A flush that does not complete on the SUCCESS
-path is a preservation failure — there is a failure to report and an abort to
-take (`WP-preservation-abort-widening` Table **P**, cited, not restated). On a
-DISPOSAL path there is not: the preservation has already failed, `null` has
-already been decided, and no weaker outcome is left. So each removal needed an
-answer of its own, and two of the three CALL SITES (Current state counts the
-five removal ACTS they perform) carry shipped `best-effort` postures whose change
-would be the owner's act rather than a fold-in.
+path is a preservation failure — there is a failure to report and an abort to take
+(`WP-preservation-abort-widening` Table **P**, cited, not restated). **What a
+disposal path owes instead is decided per act and nowhere else**: two of the three
+CALL SITES (Current state counts the five removal ACTS they perform) carry shipped
+`best-effort` postures whose change would be the owner's act rather than a
+fold-in.
 
 **Only Table M's decision column governs; no rule spans the acts.**
 
@@ -532,23 +499,18 @@ table and all its mirrors in one pass and in the same commit:
       a resurrection there leaves a POST-COMPLETION residual nothing prices
       today — never a falsification of Table D row **D4**, which requires no
       durability (round 3, **R3-B**); at
-      **M4** and **M6** the reappearing
-      object is one a pre-removal crash already leaves, on the same shelf, on the
-      same terms — reached on the withheld shelf by the pending-review banner, and
-      on the `redacted/` shelf by nothing user-facing and **by no schedule**
-      (round 1's finding; Table N makes it ELIGIBLE for a future qualifying prune
-      and nothing more, so it may persist — owner item **O10**). A reader who can
-      open that directory is `docs/THREAT-MODEL.md`'s class **A12**, outside the
-      boundary.
-- [ ] **Three residuals, all named, and two acts that are only PARTLY one.** The
-      residuals: the pre-removal crash class itself, accepted and unchanged from
-      today; row **M5**'s selection window, owner item **O9**, routed to a filed
-      stub; and the indefinite, unbannered, unrecorded persistence of a
-      `redacted/` copy, owner item **O10** — the shelf's own retention contract,
-      not something this disposition creates. **Not fully a residual:** rows **M2**
-      and **M3** are decided **(b)** — a BEST-EFFORT flush, moved to a successor —
-      which closes their window where the flush COMPLETES on POSIX and RETAINS it
-      where it does not, and on win32 (owner item **O11** prices both halves).
+      **M4** and **M6** each decide their own containment in their own row, and
+      this checklist states none of it. What is common to the whole shelf and not
+      to any one act: a reader who can open that directory is
+      `docs/THREAT-MODEL.md`'s class **A12**, outside the boundary.
+- [ ] **Residuals and decisions, each named by its own carrier and summarised
+      nowhere.** The pre-removal crash class itself is accepted and unchanged from
+      today. Row **M5**'s selection window is owner item **O9**, routed to a filed
+      stub. Row **M6**'s post-completion and post-owner-deletion state is owner
+      item **O10**, which accepts and prices it. Rows **M2** and **M3** are owner
+      item **O11**, whose best-effort flush closes each act's window only where the
+      flush COMPLETES on POSIX and retains the priced residual where it does not
+      and on win32.
 
 ## Acceptance criteria
 
@@ -669,9 +631,10 @@ npm run lint
   sentence. This package changed none of them and reproduced none of them.
 - **Re-litigating the abort.** `WP-preservation-abort-widening`'s Table D and
   Table P own the trigger class, the message taxonomy and artifact ownership.
-- **Specifying the flush rows M2 and M3 need.** Owner item **O11** decides THAT
-  they are closed and prices how; the contract, the disposition of a flush that
-  does not complete and the acceptance criteria are
+- **Specifying the flush rows M2 and M3 need.** Owner item **O11** decides that
+  those two acts take a BEST-EFFORT flush and prices both options; the contract,
+  the disposition of a flush that does not complete and the acceptance criteria
+  are
   `WP-quarantine-failed-preserve-disposal-flush`'s, and that package has its own
   design gate to run.
 - **Changing any of the three shipped disposal postures** — Table D row **D3**'s

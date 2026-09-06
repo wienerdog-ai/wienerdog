@@ -334,6 +334,7 @@ matters more than it looks:
 |---|---|---|---|
 | 0 | — (internal) | this record | Z1–Z3 and C1–C9, all fixed or accepted above; one lint failure fixed by running |
 | 1 (`7f489d15`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-codex-plugin.txt` (`0f73cf4f`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-shadow.txt` (`03ba7d57`); both committed pre-adjudication, porcelain identical before and after | Plugin 1 A; shadow 2 A + 1 B; no scope objections. **Three findings, all routed DESIGN or record by the pinned ladder — none argued to BUILD the package.** R1-A, R1-B, R1-C below, plus **R1-D self-found** during the round's coherence re-run |
+| 4 (`2511c44d`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round4-codex-plugin.txt` (`99920e87`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round4-herdr-shadow.txt` (`11c9b69e`); both committed pre-adjudication, porcelain identical before and after | Plugin 2; shadow 2; no scope objections. **Both channels: no Table M decision falsified and no false measured claim** — the SAME two items on both, each a sentence outside the rows. **THE LOOP CLOSES.** R4-A, R4-B below |
 | 3 (`40504f64`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round3-codex-plugin.txt` (`1148b69c`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round3-herdr-shadow.txt` (`3731803d`); both committed pre-adjudication, porcelain identical before and after | Plugin 2; shadow 2 A + 2 B; no scope objections. **No finding reverses O8–O11** — all four are decision SUPPORT, two of them about sentences that argued where the rows already decide. R3-A…R3-E below |
 | 2 (`03c56ed1`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-codex-plugin.txt` (`efdab74d`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-herdr-shadow.txt` (`61f211f1`); both committed pre-adjudication, porcelain identical before and after | Plugin 3; shadow 1 A + 1 B; no scope objections. **THIRD consecutive round on O8's supporting sentence → the repeat-kind rule fires and the answer is a DESIGN change: O8 loses its universal sentence and the disposition becomes Table M's per-act column.** R2-A…R2-E below |
 
@@ -503,7 +504,7 @@ again (`FAILED at: test -f docs/specs/WP-quarantine-only-copy-shelf.md`).
   that a removal must be made durable; both argued that sentences ABOUT the
   removals were false. **Had the re-measurement shown the equivalence failing for
   any removal act, this record would say so and recommend a narrower `Ready` WP for
-  that act — it does not, and `QD-P6`'s fault rows are the reason: on every
+  that act — it does not — **[SUPERSEDED — round 2's re-measurement DID show it failing, at rows M2 and M3, and those two acts moved to a `Draft` successor. The sentence stands as round 1's statement; "Round 2" below is what happened.]** — and `QD-P6`'s fault rows are the reason: on every
   non-closing path the leftover is the same object M2 already owns.**
 - **The stop criterion**, which is unchanged and governed round 1 as written.
 - **Two citations in `Done` specs that R1-C's fix makes stale, disclosed and NOT
@@ -887,3 +888,180 @@ Runs on the revised tip as the **closing confirmation**, unless a measurement
 changes a decision. Attack surface: the best-effort labelling and its retained
 residual, (a)'s re-priced cost, `QD-P12`'s reach, M6's priced acceptance and its
 asymmetry with M2/M3, and the absence of any rule spanning the acts.
+
+## Round 4
+
+**Branch:** `docs/wp-quarantine-disposal-durability`. **Tip reviewed:**
+`2511c44dd11e81e6f56b1ea906eda4e2905984e1`, base `main` `66b2b1f8`. Both channels
+executed; porcelain identical before and after. **Both reported the same two
+items, and both stated in their own words that nothing else stands: no Table M
+decision independently falsified, no scope objection, no false measured claim.**
+The plugin verified the F7(a) reconstruction, V1–V4, the scoped walk (11
+ambiguities), scoped markdownlint, six raw-introduction SHAs and its own in-memory
+fault probes; the shadow verified V1–V4's reconstruction (lines 356, 944, 1793),
+both walks, `check-frontmatter`, twelve proof-file parses and six raw SHAs. Neither
+could run `npm test`/`red-proofs` (mkdtemp `EPERM`) and neither staged a crash —
+which `QD-P1` already says no evidence can reach.
+
+### R4-A — the successor still promised unconditional closure. Plugin F1 (band B) + shadow F1 (band A), CONVERGED; mirror for M2/M3
+
+The stub's value paragraph said *"a run that COMPLETES and publishes a record
+cannot later be contradicted by a resurrected artifact it deleted"* while its own
+acceptance predicate, twenty lines above, retains the residual on a failed flush
+and on win32; the governing spec's Out-of-scope mirror said O11 decides the two
+acts *"are closed"*. `flushDir` (`src/core/dream/validate.js:806-817`) catches its
+open and `fsync` failures and returns `false`, which is what makes the promise
+false.
+
+**Disposition: DELETION, and the deleted text is replaced by the predicate
+itself.** The stub's value paragraph now reads: **only a COMPLETED
+supported-POSIX directory flush closes that act's post-completion window; a flush
+that does not complete, and every win32 run, RETAIN the priced post-completion
+residual.** The Out-of-scope mirror says *"decides that those two acts take a
+BEST-EFFORT flush and prices both options"*. **No decision changed.**
+
+### R4-B — O8 still recapped the acts. Plugin F2 (band B) + shadow F2 (band B); sentence outside the rows
+
+O8 carried a per-act recap, said the three permanent exclusions concern acts whose
+states are *"measured identical"*, and said M6's record omits the duplicate *"in
+both"* states — all three contradicting corrected row **M6**, which is
+code-derived and rests on **O10**'s priced acceptance. The plugin additionally
+flagged the Security checklist and Context for generalising across the acts.
+
+**Disposition: DELETION, four places, pointers in their place.** **O8** is now
+adoption status, the sentence *"Only Table M's decision column governs; no rule
+spans the acts."*, and its overrule cost stated as a POINTER to each row — no
+recap, no "measured identical", no "in both". **Context** loses the *"no weaker
+outcome"* generalisation. The **Security checklist** loses its cross-act
+containment sentence and its residual summary, each replaced by a pointer to the
+row or owner item that carries the fact. **Row M6's state model stays labelled
+CODE-DERIVED, never measured.** **No decision changed.**
+
+### The mechanical claim sweep
+
+Run **from a file**, never as an inline one-liner, over the spec, both stubs, the
+F7(a) clause line and this package's own appends to the rulings record. **Two
+passes, because the requested term list is not decision-grade alone:** the literal
+terms are dominated by unrelated senses (`fail-closed`, `byte-identical`, "either
+way" in a cost sentence), so pass 2 sweeps the CLAIM's shape instead — and it is
+**paragraph-flattened**, which two hits needed: a hard wrap had put the word "not"
+on a different line from "always an equivalence", so a line-based scan called a
+denial an assertion. **The output below is the FINAL run** — taken after every fix
+in this round AND after the Closure section below existed, so it sweeps its own
+record too; `## Round N` and `## Closure` are permitted as historical account,
+which is what those sections are.
+
+```text
+=== PASS 1 — literal terms, counted per file (transparency only) ===
+    18  WP-quarantine-disposal-durability.md
+     1  WP-quarantine-failed-preserve-disposal-flush.md
+     1  WP-quarantine-only-copy-shelf.md
+    47  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md
+     2  2026-09-05-owner-rulings-git-env-pinning-queue.md (this package's appends only)
+  (unrelated senses dominate: fail-closed, byte-identical, "either way" in a cost sentence)
+
+=== PASS 2 — CLAIM shapes; LIVE hits must be zero ===
+  PERMITTED (denial of an equivalence)  WP-quarantine-disposal-durability.md:132  [equivalence asserted]
+  PERMITTED (denial of an equivalence)  WP-quarantine-disposal-durability.md:158  [equivalence asserted]
+  PERMITTED (denial of an equivalence)  WP-quarantine-disposal-durability.md:402  [equivalence asserted]
+  PERMITTED (Table M row cell)  WP-quarantine-disposal-durability.md:414  [states called identical]
+  PERMITTED (Table M row cell)  WP-quarantine-disposal-durability.md:416  [states called identical; state claim ending "either way"]
+  PERMITTED (Table M row cell)  WP-quarantine-disposal-durability.md:418  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:420  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:496  [measured identical; equivalence asserted]
+  PERMITTED (round-section finding record)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:539  [equivalence asserted]
+  PERMITTED (round-section finding record)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:564  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:649  [equivalence asserted]
+  PERMITTED (round-section finding record)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:835  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:837  [states called identical; state claim ending "either way"]
+  PERMITTED (denial of an equivalence)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:848  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:861  [equivalence asserted; "none of them needs"]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:908  [act-or-class called closed; "cannot later be contradicted"]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:925  [states called identical; measured identical]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:931  [measured identical; "no weaker outcome"]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:942  [equivalence asserted]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:960  [measured identical; state claim ending "either way"; equivalence asserted; "none of them needs"]
+  PERMITTED (withdrawal / correction marker)  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:983  [equivalence asserted]
+  PERMITTED (round-section history (markers checked by reading))  2026-09-06-quarantine-disposal-durability-design-gate-rounds.md:1015  [equivalence asserted]
+  PERMITTED (withdrawal / correction marker)  2026-09-05-owner-rulings-git-env-pinning-queue.md (this package's appends only):404  [equivalence asserted]
+  PERMITTED (denial of an equivalence)  2026-09-05-owner-rulings-git-env-pinning-queue.md (this package's appends only):421  [equivalence asserted]
+
+files swept: 4 in full + the F7(a) clause line
+PASS 2 — permitted hits: 24   LIVE hits: 0
+```
+
+**Permitted, and nothing else:** a Table M row stating its OWN comparison, an
+explicit `[WITHDRAWN]`/`[CORRECTED]`/`[SUPERSEDED]` marker, a `## Round N`
+section's historical account, a denial of an equivalence, and the exact predicate
+sentence. **Three stale round-1 sentences were found by this sweep and given
+`[SUPERSEDED]` markers in place** — the record is append-only — each naming round
+2's design answer as what replaced it.
+
+### What round 4 did NOT change
+
+- **Any decision.** O8, O9, O10 and O11 all stand exactly as round 3 left them.
+- **Any shipped contract or posture**; any measurement; any Table M row's decision
+  column.
+- **The verification surface.** No fifth step. Every fix was a deletion or a
+  pointer.
+
+## Closure
+
+**THE LOOP IS CLOSED**, on the criterion pinned in this record before round 1 and
+unchanged since:
+
+> **A round that finds nothing about the product** → DONE. … **LIGHT** — a mirror,
+> a citation, a verification-machinery or a wording finding. → fixes land and are
+> verified mechanically; the loop closes without another external round.
+
+**Round 4 found nothing about the product**: both channels state that no Table M
+decision was falsified, that no measured claim is false, and that no scope
+objection remains. Both findings are LIGHT by the ladder — sentences outside the
+rows — and both were fixed by DELETION, which cannot change what an implementer
+builds. The runbook's own closing rule is the same: *"The loop is DONE when a round
+finds nothing about the product. Machinery findings at that point are fixed or
+accepted as named residuals; they do not extend the loop."*
+
+**Four consecutive rounds landed a finding on argumentative prose outside the
+rows** — round 1 on O8's coverage clause, round 2 on its lifetime and pricing,
+round 3 on its equivalence and label, round 4 on its recap. **The durable answer
+was not a fifth rewording but the removal of the prose**: the disposition is Table
+M's decision column, each act's own row, and pointers everywhere else. That is
+this loop's transferable result.
+
+### Rounds 0–4
+
+| round | verdict | outcome |
+|---|---|---|
+| **0** (internal) | — | Z1–Z3 and C1–C9 fixed or accepted; a false-green `! test` under `set -e` and an unsatisfiable zero-deletions criterion both caught by RUNNING the gate |
+| **1** (`7f489d15`) | needs-attention ×2 | M1 scoped to a COMPLETED POSIX flush (`QD-P6`, `QD-P7`); M3/M4/M6 restated against Table N's real contract (`QD-P9`), **O10** parked; `WP-quarantine-only-copy-shelf` filed so **O9** routes to a file; **R1-D self-found** — the move broke a checklist entry and reddened the unscoped walk |
+| **2** (`03c56ed1`) | needs-attention ×2 | **THE DESIGN ANSWER** — the repeat-kind rule fires, O8's universal sentence is WITHDRAWN and the disposition becomes Table M's per-act column; rows **M2** and **M3** leave the exclusion for a `Draft` successor (**O11**); the ratio is scoped to M1; the twin's lifetime claim is withdrawn; the stub's only-copy premise corrected; the ambiguity COUNT deleted rather than corrected |
+| **3** (`2511c44d`) | needs-attention ×2 | option (b) re-labelled BEST-EFFORT with its residual retained and priced; (a) re-priced — **D4 requires no durability**, so O11 ADDS a property; **M2 measured** by `QD-P12`; **M6** re-modelled and its no-flush decision re-founded on **O10**'s priced acceptance; both spanning sentences deleted |
+| **4** (`2511c44d`) | needs-attention ×2 | two sentences outside the rows, both deleted; the claim sweep runs clean; **LOOP CLOSES** |
+
+### Named residuals at closure
+
+1. **O10's accepted state** — a `redacted/` copy that survives a completed run,
+   which no record names and no banner lists, and which after the owner deletes
+   the withheld twin can be the sole surviving form of those bytes. Accepted and
+   priced in O10; the alternative (one `flushDir` after `validate.js:1491`,
+   2.0–2.7 ms) is stated there.
+2. **O11's retained residual** — the successor's best-effort flush closes an act's
+   window only where the flush COMPLETES on POSIX; a failed flush and every win32
+   run retain the post-completion residual. Priced in O11 and in the stub's
+   acceptance predicate; the fail-loud alternative is named as that package's own
+   gate's question.
+3. **The unscoped `mirror-walk`'s 14 pre-existing UNRESOLVED entries** — all of
+   the same shape (a spec that moved to `done/` after a checklist named it),
+   measured byte-identical at `66b2b1f8` and at this tip. Outside this package,
+   noted and not repaired.
+4. **The `set -e` exemption class** — bash exempts from errexit any command whose
+   status is inverted with `!` and any command that is not last in an `&&` list.
+   Round zero's V-block read GREEN on three broken trees because of it. Fixed here
+   by making each assertion its own statement; the class itself is a repo-wide
+   trap and is recorded, not solved.
+5. **Size** — the spec closes at well over the 400 lines aimed for. The bulk that
+   resisted trimming is Table M's seven rows, four owner items that each owe a
+   priced overrule cost, and a fully-commented V block whose comments are
+   load-bearing (two false greens are why). Recorded as a residual rather than
+   trimmed at the cost of a contract.

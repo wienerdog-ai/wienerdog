@@ -432,3 +432,23 @@ amendment. The measurements are
 `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
 section "Round 3", probe `QD-P12` (added in that round), so the range named in the
 earlier appends is now **`QD-P1`…`QD-P12`**.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 4 — no new item; THE LOOP IS CLOSED
+
+**No O12, and no change to O8, O9, O10 or O11.** Round 4's two findings were both
+sentences OUTSIDE the governing rows, both fixed by deletion, and both channels
+reported that no Table M decision was falsified and no measured claim is false.
+The loop closed on the criterion pinned before round 1.
+
+**What the owner has in front of them, as status and not as contract:** four
+recommendations adopted under the standing process of 2026-09-05, each reversible
+by dated amendment, whose text and enumerated overrule costs live in ONE place —
+`docs/specs/done/WP-quarantine-disposal-durability.md`'s
+`## Dispatch precondition — owner items` — with that spec's **Table M** for the
+facts and
+`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`
+for the measurements (`QD-P1`…`QD-P12`) and the closure call.
+
+Two `Draft` successors were filed by this loop and neither has run its own design
+gate: `docs/specs/WP-quarantine-only-copy-shelf.md` (**O9**) and
+`docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (**O11**).
