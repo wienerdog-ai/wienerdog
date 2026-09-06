@@ -1,0 +1,81 @@
+# raw — Codex plugin adversarial review — fpdf1
+# tip reviewed: d8d14372b979cacb173ca65fb1c41a23076f5149 ; base main = b1d20ce0cd4f48c6600d6925f760ee9d1b279428 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a075e0-be71-7cd3-823e-c20d3e0e1781).
+[codex] Turn started (01a075e0-bfc0-7ea3-878b-c1a9b06bbd7b).
+[codex] Assistant message captured: I’ll trace the specified failure paths, check the RED runner’s matching rules, and compare th...
+[codex] Running command: /bin/zsh -lc 'git diff --stat b1d20ce0cd4f48c6600d6925f760ee9d1b279428 && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat b1d20ce0cd4f48c6600d6925f760ee9d1b279428 && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-failed-preserve-disposal-flush.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-failed-preserve-disposal-flush.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate...
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '650,710p;795,870p;925,1030p;1330,1360p;1405,1445p' src/core/dream/valid...
+[codex] Command completed: /bin/zsh -lc "sed -n '650,710p;795,870p;925,1030p;1330,1360p;1405,1445p' src/core/dream/valid... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/WP-quarantine-f...
+[codex] Command completed: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/WP-quarantine-f... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '674,701p;802,865p;930,1025p;1340,13...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '674,701p;802,865p;930,1025p;1340,13... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/logbook/2026-09...
+[codex] Command completed: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/logbook/2026-09... (exit 0)
+[codex] Assistant message captured: The placement and directory targets check out: both failure sites use `qdir`, which varies by...
+[codex] Running command: /bin/zsh -lc "sed -n '1405,1442p;1480,1507p;1665,1700p;2670,2840p' tests/unit/dream-validate....
+[codex] Running command: /bin/zsh -lc "rg -n 'F2|F5|F7|2026-09-06|traceFlushes|device|medium' docs/specs/done/WP-quara...
+[codex] Command completed: /bin/zsh -lc "rg -n 'F2|F5|F7|2026-09-06|traceFlushes|device|medium' docs/specs/done/WP-quara... (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '1405,1442p;1480,1507p;1665,1700p;2670,2840p' tests/unit/dream-validate.... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '398,438p' docs/specs/done/WP-preservation-abort-widening.md rg -n 'M2|M...
+[codex] Command completed: /bin/zsh -lc "sed -n '398,438p' docs/specs/done/WP-preservation-abort-widening.md rg -n 'M2|M... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1405,1442p;1480,1507p;1665,1700p;2690,2795p' tests/unit/dream-validate....
+[codex] Command completed: /bin/zsh -lc "sed -n '1405,1442p;1480,1507p;1665,1700p;2690,2795p' tests/unit/dream-validate.... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '408,434p' docs/specs/done/WP-preservation-abort-widening.md sed -n '144...
+[codex] Command completed: /bin/zsh -lc "sed -n '408,434p' docs/specs/done/WP-preservation-abort-widening.md sed -n '144... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,70p;700,801p;866,925p' src/core/dream/validate.js rg -n '"'^module.ex...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,70p;700,801p;866,925p' src/core/dream/validate.js rg -n '"'^module.ex... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush'
+[codex] Command completed: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush' (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush'
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush' (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command failed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Assistant message captured: The in-memory probe confirms the gap: under forced Windows, the prescribed artifact-flush fau...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '210,265p' docs/specs/done/WP-quarantine-disposal-durability.md sed -n '...
+[codex] Command completed: /bin/zsh -lc "sed -n '210,265p' docs/specs/done/WP-quarantine-disposal-durability.md sed -n '... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*M[23]\\*\\*|"'^'"\\*\\*O10|"'^'"\\*\\*O11' docs/specs/don...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*M[23]\\*\\*|"'^'"\\*\\*O10|"'^'"\\*\\*O11' docs/specs/don... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Assistant message captured: I also found a residual-disclosure mismatch in Table Z2. Its “as Z1” cell inherits the claims...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''node:fs'\\''), vm = require('\\''node:vm'\\''... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --short'
+[codex] Command completed: /bin/zsh -lc 'git status --short' (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Revise before dispatch: the forced-win32 Z2 test ...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against b1d20ce0cd4f48c6600d6925f760ee9d1b279428
+Verdict: needs-attention
+
+Revise before dispatch: the forced-win32 Z2 test recipe is vacuous, and Z2 inherits the wrong residual description. Executed read-only diff inspection, in-memory control-flow probes, all seven V1 states, and occurrence checks for all 64 existing RED declarations; scoped mirror-walk passed. npm test and red-proofs both stopped at mkdtemp with EPERM in the read-only sandbox. No O12/O13 scope reversal is proposed.
+
+Findings:
+- [medium] [B][criterion/machinery] Reach Z2 before asserting zero Windows flushes (docs/specs/WP-quarantine-failed-preserve-disposal-flush.md:340-348)
+  AC4 promises independent suite coverage of both failure acts, but the supplied Z2 trigger at lines 298–299 throws from the artifact fsync. Forced win32 skips that fsync, so preservation succeeds without reaching Z2. The record already shows ret=object at lines 116–117. Executed an in-memory probe: both compliant and Z2-ungated variants returned success with zero flushes using this trigger. Injecting a read-back failure instead reached the removal and distinguished them: zero versus one flush. V1 currently catches the missing guard; the advertised second check does not.
+  Recommendation: Specify a read-back failure for forced-win32 Z2 coverage. Require assertions that the fault fired, dest was removed, and the result was null before asserting zero fsync calls. Demonstrate discrimination against a Z2-only ungated variant on both arms.
+- [medium] [B][mirror] Describe Z2's retained residual independently (docs/specs/WP-quarantine-failed-preserve-disposal-flush.md:231)
+  Z2's seventh cell says 'as Z1', importing Z1's claims that the leftover is unlisted and makes the next preservation return null. Those describe the dot-prefixed tmp, not dest. Predecessor Table M row M3 explicitly says a withheld dest is listed; validate.js:960–963 selects a suffixed name when dest exists. Executed an in-memory leftover probe on both arms: restoring tmp caused null, while restoring dest allowed preservation as x-1.md. The canonical table therefore misdescribes the residual being priced.
+  Recommendation: Replace the seventh-cell cross-reference with dest-specific consequences: retained dated artifact, listed on the withheld shelf, unlisted and potentially indefinite on redacted/, and subsequent preservation using the collision suffix. Keep the accepted best-effort disposition unchanged.
+
+Next steps:
+- Correct the two cells/recipes and update the round-zero evidence; rerun the focused discrimination checks and required verification in a writable sandbox.
+- Non-blocking C/record size audit: HEAD is 455 lines. Rationale outside Table Z and owner items appears at 154–160 (predecessor exclusion), 164–169 (distinct literals), 200–219 (table-letter choice), 279–282 (unbraced removals), 283–293 (test seam), 304–307 (substring matching), and 314–318 (security improvement). These are consolidation candidates, not additional blockers.
