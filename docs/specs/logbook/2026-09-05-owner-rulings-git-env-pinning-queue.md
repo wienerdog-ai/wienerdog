@@ -313,3 +313,142 @@ pointers, and nothing else:
   `<LOGBOOK>` resolution and the enumerated overrule cost;
 - the measurement it rests on —
   `docs/specs/logbook/2026-09-06-audit-group-c-closure.md`.
+
+### Appended 2026-09-06 after maturing `WP-quarantine-disposal-durability` — two items, O8 and O9
+
+Numbering continues this queue's. Both are **recommendations adopted under the
+standing process of 2026-09-05, not direct owner rulings, and the owner may
+reverse either by dated amendment.**
+
+**CITATION-ONLY**, in the form this record's 2026-09-06 corrections to O4/O5, to
+O6 and to O7 established: adoption status plus pointers, and nothing about what
+either item decides or what overruling it costs. Three entries in this file had
+to correct themselves this session for restating governing text; these two do not
+restate any.
+
+- **O8** — the value question of `WP-quarantine-disposal-durability`.
+- **O9** — the retention prune's selection rule.
+
+Two pointers each, and nothing else:
+
+- **The governing text for both** —
+  `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries each item's decision
+  and its enumerated overrule cost, and that spec's **Table M** for the facts.
+- **The measurements they rest on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  probe ids `QD-P1`…`QD-P5`.
+
+That spec registers this record as an external mirror, so a change to O8 or O9 is
+carried here by a dated amendment paragraph naming the spec as governing, never
+by editing this entry in place.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 1 — one item, O10
+
+Numbering continues this queue's. **O10 was adopted under the standing process of
+2026-09-05, as a recommendation and not as a direct owner ruling, and the owner
+may reverse it by dated amendment.** It exists because round 1's hermetic shadow
+(finding F3, band A) falsified two sentences in that spec's canonical table; the
+correction is a fix, but the product question it exposed is about a shipped
+retention posture and therefore the owner's.
+
+**CITATION-ONLY**, as this record's 2026-09-06 corrections to O4/O5, to O6 and to
+O7 established. Two pointers, and nothing else:
+
+- **The governing text** — `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries **O10**'s decision and
+  its enumerated overrule cost, and that spec's **Table M** for the facts.
+- **The measurement it rests on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  section "Round 1", probe `QD-P9`.
+
+**One citation in the earlier entry is corrected here rather than in place, as
+this record requires:** it names the measurements as probe ids `QD-P1`…`QD-P5`;
+round 1 added `QD-P6`…`QD-P10`, so the range is **`QD-P1`…`QD-P10`**. The pointer
+itself — that design-gate record — is unchanged and still governs.
+
+The **O8** and **O9** entries appended earlier today stand: round 1 re-derived O8
+rather than reversing it, and O9's routing now names a filed `Draft` stub,
+`docs/specs/WP-quarantine-only-copy-shelf.md`. Neither entry's text changes, for
+the reason this record's corrections give — the spec governs, and a change to any
+of the three is carried here by a dated amendment paragraph naming it, never by
+editing an entry in place.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 2 — one item, O11
+
+Numbering continues this queue's. **O11 was adopted under the standing process of
+2026-09-05, as a recommendation and not as a direct owner ruling, and the owner
+may reverse it by dated amendment.** It exists because round 2 was the THIRD
+consecutive round to land a finding on one spanning sentence, so the repeat-kind
+rule made the answer a design change rather than another patch: that spec's
+disposition is now its Table M's per-act column, and two of the five acts fall
+outside it and need a decision of their own.
+
+**CITATION-ONLY**, as this record's 2026-09-06 corrections to O4/O5, to O6 and to
+O7 established. Two pointers, and nothing else:
+
+- **The governing text** — `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries **O11**'s decision and
+  the enumerated price of BOTH options, and that spec's **Table M** for the facts.
+- **The measurement it rests on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  section "Round 2", finding **R2-A**, probe `QD-P11`.
+
+**Two consequences the owner should see without opening the spec, stated as status
+and not as contract.** The `Superseded` outcome **narrows**: that package disposes
+three of its five removal acts, and the other two move to a new `Draft` stub,
+`docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`, which has not run its
+own design gate. And **O8 is no longer a rule**: the same section records that its
+universal sentence was withdrawn rather than reworded.
+
+**O10 is qualified by the same round** (finding R2-C) — the withheld twin is not
+retained forever, and the lifetime equivalence that entry's governing text once
+carried is withdrawn there. That is a change to the governing text, not to this
+record's O10 entry, which was citation-only and stays as it is.
+
+**And one citation in the entries above is corrected here rather than in place,
+as this record requires:** the 2026-09-06 O10 append gave the measurement range as
+probe ids `QD-P1`…`QD-P10`. Round 2 added `QD-P11`, so the range is
+**`QD-P1`…`QD-P11`**. The pointer itself — that design-gate record — is unchanged
+and still governs, for O8, O9, O10 and O11 alike.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 3 — no new item; O10 and O11 are amended in their governing text
+
+**No O12.** Round 3 landed four findings, all decision SUPPORT, and **none reversed
+O8, O9, O10 or O11**. Two of them changed what those items SAY, which this record
+carries as a dated pointer rather than by editing an entry in place:
+
+- **O11 is RE-LABELLED and RE-PRICED.** Option (b) is a **best-effort** flush, not
+  a closure of the class, and option (a)'s cost is no longer stated as a shipped
+  contract becoming false. The governing text is the spec's
+  `## Dispatch precondition — owner items`, which carries both halves.
+- **O10 is EXTENDED** to name and price the exact state row **M6** now accepts.
+  Its decision did not move; what moved is that the acceptance is priced instead of
+  resting on an equivalence. Same governing text.
+
+Both remain **adopted under the standing process of 2026-09-05, as recommendations
+and not direct owner rulings**, and the owner may reverse either by dated
+amendment. The measurements are
+`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+section "Round 3", probe `QD-P12` (added in that round), so the range named in the
+earlier appends is now **`QD-P1`…`QD-P12`**.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 4 — no new item; THE LOOP IS CLOSED
+
+**No O12, and no change to O8, O9, O10 or O11.** Round 4's two findings were both
+sentences OUTSIDE the governing rows, both fixed by deletion, and both channels
+reported that no Table M decision was falsified and no measured claim is false.
+The loop closed on the criterion pinned before round 1.
+
+**What the owner has in front of them, as status and not as contract:** four
+recommendations adopted under the standing process of 2026-09-05, each reversible
+by dated amendment, whose text and enumerated overrule costs live in ONE place —
+`docs/specs/done/WP-quarantine-disposal-durability.md`'s
+`## Dispatch precondition — owner items` — with that spec's **Table M** for the
+facts and
+`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`
+for the measurements (`QD-P1`…`QD-P12`) and the closure call.
+
+Two `Draft` successors were filed by this loop and neither has run its own design
+gate: `docs/specs/WP-quarantine-only-copy-shelf.md` (**O9**) and
+`docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (**O11**).

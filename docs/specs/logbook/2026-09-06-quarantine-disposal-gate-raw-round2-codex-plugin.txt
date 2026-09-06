@@ -1,0 +1,94 @@
+# raw — Codex plugin adversarial review — qdd2
+# tip reviewed: 03c56ed118414049383db5bbf7eaa5a31fc4c849 ; base main = 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a0754f-7de7-7e23-84d9-81c305e7b2eb).
+[codex] Turn started (01a0754f-7eb7-74c1-85fc-b1447230ba15).
+[codex] Assistant message captured: I’ll trace the five removal acts and round-1 fixes against the code and predecessor contracts...
+[codex] Running command: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant...
+[codex] Command completed: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg --files -g AGENTS.md -g '*quarantine*' -g '*preservation-abort*' -g '*.proof...
+[codex] Command completed: /bin/zsh -lc "rg --files -g AGENTS.md -g '*quarantine*' -g '*preservation-abort*' -g '*.proof... (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/done/WP-quarantine-disposal-durability.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/done/WP-quarantine-disposal-durability.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,260p' docs/specs/done/WP-quarantine-disposal-durability.md"
+[codex] Running command: /bin/zsh -lc "sed -n '260,357p' docs/specs/done/WP-quarantine-disposal-durability.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,260p' docs/specs/done/WP-quarantine-disposal-durability.md" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '260,357p' docs/specs/done/WP-quarantine-disposal-durability.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-quarantine-only-copy-shelf.md; sed -n '650,1040p' src/core/dr...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-quarantine-only-copy-shelf.md; sed -n '650,1040p' src/core/dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '285,350p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '285,350p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate... (exit 0)
+[codex] Assistant message captured: The revised text covers flush failures and indefinite retention. I’m checking whether the cla...
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '1140,1200p'; nl -ba src/core/dream/...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/dream/validate.js | sed -n '1140,1200p'; nl -ba src/core/dream/... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '310,522p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-...
+[codex] Command completed: /bin/zsh -lc "sed -n '310,522p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-... (exit 0)
+[codex] Running command: /bin/zsh -lc "cat package.json; sed -n '1,100p' tests/unit/dream-validate.test.js; rg -n 'Sup...
+[codex] Command completed: /bin/zsh -lc "cat package.json; sed -n '1,100p' tests/unit/dream-validate.test.js; rg -n 'Sup... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '338,522p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-...
+[codex] Command completed: /bin/zsh -lc "sed -n '338,522p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'V1|"'^'"\\|.*\\*\\*N[3567]|"'^'"\\|.*\\*\\*D[123]' docs/specs/done/WP-qu...
+[codex] Command completed: /bin/zsh -lc "rg -n 'V1|"'^'"\\|.*\\*\\*N[3567]|"'^'"\\|.*\\*\\*D[123]' docs/specs/done/WP-qu... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '2030,2120p' docs/specs/done/WP-quarantine-preserve-durability.md; rg -n...
+[codex] Command completed: /bin/zsh -lc "sed -n '2030,2120p' docs/specs/done/WP-quarantine-preserve-durability.md; rg -n... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '2382,2434p' docs/specs/done/WP-quarantine-preserve-durability.md; rg -n...
+[codex] Command failed: /bin/zsh -lc "sed -n '2382,2434p' docs/specs/done/WP-quarantine-preserve-durability.md; rg -n... (exit 1)
+[codex] Running command: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git diff --check 66b2...
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git diff --check 66b2... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs -- --help'
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs -- --help' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Running command: /bin/zsh -lc "rg --files src | rg 'quarantine|review'; sed -n '1,100p' scripts/lint.js; sed -...
+[codex] Command completed: /bin/zsh -lc "rg --files src | rg 'quarantine|review'; sed -n '1,100p' scripts/lint.js; sed -... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''); c...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''); c... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Command completed: /bin/zsh -lc 'npm run lint' (exit 0)
+[codex] Assistant message captured: The F7(a) edit passes exact reconstruction, and the predecessor’s V1 passes when pointed at i...
+[codex] Running command: /bin/zsh -lc "node -e ' const real=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=requir...
+[codex] Command completed: /bin/zsh -lc "node -e ' const real=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=requir... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '80,112p';...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '80,112p';... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal'
+[codex] Command completed: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '240,265p' docs/specs/done/WP-quarantine-banner-location.md; sed -n '141...
+[codex] Command completed: /bin/zsh -lc "sed -n '240,265p' docs/specs/done/WP-quarantine-banner-location.md; sed -n '141... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'only-copy|hard-secret|hard secret|new note|new file|withhold|baseline' t...
+[codex] Command completed: /bin/zsh -lc "rg -n 'only-copy|hard-secret|hard secret|new note|new file|withhold|baseline' t... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,85p' src/core/dream/validate.js; sed -n '1280,1335p' src/core/dream/v...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,85p' src/core/dream/validate.js; sed -n '1280,1335p' src/core/dream/v... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(... (exit 0)
+[codex] Assistant message captured: The modeled runs reproduce the round-1 fault, collision and retention results. Two prose issu...
+[codex] Running command: /bin/zsh -lc "nl -ba docs/GLOSSARY.md | sed -n '136,151p'; nl -ba src/core/dream/promote.js |...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/GLOSSARY.md | sed -n '136,151p'; nl -ba src/core/dream/promote.js |... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not close yet. R1-A is fixed; R1-B and R1-C ar...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d
+Verdict: needs-attention
+
+Do not close yet. R1-A is fixed; R1-B and R1-C are partial: retention eligibility and the filed stub are corrected, but the revised rationale contains false pricing and retention claims, and the stub misdescribes its inherited class. Executed: diff/reconstruction checks, lint, scoped mirror-walk, predecessor V1 with its archived path corrected, 12 proof-file parses, and in-memory execution of shipped preservation/gate/prune functions. npm test and red-proofs were blocked by mkdtemp EPERM; no system crash was staged.
+
+Findings:
+- [medium] M1’s measured narrowing factor does not apply to the other removal sites (docs/specs/done/WP-quarantine-disposal-durability.md:103-105)
+  Band A; classification: measured-claim. O8 applies the ~1.6× benefit to pruning and duplicate deletion, but QD-P10 measures M1’s unlink followed by an existing qdir flush. M4/M6 have no subsequent flush. Executed preservation/prune traces and the extracted duplicate-delete gate confirm this distinction. Their current unflushed interval has no application-established endpoint, so its reduction cannot be calculated from M1’s 3.5–4.1 ms. M3 likewise incorrectly ends its crash window at function return. This falsifies the revised cost argument without requiring a decision to build the WP.
+  Recommendation: Restrict the ratio to the measured M1 scenario. Mark other removal intervals unbounded by application flushes, correct M3’s window, and re-evaluate O8 without extrapolating that ratio.
+- [medium] An uncapped withheld twin is not retained forever (docs/specs/done/WP-quarantine-disposal-durability.md:167-171)
+  Band A; classification: contract. O10 infers permanent retention from N1’s absence of a cap. GLOSSARY.md:141–144 instead says retention lasts while the owner leaves the copy there, and promote.js:600–603 explicitly instructs deletion. Consequently, after M6 completes and the owner removes the reported twin, a subsequently resurrected redacted copy need not remain a duplicate of retained bytes. This is a code-derived crash scenario, not a staged crash result. Reading those contracts and executing M6’s gate confirms that only the withheld twin is reported. The unconditional lifetime/disclosure equivalence is unsupported.
+  Recommendation: State that the twin exists at the identity check and has no automatic retention cap. Account for later owner deletion in M6/O10 and qualify O8/F7(a)’s lifetime equivalence accordingly.
+- [medium] The shelf stub reverses the only-copy distinction it must preserve (docs/specs/WP-quarantine-only-copy-shelf.md:47-53)
+  Band B; classification: contract. A withheld artifact can itself be the only copy of rejected workspace bytes; reverting or retaining the vault baseline does not preserve those additions. Conversely, the banner’s inherited case is a refused note surviving only under redacted/, with no sanitized version promoted. Executing the extracted gate with controlled collaborators reproduced both cases, consistent with preservation-abort Table P and banner-location:410–455. The stub’s opposite premise could exclude the precise fall-through class its banner question must resolve.
+  Recommendation: Describe both shelves as potentially holding sole surviving bytes. Explicitly carry the refused-note/redacted-only fall-through alongside successful redaction, and distinguish the shelves by retention and visibility.
+
+Next steps:
+- Correct the three claims and their registered mirrors before closing the design gate.
+- Preserve the verified removal mapping: M1/M2 orphan-temp collisions return null under F8/D1; M3 is banner-visible only on the withheld shelf; M4 follows N3/N5–N7; M6 guarantees a duplicate only at its identity check.

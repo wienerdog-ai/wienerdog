@@ -1,0 +1,90 @@
+# raw — Codex plugin adversarial review — qdd4
+# tip reviewed: 2511c44dd11e81e6f56b1ea906eda4e2905984e1 ; base main = 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a07586-22f0-77f2-97e0-d9899cbd615b).
+[codex] Turn started (01a07586-239b-7552-8c77-ab0fc2e4889a).
+[codex] Assistant message captured: I’ll check the round-3 fixes against the code and probe records, then run the read-only check...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '260,425p'"
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; cat docs/specs/...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '260,425p'" (exit 0)
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; cat docs/specs/... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant...
+[codex] Command completed: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '429,460p' docs/specs/done/WP-quarantine-disposal-durability.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '429,460p' docs/specs/done/WP-quarantine-disposal-durability.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '85,195p' docs/specs/WP-quarantine-failed-preserve-disposal-flush.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '85,195p' docs/specs/WP-quarantine-failed-preserve-disposal-flush.md" (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-quarantine-only-copy-shelf.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-quarantine-only-copy-shelf.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^##|''^###|QD-P12|R3-|STOP|band'"' docs/specs/logbook/2026-09-06-quara...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^##|''^###|QD-P12|R3-|STOP|band'"' docs/specs/logbook/2026-09-06-quara... (exit 0)
+[codex] Assistant message captured: The main rows now distinguish the best-effort residual and explicitly accept M6’s post-owner-...
+[codex] Running command: /bin/zsh -lc "sed -n '1,92p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-des...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,92p' docs/specs/logbook/2026-09-06-quarantine-disposal-durability-des... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '650,700p' src/core/dream/validate.js; sed -n '790,875p' src/core/dream/...
+[codex] Running command: /bin/zsh -lc "sed -n '590,610p' src/core/dream/promote.js; sed -n '1635,1660p' src/core/dream...
+[codex] Command completed: /bin/zsh -lc "sed -n '650,700p' src/core/dream/validate.js; sed -n '790,875p' src/core/dream/... (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '590,610p' src/core/dream/promote.js; sed -n '1635,1660p' src/core/dream... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'V1|guarantee sentence|"'^'"\\| \\*\\*[FN][0-9]|"'^'"\\| \\*\\*P[0-9]' do...
+[codex] Command completed: /bin/zsh -lc "rg -n 'V1|guarantee sentence|"'^'"\\| \\*\\*[FN][0-9]|"'^'"\\| \\*\\*P[0-9]' do... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '855,867p' src/core/dream/validate.js; sed -n '940,1030p' src/core/dream...
+[codex] Command completed: /bin/zsh -lc "sed -n '855,867p' src/core/dream/validate.js; sed -n '940,1030p' src/core/dream... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '590,610p' src/core/dream/promote.js; sed -n '1635,1660p' src/core/dream...
+[codex] Command completed: /bin/zsh -lc "sed -n '590,610p' src/core/dream/promote.js; sed -n '1635,1660p' src/core/dream... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js --scope WP-quarantine-disposal-durability'
+[codex] Command completed: /bin/zsh -lc 'node scripts/mirror-walk.js --scope WP-quarantine-disposal-durability' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat package.json; sed -n '410,455p' docs/specs/done/WP-quarantine-banner-locati...
+[codex] Command completed: /bin/zsh -lc "cat package.json; sed -n '410,455p' docs/specs/done/WP-quarantine-banner-locati... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib, re, subprocess p=pathlib.Path(\"docs/specs/done/WP-...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib, re, subprocess p=pathlib.Path(\"docs/specs/done/WP-... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,165p' scripts/lint.js; cat docs/specs/logbook/2026-09-06-quarantine-d...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,165p' scripts/lint.js; cat docs/specs/logbook/2026-09-06-quarantine-d... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib for p in sorted(pathlib.Path(\"docs/specs/logbook\")...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib for p in sorted(pathlib.Path(\"docs/specs/logbook\")... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git diff 40504f64..H...
+[codex] Command completed: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git diff 40504f64..H... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,65p' src/core/dream/validate.js; sed -n '705,790p' src/core/dream/val...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,65p' src/core/dream/validate.js; sed -n '705,790p' src/core/dream/val... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '83,123p';...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '83,123p';... (exit 0)
+[codex] Assistant message captured: V1–V4 and the exact F7(a) reconstruction pass with the temporary key held in memory. Scoped m...
+[codex] Running command: /bin/zsh -lc "test -f node_modules/.bin/markdownlint-cli2; sed -n '1290,1315p' src/core/dream...
+[codex] Command completed: /bin/zsh -lc "test -f node_modules/.bin/markdownlint-cli2; sed -n '1290,1315p' src/core/dream... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git rev-parse origin...
+[codex] Command completed: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d; git rev-parse origin... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs'
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"),vm=require(\"node:vm\"),path=require(\"n...
+[codex] Command completed: /bin/zsh -lc "node -e 'const fs=require(\"node:fs\"),vm=require(\"node:vm\"),path=require(\"n... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,json base=\"66b2b1f8040b93a9af4f1cda25c3a...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib,subprocess,json base=\"66b2b1f8040b93a9af4f1cda25c3a... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const cp=require(\"node:child_process\"),fs=require(\"node:fs\"); cons...
+[codex] Command completed: /bin/zsh -lc "node -e 'const cp=require(\"node:child_process\"),fs=require(\"node:fs\"); cons... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not close yet: two live prose claims contradic...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d
+Verdict: needs-attention
+
+Do not close yet: two live prose claims contradict the corrected rows. R3-A partial; R3-B fixed; R3-C fixed; R3-D fixed in M6/O10; R3-E partial. No independently falsified Table M decision or scope objection remains. F7(a) is per-act and consistent within the predecessor’s platform-flush scope. Both stubs disclose their unrun gates. Executed: adapted read-only V1–V4 and F7(a) reconstruction (pass), predecessor V1 (obsolete path fails; done-path passes), scoped mirror-walk (pass, 11 ambiguities), scoped markdownlint (pass), diff checks, six raw-introduction SHA checks, and in-memory preservation/gate fault probes. npm test and red-proofs could not start: mkdtemp EPERM. Original scratch probes and power-loss outcomes were not independently reproduced.
+
+Findings:
+- [medium] The successor still promises unconditional closure (docs/specs/WP-quarantine-failed-preserve-disposal-flush.md:137-140)
+  Band B; classification: mirror (M2/M3). This value-question paragraph says a completed run cannot later be contradicted by a resurrected artifact, although its acceptance predicate explicitly retains that residual after failed flushes and on win32. The parent spec repeats the overclaim at lines 672–675: O11 decides that the windows 'are closed'. Executed in-memory fault probes confirmed that an ignored disposal-flush failure still allows the withheld fallback and withheld-only record. These live instructions could mature the successor around a guarantee the adopted best-effort decision does not provide.
+  Recommendation: Scope the stated benefit to completed POSIX flushes, explicitly retain the failed-flush/win32 residual, and correct the parent’s Out of scope mirror. Keep O11’s decision unchanged.
+- [medium] O8 still argues across acts using the withdrawn equivalence (docs/specs/done/WP-quarantine-disposal-durability.md:114-120)
+  Band B; classification: sentence outside rows. The overrule-cost paragraph claims all three permanently excluded acts have states 'measured identical'. M6 now expressly rejects that equivalence and rests on O10’s priced acceptance. O8 at lines 92–94 and the Security checklist at 534–540 retain related equivalence arguments; Context at 299–307 also generalizes disposal as having no weaker outcome. Executed lexical checks found these live assertions despite removal of the two originally cited sentences. Source inspection and the in-memory M6 trace confirm deletion precedes gate return and publication, so pre-return and post-owner-deletion states differ. This leaves competing decision support outside the governing rows and contradicts the logbook’s claimed complete sweep.
+  Recommendation: Remove the cross-act rationale and stale M6 equivalence mirrors; point to each governing row and O10’s explicit acceptance. Correct the round-3 sweep record without changing the adopted decisions.
+
+Next steps:
+- Correct the two prose/mirror defects, then rerun V1–V4, scoped mirror-walk and the live-claim sweep.
+- Route these as band-B corrections under the closing rule; neither finding requires reversing O8–O11.

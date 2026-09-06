@@ -1,0 +1,66 @@
+# raw — Codex plugin adversarial review — qdd1
+# tip reviewed: 7f489d15f2b36ce5a1711c1f2112d8020d451168 ; base main = 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a07535-dcc2-7653-92dd-d87c8657b32d).
+[codex] Turn started (01a07535-ddc2-7010-aaca-782d5065a1d6).
+[codex] Assistant message captured: I’ll inspect the diff, trace the removal paths against the cited contracts, and run the read-...
+[codex] Running command: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant...
+[codex] Command completed: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-ro...
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-ro... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '1,250p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '1,250p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '250,480p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '250,480p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '650,1040p' src/core/dream/validate.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '650,1040p' src/core/dream/validate.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1140,1205p' src/core/dream/validate.js; sed -n '1350,1565p' src/core/dr...
+[codex] Command completed: /bin/zsh -lc "sed -n '1140,1205p' src/core/dream/validate.js; sed -n '1350,1565p' src/core/dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'Superseded|\\*\\*N[3567]\\*\\*|\\*\\*D[123]\\*\\*|# V1|guarantee|\\*\\*F...
+[codex] Command completed: /bin/zsh -lc "rg -n 'Superseded|\\*\\*N[3567]\\*\\*|\\*\\*D[123]\\*\\*|# V1|guarantee|\\*\\*F... (exit 0)
+[codex] Assistant message captured: The successful path does flush `qdir` after removing `tmp` on both arms. But Table M says the...
+[codex] Running command: /bin/zsh -lc "sed -n '1166,1193p' src/core/dream/validate.js; sed -n '1390,1508p' src/core/dr...
+[codex] Command completed: /bin/zsh -lc "sed -n '1166,1193p' src/core/dream/validate.js; sed -n '1390,1508p' src/core/dr... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*D[123]\\*\\*|"'^'"\\| \\*\\*F2\\*\\*|"'^# V1|''^# V2|''^`...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*D[123]\\*\\*|"'^'"\\| \\*\\*F2\\*\\*|"'^# V1|''^# V2|''^`... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '2390,2435p' docs/specs/done/WP-quarantine-preserve-durability.md; sed -...
+[codex] Command completed: /bin/zsh -lc "sed -n '2390,2435p' docs/specs/done/WP-quarantine-preserve-durability.md; sed -... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal'
+[codex] Command completed: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal' (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs -- --help'
+[codex] Running command: /bin/zsh -lc 'npm run lint'
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs -- --help' (exit 1)
+[codex] Command completed: /bin/zsh -lc 'npm run lint' (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\"'\"'node:fs'\"'\"'), path = require('\"'\"'node...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\"'\"'node:fs'\"'\"'), path = require('\"'\"'node... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'), cp=require('\"'\"'child_process'\...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'), cp=require('\"'\"'child_process'\... (exit 0)
+[codex] Assistant message captured: The fault trace confirms the gap on both arms: `tmp` is removed, the artifact flush fails, `d...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'),cp=require('\"'\"'child_process'\"...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'),cp=require('\"'\"'child_process'\"... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'),vm=require('\"'\"'vm'\"'\"'),path=...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\"'\"'fs'\"'\"'),vm=require('\"'\"'vm'\"'\"'),path=... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs; git st...
+[codex] Command completed: /bin/zsh -lc 'git diff --check 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs; git st... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "One load-bearing durability claim is false. Execu...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d
+Verdict: needs-attention
+
+One load-bearing durability claim is false. Executed: diff checks, lint, mirror-walk, adapted V1–V4, nine in-memory negative cases, and mocked execution of preservation/prune functions. The predecessor’s V1 passes with its filed path corrected. npm test and the red-proofs entrypoint were blocked by temporary-directory EPERM; no system crash was staged.
+
+Findings:
+- [high] M1 incorrectly treats the post-commit unlink as unconditionally flushed (docs/specs/done/WP-quarantine-disposal-durability.md:266)
+  Band A; classification: measured-claim. M1 declares the unflushed state “not reachable,” but validate.js:995 removes tmp before :1006 calls flushPreservation. That function short-circuits when the artifact fsync or qdir open/fsync fails. Executing the extracted shipped functions with filesystem fault injection reproduced this on BOTH arms: remove tmp → failed artifact fsync → remove dest → return null, with no directory flush. A crash between unlink and flush is also outside the successful call-order observation. QD-P5 establishes coverage only when qdir’s flush completes. O8 and the F7(a) amendment use this narrower observation to claim unconditional coverage, invalidating a stated premise of the permanent exclusion.
+  Recommendation: Scope M1’s coverage to completed qdir flushes. Record the intervening crash window and flush-failure paths, identify their accepted response, and update O8, F7(a), QD-P5 and the removal-cost accounting consistently.
+
+Next steps:
+- Correct the measured claim and its mirrors, then rerun the design gate. This finding does not require choosing to implement disposal durability.
