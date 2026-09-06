@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { getPaths } = require('../core/paths');
+const { buildGitEnv } = require('../core/dream/git-env');
 const { spawnPinnedSync } = require('../core/exec-identity');
 const { WienerdogError } = require('../core/errors');
 const { readDreamConfig } = require('../core/dream/config');
@@ -161,10 +162,10 @@ function printPlan(sel, cfg, vaultDir, workspaceDir, date, layout, settingsPath)
  * implementation, and green on a broken one that passes the path through a variable.
  * @param {(o:{args:string[], cwd:string, env:NodeJS.ProcessEnv}) => {status:number|null, stdout?:string|Buffer, stderr?:string, error?:Error}} spawnGit
  * @param {string} cwd @param {string[]} args
- * @param {{allowFail?:boolean, input?:Buffer, env?:NodeJS.ProcessEnv}} [opts]
+ * @param {{allowFail?:boolean, input?:Buffer, indexFile?:string}} [opts]
  */
 function gitIn(spawnGit, cwd, args, opts = {}) {
-  const res = spawnGit({ args, cwd, env: opts.env || process.env, input: opts.input });
+  const res = spawnGit({ args, cwd, env: buildGitEnv(opts.indexFile), input: opts.input });
   if (res.error) {
     throw new WienerdogError(`git could not run (${args[0]}): ${res.error.message}`);
   }
@@ -227,8 +228,7 @@ function commitNamedSet(o) {
   fs.rmSync(tmpIndex, { force: true });
   // The private index travels in the CHILD's env only — never by mutating this
   // process's, which a concurrent caller would see.
-  const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };
-  const withIndex = (args, opts) => g(args, { ...opts, env: indexEnv });
+  const withIndex = (args, opts) => g(args, { ...opts, indexFile: tmpIndex });
 
   try {
     withIndex(['read-tree', head]);
