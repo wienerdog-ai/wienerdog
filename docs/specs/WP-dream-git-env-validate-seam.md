@@ -72,8 +72,9 @@ Measured on `8358655d` (`origin/main`), the tree this spec is drafted against.
   set `USERPROFILE` on win32, and `GIT_INDEX_FILE` **only** when `indexFile` is
   passed. With no argument it carries none — measured, the whole map on this
   host is `{HOME, PATH}` (VS-P2).
-- **`src/core/exec-identity.js:554-556`** — `spawnPinnedSync` uses the `env` it
-  is given both to resolve the pinned executable and as the child's environment.
+- **`src/core/exec-identity.js:554-558`** — `spawnPinnedSync` uses the `env` it
+  is given both to resolve the pinned executable (`:556`) and as the child's
+  environment (`:558`, through `passthroughSpawnOpts`).
   `buildGitEnv` carries `process.env.PATH` verbatim, so pin resolution and the
   WP-154 drift refusal are unaffected: the fake-`git`-on-PATH assertion at
   `tests/unit/dream-validate.test.js:1386` keeps its meaning.
@@ -182,8 +183,9 @@ by enumerating the four argv we intend to accept and refusing a fifth call site.
 a total over *the run's own acts*. A function no dream run calls performs no act
 during a run, so row J2 is outside that total today by having no caller — not by
 an exemption — and this WP does not give it one. Its index-refresh property is
-recorded in the row because W1(e) measured it (`status --porcelain` rewrites the
-index file from a stale-stat state) and a future caller would inherit it.
+recorded in the row because **row W1's `(e)` sub-bullet** measured it — *"at
+`1ac82ac` on git 2.50.1 from a stale-stat state, `status --porcelain` rewrites
+the index file"* — and a future caller would inherit it.
 
 ### Mirrored Surface Checklist
 
@@ -196,8 +198,8 @@ review is added here on the spot.
       construction, rows J1–J4's "no argv changes and no call site added or
       removed", row J5's JSDoc).
 - [ ] **Acceptance criteria** — AC1 asserts row J1, AC2 rows J0/J1, AC3 row J5,
-      AC5 rows J1–J4's invariance. **Current state** — the `git()` and
-      `buildGitEnv` bullets.
+      AC5 rows J1–J4's invariance.
+- [ ] **Current state** — the `git()` bullet and the `buildGitEnv` bullet.
 - [ ] **Verification commands / greps** — V3 and **V4, the executable mirror of
       rows J1–J4**: the argv literals it greps and the call-site count it asserts
       ARE those cells, so a row that changes without moving V4 is a table and a

@@ -306,11 +306,23 @@ src/core/dream/git-env.js:26-41  (buildGitEnv)
    LAST  : }
    after :
 
-src/core/exec-identity.js:554-556  (spawnPinnedSync uses opts.env for resolution and for the child)
+src/core/exec-identity.js:554-558  (spawnPinnedSync uses opts.env for resolution and for the child)
    before: function spawnPinnedSync(name, paths, opts = {}) {
    FIRST :   const env = opts.env || process.env;
+   LAST  :   const raw = spawnSync(command, [...args, ...jobArgs], passthroughSpawnOpts(opts, SAFE_SYNC_OPTS, env));
+   after :   /** @type {{status:number|null, signal:string|null, stdout:any, stderr:any, error?:Error}} */
+
+src/core/exec-identity.js:556  (the pin resolution that reads env)
+   before:   const platform = opts.platform || process.platform;
+   FIRST :   const { command, args } = resolvePinnedSpawn(name, paths, env, platform);
    LAST  :   const { command, args } = resolvePinnedSpawn(name, paths, env, platform);
    after :   const jobArgs = Array.isArray(opts.args) ? opts.args : [];
+
+src/core/exec-identity.js:558  (the child spawn that carries env)
+   before:   const jobArgs = Array.isArray(opts.args) ? opts.args : [];
+   FIRST :   const raw = spawnSync(command, [...args, ...jobArgs], passthroughSpawnOpts(opts, SAFE_SYNC_OPTS, env));
+   LAST  :   const raw = spawnSync(command, [...args, ...jobArgs], passthroughSpawnOpts(opts, SAFE_SYNC_OPTS, env));
+   after :   /** @type {{status:number|null, signal:string|null, stdout:any, stderr:any, error?:Error}} */
 
 src/cli/adopt.js:79-83  (adopt's isGitRepo)
    before:
@@ -331,10 +343,16 @@ tests/unit/dream-validate.test.js:1386  (the existing assertGitRepo assertion)
    after :
 ```
 
-Two ranges were **wrong at one end in the first draft and corrected here rather
-than in prose**: `src/cli/adopt.js:79-82` ended on the `return` with the closing
-brace after it (now `:79-83`), and `src/core/vault.js:118-119` ended inside the
-`if` block (now `:118`). Both are finding Y3.
+Three ranges were **wrong at one end and corrected here rather than in prose**:
+`src/cli/adopt.js:79-82` ended on the `return` with the closing brace after it
+(now `:79-83`) and `src/core/vault.js:118-119` ended inside the `if` block (now
+`:118`) — both finding Y3, caught in this pass; and
+`src/core/exec-identity.js:554-556` covered only the FIRST of the two facts the
+spec cites it for — finding **X2**, caught by the coherence executor, corrected
+to `:554-558` and re-run above rather than edited in place. X2's fix also pins
+each of the two facts to its own line in the spec's Current-state bullet, so
+`:556` and `:558` were **added to `check-ranges.js`** and are checked at both
+ends above rather than trusted because they fall inside a checked range.
 
 ### 0.4 Both-directions proof of every NEW verification step
 
@@ -434,7 +452,7 @@ Counts re-derived from the spec's own text by `coherence.js`, not read, and ever
 `file:line` citation extracted FROM the spec and resolved (rc 0):
 
 ```text
-spec line count                                 = 423
+spec line count                                 = 425
 Table J rows                                    = 6  J0,J1,J2,J3,J4,J5
 J-ids mentioned but absent from Table J         = none
 J-ids contiguous J0..J5                         = ok
@@ -486,7 +504,7 @@ template section is present.
 
 ### 0.6 Size
 
-The spec is **422 lines** by `wc -l` — 0.5's `coherence.js` reports 423 because
+The spec is **424 lines** by `wc -l` — 0.5's `coherence.js` reports 425 because
 it counts `split('\n')`'s array, whose last element is the empty string after the
 trailing newline. Same file; the convention is stated so a reader does not read
 the two numbers as a disagreement.
@@ -529,4 +547,60 @@ Recorded here rather than fixed, per CLAUDE.md's "Discovered issues" rule.
   `docs/specs/done/WP-dream-git-env-pinning.md` — the path moved when the WP was
   filed as `Done`. The citation names the canonical surface for the whole channel
   set, so it is worth a one-line correction by whoever next touches that ADR.
-  This WP does not touch ADR-0012 (Out of scope).
+  This WP does not touch ADR-0012 (Out of scope) and ADR-0012 is deliberately NOT
+  added to its boundary. **Routing:** the next touch of ADR-0012; the
+  orchestrator notes it in the done-flip.
+
+## Executor pass — template conformance
+
+Run in a clean context by the orchestrator against `docs/specs/_TEMPLATE.md`
+(`docs/runbooks/codex-review.md`, "Template conformance"). **Verdict:
+NON-CONFORMANT on four items; three DROPPED by the orchestrator on the
+predecessor's accepted precedent, one FIXED.** Confirmed present: the Security
+checklist with the template's anchored-pattern item `N/A`-marked, AC6's
+idempotence `N/A`, and all five Definition-of-done items.
+
+| # | Item | Disposition |
+|---|------|-------------|
+| T1 | `### Contract table(s)` is renamed `### Table J — validate.js's git call sites, and the guard's precondition` | **DROP.** The template's own comment invites the instantiation (`<!-- One canonical table per dense contract -->`), and the predecessor's `### Table U — …` carried four external rounds under the same shape |
+| T2 | `## Dispatch precondition — owner items` has no template counterpart | **DROP.** The same section appears in `WP-dream-git-env-pinning` and in `WP-process-runbook-sweeps`; it is where the standing process of 2026-09-05 lives, and the template predates that process |
+| T3 | The Mirrored Surface Checklist merged the template's "Acceptance criteria" and "Current state" categories into ONE bullet, leaving four list items where the template names five | **FIX (band C).** Split into two bullets; the "Outside this spec" entry stays as the sixth. The merge was a size trim in round zero's final pass and it cost a category its own line — exactly the surface a review finding is supposed to land on individually |
+| T4 | The `> **Provenance.**` blockquote sits in the slot the template gives the `Authoring rules live in docs/runbooks/spec-authoring.md…` bullet, which is absent | **DROP.** The bullet is an instruction to the author, not a section of the artifact — the worked example `docs/specs/done/WP-daily-summary-per-line-framing.md` omits it, as did `WP-dream-git-env-pinning` (which carried its own Provenance subsection in the same place) |
+
+## Executor pass — internal coherence
+
+Run in a clean context, and it **RAN** the verification steps rather than reading
+them. **No band A, no band B. Two band-C findings, both citation precision**;
+every other citation resolved at both ends.
+
+**What it re-derived independently and confirmed.** Table J's Caller column:
+`assertGitRepo` is the only one of the three with a caller in `src/`, and
+`assertCleanTree` / `restoreVaultToHead` have zero. VS-P4's pasted output
+supports the claim it is cited for — adopt accepts the nested directory. The
+red-proof loader imposes no per-suite uniqueness, corroborating the Y1
+withdrawal. **Discrimination assessment: every acceptance criterion
+discriminates, and none rests on a repo-wide count** — AC4 is identified by this
+WP's own `wp` field and the one fixed id.
+
+**The executor's own run, on a plain `git archive` copy of the base:**
+
+```text
+V1  npm test                                    rc 0   tests 2690 / pass 2678 / fail 0 / skipped 12
+V2  node scripts/red-proofs.js                  rc 0   63 declared, 63 selected, RUN: PROVEN
+V2  node scripts/red-proofs.js --wp <this WP>   rc 1   VACUOUS — the selection matched no proof (expected: the declaration file does not exist yet)
+V3  the declaration identity check              --     file absent (the deliverable-absent red)
+V4  the argv-invariance guard                   rc 0   V4 OK — on the UNTOUCHED tree, as AC5 states
+V5  npm run lint                                rc 0
+V5  node scripts/boundary-check.js …            rc 0   names nothing
+```
+
+| # | Band | Finding | Disposition and what changed |
+|---|------|---------|------------------------------|
+| X1 | C | The spec cited "**W1(e)** measured it". **No `W1(e)` label exists** in `docs/specs/done/WP-dream-promote-in-workspace.md`: the fact sits under a bare `**(e)**` sub-bullet inside row W1's cell, and that file's own convention only ever produces `W1(a)`…`W1(d2)` (verified: `grep -o "W1(\([a-z][0-9]*\))"` yields exactly those six). A reader following the citation finds nothing | **FIX (LIGHT).** Cited as **"row W1's `(e)` sub-bullet"** with the measured sentence quoted, so the citation resolves by text rather than by a label that was never minted |
+| X2 | C | `src/core/exec-identity.js:554-556` is cited for TWO facts — the `env` resolves the pin AND is the child's environment — but the range covers only the first; the second is at `:558` (`passthroughSpawnOpts(opts, SAFE_SYNC_OPTS, env)`). Evidence that reaches only half the claim | **FIX (LIGHT).** `:554-558`, with the two facts pinned to `:556` and `:558` individually in the Current-state bullet. `check-ranges.js` was updated and **re-run**, so 0.3's pasted output is real rather than edited |
+
+**Round-zero outcome under §0.1's round rule: LIGHT.** All three fixes (T3, X1,
+X2) are machinery, category-splitting and citation precision — branch 6 — so no
+fresh external round is owed by them and **round 1 runs on the revised tip**. No
+owner item was raised by either executor, and neither recommendation (O4, O5) was
+argued against.
