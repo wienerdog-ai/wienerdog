@@ -249,7 +249,8 @@ all its mirrors in one pass and in the same commit:
 - [ ] Acceptance criterion **1**, which is where row **Z5**'s whole-block match
       is asserted, and criteria **2**–**5**, which assert the rest
 - [ ] Verification steps **V1**–**V3** — V1's byte-exact line and placement
-      program, V2's two RED declarations, V3's suite assertions
+      program, V2's two RED declarations proved by an UNFILTERED
+      `npm run red-proofs` (Erratum 1), V3's suite assertions
 - [ ] Implementation notes' statement of what the evidence reaches, and the
       block/declaration trap Z1's and Z2's line shape rests on
 - [ ] The Security checklist's third item, which names the retained residual
@@ -356,13 +357,33 @@ all its mirrors in one pass and in the same commit:
       not claimed.**
 - [ ] **5.** Two RED declarations, one per act, sharing one `testNamePattern`
       that runs BOTH acts' assertions. Each removes exactly that act's flush call
-      and must redden exactly its own assertion, leaving the other green (V2).
+      and must redden exactly its own assertion, leaving the other green — proved
+      by an **UNFILTERED** `npm run red-proofs`, which must report
+      `66 declared proof(s), 66 selected`, `RUN: PROVEN` and rc 0 with both new
+      ids PROVEN (V2). **A `--wp`-filtered run cannot satisfy this criterion: it
+      exits non-zero by construction** — Erratum 1.
 - [ ] **6.** `npm test` (V3), `npm run lint` (V4) and the scoped mirror walk
       (V5) pass.
 - [ ] **7.** Idempotence — **N/A: this WP ships no command and writes nothing
       outside the repository.**
 
 ## Verification steps (run these; paste output in the PR)
+
+> **Erratum 1 (pre-merge, 2026-09-06).** **V2 as first written could never
+> pass.** It prescribed `npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush`
+> inside the `set -e` block; `scripts/red-proofs.js`'s `rollUp` marks every
+> `(wp, criterion)` pair with an unselected declaration **FILTERED** and the run
+> exits non-zero, so the gate aborted on a run that had proved this package's two
+> declarations. **What is true:** the two ids are PROVEN under either
+> invocation, and the RUN verdict is `PROVEN` with rc 0 only when the runner is
+> UNFILTERED. **Re-measured on the WP branch at `01323729`:** the `--wp`
+> selection gives `66 declared proof(s), 2 selected` → `RUN: FILTERED`, **rc 1**,
+> with both new ids PROVEN; the bare `npm run red-proofs` gives
+> `66 declared proof(s), 66 selected` → `RUN: PROVEN`, **rc 0**. V2 is now the
+> bare command, criterion 5 and the Mirrored Surface Checklist say so, and the
+> `--wp` selection survives only as a non-gating reading with `|| true`.
+> **Found by wd-reviewer on PR #243, round 1**, which also named the rule already
+> stated verbatim at `docs/specs/done/WP-dot-segment-denial.md:683-686`.
 
 ```bash
 set -e   # REQUIRED, and each assertion is its OWN statement: bash exempts from
@@ -407,8 +428,28 @@ node /tmp/fpdf-v1.js
 #      reddens ONLY its own act. The runner requires a green BASELINE, enforces
 #      SET EQUALITY over own-body failures (so a mutation that also reddens the
 #      other act's assertion FAILS here), and runs a fresh green CONTROL after.
+#
+#      RUN IT UNFILTERED. `--wp` and `--proof` leave every other declaration's
+#      `(wp, criterion)` pair unselected, which `rollUp` reports as FILTERED and
+#      which exits NON-ZERO — a filtered run is evidence of a filter, not of a
+#      failure (`docs/specs/done/WP-dot-segment-denial.md:683-686` states this
+#      rule verbatim). See Erratum 1.
+#
+#      EXPECT: `66 declared proof(s), 66 selected`, `RUN: PROVEN`, rc 0, with
+#      `failed-preserve-tmp-flush-dropped` and `failed-preserve-dest-flush-dropped`
+#      each PROVEN and their shared `(WP-…-flush, criterion 2)` roll-up PROVEN.
+#      66 = the 64 declarations that predate this package plus these two; a
+#      different total means the tree moved, not that this WP failed.
 #      If node_modules is a symlink here, see Implementation notes.
-npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush
+npm run red-proofs
+
+# V2's companion READING — not a gate, and not a criterion. It prints just this
+# package's two verdicts, which is faster to read than the full run above. The
+# `|| true` is REQUIRED and is what keeps it outside the gate: this invocation
+# exits 1 BY CONSTRUCTION (every other declaration is left out, so the roll-up
+# is FILTERED), and without it `set -e` would abort the block on a run that
+# proved exactly what it claims. Never cite it as pass or fail.
+npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush || true
 
 # V3 — criteria 2, 3 and 4's suite half.
 npm test
