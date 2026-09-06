@@ -11,12 +11,16 @@ epic: dream-promotion
 
 # WP-quarantine-failed-preserve-disposal-flush: a best-effort flush after a failed preservation's removal
 
-> **Design gate round zero ran 2026-09-06 against `b1d20ce0`;** the measurements
-> (`FP-P1`…`FP-P7`), the pinned STOP CRITERION and the both-directions proof of
-> V1 are
-> `docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate-rounds.md`.
-> The value question this stub was filed to ask is answered **YES** — owner item
-> **O12** below. This spec is `Draft` until its adversarial rounds close.
+> **The design gate ran 2026-09-06 against `b1d20ce0` and CLOSED at round 2** —
+> one channel approved with no material findings, the other's two items were a
+> residual-cell qualification and a record inaccuracy, both fixed and neither
+> falsifying a decision. **This spec is `Ready`.** The measurements (`FP-P1`…`FP-P9`),
+> the STOP CRITERION pinned before round 1, the both-directions proof of V1, the
+> per-round dispositions and the closure are
+> `docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate-rounds.md`
+> — see its "Closure" section for the named residuals and the dispatch-time
+> re-verification inventory. **The value question this stub was filed to ask is
+> answered YES** — owner item **O12** below.
 
 ## Context (read this, nothing else)
 
@@ -419,9 +423,11 @@ npm run lint
 #      UNRESOLVED block is byte-identical between the base and this branch (the
 #      round-zero record, "the executor passes"). A reviewer who runs the bare
 #      command sees that rc 1 and must not attribute it here. The scoped run
-#      exits 0, and reports rows Z1–Z3 as AMBIGUOUS against
-#      `WP-dream-promote-report`'s Table Z — reported, never failed, and resolved
-#      by the qualification paragraph under "Contract reference".
+#      exits 0, and reports this spec's Z-row references as AMBIGUOUS against
+#      `WP-dream-promote-report`'s Table Z — reported, NEVER failing, and resolved
+#      by the qualification paragraph under "Contract reference". The list of
+#      which rows is deliberately not written here: it grows with the table, and
+#      a count beside a list is a number waiting to be falsified.
 node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush
 ```
 

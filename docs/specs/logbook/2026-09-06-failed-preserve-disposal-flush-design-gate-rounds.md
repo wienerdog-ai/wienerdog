@@ -584,7 +584,7 @@ an un-dispositioned finding.
 3. **The unscoped `node scripts/mirror-walk.js` exits 1** from 14 UNRESOLVED
    entries in unrelated specs that predate this package; the block is
    byte-identical to `b1d20ce0`'s. V5 is scoped for exactly this reason.
-4. **Size: 465 lines**, above the 400 aimed for. Six rationale paragraphs were
+4. **Size: 471 lines**, above the 400 aimed for. (**465** at `5564fb20`; the mechanical verification's two prose corrections added 6 — the stale `Draft` blockquote became the closure statement, and V5's comment stopped naming a row list that grows with the table.) Six rationale paragraphs were
    consolidated across rounds 1 and 2; what remains is the contract, the owner
    items, the table and the template's own sections.
 5. **No test reaches what a power loss leaves**, and none is named for crash
