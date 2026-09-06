@@ -43,6 +43,17 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 #10 (night/day autopilot session, owner-authorized merges).**
+> Measured on `main` at `8ea9e5d1`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | 3c-succ | `WP-quarantine-failed-preserve-disposal-flush` | **Done** | design loop #242 (`fdbeb9f2`), implementation #243 (`8ea9e5d1`), filed in this pass | **The O11 successor: a BEST-EFFORT `flushDir` of the removal's parent after each of Table D row D4's two failure-arm removals (`validate.js:984` `tmp`, `:1020` `dest`), gated by `DURABILITY_AVAILABLE` at the call site because `flushDir` itself carries no gate (Table Z row Z4, measured).** A completed POSIX flush closes that act's post-completion window; a flush that does not complete, and every win32 run, retain the residual priced under O10 (Z3 — the flush result does not change what `quarantinePreserve` returns; downstream branch-specific and unchanged). Owner items **O12** (value YES — 2.5–3 ms on an already-failing arm; the success path pays nothing, measured) and **O13** (best-effort; fail-loud priced as the overrule). **Design loop: round zero, two clean-context executors, TWO double-channel rounds** (round 1 HEAVY — Z3 narrowed to the observable contract, the forced-win32 recipe replaced and proven discriminating, Z2's residual written independently, Z5 pinning the comment blocks to V1; round 2 CLOSE — plugin approve, shadow one residual qualifier + one record inaccuracy). **Implementation: two rounds of the triple-channel PR gate** — round 1: plugin CLEAN, shadow one B (the forced-win32 tests counted fsyncs without establishing reach), wd-reviewer REQUEST-CHANGES with the implementation judged correct — the same reach gap (converged), a false `rc=0` pasted for V2, and a SPEC DEFECT: V2's `--wp`-filtered red-proofs run under `set -e` can never pass (the runner rolls unselected pairs up as FILTERED, rc 1) → **erratum 1 landed on the branch before merge** (`3cd68a85`: V2 is the unfiltered run; the `--wp` form a non-gating reading); round 2 on `ae164823`: plugin CLEAN, shadow *"patch is correct"* (zero findings), wd-reviewer **APPROVE** — all six round-1 findings genuinely fixed, four disjoint tracer patch sets, five band-C observations (one erratum, one routed to the predecessor, one routed to wd-architect as a cross-WP ADR-0031 signal). Merged tree: `2699/2687/0/12`, whole-tree `RUN: PROVEN` 66/66 (the two new declarations and the seven pre-existing preserve-durability roll-ups), lint clean. **Two dated errata** in the filed spec (one pre-merge on the branch). |
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried forward, **plus:** O10's class on every failed flush and every win32 run; Z1's same-PID collision; no test reaches what a power loss leaves (by design); the 2-space/4-space comment-line substring hazard in RED `find` literals (third occurrence, recorded).
+>
+> **Next in the queue:** `WP-quarantine-only-copy-shelf` (Draft, filed; the banner class + O9 + O10), then unfiled — `WP-red-proofs-marker-audit`, the owner's named option **(c)** (mid-trim of `References`), the criterion-7 one-test follow-up; routed hygiene: ADR-0012's pre-`done/` spec path, the unused `restoreVaultToHead` import.
+>
 > **Status pass, 2026-09-06 #9 (night autopilot session, owner-authorized merges).**
 > Measured on `main` at `66b2b1f8 (the base this loop measured on)`, not transcribed:
 >
