@@ -64,13 +64,24 @@ and the pin does not touch it. Owner item **O5** decides it.
 
 **THE PINNED BASE IS `8358655d41f997e8da05a39ec6b2851d05785480`**, stated here
 once and cited everywhere else. Every measurement below, Table J's cells, VS-P7's
-re-measurement and the Table W amendment's claim were taken against it, so **V4
-refuses to run against any other base**: `git merge-base origin/main HEAD` must
-equal this SHA. A rebase onto a newer `main` silently moves that base and folds
-any upstream `validate.js` change into it — which is exactly when row W1(c)(i)'s
-standing trigger should force re-review, not when it should go quiet. If the base
-moves, re-derive Table J, re-run VS-P7 against the new base, and update this SHA;
-dispatch-time re-verification runs that check.
+re-measurement and the Table W amendment's claim were taken against it, and V4
+takes its diff of the prescribed lines against it.
+
+**V4's guard on that base compares CONTENT, not SHAs**, and the distinction is
+load-bearing rather than pedantic: `src/core/dream/validate.js` and
+`src/core/dream/git-env.js` must be **byte-identical between the pinned base and
+`git merge-base origin/main HEAD`**. The two subjects are exactly the files the
+measurements rest on — Table J's rows are `validate.js`'s call sites, and row J0
+calls `buildGitEnv`, which is `git-env.js`'s. What the guard exists to catch is
+an **upstream change to those files sliding under a rebase**, which is when row
+W1(c)(i)'s standing trigger should force re-review rather than go quiet; a
+`main` that moved for unrelated reasons is not that. **A SHA-equality form of
+this guard was unsatisfiable by construction** and the dispatch-time gate caught
+it (finding D1): the Ready PR itself advances `main`, and the implementer must
+branch AFTER it to have this spec in the tree, so the merge-base is never the
+measured SHA on any honest implementation branch. If the CONTENT differs,
+re-derive Table J, re-run VS-P7 against the new base, and update this SHA;
+dispatch-time re-verification runs exactly that content check.
 
 - **`src/core/dream/validate.js:64-81` — the module-private `git()`.** It
   spawns through the pinned front door
@@ -294,7 +305,10 @@ review is added here on the spot.
 - [ ] **Verification commands / greps** — V3, V5, and **V4 with V4a, the
       executable mirror of rows J1–J4**: the three diff lines V4 requires and the
       four argv literals V4a greps ARE those cells, so a row that changes without
-      moving them is a table and a mirror disagreeing inside one commit.
+      moving them is a table and a mirror disagreeing inside one commit. **V4's
+      base guard is a CONTENT comparison over `validate.js` and `git-env.js`, not
+      a SHA equality** — the wording is the Current-state bullet's and moves with
+      it.
       **Both are PRESENCE screens and are labelled so in the step, in AC5 and
       here — V4 is blind to additions.** The invariant they do not carry is
       AC2's one-spawn clause and wd-reviewer's whole-diff read of
@@ -488,9 +502,12 @@ no longer an S.
 - [ ] **AC5 — the prescribed change landed, and nothing else was added; the two
       halves are checked by different things and neither pretends to be the
       other** (rows J1–J4, and the claim the Table W amendment carries).
-      **(a) LANDED — mechanical.** V4 exits 0: the merge-base equals the pinned
-      base, and the diff against it CONTAINS the two prescribed added lines and
-      the one removed line. **V4 is blind to additions and is labelled so in the
+      **(a) LANDED — mechanical.** V4 exits 0: `src/core/dream/validate.js` and
+      `src/core/dream/git-env.js` are **unchanged in CONTENT** between the pinned
+      base and the branch's merge-base with `origin/main` (never a SHA
+      comparison — see Current state and finding D1), and the diff against the
+      pinned base CONTAINS the two prescribed added lines and the one removed
+      line. **V4 is blind to additions and is labelled so in the
       step** — it proves the prescribed change landed, nothing about what else
       did. V4a is likewise a presence screen for the four argv literals.
       **(b) NOTHING ELSE WAS ADDED — observed where it is observable, plus a
@@ -563,15 +580,19 @@ echo "V4a OK — presence screen only"
 # a lexically sound analysis needs an AST dependency this repo does not carry.
 # The no-added-spawn invariant is AC2's ONE-SPAWN clause plus wd-reviewer's
 # whole-diff read of this file — see AC5.
-# The base is PINNED (Current state): a rebase would fold an upstream change into
-# the base and silently retire this check, which is when W1(c)(i)'s trigger should
-# fire, not go quiet.
+# The base is PINNED (Current state) and its guard compares CONTENT, not SHAs:
+# what must not happen is an upstream change to the two measured files folding
+# into the base under a rebase — that is when W1(c)(i)'s trigger should fire, not
+# go quiet. `main` moving for unrelated reasons is not that, and a SHA-equality
+# form was unsatisfiable by construction (finding D1): the Ready PR itself moves
+# `main`, and the implementer branches after it.
 # NOTE, so the sequence is not misread: `scripts/red-proofs.js` applies its
 # mutations to fresh isolated COPIES of the tree. V4 runs against the unmutated
 # working checkout, so a mutation that would redden V4 is not a conflict with V2.
 BASE=8358655d41f997e8da05a39ec6b2851d05785480
 MB=$(git merge-base origin/main HEAD)
-[ "$MB" = "$BASE" ] || { echo "FAIL: base moved ($MB) — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA"; exit 1; }
+git diff --quiet "$BASE" "$MB" -- src/core/dream/validate.js src/core/dream/git-env.js \
+  || { echo "FAIL: base moved — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA (merge-base $MB changes one of the two measured files)"; exit 1; }
 D=$(git diff "$BASE" -- src/core/dream/validate.js)
 # `-e` is required, not stylistic: the removed-line pattern begins with `-` and
 # grep would otherwise read it as an option (measured — the first draft of this

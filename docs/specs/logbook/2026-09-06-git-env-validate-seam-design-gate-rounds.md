@@ -851,7 +851,7 @@ on the revised tip, then the PR.
 | # | Source | Band | Branch | Finding | What changed |
 |---|--------|------|--------|---------|--------------|
 | R2-A | plugin F1 **+** shadow F1, **CONVERGED** | B | **3 — the same-family repeat rule (ADR-0031), fired** | The SECOND consecutive round on V4's evadability. Round 1 broke a literal count with a multi-line call; round 2 broke the comment filter with `/* explanatory comment */ git(vaultDir, ['status', '--porcelain']);` — both channels EXECUTED it, V4 returned rc 0 and the hidden call ran. A multi-line `// x */ git(); /*` passes too. A line-prefix comment filter over a JS diff cannot be lexically sound, and an AST tool is a dependency this repo does not carry | **RE-CUT BY KIND, never a third textual patch** — see below |
-| R2-B | shadow F2 | B | 6 (machinery) → LIGHT | V4 diffed from `merge-base(origin/main, HEAD)` while Table J, VS-P7 and the W1 amendment were measured on `8358655d`. Today they coincide; after a routine rebase an upstream `validate.js` change folds into the new base and **disappears** from V4, while V4a still finds the four calls and AC2 still observes only `assertGitRepo`. That is precisely when W1(c)(i)'s trigger should force re-review | **FIX.** The pinned base SHA is stated **once**, in Current state, and V4 now REFUSES any other: `git merge-base origin/main HEAD` must equal it, else red with *"base moved — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA"*. Proved as state 5 below. Dispatch-time re-verification runs exactly that check |
+| R2-B | shadow F2 | B | 6 (machinery) → LIGHT | V4 diffed from `merge-base(origin/main, HEAD)` while Table J, VS-P7 and the W1 amendment were measured on `8358655d`. Today they coincide; after a routine rebase an upstream `validate.js` change folds into the new base and **disappears** from V4, while V4a still finds the four calls and AC2 still observes only `assertGitRepo`. That is precisely when W1(c)(i)'s trigger should force re-review | **FIX.** The pinned base SHA is stated **once**, in Current state, and V4 now REFUSES any other: `git merge-base origin/main HEAD` must equal it, else red with *"base moved — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA"*. Proved as state 5 below. **SUPERSEDED IN PART by dispatch-time finding D1**: the intent stands, the predicate does not — the guard is now a CONTENT comparison |
 | R2-C | plugin + shadow F3 | C | 5 (mirror drift) → LIGHT | The new O6 entry in the owner-rulings record restates the trigger subject, the no-shape claim, the constructed-environment rule, the stale-stat result and the full overrule cost — then closes by claiming citation-only treatment. Two substantive copies to keep aligned in an append-only record; the same defect the previous amendment had just fixed for O4/O5 | **FIX, by the same append-only route.** A dated correction withdraws every deciding sentence of the O6 entry **including its false closing sentence**, leaving adoption status plus a citation of the spec's O6 |
 | R2-D | plugin, next-steps note | — | 6 → LIGHT | The RED mutation would make V4 red; a reader could take that for a conflict with V2 | **FIX.** V4's comment now states that `scripts/red-proofs.js` mutates fresh isolated COPIES while V4 runs on the unmutated working checkout, so the two never meet |
 
@@ -963,8 +963,9 @@ Each is stated here so the next reader finds them together.
    one-spawn assertion** at the seam, and **wd-reviewer's whole-diff read of
    `src/core/dream/validate.js`**, named in AC5. Rows J2–J4 have no dream-path
    caller, so an addition there is inert on the run.
-2. **Size.** The spec is **635 lines** against `docs/specs/README.md`'s ~400-line
-   heuristic — a ~59% overage, recorded rather than trimmed, because trimming now
+2. **Size.** The spec is **656 lines** against `docs/specs/README.md`'s ~400-line
+   heuristic — a ~64% overage (635 at closure; the dispatch-time D1 fix added 21),
+   recorded rather than trimmed, because trimming now
    would reopen surface two rounds have frozen. It touches **5 files** (4
    Deliverables + the spec), inside the `≤ 8` bound, and the code change is **two
    lines plus two comment edits**: an **S**.
@@ -1001,10 +1002,17 @@ executable Current-state claim against `main` immediately before dispatch, and t
 record the run and the SHA it ran against. **A stale claim blocks the dispatch
 and routes the spec back to wd-architect.**
 
-- [ ] **`git merge-base origin/main HEAD` still equals the PINNED BASE
-      `8358655d41f997e8da05a39ec6b2851d05785480`.** This is V4's first gate and
-      the anchor for Table J, VS-P7 and the Table W amendment; if it moved,
-      Table J must be re-derived and VS-P7 re-run before the SHA is updated.
+- [ ] **`src/core/dream/validate.js` and `src/core/dream/git-env.js` are
+      UNCHANGED IN CONTENT between the pinned base
+      `8358655d41f997e8da05a39ec6b2851d05785480` and
+      `git merge-base origin/main HEAD`** —
+      `git diff --quiet 8358655d <merge-base> -- src/core/dream/validate.js src/core/dream/git-env.js`
+      exits 0. **This is a CONTENT comparison and never a SHA equality**
+      (dispatch-time finding D1 below): `main` moves for unrelated reasons all
+      the time, including for this spec's own Ready PR. It is V4's first gate and
+      the anchor for Table J, VS-P7 and the Table W amendment; if the CONTENT
+      differs, Table J must be re-derived and VS-P7 re-run before the SHA is
+      updated.
 - [ ] `src/core/dream/validate.js:64-81` resolves to the module-private `git()`,
       and its `env: process.env,` line is still byte-exact — it is the line V4
       requires to be removed.
@@ -1040,3 +1048,54 @@ and routes the spec back to wd-architect.**
 - [ ] `tests/red-proofs/dream-git-env-validate-seam.proofs.json` still does not
       exist (V3's deliverable-absent red), and no other declaration file has
       claimed the id `validate-git-inherits-git-dir`.
+
+## Dispatch-time re-verification, 2026-09-06 — one finding, D1
+
+The design loop closed at round 2, the clean-context mechanical verification
+passed 7/7, and PR #236 merged the `Ready` spec to `main` (`e7f1c957`). The
+orchestrator then ran the dispatch-time gate
+(`docs/runbooks/codex-review.md`, "Dispatch-time re-verification") against
+`main` and **blocked the dispatch on the Closure checklist's own first item.**
+It was right to: the item was **stale by construction**, and no implementer could
+ever have satisfied it.
+
+| # | Band | Branch | Finding | What changed |
+|---|------|--------|---------|--------------|
+| D1 | B | 6 (machinery) → LIGHT, no external round | **V4's base guard was UNSATISFIABLE BY CONSTRUCTION.** It required `git merge-base origin/main HEAD` to EQUAL `8358655d`. But the implementer must branch from `main` **after** the `Ready` PR merges — that is how the spec reaches their tree — so the merge-base is `e7f1c957`, and V4 was red on **every honest implementation branch**. The circularity is the point: **the Ready PR itself moves `main`**, so a SHA-equality guard pinned to a pre-Ready commit can never hold once the spec is dispatchable. R2-B's intent — an upstream change to the measured files must not slide under a rebase — is right; the SHA was the wrong predicate for it | **FIX.** The guard compares **CONTENT**: `git diff --quiet "$BASE" "$(git merge-base origin/main HEAD)" -- src/core/dream/validate.js src/core/dream/git-env.js` must exit 0, else the same base-moved message with the offending merge-base named. **Both files, not one**: Table J's rows are `validate.js`'s call sites and row J0 calls `buildGitEnv`, which is `git-env.js`'s, so the measurements rest on both. `BASE` stays pinned as the SHA the prescribed-lines diff is taken against. Every mirror moved in the same commit: the Current-state pinned-base bullet, AC5 half (a), the Mirrored Surface Checklist's V4 line, and this record's Closure checklist item above |
+
+**Measured on this tree before the fix was written:** `git diff --quiet 8358655d e7f1c957 -- src/core/dream/validate.js src/core/dream/git-env.js` exits **0** — neither measured file changed between the pinned base and the post-merge `main`, so every measurement in this record still holds and nothing needs re-deriving. That is what the new guard asserts, and it is the fact the old guard could not express.
+
+### Both-directions proof of the new base guard (`prove-d1.sh`)
+
+The script under test is **extracted from the spec**, not retyped. Each state is
+a fresh `git clone --no-hardlinks`; rc captured with no pipe in between.
+
+```text
+=== (i) an HONEST implementation branch: merge-base is e7f1c957, NOT the pinned SHA ===
+  merge-base = e7f1c957378d62d9b4bd5b55b07b4647bb2aecf2
+  pinned base= 8358655d41f997e8da05a39ec6b2851d05785480
+  V4 rc=1  FAIL: the require('./git-env') line was not added
+=== (ii) the base genuinely MOVED: validate.js differs at the merge-base ===
+  merge-base = f2e2dd135c0b71ce4e4fa376b77df35d55a7766a
+  V4 rc=1  FAIL: base moved — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA (merge-base f2e2dd135c0b71ce4e4fa376b77df35d55a7766a changes one of the two measured files)
+=== (iii) a COMPLIANT working state on an honest branch ===
+  merge-base = e7f1c957378d62d9b4bd5b55b07b4647bb2aecf2
+  V4 rc=0  V4 OK — the prescribed change landed (blind to additions; AC2 and the reviewer's read carry that)
+```
+
+**Read (i) carefully — it is the case the old form got wrong.** The merge-base is
+`e7f1c957`, **not** the pinned SHA, and the guard **passes**: the two measured
+files are byte-identical between the two commits, so V4 proceeds to its
+prescribed-lines checks and fails there, on the untouched tree, which is the
+correct red for a branch where the work has not been done. Under the old form
+this state died at the guard with a base-moved message and the implementer had no
+way forward. **(ii)** is the case the guard exists for: a one-line change to
+`validate.js` committed upstream and folded into the merge-base produces the
+base-moved failure naming the offending commit. **(iii)** is the green.
+
+**The lesson, stated where the next architect will hit it.** A **SHA-equality**
+base guard on a spec that must reach `Ready` is unsatisfiable by construction,
+because the Ready PR is itself a commit on `main`. Guard the **content that the
+measurements rest on**, and name those files explicitly — the predicate then says
+what the reviewer actually meant, and stays true across every merge that does not
+touch them.
