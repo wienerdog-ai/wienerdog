@@ -1,0 +1,45 @@
+{
+  "suite": "tests/unit/dream-validate.test.js",
+  "proofs": [
+    {
+      "id": "failed-preserve-tmp-flush-dropped",
+      "wp": "WP-quarantine-failed-preserve-disposal-flush",
+      "criterion": "2",
+      "why": "row Z1: dropping the shared-catch removal's best-effort flush must redden the ONE assertion that observes it — the removal followed by an fsync of qdir. The boolean-ignored and forced-win32 [FPDF-Z1] tests assert an observable (null, nothing thrown; zero fsyncs under forced win32) that is unchanged whether or not this line exists, and [FPDF-Z2]'s tests are a different act entirely — both must stay green",
+      "file": "src/core/dream/validate.js",
+      "find": "    if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);",
+      "replace": "    /* RP_MUT_FPDF_Z1_DROPPED */",
+      "marker": "RP_MUT_FPDF_Z1_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[FPDF-Z[12]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [FPDF-Z1] the shared-catch removal of tmp is followed by an fsync of qdir, on both arms"
+          ],
+          "signal": "[FPDF-Z1]"
+        }
+      ]
+    },
+    {
+      "id": "failed-preserve-dest-flush-dropped",
+      "wp": "WP-quarantine-failed-preserve-disposal-flush",
+      "criterion": "2",
+      "why": "row Z2: dropping the post-commit removal's best-effort flush must redden the ONE assertion that observes it — the removal followed by an fsync of qdir. The boolean-ignored and forced-win32 [FPDF-Z2] tests assert an observable that is unchanged whether or not this line exists, and [FPDF-Z1]'s tests are a different act entirely — both must stay green",
+      "file": "src/core/dream/validate.js",
+      "find": "  if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);",
+      "replace": "  /* RP_MUT_FPDF_Z2_DROPPED */",
+      "marker": "RP_MUT_FPDF_Z2_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[FPDF-Z[12]\\]",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: [FPDF-Z2] the post-commit removal of dest is followed by an fsync of qdir, on both arms"
+          ],
+          "signal": "[FPDF-Z2]"
+        }
+      ]
+    }
+  ]
+}

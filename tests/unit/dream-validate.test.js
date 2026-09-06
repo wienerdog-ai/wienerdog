@@ -3424,7 +3424,216 @@ test('dream-validate: [QPD-7] every directory descriptor the flush protocol open
   }
 });
 
+// ── FPDF-Z1/Z2 (WP-quarantine-failed-preserve-disposal-flush, Table Z) ──────
+// A best-effort directory flush after each FAILED preservation's owned-path
+// removal. Row Z3: the flush's boolean is discarded, so a flush that does not
+// complete must leave `quarantinePreserve`'s observable contract (`null`,
+// nothing thrown) exactly as it is today. Row Z4: the platform gate lives at
+// the call site (`DURABILITY_AVAILABLE`), not inside `flushDir` itself.
 
+/** Force `fs.linkSync` to throw on every call — Implementation notes: the ONE
+ *  way to reach row Z1's shared `catch` on any platform. The create and the
+ *  write succeed; the commit itself throws, so `ownedTmp` is true and `tmp`
+ *  is removed. @returns {() => void} restorer */
+function failCommit() {
+  return patchFs('linkSync', () => function () {
+    const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+  });
+}
+
+/** Force ONE directory's `openSync` to throw. @param {string} dirPath
+ *  @returns {() => void} restorer */
+function failDirOpen(dirPath) {
+  return patchFs('openSync', (orig) => function (p, ...rest) {
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dirPath)) {
+      const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+    }
+    return orig.call(this, p, ...rest);
+  });
+}
+
+/** Force ONE directory's `fsyncSync` to throw, matched by the descriptor
+ *  `openSync` returned for it. @param {string} dirPath
+ *  @returns {() => void} restorer */
+function failDirFsync(dirPath) {
+  let matchedFd = -1;
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(dirPath)) matchedFd = fd;
+    return fd;
+  });
+  const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
+    if (fd === matchedFd) { const e = new Error('EIO: injected'); e.code = 'EIO'; throw e; }
+    return orig.call(this, fd);
+  });
+  return () => { unOpen(); unFsync(); };
+}
+
+/** Every `rmSync` of `removedPath` and every `fsyncSync` resolved to `qdir`,
+ *  in call order — so "the removal is followed by an fsync of qdir" is a
+ *  claim about ORDER, not merely occurrence: row Z2's own read-back can issue
+ *  a legitimate chain flush of `qdir` BEFORE the removal, and that must not be
+ *  mistaken for the flush this package adds AFTER it.
+ *  @param {string} removedPath @param {string} qdir
+ *  @returns {{events: Array<{type:'rm'|'fsync'}>, restore: () => void}} */
+function traceRemovalThenFlush(removedPath, qdir) {
+  const events = [];
+  const openPaths = new Map();
+  const unRm = patchFs('rmSync', (orig) => function (p, ...rest) {
+    const res = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(removedPath)) events.push({ type: 'rm' });
+    return res;
+  });
+  const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
+    const fd = orig.call(this, p, ...rest);
+    if (typeof p === 'string') openPaths.set(fd, p);
+    return fd;
+  });
+  const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
+    const p = openPaths.get(fd);
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(qdir)) events.push({ type: 'fsync' });
+    return orig.call(this, fd);
+  });
+  return { events, restore: () => { unRm(); unOpen(); unFsync(); } };
+}
+
+/** Re-require `validate.js` with `process.platform` forced to `win32` for the
+ *  duration of `fn(mod)` — row Z4's platform gate lives at the call site, so
+ *  `DURABILITY_AVAILABLE` binds `false` at the re-require and stays bound for
+ *  every call `fn` makes. Restores the platform AND the cache entry in a
+ *  `finally` (Implementation notes). @param {(mod: object) => void} fn */
+function withForcedWin32(fn) {
+  const orig = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  delete require.cache[VALIDATE_ID];
+  try {
+    fn(require('../../src/core/dream/validate'));
+  } finally {
+    Object.defineProperty(process, 'platform', orig);
+    delete require.cache[VALIDATE_ID];
+  }
+}
+
+test('dream-validate: [FPDF-Z1] the shared-catch removal of tmp is followed by an fsync of qdir, on both arms', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  for (const kind of ['withheld', 'redacted']) {
+    const stateDir = freshStateDir();
+    const qdir = chainFor(stateDir, kind)[0];
+    const tmp = path.join(qdir, `.tmp-${process.pid}-x.md`);
+    const unLink = failCommit();
+    const tracer = traceRemovalThenFlush(tmp, qdir);
+    let res;
+    try {
+      res = quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+    } finally { unLink(); tracer.restore(); }
+    assert.equal(res, null, `[FPDF-Z1] ${kind}: the injected commit failure is a preservation failure`);
+    assert.equal(fs.existsSync(tmp), false, `[FPDF-Z1] ${kind}: the owned tmp was removed`);
+    const rmIdx = tracer.events.findIndex((e) => e.type === 'rm');
+    assert.notEqual(rmIdx, -1, `[FPDF-Z1] ${kind}: the removal was observed`);
+    assert.ok(
+      tracer.events.slice(rmIdx + 1).some((e) => e.type === 'fsync'),
+      `[FPDF-Z1] ${kind}: an fsync of qdir followed the removal — events: ${JSON.stringify(tracer.events)}`
+    );
+  }
+});
+
+test('dream-validate: [FPDF-Z2] the post-commit removal of dest is followed by an fsync of qdir, on both arms', { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  for (const kind of ['withheld', 'redacted']) {
+    const stateDir = freshStateDir();
+    const qdir = chainFor(stateDir, kind)[0];
+    const dest = path.join(qdir, '2026-07-02-x.md');
+    const unRead = patchDestRead(dest, 'corrupt');
+    const tracer = traceRemovalThenFlush(dest, qdir);
+    let res;
+    try {
+      res = quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+    } finally { unRead(); tracer.restore(); }
+    assert.equal(res, null, `[FPDF-Z2] ${kind}: the injected read-back corruption is a preservation failure`);
+    assert.equal(fs.existsSync(dest), false, `[FPDF-Z2] ${kind}: the owned dest was removed`);
+    const rmIdx = tracer.events.findIndex((e) => e.type === 'rm');
+    assert.notEqual(rmIdx, -1, `[FPDF-Z2] ${kind}: the removal was observed`);
+    assert.ok(
+      tracer.events.slice(rmIdx + 1).some((e) => e.type === 'fsync'),
+      `[FPDF-Z2] ${kind}: an fsync of qdir followed the removal — events: ${JSON.stringify(tracer.events)}`
+    );
+  }
+});
+
+test("dream-validate: [FPDF-Z1] the flush's boolean is ignored — its openSync and, separately, its fsyncSync forced to throw, on both arms", { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  for (const kind of ['withheld', 'redacted']) {
+    for (const fault of [failDirOpen, failDirFsync]) {
+      const stateDir = freshStateDir();
+      const qdir = chainFor(stateDir, kind)[0];
+      const tmp = path.join(qdir, `.tmp-${process.pid}-x.md`);
+      const unLink = failCommit();
+      const unFault = fault(qdir);
+      let res;
+      let threw = null;
+      try {
+        res = quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+      } catch (e) { threw = e; } finally { unLink(); unFault(); }
+      assert.equal(threw, null, `[FPDF-Z1] ${kind}/${fault.name}: nothing is thrown`);
+      assert.equal(res, null, `[FPDF-Z1] ${kind}/${fault.name}: the observable is unchanged — null`);
+      assert.equal(fs.existsSync(tmp), false, `[FPDF-Z1] ${kind}/${fault.name}: the owned tmp is still removed`);
+    }
+  }
+});
+
+test("dream-validate: [FPDF-Z2] the flush's boolean is ignored — its openSync and, separately, its fsyncSync forced to throw, on both arms", { skip: process.platform === 'win32' && 'row F5: no flush on win32' }, () => {
+  for (const kind of ['withheld', 'redacted']) {
+    for (const fault of [failDirOpen, failDirFsync]) {
+      const stateDir = freshStateDir();
+      const qdir = chainFor(stateDir, kind)[0];
+      const dest = path.join(qdir, '2026-07-02-x.md');
+      const unFault = fault(qdir);
+      let res;
+      let threw = null;
+      try {
+        res = quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+      } catch (e) { threw = e; } finally { unFault(); }
+      assert.equal(threw, null, `[FPDF-Z2] ${kind}/${fault.name}: nothing is thrown`);
+      assert.equal(res, null, `[FPDF-Z2] ${kind}/${fault.name}: the observable is unchanged — null`);
+      assert.equal(fs.existsSync(dest), false, `[FPDF-Z2] ${kind}/${fault.name}: the owned dest is still removed`);
+    }
+  }
+});
+
+test('dream-validate: [FPDF-Z1] DURABILITY_AVAILABLE false (forced win32) issues zero fsync calls, on both arms', () => {
+  for (const kind of ['withheld', 'redacted']) {
+    withForcedWin32((mod) => {
+      const stateDir = freshStateDir();
+      const qdir = chainFor(stateDir, kind)[0];
+      const tmp = path.join(qdir, `.tmp-${process.pid}-x.md`);
+      const unLink = failCommit();
+      const tracer = traceFlushes();
+      let res;
+      try {
+        res = mod.quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+      } finally { unLink(); tracer.restore(); }
+      assert.equal(res, null, `[FPDF-Z1] win32/${kind}: the injected commit failure is a preservation failure`);
+      assert.equal(fs.existsSync(tmp), false, `[FPDF-Z1] win32/${kind}: the owned tmp was removed`);
+      assert.equal(tracer.events.length, 0, `[FPDF-Z1] win32/${kind}: zero fsync calls — events: ${JSON.stringify(tracer.events)}`);
+    });
+  }
+});
+
+test('dream-validate: [FPDF-Z2] DURABILITY_AVAILABLE false (forced win32) issues zero fsync calls, on both arms', () => {
+  for (const kind of ['withheld', 'redacted']) {
+    withForcedWin32((mod) => {
+      const stateDir = freshStateDir();
+      const qdir = chainFor(stateDir, kind)[0];
+      const dest = path.join(qdir, '2026-07-02-x.md');
+      const unRead = patchDestRead(dest, 'corrupt');
+      const tracer = traceFlushes();
+      let res;
+      try {
+        res = mod.quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
+      } finally { unRead(); tracer.restore(); }
+      assert.equal(res, null, `[FPDF-Z2] win32/${kind}: the injected read-back corruption is a preservation failure`);
+      assert.equal(fs.existsSync(dest), false, `[FPDF-Z2] win32/${kind}: the owned dest was removed`);
+      assert.equal(tracer.events.length, 0, `[FPDF-Z2] win32/${kind}: zero fsync calls — events: ${JSON.stringify(tracer.events)}`);
+    });
+  }
+});
 
 // ── AC-14 — the retention contract for state/quarantine/redacted/ ───────────
 // The prune is a DELETE PATH over the only pre-scrub copies of the user's own

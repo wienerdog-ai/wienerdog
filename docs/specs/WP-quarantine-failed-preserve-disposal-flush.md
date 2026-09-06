@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-failed-preserve-disposal-flush
 title: Flush the directory after each owned-path removal on a failed preservation, best-effort, and price what a failed flush still leaves
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-quarantine-preserve-durability, WP-preservation-abort-widening]

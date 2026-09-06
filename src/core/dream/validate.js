@@ -982,6 +982,10 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
       fd = -1;
     }
     if (ownedTmp) removeOwnedQuarantinePath(tmp);
+    // Best-effort (Table Z row Z3): a COMPLETED flush closes this removal's
+    // post-completion window. The boolean is IGNORED — it does not change what
+    // this function returns, and what the caller then does is its own branch.
+    if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);
     return null;
   }
 
@@ -1018,6 +1022,10 @@ function quarantinePreserve(stateDir, content, rel, date, kind = 'withheld') {
   }
   if (verified !== null) return { name, bytes: verified };
   if (ownedDest) removeOwnedQuarantinePath(dest);
+  // Best-effort (Table Z row Z3): a COMPLETED flush closes this removal's
+  // post-completion window. The boolean is IGNORED — it does not change what
+  // this function returns, and what the caller then does is its own branch.
+  if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);
   return null;
 }
 
