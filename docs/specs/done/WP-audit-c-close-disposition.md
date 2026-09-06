@@ -397,6 +397,38 @@ successor stubs, as their required verification — which is where it is closabl
 | E1 | **open** — recommended today | **Open — four residuals** — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `<LOGBOOK>`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
 | E2 | **closed** — a later act, not a trigger | **Closed** — every group C mechanism retired or accepted; basis in `<LOGBOOK>`. Written by a later disposition act once every successor in that entry's Table D is Done with its own verification green |
 
+### E2 disposition act, 2026-09-06
+
+**THE RULING IS NOW E2.** Append-only; nothing above is rewritten or renumbered,
+and no closed-state assertion is added here — E2 stays a pointer, and the
+measurement lives where it can be re-run.
+
+**The precondition E2 names is met, MEASURED not transcribed.** On
+`eedd8783`, every successor named in Table D is in
+`docs/specs/done/` with `status: Done` and its own verification green:
+`WP-dot-segment-denial` (D1 (b), D5), `WP-instruction-basename-currency`
+(D1 (c)), `WP-dream-git-env-pinning` (D2 (b), D4's env half) and
+`WP-dream-git-env-validate-seam` (D4's second spawn point). Three residuals are
+**accepted rather than retired**, which is what E2's own words allow: the
+`reference-transaction` hook (Table W row W1's owner ruling of 2026-08-31, **not
+reopened**), the nested vault (`WP-dream-git-env-validate-seam` owner item O5,
+named in `assertGitRepo`'s shipped contract), and an undocumented tool's
+instruction file (the currency WP's dated inventory, owner and trigger).
+
+**`<LOGBOOK>` in Table E row E2 resolves to
+`docs/specs/logbook/2026-09-06-audit-group-c-closure.md`** — the basis file
+holding the measured table, the pasted runs, the accepted residuals with their
+homes, and the act's own stop criterion. Per-finding disposition facts stay
+`docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`'s.
+
+**Provenance and reversal.** Taken under the **standing authorization of
+2026-09-05** (`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`,
+item **O7**) as a recommendation adopted, **never a direct owner ruling**. The
+owner may reverse it by dated amendment; the cost is that **group C reopens with
+the residual named** — the ruling returns to E1, `docs/HANDOVER.md`'s row C
+returns to an open cell, and the residual argued unaccepted acquires an owner WP
+of its own instead of a home that already carries it.
+
 ### Mirrored Surface Checklist
 
 Every surface that mirrors Table D, E or F. A finding updates the table **and**
