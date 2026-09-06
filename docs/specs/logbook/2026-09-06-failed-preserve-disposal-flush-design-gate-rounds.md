@@ -157,7 +157,7 @@ exactly those four and nothing else:
   <kind> <arm> <pristine|compliant> fault={n/a|none|open|fsync} ret=null threw=null qdir_after=[]
 
 ### FP-P7  every cited range, checked at BOTH ends  rc=0
-ALL 21 RANGES RESOLVE AT BOTH ENDS
+ALL 21 RANGES RESOLVE AT BOTH ENDS   (24 after the LIGHT fixes; re-run rc=0)
 
 == V1 BOTH DIRECTIONS  absent / untouched / four violating / compliant ==
 ### V1 on bad-absent  rc=1
@@ -196,7 +196,7 @@ TWO entries in that one directory (`.tmp-<pid>-fp.md` at `:995`, then
 | **FP-P4** | all 64 existing `find` literals still occur exactly their declared count, so no declaration is re-targeted; and the two new literals occur once each, are distinct, and neither matches inside the other | that the two NEW declarations pass the runner — that is the WP's V2 |
 | **FP-P5** | the cost of one dirty-directory `fsync` on this host, re-measured rather than inherited | the cost on any other filesystem |
 | **FP-P6** | that a flush that does not complete is invisible at `quarantinePreserve`'s interface: identical `null`, no throw, empty `qdir`, across 16 runs | the gate-level fall-through, which is CODE-DERIVED from `validate.js:1406-1429` plus the shipped `tests/unit/dream-validate.test.js:1670-1695`; since the return value is identical, no caller can distinguish the two |
-| **FP-P7** | all 21 cited ranges resolve at BOTH ends | that the cited text SAYS what the citing sentence claims |
+| **FP-P7** | all cited ranges resolve at BOTH ends — 21 at `bee6514f`, 24 after the LIGHT fixes below added two test-file citations and 0.5's `Table Z` heading citation | that the cited text SAYS what the citing sentence claims |
 | **V1** | the new gate is neither vacuous nor over-strict: red on absent, red on untouched, red on four distinct violations each with its own message, green on the hand-built compliant state | whether a flush ever completes on a real medium — no test can, and the spec says so |
 
 **The crash itself is not staged and is not claimed anywhere.** `QD-P1` (the
@@ -298,7 +298,7 @@ and the compliant tree (`FP-P3`), and `npm run lint` is green on this worktree
 
 ### 0.7 Size, and the lint run
 
-- The spec is **423 lines** — over the 400 aimed for and stated rather than
+- The spec is **455 lines** (**423** at `bee6514f`, the tip round zero was adjudicated on; the four LIGHT fixes below added 32) — over the 400 aimed for and stated rather than
   rounded. The 4-row × 8-column Table Z, the two byte-exact code blocks, V1's
   21-line program and the template's own section list account for it; nothing was
   cut that a Sonnet implementer needs under the One-Document Rule (ADR-0005).
@@ -320,3 +320,72 @@ and the compliant tree (`FP-P3`), and `npm run lint` is green on this worktree
 - `npm run lint` — `markdownlint` 0 errors over 656 files, `shellcheck` clean,
   `PSScriptAnalyzer` clean, frontmatter check 271 specs / 4 agents, **lint
   passed**.
+
+## The executor passes — clean-context template conformance and internal coherence, on `bee6514f`
+
+Both run per `docs/runbooks/codex-review.md:129-139` ("Template conformance
+(round zero, before any review)") and `:141-170` ("Internal coherence pass"), in
+contexts that took no part in drafting. **Round zero is adjudicated on
+`bee6514f`: no finding above band C, and all four are LIGHT** — none changes the
+two inserted lines, their gating, their placement, a Table Z decision, an owner
+item's verdict or the Deliverables table. They therefore land and are verified
+mechanically; no fresh external round is owed, per the criterion pinned in 0.1.
+
+### T — template conformance: NON-CONFORMANT on two non-precedented items, both FIXED
+
+| # | Band | Finding | Disposition |
+|---|---|---|---|
+| **T1** | C | `## Definition of done` item 5 dropped the template's closing clause | **FIX.** Restored verbatim: *": this list is complete only when review is."* |
+| **T2** | C | The Mirrored Surface Checklist merged the template's *"Acceptance criteria that assert its facts"* and *"Verification commands / greps"* into one bullet (*"Acceptance criteria 1–5 and the steps V1–V3 that assert them"*), so the template's five categories were four list items | **FIX.** Split into two bullets — criteria **1**–**5**, and steps **V1**–**V3** with what each checks. The spec's additional bullets are unchanged; the checklist is now 13 entries |
+
+**Confirmed present by the same pass and recorded so a later round does not
+re-ask:** the Security checklist with the template's untrusted-identifier item
+explicitly `N/A`-marked; acceptance criterion **7**'s idempotence `N/A` with its
+reason; Definition of done items 1–4; and the precedented shape items.
+
+### X — internal coherence: no A, no B, two C, both FIXED
+
+Every citation resolved at both ends, **including the three RED declarations
+keeping `occurrences: 1` after the insertions**, `traceFlushes`
+(`tests/unit/dream-validate.test.js:2697-2717`), `patchFs` (`:1433-1438`), and
+`WP-quarantine-preserve-durability` row **F7(a)**'s 2026-09-06 clause already
+pointing rows M2/M3 at this WP.
+
+| # | Band | Finding | Disposition |
+|---|---|---|---|
+| **X1** | C | Acceptance criterion **4**'s suite-side clause — *"and in the suite by whatever form the implementer chooses"* — named no verification step, so it read as a second check when only V1's byte-exact `&& DURABILITY_AVAILABLE` match existed | **FIX, by naming the suite form rather than withdrawing it, because it is realizable with no new `src/` seam.** `DURABILITY_AVAILABLE` binds at module load (`validate.js:696`) and the suite already deletes `require.cache[VALIDATE_ID]` and re-requires (`stubCollaborators`, `tests/unit/dream-validate.test.js:1485-1502`), so forcing `process.platform` before that same re-require is the identical mechanism. Criterion 4 now names **V1** and **V3**, says what each reaches, and repeats that a real win32 host is not available and is not claimed; an Implementation note carries the seam, the `finally`-restore requirement (`:1414-1415`) and `FP-P1` as the discrimination evidence |
+| **X2** | C | The unscoped `node scripts/mirror-walk.js` exits **1** from 14 pre-existing UNRESOLVED entries in unrelated specs, while this spec's Z-row ambiguity is *"Reported, NEVER failed"* — a reviewer running the bare command sees rc 1 and may misattribute it | **FIX.** A new **V5** names the SCOPED invocation (`--scope quarantine-failed-preserve-disposal-flush`, measured **rc 0**, 13 entries, no UNRESOLVED), and its comment states that the unscoped rc 1 is the base's own: measured on `b1d20ce0` itself at rc 1, and the UNRESOLVED block `diff`s **byte-identical** between the base and this branch. Acceptance criterion **6** now covers V5 |
+
+### The executor's runs — what was EXECUTED, with each exit code its own statement
+
+| Command | Result |
+|---|---|
+| `npm test` | **rc 0** — tests 2693, pass 2681, fail 0, skipped 12 |
+| whole-tree `scripts/red-proofs.js` on a `git archive` copy | **rc 0** — `64/64 RUN: PROVEN` |
+| the same runner with `--wp WP-quarantine-failed-preserve-disposal-flush` | **rc 1, VACUOUS — expected**, and it is the correct answer: this package's two declarations do not exist yet |
+| `npm run lint` | **rc 0** |
+| `scripts/boundary-check.js` under `bash`, on the three changed docs files | **rc 0** |
+| `node scripts/mirror-walk.js` (unscoped) | **rc 1**, from the 14 pre-existing entries; rows **Z1**–**Z3** reported AMBIGUOUS and never failing — this is X2's subject |
+| `v1.js` re-run on the untouched tree | **red**, at `Z1: the flush line occurs 0 time(s), want 1` |
+
+**The executor's discrimination assessment, recorded because "a criterion that
+cannot discriminate is a round-zero finding" (`codex-review.md:149-159`):** AC1
+byte-exact and structural; AC2 reachable through the existing `traceFlushes`;
+AC3 falsifiable through `patchFs` fault injection; AC5's set equality live in the
+runner; AC7's idempotence `N/A` honest.
+
+### Re-verification after the four LIGHT fixes
+
+Run on the fixed tree, each exit code its own statement:
+
+```text
+npm run lint                                              rc=0   (markdownlint 0 errors / 657 files; frontmatter 271 specs, 4 agents)
+node scripts/mirror-walk.js --scope quarantine-…-flush     rc=0   13 checklist entries, 1 spec, no UNRESOLVED
+node fp-p7.js  (24 ranges, incl. the two X1 added)         rc=0   ALL 24 RANGES RESOLVE AT BOTH ENDS
+```
+
+**No probe was re-run beyond `FP-P7`, and that is deliberate:** the four fixes
+touch only this spec's prose, its criteria and its verification steps. None
+changes the two inserted lines, so the compliant, ungated and five broken states
+under the scratchpad are unchanged and `FP-P1`…`FP-P6`'s results stand as pasted
+in 0.2.

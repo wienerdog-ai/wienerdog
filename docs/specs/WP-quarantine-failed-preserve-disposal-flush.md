@@ -247,7 +247,9 @@ all its mirrors in one pass and in the same commit:
       and the declaration count
 - [ ] Owner item **O12** (the value verdict, citing Z1/Z2's sixth column) and
       owner item **O13** (row **Z3**'s disposition and its priced alternative)
-- [ ] Acceptance criteria **1**–**5** and the steps V1–V3 that assert them
+- [ ] Acceptance criteria **1**–**5**, which assert its facts
+- [ ] Verification steps **V1**–**V3** — V1's byte-exact line and placement
+      program, V2's two RED declarations, V3's suite assertions
 - [ ] Implementation notes' statement of what the evidence reaches, and the
       block/declaration trap Z1's and Z2's line shape rests on
 - [ ] The Security checklist's third item, which names the retained residual
@@ -278,6 +280,17 @@ all its mirrors in one pass and in the same commit:
   and `:1020` byte-for-byte with `occurrences: 1`; turning `if (x) f();` into a
   braced block edits one of those literals out of existence and the runner errors
   at APPLY. The repeated guard is deliberate and is why.
+- **Criterion 4's suite assertion needs NO new `src/` seam.** `DURABILITY_AVAILABLE`
+  is bound at module load from `process.platform` (`src/core/dream/validate.js:696`),
+  and this suite already re-requires `validate.js` after mutating something it
+  destructures at load: `stubCollaborators`
+  (`tests/unit/dream-validate.test.js:1485-1502`) deletes
+  `require.cache[VALIDATE_ID]` and re-requires. Forcing `process.platform` before
+  that same delete-and-re-require is the identical mechanism. **Restore the
+  platform AND the cache entry in a `finally`** — the file's own seam note says a
+  leaked patch *"would silently corrupt every later test in the run"* (`:1414-1415`).
+  Measured discriminating (`FP-P1`): under forced `win32` the ungated variant
+  issues one directory `fsync` on both arms and the gated one issues zero.
 - **Reuse the existing seams; add no machinery.** `traceFlushes`
   (`tests/unit/dream-validate.test.js:2697-2717`) already resolves every
   `fsyncSync` to the path its descriptor was opened under; `patchFs`
@@ -325,13 +338,19 @@ all its mirrors in one pass and in the same commit:
       `null` and throws nothing on both acts and both arms — the same observable
       as with the flush working (V3).
 - [ ] **4.** When `DURABILITY_AVAILABLE` is false, neither act issues a flush
-      (row **Z4**) — asserted by V1's conjunct check, and in the suite by whatever
-      form the implementer chooses; a run on win32 is not available here and is
-      not claimed.
+      (row **Z4**) — asserted TWO ways, both falsifiable. **V1** pins the
+      `&& DURABILITY_AVAILABLE` conjunct byte-exact at both call sites. **V3**
+      drives a `validate.js` instance re-required with `process.platform` forced
+      to `'win32'` and asserts **zero** `fsync` calls on both acts and both arms;
+      the mechanism already exists and no new `src/` seam is added — see
+      Implementation notes. **What the second reaches is the constant's branch,
+      not the platform: a run on a real win32 host is not available here and is
+      not claimed.**
 - [ ] **5.** Two RED declarations, one per act, sharing one `testNamePattern`
       that runs BOTH acts' assertions. Each removes exactly that act's flush call
       and must redden exactly its own assertion, leaving the other green (V2).
-- [ ] **6.** `npm test` (V3) and `npm run lint` (V4) pass.
+- [ ] **6.** `npm test` (V3), `npm run lint` (V4) and the scoped mirror walk
+      (V5) pass.
 - [ ] **7.** Idempotence — **N/A: this WP ships no command and writes nothing
       outside the repository.**
 
@@ -380,8 +399,20 @@ npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush
 # V3 — criteria 2, 3 and 4's suite half.
 npm test
 
-# V4 — criterion 6's other half.
+# V4 — lint.
 npm run lint
+
+# V5 — this spec's Mirrored Surface Checklist names only surfaces that resolve.
+#      SCOPED, and the scope is not decoration: the UNSCOPED `node
+#      scripts/mirror-walk.js` exits 1 on `b1d20ce0` ITSELF, from 14 UNRESOLVED
+#      entries in unrelated specs that predate this package — measured, and the
+#      UNRESOLVED block is byte-identical between the base and this branch (the
+#      round-zero record, "the executor passes"). A reviewer who runs the bare
+#      command sees that rc 1 and must not attribute it here. The scoped run
+#      exits 0, and reports rows Z1–Z3 as AMBIGUOUS against
+#      `WP-dream-promote-report`'s Table Z — reported, never failed, and resolved
+#      by the qualification paragraph under "Contract reference".
+node scripts/mirror-walk.js --scope quarantine-failed-preserve-disposal-flush
 ```
 
 - **V1 is a NEW step and was proved in every direction before this spec was
@@ -420,4 +451,5 @@ npm run lint
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
-   restated here. `In-Review` marks the START of review.
+   restated here. `In-Review` marks the START of review: this list is complete
+   only when review is.
