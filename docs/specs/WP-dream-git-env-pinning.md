@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-pinning
 title: Build the dream run's git environment from a named allowlist at the pipeline seam
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
