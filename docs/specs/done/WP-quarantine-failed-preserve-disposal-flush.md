@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-failed-preserve-disposal-flush
 title: Flush the directory after each owned-path removal on a failed preservation, best-effort, and price what a failed flush still leaves
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-quarantine-preserve-durability, WP-preservation-abort-widening]
@@ -11,6 +11,15 @@ epic: dream-promotion
 
 # WP-quarantine-failed-preserve-disposal-flush: a best-effort flush after a failed preservation's removal
 
+> **Errata, 2026-09-06 (post-merge) — one landed pre-merge on the branch, plus the records below. None is a defect in what shipped.**
+>
+> **Erratum 1 — V2 prescribed a `--wp`-filtered red-proofs run inside a `set -e` block, which the runner exits non-zero by design.** *What is wrong:* the Ready spec's V2 was `npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush`; `scripts/red-proofs.js` rolls every `(wp, criterion)` pair with unselected declarations up as `FILTERED` (`rollUp`) and exits 1, and `docs/specs/done/WP-dot-segment-denial.md:683-686` states the rule verbatim — so V2 as written could never pass, and the design gate's own round-zero and mechanical verification, both of which ran the selection on the base where it is VACUOUS, could not see it. *What is true:* the unfiltered `npm run red-proofs` → `66 declared / 66 selected`, `RUN: PROVEN`, both ids PROVEN, rc 0. *Found:* wd-reviewer, PR #243 gate round 1 (band B, [contract], routed to wd-architect). *Routing:* **landed on the branch before merge at `3cd68a85`** — V2 is the unfiltered run, the `--wp` form a non-gating reading with `|| true`; criterion 5 and the checklist mirror moved with it. **Class: a verification step that cannot pass, invisible until the deliverable exists.** Lesson: the dispatch-time gate re-runs claims about the TREE; a V-step's own exit shape is only observable once the deliverable exists — the first implementation run is where it shows, and the reviewer's re-run is what caught the pasted `rc=0` that hid it.
+>
+> **Erratum 2 — the new `failDirFsync` helper's JSDoc calls itself "a copy" of the `[QPD-2]` original.** *What is wrong:* it is not a copy — it adds the `matchedFd = -1` clearing the original at `tests/unit/dream-validate.test.js:2802` lacks (PR #243 round-1 finding R1-5). The same paragraph discloses the divergence two sentences later, so it is self-correcting. *Found:* wd-reviewer, PR #243 gate round 2 (band C). *Routing:* **residual, fix the word on the next touch of the file**; the tip was not edited after three clean verdicts on it. **Class: cosmetic.**
+>
+> **Recorded, not errata:** (i) the ORIGINAL nested `failDirFsync` at `:2802` never clears `matchedFd` — pre-existing, inside `WP-quarantine-preserve-durability`'s fenced test code, routed to that WP as a discovered issue; (ii) `traceRemovalThenFlush`'s `openPaths` map never deletes on close — a recycled fd could in principle be misattributed, mitigated because every fd on this path comes from the patched `openSync`, which overwrites the stale entry; (iii) Table Z row Z2 and the Exact contracts cite `validate.js:1020`, the correct PRE-insertion anchor the implementer built to — post-merge the removal sits at `:1024` (the known line-rot class; V5 states it resolves nothing at line level); (iv) this is the second work package whose V2 re-derived the filtered/unfiltered red-proofs rule after a review round burned on it (`WP-dot-segment-denial` settled it) — an ADR-0031 signal ACROSS work packages, routed to wd-architect: lift the RED-lane invocation invariants into one surface the spec template cites.
+
+<!-- errata above; the spec as it shipped follows -->
 > **The design gate ran 2026-09-06 against `b1d20ce0` and CLOSED at round 2** —
 > one channel approved with no material findings, the other's two items were a
 > residual-cell qualification and a record inaccuracy, both fixed and neither
