@@ -411,3 +411,24 @@ as this record requires:** the 2026-09-06 O10 append gave the measurement range 
 probe ids `QD-P1`…`QD-P10`. Round 2 added `QD-P11`, so the range is
 **`QD-P1`…`QD-P11`**. The pointer itself — that design-gate record — is unchanged
 and still governs, for O8, O9, O10 and O11 alike.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 3 — no new item; O10 and O11 are amended in their governing text
+
+**No O12.** Round 3 landed four findings, all decision SUPPORT, and **none reversed
+O8, O9, O10 or O11**. Two of them changed what those items SAY, which this record
+carries as a dated pointer rather than by editing an entry in place:
+
+- **O11 is RE-LABELLED and RE-PRICED.** Option (b) is a **best-effort** flush, not
+  a closure of the class, and option (a)'s cost is no longer stated as a shipped
+  contract becoming false. The governing text is the spec's
+  `## Dispatch precondition — owner items`, which carries both halves.
+- **O10 is EXTENDED** to name and price the exact state row **M6** now accepts.
+  Its decision did not move; what moved is that the acceptance is priced instead of
+  resting on an equivalence. Same governing text.
+
+Both remain **adopted under the standing process of 2026-09-05, as recommendations
+and not direct owner rulings**, and the owner may reverse either by dated
+amendment. The measurements are
+`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+section "Round 3", probe `QD-P12` (added in that round), so the range named in the
+earlier appends is now **`QD-P1`…`QD-P12`**.

@@ -334,6 +334,7 @@ matters more than it looks:
 |---|---|---|---|
 | 0 | — (internal) | this record | Z1–Z3 and C1–C9, all fixed or accepted above; one lint failure fixed by running |
 | 1 (`7f489d15`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-codex-plugin.txt` (`0f73cf4f`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-shadow.txt` (`03ba7d57`); both committed pre-adjudication, porcelain identical before and after | Plugin 1 A; shadow 2 A + 1 B; no scope objections. **Three findings, all routed DESIGN or record by the pinned ladder — none argued to BUILD the package.** R1-A, R1-B, R1-C below, plus **R1-D self-found** during the round's coherence re-run |
+| 3 (`40504f64`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round3-codex-plugin.txt` (`1148b69c`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round3-herdr-shadow.txt` (`3731803d`); both committed pre-adjudication, porcelain identical before and after | Plugin 2; shadow 2 A + 2 B; no scope objections. **No finding reverses O8–O11** — all four are decision SUPPORT, two of them about sentences that argued where the rows already decide. R3-A…R3-E below |
 | 2 (`03c56ed1`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-codex-plugin.txt` (`efdab74d`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-herdr-shadow.txt` (`61f211f1`); both committed pre-adjudication, porcelain identical before and after | Plugin 3; shadow 1 A + 1 B; no scope objections. **THIRD consecutive round on O8's supporting sentence → the repeat-kind rule fires and the answer is a DESIGN change: O8 loses its universal sentence and the disposition becomes Table M's per-act column.** R2-A…R2-E below |
 
 ## Round 1
@@ -598,16 +599,21 @@ published a record omitting the artifact.
 **Why that is a contract violation and not an untidy leftover.**
 `WP-preservation-abort-widening` Table D row **D4**
 (`docs/specs/done/WP-preservation-abort-widening.md:417`) says *"**`null` means the
-owned path is absent.**"* A resurrection makes D4 FALSE for a finished run. Rows
+owned path is absent.**"* A resurrection makes D4 FALSE for a finished run. **[WITHDRAWN — round 3's finding
+R3-B: D4 requires no durability. The paragraph immediately after it
+(`docs/specs/done/WP-preservation-abort-widening.md:419-433`) says neither D1/D2
+removal is crash-durable, so what a resurrection leaves is an unpriced
+POST-COMPLETION residual, and O11 ADDS a property rather than enforcing one. See
+"Round 3" below.]** Rows
 **D1** and **D2** name that owned path as `tmp` before the commit and `dest` after
 it — **so the same reasoning covers M2**, and `QD-P11` shows both leftovers in the
-same trace.
+same trace. **[CORRECTED — round 3's finding R3-C: `QD-P11`'s two removals are `:995` (M1) and `:1020` (M3); the shared catch at `:984` returns before any `fsync` and is not in that trace. M2 is measured by `QD-P12`, added in round 3. See "Round 3" below.]**
 
 **Disposition: DECIDE M3 (and M2) ON THEIR OWN, under the standing process, with
 BOTH options priced — and the decision is (b), CLOSE THEM.** Both prices are in
 the spec's owner item **O11** and are not restated here. **(a) accept and name**
 costs a shipped contract becoming untrue after the product reported success, with
-nothing enumerating the shelf to find out. **(b) close it** costs one best-effort
+nothing enumerating the shelf to find out. **(b)** — re-labelled by round 3 as a BEST-EFFORT flush rather than a closure — costs one best-effort
 directory flush per failure path, `2.0–2.7 ms` (`QD-P2`) on an arm that is already
 failing, reusing the existing `flushDir` helper, best-effort so no shipped
 disposition changes, and no `fsync` at all on win32 per row **F5**.
@@ -723,3 +729,161 @@ the reviewer asked to verify each is genuinely fixed rather than re-worded, and 
 attack the new mechanisms: the per-act column and the absence of any spanning
 claim, the split F7(a) clause, O11's pricing, the two-act scope, the corrected M6
 and O10 lifetime statements, and both filed stubs.
+
+## Round 3
+
+**Branch:** `docs/wp-quarantine-disposal-durability`. **Tip reviewed:**
+`40504f64d3e12577ef2f5f313138564683bf6a8b`, base `main` `66b2b1f8`. Both channels
+executed; porcelain identical before and after. Plugin: 2 findings, both graded
+band A in their bodies. Shadow: 2 A + 2 B. **No scope objections, and no finding
+reverses O8–O11** — both channels said so in their own words. Both again reported
+the environment limits `QD-P1` already covers; no crash was staged.
+
+**THE BAND GATE DOES NOT CLOSE THIS ROUND** (four band-A findings), **and the
+ladder routes every one of them below the OWNER rung.** None argues to build the
+package or to flip a decision; all are DECISION SUPPORT — two of them about
+sentences that argue where the rows already decide. **The repeat-kind rule does not
+fire a second design change:** round 2's design answer stands, and what round 3
+found is that three sentences had not yet been brought into line with it. Every
+fix below is a deletion, a re-label, a priced residual or a measurement — no new
+argument paragraph, and the verification surface did not grow.
+
+### R3-A — option (b) was labelled CLOSE but is best-effort. Plugin F1 + shadow F1, band A, CONVERGED; contract, M2/M3's decision SUPPORT
+
+Both channels executed the shipped code with O11's proposed calls added and found
+the same thing, and it checks out on inspection: `flushDir`
+(`src/core/dream/validate.js`) catches its own open and `fsync` failures and
+returns `false`; O11's proposal ignores that boolean; so on a failed flush the
+caller carries on, publishes and commits — **the exact R2-A state option (b)
+claimed to remove**. On win32 the same outcome is deterministic, because
+`DURABILITY_AVAILABLE` is false and no flush is issued at all (`QD-P7`).
+
+**Disposition: RE-LABEL, not more machinery — and the re-label is the honest
+contract.** Option (b) is now stated everywhere as **a BEST-EFFORT directory flush
+after each failure-path removal: a COMPLETED POSIX flush closes that removal's
+post-completion window; a failed flush, and every win32 run, RETAIN the residual**,
+which is the same class owner item **O10** parks and is priced in O11 rather than
+hidden by the word "close". **The fail-loud alternative is NOT decided here** —
+it would add a new failure class on an arm that is already failing, and its cost is
+a preservation that today falls through to the withhold arm (`validate.js:1429`)
+instead aborting the whole run. It is named as **the successor's own gate's
+question**, with that cost, so it is not lost. **Aligned in one pass:** the
+successor's `title:` and `#` heading, its Context, its new acceptance-predicate
+paragraph, O11, rows **M2** and **M3**, the Security checklist and the F7(a)
+clause.
+
+### R3-B — O11 priced (a) as leaving an existing contract false. Plugin F2, band A; contract
+
+Correct, and the citation is decisive. Table D row **D4** says *"`null` means the
+owned path is absent"* — but the paragraph immediately after it
+(`docs/specs/done/WP-preservation-abort-widening.md:419-433`) says in its own
+words: *"Neither P0b's read-back nor D1/D2's removal is crash-durable … an unlink
+is not durable until the containing directory is flushed."* And
+`WP-quarantine-preserve-durability` row **F7(a)** already discloses resurrection
+after a failure-path removal.
+
+**So D4 carries no durability requirement, and every sentence saying a
+resurrection makes it FALSE is withdrawn.** **Disposition: RE-PRICE.** (b) **ADDS**
+a durability property; it enforces none. (a) ACCEPT is now priced as **keeping
+today's disclosed non-durability**, whose cost is that the POST-COMPLETION
+residual — a run that finished and published a record omitting an artifact a crash
+can restore — **stays, and was unpriced anywhere until this package measured it**.
+D1 and D2 still justify treating both owned paths alike; they justify nothing
+about an existing guarantee. Corrected in O11, in rows **M2** and **M3**, in O8's
+"what does not survive" paragraph, in the spec header, in the Security checklist,
+in the F7(a) clause and in the successor stub; round 2's own sentence is marked
+`[WITHDRAWN]` in place, this record being append-only.
+
+### R3-C — `QD-P11` was cited as measurement of M2. Shadow F2 (band B) + plugin; measured-claim
+
+Correct: `QD-P11` injects the artifact-`fsync` failure AFTER the commit, so its two
+removals are `validate.js:995` (M1) and `:1020` (M3). The shared catch at `:984`
+returns before any `fsync` and cannot appear in it.
+
+**Disposition: option (i) — a dedicated probe, taken, and it was one driver run.**
+**`QD-P12`** makes the FIRST `linkSync` throw, so the redacted COMMIT fails and the
+shared catch executes; it then follows the outer redact fallback through record
+publication and exercises the resurrected temp's later `O_EXCL` collision:
+
+```text
+linkSync #1 -> THROWS (injected: the redacted COMMIT fails, so the shared catch at :984 runs)
+rm quarantine/redacted/.tmp-<pid>-fp.md
+linkSync #2
+rm quarantine/.tmp-<pid>-fp.md
+fsync artifact
+fsync dir quarantine
+fsync dir <stateDir>
+fsync dir ..
+```
+
+```text
+reached_M2_shared_catch_at_984: true
+dest_removal_index_should_be_minus_1: -1
+fsyncs_of_redacted_dir_ANYWHERE: 0
+verdict_kind: "refuse"
+published_preservation_record: [{ "artifact": "2026-07-02-fp.md", "location": "quarantine" }]
+later_preserve_returned: "null"
+resurrected_temp_still_present: true
+resurrected_temp_bytes_unchanged: true
+```
+
+**M2 is therefore MEASURED, not a contract inference**, and its cell now cites its
+own probe. Every "`QD-P11` shows both leftovers" sentence is corrected — in O11, in
+the successor stub, and in place in the round-2 section.
+
+### R3-D — M6 still rested on an equivalence. Shadow F3, band A; contract, M6's decision SUPPORT
+
+Correct. The row admitted the owner may delete the twin and then concluded the
+states were identical "because the record omits it either way". They are not.
+**Re-modelled with M3's three-state distinction, code-derived and labelled as
+such:** **PRE-RETURN** — a crash before `validate.js:1490` stops the gate returning
+at `:1497`, so nothing is published and nothing instructed the owner to delete
+anything; **POST-COMPLETION** — the gate returns, the run publishes and commits a
+record naming the withheld copy alone; **POST-OWNER-DELETION** — the owner follows
+`src/core/dream/promote.js:600-603`'s *"delete that copy"*, and a later power loss
+restores the `redacted/` entry as the **SOLE surviving form of those bytes**, on a
+shelf no banner announces.
+
+**DECISION, under the standing process: M6's no-flush STANDS, and it now stands as
+an explicitly priced ACCEPTANCE inside owner item O10 — never on an equivalence,
+which is exactly the condition the finding set.** O10's cell names that exact
+state and prices the alternative: one `flushDir` of `state/quarantine/redacted/`
+after `validate.js:1491`, at `QD-P2`'s **2.0–2.7 ms**. **The decision did NOT
+move, so there is no O12**; the asymmetry with M2/M3 is stated where a reader will
+challenge it, on two measured differences — M6's hazard needs a LATER, SEPARATE
+user action before it is sole-surviving, and M6's flush would land on a path that
+SUCCEEDED (every refusal that dedups pays it) where M2's and M3's land on an arm
+already failing. O10's overrule cost is M6 joining the successor as a third act.
+
+### R3-E — two spanning sentences survived outside Table M. Shadow F4, band B; record
+
+Correct, and both are **DELETED**. Context's *"this package's answer is that none
+of them needs one"* is replaced by exactly **"Only Table M's decision column
+governs; no rule spans the acts."** The platform paragraph's *"the same equivalence
+that carries every other row"* is replaced by the same pointer, scoped to win32.
+**Grep count for both sentences: 0.** The claim sweep was then re-run across all
+five documents for any other universal over the acts, for the withdrawn D4
+falsification and for the "close it" label; the only surviving hits are inside
+explicit `[WITHDRAWN]` / `[CORRECTED]` markers, which is what an append-only record
+should look like.
+
+**Both-directions re-proved after every fix in this round: twelve deliberately
+broken states, all RED, control and finished tree GREEN — unchanged in shape,
+because nothing this round touched a verification target.**
+
+### What round 3 did NOT change
+
+- **Any decision.** O8, O9, O10 and O11 all stand; O11 is re-labelled and
+  re-priced, O10 is extended to price M6's exact state, and neither reverses.
+- **Any shipped contract or posture.** Table D, F, N and P remain cited and
+  unamended.
+- **The verification surface.** No fifth step, no new argument paragraph. Every
+  fix was a deletion, a re-label, a priced residual or a measurement.
+- **The stop criterion**, which is unchanged and governed round 3 as written.
+
+### Round 4
+
+Runs on the revised tip as the **closing confirmation**, unless a measurement
+changes a decision. Attack surface: the best-effort labelling and its retained
+residual, (a)'s re-priced cost, `QD-P12`'s reach, M6's priced acceptance and its
+asymmetry with M2/M3, and the absence of any rule spanning the acts.

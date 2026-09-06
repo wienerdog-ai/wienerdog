@@ -1,6 +1,6 @@
 ---
 id: WP-quarantine-failed-preserve-disposal-flush
-title: Make the two owned-path removals on a failed preservation durable, so a completed run's record cannot be falsified by a crash
+title: Add a best-effort directory flush after each owned-path removal on a failed preservation, and price what a failed flush still leaves
 status: Draft
 model: sonnet
 size: S
@@ -9,7 +9,7 @@ adrs: [ADR-0004, ADR-0031, ADR-0034]
 epic: dream-promotion
 ---
 
-# WP-quarantine-failed-preserve-disposal-flush: make D4 true after a completed run
+# WP-quarantine-failed-preserve-disposal-flush: a best-effort flush after a failed preservation's removal
 
 > **Draft stub, filed 2026-09-06 by `WP-quarantine-disposal-durability`'s
 > design-gate ROUND 2, which measured that package's universal claim FALSE for
@@ -30,8 +30,9 @@ gate (ADR-0034) preserves the bytes it is judging into `state/quarantine/` or
 them, via `quarantinePreserve` in `src/core/dream/validate.js`.
 
 **`WP-preservation-abort-widening` Table D row D4 is the contract this package
-enforces**, and it is quoted here because it is the whole reason the package
-exists (`docs/specs/done/WP-preservation-abort-widening.md:417`):
+ADDS A DURABILITY PROPERTY TO — it enforces nothing that exists today**, and it is
+quoted here because it names the two paths whose scope this package takes
+(`docs/specs/done/WP-preservation-abort-widening.md:417`):
 
 > **`null` means the owned path is absent.** Every caller already treats `null`
 > as "no artifact"; this row is what makes that true
@@ -40,13 +41,22 @@ Row **D1** names that owned path as `tmp` before the commit completes, row **D2*
 as `dest` after it. On a failed preservation `quarantinePreserve` removes whichever
 one it owns and returns `null`.
 
+**AND D4 CARRIES NO DURABILITY REQUIREMENT — read this before writing a sentence
+that says it does.** The paragraph immediately after it
+(`docs/specs/done/WP-preservation-abort-widening.md:419-433`) states in its own
+words that *"Neither P0b's read-back nor D1/D2's removal is crash-durable"*, and
+`WP-quarantine-preserve-durability` row **F7(a)** already discloses resurrection
+after a failure-path removal. **So this package proposes an ADDITION**, and its
+value question is whether that addition is worth its cost — never whether an
+existing guarantee is being repaired.
+
 **`WP-quarantine-preserve-durability` Table F made a SUCCESSFUL preservation
 durable and explicitly excluded removals (row F7(a)).** Its flush protocol is
 POSIX-only (row **F5**), runs only on the success path, and its helper `flushDir`
 already exists: it opens a directory, `fsync`s it, closes the descriptor on every
 path, and returns a boolean. **Nothing in this package changes Table F, Table D or
-Table P** — it makes D4 survive a crash, which is a durability property D4 never
-had.
+Table P.** It proposes to give a removal a durability property no shipped row
+requires, and to say honestly where that property does and does not reach.
 
 ## Current state
 
@@ -63,7 +73,20 @@ runs only on the success path, returns before every `fsync` on win32
 (`DURABILITY_AVAILABLE`, `validate.js:696`), and short-circuits on the first flush
 that fails.
 
-**The consequence is measured, not inferred (`QD-P11`).** Driving the shipped
+**THE ACCEPTANCE PREDICATE — what this package would actually deliver, stated
+before any measurement so no later sentence can inflate it.** A **BEST-EFFORT**
+directory flush after each of the two removals. **A COMPLETED POSIX flush closes
+that removal's post-completion window.** **A flush that does not complete, and
+every win32 run, RETAIN the residual** — `flushDir` catches its own open and
+`fsync` failures and returns `false`, and this proposal ignores that boolean, so
+the caller carries on and the run can publish and commit exactly as it does today;
+on win32 `DURABILITY_AVAILABLE` is false and no flush is issued at all. **That
+retained residual is real and is this package's to price, not to omit** — it is the
+same class `WP-quarantine-disposal-durability`'s owner item **O10** parks. Nothing
+here is a closure of the class.
+
+**The consequence is measured, not inferred (`QD-P11` for `dest`, `QD-P12` for
+`tmp`).** Driving the shipped
 `makeGates({stateDir}).secret(…)` through the redact-arm fall-through — the
 `redacted/` preservation's artifact flush fault-injected, the withheld one left
 working — the whole trace of one gate call is:
@@ -83,7 +106,18 @@ fsync dir <core>
 `[{artifact: "2026-07-02-fp.md", location: "quarantine"}]` — **the withheld copy
 only**. So the run then completes, publishes that record and commits it, while the
 `redacted/` entry it deleted has had no flush at all. A power loss afterwards can
-restore it, and **D4 is then false for a run that already finished.**
+restore it — **a POST-COMPLETION residual nothing in the product prices today.**
+It does NOT make row **D4** false: D4 requires no durability, as the paragraph
+quoted above says.
+
+**That trace is `dest`'s: its first `rm` is `validate.js:995` and its second is
+`:1020`. The shared catch at `:984` — `tmp` — returns before any `fsync` and is NOT
+in it.** `QD-P12` reaches that branch instead, by making the first `linkSync` throw
+so the redacted COMMIT fails: `reached_M2_shared_catch_at_984: true` with no `dest`
+removal, `fsyncs_of_redacted_dir_ANYWHERE: 0`, the withheld fallback succeeding,
+and the same withheld-only published record. It also measures what the leftover
+then costs: a resurrected `.tmp-<pid>-<stem>` makes the NEXT `redacted` preserve
+return `null` (`later_preserve_returned: "null"`) and is itself not removed.
 
 The control flow after the failed preserve is a shipped, tested behaviour and is
 not re-derived here: `tests/unit/dream-validate.test.js:1670` —
@@ -113,14 +147,20 @@ before writing, not after.
    redact arm the caller goes on to the withhold fallback (`validate.js:1429`),
    which is what keeps the note's bytes held. **The recommendation to weigh is
    BEST-EFFORT** — flush, ignore the boolean — which changes no shipped contract
-   and is a strict improvement wherever it works. Whichever is chosen, say what
+   and is a strict improvement wherever the flush COMPLETES, while retaining the
+   residual priced above wherever it does not. **The alternative was deliberately
+   NOT decided by the package that filed this one, and it is THIS gate's to
+   weigh:** giving an incomplete flush a disposition that stops the run adds a new
+   failure class on an arm that is already failing, and its cost is a preservation
+   that today falls through to the withhold arm instead aborting the whole run.
+   Whichever is chosen, say what
    win32 does: `DURABILITY_AVAILABLE` is false there and no flush is issued, which
    is today's behaviour and row **F5**'s posture, never called durable.
 3. **Both acts or one.** The scope above is *the owned paths D4 names*, which is
    an acceptance predicate over the contract rather than a list of the leftovers
-   anyone happened to notice. Narrowing to `:1020` alone would enforce D4 for
-   `dest` and not for `tmp` — a half-true contract, and the question "which half?"
-   is what a later round asks. Price both before choosing.
+   anyone happened to notice. Narrowing to `:1020` alone would add the property
+   for `dest` and not for `tmp` — a half-covered pair, and the question "which
+   half?" is what a later round asks.
 4. **One canonical table** with a Mirrored Surface Checklist (ADR-0031), and **no
    second Table D, F, M, N or P** — those are
    `WP-preservation-abort-widening`'s, `WP-quarantine-preserve-durability`'s,
