@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-pinning
 title: Build the dream run's git environment from a named allowlist at the pipeline seam
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,14 @@ epic: dream-promotion
 ---
 
 # WP-dream-git-env-pinning: build the dream run's git environment from a named allowlist
+
+> **Errata, 2026-09-06 (post-merge) — two, plus one informational record. None is a defect in what shipped.**
+>
+> **Erratum 1 — the Mirrored Surface Checklist did not register `WIN32_CARRIED` as a mirror of Table U row U4.** *What is wrong:* the checklist registered `src/core/dream/git-env.js`'s **comments** as the code's mirror of Table U; the shipped module also carries row U4's nine win32 keys as a data constant (`WIN32_CARRIED`, `src/core/dream/git-env.js:6-9`), an executable mirror on the one path AC1's fixture cannot run, so a later row-U4 edit could move the table and every registered mirror while the array silently disagreed. *What is true:* the array's contents are correct (nine keys, the row's order). *Found:* wd-reviewer, PR #234 gate round 1 (band C). *Routing:* **fixed in this pass** — the checklist bullet below now names the constant. **Class: an unregistered mirror.**
+>
+> **Erratum 2 — `env.PATH` is assigned unguarded while the win32 keys are guarded.** *What is wrong:* `src/core/dream/git-env.js:29` writes `env.PATH = process.env.PATH` without the `!== undefined` guard the win32 loop applies, so a launching environment with no `PATH` yields an own key whose value is `undefined`. *What is true:* no behavioural consequence — Node's `child_process` omits `undefined` values, and a `PATH`-less run fails loudly at `resolveExecutable`/`verifyPin` regardless. *Found:* wd-reviewer, PR #234 gate round 1 (band C, no change requested). *Routing:* **residual, fix on the next touch of the file** — the tip was not edited after three verdicts on it, so "both gates on the same tip" holds exactly. **Class: cosmetic asymmetry.**
+>
+> **Recorded, not an erratum — the re-targeted `dream-private-index-dropped` declaration gained a `testNamePattern`.** The spec froze that declaration's `id`, `wp`, `criterion`, `why` and `expectRed`; all five are unchanged. The implementer's new AC1 test also observes the private-index property and therefore reddened under the same mutation, and the runner's set-equality rule refuses an undeclared red — the spec forbade adding AC1 to `expectRed`, so the precedented selection facility (used by five other declaration files) is the only reachable option. The runner refuses a proof whose declared identity the pattern excludes, so `PROVEN` remains evidence that all three declared row-G8 tests ran and reddened (wd-reviewer, PR #234 round 1, band C informational; implementer's Decision 2).
 
 ## Context (read this, nothing else)
 
@@ -655,7 +663,9 @@ prose mirror, registered so they move with it:**
       byte-intact**, and W1's existing line citations into `src/cli/dream.js`
       are NOT re-numbered: they are pinned to the SHAs at which they were
       measured, and chasing them is the rot this row already ruled against.
-- [ ] **`src/core/dream/git-env.js`'s own comments** — the run's first-read
+- [ ] **`src/core/dream/git-env.js`'s own comments, and its `WIN32_CARRIED`
+      constant — the executable mirror of row U4's key list (erratum 1,
+      2026-09-06)** — the run's first-read
       statement of Table U. It may summarise; it may not decide. Its `HOME`
       sentence must say the value is taken from `getPaths().home` at call time
       (row U2), which is what licenses the module's one non-`node:` dependency.
