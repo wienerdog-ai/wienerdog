@@ -264,7 +264,7 @@ commit:
 
 | # | finding | disposition |
 |---|---|---|
-| **C1** | The table-letter paragraph said the three colliding specs are "none of which this spec cites, and none of which is therefore in this spec's mirror-walk resolution scope" — **naming them is exactly what puts them in scope**, and `mirror-walk` reports one AMBIGUOUS reference (row **M5** against `WP-launcher-no-self-resync-republish`'s Table M) because of it | FIX: the paragraph now states the mirror-walk verdict, that the tool reports ambiguity and never fails on it, and that every row id in the spec means a row of THIS spec's Table M unless a path is given |
+| **C1** | The table-letter paragraph said the three colliding specs are "none of which this spec cites, and none of which is therefore in this spec's mirror-walk resolution scope" — **naming them is exactly what puts them in scope**, and `mirror-walk` reports AMBIGUOUS references because of it. **[STALE — round 2's finding R2-E: this cell said "one", the tool said nine, and the count moved again with round 2's own checklist edits. The count is no longer written in the spec at all; the run's output is pasted under "Round 2" below.]** | FIX: the paragraph now states the mirror-walk verdict, that the tool reports ambiguity and never fails on it, and that every row id in the spec means a row of THIS spec's Table M unless a path is given |
 | **C2** | The Deliverables cell still said "Zero deletions in that file" — the Z2 criterion | FIX: the cell now cites V2's reconstruction and says outright that it is never a deletion count |
 | **C3** | Current state said "Five removal acts exist"; the spec elsewhere says "three call sites" | FIX: **three call sites performing five removal ACTS**, with the five Table M rows named |
 | **C4** | Context's "two of the three sites" left the granularity implicit | FIX: "two of the three CALL SITES (Current state counts the five removal ACTS they perform)" |
@@ -282,7 +282,9 @@ fixed by running rather than reading:** `MD056/table-column-count` on Table M ro
 rewritten as `` `O_CREAT` with `O_EXCL` ``.
 
 `node scripts/mirror-walk.js --scope quarantine-disposal` → **RESOLVED**, exit 0,
-one AMBIGUOUS reference reported (C1's, resolved by prose qualification).
+AMBIGUOUS references reported and resolved by prose qualification — **the COUNT
+this line originally carried is withdrawn as stale (round 2, R2-E); the run's own
+output is under "Round 2" below**.
 `scripts/check-frontmatter.js` → passed, 269 specs.
 
 ## The size count (the stub's "measure the surface before sizing")
@@ -332,6 +334,7 @@ matters more than it looks:
 |---|---|---|---|
 | 0 | — (internal) | this record | Z1–Z3 and C1–C9, all fixed or accepted above; one lint failure fixed by running |
 | 1 (`7f489d15`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-codex-plugin.txt` (`0f73cf4f`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-shadow.txt` (`03ba7d57`); both committed pre-adjudication, porcelain identical before and after | Plugin 1 A; shadow 2 A + 1 B; no scope objections. **Three findings, all routed DESIGN or record by the pinned ladder — none argued to BUILD the package.** R1-A, R1-B, R1-C below, plus **R1-D self-found** during the round's coherence re-run |
+| 2 (`03c56ed1`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-codex-plugin.txt` (`efdab74d`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-herdr-shadow.txt` (`61f211f1`); both committed pre-adjudication, porcelain identical before and after | Plugin 3; shadow 1 A + 1 B; no scope objections. **THIRD consecutive round on O8's supporting sentence → the repeat-kind rule fires and the answer is a DESIGN change: O8 loses its universal sentence and the disposition becomes Table M's per-act column.** R2-A…R2-E below |
 
 ## Round 1
 
@@ -520,3 +523,203 @@ tip**, with the prior findings listed and the reviewer asked to verify each is
 genuinely fixed rather than re-worded, and to attack the new mechanisms: the
 platform-scope paragraph, M1's conditional coverage, M2's widened role, the
 restated M3/M4/M6 cells, O10, and the filed stub.
+
+## Round 2
+
+**Branch:** `docs/wp-quarantine-disposal-durability`. **Tip reviewed:**
+`03c56ed118414049383db5bbf7eaa5a31fc4c849`, base `main` `66b2b1f8`. Both channels
+executed; porcelain identical before and after. Plugin: 3 findings (1 A + 2
+graded A in the body, reported medium). Shadow: 1 A + 1 B. No scope objections.
+Both again reported the environment limits `QD-P1` already covers — no crash was
+staged, and the shadow additionally could not re-run `QD-P6`–`QD-P10` because the
+probe scripts are deliberately uncommitted and its sandbox is read-only.
+
+**THE BAND GATE DOES NOT CLOSE THIS ROUND, AND THE LADDER'S TOP RUNG IS NOT WHAT
+FIRES.** Three band-A findings. But the decisive fact is not any one of them: it
+is that **this is the THIRD consecutive round landing a finding on O8's supporting
+SENTENCE** — round zero's draft, round 1 (coverage, "designed response"), round 2
+(pricing, lifetime, and the temporal equivalence itself). The runbook's repeat-kind
+rule is explicit: when two consecutive rounds land findings of the same kind, the
+next step is a **design question, never another textual patch**.
+
+### THE DESIGN ANSWER — O8 loses its universal sentence
+
+**The design question:** can a single claim about "every removal act" be true here
+at all? **Round 2 answered no by measurement** (R2-A), and the answer is
+structural rather than a wording fix: the five acts sit at different points in the
+run — two inside a preservation that then FAILS and is followed by a fallback, a
+report and a commit; one inside a preservation that SUCCEEDS; one after
+`promote()` has already returned; one inside the gate's own refusal arm. **Their
+crash-before and crash-after states therefore differ in different ways, and no
+sentence spans them.**
+
+So: **the universal sentence is WITHDRAWN, not reworded, and the disposition of
+this package becomes exactly Table M's last column** — each act decided on its own
+comparison of the two states. The F7(a) clause and the spec's header now cite that
+column, and the clause itself is split per act. **Two acts fall out of the
+exclusion entirely** (below).
+
+### R2-A — the equivalence is FALSE at M3 (and at M2). Shadow F1, band A; classification measured-claim → **DESIGN**
+
+**Re-measured before anything was rewritten, with a new probe.** `QD-P11` drives
+the SHIPPED `makeGates({stateDir}).secret(…)` through the redact-arm fall-through:
+a soft (redact-severity) note, the FIRST artifact `fsync` fault-injected so the
+`redacted/` preservation fails while the withheld one still works. The whole trace
+of that one gate call:
+
+```text
+rm quarantine/redacted/.tmp-<pid>-fp.md
+fsync artifact #1 -> THROWS (injected: the redacted preserve fails)
+rm quarantine/redacted/2026-07-02-fp.md
+rm quarantine/.tmp-<pid>-fp.md
+fsync artifact #2
+fsync dir quarantine
+fsync dir <stateDir>
+fsync dir <core>
+```
+
+```text
+fsyncs_of_redacted_dir_ANYWHERE: 0
+published_preservation_record: [{ "artifact": "2026-07-02-fp.md", "location": "quarantine" }]
+files_left_in_redacted: []
+files_left_in_quarantine: ["2026-07-02-fp.md"]
+```
+
+**Three facts follow, and the third is the finding.** (1) `redacted/` is never
+`fsync`ed anywhere in the call, so M3's window does NOT end at the function return
+— the earlier cell's bound was wrong. (2) The run continues: the withheld fallback
+at `validate.js:1429` succeeds, `validate.js:1463` records only that copy, and the
+report is published and committed. The control flow is a shipped, tested behaviour
+(`tests/unit/dream-validate.test.js:1670`) and is cited rather than re-derived.
+(3) **Therefore the two states differ**: a crash BEFORE `:1020` ends the run before
+any fallback or report; a crash AFTER it can follow a run that COMPLETED and
+published a record omitting the artifact.
+
+**Why that is a contract violation and not an untidy leftover.**
+`WP-preservation-abort-widening` Table D row **D4**
+(`docs/specs/done/WP-preservation-abort-widening.md:417`) says *"**`null` means the
+owned path is absent.**"* A resurrection makes D4 FALSE for a finished run. Rows
+**D1** and **D2** name that owned path as `tmp` before the commit and `dest` after
+it — **so the same reasoning covers M2**, and `QD-P11` shows both leftovers in the
+same trace.
+
+**Disposition: DECIDE M3 (and M2) ON THEIR OWN, under the standing process, with
+BOTH options priced — and the decision is (b), CLOSE THEM.** Both prices are in
+the spec's owner item **O11** and are not restated here. **(a) accept and name**
+costs a shipped contract becoming untrue after the product reported success, with
+nothing enumerating the shelf to find out. **(b) close it** costs one best-effort
+directory flush per failure path, `2.0–2.7 ms` (`QD-P2`) on an arm that is already
+failing, reusing the existing `flushDir` helper, best-effort so no shipped
+disposition changes, and no `fsync` at all on win32 per row **F5**.
+
+**THE SUPERSEDED OUTCOME THEREFORE NARROWS — say it loudly.** This package stays
+`Superseded` for **three** acts (M1, M4, M6). **Two acts (M2, M3) leave it** and
+are filed as `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`
+(`Draft` — it has not run its own design gate, so it is not `Ready`).
+
+**Scope note, stated because it widens the coordinator's framing by one act.** The
+finding was raised against M3. The scope taken is *the owned paths D4 names on the
+failure arms*, which is M2 as well — an acceptance predicate over the contract
+rather than a list of the leftovers a review happened to notice. Enforcing D4 for
+`dest` and not for `tmp` leaves the contract half-true; O11 prices the narrower
+alternative too.
+
+### R2-B — the ~1.6× ratio is M1's and no other row's. Plugin F1, band A; measured-claim
+
+Correct, and the correction is a scoping. `QD-P10` measured an interval that an
+application flush ENDS — the unlink at `:995` followed by `qdir`'s flush at
+`:1006`. **M4 and M6 have no subsequent application flush at all, and M3's did not
+end at the return either**, so no width and no narrowing ratio can be derived for
+them from M1's figures. **FIX:** the ratio now lives in M1's cell alone and says
+outright that it is that row's; M2, M3, M4 and M6 each say **"unbounded by any
+application flush"**, with the honest addition that such an interval ends only at
+the platform's own writeback, which this product neither requests nor observes and
+which is not measured here. Every generalising pricing sentence in O8 is gone with
+the universal sentence.
+
+### R2-C — an uncapped withheld twin is not retained forever. Plugin F2, band A; contract
+
+Correct, and both citations check out. `docs/GLOSSARY.md:141-144` says
+`state/quarantine/` holds a withheld note *"kept for as long as the owner leaves it
+there"* and calls `redacted/` *"disposable"*; `src/core/dream/promote.js:600-603`
+renders `REMEDIATION_GUIDANCE`, whose `delete` value is *"Nothing was promoted for
+this path; delete that copy."* **FIX:** row **M6** and owner item **O10** now say
+the twin exists **at the identity check** and has no automatic cap — which is not
+permanence — and that once the owner deletes it a resurrected `redacted/` copy is
+no longer a duplicate of retained bytes. **No lifetime or disclosure equivalence is
+claimed anywhere**, and the F7(a) clause carries none either.
+
+### R2-D — the shelf stub reversed the only-copy distinction. Plugin F3, band B; contract
+
+Correct. **FIX**, in `docs/specs/WP-quarantine-only-copy-shelf.md`: both shelves
+are now described as potentially holding sole surviving bytes — a withheld copy can
+be the only surviving form of the run's ADDITIONS, since nothing was promoted and
+the workspace is destroyed; a `redacted/` copy is the only surviving form of the
+unscrubbed content. **The refused-note/redacted-only fall-through is carried
+explicitly** alongside successful redaction, citing
+`WP-quarantine-banner-location:410-455`'s measured verdict and
+`WP-preservation-abort-widening` **Table P row P3**. The shelves are now
+distinguished by **retention and visibility**, not by replaceability.
+
+### R2-E — the mirror registry asserted facts the tool disproves. Shadow F2, band B; mirror
+
+Correct on both halves. **FIX, and the durable half is a deletion.** (i) The spec
+no longer states an ambiguity COUNT at all: the earlier draft said "exactly one",
+the tool said nine, and this round's own checklist edits moved it again — a number
+beside a list is a number waiting to be falsified, so the count now lives only
+where it is produced, beside the tip it ran on. Round zero's two stale statements
+(this record's C1 cell and its coherence-pass line) carry forward pointers rather
+than rewrites. (ii) The stub is registered honestly as a **cross-document mirrored
+SUMMARY** rather than a citation — it repeats M4's and M6's persistence result and
+M5's `QD-P3`/`QD-P4` predicate locally, because a stub opened cold cannot be a bare
+pointer — and it now **cites row M5 explicitly**. `WP-quarantine-failed-preserve-disposal-flush`
+is registered the same way.
+
+**The scoped walk, re-run after every fix in this round, pasted rather than
+described:**
+
+```text
+mirror-walk (scope: quarantine-disposal): 14 checklist entries across 1 specs (1 scanned)
+  row references: 18   table references: 2   spec-path references: 3
+  skipped: 4 ids whose letter names no table in scope (another addressing scheme, not a mirror) — --skipped lists them
+
+AMBIGUOUS — 11 references. Reported, NEVER failed: the canonical table-letter map records these collisions as resolved by prose qualification, which no parser can check. Distinct colliding surfaces:
+  Table M → WP-147-managed-block-separator-roundtrip.md | WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md | WP-refusal-remedy-discriminator.md   (1 entry)
+  row M2 → WP-dream-promote-module.md | WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md | WP-refusal-remedy-discriminator.md   (2 entries)
+  row M3 → WP-dream-promote-module.md | WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md   (2 entries)
+  row M4 → WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md   (2 entries)
+  row M5 → WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md   (2 entries)
+  row M6 → WP-launcher-no-self-resync-republish.md | WP-quarantine-disposal-durability.md   (2 entries)
+  (--ambiguous lists every site)
+
+RESOLVED — every table letter, table-row id and spec path this run EXTRACTED from these
+```
+
+`node scripts/mirror-walk.js` unscoped: **UNRESOLVED block byte-identical to the
+base's fourteen pre-existing entries**, verified by diff.
+
+**Both-directions re-proved after every fix in this round: twelve deliberately
+broken states, all RED, control and finished tree GREEN.** The new one this round
+requires is **r12**, the failed-preserve successor stub deleted so O11 routes to a
+name again (`FAILED at: test -f docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`).
+
+### What round 2 did NOT change
+
+- **Any shipped contract or posture.** Table D, F, N and P are cited and
+  unamended; O11's answer changes `src/`, but inside a successor package with its
+  own design gate, not here.
+- **The three permanent exclusions.** M1, M4 and M6 keep their decisions; what
+  changed at M1 and M6 is the REASON stated, not the decision.
+- **The verification surface.** No fifth step. V1's key literal and V3's file list
+  were re-scoped because the fixes moved their targets, which the round rule
+  permits; V2's three-edit reconstruction is unchanged in shape.
+- **The stop criterion**, which is unchanged and governed round 2 as written.
+
+### Round 3 is owed
+
+R2-A is HEAVY and the design answer rewrote the disposition's shape, so a **full
+fresh external round runs on the revised tip**, with the prior findings listed and
+the reviewer asked to verify each is genuinely fixed rather than re-worded, and to
+attack the new mechanisms: the per-act column and the absence of any spanning
+claim, the split F7(a) clause, O11's pricing, the two-act scope, the corrected M6
+and O10 lifetime statements, and both filed stubs.

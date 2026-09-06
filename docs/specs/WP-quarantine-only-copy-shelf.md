@@ -44,18 +44,52 @@ before refusing to promote them. Two shelves exist under the user's core, both
   `src/core/private-fs.js:667-672`'s insecure-modes scan, which reads modes and
   not names.
 
-**The asymmetry that makes this shelf different.** A withheld copy is a second
-copy: the note is still in the vault, reverted. A `redacted/` copy is often the
-ONLY copy of the note's pre-scrub content — the vault holds the scrubbed version
-and the workspace is destroyed — so evicting one destroys bytes the user cannot
-get back. `src/core/dream/validate.js:1401-1405` says so in the code's own words:
-never redact a note whose original could not be preserved, because that is *"the
-permanent-corruption outcome this design exists to avoid."*
+**BOTH SHELVES CAN HOLD THE ONLY SURVIVING COPY OF SOME BYTES, and an earlier
+draft of this stub had the distinction backwards — corrected here by
+`WP-quarantine-disposal-durability`'s design-gate round 2, finding R2-D.**
+
+- A **withheld** copy is not merely a second copy. Nothing is promoted for that
+  path, and reverting or retaining the vault baseline does not recover the
+  ADDITIONS the run made: the workspace is destroyed at teardown, so the flagged
+  copy on `state/quarantine/` can be the only surviving form of those added bytes.
+  `src/core/dream/promote.js:600-603` renders the guidance for exactly that state
+  — *"Nothing was promoted for this path; delete that copy."*
+- A **`redacted/`** copy is the pre-scrub original of a note whose added lines the
+  gate rewrote and committed, so it is the only surviving form of the UNSCRUBBED
+  content. `src/core/dream/validate.js:1401-1405` says so in the code's own words:
+  never redact a note whose original could not be preserved, because that is *"the
+  permanent-corruption outcome this design exists to avoid."*
+- **And the case this package inherits from the banner is neither of those two.**
+  It is a **refused note surviving only under `redacted/` with nothing sanitized
+  promoted** — the redact-arm fall-through. That state is measured, not
+  hypothetical: `docs/specs/done/WP-quarantine-banner-location.md:410-455` drives
+  `makeGates({stateDir}).secret(…)` to a `{refuse:true}` verdict whose record is
+  `[{artifact, location: "quarantine/redacted"}]` while
+  `listSecretQuarantine(stateDir)` is `[]`, and
+  `WP-preservation-abort-widening` **Table P row P3** states the same conclusion as
+  a contract: a surviving `redacted/` copy always recovers, so the run refuses the
+  note and reports that copy rather than aborting. **Carry this fall-through
+  alongside the successful-redaction case; a question scoped to the latter alone
+  excludes the very state the banner question exists to resolve.**
+
+**So the shelves are distinguished by RETENTION and VISIBILITY, not by whether
+their contents are replaceable.** Retention: `state/quarantine/` has no automatic
+cap and is kept *"for as long as the owner leaves it there"*; `redacted/` is capped
+at 50, pruned opportunistically, and called *"disposable"*
+(`docs/GLOSSARY.md:141-144`). Visibility: the withheld shelf is announced by the
+pending-review banner; `redacted/` is announced by no banner at all.
 
 ## What this package must settle
 
 **Three questions land here. They share one subject — what the bounded shelf owes
 a copy that is irreplaceable — and each needs its own answer.**
+
+**This section is a mirrored SUMMARY of `WP-quarantine-disposal-durability`'s
+Table M rows M4, M5 and M6, not a bare pointer** — it repeats their results
+locally, because a stub a reader opens cold cannot be a pointer only. That
+package's Mirrored Surface Checklist registers this file for exactly that reason,
+so a change to any of those three rows changes this section too. **Table M
+governs; where this summary and that table disagree, the table is right.**
 
 1. **The BANNER question, routed by `WP-quarantine-banner-location`
    (`docs/specs/done/WP-quarantine-banner-location.md:1415-1426`).** That package
@@ -67,7 +101,8 @@ a copy that is irreplaceable — and each needs its own answer.**
    item** also parked a related sentence: the pending-review notice's closing
    *"this notice clears when no withheld copies are left"* is false in one measured
    state, and that package accepted it as a residual rather than fixing it here.
-2. **The SELECTION question, routed by `WP-quarantine-disposal-durability` owner
+2. **The SELECTION question — `WP-quarantine-disposal-durability` Table M row
+   **M5**, routed here by that package's owner
    item O9** (`docs/specs/done/WP-quarantine-disposal-durability.md`, its
    `## Dispatch precondition — owner items`; measurements in
    `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
@@ -85,8 +120,9 @@ a copy that is irreplaceable — and each needs its own answer.**
    refusing to prune while the run's own `created` set has reached the cap closes
    exactly the measured case — **and explicitly left the choice here**, because
    taking it would pre-empt one of question 1's three answers.
-3. **The PERSISTENCE question, routed by that package's owner item O10** (same
-   section; probe **QD-P9**). Rows M3, M4 and M6 of its Table M each leave a
+3. **The PERSISTENCE question — that package's Table M rows **M4** and **M6**,
+   routed here by its owner item O10** (same
+   section; probe **QD-P9**). Each leaves a
    secret-bearing copy on this shelf that no record names, no banner lists, and —
    measured — no prune is scheduled to remove: a shelf of 20 and a shelf of exactly
    50 are never pruned at all. That package's recommendation is ACCEPT AND NAME,

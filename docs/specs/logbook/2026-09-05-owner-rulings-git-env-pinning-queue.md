@@ -373,3 +373,41 @@ rather than reversing it, and O9's routing now names a filed `Draft` stub,
 the reason this record's corrections give — the spec governs, and a change to any
 of the three is carried here by a dated amendment paragraph naming it, never by
 editing an entry in place.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 2 — one item, O11
+
+Numbering continues this queue's. **O11 was adopted under the standing process of
+2026-09-05, as a recommendation and not as a direct owner ruling, and the owner
+may reverse it by dated amendment.** It exists because round 2 was the THIRD
+consecutive round to land a finding on one spanning sentence, so the repeat-kind
+rule made the answer a design change rather than another patch: that spec's
+disposition is now its Table M's per-act column, and two of the five acts fall
+outside it and need a decision of their own.
+
+**CITATION-ONLY**, as this record's 2026-09-06 corrections to O4/O5, to O6 and to
+O7 established. Two pointers, and nothing else:
+
+- **The governing text** — `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries **O11**'s decision and
+  the enumerated price of BOTH options, and that spec's **Table M** for the facts.
+- **The measurement it rests on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  section "Round 2", finding **R2-A**, probe `QD-P11`.
+
+**Two consequences the owner should see without opening the spec, stated as status
+and not as contract.** The `Superseded` outcome **narrows**: that package disposes
+three of its five removal acts, and the other two move to a new `Draft` stub,
+`docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`, which has not run its
+own design gate. And **O8 is no longer a rule**: the same section records that its
+universal sentence was withdrawn rather than reworded.
+
+**O10 is qualified by the same round** (finding R2-C) — the withheld twin is not
+retained forever, and the lifetime equivalence that entry's governing text once
+carried is withdrawn there. That is a change to the governing text, not to this
+record's O10 entry, which was citation-only and stays as it is.
+
+**And one citation in the entries above is corrected here rather than in place,
+as this record requires:** the 2026-09-06 O10 append gave the measurement range as
+probe ids `QD-P1`…`QD-P10`. Round 2 added `QD-P11`, so the range is
+**`QD-P1`…`QD-P11`**. The pointer itself — that design-gate record — is unchanged
+and still governs, for O8, O9, O10 and O11 alike.

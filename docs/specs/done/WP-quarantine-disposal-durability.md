@@ -11,105 +11,110 @@ epic: dream-promotion
 
 # WP-quarantine-disposal-durability: the disposal half, and why it is not built
 
-> **SUPERSEDED 2026-09-06 — never implemented; the value question this package
-> was filed to ask answered NO, and the record is kept because the answer is the
-> deliverable.** The package was split out of
+> **SUPERSEDED 2026-09-06 — never implemented. The value question this package was
+> filed to ask answered NO for THREE of its five removal acts and YES for two, and
+> the record is kept because that split is the deliverable.** The package was split
+> out of
 > `docs/specs/done/WP-quarantine-preserve-durability.md` on 2026-09-05 (that
 > spec's Dispatch precondition **item 4**) to decide whether a quarantine
-> artifact this product deletes must be *durably* gone. It is not. **Three acts
-> replace it, and all three are in this branch:**
+> artifact this product deletes must be *durably* gone. **The answer is per act,
+> not per package** — design-gate round 2 withdrew the universal claim after
+> measuring it false — and **Table M's last column IS the disposition**. **Four
+> acts replace this package, and all four are in this branch:**
 >
-> 1. **The permanent exclusion.** `WP-quarantine-preserve-durability`'s **Table F
->    row F7(a)** — the row that names removal durability as out of that package's
->    scope — gains one dated clause recording that the exclusion is now permanent
->    rather than deferred. That row keeps the fact; this file keeps the reasoning.
-> 2. **The one live question that rode along and is NOT a durability question** —
+> 1. **The SPLIT exclusion.** `WP-quarantine-preserve-durability`'s **Table F row
+>    F7(a)** — the row that names removal durability as out of that package's
+>    scope — gains one dated clause: the exclusion is **permanent** for rows
+>    **M1**, **M4** and **M6**, and **lifted** for rows **M2** and **M3**. That row
+>    keeps the fact; this file keeps the reasoning.
+> 2. **The successor for the two acts that are NOT excluded:**
+>    `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`, filed as a
+>    `Draft` stub in this branch. Round 2 measured that a failed preservation's
+>    removal can be followed by a run that COMPLETES and publishes a record, with
+>    no flush anywhere — so Table D row **D4** (*"`null` means the owned path is
+>    absent"*) becomes false for a finished run. Owner item **O11** carries the
+>    decision and prices both options.
+> 3. **The one live question that rode along and is NOT a durability question** —
 >    whether `pruneRedactedOriginals` may SELECT another still-running
 >    invocation's fresh `redacted/` artifact for eviction — is answered here as
 >    owner item **O9**, measured, and routed to a FILED home.
-> 3. **That home:** `docs/specs/WP-quarantine-only-copy-shelf.md`, filed as a
+> 4. **That home:** `docs/specs/WP-quarantine-only-copy-shelf.md`, filed as a
 >    `Draft` stub in this branch. It was proposed and never filed by
 >    `WP-quarantine-banner-location`; design-gate round 1 found that O9 was
 >    routing a measured data-loss class to a name with no file behind it, and
 >    filing the stub is that finding's fix. It also carries owner item **O10**.
 >
-> The measurements that decided all three are
+> The measurements that decided all four are
 > `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`
-> (probe ids `QD-P1`…`QD-P10`; `QD-P6`…`QD-P10` were added by round 1). The
+> (probe ids `QD-P1`…`QD-P11`; `QD-P6`…`QD-P10` were added by round 1 and
+> `QD-P11` by round 2). The
 > predecessor's own design-gate record, which routed the first two questions
 > here, is
 > `docs/specs/logbook/2026-09-05-quarantine-preserve-durability-design-gate-rounds.md`.
 
 ## Dispatch precondition — owner items
 
-**THREE items. All are recommendations recorded with the cost of overruling them,
+**FOUR items. All are recommendations recorded with the cost of overruling them,
 under the standing process of 2026-09-05
 (`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`): the
 maturing architect records a recommendation with its overrule cost, the session
 proceeds under it, and the owner reverses it by dated amendment. This section is
 the ONE place their text and their costs live; the rulings record cites it.**
-**Adopting all three changes no `src/` line and no shipped contract.** **O10 was
-added by design-gate round 1** (`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`),
-whose finding R1-B established that a state two of these rows called self-clearing
-is not.
+**Adopting all four changes no `src/` line and no shipped contract HERE** — O11's
+answer changes `src/`, but in a successor package with its own gate, not in this
+one. **O10 was added by design-gate round 1 and O11 by round 2**
+(`docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`),
+whose findings R1-B and R2-A each falsified a sentence these rows had rested on.
 
-**O8 — THE VALUE QUESTION: a disposed quarantine artifact does NOT have to be
-durably gone. Recommendation: accept, and close the package. VERDICT AFTER
-ROUND 1: STANDS, NARROWED — two supporting sentences were falsified and are
-withdrawn; the sentence that decides it was not touched.**
+**O8 — THE VALUE QUESTION, AND ITS ANSWER IS NOW A COLUMN RATHER THAN A
+SENTENCE. Recommendation: accept Table M's per-act decisions as they stand.
+VERDICT AFTER ROUND 2: the disposition SURVIVES for three acts and is WITHDRAWN
+for two.**
 
-**What decides it is an EQUIVALENCE, and it is the only load-bearing claim.** At
-every removal Table M names, the state a crash leaves AFTER a non-durable removal
-is the state a crash BEFORE that same removal already leaves — the file back under
-its own name, in the same 0700 directory, with the same bytes — and **nothing in
-the product distinguishes the two**. So a durable removal closes ONE ENTRANCE to a
-state the other entrance keeps open, and it changes neither the state, nor its
-lifetime, nor its disposition. That is why "not worth solving" is a statement
-about what the fix would BUY, not about how rare a crash is.
+**THE DESIGN ANSWER, and it is why this item no longer states a rule.** Three
+consecutive rounds landed findings on the SENTENCE this item used to open with —
+round 1 on its coverage clause and its "designed response" clause, round 2 on its
+pricing and on the temporal equivalence itself. The runbook's repeat-kind rule
+says that when two consecutive rounds land findings of the same kind the next step
+is a design question, never another textual patch. **The design question is
+whether a claim spanning five removal acts can be true at all, and round 2
+answered it: it cannot.** So the universal sentence is WITHDRAWN, not reworded,
+and **the disposition of this package is exactly Table M's last column** — each
+act decided on its own comparison of the crash-before and crash-after states, with
+no claim spanning them. The F7(a) clause and this file's header cite that column.
 
-**Two sentences an earlier draft rested on are WITHDRAWN, both falsified by
-round 1 and both re-measured.** (a) *"The one removal whose leftover would be
-functionally harmful is already durable."* It is not unconditional. The coverage
-holds on POSIX only while the whole flush set COMPLETES: `flushPreservation`
-short-circuits on an artifact- or directory-`fsync` failure (`QD-P6`, reproduced
-on both arms) and issues nothing at all on win32 (`QD-P7`, zero `fsync` calls).
-Row **M1** now carries that scope, and the paths where it does not close route to
-row **M2**, whose leftover and disposition are the same. (b) *"…accepted today at
-all of them, with a designed response at each."* What is designed is the response
-to ENCOUNTERING the leftover, never a clearing of it: at M2 the exclusive create
-turns the collision into an ordinary preservation failure and does not remove the
-leftover (`QD-P8`), and on the `redacted/` shelf Table N gives no schedule at all
-(`QD-P9`). The corrected statement is in the rows, and the persistence it exposes
-is owner item **O10**.
+**What survives, per act, and each stands on its own row's measurement.**
+**M1** — the window closes inside the call wherever the flush completes, so there
+is no post-completion state; where it does not, the act becomes M2's. **M4** — the
+prune runs after `promote()` has returned, so the record is already produced in
+both states and neither falsifies it. **M6** — the duplicate is present in both
+states and the record omits it in both, because the `if (identical)` branch never
+records it. **Those three are the permanent exclusion.**
 
-**The re-pricing round 1 forced makes the case stronger, not weaker, and it is
-measured.** A dedicated flush after an unlink **cannot reach zero exposure**: at
-M1 it would replace a 3.5–4.1 ms unflushed window (median, `QD-P10`) with the
-2.0–2.7 ms its own dirty-directory `fsync` takes (`QD-P2`) — a factor of about
-1.6. And on the `redacted/` shelf the pre-removal entrance is not a window at
-all: the artifact sits there for as long as Table N leaves it, which `QD-P9`
-measures as *indefinitely* in two ordinary states. Closing a millisecond-scale
-entrance to a room the product leaves open indefinitely by another door is the
-whole of what a disposal-durability package would buy. **And no crash can be
-staged** (`QD-P1`), so such a package could only ever assert flush CALLS, never
-the outcome they are wanted for.
+**What does NOT survive: M2 and M3, and the reason is a shipped contract rather
+than a preference.** Round 2 measured (`QD-P11`) that a failed preservation's
+removal can be followed by a run that COMPLETES and publishes a record, with no
+flush of that directory anywhere in the call. `tmp` and `dest` are the two paths
+Table D row **D4** calls *the owned path*, and D4 says *"`null` means the owned
+path is absent"* (`docs/specs/done/WP-preservation-abort-widening.md:417`). **A
+resurrection there makes D4 false for a run that already finished** — which is not
+an untidy leftover but a shipped contract becoming untrue after the product
+reported success at its own task. Those two acts are decided **(b), close them**,
+and move to a successor; owner item **O11** carries that choice and prices both
+options.
 
-**Cost of overruling:** a second flush protocol over the three call sites in
-`src/core/dream/validate.js` — four removal acts, since row **M1**'s is already
-inside Table F's set wherever that set completes — and the disposition it needs is
-where the cost really sits. At `removeOwnedQuarantinePath` a flush that does not
-complete has no honest home but `WP-preservation-abort-widening` Table D row
-**D3**'s fail-loud class, which turns a new class of filesystem error into an
-aborted dream; at the other two sites a flush must stay best-effort to leave
-Table N row **N7** and the identity-gated delete's shipped postures standing, and
-a best-effort flush buys the ~1.6× narrowing priced above. It would also have to
-say what it does on win32, where there is no flush to add without making an
-unmeasured Node behaviour load-bearing on a platform this pipeline cannot test —
-Dispatch precondition item **1** of the predecessor already priced that. Reversing
-this item re-opens the package, re-widens it to the three sites, and puts two
-shipped `best-effort` contracts in front of the owner, which is the contract
-change item 4 declined to fold in.
+**No crash can be staged** (`QD-P1`), so nothing here — in this package or its
+successor — may assert what a power loss leaves. What the evidence reaches is
+stated under Table M.
 
+**Cost of overruling this item** is now per act, because the item is. Overruling
+the three permanent exclusions re-opens a flush protocol over acts whose two
+states are measured identical, and at `pruneRedactedOriginals` and the
+identity-gated delete a flush must stay best-effort to leave Table N row **N7**
+and the shipped *"a stale duplicate, not a hazard"* posture standing — which is a
+contract change and the owner's act, and the runbook's *diff size does not measure
+contract impact* rule is why. Overruling M2/M3's move is **O11**'s cost, stated
+there.
 **O9 — THE PRUNE'S SELECTION RULE: ACCEPT AND NAME the residual now; the answer
 belongs to `WP-quarantine-only-copy-shelf`, which already owns the class.
 Recommendation: accept.** The finding is real and reachable, and both halves are
@@ -166,9 +171,17 @@ verdict** — but calling it acceptable is a statement about the shipped retenti
 posture, and that is the owner's. **Why ACCEPT is the recommendation, in the
 product's own terms:** the object persisting is one the `redacted/` shelf already
 holds by design for an unbounded time — Table N row **N1** bounds the shelf by
-COUNT and not by age, and leaves `state/quarantine/` unbounded outright — and at
-row **M6** the persisting copy is byte-identical to a twin that IS on the record
-and IS retained forever, so it discloses nothing new. **Cost of accepting, stated
+COUNT and not by age — and `docs/GLOSSARY.md:141-144` names that shelf's contents
+*"disposable"* in the product's own vocabulary. **Round 2's finding R2-C removed
+the second half of this argument and it is not restored:** an earlier draft said
+the M6 copy is byte-identical to a twin *retained forever*. It is not. The twin
+exists **at the identity check**; `state/quarantine/` has no automatic cap, but
+GLOSSARY:141-144 says a withheld copy is kept *"for as long as the owner leaves it
+there"* and `src/core/dream/promote.js:600-603` renders guidance instructing the
+owner to *"delete that copy"*. **So once the owner deletes the twin, a resurrected
+`redacted/` copy is no longer a duplicate of retained bytes**, and this item claims
+no equivalence of lifetime or of disclosure — only that the shelf's own contract
+already tolerates such a file. **Cost of accepting, stated
 rather than implied:** a user who inspects `state/quarantine/redacted/` can find a
 copy that no report, banner or record accounts for, and nothing tells them which
 it is. **Cost of overruling:** the only mechanism that removes the class is a
@@ -182,6 +195,50 @@ at all: a loud prune failure removes no file a crash left behind. **It is not a
 Deliverables change either way**, and its natural home if the owner overrules is
 `WP-quarantine-only-copy-shelf`, which already owns the shelf's retention
 question.
+
+**O11 — THE TWO ACTS THIS PACKAGE COULD NOT DISPOSE: CLOSE THEM, option (b).
+Recommendation: accept (b) and dispatch the successor. Added by design-gate
+round 2, whose finding R2-A is what made the choice necessary.** Rows **M2** and
+**M3** are Table D row **D4**'s two owned paths, removed on `quarantinePreserve`'s
+failure arms. **Both options were priced and the record shows both.**
+
+**(a) ACCEPT AND NAME, as O10's class reached after a COMPLETED run.** Cost: a
+`redacted/` or `.tmp-` artifact the product deleted can come back after a run that
+finished and published a record omitting it, so Table D row **D4** — *"`null`
+means the owned path is absent"* — is false for that finished run, and the
+product's own published statement is the thing a crash contradicts. Nothing
+enumerates the shelf, so nobody finds out.
+
+**(b) CLOSE IT — one best-effort directory flush after each of the two failure-path
+removals, POSIX-only. This is the recommendation.** **Reachable:** both removals
+sit inside `quarantinePreserve` with `qdir` in scope, each inside its own
+`if (owned…)` branch, and the existing helper `flushDir` already opens, `fsync`s
+and closes a directory and returns a boolean — **zero new machinery**. **Cost:**
+one dirty-directory `fsync` per failure path, **2.0–2.7 ms** (`QD-P2`), on an arm
+that is already failing; the common case pays nothing. **Disposition of a flush
+that does not complete: BEST-EFFORT** — flush, ignore the boolean. Raising would
+abort a run that is currently recoverable: at `:1020` on the redact arm the caller
+goes on to the withheld fallback (`validate.js:1429`), which is what keeps the
+note's bytes held. Best-effort changes no shipped contract, because Table D row
+**D3** is about a REMOVAL that cannot be completed, not about a flush. **On
+win32:** `DURABILITY_AVAILABLE` is false, no flush is issued, and that is today's
+behaviour and row **F5**'s posture — never called durable. **What (b) does NOT
+close:** the interval between the `rmSync` and the `fsync` completing. That
+residual is reachable only by a crash that also precedes the published record —
+which is the crash-before state these acts already accept.
+
+**Why BOTH acts and not `dest` alone.** The scope is *the owned paths D4 names* —
+an acceptance predicate over the contract, not a list of the leftovers a review
+happened to notice. **`QD-P11` shows both leftovers in one trace of one run.**
+Enforcing D4 for `dest` and not for `tmp` leaves the contract half-true, and
+"which half?" is the question the next round asks. **Cost of the narrower
+alternative:** one line saved, one split contract bought.
+
+**Cost of overruling O11** (taking (a)): `WP-quarantine-failed-preserve-disposal-flush`
+is withdrawn, rows **M2** and **M3** return to this table's permanent exclusion,
+the F7(a) clause loses its "NOT EXCLUDED" half, and **D4 acquires a disclosed
+durability residual it does not have today** — which is an amendment to a `Done`
+spec's canonical row, and therefore the owner's act rather than a fold-in.
 
 ## Context (read this, nothing else)
 
@@ -218,8 +275,10 @@ five removal ACTS they perform) carry shipped `best-effort` postures whose chang
 would be the owner's act rather than a fold-in.
 
 **This package's answer is that none of them needs one.** What follows is the
-enumeration that decides it, and the three owner items above are what it
-produced.
+enumeration that decides it, and the four owner items above are what it produced.
+**It is an enumeration and not a rule:** design-gate round 2 withdrew the one
+sentence that spanned the acts, so what decides this package is Table M's last
+column, act by act.
 
 ## Current state
 
@@ -269,6 +328,7 @@ implementation shape this package ever considered would have put a flush INSIDE
 
 | Action | Path | Notes |
 |--------|------|-------|
+| create | docs/specs/WP-quarantine-failed-preserve-disposal-flush.md | the `Draft` stub owner item **O11** moves rows **M2** and **M3** to, filed by design-gate round 2's finding R2-A. **ALREADY WRITTEN by the architect in this branch** — a stub, so it carries no Deliverables table of its own |
 | create | docs/specs/WP-quarantine-only-copy-shelf.md | the `Draft` stub owner item **O9** routes to, filed by design-gate round 1's finding R1-C. **ALREADY WRITTEN by the architect in this branch** — a stub, so it carries no Deliverables table of its own |
 | modify | docs/specs/done/WP-quarantine-preserve-durability.md | THREE lines, and nothing else in that file. **(1)** one dated clause appended inside **Table F row F7(a)**'s cell; **(2)** and **(3)** the two live pointers to this spec — Dispatch precondition item 4, and the Mirrored Surface Checklist entry that registers this spec's Context paragraph as an external mirror — repathed to `docs/specs/done/`, because this spec MOVED and a checklist entry naming a path that no longer exists makes `scripts/mirror-walk.js` exit 1 (round 1's finding **R1-D**, self-found). **ALL THREE ARE ALREADY WRITTEN by the architect in this spec's own commit — do not author them, do not revise them**; the row is listed so the record is exhaustive and the boundary check permits it. V2 asserts exactly these three edits and no fourth, by reconstruction and never by a deletion count |
 
@@ -295,7 +355,7 @@ Everything else in that row is `WP-quarantine-preserve-durability`'s and is
 unchanged.
 
 <!-- f7a-clause:begin -->
-**AMENDED 2026-09-06 — the exclusion is PERMANENT, not deferred.** That successor is `Superseded` and filed at `docs/specs/done/WP-quarantine-disposal-durability.md`, and the `(Draft)` marker in the preceding sentence is withdrawn by this clause. Its value question answered NO, on one equivalence: for every removal named here, the state a crash leaves AFTER a non-durable removal is the state a crash BEFORE that same removal already leaves, and nothing in the product distinguishes them — so a durable removal closes one entrance to a state the other entrance keeps open, and neither the state, its lifetime nor its disposition changes. **What that lifetime IS on the `redacted/` shelf is Table N's and not this row's, and it is not a cleanup:** a copy there is merely ELIGIBLE for eviction during a future qualifying prune, and may otherwise persist. The decided answer per removal, its PLATFORM SCOPE — the flushes this table requires are POSIX-only (row **F5**) and complete conditionally — and the three owner items this produced are that file's **Table M**; the measurements are `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`.
+**AMENDED 2026-09-06 — the exclusion is PART permanent and PART superseded, and the split is PER REMOVAL ACT.** The successor is `Superseded` and filed at `docs/specs/done/WP-quarantine-disposal-durability.md`, and the `(Draft)` marker in the preceding sentence is withdrawn by this clause. Its **Table M** decides each removal act on its own measured state comparison and **makes no claim that spans them** — design-gate round 2 withdrew the universal one, having falsified it. **PERMANENTLY EXCLUDED, rows M1, M4 and M6:** `pruneRedactedOriginals`' evictions and the identity-gated delete are not made crash-durable, and neither is the post-commit temp removal, which is inside row **F2**'s flush wherever that flush COMPLETES and on POSIX only (row **F5**). **NOT EXCLUDED, rows M2 and M3:** the two paths Table D row **D4** calls *the owned path*, removed on `quarantinePreserve`'s FAILURE arms, because a resurrection there makes **D4** false for a run that has already completed and published a record omitting the artifact — measured. They are `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (Draft). The measurements are `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`.
 <!-- f7a-clause:end -->
 
 **Exactly one space follows it** in the amended cell, before that cell's
@@ -322,29 +382,45 @@ none of which is in this family and none of which decides anything this spec
 relies on. **Measured, and stated because naming them has a mechanical cost:**
 `Table M` occurs zero times in the family's own documents
 (`WP-quarantine-preserve-durability`, `WP-preservation-abort-widening`,
-`WP-dream-promote-module`, `ADR-0034`), and `scripts/mirror-walk.js` reports
-exactly one AMBIGUOUS reference — row **M5** against
-`WP-launcher-no-self-resync-republish`'s Table M, which naming that spec above is
-what pulled into scope. That tool reports ambiguity and never fails on it,
-because prose qualification is what resolves a collision and no parser can check
-one; the qualification is this paragraph, and every row id in this spec means a
-row of THIS spec's Table M unless a path is given.
+`WP-dream-promote-module`, `ADR-0034`). **The collision has a mechanical cost, and NO COUNT OF IT IS WRITTEN HERE —
+round 2's finding R2-E is exactly why.** An earlier draft said the scoped
+`scripts/mirror-walk.js` reported "exactly one" ambiguous reference; by then it
+reported nine, and after this round's own checklist edits it reports more again. A
+number beside a list is a number waiting to be falsified, so **the count lives
+where it is produced**: the design-gate record pastes the run's own output beside
+the tip it ran on. What is stable and therefore stated here is the SHAPE — every
+`Table M` and `M<n>` reference in this spec is ambiguous to that tool against
+`WP-launcher-no-self-resync-republish`, `WP-147-managed-block-separator-roundtrip`,
+`WP-refusal-remedy-discriminator` and `WP-dream-promote-module`, all of which
+naming them above is what pulled into scope. **That tool
+reports ambiguity and never fails on it**, because prose qualification is what
+resolves a collision and no parser can check one; the qualification is this
+paragraph, and **every row id in this spec means a row of THIS spec's Table M
+unless a path is given**.
 
-### Table M — canonical: the disposition act, the five removals, the one selection question, and what was decided at each
+### Table M — canonical: each removal act, its own state comparison, and its own decision
 
 This table is the single place these facts are decided; every other surface in
 this spec cites it. **It decides nothing about the SUCCESS path** — Table F owns
 the flush protocol and the guarantee sentence, cited and unrestated.
 
-| # | The removal, and its site | The crash window | What a crash AFTER a non-durable removal leaves — and what a crash BEFORE that same removal leaves | Decided |
+**THE DISPOSITION IS THE LAST COLUMN AND NOTHING ELSE — design-gate round 2's
+design answer, taken after THREE consecutive rounds landed findings on a sentence
+that spanned the acts.** Each act is decided on ITS OWN comparison of two states:
+what a crash BEFORE the removal leaves, against what a crash AFTER a non-durable
+removal leaves. **No claim in this spec spans the acts, and the comparison is not
+always an equivalence** — at rows **M2** and **M3** it measurably is not, and
+those two are therefore NOT disposed here.
+
+| # | The removal, and its site | The crash window | THE TWO STATES COMPARED — a crash BEFORE the removal, against a crash AFTER a non-durable one | Decided |
 |---|---|---|---|---|
-| **M0** | — the act this package performs | — | — | **The exclusion in Table F row F7(a) becomes PERMANENT**, by one dated clause appended inside that cell. The clause is the Deliverables row above; the reasoning it points at is this table |
-| **M1** | the post-commit removal of `tmp`, `validate.js:995` | **OPEN from the unlink until `qdir`'s flush COMPLETES, and CONDITIONALLY** — round 1's finding, and the earlier cell's *"not reachable"* is withdrawn. On POSIX, when the whole flush set completes, the window CLOSES inside the same call: measured by running a real `quarantinePreserve` on both arms with `rmSync`, `openSync` and `fsyncSync` traced (`QD-P5`), the unlink is followed by an `fsync` of the directory that held the temp name, because Table F row **F2** flushes `qdir` and `tmp` lives in `qdir`. Its measured width is **3.5–4.1 ms** (median, `QD-P10`), which is 3–6× the **0.66–1.03 ms** for which `tmp` existed BEFORE the unlink. **It does NOT close on three paths, all executed (`QD-P6`, `QD-P7`):** `flushPreservation` (`validate.js:857-864`) SHORT-CIRCUITS, so an artifact-`fsync` failure or a `qdir` open/`fsync` failure returns before any completed directory flush — reproduced on BOTH arms, `rm .tmp` → failed `fsync` → `rm dest` → `null`; and on **win32** `DURABILITY_AVAILABLE` is false, so a SUCCESSFUL preservation issues **zero** `fsync` calls (`QD-P7`, with `process.platform` forced before load) | on the three non-closing paths, exactly the leftover row **M2** owns, and with M2's disposition | **NOTHING TO DO — but for the equivalence, not for coverage.** Where the flush completes the window is closed by a flush this package did not have to add. Where it does not, the leftover is M2's, whose row decides it. **And a dedicated flush after the unlink would not reach zero:** it would replace a 3.5–4.1 ms unflushed window with the 2.0–2.7 ms its own dirty-directory `fsync` takes (`QD-P2`) — a factor of ~1.6, measured |
-| **M2** | the shared-`catch` removal of `tmp`, `validate.js:984` | between `rmSync` returning and any later flush of `qdir`; on this path there is none — the call returns `null` | this invocation's own bytes back at `.tmp-<pid>-<stem>`, **which the pending-review banner does not list** (`listSecretQuarantine` skips dot-prefixed entries) and which the insecure-modes scan does reach. A crash **before** l.984 leaves the identical file. That earlier state is not merely accepted, it is DESIGNED FOR, and round 1 asked for the design to be verified rather than asserted. **Measured (`QD-P8`), by planting a leftover at the deterministic `.tmp-<pid>-<stem>` name this process owns and calling the shipped `quarantinePreserve`: it returns `null` — an ordinary preservation FAILURE — and the leftover is NOT removed** (row F8 and Table D row **D1** forbid removing a name this call did not create), so it persists and the failure takes Table P's shipped route for a `null` preserve, which that table owns and this row does not restate. **This row also receives M1's three non-closing paths**, since the leftover and its name are the same | **NO FLUSH.** The class is answered by the exclusive create and the failure route it produces, not by the unlink's durability; durability could only shrink one of two windows onto the identical leftover |
-| **M3** | the failure-path removal of `dest`, `validate.js:1020` | between `rmSync` returning and the function returning; nothing flushes afterwards | the artifact back under `<date>-<stem>`. On the **withheld** shelf the pending-review banner LISTS it and points the user at `state/quarantine/` — so *"a name no record reaches"* is measurably false there. On the **`redacted/`** shelf it is not listed by any user-facing surface — measured: outside `validate.js` the only reader of that directory in `src/` is `private-fs.js:667-672`'s insecure-modes scan, which reads modes and not names — and it is merely **ELIGIBLE** for eviction, never scheduled for it: Table N rows **N1**, **N2**, **N5** and **N6** make a prune happen only when a FUTURE run completes at least one redaction, only while the shelf exceeds the cap, and oldest-first, with the overshoot explicitly not time-bounded. **Round 1's finding, and the earlier cell's *"evicts it in time"* is withdrawn: measured (`QD-P9`), a shelf of 20 and a shelf of exactly 50 are not pruned at all, and above the cap only the oldest go — so such a copy may persist INDEFINITELY.** A crash **before** l.1020 leaves the identical file, on the identical terms | **NO FLUSH — and the reason is now the stronger one.** The pre-removal crash reaches the same state, and on the `redacted/` shelf that state has no clearing mechanism at all, so closing the post-removal entrance narrows nothing about how long it lasts. **Whether the product should accept that persistence is a separate question and is owner item O10**, not this row's |
-| **M4** | the retention eviction, `validate.js:1186` (one `rmSync` per evicted original, inside the loop) | between each `rmSync` and any later flush of `redacted/`; there is none | up to N evicted originals back, i.e. the shelf above `REDACTED_RETENTION_CAP` — a state the shipped contract already produces and does NOT bound in time. **Round 1's finding, and the earlier cell's *"self-healing"* is withdrawn:** Table N row **N5** says the cap YIELDS, and row **N6** puts the overshoot's lifetime at *the next run that completes at least one redaction* — which is not a schedule, and `QD-P9` measures the two states in which no prune runs at all. A crash **before** the prune leaves the same overshoot, on the same terms | **NO FLUSH.** The state, its lifetime and its disposition are identical by either entrance; a durable eviction only makes the shelf reach the cap sooner on the runs that would have pruned anyway. The SELECTION question row **M5** carries is a different question and is not answered by this row; the PERSISTENCE question is owner item **O10** |
+| **M0** | — the act this package performs | — | — | **Table F row F7(a)'s exclusion becomes PART permanent and PART superseded, split PER ACT**, by one dated clause appended inside that cell: permanent for **M1**, **M4** and **M6**; LIFTED for **M2** and **M3**, which move to `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (Draft). The clause is the Deliverables row above; the reasoning it points at is this table |
+| **M1** | the post-commit removal of `tmp`, `validate.js:995` | **OPEN from the unlink until `qdir`'s flush COMPLETES, and CONDITIONALLY** — round 1's finding, and the earlier cell's *"not reachable"* is withdrawn. On POSIX, when the whole flush set completes, the window CLOSES inside the same call: measured by running a real `quarantinePreserve` on both arms with `rmSync`, `openSync` and `fsyncSync` traced (`QD-P5`), the unlink is followed by an `fsync` of the directory that held the temp name, because Table F row **F2** flushes `qdir` and `tmp` lives in `qdir`. Its measured width is **3.5–4.1 ms** (median, `QD-P10`), which is 3–6× the **0.66–1.03 ms** for which `tmp` existed BEFORE the unlink. **It does NOT close on three paths, all executed (`QD-P6`, `QD-P7`):** `flushPreservation` (`validate.js:857-864`) SHORT-CIRCUITS, so an artifact-`fsync` failure or a `qdir` open/`fsync` failure returns before any completed directory flush — reproduced on BOTH arms, `rm .tmp` → failed `fsync` → `rm dest` → `null`; and on **win32** `DURABILITY_AVAILABLE` is false, so a SUCCESSFUL preservation issues **zero** `fsync` calls (`QD-P7`, with `process.platform` forced before load) | on the three non-closing paths, exactly the leftover row **M2** owns, and with M2's disposition | **NOTHING TO DO.** Where the flush COMPLETES the window closes INSIDE the call, by a flush this package did not have to add, so this act has no post-completion state to compare. Where it does not, the leftover and its name are **M2**'s and M2's row decides it. **A dedicated flush here would not reach zero either:** it would replace a 3.5–4.1 ms unflushed window with the 2.0–2.7 ms its own dirty-directory `fsync` takes (`QD-P2`) — a factor of ~1.6. **THAT RATIO IS THIS ROW'S AND NO OTHER ROW'S** (round 2's finding **R2-B**): it exists only because an application flush already ENDS this interval, and no other row has one |
+| **M2** | the shared-`catch` removal of `tmp`, `validate.js:984` | from `rmSync` returning, and **UNBOUNDED BY ANY APPLICATION FLUSH** (round 2, **R2-B**): nothing this product runs ever flushes `qdir` on this path, so the interval ends only at the platform's own writeback, which this product neither requests nor observes and which is not measured here | this invocation's own bytes back at `.tmp-<pid>-<stem>`, **which the pending-review banner does not list** (`listSecretQuarantine` skips dot-prefixed entries) and which the insecure-modes scan does reach. A crash **before** l.984 leaves the identical file. That earlier state is not merely accepted, it is DESIGNED FOR, and round 1 asked for the design to be verified rather than asserted. **Measured (`QD-P8`), by planting a leftover at the deterministic `.tmp-<pid>-<stem>` name this process owns and calling the shipped `quarantinePreserve`: it returns `null` — an ordinary preservation FAILURE — and the leftover is NOT removed** (row F8 and Table D row **D1** forbid removing a name this call did not create), so it persists and the failure takes Table P's shipped route for a `null` preserve, which that table owns and this row does not restate. **This row also receives M1's three non-closing paths**, since the leftover and its name are the same | **NOT DISPOSED HERE — MOVED.** Round 2's finding **R2-A** measured that the two states are NOT the same: a crash before the removal ends the run, while a crash after it can follow a run that COMPLETED and published a record — and `tmp` is one of the two paths Table D row **D4** calls *the owned path*, so a resurrection makes **D4** false for a finished run. Decided **(b), close it**, with the act owned by `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (Draft); owner item **O11** carries the choice and both prices |
+| **M3** | the failure-path removal of `dest`, `validate.js:1020` | from `rmSync` returning, and it **DOES NOT END AT THE FUNCTION RETURN** — round 2's finding **R2-A**, and the earlier cell's bound is withdrawn. Measured (`QD-P11`), driving the shipped `makeGates(…).secret(…)` through the redact-arm fall-through: `fsyncs_of_redacted_dir_ANYWHERE: 0` across the whole gate call. **UNBOUNDED BY ANY APPLICATION FLUSH** | the artifact back under `<date>-<stem>`. On the **withheld** shelf the pending-review banner LISTS it and points the user at `state/quarantine/` — so *"a name no record reaches"* is measurably false there. On the **`redacted/`** shelf it is not listed by any user-facing surface — measured: outside `validate.js` the only reader of that directory in `src/` is `private-fs.js:667-672`'s insecure-modes scan, which reads modes and not names — and it is merely **ELIGIBLE** for eviction, never scheduled for it: Table N rows **N1**, **N2**, **N5** and **N6** make a prune happen only when a FUTURE run completes at least one redaction, only while the shelf exceeds the cap, and oldest-first, with the overshoot explicitly not time-bounded. **Round 1's finding, and the earlier cell's *"evicts it in time"* is withdrawn: measured (`QD-P9`), a shelf of 20 and a shelf of exactly 50 are not pruned at all, and above the cap only the oldest go — so such a copy may persist INDEFINITELY.** A crash **before** l.1020 leaves the identical file, on the identical terms | **NOT DISPOSED HERE — MOVED, and this is the row that broke the universal claim.** The two states are DIFFERENT: a crash before `:1020` ends the run before the withheld fallback (`validate.js:1429`) and before any report; a crash after it can follow a run that completed, published a record naming only the withheld copy (`validate.js:1463`, measured `[{artifact, location: "quarantine"}]`) and committed it. **`dest` is Table D row D4's owned path, so a resurrection makes D4 FALSE for a finished run** — the only act in this table where a resurrection falsifies a shipped contract rather than leaving an untidy file. Decided **(b), close it**, with the act owned by `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (Draft); owner item **O11** carries the choice and both prices |
+| **M4** | the retention eviction, `validate.js:1186` (one `rmSync` per evicted original, inside the loop) | from each `rmSync`, and **UNBOUNDED BY ANY APPLICATION FLUSH** (round 2, **R2-B**): nothing flushes `redacted/` afterwards, so no interval width and no narrowing ratio can be derived for this row — M1's figures are M1's | up to N evicted originals back, i.e. the shelf above `REDACTED_RETENTION_CAP` — a state the shipped contract already produces and does NOT bound in time. **Round 1's finding, and the earlier cell's *"self-healing"* is withdrawn:** Table N row **N5** says the cap YIELDS, and row **N6** puts the overshoot's lifetime at *the next run that completes at least one redaction* — which is not a schedule, and `QD-P9` measures the two states in which no prune runs at all. A crash **before** the prune leaves the same overshoot, on the same terms | **NO FLUSH.** Here the two states ARE the same, and for a reason peculiar to this act: the prune runs AFTER `promote()` has returned, so the run's record is already produced either way and neither state falsifies it — the shelf is over the cap in both. A durable eviction only makes the shelf reach the cap sooner on the runs that would have pruned anyway. The SELECTION question row **M5** carries is a different question and is not answered by this row; the PERSISTENCE question is owner item **O10** |
 | **M5** | — **NOT a durability row: the SELECTION rule at M4's site** | not a crash window at all — an overlapping-run window | Table N row **N3** defines the candidates by EXCLUDING this run's own basenames, so another still-running invocation's fresh copy is a candidate. Measured against the shipped code (`QD-P3`, `QD-P4`): the newest such copy is evicted **iff the pruning run's own `created` set has reached the cap** — false at 0/10/48/49 creations, true at 50/51/60, and at 51 and above the eviction does not even reach the cap. What is destroyed can be the only copy of a note's pre-scrub content, which the other run's own preservation record and dream report both name | **ACCEPT AND NAME, and route.** Owner item **O9** above carries the answer, the measured guard and the cost; the home is `WP-quarantine-only-copy-shelf`, which already owns this class by `WP-quarantine-banner-location`'s routing |
-| **M6** | the identity-gated delete of the `redacted/` duplicate, `validate.js:1488-1491` | between `rmSync` and any later flush; there is none | a byte-identical duplicate of a copy that IS on the preservation record and IS retained — in `state/quarantine/`, which Table N row **N1** leaves UNBOUNDED — so the reappearance discloses no byte its retained twin does not, in the same 0700 directory. It lands on the capped shelf, where Table N makes it ELIGIBLE for a future qualifying prune and nothing more (**M3**'s cell carries the measurement; the earlier cell's *"evicted in time"* is withdrawn). A crash **before** the delete leaves the same duplicate, which is what the shipped comment already prices as *"a stale duplicate, not a hazard"* | **NO FLUSH.** The shipped posture is correct as written and is not changed; the duplicate's persistence is owner item **O10**'s subject, not this row's |
+| **M6** | the identity-gated delete of the `redacted/` duplicate, `validate.js:1488-1491` | from `rmSync`, and **UNBOUNDED BY ANY APPLICATION FLUSH** (round 2, **R2-B**) | a byte-identical duplicate of a copy that IS on the preservation record and that exists **AT THE IDENTITY CHECK**. **Round 2's finding R2-C withdrew the lifetime claim that stood here:** `state/quarantine/` has no automatic cap (Table N row **N1**), but that is not permanence — `docs/GLOSSARY.md:141-144` says a withheld copy is kept *"for as long as the owner leaves it there"*, and `src/core/dream/promote.js:600-603` renders remediation guidance that instructs the owner to *"delete that copy"*. **So after the owner deletes the twin, a later resurrected `redacted/` copy is no longer a duplicate of retained bytes**, and no equivalence of lifetime or of disclosure is claimed. What holds at the moment of the delete is that the bytes are the twin's. It lands on the capped shelf, where Table N makes it ELIGIBLE for a future qualifying prune and nothing more (**M3**'s cell carries the measurement; the earlier cell's *"evicted in time"* is withdrawn). A crash **before** the delete leaves the same duplicate, which is what the shipped comment already prices as *"a stale duplicate, not a hazard"* | **NO FLUSH.** The two states are the same for this act — the duplicate is present either way and the record omits it either way, because the `if (identical)` branch never records it — so a resurrection falsifies no published statement. The shipped posture is correct as written and is not changed; the duplicate's PERSISTENCE, and what it means once the owner has deleted the twin, are owner item **O10**'s subject |
 
 **PLATFORM SCOPE, stated once and applying to every row.** Every flush this
 table mentions is Table F row **F5**'s, which is **POSIX-only**. On win32
@@ -354,10 +430,13 @@ win32 NO removal in this table is ever covered by a flush, and none is called
 durable: what carries win32 is the same equivalence that carries every other row,
 never a coverage claim.
 
-**What the evidence in this table can and cannot reach, stated once.** `QD-P5`,
-`QD-P6`, `QD-P7`, `QD-P8`, `QD-P9` and `QD-P10` are RUNS against the shipped
-functions and reach exactly what their cells say — a call order, a short-circuit,
-a platform branch, a collision outcome, a prune outcome, two window widths. **Nothing here reaches a claim about what a
+**What the evidence in this table can and cannot reach, stated once.** `QD-P5`
+through `QD-P11` are RUNS against the shipped functions and reach exactly what
+their cells say — a call order, a short-circuit, a platform branch, a collision
+outcome, a prune outcome, two window widths, and (`QD-P11`) the whole
+`makeGates(…).secret(…)` trace through the redact-arm fall-through, in which
+`redacted/` is fsynced **zero** times and the published record names the withheld
+copy alone. **Nothing here reaches a claim about what a
 crash leaves**, and no test could: `QD-P1` removed a file under a 0700 directory
 with no directory flush anywhere, 200 times with a clean `process.exit(0)` and
 200 times with the removing process `SIGKILL`ed immediately after the unlink, on
@@ -378,7 +457,8 @@ table and all its mirrors in one pass and in the same commit:
 - [ ] The Deliverables-table row (the one clause — row **M0**)
 - [ ] Owner item **O8**, which states M1–M4 and M6's shared reason and cites M1's measurement
 - [ ] Owner item **O9**, which states row **M5**'s answer, its guard and its cost
-- [ ] Owner item **O10**, which states the persistence rows **M3**, **M4** and **M6** leave, and cites `QD-P9`
+- [ ] Owner item **O10**, which states the persistence rows **M4** and **M6** leave, cites `QD-P9`, and carries R2-C's qualification of the withheld twin's lifetime
+- [ ] Owner item **O11**, which states rows **M2** and **M3**'s decision and prices both options
 - [ ] The platform-scope paragraph under Table M, which applies **F5** to every row
 - [ ] The Current-state enumeration of the three call sites, their five removal acts and their line ranges
 - [ ] Acceptance criteria **1**, **2**, **3** and **4**, and the verification steps V1–V4 that assert them
@@ -386,7 +466,8 @@ table and all its mirrors in one pass and in the same commit:
 - [ ] Out of scope's list of what this disposition does NOT decide
 - [ ] **External:** `WP-quarantine-preserve-durability` Table F row **F7(a)**'s dated clause, which is the durable half of row **M0** and governs the fact; a later change to M0 is carried there by a further dated clause, never by rewriting that one
 - [ ] **External:** `docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`'s O8, O9 and O10 entries, which are citation-only and restate nothing from this table
-- [ ] **External:** `docs/specs/WP-quarantine-only-copy-shelf.md`'s "What this package must settle", which cites rows **M3**, **M4**, **M5** and **M6** and the probes, and restates no cell
+- [ ] **External, and it is a mirrored SUMMARY rather than a citation — round 2's finding R2-E, registered honestly:** `docs/specs/WP-quarantine-only-copy-shelf.md`'s "What this package must settle" **locally repeats** row **M4**'s and **M6**'s persistence result and row **M5**'s `QD-P3`/`QD-P4` predicate and guard, because a stub a later reader opens cold cannot be a bare pointer. It cites **M4**, **M5** and **M6** by id. **A change to any of those three rows changes that file too**, and this entry is what says so
+- [ ] **External:** `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md`, which owns rows **M2** and **M3**'s acts and restates D4, `QD-P11`'s trace and the two call sites — also a mirrored SUMMARY, for the same reason
 
 ## Implementation notes & constraints
 
@@ -415,8 +496,11 @@ table and all its mirrors in one pass and in the same commit:
 - [ ] **The surface actually at issue is secret-bearing bytes reappearing on a
       0700 shelf.** Containment, as decided: at **M1** the removal is inside
       Table F's flushed set **wherever that set completes, and on POSIX only**
-      (`QD-P6`, `QD-P7`), falling back to M2's state otherwise; at **M2**,
-      **M3**, **M4** and **M6** the reappearing
+      (`QD-P6`, `QD-P7`), falling back to M2's state otherwise; at **M2** and
+      **M3** containment is NOT decided here at all — those acts move to
+      `WP-quarantine-failed-preserve-disposal-flush` (owner item **O11**), because
+      a resurrection there falsifies Table D row **D4** for a finished run; at
+      **M4** and **M6** the reappearing
       object is one a pre-removal crash already leaves, on the same shelf, on the
       same terms — reached on the withheld shelf by the pending-review banner, and
       on the `redacted/` shelf by nothing user-facing and **by no schedule**
@@ -424,12 +508,14 @@ table and all its mirrors in one pass and in the same commit:
       and nothing more, so it may persist — owner item **O10**). A reader who can
       open that directory is `docs/THREAT-MODEL.md`'s class **A12**, outside the
       boundary.
-- [ ] **Three residuals, all named:** the pre-removal crash class itself,
-      accepted here and unchanged from today; row **M5**'s selection window,
-      accepted as owner item **O9** and routed to a filed stub, not closed; and
-      the indefinite, unbannered, unrecorded persistence of a `redacted/` copy,
-      accepted as owner item **O10** — the shelf's own retention contract, not
-      something this disposition creates.
+- [ ] **Three residuals, all named, and one thing that is NOT a residual.** The
+      residuals: the pre-removal crash class itself, accepted and unchanged from
+      today; row **M5**'s selection window, owner item **O9**, routed to a filed
+      stub; and the indefinite, unbannered, unrecorded persistence of a
+      `redacted/` copy, owner item **O10** — the shelf's own retention contract,
+      not something this disposition creates. **Not a residual:** rows **M2** and
+      **M3**, which are decided **(b), close it** and moved to a successor rather
+      than accepted (owner item **O11**).
 
 ## Acceptance criteria
 
@@ -442,9 +528,10 @@ table and all its mirrors in one pass and in the same commit:
       nothing else in the file moved (V2). `node scripts/mirror-walk.js` names no
       unresolved entry that this branch introduced.
 - [ ] **3.** This spec's `status:` is `Superseded` and its file is under
-      `docs/specs/done/`, per `docs/specs/README.md`; and
-      `docs/specs/WP-quarantine-only-copy-shelf.md` exists, so owner item **O9**
-      routes to a file rather than to a name (V3).
+      `docs/specs/done/`, per `docs/specs/README.md`; and both successors exist —
+      `docs/specs/WP-quarantine-only-copy-shelf.md` (owner item **O9**) and
+      `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (owner item
+      **O11**) — so neither routes to a name (V3).
 - [ ] **4.** No file under `src/` or `tests/` differs from `origin/main` in this
       commit — the disposition changes no behaviour (V4).
 - [ ] **5.** `npm run lint` passes.
@@ -466,7 +553,7 @@ set -e   # REQUIRED, and each assertion below is its OWN statement for the same
 #      QUOTED heredoc, never nested inline quotes, so a quoting accident cannot
 #      change what the gate matched.
 cat > /tmp/f7a-key.txt <<'LITERAL'
-**AMENDED 2026-09-06 — the exclusion is PERMANENT, not deferred.**
+**AMENDED 2026-09-06 — the exclusion is PART permanent and PART superseded, and the split is PER REMOVAL ACT.**
 LITERAL
 test -f docs/specs/done/WP-quarantine-preserve-durability.md
 test "$(grep -F -c -f /tmp/f7a-key.txt docs/specs/done/WP-quarantine-preserve-durability.md)" = 1
@@ -516,11 +603,14 @@ console.log("V2 OK: lines " + moved.map((i) => i + 1).join(", ") + " — one bas
 #      never a shell `! test -f`, which errexit would exempt. The last line is
 #      round 1's finding R1-C, folded INTO this step rather than added as a fifth
 #      one: the round rule freezes the verification surface, and a routing that
-#      names a file is a record property, not a product behaviour.
+#      names a file is a record property, not a product behaviour. Round 2 added
+#      the second successor to the SAME step for the same reason — the surface
+#      did not grow, the step's target did.
 test -f docs/specs/done/WP-quarantine-disposal-durability.md
 test ! -e docs/specs/WP-quarantine-disposal-durability.md
 grep -qx 'status: Superseded' docs/specs/done/WP-quarantine-disposal-durability.md
 test -f docs/specs/WP-quarantine-only-copy-shelf.md
+test -f docs/specs/WP-quarantine-failed-preserve-disposal-flush.md
 
 # V4 — the disposition changes no behaviour: nothing under src/ or tests/ moved
 test -z "$(git diff --name-only origin/main -- src tests)"
@@ -546,6 +636,11 @@ npm run lint
   sentence. This package changed none of them and reproduced none of them.
 - **Re-litigating the abort.** `WP-preservation-abort-widening`'s Table D and
   Table P own the trigger class, the message taxonomy and artifact ownership.
+- **Specifying the flush rows M2 and M3 need.** Owner item **O11** decides THAT
+  they are closed and prices how; the contract, the disposition of a flush that
+  does not complete and the acceptance criteria are
+  `WP-quarantine-failed-preserve-disposal-flush`'s, and that package has its own
+  design gate to run.
 - **Changing any of the three shipped disposal postures** — Table D row **D3**'s
   fail-loud removal, Table N row **N7**'s best-effort prune, and the
   identity-gated delete's *"a stale duplicate, not a hazard"*. Each is measured
@@ -567,7 +662,7 @@ Done means the disposition act above has landed and is checkable:
    that clause (V1, V2), and the spec is filed under `docs/specs/done/` with
    `status: Superseded` (V3).
 2. Nothing under `src/` or `tests/` moved (V4), and `npm run lint` passes.
-3. Owner items **O8**, **O9** and **O10** are recorded, citation-only, in
+3. Owner items **O8**, **O9**, **O10** and **O11** are recorded, citation-only, in
    `docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`, with
    their text and their overrule costs left in this file's
    `## Dispatch precondition — owner items`, which governs.
@@ -576,7 +671,9 @@ Done means the disposition act above has landed and is checkable:
    under the probe ids Table M cites, that record states the STOP CRITERION
    pinned before any external round, and it carries the Round 1 section with each
    raw file's path and the SHA of the commit that introduced it.
-5. `docs/specs/WP-quarantine-only-copy-shelf.md` exists as a `Draft` stub, so
-   owner item **O9**'s routing names a file and not a proposal.
+5. Both successor stubs exist as `Draft` specs —
+   `docs/specs/WP-quarantine-only-copy-shelf.md` (**O9**) and
+   `docs/specs/WP-quarantine-failed-preserve-disposal-flush.md` (**O11**) — so
+   neither routing names a proposal.
 6. Both review gates have run on this diff and are clean or fully dispositioned —
    they are defined in `docs/runbooks/codex-review.md` and not restated here.
