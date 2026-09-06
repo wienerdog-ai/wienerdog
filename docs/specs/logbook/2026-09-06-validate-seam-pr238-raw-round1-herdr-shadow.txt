@@ -1,0 +1,87 @@
+# raw — hermetic Codex shadow, PR gate (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high, vendored pr-rubric) — pr2
+# tip reviewed: c68635af0fceee778c827bef086a05af1d4560f9 (detached worktree) ; base main = 489f981e ; committed pre-adjudication
+# codex exec rc=0 ; porcelain before/after: identical
+
+{
+  "target": "c68635af0fceee778c827bef086a05af1d4560f9",
+  "verdict": "patch is correct",
+  "executed": [
+    {
+      "command": "npm test -- --test-name-pattern 'git-env-validate-seam AC'",
+      "exit_status": 1,
+      "result": "Tests did not start: sandbox denied mkdtemp with EPERM."
+    },
+    {
+      "command": "node --test --test-name-pattern='git-env-validate-seam AC' --test-reporter=spec tests/unit/dream-validate.test.js",
+      "exit_status": 0,
+      "result": "3 focused tests passed."
+    },
+    {
+      "command": "npm test",
+      "exit_status": 1,
+      "result": "Full suite did not start: sandbox denied mkdtemp with EPERM."
+    },
+    {
+      "command": "node tests/with-temp-root.js scripts/red-proofs.js --wp WP-dream-git-env-validate-seam",
+      "exit_status": 1,
+      "result": "Proofs did not start: sandbox denied mkdtemp with EPERM."
+    },
+    {
+      "command": "node scripts/red-proofs.js",
+      "exit_status": 1,
+      "result": "Proofs did not run: isolated sandbox creation failed with EPERM."
+    },
+    {
+      "command": "node scripts/red-proofs.js --wp WP-dream-git-env-validate-seam",
+      "exit_status": 1,
+      "result": "Proof did not run: isolated sandbox creation failed with EPERM."
+    },
+    {
+      "command": "V3 RED-proof identity check",
+      "exit_status": 0,
+      "result": "Declared id was validate-git-inherits-git-dir."
+    },
+    {
+      "command": "V4a argv presence screen",
+      "exit_status": 0,
+      "result": "The shell could not create the here-document temporary file, so this apparent success was not credited."
+    },
+    {
+      "command": "Equivalent direct argv presence check",
+      "exit_status": 0,
+      "result": "All four Table J argv literals were present."
+    },
+    {
+      "command": "V4 prescribed-diff and pinned-base content check",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "V5 registered mirror presence check",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "npm run lint",
+      "exit_status": 1,
+      "result": "markdownlint dependency fetch failed with the known ENOTFOUND sandbox artifact; frontmatter checking passed. Not counted against the patch."
+    },
+    {
+      "command": "node scripts/boundary-check.js docs/specs/WP-dream-git-env-validate-seam.md $(git diff --name-only origin/main...HEAD)",
+      "exit_status": 0,
+      "result": "Passed."
+    },
+    {
+      "command": "Read-only spawn-capture probe",
+      "exit_status": 0,
+      "result": "Confirmed exactly one unchanged argv and no inherited GIT_DIR or GIT_INDEX_FILE."
+    },
+    {
+      "command": "node --check src/core/dream/validate.js",
+      "exit_status": 0,
+      "result": "Passed."
+    }
+  ],
+  "summary": "The implementation matches the spec's exact code, test, boundary, and documentation contracts, and all three focused acceptance tests pass directly. The full wrapped suite and mutation proof runner could not execute because the read-only sandbox denied their temporary-directory creation; the lint failure was solely the documented blocked registry fetch.",
+  "findings": []
+}
