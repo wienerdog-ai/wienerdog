@@ -1,0 +1,58 @@
+# raw — Codex plugin adversarial review — fpdf2
+# tip reviewed: 5b99f49fe56e2c2eda9a8b801a7e00eefd5212ab ; base main = b1d20ce0cd4f48c6600d6925f760ee9d1b279428 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a075f4-a798-76e2-80e6-03295f414faf).
+[codex] Turn started (01a075f4-a827-7340-87b4-92821014ccb5).
+[codex] Assistant message captured: I’ll trace the revised spec against the implementation and test machinery, check each round-1...
+[codex] Running command: /bin/zsh -lc 'git diff --stat b1d20ce0cd4f48c6600d6925f760ee9d1b279428 && git status --short ...
+[codex] Command completed: /bin/zsh -lc 'git diff --stat b1d20ce0cd4f48c6600d6925f760ee9d1b279428 && git status --short ... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '680,1035p' src/core/dream/validate.js && sed -n '1330,1465p' src/core/d...
+[codex] Command completed: /bin/zsh -lc "sed -n '680,1035p' src/core/dream/validate.js && sed -n '1330,1465p' src/core/d... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/WP-quarantine-f...
+[codex] Running command: /bin/zsh -lc "sed -n '1400,1510p' tests/unit/dream-validate.test.js && sed -n '1650,1705p' te...
+[codex] Command completed: /bin/zsh -lc 'git diff b1d20ce0cd4f48c6600d6925f760ee9d1b279428 -- docs/specs/WP-quarantine-f... (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '1400,1510p' tests/unit/dream-validate.test.js && sed -n '1650,1705p' te... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '680,710p' src/core/dream/validate.js; sed -n '790,870p' src/core/dream/...
+[codex] Command completed: /bin/zsh -lc "sed -n '680,710p' src/core/dream/validate.js; sed -n '790,870p' src/core/dream/... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1400,1510p' tests/unit/dream-validate.test.js; sed -n '1660,1703p' test...
+[codex] Command completed: /bin/zsh -lc "sed -n '1400,1510p' tests/unit/dream-validate.test.js; sed -n '1660,1703p' test... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'F2|F5|F7|2026-09-06|fsync|capture' docs/specs/done/WP-quarantine-preserv...
+[codex] Command completed: /bin/zsh -lc "rg -n 'F2|F5|F7|2026-09-06|fsync|capture' docs/specs/done/WP-quarantine-preserv... (exit 0)
+[codex] Assistant message captured: The revised call sites use the correct `qdir` on both arms, and the win32 read-back fault can...
+[codex] Running command: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*F[257]|2026-09-06' docs/specs/done/WP-quarantine-preserve...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^'"\\| \\*\\*F[257]|2026-09-06' docs/specs/done/WP-quarantine-preserve... (exit 0)
+[codex] Running command: /bin/zsh -lc "node <<'NODE' const fs = require('fs'); const vm = require('vm'); const spec = ...
+[codex] Command completed: /bin/zsh -lc "node <<'NODE' const fs = require('fs'); const vm = require('vm'); const spec = ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs = require('\\''fs'\\''), vm = require('\\''vm'\\''); const s...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs = require('\\''fs'\\''), vm = require('\\''vm'\\''); const s... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-design-gate... (exit 0)
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs -- --wp WP-quarantine-failed-preserve-disposal-flush' (exit 1)
+[codex] Assistant message captured: V1 passed the compliant in-memory source and rejected the missing guard, wrong placement, ext...
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),vm=require('\\''vm'\\''),path=require(... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '185,240p' docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-...
+[codex] Command completed: /bin/zsh -lc "sed -n '185,240p' docs/specs/logbook/2026-09-06-failed-preserve-disposal-flush-... (exit 0)
+[codex] Assistant message captured: { "verdict": "approve", "summary": "Approve the design; no material blocker remains. R1-A fix...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against b1d20ce0cd4f48c6600d6925f760ee9d1b279428
+Verdict: approve
+
+Approve the design; no material blocker remains. R1-A fixed: the read-back fault reaches forced-win32 Z2 and distinguishes gated/ungated calls on both arms. R1-B fixed: Z3 preserves null/no-throw while correctly distinguishing fallback from abort. R1-C fixed: dest’s listing, indefinite retention and suffix behavior are stated independently. R1-D fixed: V1 owns both comments byte-for-byte. R1-E fixed in the committed record: three FP-P5 medians and 12 FP-P6 cases plus four baselines. Size audit is partial: 469 lines; some allegedly reduced/replaced rationale remains.
+
+Both insertion sites use the correct qdir. V1 enforces their distinct indentation and placement; each new literal matches once. Single-line removal affects only its act’s positive flush assertion; boolean-ignored and win32 checks remain green. F7(a) needs no amendment. No remaining Table Z promise exceeds the scoped predicate.
+
+Executed: diff inspection, nine in-memory V1 states, all 64 existing RED occurrence checks, 54 control-flow cases using filesystem doubles, scoped mirror-walk and diff-check. Checks passed as expected. npm test and red-proofs both stopped at mkdtemp with EPERM; future declarations and real filesystem behavior were not executed.
+
+No material findings.
+
+Next steps:
+- Correct the nonblocking size-audit claim at logbook/2026-09-06-failed-preserve-disposal-flush-design-gate-rounds.md:430.
+- Run the implementation’s full tests and both RED declarations in a writable environment before shipping.
