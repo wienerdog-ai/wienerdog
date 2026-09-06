@@ -135,3 +135,54 @@ records is unchanged and the adoption stands on it, not on those two
 sentences** — `HOME` is carried because it is where the user's own git
 configuration lives and O1 declines to override the user's configuration. That
 is a trust decision, stated as one.
+
+### Appended 2026-09-06 after maturing `WP-dream-git-env-validate-seam` — two items, O4 and O5
+
+`docs/specs/WP-dream-git-env-validate-seam.md` — the successor stub that
+`WP-dream-git-env-pinning` routed its owner item O2 to — was matured under the
+standing process above. Numbering continues this queue's: **O4** and **O5**. Both are
+**recommendations adopted under the standing process, not direct rulings**, and
+**their text and their enumerated overrule costs live in ONE place** — that
+spec's `## Dispatch precondition — owner items` — and are cited here rather than
+restated, for the reason the 2026-09-05 append gives. The measurements behind
+them are in
+`docs/specs/logbook/2026-09-06-git-env-validate-seam-design-gate-rounds.md`
+under the probe ids named.
+
+1. **O4 — extend the constructed environment to the second git spawn point.**
+   `src/core/dream/validate.js`'s module-private `git()` builds its child
+   environment with the same `buildGitEnv` the pipeline seam uses: one
+   construction, no second allowlist, **no new row in Table U**, which stays
+   canonical for the channel set. Measured (**VS-P1**), through the real
+   `assertGitRepo` rather than a bare `git` invocation: with `GIT_DIR` exported
+   to a repository elsewhere the shipped guard **accepts** a directory that is
+   not a repository; under `buildGitEnv()` the identical argv exits 128
+   (**VS-P2**). The predecessor's Table W row W1(c)(i) standing trigger does
+   **not** fire — the argv is byte-identical at all four call sites and no call
+   site is added, so no tenth pinned shape is surfaced — and the spec asserts
+   that mechanically rather than by assurance. Reversing this withdraws the WP;
+   the cost is the spec's O4.
+
+2. **O5 — the nested vault: ACCEPT AND NAME IT.** `assertGitRepo` establishes
+   that the vault is **inside** a repository, not that it **is** one; that is
+   now stated in its own contract instead of being implied. **The measurement is
+   what selects this answer over the two hardening ones** (**VS-P4**): running
+   the real `wienerdog adopt --yes` against a directory that is a subdirectory of
+   an existing repository and has no `.git` of its own **succeeds** — adopt's own
+   `isGitRepo` is the same `rev-parse --git-dir` predicate, so it reads "inside a
+   repository" as "already a repo", skips `git init`, and writes that path into
+   `config.yaml`. The nested case is therefore reachable through the product's
+   own front door and supported today, so requiring
+   `rev-parse --show-toplevel == vault`, or setting `GIT_CEILING_DIRECTORIES`,
+   would stop a currently-working vault from dreaming. **Both hardening answers
+   are PARKED as this item's overrule cost, not dropped**, each with what it
+   would change; a hardening proposal with a user-visible cost becomes text only
+   on an explicit owner yes. *The cost of accepting, stated:* a dream in such a
+   vault reads against the ancestor repository (**VS-P2**, **VS-P3**), and that
+   it would then commit there is inferred from the code rather than measured.
+
+**No item was parked by the design loop under escalation (ii): round zero
+produced no finding that argues against either recommendation.** Its six
+findings (Y1–Y6) are machinery, citations or an id collision, and are recorded
+with what changed in
+`2026-09-06-git-env-validate-seam-design-gate-rounds.md`.
