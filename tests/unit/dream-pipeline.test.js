@@ -40,6 +40,11 @@ const NOW = new Date(DY, DM - 1, DD, 12, 0, 0);
 const ENV_KEYS = [
   'HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY', 'WIENERDOG_FAKE_BRAIN_MODE', 'WIENERDOG_DREAM_RUN_TOKEN', 'PATH',
+  // WP-dream-git-env-pinning (AC1-AC5): channels a test exports for the duration
+  // of a run, via `runDream`'s `o.env` — carried through this same
+  // save/overwrite/restore so none of them leaks into a later test.
+  'XDG_CONFIG_HOME', 'WIENERDOG_ENV_CANARY', 'GIT_DIR', 'GIT_OBJECT_DIRECTORY',
+  'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0',
 ];
 
 /** @param {string} cwd @param {string[]} args */
@@ -1829,3 +1834,206 @@ for (const layout of ['plain', 'separate-git-dir', 'linked-worktree']) {
     }
   });
 }
+
+// ── WP-dream-git-env-pinning — Table U, the run's constructed git environment ──
+//
+// AC1 is the STRUCTURAL assertion (the complete key→value map, plus the canary)
+// and is deliberately NOT a red-proof target: it runs in its own fixture, which
+// exports only the canary and XDG_CONFIG_HOME, so a single-channel mutation
+// (AC2/AC3/AC4's own fixtures) leaves it green. AC2-AC5 are the BEHAVIOURAL,
+// mutation-sensitive criteria: each exports its own channel for the whole run,
+// so `git-env.js`'s three RED declarations each redden a distinct, deterministic
+// subset — never AC1.
+
+/** `git count-objects`'s loose-object count, parsed from its plain (non `-v`)
+ *  one-line form: "N objects, K kilobytes". */
+function looseObjectCount(dir) {
+  const out = git(dir, ['count-objects']);
+  const m = /^(\d+)\s+objects?/.exec(out);
+  if (!m) throw new Error(`could not parse 'git count-objects' output: ${out}`);
+  return Number(m[1]);
+}
+
+test('dream-pipeline: AC1 — every invocation carries the constructed environment, key and value (rows U1-U5)', async () => {
+  const ctx = setup();
+  const realRoot = fs.realpathSync(ctx.root);
+  const fakeBinDir = path.join(realRoot, 'bin');
+  const { spawnPinnedSync } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  /** @type {Array<{args:string[], env:NodeJS.ProcessEnv}>} */
+  const calls = [];
+  const spawnGit = (o) => {
+    calls.push({ args: o.args || [], env: o.env || {} });
+    return spawnPinnedSync('git', getPaths(), {
+      args: ['-C', o.cwd, ...o.args], env: o.env, platform: process.platform,
+      encoding: 'utf8', ...(o.input === undefined ? {} : { input: o.input }),
+    });
+  };
+  const r = await runDream(ctx, ['--yes'], {
+    opts: { spawnGit },
+    env: {
+      XDG_CONFIG_HOME: path.join(ctx.root, 'xdg-must-not-be-seen'),
+      WIENERDOG_ENV_CANARY: 'wd-env-canary-no-table-u-row-names-this',
+    },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(calls.length > 0, 'non-vacuity: the run invoked git at least once');
+
+  const PRIVATE_VERBS = ['update-index', 'read-tree', 'write-tree'];
+  assert.ok(calls[0].env.PATH && calls[0].env.PATH.includes(fakeBinDir),
+    'PATH must be the inherited process.env.PATH, not stripped or replaced (row U1)');
+  for (const { args, env } of calls) {
+    assert.equal(env.PATH, calls[0].env.PATH,
+      `PATH must be identical across the whole run: ${args.join(' ')}`);
+    assert.equal(env.HOME, ctx.home, `HOME must equal getPaths().home: ${args.join(' ')}`);
+    assert.equal(env.XDG_CONFIG_HOME, undefined,
+      `XDG_CONFIG_HOME must not be carried, even when the launching environment sets one (row U3): ${args.join(' ')}`);
+    assert.equal(env.WIENERDOG_ENV_CANARY, undefined,
+      `the canary must never reach a git call — a denylist would leak it (row U21): ${args.join(' ')}`);
+    if (PRIVATE_VERBS.includes(args[0])) {
+      assert.equal(typeof env.GIT_INDEX_FILE, 'string',
+        `a private-disposition shape must carry GIT_INDEX_FILE: ${args.join(' ')}`);
+      assert.equal(env.GIT_INDEX_FILE, path.join(ctx.state, `dream-index.${process.pid}.tmp`),
+        `GIT_INDEX_FILE must equal <paths.state>/dream-index.<pid>.tmp: ${args.join(' ')}`);
+    } else {
+      assert.equal(env.GIT_INDEX_FILE, undefined,
+        `an unset-disposition shape must not carry GIT_INDEX_FILE: ${args.join(' ')}`);
+    }
+    const extra = Object.keys(env).filter((k) => !['PATH', 'HOME', 'GIT_INDEX_FILE'].includes(k));
+    assert.deepEqual(extra, [], `no other key may be present in ${args.join(' ')}: got ${extra.join(',')}`);
+  }
+});
+
+test('dream-pipeline: AC1 — HOME is derived from getPaths().home even when the launching environment has none (row U2)', () => {
+  const { buildGitEnv } = require('../../src/core/dream/git-env');
+  const saved = process.env.HOME;
+  delete process.env.HOME;
+  try {
+    const env = buildGitEnv();
+    assert.equal(env.HOME, os.homedir(),
+      'with HOME unset in the launching environment, buildGitEnv must still carry one, '
+        + 'derived from getPaths().home (= os.homedir() with no override)');
+  } finally {
+    if (saved === undefined) delete process.env.HOME; else process.env.HOME = saved;
+  }
+});
+
+test('dream-pipeline: AC2 — an exported GIT_DIR does not redirect the run (row U6)', async () => {
+  const ctx = setup();
+  const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-decoy-gitdir-'));
+  git(decoy, ['init', '-q']);
+  writeFile(decoy, 'SEED.md', 'decoy seed\n');
+  git(decoy, ['add', '-A']);
+  git(decoy, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'seed']);
+  const decoyHeadBefore = git(decoy, ['rev-parse', 'HEAD']).trim();
+  const decoyObjBefore = looseObjectCount(decoy);
+  const vaultHeadBefore = git(ctx.vault, ['rev-parse', 'HEAD']).trim();
+
+  const r = await runDream(ctx, ['--yes'], { env: { GIT_DIR: path.join(decoy, '.git') } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  const vaultHeadAfter = git(ctx.vault, ['rev-parse', 'HEAD']).trim();
+  assert.notEqual(vaultHeadAfter, vaultHeadBefore,
+    "GIT_DIR must not stop the vault's HEAD from advancing by the run's own commit");
+  const parent = git(ctx.vault, ['rev-parse', 'HEAD^']).trim();
+  assert.equal(parent, vaultHeadBefore, "the run's commit must sit on top of the vault's own prior HEAD");
+
+  const decoyHeadAfter = git(decoy, ['rev-parse', 'HEAD']).trim();
+  assert.equal(decoyHeadAfter, decoyHeadBefore, "GIT_DIR must not let the run advance the decoy repository's HEAD");
+  const decoyObjAfter = looseObjectCount(decoy);
+  assert.equal(decoyObjAfter, decoyObjBefore, "GIT_DIR must not let the run write into the decoy repository's object store");
+});
+
+test('dream-pipeline: AC3 — an exported GIT_OBJECT_DIRECTORY does not redirect object writes (row U7)', async () => {
+  const ctx = setup();
+  // A CLONE, not an unrelated repository: it shares the vault's history, so a
+  // channel that redirected reads to it would still let every pinned shape
+  // SUCCEED — the corruption is in what the vault can read afterwards, not in
+  // whether the run completes. An unrelated decoy would instead fail read-tree
+  // outright, proving nothing about THIS channel's actual, silent failure mode.
+  const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-decoy-objdir-'));
+  execFileSync('git', ['clone', '-q', '--no-hardlinks', ctx.vault, decoy], { encoding: 'utf8' });
+  const decoyObjectDir = path.join(decoy, '.git', 'objects');
+  const decoyHeadBefore = git(decoy, ['rev-parse', 'HEAD']).trim();
+  const decoyObjBefore = looseObjectCount(decoy);
+  const vaultHeadBefore = git(ctx.vault, ['rev-parse', 'HEAD']).trim();
+
+  const r = await runDream(ctx, ['--yes'], { env: { GIT_OBJECT_DIRECTORY: decoyObjectDir } });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+
+  const vaultHeadAfter = git(ctx.vault, ['rev-parse', 'HEAD']).trim();
+  assert.notEqual(vaultHeadAfter, vaultHeadBefore, "the vault's HEAD must still advance by the run's own commit");
+
+  // THE OBJECTS THE RUN WRITES ARE READABLE IN THE VAULT — never merely
+  // inferred from a successful run, since a redirected primary object store
+  // can leave the run itself green while the vault's OWN store holds a ref to
+  // objects it cannot read.
+  const readable = require('node:child_process').spawnSync(
+    'git', ['-C', ctx.vault, 'cat-file', '-e', vaultHeadAfter], { encoding: 'utf8' }
+  );
+  assert.equal(readable.status, 0,
+    'GIT_OBJECT_DIRECTORY must not leave the vault unable to read its own new commit');
+  const fsckOk = require('node:child_process').spawnSync(
+    'git', ['-C', ctx.vault, 'fsck', '--connectivity-only'], { encoding: 'utf8' }
+  );
+  assert.equal(fsckOk.status, 0,
+    'GIT_OBJECT_DIRECTORY must not leave the vault with a broken link to an object in the decoy store');
+
+  const decoyHeadAfter = git(decoy, ['rev-parse', 'HEAD']).trim();
+  assert.equal(decoyHeadAfter, decoyHeadBefore, "the decoy repository's HEAD must be unaffected");
+  const decoyObjAfter = looseObjectCount(decoy);
+  assert.equal(decoyObjAfter, decoyObjBefore, "the decoy repository's object store must gain nothing");
+});
+
+test('dream-pipeline: AC4 — an injected GIT_CONFIG_COUNT config does not run its program (row U10)', async () => {
+  const ctx = setup();
+  const script = path.join(ctx.root, 'fsmonitor.sh');
+  const log = path.join(ctx.root, 'fsmonitor.log');
+  fs.writeFileSync(script, `#!/bin/sh\necho "FSMONITOR RAN" >> ${JSON.stringify(log)}\nexit 0\n`);
+  fs.chmodSync(script, 0o755);
+
+  const r = await runDream(ctx, ['--yes'], {
+    env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: script },
+  });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.equal(fs.existsSync(log), false,
+    'GIT_CONFIG_COUNT must not run an injected core.fsmonitor program');
+});
+
+test('dream-pipeline: AC5 — the positive control: a hook configured through config files fires, the same hook offered through the environment does not (rows U2, U10)', async () => {
+  // (a) — a hook the user configured through their config FILES: a
+  // core.hooksPath in the bound home's ~/.gitconfig. It must still fire on the
+  // run's pinned update-ref, because HOME is carried and the run's own
+  // environment does not suppress the user's configuration (O1's principle).
+  const ctxA = setup();
+  const hooksDirA = path.join(ctxA.home, 'wd-hooks');
+  fs.mkdirSync(hooksDirA, { recursive: true });
+  const hookLogA = path.join(ctxA.root, 'hook-a.log');
+  const hookScriptA = path.join(hooksDirA, 'reference-transaction');
+  fs.writeFileSync(hookScriptA, `#!/bin/sh\necho "HOOK RAN $1" >> ${JSON.stringify(hookLogA)}\nexit 0\n`);
+  fs.chmodSync(hookScriptA, 0o755);
+  fs.writeFileSync(path.join(ctxA.home, '.gitconfig'), `[core]\n\thooksPath = ${hooksDirA}\n`);
+
+  const rA = await runDream(ctxA);
+  assert.equal(rA.thrown, null, rA.thrown && rA.thrown.message);
+  assert.ok(fs.existsSync(hookLogA),
+    "a hook configured through the bound home's config FILES must fire on the pinned update-ref");
+
+  // (b) — the SAME hook, offered instead through the launching ENVIRONMENT
+  // (GIT_CONFIG_COUNT + core.hooksPath, the AC4 family). It must NOT fire — a
+  // pin that leaked the launching environment would fail exactly this half.
+  const ctxB = setup();
+  const hooksDirB = path.join(ctxB.root, 'wd-hooks-injected');
+  fs.mkdirSync(hooksDirB, { recursive: true });
+  const hookLogB = path.join(ctxB.root, 'hook-b.log');
+  const hookScriptB = path.join(hooksDirB, 'reference-transaction');
+  fs.writeFileSync(hookScriptB, `#!/bin/sh\necho "HOOK RAN $1" >> ${JSON.stringify(hookLogB)}\nexit 0\n`);
+  fs.chmodSync(hookScriptB, 0o755);
+
+  const rB = await runDream(ctxB, ['--yes'], {
+    env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: hooksDirB },
+  });
+  assert.equal(rB.thrown, null, rB.thrown && rB.thrown.message);
+  assert.equal(fs.existsSync(hookLogB), false,
+    'GIT_CONFIG_COUNT must not run a hook offered only through the launching environment');
+});

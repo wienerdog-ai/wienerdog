@@ -1,0 +1,60 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "git-env-inherits-git-dir",
+      "wp": "WP-dream-git-env-pinning",
+      "criterion": "2",
+      "why": "AC2 is not vacuously green: reintroducing an inherited GIT_DIR makes the run's own calls follow it, so the vault's HEAD stops advancing and the decoy's does instead",
+      "file": "src/core/dream/git-env.js",
+      "find": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  return env;",
+      "replace": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  if (process.env.GIT_DIR !== undefined) env.GIT_DIR = process.env.GIT_DIR; /* RP_MUT_GIT_ENV_INHERITS_GIT_DIR */\n  return env;",
+      "marker": "RP_MUT_GIT_ENV_INHERITS_GIT_DIR",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: AC2 — an exported GIT_DIR does not redirect the run (row U6)"],
+          "signal": "GIT_DIR must not stop the vault's HEAD from advancing by the run's own commit"
+        }
+      ]
+    },
+    {
+      "id": "git-env-inherits-object-directory",
+      "wp": "WP-dream-git-env-pinning",
+      "criterion": "3",
+      "why": "AC3 is not vacuously green: reintroducing an inherited GIT_OBJECT_DIRECTORY redirects the run's own object writes to the decoy's store, so the vault's HEAD advances to a commit its own object store cannot read",
+      "file": "src/core/dream/git-env.js",
+      "find": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  return env;",
+      "replace": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  if (process.env.GIT_OBJECT_DIRECTORY !== undefined) env.GIT_OBJECT_DIRECTORY = process.env.GIT_OBJECT_DIRECTORY; /* RP_MUT_GIT_ENV_INHERITS_OBJECT_DIRECTORY */\n  return env;",
+      "marker": "RP_MUT_GIT_ENV_INHERITS_OBJECT_DIRECTORY",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: AC3 — an exported GIT_OBJECT_DIRECTORY does not redirect object writes (row U7)"],
+          "signal": "GIT_OBJECT_DIRECTORY must not leave the vault unable to read its own new commit"
+        }
+      ]
+    },
+    {
+      "id": "git-env-inherits-config-count",
+      "wp": "WP-dream-git-env-pinning",
+      "criterion": "4",
+      "why": "AC4 and AC5(b) are not vacuously green: reintroducing the inherited GIT_CONFIG_COUNT/GIT_CONFIG_KEY_0/GIT_CONFIG_VALUE_0 triple lets the launching environment inject an arbitrary core.fsmonitor program and a core.hooksPath the user never configured, and both run",
+      "file": "src/core/dream/git-env.js",
+      "find": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  return env;",
+      "replace": "  if (indexFile !== undefined) env.GIT_INDEX_FILE = indexFile;\n  if (process.env.GIT_CONFIG_COUNT !== undefined) {\n    env.GIT_CONFIG_COUNT = process.env.GIT_CONFIG_COUNT;\n    env.GIT_CONFIG_KEY_0 = process.env.GIT_CONFIG_KEY_0;\n    env.GIT_CONFIG_VALUE_0 = process.env.GIT_CONFIG_VALUE_0;\n  } /* RP_MUT_GIT_ENV_INHERITS_CONFIG_COUNT */\n  return env;",
+      "marker": "RP_MUT_GIT_ENV_INHERITS_CONFIG_COUNT",
+      "occurrences": 1,
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: AC4 — an injected GIT_CONFIG_COUNT config does not run its program (row U10)"],
+          "signal": "GIT_CONFIG_COUNT must not run an injected core.fsmonitor program"
+        },
+        {
+          "test": ["dream-pipeline: AC5 — the positive control: a hook configured through config files fires, the same hook offered through the environment does not (rows U2, U10)"],
+          "signal": "GIT_CONFIG_COUNT must not run a hook offered only through the launching environment"
+        }
+      ]
+    }
+  ]
+}

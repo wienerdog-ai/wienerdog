@@ -309,3 +309,45 @@ it stays as an ordinary uncommitted modification.
   taken back. Classification consults git nowhere, so a brain-written
   `.gitignore` has no gate to blind. ADR-0004 (just files) is unchanged: the
   workspace is removed on every ordinary exit path and outlives no job.
+
+## Amendment (2026-09-05): the run's git calls run under a constructed environment — WP-dream-git-env-pinning
+
+**Decision.** The run's own git invocations — the nine pinned shapes Table W
+row W1(c) canonicalises — now run under an environment **built from a named
+allowlist at the seam**, key by key, rather than the launching process's
+`process.env`. Every inherited `GIT_*` variable is thereby absent from the
+constructed environment, with the run's own `GIT_INDEX_FILE` added on top for
+the three `private`-disposition shapes exactly as before. The channel set this
+allowlist carries — and every channel it deliberately drops, with its measured
+cost — is Table U in `docs/specs/WP-dream-git-env-pinning.md`, which is
+canonical here and is not restated.
+
+**The principle.** Git's configuration files and hooks are the user's standing
+instructions, bound to the repository or to the home directory, and they stay
+honoured: the constructed environment carries `HOME`, taken as the run's bound
+`paths.home` (`getPaths().home`), so the global and repository-local
+configuration the user actually authored still applies; `XDG_CONFIG_HOME` is
+not carried; and a hook the user configured still RUNS on the run's own git
+calls — it runs under the run's constructed environment rather than the
+launching shell's. **`HOME` is a TRUST DECISION, not a security boundary** — it
+selects the user's own configuration, which this decision declines to
+override, and it is the same value the scheduled child already receives. The
+launching process's environment is otherwise not a configuration surface for a
+run that is also a scheduled job: it may not choose the repository, the object
+store, the index, the commit identity, object interpretation, or (`HOME`
+excepted) which configuration the call obeys.
+
+**Distinguished, by name, from the hook suppression Table W row W1 rejects.**
+This decision does not suppress, relocate or disable any hook or configuration
+file the user set up — that remedy is rejected in `WP-dream-promote-in-workspace`
+Table W row W1 on two independent grounds neither of which this decision
+reaches, and row W1's hook residual is **not reopened** by it. What this
+decision removes is an injection from the *launching shell* into the run's own
+act, never a configuration the user themselves put in a file the run's
+constructed `HOME` still resolves.
+
+**Provenance.** Adopted under the standing authorization of 2026-09-05
+(`docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`), not as
+a direct owner ruling, and reversible by dated amendment. The overrule cost is
+enumerated in `WP-dream-git-env-pinning`'s owner item O1 and is not
+re-enumerated here.

@@ -7,10 +7,11 @@
       "criterion": "3",
       "why": "the index guard's enforcement is not vacuously green: dropping the run's private GIT_INDEX_FILE makes the pinned-shape check fire in all three vault layouts",
       "file": "src/cli/dream.js",
-      "find": "const indexEnv = { ...process.env, GIT_INDEX_FILE: tmpIndex };",
-      "replace": "const indexEnv = { ...process.env }; void tmpIndex; /* RP_MUT_PRIVATE_INDEX_DROPPED */",
+      "find": "const withIndex = (args, opts) => g(args, { ...opts, indexFile: tmpIndex });",
+      "replace": "const withIndex = (args, opts) => g(args, { ...opts }); /* RP_MUT_PRIVATE_INDEX_DROPPED */",
       "marker": "RP_MUT_PRIVATE_INDEX_DROPPED",
       "occurrences": 1,
+      "testNamePattern": "does not touch the user's git index",
       "expectRed": [
         {
           "test": ["dream-pipeline: the run does not touch the user's git index — at all, plain vault (row G8)"],
