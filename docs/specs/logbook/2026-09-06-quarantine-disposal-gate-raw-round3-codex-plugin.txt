@@ -1,0 +1,90 @@
+# raw — Codex plugin adversarial review — qdd3
+# tip reviewed: 40504f64d3e12577ef2f5f313138564683bf6a8b ; base main = 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex task thread.
+[codex] Thread ready (01a0756a-9f97-7392-8a24-d65ee2bb7543).
+[codex] Turn started (01a0756a-a014-7453-9dcc-0eb1ab89b8a4).
+[codex] Assistant message captured: I’ll inspect the diff, trace each removal act against the code and accepting contracts, and r...
+[codex] Running command: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d && git status --short'
+[codex] Command completed: /bin/zsh -lc 'git diff --stat 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d && git status --short' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/done/WP-quarantine-disposal-durability.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-quarantine-only-copy-shelf.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-quarantine-only-copy-shelf.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md'
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '280,430p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/done/WP-quarantine-disposal-durability.md | sed -n '280,430p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant...
+[codex] Command completed: /bin/zsh -lc 'git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d -- docs/specs/done/WP-quarant... (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-failed-preserve-disposal-flush.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-failed-preserve-disposal-flush.md' (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-only-copy-shelf.md'
+[codex] Command completed: /bin/zsh -lc 'nl -ba docs/specs/WP-quarantine-only-copy-shelf.md' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '650,705p' src/core/dream/validate.js; sed -n '800,1030p' src/core/dream...
+[codex] Command completed: /bin/zsh -lc "sed -n '650,705p' src/core/dream/validate.js; sed -n '800,1030p' src/core/dream... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '950,1050p' src/cli/dream.js; sed -n '590,612p' src/core/dream/promote.j...
+[codex] Command completed: /bin/zsh -lc "sed -n '950,1050p' src/cli/dream.js; sed -n '590,612p' src/core/dream/promote.j... (exit 0)
+[codex] Assistant message captured: The scope split is recorded, and both successor files explicitly remain Draft. I’m checking t...
+[codex] Running command: /bin/zsh -lc "sed -n '410,420p' docs/specs/done/WP-preservation-abort-widening.md; rg -n '"'^...
+[codex] Command completed: /bin/zsh -lc "sed -n '410,420p' docs/specs/done/WP-preservation-abort-widening.md; rg -n '"'^... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n '"'^##|''^###|QD-P11|mirror-walk|AMBIG|ambig|R2-'"' docs/specs/logbook/20...
+[codex] Command completed: /bin/zsh -lc "rg -n '"'^##|''^###|QD-P11|mirror-walk|AMBIG|ambig|R2-'"' docs/specs/logbook/20... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-codex-plu...
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round2-codex-plu... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '419,450p' docs/specs/done/WP-preservation-abort-widening.md; sed -n '56...
+[codex] Command completed: /bin/zsh -lc "sed -n '419,450p' docs/specs/done/WP-preservation-abort-widening.md; sed -n '56... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal'
+[codex] Command completed: /bin/zsh -lc 'node scripts/mirror-walk.js --scope quarantine-disposal' (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,95p' scripts/mirror-walk.js; sed -n '1,70p' scripts/test.js; cat pack...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,95p' scripts/mirror-walk.js; sed -n '1,70p' scripts/test.js; cat pack... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '705,801p' src/core/dream/validate.js; sed -n '1,65p' src/core/dream/val...
+[codex] Command completed: /bin/zsh -lc "sed -n '705,801p' src/core/dream/validate.js; sed -n '1,65p' src/core/dream/val... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-sha...
+[codex] Command completed: /bin/zsh -lc 'cat docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-sha... (exit 0)
+[codex] Running command: /bin/zsh -lc 'NPM_CONFIG_OFFLINE=true npm run lint'
+[codex] Running command: /bin/zsh -lc 'npm test'
+[codex] Running command: /bin/zsh -lc 'npm run red-proofs'
+[codex] Command failed: /bin/zsh -lc 'npm test' (exit 1)
+[codex] Command failed: /bin/zsh -lc 'npm run red-proofs' (exit 1)
+[codex] Assistant message captured: D4’s surrounding text explicitly says its removals are not crash-durable, which conflicts wit...
+[codex] Running command: /bin/zsh -lc "python3 -c 'import pathlib, subprocess, re, shlex p=pathlib.Path('\\''docs/spec...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import pathlib, subprocess, re, shlex p=pathlib.Path('\\''docs/spec... (exit 0)
+[codex] Command completed: /bin/zsh -lc 'NPM_CONFIG_OFFLINE=true npm run lint' (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'function redactFixture|const SOFT|function makeGates|const secret =' tes...
+[codex] Command completed: /bin/zsh -lc "rg -n 'function redactFixture|const SOFT|function makeGates|const secret =' tes... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n 'REDACT_NOTE|REDACT_TOKEN' tests/unit/dream-validate.test.js | head -10; ...
+[codex] Command completed: /bin/zsh -lc "rg -n 'REDACT_NOTE|REDACT_TOKEN' tests/unit/dream-validate.test.js | head -10; ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e ' const real=require('\\''node:fs'\\''),path=require('\\''node:path'\\'...
+[codex] Command completed: /bin/zsh -lc "node -e ' const real=require('\\''node:fs'\\''),path=require('\\''node:path'\\'... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '935,945p' docs/specs/done/WP-quarantine-preserve-durability.md | cut -c...
+[codex] Command failed: /bin/zsh -lc "sed -n '935,945p' docs/specs/done/WP-quarantine-preserve-durability.md | cut -c... (exit 1)
+[codex] Running command: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''),as...
+[codex] Command completed: /bin/zsh -lc "node -e ' const fs=require('\\''fs'\\''),cp=require('\\''child_process'\\''),as... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/mirror-walk.js'
+[codex] Command failed: /bin/zsh -lc 'node scripts/mirror-walk.js' (exit 1)
+[codex] Assistant message captured: The in-memory fault probe confirms the gap: with O11’s proposed flushes added only to the mod...
+[codex] Running command: /bin/zsh -lc "git status --short; git diff --name-only 66b2b1f8040b93a9af4f1cda25c3ac307da64f...
+[codex] Command completed: /bin/zsh -lc "git status --short; git diff --name-only 66b2b1f8040b93a9af4f1cda25c3ac307da64f... (exit 0)
+[codex] Assistant message captured: { "verdict": "needs-attention", "summary": "Do not close the design gate. R2-A is partial: M3...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d
+Verdict: needs-attention
+
+Do not close the design gate. R2-A is partial: M3’s completion path and both options are recorded, but O11 overstates both the existing contract and the proposed closure. R2-B, R2-C, R2-D and R2-E are fixed. M1’s conditional coverage, M2’s collision consequence, M4’s opportunistic retention and M6’s owner-deletable twin are documented. Both successors honestly remain Draft; the Superseded header satisfies README.
+Executed: diff/check/status; extracted V1–V4 with the temporary key held in memory, against origin/main and the requested base; F7(a) reconstruction; lint; scoped mirror-walk (passes, matching 11 recorded ambiguities); unscoped walk (14 unresolved entries); 12 proof-file parses and three removal-anchor checks; four raw-file introduction checks; in-memory preservation/gate fault probes. The predecessor’s literal V1 fails on its obsolete path and passes with the done/ path. npm test and red-proofs could not start: mkdtemp EPERM. No crash was staged. Scope objections: none.
+
+Findings:
+- [medium] Best-effort flush failure leaves the post-completion window open (docs/specs/done/WP-quarantine-disposal-durability.md:218-228)
+  Band A; classification: measured-claim. This affects M2/M3’s DECISION support through O11, although the faulty sentence is outside the rows. Lines 226–228 say the remaining window can only precede the published record, while line 219 explicitly ignores a failed flush. Executed the shipped gate in memory with only O11’s proposed calls added: the redacted-directory preservation flush failed, dest was removed, the disposal flush also failed, and the withheld fallback succeeded with a withheld-only record. The inspected CLI path can then publish and commit without a successful redacted-directory flush. Thus the same post-completion exposure survives option (b); the Draft’s claim that completion cannot later be contradicted also overstates the benefit.
+  Recommendation: Keep best-effort if intended, but explicitly retain and price the post-completion residual when the flush fails. Limit closure to a completed POSIX flush and the predecessor’s platform guarantee; update M2/M3, O11 and the Draft together.
+- [medium] O11 prices an existing durability exclusion as a new contract violation (docs/specs/done/WP-quarantine-disposal-durability.md:237-241)
+  Band A; classification: contract. This affects M2/M3’s DECISION support and its F7(a)/Draft mirrors. D4 says: “null means the owned path is absent. Every caller already treats null as ‘no artifact’; this row is what makes that true.” But the immediately following paragraph at WP-preservation-abort-widening.md:419–433 explicitly states that neither D1/D2 removal is crash-durable. The predecessor’s existing F7(a) likewise discloses resurrection after failure-path removal. Consequently, accepting that residual does not make D4 acquire a durability residual it lacks today. D1/D2 justify considering both owned paths, but not claiming that their crash durability is already required. Also, the reproduced QD-P11 trace’s temp unlink is M1 at :995, not M2’s catch removal at :984.
+  Recommendation: Describe O11 as choosing an additional durability property, correct option (a)’s contractual cost throughout its mirrors, and distinguish QD-P11’s M1/M3 trace from evidence for M2. The adopted two-act scope can remain without asserting an existing guarantee that the cited contract explicitly excludes.
+
+Next steps:
+- Correct the two supporting claims and their registered mirrors, then rerun the design gate; neither finding requires reversing O8–O11.
+- Preserve the Draft status and separately gate the successor’s flush-failure contract.
