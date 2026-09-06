@@ -24,14 +24,15 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 |-------|---------|--------|
 | A | Interpolation neutralizer for code-owned markdown control planes | **Done** — `WP-sanitize-project-display-names`, `WP-daily-summary-per-line-framing`, `WP-neutralize-alert-callout-rendering` in `done/` |
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
-| C | Dream write fence (machinery-controlling files) | **Open — last residual RETIRED 2026-09-06 (`WP-dream-git-env-pinning` Done, #234); awaits E2's disposition act** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
+| C | Dream write fence (machinery-controlling files) | **Done — E2 disposition act, 2026-09-06** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) and D4's env half CLOSED by `WP-dream-git-env-pinning`, #234; D4's second spawn point CLOSED by `WP-dream-git-env-validate-seam`, #238) — every group C mechanism retired or accepted, measured on `eedd8783`. **Three residuals ACCEPTED, not retired, each with a home that owns it:** the `reference-transaction` hook (`WP-dream-promote-in-workspace` Table W row W1, owner ruling of 2026-08-31, not reopened); the nested vault (`WP-dream-git-env-validate-seam` owner item O5, named in `assertGitRepo`'s contract); an undocumented tool's instruction file (the currency WP's dated inventory, its owner and its trigger). Basis in `docs/specs/logbook/2026-09-06-audit-group-c-closure.md`; per-finding disposition in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md` |
 | D | Code-derived draft recipients (no verb accepts a model-named address) | **Done** — `WP-audit-d-code-derived-recipients` in `docs/specs/done/` |
 | E | Ledger-parser correctness + hostile corpus | **Done** — `WP-audit-e-ledger-parser-corpus` in `docs/specs/done/` |
 
-**The five audit groups now read: A Done, B Done, C Open (one residual,
-`WP-dream-git-env-pinning`), D Done, E Done.** Only group C remains, and only its
-D2 (b) finding — the run's git calls inheriting `process.env` — which is an owner
-product decision, not unfinished work.
+**The five audit groups now read: A Done, B Done, C Done, D Done, E Done** — group
+C closed by the E2 disposition act of 2026-09-06 with three residuals accepted
+rather than retired (the `reference-transaction` hook, the nested vault, an
+undocumented tool's instruction file), each named with the home that owns it in
+`docs/specs/logbook/2026-09-06-audit-group-c-closure.md`.
 
 Two known status anomalies at handover time:
 `docs/specs/WP-ep2-unscannable-preserve.md` was still In-Review after its PR

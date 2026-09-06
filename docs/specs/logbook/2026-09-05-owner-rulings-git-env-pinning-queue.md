@@ -267,3 +267,23 @@ the largest in this queue — are in
 record as an external mirror, so a change to O6 is carried here by a dated
 amendment paragraph naming the spec as governing, never by editing an entry in
 place.
+
+### Appended 2026-09-06 — O7, the E2 disposition act that closes audit group C
+
+**O7 — TAKE `WP-audit-c-close-disposition` TABLE E ROW **E2**: audit group C is
+CLOSED, every mechanism retired or accepted. Recommendation adopted under the
+standing process above, never a direct owner ruling.**
+
+Citation-only, as the 2026-09-06 corrections to O4/O5 and O6 established for this
+record. **The governing text is
+`docs/specs/done/WP-audit-c-close-disposition.md`'s dated section "E2 disposition
+act, 2026-09-06"**, and the measurement it rests on is
+`docs/specs/logbook/2026-09-06-audit-group-c-closure.md` — the four owner WPs
+Done with their own verification re-run green on `eedd8783`, the retiring code
+cited at both ends, and the three residuals **accepted rather than retired** with
+the home that owns each. This entry restates none of it.
+
+*Overrule cost, as that section enumerates it:* group C reopens with the residual
+named — the ruling returns to E1, `docs/HANDOVER.md`'s row C returns to an open
+cell, and the residual argued unaccepted acquires an owner WP of its own instead
+of the home that already carries it.
