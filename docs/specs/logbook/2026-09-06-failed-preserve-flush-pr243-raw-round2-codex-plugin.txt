@@ -1,0 +1,24 @@
+# raw — Codex plugin review review — pr3b
+# tip reviewed: ae164823f377986ac9a98c45c7b029613b639c8a ; base main = fdbeb9f2e4d322c1fc2d1a84921b4873faa493f7 ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a07656-da8a-7943-886b-3d9e8582a9fe).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc "pwd; git status --short; git diff --stat fdbeb9f2e4d322c1fc2d1a84921b4873faa493...
+[codex] Command completed: /bin/zsh -lc "pwd; git status --short; git diff --stat fdbeb9f2e4d322c1fc2d1a84921b4873faa493... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; git diff fdbeb9f2e4d322c1fc2d1a84921b4873faa493f7'
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; git diff fdbeb9f2e4d322c1fc2d1a84921b4873faa493f7' (exit 0)
+[codex] Running command: /bin/zsh -lc "cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; sed -n '630,104...
+[codex] Command completed: /bin/zsh -lc "cat docs/specs/WP-quarantine-failed-preserve-disposal-flush.md; sed -n '630,104... (exit 0)
+[codex] Running command: /bin/zsh -lc "find src tests docs -name AGENTS.md -o -name AGENTS.override.md; sed -n '260,37...
+[codex] Command failed: /bin/zsh -lc "find src tests docs -name AGENTS.md -o -name AGENTS.override.md; sed -n '260,37... (exit 1)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The two best-effort directory flushes match the specification, preserve existing failure beha...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The two best-effort directory flushes match the specification, preserve existing failure behavior, and correctly skip Windows. No actionable defects were found. Syntax checks passed; runtime tests were blocked by the read-only sandbox’s temporary-directory restrictions.
