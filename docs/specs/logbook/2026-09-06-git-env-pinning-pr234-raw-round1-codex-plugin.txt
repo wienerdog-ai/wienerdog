@@ -1,0 +1,32 @@
+# raw — Codex plugin review review — pr1
+# tip reviewed: cca7f16430b6c95772b96c3d335d429e28356211 ; base main = d6a233eaa868f92cb0df015dc0cc86cfcd23743e ; committed pre-adjudication
+# companion rc=0 ; porcelain before/after: identical
+
+[codex] Starting Codex review thread.
+[codex] Thread ready (01a0742a-63e5-77b1-84c7-d55622dea34f).
+[codex] Reviewer started: changes against 'main'
+[codex] Running command: /bin/zsh -lc 'pwd; git status --short; git diff --stat d6a233eaa868f92cb0df015dc0cc86cfcd2374...
+[codex] Command completed: /bin/zsh -lc 'pwd; git status --short; git diff --stat d6a233eaa868f92cb0df015dc0cc86cfcd2374... (exit 0)
+[codex] Running command: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-dream-git-env-pinning.md; git diff d6a233eaa86...
+[codex] Command completed: /bin/zsh -lc 'cat AGENTS.md; cat docs/specs/WP-dream-git-env-pinning.md; git diff d6a233eaa86... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff d6a233eaa868f92cb0df015dc0cc86cfcd23743e -- src/cli/dream.js src/core/...
+[codex] Command completed: /bin/zsh -lc "git diff d6a233eaa868f92cb0df015dc0cc86cfcd23743e -- src/cli/dream.js src/core/... (exit 0)
+[codex] Running command: /bin/zsh -lc "git diff d6a233eaa868f92cb0df015dc0cc86cfcd23743e -- src; sed -n '1,185p' tests...
+[codex] Command completed: /bin/zsh -lc "git diff d6a233eaa868f92cb0df015dc0cc86cfcd23743e -- src; sed -n '1,185p' tests... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '280,317p' docs/specs/WP-dream-git-env-pinning.md; sed -n '679,714p' doc...
+[codex] Command completed: /bin/zsh -lc "sed -n '280,317p' docs/specs/WP-dream-git-env-pinning.md; sed -n '679,714p' doc... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '822,870p' docs/specs/WP-dream-git-env-pinning.md; cat tests/run.js | he...
+[codex] Command completed: /bin/zsh -lc "sed -n '822,870p' docs/specs/WP-dream-git-env-pinning.md; cat tests/run.js | he... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 - <<'PY' import subprocess,os s=subprocess.check_output(['git','diff','...
+[codex] Command completed: /bin/zsh -lc "python3 - <<'PY' import subprocess,os s=subprocess.check_output(['git','diff','... (exit 0)
+[codex] Running command: /bin/zsh -lc "python3 -c 'import subprocess,difflib; s=subprocess.check_output([\"git\",\"dif...
+[codex] Command completed: /bin/zsh -lc "python3 -c 'import subprocess,difflib; s=subprocess.check_output([\"git\",\"dif... (exit 0)
+[codex] Review output captured.
+[codex] Reviewer finished.
+[codex] Assistant message captured: The changes implement the specified environment allowlist consistently across the pipeline’s ...
+[codex] Turn completed.
+# Codex Review
+
+Target: branch diff against main
+
+The changes implement the specified environment allowlist consistently across the pipeline’s Git calls while preserving private-index handling. No actionable regressions were identified. The focused HOME-fallback test passed; the full suite and mutation proofs were not run because the sandbox is read-only.
