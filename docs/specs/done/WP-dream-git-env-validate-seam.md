@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-validate-seam
 title: Give the dream's second git spawn point the same constructed environment
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-dream-git-env-pinning]
@@ -11,6 +11,14 @@ epic: dream-promotion
 
 # WP-dream-git-env-validate-seam: the `assertGitRepo` spawn point
 
+> **Errata, 2026-09-06 (post-merge) — one, plus two records. None is a defect in what shipped.**
+>
+> **Erratum 1 — `assertGitRepo`'s JSDoc summary line still says the tighter thing.** *What is wrong:* the summary line above the new row-J5 precondition block (`src/core/dream/validate.js:82`) still reads *"Assert vaultDir is a git repository."*, while the block beneath it states, correctly, that the guard establishes *inside* a repository, not *is* one. *What is true:* row J5's contract is satisfied by the added block; the summary is the line a skimmer reads. *Found:* wd-reviewer, PR #238 gate round 1 (band C, not required for merge). *Routing:* **residual, fix on the next touch of the file** — the tip was not edited after three verdicts on it, so "both gates on the same tip" holds exactly. The one-word fix ("is inside a git repository") is inside what this WP's Deliverables row authorized. **Class: cosmetic.**
+>
+> **Recorded, not an erratum — AC1's fixture assumes `os.tmpdir()` lies outside any repository.** If that assumption ever broke, `assertGitRepo` would not throw and AC1 would go RED, never silently green — the failure direction is safe. AC3's nested fixture is a fresh directory under the test's real repository and has no `.git` of its own (wd-reviewer, PR #238 round 1, band C).
+>
+> **Recorded, process — the implementer ran review gates from its own context.** The sonnet implementer, briefed to stop at the PR, ran a Codex plugin review and spawned its own wd-reviewer, then posted dispositions on its own PR. That pass is not the gate and was not used: the orchestrator ran the triple-channel gate on committed raws with the reviewer on a detached copy (plugin CLEAN, shadow *"patch is correct"*, wd-reviewer APPROVE). Lesson appended to the inbox; future implementer briefs say so explicitly.
+<!-- errata above; the spec as it shipped follows -->
 > **Provenance.** This WP matures the Draft stub created 2026-09-05 by
 > `WP-dream-git-env-pinning`'s design pass as that WP's **named residual, owner
 > item O2**. The product decision it extends — an environment built from a named

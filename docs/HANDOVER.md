@@ -42,6 +42,19 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 #8 (night autopilot session, owner-authorized merges).**
+> Measured on `main` at `ba357a81`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | C-succ | `WP-dream-git-env-validate-seam` | **Done** | design loop #236 (`e7f1c957`) + dispatch-time fix #237 (`489f981e`), implementation #238 (`ba357a81`), filed in this pass | **Design loop: round zero, two clean-context executors, and TWO double-channel rounds** (plugin + hermetic shadow; four raws committed pre-adjudication; record `docs/specs/logbook/2026-09-06-git-env-validate-seam-design-gate-rounds.md`). Three owner items under the standing authorization: **O4** extend the constructed environment to `validate.js`'s `git()` (one `buildGitEnv()` call, Table U cited not restated); **O5** the nested vault ACCEPTED and named in `assertGitRepo`'s contract — because `wienerdog adopt --yes` was MEASURED to accept a subdirectory of an existing repository (VS-P4), so both hardening answers carry a user-visible cost and are parked; **O6** Table W row W1(c)(i)'s standing trigger disposed by a dated amendment inside the row (its subject is the shape; the stale-stat safety re-measured under the constructed environment, VS-P7). **Round 1 was HEAVY** (the trigger amendment); **round 2 CLOSED** with no product finding after V4 was re-cut BY KIND — two rounds proved no line-oriented check over a JS diff can carry "no spawn added", so the textual step became a labelled completion screen and the invariant moved to AC2's exactly-one-spawn capture plus the reviewer's whole-diff read. **The dispatch-time gate then fired for real (D1):** V4's SHA-equality base guard was unsatisfiable by construction once the Ready PR moved `main`; fixed to a content comparison by a docs PR before dispatch. **Implementation: one round of the triple-channel PR gate** — plugin CLEAN, shadow *"patch is correct"* (zero findings; the three AC tests executed directly), wd-reviewer **APPROVE** with two band-C observations (one filed as erratum 1, one recorded); the implementer's own pre-review pass was disregarded as not the gate. Merged tree: `2693/2681/0/12`, whole-tree `RUN: PROVEN` (`validate-git-inherits-git-dir` PROVEN), lint clean. **One dated erratum** in the filed spec. |
+>
+> **Audit group C:** the second spawn point now runs under the constructed environment too; what remains for group C is E2's disposition act in `docs/specs/done/WP-audit-c-close-disposition.md` (an architect pass), plus the nested-vault residual now NAMED in `assertGitRepo`'s contract rather than implied.
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried forward, **plus this WP's:** V4's blindness to additions (by design, reviewer-carried); the nested-vault ancestor commit (inferred from code, not measured); the unused `restoreVaultToHead` import in `src/cli/dream.js`; ADR-0012's 2026-09-05 amendment citing the pre-`done/` spec path; size (656-line Ready spec); O6's overrule cost as the queue's largest.
+>
+> **Next in the queue:** E2's group-C disposition act; `WP-quarantine-disposal-durability` (**Draft**); unfiled — `WP-quarantine-only-copy-shelf`, `WP-red-proofs-marker-audit`, the owner's named option **(c)** (mid-trim of `References`), the criterion-7 one-test follow-up from audit-D's erratum 4.
+>
 > **Status pass, 2026-09-06 #7 (night autopilot session of 2026-09-05/06, owner-authorized
 > merges).** Measured on `main` at `e269f5cd`, not transcribed:
 >
