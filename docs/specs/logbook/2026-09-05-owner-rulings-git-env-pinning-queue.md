@@ -287,3 +287,29 @@ the home that owns each. This entry restates none of it.
 named — the ruling returns to E1, `docs/HANDOVER.md`'s row C returns to an open
 cell, and the residual argued unaccepted acquires an owner WP of its own instead
 of the home that already carries it.
+
+### Correction, 2026-09-06 (after the E2 closure review round) — the O7 entry above is reduced to adoption status and pointers
+
+The round's hermetic shadow (finding F2, band C) found that the O7 append
+declares itself citation-only and then restates the governing act: the four-WP
+green measurement, the retiring-code evidence, the three accepted residuals, and
+the full overrule cost copied from the spec. **That is the same append-only drift
+this record's 2026-09-06 corrections withdrew for O4/O5 and again for O6** — a
+substantive copy that a later change to the governing text would have to chase.
+This record is append-only, so the original entry stands where it is and is
+corrected here.
+
+**WITHDRAWN, in favour of the pointers:** every sentence of the O7 entry above
+that states what the act MEASURED, what it retired or accepted, or what
+overruling it costs.
+
+**What stands, and it is the whole of this record's function for O7:** **O7 was
+adopted under the standing process of 2026-09-05, as a recommendation and not as
+a direct owner ruling, and the owner may reverse it by dated amendment.** Two
+pointers, and nothing else:
+
+- the governing act — `docs/specs/done/WP-audit-c-close-disposition.md`, section
+  **"E2 disposition act, 2026-09-06"**, which carries the decision, the
+  `<LOGBOOK>` resolution and the enumerated overrule cost;
+- the measurement it rests on —
+  `docs/specs/logbook/2026-09-06-audit-group-c-closure.md`.

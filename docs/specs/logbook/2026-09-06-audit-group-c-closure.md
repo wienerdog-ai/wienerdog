@@ -24,17 +24,18 @@ was mutated.
 
 | Table D row | Owner | Done at | Verification run, and result | Disposition |
 |---|---|---|---|---|
-| **D1 (a)** M7, enumerated instruction basenames | — (mooted at ruling time) | — | whole-tree `npm test` green; the enumeration is `promote.js:99-111` | **RETIRED** by the promote-in inversion; unchanged |
+| **D1 (a)** M7, enumerated instruction basenames | — (mooted at ruling time) | — | whole-tree `npm test` green, and the named test `dream-promote C1: a path outside the promotion allowlist is refused and publishes nothing` (`tests/unit/dream-promote.test.js:193-199`) re-run alone here, rc 0 — a brain-written root `CLAUDE.md` is refused and nothing is published | **RETIRED** by the promote-in inversion, and the citation is the ENFORCEMENT rather than the list: clause (a), the writable-tier gate at `src/core/dream/promote.js:265-268`, puts a vault-**root** path outside the positive allowlist **with no name enumerated at all**. `INSTRUCTION_BASENAMES` (enforced at `promote.js:255-257`) is D1 (c)'s surface, not this row's |
 | **D1 (b)** M7, dot segments beneath a tier | `WP-dot-segment-denial` (`done/`, `status: Done`) | impl PR **#215** (`2da074d5`), filed **#216** (`8302ce8e`) | its **V2** re-run here, rc 0: `ref1 2000/2000 \| ref2 2000/2000 \| ref3 1000/1000 \| over 12/12 \| handoff 87/87 \| boundary 39/39` — the implementation EQUALS the reference predicate at all three enforcement points over 5000 full-alphabet samples. Roll-up `WP-dot-segment-denial criterion 1 — PROVEN` | **RETIRED** — the class rule at `src/core/dream/promote.js:274-277` |
-| **D1 (c)** M7, stale basename list | `WP-instruction-basename-currency` (`done/`, `Done`) | impl PR **#211** (`c26214cb`), filed **#212** (`9e636118`) | its **V3** rc 0 (`docs/instruction-file-inventory.md` byte-identical to the canonical rendering, 13996 bytes, 10 placeholder sites) and **V4** rc 0 (the release-runbook obligation present exactly once, outside any fence). Roll-up `WP-instruction-basename-currency criterion 7 — PROVEN` | **RETIRED as a currency defect** — `promote.js:99-111`, a dated inventory with an owner and a trigger. Its ruling-time residual is **accepted**, below |
+| **D1 (c)** M7, stale basename list | `WP-instruction-basename-currency` (`done/`, `Done`) | impl PR **#211** (`c26214cb`), filed **#212** (`9e636118`) | its **V3** rc 0 (`docs/instruction-file-inventory.md` byte-identical to the canonical rendering, 13996 bytes, 10 placeholder sites) and **V4** rc 0 (the release-runbook obligation present exactly once, outside any fence). Roll-up `WP-instruction-basename-currency criterion 7 — PROVEN` | **RETIRED as a currency defect** — the set is declared at `promote.js:99-111` and **enforced at any depth** at `promote.js:255-257`; it is a dated inventory with an owner and a trigger. Its ruling-time residual is **accepted**, below |
 | **D2 (a)** M9, `git add`/`git commit` in the vault | — (mooted at round 1) | — | whole-tree `npm test` green; no `git commit` exists on the dream path | **RETIRED** by `commitNamedSet` — `src/cli/dream.js:259-263`, `commit-tree` + `update-ref`, so `--no-verify` has nothing to suppress |
 | **D2 (b)** M9, the unfiltered environment | `WP-dream-git-env-pinning` (`done/`, `Done`) | impl PR **#234** (`e269f5cd`), filed **#235** (`8358655d`) | its **V4** rc 0 (the three declared ids, exactly) and **V5** rc 0 (both out-of-spec mirrors present, row W1's hook residual intact). Roll-ups `criterion 2/3/4 — PROVEN` (`git-env-inherits-git-dir`, `-object-directory`, `-config-count`) | **RETIRED** — the environment is built key by key at `src/core/dream/git-env.js:26-41` and the pipeline seam uses it at `src/cli/dream.js:167-168` |
 | **D3** M10, the gitignored region | — (mooted) | — | `grep` over `src/` for `assertCleanTree`/`restoreVaultToHead` outside `validate.js`: **rc 1, no consumer** (re-measured today) | **RETIRED** by the git-free classifier — `src/core/dream/delta.js:77-79` requires `node:fs`, `node:path`, `../errors` and nothing that spawns |
 | **D4** C2, the git seam | own-defense half **void**; env half = D2 (b); the second spawn point → `WP-dream-git-env-validate-seam` (`done/`, `Done`) | impl PR **#238** (`ba357a81`), filed **#239** (`eedd8783`) | its **V3** rc 0 (the one declared id), **V4a** rc 0 (the four argv literals byte-exact), **V5** rc 0 (the Table W row W1(c)(i) amendment present, hook residual intact). Roll-up `WP-dream-git-env-validate-seam criterion 1 — PROVEN` | **RETIRED** — `assertGitRepo`'s spawn now carries the same construction, `src/core/dream/validate.js:65-71`. Its nested-vault finding is **accepted**, below |
 | **D5** C3, layout | `WP-dot-segment-denial` (same WP as D1 (b)) | same PRs as D1 (b) | the same V2 run: `boundary 39/39`, `handoff 87/87`, both validators graded. Roll-up as above | **RETIRED** at BOTH validators — the reader `src/core/layout.js:67-73` and the producer `src/core/layout-infer.js:114-117` |
 
-Every citation above was checked at both ends mechanically (`m3-citations.js`,
-rc 0); the pasted first and last lines are in the runs below.
+**Every citation above is the code or test that actually DOES the retiring**, and
+all eleven were checked at both ends mechanically (`m3-citations.js`, rc 0)
+after round 1 corrected D1 (a)'s — see the review round below.
 
 ## The residuals ACCEPTED rather than retired
 
@@ -161,3 +162,33 @@ or it is not about this act.**
   residual is what E2's own words allow.
 - A finding that group C should not close **because a residual exists at all**
   is the same item in different words, and gets the same disposition.
+
+## Review round, 2026-09-06 — one external double-channel round, and it CLOSES
+
+| Channel | Raw | Introducing SHA | Verdict |
+|---------|-----|-----------------|---------|
+| Codex plugin | `docs/specs/logbook/2026-09-06-audit-c-closure-gate-raw-round1-codex-plugin.txt` | `a74360c1` | **approve**, no material findings |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-06-audit-c-closure-gate-raw-round1-herdr-shadow.txt` | `1a822574` | needs-attention, two band-C findings |
+
+Both raws committed pre-adjudication; porcelain identical before and after.
+**Neither channel found a false measured claim** — the shadow independently
+re-verified all four owners' `status: Done`, every cited commit and PR merge by
+`git cat-file` / `merge-base --is-ancestor`, every residual home, the read-only
+equivalents of currency V3/V4, pinning V4/V5, seam V3/V4a/V5 and the D3
+consumer check (all exit 0, and it observed the same 13996 bytes, 10
+placeholders, 525-byte release step and exact proof ids), all 64 declarations
+with the six cited roll-up memberships, seam V4's documented rc 1, and that the
+`Done` spec is byte-identical to the base outside the appended section. The
+plugin's `makeAdmit` probe confirmed a root `CLAUDE.md` is refused today.
+
+**Under the pinned STOP CRITERION the round CLOSES**: no false measurement, so
+neither the RE-MEASURE branch nor the parked-OWNER branch fires, and the two
+findings are fixed in place.
+
+| # | Source | Band | Finding | Disposition |
+|---|--------|------|---------|-------------|
+| F1 | shadow | C (citation) | D1 (a)'s only code citation was `promote.js:99-111`, which declares `INSTRUCTION_BASENAMES` and opens the next JSDoc — **it does not show the inversion, the Set's enforcement or the writable-tier gate.** The behaviour was not disproven (the probe confirmed the refusal); the citation did not demonstrate it, which conflicted with this file's own "every citation checked" sentence | **FIX.** D1 (a) now cites the **enforcement**: clause (a), the writable-tier gate at `promote.js:265-268` — the reason a vault-root path is outside the allowlist **with no name enumerated** — plus the named existing test `dream-promote C1` (`tests/unit/dream-promote.test.js:193-199`), re-run alone here at rc 0. `INSTRUCTION_BASENAMES`'s enforcement site (`promote.js:255-257`) moved to D1 (c), where it belongs. `m3-citations.js` re-run over all **eleven** ranges, rc 0, so the "every citation" sentence is true again |
+| F2 | shadow | C (record) | O7 declared itself citation-only and then restated the four-WP measurement, the retiring evidence, the three residuals and the full overrule cost — **the same append-only drift the O4/O5 and O6 corrections withdrew in that very file** | **FIX, by the same append-only route.** A dated correction paragraph in the rulings record withdraws O7's restating sentences in favour of two pointers — the spec's `E2 disposition act, 2026-09-06` section and this basis file. The original append is not rewritten |
+
+**No owner item was raised**: neither channel argued that an accepted residual
+should be fixed instead, so the criterion's parked branch never fired.
