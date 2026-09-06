@@ -1,0 +1,27 @@
+# raw — wd-reviewer (opus), PR gate round 2 — WP-quarantine-failed-preserve-disposal-flush, PR #243
+# tip reviewed: ae164823f377986ac9a98c45c7b029613b639c8a (detached copy, copied node_modules) ; base main = fdbeb9f2 ; committed pre-adjudication
+# porcelain of the review checkout after the run: empty
+
+## APPROVE
+All six round-1 findings genuinely fixed (not re-worded); V1–V5 re-run clean from the detached round-2 checkout; boundary exact.
+
+Round-1 disposition: R1-1 FIXED (PR body pastes the unfiltered run 66/66 RUN: PROVEN rc 0; the --wp form confined to a non-gating parenthetical with its real rc 1 — both re-run, numbers match line for line). R1-2 FIXED materially (both forced-win32 tests assert, in order and before the count: fault.fired >= 1, rmTracer.removed — an observed rmSync event, not non-existence — and res === null). R1-3 FIXED by erratum 1 at 3cd68a85. R1-4 FIXED (JSDoc at each copy names the original at :2794/:2802; "Decisions made" carries the rationale). R1-5 FIXED (the new failDirFsync sets matchedFd = -1 inside the firing branch before throwing). R1-6 FIXED ("+6 tests": zero removed lines, exactly six new test( blocks; 2699 − 2693 = 6).
+
+Executed: boundary (3 Deliverables rows + spec + round-1 raws) rc 0; boundary-check rc 0; V1 verbatim rc 0 ("V1 OK…"); V2 unfiltered rc 0 (66 declared / 66 selected; RUN: PROVEN; 97 verdict lines all PROVEN; both new ids PROVEN; the shared criterion-2 roll-up PROVEN; all 7 WP-quarantine-preserve-durability roll-ups PROVEN); V2 companion --wp rc 1 (66/2 selected, RUN: FILTERED, both ids PROVEN — as erratum 1 predicts, not cited as pass/fail); V3 npm test rc 0 (2699/2687/0/12); V4 lint rc 0 (271 specs); V5 scoped mirror-walk rc 0 (RESOLVED, non-vacuous). git status --porcelain: empty.
+
+R1-2 re-check, read whole: traceRemoval patches only rmSync; traceFlushes patches openSync/fsyncSync; failCommitCounted patches linkSync; corruptReadCounted patches readSync — four disjoint patch sets, no double-patch. The counting variants are new functions (criterion-2/3 call sites untouched; zero-deletion diff). The criterion-2 tests use traceRemovalThenFlush with an ORDERED assertion (events.slice(rmIdx+1).some(fsync)), so Z2's pre-removal chain flush cannot satisfy it. Test names byte-identical to 22aacfac; V2's per-proof lines prove each mutation reddens exactly its own test. src/core/dream/validate.js and the proofs JSON unchanged since round 1 (git diff --stat 22aacfac..HEAD -- src/ tests/red-proofs/ empty), so round 1's contract verdict carries.
+
+Contract fidelity unchanged: both byte-exact blocks at validate.js:984-988 (Z1) and :1024-1028 (Z2), each immediately before return null; flushDir( on exactly 4 lines; 64 + 2 = 66 declarations.
+
+Spec / erratum 1: the spec's diff against fdbeb9f2 is exactly the status flip plus erratum 1; the three mirrors of the V2 contract (checklist :250-253, criterion 5 :357-364, the V2 block :428-441) agree; the erratum paragraph (:372-386) states what was wrong and what is true; the invoked rule verified verbatim at WP-dot-segment-denial.md:683-686.
+
+ADR-0031 drift: clean — erratum 1 corrects a verification-procedure defect, not a canonical fact; the unfiltered rule is CITED to its home, not restated as a new canonical.
+
+Non-blocking observations (band C, no change in this PR):
+1. [quality] the new failDirFsync's JSDoc calls itself "a copy" of :2802 but adds the matchedFd clearing the original lacks — self-corrected two sentences later; flag the word "copy".
+2. [quality] the ORIGINAL failDirFsync nested in [QPD-2] at :2802 still does not clear matchedFd — pre-existing, fenced, out of boundary; note against WP-quarantine-preserve-durability.
+3. [quality] traceRemovalThenFlush's openPaths map never deletes on close — a recycled fd could in principle be misattributed; mitigated (every fd comes from the patched openSync, which overwrites). No action.
+4. [contract] line-rot, spec-side: Table Z row Z2 / Exact contracts cite validate.js:1020 — the correct PRE-insertion anchor; post-merge the removal sits at :1024. Known repo-wide class.
+5. [convention] repo-level, for wd-architect: this is the second WP whose V2 re-derived the filtered/unfiltered red-proofs rule after a review round burned on it — an ADR-0031 signal ACROSS WPs; recommend lifting the RED-lane invocation invariants into one referenced surface the template cites.
+
+No band A or B findings. Ready to merge once the round-2 raws are committed.
