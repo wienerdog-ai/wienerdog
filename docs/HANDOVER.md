@@ -24,7 +24,7 @@ tree (`docs/specs/done/` + merged PRs), not from memory:
 |-------|---------|--------|
 | A | Interpolation neutralizer for code-owned markdown control planes | **Done** — `WP-sanitize-project-display-names`, `WP-daily-summary-per-line-framing`, `WP-neutralize-alert-callout-rendering` in `done/` |
 | B | Vault-snapshot second path into model sessions | **Done** — `WP-gate-vault-snapshot`, `WP-snapshot-read-path-hardening` in `done/` |
-| C | Dream write fence (machinery-controlling files) | **Open — one residual** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
+| C | Dream write fence (machinery-controlling files) | **Open — last residual RETIRED 2026-09-06 (`WP-dream-git-env-pinning` Done, #234); awaits E2's disposition act** (D1 (c) CLOSED by `WP-instruction-basename-currency`, #211; D1 (b) and D5 CLOSED by `WP-dot-segment-denial`, #215; D2 (b) — the run's git calls inherit `process.env` — stays with `WP-dream-git-env-pinning`, owner product decision) — the promote-in family retired M10 and the git-commit half of M9, and the promotion allowlist retired the enumerated instruction basenames; four mechanisms remain live, measured. Basis per finding in `docs/specs/logbook/2026-09-02-audit-group-c-disposition.md`. Owners: `WP-dot-segment-denial`, `WP-instruction-basename-currency`, `WP-dream-git-env-pinning` |
 | D | Code-derived draft recipients (no verb accepts a model-named address) | **Done** — `WP-audit-d-code-derived-recipients` in `docs/specs/done/` |
 | E | Ledger-parser correctness + hostile corpus | **Done** — `WP-audit-e-ledger-parser-corpus` in `docs/specs/done/` |
 
@@ -42,6 +42,23 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-06 #7 (night autopilot session of 2026-09-05/06, owner-authorized
+> merges).** Measured on `main` at `e269f5cd`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | C-D2(b) | `WP-dream-git-env-pinning` | **Done** | design loop #233 (`d6a233ea`), implementation #234 (`e269f5cd`), filed in this pass | **Design loop: round zero, two clean-context executors, and FOUR double-channel rounds** (plugin + hermetic shadow; eight raws committed pre-adjudication; record `docs/specs/logbook/2026-09-05-git-env-pinning-design-gate-rounds.md`). **The owner product decision was taken under the standing authorization** (record `docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`; O1 pin by construction, O2 the validate.js spawn point to a successor, O3 `XDG_CONFIG_HOME` not carried — each with its overrule cost in the spec). Table U grew from 21 to 24 rows and every Reach cell was re-derived twice from drivers issuing the nine pinned shapes' exact argv; **round 1 fired the DESIGN branch** (one probe used a non-pinned argv), **round 2 fired the ADR-0031 breaker** and the extraction was of KIND — cells keep decided facts, one rationale section owns the reasoning, the record owns the probes — after which every finding landed on a sentence, not a row; **round 3 was HEAVY** (a Deliverables/contract dependency contradiction); **round 4 CLOSED** (plugin approve; shadow three non-product items). Measured along the way and now in Table U: `GIT_CONFIG_COUNT`+`core.fsmonitor` executes code inside the pinned `update-index --add --cacheinfo` and `write-tree`; inherited `GIT_AUTHOR_*`/`GIT_COMMITTER_*` beat `-c user.*` on `commit-tree`; a blob deduplicated against an inherited alternate is never stored in the vault and `fsck` breaks when the alternate goes; `commit-tree` ignores `commit.gpgsign`. **Implementation: one round of the triple-channel PR gate** — plugin CLEAN, shadow *"patch is correct"* (zero findings), wd-reviewer **APPROVE** with three band-C items (one fixed as erratum 1 in this pass, one residual, one informational). Merged tree: `2690/2678/0/12`, whole-tree `RUN: PROVEN` with the three new declarations and the re-targeted one, lint clean. **Two dated errata** in the filed spec |
+>
+> **The audit status table's group C row closes its last residual by this pass:** D2 (b) — the run's git calls inheriting `process.env` — is retired by construction (`src/core/dream/git-env.js`; ADR-0012 Amendment 2026-09-05; Table W row W1 amended 2026-09-05). Whether group C reads **Done** is E2's disposition act in `docs/specs/done/WP-audit-c-close-disposition.md`; this pass updates the row above to say the successor is Done with its own verification green, and leaves the disposition act to the next architect pass rather than pre-writing it.
+>
+> **Owner instruction this session, verbatim** (record:
+> `docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`):
+> *"Great. Please proceed with the queue. Note that I will go to sleep soon, and you will be on autopilot. Accordingly, try and get as much done as possible. You have merge authorization for this session. And remember to follow the playbook of the project, including the double gate reviews and using subagents."*
+>
+> **Residuals routed to wd-architect, not dispatched** — the earlier list carried forward unchanged, **plus this WP's:** the nested-vault discovery question and the second spawn point (owned by the Draft successor `WP-dream-git-env-validate-seam`); the size residual (932-line Ready spec, recorded not trimmed); U8/U9 resting on construction plus the canary rather than a per-channel proof; the unmeasured partial-clone lazy fetch and win32 rows; erratum 2's `PATH` guard asymmetry; E2's group-C disposition act.
+>
+> **Next in the queue:** `WP-dream-git-env-validate-seam` (Draft stub, filed by this loop), `WP-quarantine-disposal-durability` (**Draft**), and unfiled — `WP-quarantine-only-copy-shelf`, `WP-red-proofs-marker-audit`, the owner's named option **(c)** (mid-trim of `References`), the criterion-7 one-test follow-up from audit-D's erratum 4.
+>
 > **Status pass, 2026-09-06 #6 (evening session of 2026-09-05, owner-authorized
 > merges).** Measured on `main` at `2ccc3d58`, not transcribed:
 >
