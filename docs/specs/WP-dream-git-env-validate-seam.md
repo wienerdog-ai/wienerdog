@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-validate-seam
 title: Give the dream's second git spawn point the same constructed environment
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-dream-git-env-pinning]
@@ -62,7 +62,15 @@ and the pin does not touch it. Owner item **O5** decides it.
 
 ## Current state
 
-Measured on `8358655d` (`origin/main`), the tree this spec is drafted against.
+**THE PINNED BASE IS `8358655d41f997e8da05a39ec6b2851d05785480`**, stated here
+once and cited everywhere else. Every measurement below, Table J's cells, VS-P7's
+re-measurement and the Table W amendment's claim were taken against it, so **V4
+refuses to run against any other base**: `git merge-base origin/main HEAD` must
+equal this SHA. A rebase onto a newer `main` silently moves that base and folds
+any upstream `validate.js` change into it — which is exactly when row W1(c)(i)'s
+standing trigger should force re-review, not when it should go quiet. If the base
+moves, re-derive Table J, re-run VS-P7 against the new base, and update this SHA;
+dispatch-time re-verification runs that check.
 
 - **`src/core/dream/validate.js:64-81` — the module-private `git()`.** It
   spawns through the pinned front door
@@ -137,21 +145,27 @@ one PASSES, and the run then targets that ancestor. Decided by owner item O5,
 reachable through `wienerdog adopt` today, and named here rather than left
 implied by what the guard happens to check.*
 
-**The two lines, and they are the whole code change.** V4 compares the diff
-against the branch's merge-base with `origin/main` and admits **exactly** these,
-after comment-only lines are filtered out:
+**The two lines, and they are the whole code change.** Against the pinned base,
+`src/core/dream/validate.js` gains exactly these two non-comment lines and loses
+exactly one, byte-exact including indentation:
 
 ```text
-ADDED    const { buildGitEnv } = require('./git-env');
-ADDED    env: buildGitEnv(),
-REMOVED  env: process.env,
+ADDED    +const { buildGitEnv } = require('./git-env');
+ADDED    +    env: buildGitEnv(),
+REMOVED  -    env: process.env,
 ```
 
-Anything else added or removed — a fifth call however spelled or wrapped, a
-direct `spawnPinnedSync`, a change to `git()`'s own `args: ['-C', vaultDir,
-...args]` assembly — is a **red**, and all four were proved red (round-1 record,
-R1-B). The old form of this check counted occurrences of a literal and **passed
-a fifth spawn**, which is why the check is a diff and not a grep.
+**V4 checks that these three landed and NOTHING MORE — it is a completion and
+presence screen, blind to whatever else the diff contains, and it says so.** Two
+consecutive rounds landed findings on textual forms of this check that claimed to
+exclude additions and did not (a literal count missed a multi-line fifth call; a
+line-prefix comment filter missed `/* c */ git(…)`), so the check stopped
+claiming exclusion rather than being patched a third time. **Where the
+no-added-spawn invariant is actually established: AC2**, which observes that
+`assertGitRepo` performs exactly ONE spawn, and **wd-reviewer's whole-diff read
+of `validate.js`**, which AC5 names. Rows J2–J4 have no dream-path caller
+(Table J), so a hidden addition there is inert on the run and the reviewer's read
+is the proportionate check for it.
 
 **The Table W amendment** (Deliverables row 4). It opens with this sentence,
 byte-exact:
@@ -163,8 +177,10 @@ byte-exact:
 and must state, nothing more being required of it: that this clause's standing
 trigger has as its subject the **SHAPE** — the argv and the call-site set, which
 is what the row's own tenth-shape reasoning is about; that
-`WP-dream-git-env-validate-seam` changes **no shape and adds no call**, and that
-its V4 asserts this against the merge-base rather than by assurance; that the
+`WP-dream-git-env-validate-seam` changes **no shape and adds no call**, observed
+at the spawn by AC2 (exactly one spawn from `assertGitRepo`, with the complete
+argv) and read whole-diff by wd-reviewer, rather than asserted by assurance; that
+the
 **environment** of the existing invocation is now constructed rather than
 inherited, per ADR-0012's amendment of 2026-09-05, which is the decision this
 successor extends and not a new one; and that **the election's admissibility
@@ -275,11 +291,14 @@ review is added here on the spot.
 - [ ] **Acceptance criteria** — AC1 asserts row J1, AC2 rows J0/J1, AC3 row J5,
       AC5 rows J1–J4's invariance.
 - [ ] **Current state** — the `git()` bullet and the `buildGitEnv` bullet.
-- [ ] **Verification commands / greps** — V3, V5, and **V4, the executable mirror
-      of rows J1–J4**: the diff V4 admits IS those cells, so a row that changes
-      without moving V4 is a table and a mirror disagreeing inside one commit.
-      Its four-argv grep is a **presence screen only**, labelled as such in the
-      step: the diff comparison is what enforces the invariance.
+- [ ] **Verification commands / greps** — V3, V5, and **V4 with V4a, the
+      executable mirror of rows J1–J4**: the three diff lines V4 requires and the
+      four argv literals V4a greps ARE those cells, so a row that changes without
+      moving them is a table and a mirror disagreeing inside one commit.
+      **Both are PRESENCE screens and are labelled so in the step, in AC5 and
+      here — V4 is blind to additions.** The invariant they do not carry is
+      AC2's one-spawn clause and wd-reviewer's whole-diff read of
+      `src/core/dream/validate.js`, which AC5 names.
 - [ ] **Operative prose** — the W1(c)(i) non-firing paragraph and the row-J2
       paragraph above; owner items O4 and O5.
 - [ ] **Outside this spec** — `assertGitRepo`'s JSDoc in
@@ -436,17 +455,25 @@ no longer an S.
       argv, both captured at the spawn** (rows J0, J1). Through the suite's
       existing require-cache substitution — `stubCollaborators`
       (`tests/unit/dream-validate.test.js:1485`), which `stubSpawn` already uses
-      to intercept `spawnPinnedSync` — one `assertGitRepo` call is observed and
-      the intercepted `opts` assert **both** halves:
-      **(a) the environment** is exactly what `buildGitEnv()` returns for the
+      to intercept `spawnPinnedSync` — **one** `assertGitRepo` call is driven and
+      every spawn it performs is captured. Three clauses, all required:
+      **(a) EXACTLY ONE SPAWN.** The captured count is `1`. This is where the
+      no-added-spawn invariant lives: a hidden call inside the guard — however
+      spelled, wrapped or preceded by a comment — is a second spawn and reddens
+      this. Two review rounds established that no textual check over the diff can
+      carry this claim, so it is carried where it is observable.
+      **(b) The COMPLETE spawned argv** is `['-C', <vault>, 'rev-parse',
+      '--git-dir']` — not the arguments handed to `git()`, but what `git()`
+      assembles and hands `spawnPinnedSync`, which is the gap a round-1 channel
+      demonstrated by mutating the `-C` prefix.
+      **(c) The environment** is exactly what `buildGitEnv()` returns for the
       same process — compared against `buildGitEnv` itself, never a copied key
       list, so a Table U row added or removed cannot make the two disagree — and
-      carries **no `GIT_INDEX_FILE`**, asserted with one exported around the call;
-      **(b) the COMPLETE spawned argv** is `['-C', <vault>, 'rev-parse',
-      '--git-dir']`. Half (b) is the **runtime** half of "no shape changed", and
-      it is required rather than optional: V4 reads the diff, so only this
-      observes what `git()` actually assembles and hands over — the gap a
-      round-1 channel demonstrated by mutating the `-C` prefix.
+      carries **no `GIT_INDEX_FILE`**, asserted with one exported around the call.
+      A round-2 channel executed this capture against the real helper and
+      confirmed all three are observable; the helper is **JavaScript
+      require-cache substitution, not an environment seam** (ADR-0028 is not
+      touched).
 - [ ] **AC3 — the nested-vault pair, asserted rather than inherited** (row J5).
       Both halves, one test: a vault that **is** a repository root passes
       `assertGitRepo`; a directory that is **not** a repository but lies inside
@@ -458,17 +485,27 @@ no longer an S.
       `node scripts/red-proofs.js` exits 0 with `RUN: PROVEN`, and within it
       `validate-git-inherits-git-dir` has a `PROVEN` per-proof line and every
       roll-up line for this WP reads `PROVEN`.
-- [ ] **AC5 — no shape changed and no spawn was added, mechanically** (rows
-      J1–J4, and the claim the Table W amendment carries). V4 exits 0: against
-      the branch's merge-base with `origin/main`, the **only** non-comment lines
-      `src/core/dream/validate.js` adds are the two prescribed under Exact
-      contracts and the only one it removes is `env: process.env,`. **An earlier
-      literal-count form of this criterion was a false green** — both round-1
-      channels passed a fifth spawn through it — so the check is a diff, and the
-      four-argv grep beside it is a **presence screen, not the enforcement**.
-      **Unlike the old form this criterion is RED on the untouched tree** (the
-      two added lines are absent), so it is a completion check as well as an
-      invariance one.
+- [ ] **AC5 — the prescribed change landed, and nothing else was added; the two
+      halves are checked by different things and neither pretends to be the
+      other** (rows J1–J4, and the claim the Table W amendment carries).
+      **(a) LANDED — mechanical.** V4 exits 0: the merge-base equals the pinned
+      base, and the diff against it CONTAINS the two prescribed added lines and
+      the one removed line. **V4 is blind to additions and is labelled so in the
+      step** — it proves the prescribed change landed, nothing about what else
+      did. V4a is likewise a presence screen for the four argv literals.
+      **(b) NOTHING ELSE WAS ADDED — observed where it is observable, plus a
+      read.** AC2's clause (a) asserts `assertGitRepo` performs exactly ONE
+      spawn, which is the only surface that sees a hidden call regardless of how
+      it is written; and **wd-reviewer's whole-diff read of
+      `src/core/dream/validate.js` is the named check that no other spawn was
+      added elsewhere in the file** — proportionate, because rows J2–J4 have no
+      dream-path caller and an addition there is inert on the run.
+      **Why this shape and not a third textual patch:** two consecutive rounds
+      landed on the mechanical form (a literal count, then a line-prefix comment
+      filter), and a lexically sound JS analysis needs an AST dependency this
+      repo does not carry. Under §0.1's repeat rule the answer is a re-cut by
+      kind, and this one is **smaller** than what it replaces — no new gate, one
+      assertion moved to where the property is visible.
 - [ ] **AC6 — the registered out-of-spec mirror moved in the same commit**:
       `docs/specs/done/WP-dream-promote-in-workspace.md` Table W row W1(c)(i)
       carries the dated amendment with the byte-exact opening sentence (V5), and
@@ -518,34 +555,31 @@ git(vaultDir, ['clean', '-fd'])
 ARGV
 echo "V4a OK — presence screen only"
 
-# V4 — AC5, THE INVARIANCE GATE. A DIFF, not a count: the only non-comment lines
-# this file gains are the two prescribed under Exact contracts, and the only one
-# it loses is `env: process.env,`. A fifth call however spelled or wrapped, a
-# direct spawnPinnedSync, or a changed `-C` assembly is therefore red — all four
-# were proved red, and the previous literal-count form passed the first of them.
-node -e '
-const { execFileSync } = require("node:child_process");
-const fs = require("node:fs");
-const q = String.fromCharCode(39);
-const F = "src/core/dream/validate.js";
-if (!fs.existsSync(F)) { console.log("FAIL: " + F + " is missing"); process.exit(1); }
-const BASE = execFileSync("git", ["merge-base", "origin/main", "HEAD"], { encoding: "utf8" }).trim();
-const d = execFileSync("git", ["diff", BASE, "--", F], { encoding: "utf8" });
-const code = (s) => d.split("\n")
-  .filter((l) => l.startsWith(s) && !l.startsWith(s + s + s))
-  .map((l) => l.slice(1).trim())
-  .filter((l) => l !== "" && !/^(\*|\/[\/*])/.test(l));
-const added = code("+").sort();
-const removed = code("-").sort();
-const wantAdded = ["const { buildGitEnv } = require(" + q + "./git-env" + q + ");", "env: buildGitEnv(),"].sort();
-const wantRemoved = ["env: process.env,"];
-console.log("BASE    " + BASE.slice(0, 8));
-console.log("ADDED   " + JSON.stringify(added));
-console.log("REMOVED " + JSON.stringify(removed));
-const ok = JSON.stringify(added) === JSON.stringify(wantAdded) && JSON.stringify(removed) === JSON.stringify(wantRemoved);
-console.log(ok ? "V4 OK — the only code lines this WP adds or removes are the two prescribed and the one replaced"
-               : "FAIL: an unprescribed code line was added or removed");
-process.exit(ok ? 0 : 1)'
+# V4 — AC5 half (a): a COMPLETION / PRESENCE screen, and that is ALL it is.
+# It checks that the prescribed change LANDED. It is BLIND TO ADDITIONS: it makes
+# no claim about what else the diff contains, because two rounds proved that no
+# line-oriented check over a JS diff can carry that claim (a literal count missed
+# a multi-line fifth call; a comment-prefix filter missed `/* c */ git(...)`), and
+# a lexically sound analysis needs an AST dependency this repo does not carry.
+# The no-added-spawn invariant is AC2's ONE-SPAWN clause plus wd-reviewer's
+# whole-diff read of this file — see AC5.
+# The base is PINNED (Current state): a rebase would fold an upstream change into
+# the base and silently retire this check, which is when W1(c)(i)'s trigger should
+# fire, not go quiet.
+# NOTE, so the sequence is not misread: `scripts/red-proofs.js` applies its
+# mutations to fresh isolated COPIES of the tree. V4 runs against the unmutated
+# working checkout, so a mutation that would redden V4 is not a conflict with V2.
+BASE=8358655d41f997e8da05a39ec6b2851d05785480
+MB=$(git merge-base origin/main HEAD)
+[ "$MB" = "$BASE" ] || { echo "FAIL: base moved ($MB) — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA"; exit 1; }
+D=$(git diff "$BASE" -- src/core/dream/validate.js)
+# `-e` is required, not stylistic: the removed-line pattern begins with `-` and
+# grep would otherwise read it as an option (measured — the first draft of this
+# step reported the compliant state RED for exactly that reason).
+printf '%s\n' "$D" | grep -qxF -e "+const { buildGitEnv } = require('./git-env');" || { echo "FAIL: the require('./git-env') line was not added"; exit 1; }
+printf '%s\n' "$D" | grep -qxF -e "+    env: buildGitEnv()," || { echo "FAIL: env: buildGitEnv(), was not added"; exit 1; }
+printf '%s\n' "$D" | grep -qxF -e "-    env: process.env," || { echo "FAIL: env: process.env, was not removed"; exit 1; }
+echo "V4 OK — the prescribed change landed (blind to additions; AC2 and the reviewer's read carry that)"
 
 # V5 — AC6, the registered out-of-spec mirror, guarded so an absent file is RED.
 # PRESENCE only; the amendment's four required statements are the reviewer's read.

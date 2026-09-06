@@ -816,3 +816,227 @@ would reopen surface the round just froze
 **It touches 5 files (4 Deliverables + the spec itself)**, still inside the
 README's `≤ 8` bound, and the code change is still **two lines and two comments**:
 an **S**.
+
+## Round 2 — external, double channel, tip `382faefb`
+
+| Channel | Raw | Introducing SHA | Verdict |
+|---------|-----|-----------------|---------|
+| Codex plugin | `docs/specs/logbook/2026-09-06-validate-seam-gate-raw-round2-codex-plugin.txt` | `ba41781f` | needs-attention |
+| Hermetic Codex shadow | `docs/specs/logbook/2026-09-06-validate-seam-gate-raw-round2-herdr-shadow.txt` | `6e0e29d2` | needs-attention |
+
+Both raws committed **pre-adjudication**; porcelain identical before and after.
+
+**What round 2 CONFIRMED, and it is why the loop closes.** Both channels report
+R1-A, R1-C, R1-D, R1-E and R1-F **fixed**. Both checked VS-P7's pasted setup
+against row W1's original stale-stat description and found it matches
+(mtime moved, tracked content unchanged); neither could re-execute it, their
+sandboxes being read-only. Both executed AC2's capture against the **real**
+`stubCollaborators` helper and confirmed the complete argv and the
+`buildGitEnv` equality are observable, and both state that this is **JavaScript
+require-cache substitution, not an environment-variable seam** — so ADR-0028 is
+untouched. The plugin adds that under the adopted O6 the specified amendment
+"does not otherwise contradict W1(a), COVERAGE, (c)(ii), (e), or the
+predecessor's dated amendment". **Neither channel raised a product or contract
+finding, and neither objected to O4, O5 or O6.**
+
+**Round outcome: CLOSE.** `docs/runbooks/codex-review.md`, weighted closure:
+*"The loop is DONE when a round finds nothing about the product. Machinery
+findings at that point are fixed or accepted as named residuals; they do not
+extend the loop."* Every round-2 finding is criterion/machinery or record. **No
+further external round is owed.** A clean-context mechanical verification follows
+on the revised tip, then the PR.
+
+### Findings, bands, criterion branch, disposition
+
+| # | Source | Band | Branch | Finding | What changed |
+|---|--------|------|--------|---------|--------------|
+| R2-A | plugin F1 **+** shadow F1, **CONVERGED** | B | **3 — the same-family repeat rule (ADR-0031), fired** | The SECOND consecutive round on V4's evadability. Round 1 broke a literal count with a multi-line call; round 2 broke the comment filter with `/* explanatory comment */ git(vaultDir, ['status', '--porcelain']);` — both channels EXECUTED it, V4 returned rc 0 and the hidden call ran. A multi-line `// x */ git(); /*` passes too. A line-prefix comment filter over a JS diff cannot be lexically sound, and an AST tool is a dependency this repo does not carry | **RE-CUT BY KIND, never a third textual patch** — see below |
+| R2-B | shadow F2 | B | 6 (machinery) → LIGHT | V4 diffed from `merge-base(origin/main, HEAD)` while Table J, VS-P7 and the W1 amendment were measured on `8358655d`. Today they coincide; after a routine rebase an upstream `validate.js` change folds into the new base and **disappears** from V4, while V4a still finds the four calls and AC2 still observes only `assertGitRepo`. That is precisely when W1(c)(i)'s trigger should force re-review | **FIX.** The pinned base SHA is stated **once**, in Current state, and V4 now REFUSES any other: `git merge-base origin/main HEAD` must equal it, else red with *"base moved — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA"*. Proved as state 5 below. Dispatch-time re-verification runs exactly that check |
+| R2-C | plugin + shadow F3 | C | 5 (mirror drift) → LIGHT | The new O6 entry in the owner-rulings record restates the trigger subject, the no-shape claim, the constructed-environment rule, the stale-stat result and the full overrule cost — then closes by claiming citation-only treatment. Two substantive copies to keep aligned in an append-only record; the same defect the previous amendment had just fixed for O4/O5 | **FIX, by the same append-only route.** A dated correction withdraws every deciding sentence of the O6 entry **including its false closing sentence**, leaving adoption status plus a citation of the spec's O6 |
+| R2-D | plugin, next-steps note | — | 6 → LIGHT | The RED mutation would make V4 red; a reader could take that for a conflict with V2 | **FIX.** V4's comment now states that `scripts/red-proofs.js` mutates fresh isolated COPIES while V4 runs on the unmutated working checkout, so the two never meet |
+
+### R2-A — the re-cut, and why it is SMALLER
+
+§0.1 branch 3 names **Table J** as this WP's family and V4 is a registered mirror
+of rows J1–J4, so a second consecutive round landing there is a design question,
+not a third patch. §0.1's FALLBACK anticipated the same direction from the other
+end — *"verification machinery may grow only to guard a product behavior, in the
+smallest form that guards it"* — and both point the same way here. What changed:
+
+1. **V4 stopped claiming what it cannot check.** It is now a **COMPLETION /
+   PRESENCE screen**: against the pinned base, the diff must CONTAIN the two
+   prescribed added lines and the one removed line. **No comment filtering at
+   all**, so there is no false claim about what it excludes — and the step, AC5
+   and the Mirrored Surface Checklist all say **"blind to additions: it proves
+   the prescribed change landed, nothing about what else did."**
+2. **The invariant moved to where it is observable — AC2.** Through the same
+   `stubCollaborators`/`stubSpawn` capture both channels executed, AC2 now
+   asserts that `assertGitRepo` performs **exactly ONE spawn** (count `=== 1`),
+   with the complete argv `['-C', <vault>, 'rev-parse', '--git-dir']` and `env`
+   deep-equal to `buildGitEnv()`. A hidden call inside the guard — however
+   spelled, wrapped, or preceded by a block comment — is a second spawn and
+   reddens it. **This is the round-2 evasion's own case, caught at the seam
+   instead of in the text.**
+3. **The rest is the REVIEWER's, named rather than implied.** Rows J2–J4 have no
+   dream-path caller (Table J), so a hidden addition there is inert on the run;
+   AC5 names **wd-reviewer's whole-diff read of `src/core/dream/validate.js`** as
+   the check for it. V4a survives unchanged as the four-argv presence screen it
+   already was.
+
+**It is smaller than what it replaced**: no new gate, no new machinery, one
+assertion moved from a text check that could not carry it to a runtime check that
+can, and one check honestly downgraded to what it does. The measurement that
+carries the safety claim is still VS-P7, untouched.
+
+### Both-directions proof of the RE-CUT V4 — five states (`prove-v4-r2.sh`)
+
+The script under test is **extracted from the spec**, not retyped, so the proof
+runs the step's own bytes. Each state is a fresh `git clone --no-hardlinks`
+checked out at the design tip.
+
+```text
+=== STATE 1 — untouched tree: the prescribed change has NOT landed ===
+  V4 rc=1  FAIL: the require('./git-env') line was not added
+=== STATE 2 — compliant: the two added lines and the one removed ===
+  V4 rc=0  V4 OK — the prescribed change landed (blind to additions; AC2 and the reviewer's read carry that)
+=== STATE 3 — partial: the require line added, env: still process.env ===
+  V4 rc=1  FAIL: env: buildGitEnv(), was not added
+=== STATE 4 — compliant PLUS the two authorized comment edits (must stay green) ===
+  V4 rc=0  V4 OK — the prescribed change landed (blind to additions; AC2 and the reviewer's read carry that)
+=== STATE 5 — base moved: the merge-base is not the pinned SHA ===
+  V4 rc=1  FAIL: base moved (e269f5cd07267a976c87f2df1759ca791c696478) — re-derive Table J and re-run VS-P7 against the new base, then update the pinned SHA
+```
+
+**State 4 is the one that had to stay green**: the two comment edits the
+Deliverables row authorizes (the JSDoc precondition and the stale export-block
+sentence) must not redden a check on code lines — both channels asked for that
+control and both got it. **State 3** is a half-done implementation, red.
+**State 5** is R2-B, red with the re-derivation instruction in the message.
+
+**One defect this proof caught in the step itself, recorded rather than quietly
+fixed.** The first form of V4's removed-line check was
+`grep -qxF "-    env: process.env,"`; `grep` read the leading `-` as an option
+and the **compliant state reported RED**. The step now uses `grep -qxF -e`, and
+the reason is a comment in the step. It was caught by state 2 failing — the
+proof's whole purpose — not by review.
+
+**The AC2 count clause is an implementer test obligation, not new gate
+machinery**, and that is deliberate: the assertion lives in
+`tests/unit/dream-validate.test.js`, which is already a Deliverable and already
+carries the helper. Its both-directions evidence is the ordinary one for a unit
+assertion — the RED declaration proves AC1's non-vacuity, and AC2's count clause
+is a positive assertion whose failure mode (a second spawn) the implementer
+demonstrates in the PR by construction if wd-reviewer asks. No new declaration,
+no new runner, no new step.
+
+## Closure
+
+**The decision, and the rule it rests on.** `docs/runbooks/codex-review.md`,
+weighted closure: *"The loop is DONE when a round finds nothing about the
+product. Machinery findings at that point are fixed or accepted as named
+residuals; they do not extend the loop."* **Round 2 is that round.** Both
+channels returned needs-attention, and every one of their findings is a
+verification-machinery shape, a base anchor, or a record duplication — none
+changes what the implementer builds, and all are fixed in place. Both channels
+also positively confirmed the round-1 fixes, VS-P7's condition, and AC2's seam,
+and neither objected to any owner item. **No further external round is owed.**
+
+### The rounds
+
+| Round | Tip | Raws (introducing SHA) | Verdicts | Outcome (§0.1 round rule) |
+|-------|-----|------------------------|----------|---------------------------|
+| 0 | `8358655d` (base) | architect's own; executor passes `T1`–`T4`, `X1`–`X2` | — | criterion pinned; 6 findings fixed (Y1–Y6), then 3 more (T3, X1, X2) |
+| 1 | `e96f761d` | plugin `ad1fa653`, shadow `e9e21e9a` | needs-attention / needs-attention | **HEAVY** (branch 4 on R1-A) |
+| 2 | `382faefb` | plugin `ba41781f`, shadow `6e0e29d2` | needs-attention / needs-attention | **CLOSE** (branch 3 fired on R2-A; no product finding) |
+
+**No verification machinery was added after round 1** — still V1–V6 with V4a, and
+still one RED declaration. Round 2's re-cut made the surface smaller, not larger.
+
+### Named residuals carried OUT of the loop
+
+Each is stated here so the next reader finds them together.
+
+1. **V4 is BLIND TO ADDITIONS, by design.** It proves the prescribed change
+   landed and nothing about what else the diff contains. Two rounds established
+   that no line-oriented check over a JS diff can carry that claim without an AST
+   dependency this repo does not have. What carries it instead: **AC2's
+   one-spawn assertion** at the seam, and **wd-reviewer's whole-diff read of
+   `src/core/dream/validate.js`**, named in AC5. Rows J2–J4 have no dream-path
+   caller, so an addition there is inert on the run.
+2. **Size.** The spec is **635 lines** against `docs/specs/README.md`'s ~400-line
+   heuristic — a ~59% overage, recorded rather than trimmed, because trimming now
+   would reopen surface two rounds have frozen. It touches **5 files** (4
+   Deliverables + the spec), inside the `≤ 8` bound, and the code change is **two
+   lines plus two comment edits**: an **S**.
+3. **`tests/unit/dream-validate.test.js:15` imports `restoreVaultToHead` and
+   nothing calls it** (VS-P8) — the tests were retired at row G7 and the import
+   stayed. Discovered, not fixed: it is neither of the two lines V4 requires.
+   Routed to the next work package that edits that suite.
+4. **ADR-0012's 2026-09-05 amendment cites `docs/specs/WP-dream-git-env-pinning.md`**,
+   which is now under `docs/specs/done/`. Routed to the next touch of ADR-0012;
+   ADR-0012 is deliberately not in this WP's boundary.
+5. **The nested-vault ancestor COMMIT is inferred from the code, not measured.**
+   VS-P2 and VS-P3 measure that reads from a nested vault resolve the ancestor;
+   that the pipeline would then publish there was not executed. Owner item O5
+   states it that way and does not claim more.
+6. **O6's overrule cost is the largest in this queue.** If the owner rules that
+   row W1(c)(i)'s trigger FIRES on an environment change, this WP is superseded:
+   seam closure plus admitting `rev-parse --git-dir` as a TENTH pinned shape
+   become owner business and a change to Table W row W1(c);
+   `tests/unit/dream-pipeline.known-calls.js` joins Deliverables; nine becomes ten
+   in every surface stating it; and the package is no longer an S.
+7. **V5 proves PRESENCE, not content.** A copied opening sentence over a wrong
+   amendment body passes it; the four required statements are the reviewer's
+   read, judged over the whole cell. AC6 says so.
+8. **Three owner items, none a direct ruling.** O4, O5 and O6 are recommendations
+   adopted under the standing authorization of 2026-09-05. Their enumerated
+   overrule costs live in the spec's `## Dispatch precondition — owner items`;
+   the owner-rulings record records the adoption and CITES those costs — twice
+   corrected to do so, by dated amendment, after rounds 1 and 2.
+
+### Dispatch-time re-verification — the checklist the dispatch message ticks
+
+`docs/runbooks/codex-review.md` requires the orchestrator to re-run every
+executable Current-state claim against `main` immediately before dispatch, and to
+record the run and the SHA it ran against. **A stale claim blocks the dispatch
+and routes the spec back to wd-architect.**
+
+- [ ] **`git merge-base origin/main HEAD` still equals the PINNED BASE
+      `8358655d41f997e8da05a39ec6b2851d05785480`.** This is V4's first gate and
+      the anchor for Table J, VS-P7 and the Table W amendment; if it moved,
+      Table J must be re-derived and VS-P7 re-run before the SHA is updated.
+- [ ] `src/core/dream/validate.js:64-81` resolves to the module-private `git()`,
+      and its `env: process.env,` line is still byte-exact — it is the line V4
+      requires to be removed.
+- [ ] `src/core/dream/validate.js:88-93` `assertGitRepo`, `:102-107`
+      `assertCleanTree`, `:117-120` `restoreVaultToHead`; the four `git(vaultDir,`
+      call sites are still exactly the four of Table J rows J1–J4 (V4a).
+- [ ] `src/cli/dream.js:29` and `:587` are still the `assertGitRepo` import and
+      its single call site.
+- [ ] `src/core/dream/git-env.js:26-41` still resolves to `buildGitEnv`, and it
+      still adds `GIT_INDEX_FILE` only when `indexFile` is passed (AC2 clause c).
+- [ ] `src/core/exec-identity.js:554-558` still uses `opts.env` both to resolve
+      the pin (`:556`) and as the child's environment (`:558`).
+- [ ] `tests/unit/dream-validate.test.js:1485-1502` is still
+      `stubCollaborators` and `:1506-1513` still `stubSpawn` — AC2's three
+      clauses rest on that helper and this WP adds no seam of its own.
+- [ ] `tests/unit/dream-validate.test.js:1386` is still the `assertGitRepo`
+      pinned-drift assertion, and `:15` still the unused `restoreVaultToHead`
+      import (residual 3).
+- [ ] `src/cli/adopt.js:79-83` is still `isGitRepo` = `rev-parse --git-dir`, and
+      `src/core/vault.js:118` still the same predicate — owner item O5 rests on
+      adopt reading "inside a repository" as "already a repo".
+- [ ] **V5's second grep** — `NEITHER SUPPRESSED NOR DETECTED` — is still present
+      in `docs/specs/done/WP-dream-promote-in-workspace.md`, so the guard that
+      proves row W1's hook residual was left intact is not vacuous.
+- [ ] Row **W1(c)(i)** still carries the standing-trigger sentence the amendment
+      disposes of, and row **W1(c)** still declares **nine** pinned shapes — a
+      tenth appearing upstream is O6's overrule condition arriving by another
+      route.
+- [ ] `node scripts/red-proofs.js --wp WP-dream-git-env-validate-seam` still
+      exits 1 with `VACUOUS: V2` (the deliverable-absent red), and
+      `node scripts/red-proofs.js --wp WP-dream-git-env-pinning` still reports
+      its three proofs `PROVEN`.
+- [ ] `tests/red-proofs/dream-git-env-validate-seam.proofs.json` still does not
+      exist (V3's deliverable-absent red), and no other declaration file has
+      claimed the id `validate-git-inherits-git-dir`.

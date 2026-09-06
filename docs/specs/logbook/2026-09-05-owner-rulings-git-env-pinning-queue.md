@@ -240,3 +240,30 @@ count moves from nine to ten in **every** surface that states it, and the
 package is no longer an S. The text and the full statement of this item live in
 the spec's `## Dispatch precondition — owner items`; this entry cites them and
 does not restate them.
+
+### Correction, 2026-09-06 (after design-gate round 2) — the O6 entry above is reduced to its adoption status and a citation
+
+Round 2 found, in both channels, that the O6 entry appended above **restates**
+what it claims to cite: the trigger's subject, the no-shape/no-call claim, the
+constructed-environment rule, the stale-stat result and the whole overrule cost —
+and then closes by saying it cites the spec and does not restate it, which
+contradicts the paragraphs immediately before it and the primary spec's
+citation-only checklist. Two substantive copies of O6 would have to be kept
+aligned in an append-only record. This is the same defect the 2026-09-06
+amendment corrected for O4 and O5, one entry later.
+
+**WITHDRAWN, in favour of the citation:** every sentence of the O6 entry above
+that states what O6 *decides* or what overruling it *costs* — including its
+closing sentence claiming citation-only treatment, which was false of the text it
+closed.
+
+**What stands, and it is the whole of this record's function for O6:** **O6 was
+adopted under the standing process of 2026-09-05, as a recommendation and not as
+a direct owner ruling, and the owner may reverse it by dated amendment.** Its
+text, its four required amendment statements and its enumerated overrule cost —
+the largest in this queue — are in
+`docs/specs/WP-dream-git-env-validate-seam.md`'s
+`## Dispatch precondition — owner items`, which governs. That spec registers this
+record as an external mirror, so a change to O6 is carried here by a dated
+amendment paragraph naming the spec as governing, never by editing an entry in
+place.
