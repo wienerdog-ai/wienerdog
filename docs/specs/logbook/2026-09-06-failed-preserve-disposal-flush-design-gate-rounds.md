@@ -426,8 +426,8 @@ DID execute are listed in each raw.
 | **R1-B** | B | **HEAVY (product/contract, Table Z row Z3)** | **Row Z3 said unconditionally that after the flush "the caller carries on and the run publishes and commits".** True of the measured redacted→withheld fallback; FALSE for a failed WITHHELD preservation, where `quarantinePreserve` returns `null` and the gate throws at `validate.js:1442-1459` — that run publishes nothing | **FIX.** Z3 now states the exact observable contract — the flush result does not change what `quarantinePreserve` RETURNS (`null`, nothing thrown), measured over 12 fault cases and 4 baselines — and says that downstream behaviour is BRANCH-SPECIFIC and unchanged, naming both branches with their line ranges. Swept: **O13**'s FP-P6 sentence, the two source comments (whose third line now reads *"it does not change what this function returns, and what the caller then does is its own branch"*), and the Context predicate, which was already conditional and stays |
 | **R1-C** | B | LIGHT (mirror) | **Row Z2's residual cell said "as Z1"**, importing the dot-prefixed temp's consequences — unlisted, and the next preservation returns `null`. `dest` differs on every count | **FIX, written independently and measured.** New probe **`FP-P9`**: the `<date>-<stem>` leftover IS listed by the shipped `listSecretQuarantine` on the withheld shelf and is NOT on `redacted/`; and the next preservation does not fail — the collision loop (`validate.js:960-963`) commits as `2026-07-02-fp-1.md` on both arms and the leftover stays. Z1's own cell is unchanged and now cites `FP-P9` too |
 | **R1-D** | C | LIGHT (mirror) | **The two verbatim comment mirrors had no owner.** V1 only checked that intervening lines began with `//`; the shadow executed V1-equivalent logic against a source with both comments replaced by `// WRONG COMMENT` and it PASSED | **FIX, in the smallest form and with no new step.** V1 now matches each act's WHOLE four-line block — removal line, three comment lines, flush call — byte-for-byte and requires it exactly once. New Table Z row **Z5** decides the ownership; acceptance criterion **1** asserts it; both checklist entries cite it. V1's eighth direction, `bad-comment`, is red |
-| **R1-E** | C | LIGHT (record) | **`FP-P5` held one median while §0.4 claimed a band and the spec claimed three medians, two of which were nowhere in the repository**; and `FP-P6`'s "16 runs = 2 acts × 2 arms × 3 faults" is 12, not 16 | **FIX.** `FP-P5` now runs three times in ONE pass and records all three: medians **2.65 / 2.50 / 1.26 ms**, clean-directory medians 0.03–0.07. **The claim is narrowed to what survives a re-run: single-digit milliseconds, the same order as `QD-P2`'s 2.0–2.7, with the figure moving with machine load between passes and the decision not turning on its precise value.** `FP-P6` is now stated as **12 fault cases (2 acts × 2 arms × {none, open, fsync}) + 4 pristine baselines**, with the eight fault rows printed |
-| **size audit** | C | LIGHT | Seven rationale paragraphs outside Table Z and the owner items | **FIX for six, and the seventh is superseded rather than cut.** Compressed to one sentence each: the predecessor-exclusion note, the Exact-contracts preamble, the table-letter paragraph, the unbraced-removal note, the substring-matching note, and the security-improvement item. **The seventh (the test-seam paragraph) was replaced by R1-A's required per-act recipe contract, which is longer and is not rationale.** The spec is **469 lines** — up from 455, because R1-A's recipe, R1-C's independent Z2 cell and R1-D's row Z5 are all additions the round required |
+| **R1-E** | C | LIGHT (record) | **`FP-P5` held one median while §0.4 claimed a band and the spec claimed three medians, two of which were nowhere in the repository**; and `FP-P6`'s "16 runs = 2 acts × 2 arms × 3 faults" is 12, not 16 | **FIX.** `FP-P5` now runs three times in ONE pass and records all three: medians **2.65 / 2.50 / 1.26 ms**, clean-directory medians 0.03–0.07. **The claim is narrowed to what survives a re-run: single-digit milliseconds, the same order as `QD-P2`'s 2.0–2.7, with the figure moving with machine load between passes and the decision not turning on its precise value.** `FP-P6` is now stated as **12 fault cases (2 acts × 2 arms × {none, open, fsync}) + 4 pristine baselines**, recorded as an **auditable aggregate** — every row `returned=null, threw=null, qdir empty` — with the per-row listing abridged in the fence and named there as abridged. **An earlier draft of this cell said the eight fault rows were printed; they are not, and round 2's finding R2-B is that correction** |
+| **size audit** | C | LIGHT | Seven rationale paragraphs outside Table Z and the owner items | **PARTIAL in round 1, completed in round 2 — and this cell is round 2's correction of what it first claimed.** Round 1 compressed FOUR: the predecessor-exclusion note, the Exact-contracts preamble, the unbraced-removal note and the substring-matching note, plus the security-improvement item. **It did NOT compress the table-letter paragraph (still four sentences) and did NOT delete the test-seam paragraph, though this cell said it had** — both were found still present by round 2's finding **R2-B** and are consolidated there. Round 1's line count was **469**, up from 455 |
 
 ### The re-measurement — `run-probes.sh` on the revised comment text
 
@@ -493,3 +493,140 @@ npm run lint                                            rc=0
 node scripts/mirror-walk.js --scope quarantine-…-flush   rc=0
 diff <spec's V1 program> <the proven scratch v1.js>      rc=0   (the spec ships the program that was proved)
 ```
+
+## Round 2 — two channels on `5b99f49f`, and the loop CLOSES
+
+| Channel | Verdict | Raw | Commit that introduced it |
+|---|---|---|---|
+| Codex plugin | **approve — no material findings** | `docs/specs/logbook/2026-09-06-failed-preserve-flush-gate-raw-round2-codex-plugin.txt` | `cb483db7` |
+| hermetic shadow | `needs-attention` — two items, **no decision falsified** | `docs/specs/logbook/2026-09-06-failed-preserve-flush-gate-raw-round2-herdr-shadow.txt` | `149d5e14` |
+
+Both committed pre-adjudication; porcelain identical before and after each run.
+**Both channels again report that `npm test` and `npm run red-proofs` did NOT
+run** (`mkdtemp` EPERM in the read-only sandbox) and the shadow that
+`npm run lint` did not (markdownlint dependency lookup, `ENOTFOUND`); their
+verdicts are readings on those, and each raw says so.
+
+**What the plugin executed and confirmed:** both insertion sites use the correct
+`qdir`; V1 enforces their distinct indentation and placement and each new literal
+matches once; a single-line removal reddens only its own act's positive flush
+assertion while the boolean-ignored and win32 checks stay green; **row F7(a)
+needs no amendment**; and *"no remaining Table Z promise exceeds the scoped
+predicate."* Nine in-memory V1 states, all 64 existing RED occurrence checks, 54
+control-flow cases, scoped mirror-walk and `git diff --check`.
+
+### The shadow's two findings
+
+| # | Band | Branch | Disposition | What changed |
+|---|---|---|---|---|
+| **R2-A** | B | Table Z row **Z1**'s residual cell | **FIX — but by KIND, not as a third cell edit.** Z1 said a resurrected `.tmp-<pid>-<stem>` makes the NEXT preservation return `null`. The pathname is built from the CURRENT `process.pid` (`validate.js:964`), so after a crash a different pid selects a different pathname and preserves normally; `QD-P12` and `FP-P9` had both exercised a later call in the SAME process, and the shipped suite's own commentary (`tests/unit/dream-validate.test.js:2487-2494`) qualifies exactly this same/reused-pid case. **A same-process measurement had been promoted into an unconditional post-crash claim** | `FP-P9` extended with a DIFFERENT-pid leftover on both arms — measured: the next preservation SUCCEEDS as `2026-07-02-fp.md` and the leftover stays. **Row Z1's residual cell rewritten**, keeping the unconditional facts (unlisted on either shelf; not removed) and qualifying the conditional one. **Swept O12, O13, the Context and the record: the unqualified form appears nowhere else** (whitespace-flattened sweep, one hit, in Z1) |
+| **R2-B** | C | the round-1 record | **FIX, and the consolidation performed rather than deferred.** The round-1 section claimed the eight `FP-P6` fault rows were printed (the fence holds an aggregate and says the listing was abridged) and claimed the table-letter rationale had become one sentence and the seam paragraph had been replaced (both were still there) | Round 1's `FP-P6` cell now says an **auditable aggregate** was recorded and names its own earlier claim as false; round 1's size-audit cell is restated as **PARTIAL — four paragraphs plus the security item, not six** — and round 2 performs the two that remained: the table-letter paragraph is now one sentence plus the §0.5 citation, and the seam paragraph is folded into two lines beside R1-A's recipe contract |
+
+### The by-KIND response — the residual column now has a rule
+
+**Two consecutive rounds landed a finding on the SAME contract family: Table Z's
+residual column** — row **Z2** in round 1 (R1-C), row **Z1** in round 2 (R2-A).
+`docs/runbooks/codex-review.md:79-80` makes the next step a design question rather
+than a third patch, and rung 3 of §0.1's ladder names the response. **The rule now
+stands in the table's own preamble:** a residual cell states **measured facts,
+each with its probe id and its qualifier, and nothing beyond the cited fact** — no
+consequence prose, no cross-reference to another row's residual, and no
+unconditional form of a conditional measurement. **BOTH cells were rewritten under
+it in one pass**, not just the one the finding named.
+
+### The measurement round 2 added
+
+```text
+### FP-P9 (extended for R2-A)  rc=0
+  Z1 same-pid    withheld  banner_lists=false next_preserve=null                still_there=true
+  Z1 same-pid    redacted  banner_lists=false next_preserve=null                still_there=true
+  Z1 other-pid   withheld  banner_lists=false next_preserve=2026-07-02-fp.md    still_there=true
+  Z1 other-pid   redacted  banner_lists=false next_preserve=2026-07-02-fp.md    still_there=true
+  Z2             withheld  banner_lists=true  next_preserve=2026-07-02-fp-1.md  still_there=true
+  Z2             redacted  banner_lists=false next_preserve=2026-07-02-fp-1.md  still_there=true
+
+### FP-P7  rc=0   ALL 28 RANGES RESOLVE AT BOTH ENDS   (27 -> 28: test.js:2487-2494)
+```
+
+## Closure
+
+**The loop is DONE under weighted closure** (`docs/runbooks/codex-review.md:182-184`):
+
+> **The loop is DONE when a round finds nothing about the product. Machinery
+> findings at that point are fixed or accepted as named residuals; they do not
+> extend the loop.**
+
+One channel returned **approve with no material findings**. The other returned two
+items: **a residual-cell qualification** — which sharpened a measured statement and
+falsified no decision — **and a record inaccuracy**. Neither reversed **O12** or
+**O13**, neither changed the two inserted lines, their gating or their placement,
+and neither touched the Deliverables table. Both are fixed; nothing is carried as
+an un-dispositioned finding.
+
+### Rounds 0–2
+
+| Round | Channels | Findings | Bands | Weight | Outcome |
+|---|---|---|---|---|---|
+| **0** | architect + two clean-context executors (template, coherence) | 4 self-found (C-1…C-4) + T1, T2 + X1, X2 | all C, one B (C-1) | all LIGHT | fixed in place; adjudicated on `bee6514f`, then `d8d14372` |
+| **1** | Codex plugin + hermetic shadow, both `needs-attention` | R1-A…R1-E + size audit | three B, three C | **R1-B HEAVY** (Table Z row Z3), rest LIGHT | fixed in one pass; a fresh round owed and run |
+| **2** | Codex plugin (**approve**) + hermetic shadow (`needs-attention`) | R2-A, R2-B | one B, one C | both LIGHT | fixed by KIND; **loop closes** |
+
+### Named residuals, carried into `Ready`
+
+1. **The priced post-completion residual on every path where the flush does not
+   complete, and on every win32 run** — owner item **O10**'s class in
+   `docs/specs/done/WP-quarantine-disposal-durability.md`. This package closes
+   nothing of it and says so in the acceptance predicate, in rows **Z1**/**Z2**
+   and in the Security checklist.
+2. **Row Z1's same-pid collision** — a resurrected `.tmp-<pid>-<stem>` blocks a
+   later preservation only when that call selects the same pid-derived pathname
+   (R2-A, `FP-P9`). The unconditional facts — unlisted, not removed — stand.
+3. **The unscoped `node scripts/mirror-walk.js` exits 1** from 14 UNRESOLVED
+   entries in unrelated specs that predate this package; the block is
+   byte-identical to `b1d20ce0`'s. V5 is scoped for exactly this reason.
+4. **Size: 465 lines**, above the 400 aimed for. Six rationale paragraphs were
+   consolidated across rounds 1 and 2; what remains is the contract, the owner
+   items, the table and the template's own sections.
+5. **No test reaches what a power loss leaves**, and none is named for crash
+   survival — stated in the Implementation notes and in every Table Z evidence
+   cell.
+
+### Dispatch-time re-verification — every executable Current-state claim, re-run
+
+`docs/runbooks/codex-review.md:198-287` requires this at DISPATCH, against the
+`main` the implementer will branch from, and it is the orchestrator's to redo
+then. **This run is the architect's inventory of what must be re-run** — the
+enumeration the runbook requires a spec to make possible — executed here on this
+tip so the list is known good at `Ready`. Driver: `dispatch-check.js` in the
+session scratchpad.
+
+```text
+OK    validate.js:984  the Z1 removal              OK    test:1433-1438 patchFs
+OK    validate.js:985  its `return null;`          OK    test:1485-1502 stubCollaborators
+OK    validate.js:995  the post-commit tmp removal OK    test:2487-2494 the reused-pid commentary
+OK    validate.js:1020 the Z2 removal              OK    test:2697-2717 traceFlushes
+OK    validate.js:1021 its `return null;`          OK    test:1670-1695 the R1 redact-arm test
+OK    validate.js:806-817 flushDir, and UNGATED    OK    declaration destination-removal-not-gated occurrences: 1
+OK    validate.js:857-864 flushPreservation, GATED OK    declaration tmp-removal-dropped occurrences: 1
+OK    validate.js:696  DURABILITY_AVAILABLE        OK    declaration tmp-removal-not-gated occurrences: 1
+OK    validate.js:964  tmp built from process.pid  OK    F7(a) clause still points here
+OK    validate.js:960-963 the collision loop       OK    the declaration file this WP creates is ABSENT
+OK    validate.js:1442-1459 the withheld abort     OK    spec status: Ready
+OK    `flushDir(` appears on exactly 2 lines
+ALL 23 EXECUTABLE CURRENT-STATE CLAIMS HOLD          rc=0
+```
+
+### The closing runs
+
+```text
+npm run lint                                            rc=0
+node scripts/mirror-walk.js --scope quarantine-…-flush   rc=0   13 entries, no UNRESOLVED
+v1.js on the UNTOUCHED tree                              rc=1   red, as a new gate must be
+v1.js on the COMPLIANT state                             rc=0   green
+node dispatch-check.js                                   rc=0   23/23
+node fp-p7.js                                            rc=0   ALL 28 RANGES RESOLVE AT BOTH ENDS
+```
+
+**`status: Ready`.** What remains is the implementer's: `npm test` and both new
+RED declarations have never been executed in a writable environment — both
+channels disclosed that, and both raws say so.

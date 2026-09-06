@@ -1,7 +1,7 @@
 ---
 id: WP-quarantine-failed-preserve-disposal-flush
 title: Flush the directory after each owned-path removal on a failed preservation, best-effort, and price what a failed flush still leaves
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-quarantine-preserve-durability, WP-preservation-abort-widening]
@@ -197,19 +197,12 @@ contract appears in six mirrored surfaces — the comment at each of the two cal
 sites, the Deliverables cells, the acceptance criteria, the RED declarations, and
 Table F row **F7(a)**'s external clause. Two of seven.
 
-**This spec's canonical table is `Z`, a documented collision** of the kind
-`docs/specs/done/WP-dream-promote-report.md:356-372` settled; the sweep that
-chose it, on row ids rather than headings, is the round-zero record §0.5. **It
-collides with `WP-dream-promote-report`'s own Table Z (rows Z1–Z5)** and with the
-heading in `WP-dream-promote-in-workspace` and `WP-dot-segment-denial` — none in
-this family, none deciding anything this spec relies on — so
-`node scripts/mirror-walk.js` reports this spec's row ids AMBIGUOUS and never
-fails on them. **The qualification a parser cannot check: every `Z<n>` in this
-spec means a row of THIS spec's Table Z unless a path is given.** Table **D** and
-Table **P** are `WP-preservation-abort-widening`'s, Table **F** and Table **C**
-`WP-quarantine-preserve-durability`'s, Table **M**
-`WP-quarantine-disposal-durability`'s, Table **N**
-`WP-secret-fence-ep2-redact-arm`'s — all cited, none restated.
+**This spec's canonical table is `Z`** — a documented collision with
+`WP-dream-promote-report`'s Table Z, chosen and measured in the round-zero record
+§0.5, of the kind `docs/specs/done/WP-dream-promote-report.md:356-372` settled.
+**The qualification no parser can check: every `Z<n>` in this spec means a row of
+THIS spec's Table Z unless a path is given.** Every other table named here is
+cited and never restated.
 
 ### Table Z — canonical: each act, its flush, and exactly what that flush reaches
 
@@ -218,10 +211,17 @@ this spec cites it. **It decides nothing about the SUCCESS path** (Table F) and
 nothing about the other three removal acts (Table M rows **M1**, **M4**, **M6**,
 permanently excluded by row **F7(a)**'s dated clause).
 
+**THE RESIDUAL COLUMN'S RULE, adopted after two consecutive rounds landed on it —
+Z2 in round 1, Z1 in round 2 — and applied by kind rather than as a third cell
+edit:** a residual cell states **measured facts, each with its probe id and its
+qualifier, and nothing beyond the cited fact.** No consequence prose, no
+cross-reference to another row's residual, and no unconditional form of a
+conditional measurement.
+
 | # | The act — the removal it follows | The line inserted after it | The directory flushed | Platform scope | What a COMPLETED flush closes | What a flush that does not complete, and win32, RETAIN | The evidence that reaches this row |
 |---|---|---|---|---|---|---|---|
-| **Z1** | the shared-`catch` removal of `tmp`, `src/core/dream/validate.js:984` — reached when the create, the write or the commit threw and `tmp` still names this call's inode | `if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);`, gated on the SAME boolean as the removal so a flush is issued only where a removal happened, and placed immediately before `return null;` | **`qdir`** — the removal's own parent: `state/quarantine/redacted/` on the redact arm, `state/quarantine/` on the withheld arm. Measured, `FP-P2` | POSIX only, row **F5**'s posture. On win32 no flush is issued, which is today's behaviour and is never called durable — row **Z4** | the post-completion window for THIS removal on THIS path: after the run has completed and published its record, a resurrected `.tmp-<pid>-<stem>` — secret-bearing bytes that no record, no banner and no cleanup pass names — can no longer appear. **That is all it closes** | the residual, unchanged from today: that same leftover, which the pending-review banner does not list (`listSecretQuarantine` skips dot-prefixed entries) and which makes the NEXT preserve of that name return `null` without removing it (`QD-P12`). Same class as owner item **O10**'s | `FP-P1` (zero flushes on the pristine tree, on both arms; exactly one `fsync` of `qdir` after the insertion, and zero on forced win32) and `FP-P2` (the parent). **The crash itself is not evidence and is not claimed** — see Implementation notes |
-| **Z2** | the post-commit failure removal of `dest`, `src/core/dream/validate.js:1020` — reached when the flush set, the read-back or the byte comparison failed and `dest` still names this call's inode | `if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);`, same gating and same placement, and TEXTUALLY DISTINCT from **Z1**'s line | **`qdir`**, same two directories, measured the same way. The flush is of the DIRECTORY, so it also covers the `tmp` unlink `:995` performed in that same directory on this path — an incidental consequence this package claims nothing about and which changes no Table M row | as **Z1** | the post-completion window for this removal: the measured case is `WP-quarantine-disposal-durability` row **M3** — the run completes, publishes `[{artifact, location: "quarantine"}]` (the withheld copy alone) and commits it, while a resurrected `<date>-<stem>` sits on a shelf that record does not name | **a RETAINED DATED ARTIFACT, `<date>-<stem>` — and its consequences are NOT row Z1's; measured, `FP-P9`.** On the **withheld** shelf the pending-review banner LISTS it (`listSecretQuarantine`), so *"a name no record reaches"* is false there — the same fact `WP-quarantine-disposal-durability` row **M3** records. On the **`redacted/`** shelf no user-facing surface lists it, and Table **N** bounds that shelf by COUNT and not by age, so it can persist indefinitely. On BOTH shelves the NEXT preservation of that note does not fail: the collision loop (`validate.js:960-963`) commits under the suffixed name — measured `2026-07-02-fp-1.md` — and the leftover is left in place. **Row Z1's `null`-returning collision is the dot-prefixed temp's behaviour and is not imported here.** | as **Z1** for the flush counts, plus `FP-P8` (the recipe that reaches THIS act under forced win32, and its discrimination), `FP-P9` (this cell's residual) and `WP-quarantine-disposal-durability`'s `QD-P11` for the published record this row's window sits after |
+| **Z1** | the shared-`catch` removal of `tmp`, `src/core/dream/validate.js:984` — reached when the create, the write or the commit threw and `tmp` still names this call's inode | `if (ownedTmp && DURABILITY_AVAILABLE) flushDir(qdir);`, gated on the SAME boolean as the removal so a flush is issued only where a removal happened, and placed immediately before `return null;` | **`qdir`** — the removal's own parent: `state/quarantine/redacted/` on the redact arm, `state/quarantine/` on the withheld arm. Measured, `FP-P2` | POSIX only, row **F5**'s posture. On win32 no flush is issued, which is today's behaviour and is never called durable — row **Z4** | the post-completion window for THIS removal on THIS path: after the run has completed and published its record, a resurrected `.tmp-<pid>-<stem>` — secret-bearing bytes that no record, no banner and no cleanup pass names — can no longer appear. **That is all it closes** | **the leftover `.tmp-<pid>-<stem>`, unchanged from today. Measured, `FP-P9`:** the pending-review banner does NOT list it on either shelf (`listSecretQuarantine` skips dot-prefixed entries); a later preservation does NOT remove it; and it makes a later preservation return `null` **ONLY when that call selects the SAME pid-derived pathname** — the name is built from `process.pid` (`validate.js:964`), a DIFFERENT pid preserves normally (measured), and `tests/unit/dream-validate.test.js:2487-2494` qualifies this same/reused-pid case in the shipped suite. Same class as owner item **O10**'s | `FP-P1` (zero flushes on the pristine tree, on both arms; exactly one `fsync` of `qdir` after the insertion, and zero on forced win32) and `FP-P2` (the parent). **The crash itself is not evidence and is not claimed** — see Implementation notes |
+| **Z2** | the post-commit failure removal of `dest`, `src/core/dream/validate.js:1020` — reached when the flush set, the read-back or the byte comparison failed and `dest` still names this call's inode | `if (ownedDest && DURABILITY_AVAILABLE) flushDir(qdir);`, same gating and same placement, and TEXTUALLY DISTINCT from **Z1**'s line | **`qdir`**, same two directories, measured the same way. The flush is of the DIRECTORY, so it also covers the `tmp` unlink `:995` performed in that same directory on this path — an incidental consequence this package claims nothing about and which changes no Table M row | as **Z1** | the post-completion window for this removal: the measured case is `WP-quarantine-disposal-durability` row **M3** — the run completes, publishes `[{artifact, location: "quarantine"}]` (the withheld copy alone) and commits it, while a resurrected `<date>-<stem>` sits on a shelf that record does not name | **the leftover `<date>-<stem>`, unchanged from today, and NOT row Z1's leftover. Measured, `FP-P9`:** the pending-review banner LISTS it on the **withheld** shelf and does NOT on **`redacted/`**; a later preservation does NOT remove it; and it does NOT block one — the collision loop (`validate.js:960-963`) commits under `<date>-<stem>-1`. On `redacted/`, Table **N** bounds the shelf by COUNT and not by age. Same class as owner item **O10**'s | as **Z1** for the flush counts, plus `FP-P8` (the recipe that reaches THIS act under forced win32, and its discrimination), `FP-P9` (this cell's residual) and `WP-quarantine-disposal-durability`'s `QD-P11` for the published record this row's window sits after |
 | **Z3** | — **the rule, not an act: the disposition of a flush that does not complete** | — the boolean `flushDir` returns is IGNORED at both call sites, and the reason is the comment both sites carry verbatim (row **Z5**) | — | — | — | — | **BEST-EFFORT, owner item O13.** `flushDir` catches its own `open` and `fsync` failures and returns `false`, and that boolean is discarded. **THE OBSERVABLE CONTRACT, and it is exactly this: the flush result does not change what `quarantinePreserve` RETURNS** — `null`, with nothing thrown — on either act, either arm, and whether the flush completed, failed at its `open`, or failed at its `fsync`. Measured, `FP-P6`: 12 fault cases and 4 pristine baselines, every row identical. **DOWNSTREAM BEHAVIOUR IS BRANCH-SPECIFIC AND UNCHANGED BY THIS PACKAGE, and no sentence here may generalize over the branches:** a failed `redacted` preservation can fall through to the withhold arm (`validate.js:1406-1429`), while a failed `withheld` preservation with no surviving redact copy still takes the EXISTING abort (`validate.js:1442-1459`) — that run publishes and commits nothing, before and after this package alike. Fail-loud is priced in **O13** and rejected |
 | **Z4** | — **the rule, not an act: WHERE the platform gate lives** | — the `&& DURABILITY_AVAILABLE` conjunct in both inserted lines | — | — | — | — | **AT THE CALL SITE, and it is NOT optional.** `flushDir` has no platform gate; only `flushPreservation` does. Measured, `FP-P1`: with the conjunct dropped, a forced-`win32` run of the shared-catch arm issues **one** directory `fsync` on both arms — row **F5**'s posture violated. With the conjunct, forced `win32` issues **zero** |
 | **Z5** | — **the rule, not an act: WHICH CHECK OWNS THE TWO COMMENT MIRRORS** | — the three comment lines above each flush call, byte-exact and identical apart from indentation | — | — | — | — | **V1 OWNS THEM, and nothing else does.** V1 matches each act's whole four-line block — removal line, three comment lines, flush call — byte-for-byte and requires it exactly once in the file. The RED declarations' `find` literals are the flush LINES only, and no behaviour test can read a comment, so without this V1 clause a `// WRONG COMMENT` would pass every other gate — **measured on a hand-built state (round-1 finding R1-D, and V1's eighth direction, `bad-comment` → red)** |
@@ -276,15 +276,11 @@ all its mirrors in one pass and in the same commit:
   RED declarations pin `:995` and `:1020` byte-for-byte at `occurrences: 1`, so
   bracing either edits a `find` literal out of existence and the runner errors at
   APPLY.
-- **Criterion 4's suite assertion needs NO new `src/` seam.** `DURABILITY_AVAILABLE`
-  is bound at module load from `process.platform` (`src/core/dream/validate.js:696`),
-  and this suite already re-requires `validate.js` after mutating something it
-  destructures at load: `stubCollaborators`
-  (`tests/unit/dream-validate.test.js:1485-1502`) deletes
-  `require.cache[VALIDATE_ID]` and re-requires. Forcing `process.platform` before
-  that same delete-and-re-require is the identical mechanism. **Restore the
-  platform AND the cache entry in a `finally`** — the file's own seam note says a
-  leaked patch *"would silently corrupt every later test in the run"* (`:1414-1415`).
+- **Forcing the platform needs NO new `src/` seam:** `DURABILITY_AVAILABLE` binds
+  at load (`validate.js:696`) and `stubCollaborators`
+  (`tests/unit/dream-validate.test.js:1485-1502`) already deletes
+  `require.cache[VALIDATE_ID]` and re-requires — **restore the platform AND the
+  cache entry in a `finally`** (`:1414-1415`).
 - **THE TWO FAULTS ARE DIFFERENT, and the obvious one is VACUOUS at row Z2.**
   **Z1** is reached by making `fs.linkSync` throw, on any platform. **Z2 is NOT
   reachable by making the artifact `fsyncSync` throw under forced `win32`:**
