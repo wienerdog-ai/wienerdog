@@ -4305,3 +4305,89 @@ test('dream-validate: ledger corpus [C43] heading prototype, fully valid, K keep
   const aText = ledgerA({ heading: 'prototype', patternKey: '`prototype`' });
   assert.equal(runA(aText, 'prototype'), null);
 });
+
+// ─── WP-dream-git-env-validate-seam: the assertGitRepo spawn point (AC1-AC3) ─
+//
+// `validate.js`'s module-private `git()` now builds its child environment
+// with `buildGitEnv()` (Table J row J0) instead of inheriting `process.env`
+// wholesale. These three tests are this WP's Deliverable; the RED declaration
+// `validate-git-inherits-git-dir` (tests/red-proofs/dream-git-env-validate-seam.proofs.json)
+// names AC1 as its sole witness.
+
+test('dream-validate: git-env-validate-seam AC1 — an exported GIT_DIR no longer decides the guard\'s verdict (row J1)', () => {
+  const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-validate-gitdir-decoy-'));
+  git(decoy, ['init', '-q']);
+  git(decoy, ['config', 'user.name', 'test']);
+  git(decoy, ['config', 'user.email', 'test@test']);
+  fs.writeFileSync(path.join(decoy, 'seed.md'), 'seed\n');
+  git(decoy, ['add', '-A']);
+  git(decoy, ['commit', '-q', '-m', 'seed']);
+
+  // Measured before-state on 8358655d (VS-P1 arm (b)): with GIT_DIR exported to
+  // this real repository elsewhere, assertGitRepo used to ACCEPT a directory
+  // that is not a repository at all — so this criterion is not vacuous.
+  const notARepo = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-validate-notrepo-'));
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = path.join(decoy, '.git');
+  try {
+    assert.throws(
+      () => assertGitRepo(notARepo),
+      (err) => err instanceof WienerdogError
+        && err.message === `vault is not a git repository at ${notARepo} — run \`npx wienerdog init\` first.`,
+      'AC1-GIT_DIR-must-not-decide-the-verdict: assertGitRepo must refuse a non-repository, non-nested '
+        + 'vault even while GIT_DIR is exported to a real repository elsewhere'
+    );
+  } finally {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  }
+});
+
+test('dream-validate: git-env-validate-seam AC2 — the call carries the constructed environment and the unchanged argv, captured at the spawn (rows J0, J1)', () => {
+  const { vault } = tempVault();
+  const { buildGitEnv } = require('../../src/core/dream/git-env');
+
+  const savedIndexFile = process.env.GIT_INDEX_FILE;
+  const savedGitDir = process.env.GIT_DIR;
+  // Exported around the call so the "no GIT_INDEX_FILE" clause (AC2(c)) is
+  // non-vacuous; GIT_DIR is cleared so this test stays silent on the
+  // behavioural regression AC1 alone is the declared RED witness for.
+  process.env.GIT_INDEX_FILE = path.join(os.tmpdir(), 'wd-validate-ac2-should-not-leak.idx');
+  delete process.env.GIT_DIR;
+
+  /** @type {Array<{args:string[], env:NodeJS.ProcessEnv}>} */
+  const calls = [];
+  const { mod, restore } = stubCollaborators([[EXEC_IDENTITY_ID, 'spawnPinnedSync', (orig) => function (...a) {
+    const opts = a[2] || {};
+    calls.push({ args: opts.args || [], env: opts.env });
+    return orig.apply(this, a);
+  }]]);
+  try {
+    mod.assertGitRepo(vault);
+
+    assert.equal(calls.length, 1, 'AC2(a): assertGitRepo must perform exactly one spawn');
+    assert.deepEqual(calls[0].args, ['-C', vault, 'rev-parse', '--git-dir'], 'AC2(b): the complete spawned argv');
+
+    const want = buildGitEnv();
+    assert.deepEqual(calls[0].env, want,
+      'AC2(c): the environment must equal buildGitEnv() for the same process, never a copied key list');
+    assert.equal(calls[0].env.GIT_INDEX_FILE, undefined,
+      'AC2(c): the constructed environment must carry no GIT_INDEX_FILE');
+  } finally {
+    restore();
+    if (savedIndexFile === undefined) delete process.env.GIT_INDEX_FILE;
+    else process.env.GIT_INDEX_FILE = savedIndexFile;
+    if (savedGitDir === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = savedGitDir;
+  }
+});
+
+test('dream-validate: git-env-validate-seam AC3 — the nested-vault pair: a repository root passes, and a non-repository directory inside one also passes (row J5)', () => {
+  const { vault } = tempVault();
+  assert.doesNotThrow(() => assertGitRepo(vault), 'a repository root passes');
+
+  const nested = path.join(vault, 'nested', 'sub');
+  fs.mkdirSync(nested, { recursive: true });
+  assert.doesNotThrow(() => assertGitRepo(nested),
+    'a directory that is not itself a repository but lies inside one also passes (owner item O5)');
+});

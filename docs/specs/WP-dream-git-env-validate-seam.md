@@ -1,7 +1,7 @@
 ---
 id: WP-dream-git-env-validate-seam
 title: Give the dream's second git spawn point the same constructed environment
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-dream-git-env-pinning]

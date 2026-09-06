@@ -1,0 +1,25 @@
+{
+  "suite": "tests/unit/dream-validate.test.js",
+  "proofs": [
+    {
+      "id": "validate-git-inherits-git-dir",
+      "wp": "WP-dream-git-env-validate-seam",
+      "criterion": "1",
+      "why": "reintroducing GIT_DIR inheritance at validate.js's git() restores the pre-fix behaviour Table J row J1 exists to close: with GIT_DIR exported to a real repository elsewhere, assertGitRepo no longer refuses a directory that is neither a repository nor inside one — it follows the exported GIT_DIR to that other repository and reports success, exactly the VS-P1 arm (b) measurement this WP's AC1 is the witness for. The mutation carries GIT_DIR alone (never the whole of process.env), so AC2's structural map (still exactly buildGitEnv(), still carrying no GIT_INDEX_FILE) and AC3's nested-vault pair are untouched and stay green.",
+      "file": "src/core/dream/validate.js",
+      "find": "    env: buildGitEnv(),",
+      "replace": "    env: Object.assign(buildGitEnv(), process.env.GIT_DIR !== undefined ? { GIT_DIR: process.env.GIT_DIR } : {}), /* RP_MUT_VALIDATE_GIT_INHERITS_GIT_DIR */",
+      "marker": "RP_MUT_VALIDATE_GIT_INHERITS_GIT_DIR",
+      "occurrences": 1,
+      "testNamePattern": "git-env-validate-seam AC",
+      "expectRed": [
+        {
+          "test": [
+            "dream-validate: git-env-validate-seam AC1 — an exported GIT_DIR no longer decides the guard's verdict (row J1)"
+          ],
+          "signal": "AC1-GIT_DIR-must-not-decide-the-verdict"
+        }
+      ]
+    }
+  ]
+}

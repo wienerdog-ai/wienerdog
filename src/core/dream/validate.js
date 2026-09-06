@@ -10,6 +10,7 @@ const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
 const { parse, coerceScalar, boolFromRaw, INVALID } = require('../frontmatter');
 const { scanAndRedact, hasHardFinding } = require('../secret-scan');
 const { displayName } = require('./ledger');
+const { buildGitEnv } = require('./git-env');
 
 // The four identity files the digest injects (direct children of identity_dir).
 // A0 pre-use freeze (WP-109): the dream may not auto-change these until a
@@ -64,7 +65,7 @@ const MIN_RECURRENCE = 3;
 function git(vaultDir, args, opts = {}) {
   const res = spawnPinnedSync('git', getPaths(), {
     args: ['-C', vaultDir, ...args],
-    env: process.env,
+    env: buildGitEnv(),
     platform: process.platform,
     encoding: 'utf8',
   });
@@ -82,6 +83,12 @@ function git(vaultDir, args, opts = {}) {
 
 /**
  * Assert vaultDir is a git repository.
+ * PRECONDITION (row J5): `vaultDir` is asserted INSIDE a git repository —
+ * what `rev-parse --git-dir` establishes and all it establishes. A vault
+ * directory that is not itself a repository but lies within one PASSES, and
+ * the run then targets that ancestor. Decided by owner item O5, reachable
+ * through `wienerdog adopt` today, and named here rather than left implied by
+ * what the guard happens to check.
  * @param {string} vaultDir
  * @throws {WienerdogError}
  */
@@ -1555,7 +1562,9 @@ module.exports = {
   // workspace delta IS the replacement of this call, because the premise it
   // rested on — a tree asserted clean immediately before the spawn — is what
   // removing the pre-commit destroys. Exported still: it is a sound, general
-  // clean-tree assertion and the tests use it to build fixtures.
+  // clean-tree assertion, though measured to have no caller anywhere in the
+  // repo today — neither a production caller nor a test fixture builder
+  // (WP-dream-git-env-validate-seam, VS-P8).
   assertCleanTree,
   // Left in place and exported (row G9): this package changes only which
   // function the two abort sites call, not the crash-replay / journal /
