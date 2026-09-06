@@ -1,0 +1,28 @@
+# raw — wd-reviewer (opus), PR gate round 1 — WP-dream-git-env-validate-seam, PR #238
+# tip reviewed: c68635af0fceee778c827bef086a05af1d4560f9 (detached copy, copied node_modules) ; base main = 489f981e ; committed pre-adjudication
+# porcelain of the review checkout after the run: empty
+
+## APPROVE
+
+Executed (foreground, synchronous, in the read-only review checkout):
+| boundary | node scripts/boundary-check.js docs/specs/WP-dream-git-env-validate-seam.md $(git diff --name-only 489f981e...HEAD) | 0 | 5 changed files, all in-boundary |
+| V1 | npm test | 0 | tests 2693 / pass 2681 / fail 0 / skipped 12; the three git-env-validate-seam AC1/AC2/AC3 tests pass |
+| V2 (gate) | node scripts/red-proofs.js | 0 | RUN: PROVEN; PROVEN validate-git-inherits-git-dir (WP-dream-git-env-validate-seam criterion 1); roll-up PROVEN |
+| V2 (view) | node scripts/red-proofs.js --wp WP-dream-git-env-validate-seam | 1 (expected FILTERED) | PROVEN validate-git-inherits-git-dir; every other WP FILTERED |
+| V3 | identity check | 0 | validate-git-inherits-git-dir |
+| V4a | extracted verbatim | 0 | V4a OK — presence screen only |
+| V4 | extracted verbatim | 0 | V4 OK; base guard passed — validate.js and git-env.js byte-identical between 8358655d and merge-base 489f981e |
+| V5 | extracted verbatim | 0 | V5 OK |
+| V6 | npm run lint / boundary-check | 0 / 0 | lint passed (652 md files, 269 specs, 0 errors) |
+
+Findings (no blocking):
+1. [quality] C — src/core/dream/validate.js:82 — the JSDoc summary line "Assert vaultDir is a git repository." is left unchanged above the new precondition block (:83-88), which states the guard establishes INSIDE a repository, not IS one. Row J5's contract is satisfied by the added text; the summary still says the tighter thing. If touched, it belongs in the same comment-only change the Deliverables row authorizes ("Assert vaultDir is inside a git repository."). Not required for merge.
+2. [quality] C — tests/unit/dream-validate.test.js:4313 (AC1's notARepo) and :4386 (AC3's nested) — AC1's non-repo fixture is mkdtemp under os.tmpdir(), correct only if os.tmpdir() is not inside a repository; the failure direction is safe (assertGitRepo would not throw and AC1 would go RED, never silently green). AC3's nested fixture is a fresh mkdir under tempVault()'s real repo and genuinely has no .git of its own (helper at :41-58). No change needed; recorded.
+
+Contract fidelity (read, not trusted): whole-diff read of validate.js — exactly three hunks: the require at :12, the env line swap inside git(), the row-J5 JSDoc block, the module.exports comment correction; every added/removed line read including comments; no fifth git() call and no direct spawnPinnedSync in any form (grep '\bgit(' = definition :65 + four call sites :96/:110/:125/:126; spawnPinnedSync only at the :8 require, a :57 doc mention, the single :66 invocation); git(vaultDir, [ count 4. buildGitEnv() called with no argument, required from ./git-env; git-env.js unmodified. Four argv literals byte-exact. Table W row W1 (line 541) character-by-character against the base: common prefix 40714, common suffix 11249, base middle length 0 — a pure insertion of 1123 chars, zero deletions anywhere; line count 1772 unchanged; pipe count 5 unchanged; insertion inside (c)(i), immediately after "…never to cite (d) as this spawn point's coverage.**<br>**" and before "(ii) core/dream/promote.js's spawnGitForMerge…"; hook residual (1 occurrence) and the predecessor's 2026-09-05 amendment byte-intact. The amendment's four content obligations present over the whole cell: (a) the trigger's subject is the SHAPE; (b) no shape changed and no call added, attributed to AC2's one-spawn capture and the reviewer's read rather than assurance; (c) environment constructed per ADR-0012's 2026-09-05 amendment, labelled as the extended decision; (d) admissibility re-measured under the constructed environment citing VS-P7. Opening sentence byte-exact. RED declaration: id/wp/criterion "1"/suite as fixed; find "    env: buildGitEnv()," unique; expectRed the AC1 identity only; the GIT_DIR-only mutation DOES reintroduce GIT_DIR inheritance at git() as the spec fixes (VS-P1 arm (b)); AC2/AC3 demonstrably stayed green under it (runner enforces set equality; PROVEN). AC2 mechanics (:4341-4377): calls.length === 1; complete argv ['-C', vault, 'rev-parse', '--git-dir'] deep-equal; env deep-equal against buildGitEnv() called in the test; GIT_INDEX_FILE asserted absent with one exported; via stubCollaborators/EXEC_IDENTITY_ID require-cache substitution (JS-only, ADR-0028 untouched). testNamePattern "git-env-validate-seam AC" matches exactly the three new tests repo-wide.
+
+Conventions: zero new package dependencies (package.json/package-lock.json untouched); JSDoc; one conventional commit with trailers; spec status flipped to In-Review as its only change; inbox not touched; glossary terms canonical.
+
+ADR-0031 drift check: none. Table U neither restated nor amended; Table J unchanged with its three out-of-spec mirrors moved consistently (assertGitRepo JSDoc = row J5; RED why names row J1; Table W amendment carries rows J1–J4's no-shape claim); row W1 extended by insertion only. Pre-existing mirror drift REPAIRED: the module.exports comment claimed tests use assertCleanTree — re-measured (grep src/ tests/ scripts/: only the definition :109, the export :1568, and a prose comment in tests/integration/dream.test.js:738) — the correction is inside what the Deliverables row authorizes.
+
+git status --porcelain of the review checkout: empty.
