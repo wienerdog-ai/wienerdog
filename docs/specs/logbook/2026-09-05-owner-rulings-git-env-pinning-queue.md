@@ -313,3 +313,32 @@ pointers, and nothing else:
   `<LOGBOOK>` resolution and the enumerated overrule cost;
 - the measurement it rests on —
   `docs/specs/logbook/2026-09-06-audit-group-c-closure.md`.
+
+### Appended 2026-09-06 after maturing `WP-quarantine-disposal-durability` — two items, O8 and O9
+
+Numbering continues this queue's. Both are **recommendations adopted under the
+standing process of 2026-09-05, not direct owner rulings, and the owner may
+reverse either by dated amendment.**
+
+**CITATION-ONLY**, in the form this record's 2026-09-06 corrections to O4/O5, to
+O6 and to O7 established: adoption status plus pointers, and nothing about what
+either item decides or what overruling it costs. Three entries in this file had
+to correct themselves this session for restating governing text; these two do not
+restate any.
+
+- **O8** — the value question of `WP-quarantine-disposal-durability`.
+- **O9** — the retention prune's selection rule.
+
+Two pointers each, and nothing else:
+
+- **The governing text for both** —
+  `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries each item's decision
+  and its enumerated overrule cost, and that spec's **Table M** for the facts.
+- **The measurements they rest on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  probe ids `QD-P1`…`QD-P5`.
+
+That spec registers this record as an external mirror, so a change to O8 or O9 is
+carried here by a dated amendment paragraph naming the spec as governing, never
+by editing this entry in place.
