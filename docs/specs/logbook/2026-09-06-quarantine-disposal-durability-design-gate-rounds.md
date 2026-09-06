@@ -18,13 +18,12 @@ related_wps: [WP-quarantine-disposal-durability, WP-quarantine-preserve-durabili
   clause making its exclusion permanent. The second question the stub routed
   here — the retention prune's SELECTION rule — is not a durability question, is
   measured reachable, and is parked as owner item **O9**.
-- **Owner items O8 and O9** are recorded citation-only in
+- **Owner items O8, O9 and O10** (O10 added by round 1) are recorded citation-only in
   `docs/specs/logbook/2026-09-05-owner-rulings-git-env-pinning-queue.md`; their
   text and their enumerated overrule costs live in the spec's
   `## Dispatch precondition — owner items`, which governs.
 - **Where the measurements ran: SCRATCH ONLY.** Every probe below ran under
-  `/private/tmp/claude-501/.../scratchpad/architect4/`. `QD-P3`, `QD-P4` and
-  `QD-P5` execute the SHIPPED `src/core/dream/validate.js` from a
+  `/private/tmp/claude-501/.../scratchpad/architect4/`. `QD-P3`–`QD-P10` execute the SHIPPED `src/core/dream/validate.js` from a
   `git archive HEAD | tar -x` copy of the tree whose ONLY edit is one added
   export line (`pruneRedactedOriginals`, needed because the module does not
   export it); that edit is in the scratch copy and never in the worktree.
@@ -181,8 +180,11 @@ redacted: rm .tmp-<pid>-n.md → fsync artifact fd → fsync dir redacted → fs
 temp_removal_is_followed_by_a_flush_of_its_own_directory: true (both arms)
 ```
 
-**The post-commit removal of `tmp` is already inside Table F row F2's flushed
-set**, because `tmp` lives in `qdir` and `qdir` is the chain's first member. That
+**NARROWED BY ROUND 1 — read R1-A before this paragraph.** As written below it is
+true only of the no-fault POSIX path, which is all this probe exercised: the
+post-commit removal of `tmp` is inside Table F row F2's flushed set **when the
+whole flush set completes, on POSIX**, because `tmp` lives in `qdir` and `qdir` is
+the chain's first member. That
 is Table M row **M1**, and it is why the value question's cost side is smaller
 than the stub assumed: the one removal whose leftover has a functional
 consequence (a later same-pid run hitting `EEXIST`) needs nothing from a disposal
@@ -326,10 +328,195 @@ matters more than it looks:
 
 ## External rounds
 
-None yet. This record is round zero; the double-channel external rounds run next
-under the STOP CRITERION above, and each round's row records the raw file's path
-AND the SHA of the commit that introduced it.
-
 | round | verdict | raw files (commit SHA) | findings and dispositions |
 |---|---|---|---|
 | 0 | — (internal) | this record | Z1–Z3 and C1–C9, all fixed or accepted above; one lint failure fixed by running |
+| 1 (`7f489d15`) | needs-attention / needs-attention | `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-codex-plugin.txt` (`0f73cf4f`), `docs/specs/logbook/2026-09-06-quarantine-disposal-gate-raw-round1-herdr-shadow.txt` (`03ba7d57`); both committed pre-adjudication, porcelain identical before and after | Plugin 1 A; shadow 2 A + 1 B; no scope objections. **Three findings, all routed DESIGN or record by the pinned ladder — none argued to BUILD the package.** R1-A, R1-B, R1-C below, plus **R1-D self-found** during the round's coherence re-run |
+
+## Round 1
+
+**Branch:** `docs/wp-quarantine-disposal-durability`. **Tip reviewed:**
+`7f489d15f2b36ce5a1711c1f2112d8020d451168`, base `main` `66b2b1f8`. Both channels
+executed rather than read; both reported the same environment limits (`npm test`
+and the red-proofs entrypoint blocked by a read-only sandbox / TMPDIR `EPERM`, no
+crash staged), which is exactly what `QD-P1` already says no evidence can reach.
+
+**The band gate (step 0) does not close this round:** three band A findings. **The
+ladder routes none of them to OWNER-blocks-nothing and none to HEAVY-builds-the-WP.**
+Two are DESIGN — a measured claim falsified, so the answer is a RE-MEASUREMENT and
+not an argument — and one is a record defect. **The verdict O8 records was
+re-derived from the new measurements, not defended:** it stands, narrowed, and the
+two sentences that were falsified are withdrawn in place.
+
+### R1-A — M1 treats the post-commit unlink as unconditionally flushed (plugin F1, band A; shadow F2, band B; CONVERGED). Classification: measured-claim → **DESIGN**
+
+**What the reviewers executed and what it showed, reproduced here independently
+before anything was rewritten.**
+
+- **`QD-P6` (new).** `flushPreservation` (`src/core/dream/validate.js:857-864`)
+  SHORT-CIRCUITS: `if (!flushFd(fd)) return false;` precedes the chain, and the
+  chain itself returns on the first `flushDir` that fails. Fault-injecting the
+  artifact `fsync` and then the `qdir` `fsync`, on BOTH arms, reproduces the
+  reviewers' trace exactly — `rm .tmp-<pid>-n.md` → `fsync … -> THROWS (injected)`
+  → `rm 2026-09-06-n.md` → `null`, with **`completed_qdir_flush_index: -1`** and
+  `temp_unlink_covered_by_a_COMPLETED_flush_of_its_own_dir: false` in all four
+  fault cases. The two no-fault rows still show `true`, so `QD-P5` was not wrong —
+  it was NARROW, and the cell built an unconditional claim on it.
+- **`QD-P7` (new).** With `process.platform` forced to `win32` before the module
+  loads, a SUCCESSFUL preservation issues **`fsync_calls: 0`** and its trace is the
+  single line `rm .tmp-<pid>-n.md`. `DURABILITY_AVAILABLE` (`validate.js:696`) is
+  false there, so no removal in Table M is ever covered by a flush on win32.
+  `QD-P5` had run only on darwin.
+- **`QD-P8` (new), because the shadow asked for the `O_EXCL` claim to be verified
+  rather than asserted.** Planting a leftover at the deterministic
+  `.tmp-<pid>-<stem>` name this process owns and calling the shipped
+  `quarantinePreserve`: it returns **`null`** — an ordinary preservation FAILURE —
+  and `leftover_still_present: true`, `leftover_bytes_unchanged: true`. So the
+  designed response is the FAILURE ROUTE (Table P's, for a `null` preserve), never
+  a cleanup: the leftover is not removed, because row F8 and Table D row D1 forbid
+  removing a name this call did not create.
+- **`QD-P10` (new), the re-pricing.** Median over 60 iterations per shape: the
+  window from the unlink to `qdir`'s COMPLETED flush is **4.079 ms** (withheld, 4 KB),
+  **3.9217 ms** (withheld, 256 KB) and **3.5032 ms** (redacted, 4 KB), against a
+  PRE-removal window — the temp's whole existence, create to unlink — of
+  **0.661 / 0.8685 / 1.0321 ms**. The post window is 3–6× the pre window, which is
+  the opposite of what the round-zero draft implicitly assumed.
+
+**Disposition: FIX, and the fix is a scoping, not a reversal.** Row **M1**'s
+*"not reachable"* is withdrawn in place; the row now says the window is OPEN from
+the unlink until `qdir`'s flush COMPLETES, gives its measured width, names the
+three paths on which it does not close (artifact-`fsync` failure, `qdir`-`fsync`
+failure, win32), and routes those paths to row **M2** — whose leftover, name and
+disposition are identical. **A platform-scope paragraph now sits under Table M and
+applies F5 to every row**, and **the F7(a) clause was rewritten** to carry the
+scope and to drop the coverage sentence entirely. O8's supporting sentence (a) is
+withdrawn there too. **HEAVY by the ladder** (an acceptance-relevant assertion and
+the clause bytes moved) → a full fresh external round is owed.
+
+### R1-B — Table M treats retention as time-bounded cleanup (shadow F3, band A). Classification: contract → **DESIGN**
+
+**Re-measured before restating.** `QD-P9` (new) drives the shipped
+`pruneRedactedOriginals` over four shelves, each holding a "resurrected" artifact:
+
+| shelf | before → after | resurrected artifact survives |
+|---|---|---|
+| 20 entries (below the cap), artifact OLDEST | 20 → 20 | **yes** |
+| 50 entries (exactly at the cap), artifact OLDEST | 50 → 50 | **yes** |
+| 61 entries (above the cap), artifact OLDEST | 61 → 50 | no |
+| 61 entries (above the cap), artifact NEWEST | 61 → 50 | **yes** |
+
+That matches Table N as written — row **N2** (a prune happens only when a future
+run completes at least one redaction), row **N5** (the cap YIELDS), row **N6** (the
+overshoot's lifetime is *the next redacting run*, explicitly not time-bounded) —
+and the guard `if (total <= REDACTED_RETENTION_CAP) return;`
+(`src/core/dream/validate.js:1172`). **So a resurrected `redacted/` copy may
+persist indefinitely, and the round-zero cells were wrong.**
+
+**Disposition: FIX in the rows, and PARK the product question.** *"evicts it in
+time"* (M3), *"self-healing"* (M4) and *"evicted in time"* (M6) are withdrawn in
+place and replaced by Table N's actual eligibility rule. **The equivalence O8
+rests on is untouched** — the artifact is present under the same name on the same
+shelf whichever entrance reached it — and the re-measurement makes O8's case
+STRONGER, because the pre-removal entrance is now known to lead to a state with no
+clearing mechanism at all. **Whether the product should ACCEPT that persistence is
+a statement about Table N's shipped posture and therefore the owner's:** parked as
+owner item **O10** with a recommendation (accept and name) and its enumerated
+cost, per the ladder's OWNER rung. **HEAVY** → the fresh round R1-A already owes
+covers it.
+
+### R1-C — O9 routes a measured data-loss class to a work package that does not exist (shadow F1, band A). Classification: record → **LIGHT fix, but the fix is a new file**
+
+`git ls-tree` and a filename sweep confirm the shadow: `WP-quarantine-only-copy-shelf`
+appeared only in `done/` specs and logbooks, never as a file under `docs/specs/`.
+**A `Superseded` package cannot be the carrier for a live data-loss class, and a
+name is not a carrier at all.**
+
+**Disposition: FIX by FILING the stub** — `docs/specs/WP-quarantine-only-copy-shelf.md`,
+`status: Draft`, `depends_on: [WP-quarantine-banner-location]`, carrying the banner
+question that package had already routed to it, O9's selection question with
+`QD-P3`/`QD-P4` cited, O10's persistence question with `QD-P9`, the three candidate
+answers, "What done means" items and a "Watch out" — and **no Deliverables table**,
+because a boundary drawn around three unanswered product questions would be a
+guess. The precedent is this session's own: the git-env-pinning loop filed
+`WP-dream-git-env-validate-seam` the same way. **The verification surface did NOT
+grow:** the existence assertion is folded into V3, because the round rule freezes
+the surface and a routing that names a file is a record property, not a product
+behaviour.
+
+### R1-D — the move broke a Mirrored Surface Checklist entry in the predecessor (SELF-FOUND during round 1's coherence re-run; band A; record → **LIGHT**)
+
+**Neither channel found this, and the reason it was missable is the lesson.**
+Round zero ran `node scripts/mirror-walk.js --scope quarantine-disposal`, which
+walks the checklists **of** the scoped specs. **A scoped walk cannot see an
+INBOUND reference** — an entry in ANOTHER spec's checklist naming the file that
+moved. Run unscoped, the tool said:
+
+```text
+UNRESOLVED — 1:
+  docs/specs/done/WP-quarantine-preserve-durability.md:1791 names spec path
+  docs/specs/WP-quarantine-disposal-durability.md, which does not exist
+```
+
+That entry is the predecessor's registration of THIS spec's Context paragraph as
+an external mirror, and the file had moved to `done/` in the same commit. The
+unscoped walk **exits 1**.
+
+**Disposition: FIX, and it widens the Deliverables from one line to three.** Both
+live pointers to this spec inside the predecessor are repathed — the checklist
+entry (line 1793) and Dispatch precondition item 4 (line 356) — so the earlier
+draft's *"named residual"* for item 4's path is **withdrawn**: once a second edit
+to that file is mandatory, carrying a knowingly rotted path for the sake of a
+one-line diff buys nothing. **V2 was rewritten to assert exactly three edits and
+no fourth**, each by reconstruction from its base line: one line is the base row
+plus the clause, two are the base line with the path substituted, and any other
+change to any of them fails. That is a fix INSIDE the frozen surface — V2 already
+existed and already reconstructed; it did not become a fifth step.
+
+**Measured, so the fix is not confused with the pre-existing state:** the unscoped
+walk reports **14** unresolved entries on `origin/main` itself, all of the same
+shape, and diffing its UNRESOLVED block between `66b2b1f8` and this tip returns
+**empty** — this branch removed the one it introduced and touched none of the
+other fourteen. Those fourteen are **disclosed and not repaired**: they are
+outside this package, they predate it, and CLAUDE.md's rule is to note what else
+is broken rather than fix it.
+
+**Both-directions re-proved after the rewrite**, now eleven broken states, all
+RED, control and finished tree GREEN — including two new ones this finding
+requires: **r10**, one of the two repaths left stale (`lines changed: [356,944]
+(want exactly 3)`), and **r11**, the only-copy stub deleted so O9 routes to a name
+again (`FAILED at: test -f docs/specs/WP-quarantine-only-copy-shelf.md`).
+
+### What round 1 did NOT change
+
+- **The verdict.** O8 stands. It was re-derived from `QD-P6`–`QD-P10`, not
+  defended: what decides it is the EQUIVALENCE between the crash-before and
+  crash-after states, and no finding touched that. The two supporting sentences
+  that WERE falsified are withdrawn in place rather than reworded.
+- **Any shipped posture.** D3, N7 and the identity-gated delete's comment are
+  unchanged; O10 is parked precisely so that N7's posture is not changed by side
+  effect.
+- **The Superseded outcome, and the ladder is why.** Neither DESIGN finding argued
+  that a removal must be made durable; both argued that sentences ABOUT the
+  removals were false. **Had the re-measurement shown the equivalence failing for
+  any removal act, this record would say so and recommend a narrower `Ready` WP for
+  that act — it does not, and `QD-P6`'s fault rows are the reason: on every
+  non-closing path the leftover is the same object M2 already owns.**
+- **The stop criterion**, which is unchanged and governed round 1 as written.
+- **Two citations in `Done` specs that R1-C's fix makes stale, disclosed and NOT
+  repaired:** `docs/specs/done/WP-quarantine-preserve-durability.md`'s Out of
+  scope calls `WP-quarantine-only-copy-shelf` *"proposed and not filed"*, and
+  `docs/specs/done/WP-quarantine-banner-location.md:1419` calls it *"Proposed
+  successor, not yet filed"*. Both are point-in-time prose, neither is a
+  registered mirror, and **neither makes any tool red** — which is exactly what
+  separates them from R1-D, whose entry did. The stub's frontmatter and header are
+  the governing statement of its existence.
+- **The fourteen pre-existing `mirror-walk` UNRESOLVED entries**, measured
+  identical at `66b2b1f8` and at this tip (R1-D). Noted, not fixed.
+
+### Round 2 is owed
+
+R1-A and R1-B are both HEAVY, so a **full fresh external round runs on the revised
+tip**, with the prior findings listed and the reviewer asked to verify each is
+genuinely fixed rather than re-worded, and to attack the new mechanisms: the
+platform-scope paragraph, M1's conditional coverage, M2's widened role, the
+restated M3/M4/M6 cells, O10, and the filed stub.

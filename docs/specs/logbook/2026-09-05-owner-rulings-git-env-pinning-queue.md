@@ -342,3 +342,34 @@ Two pointers each, and nothing else:
 That spec registers this record as an external mirror, so a change to O8 or O9 is
 carried here by a dated amendment paragraph naming the spec as governing, never
 by editing this entry in place.
+
+### Appended 2026-09-06 after `WP-quarantine-disposal-durability`'s design-gate round 1 — one item, O10
+
+Numbering continues this queue's. **O10 was adopted under the standing process of
+2026-09-05, as a recommendation and not as a direct owner ruling, and the owner
+may reverse it by dated amendment.** It exists because round 1's hermetic shadow
+(finding F3, band A) falsified two sentences in that spec's canonical table; the
+correction is a fix, but the product question it exposed is about a shipped
+retention posture and therefore the owner's.
+
+**CITATION-ONLY**, as this record's 2026-09-06 corrections to O4/O5, to O6 and to
+O7 established. Two pointers, and nothing else:
+
+- **The governing text** — `docs/specs/done/WP-quarantine-disposal-durability.md`'s
+  `## Dispatch precondition — owner items`, which carries **O10**'s decision and
+  its enumerated overrule cost, and that spec's **Table M** for the facts.
+- **The measurement it rests on** —
+  `docs/specs/logbook/2026-09-06-quarantine-disposal-durability-design-gate-rounds.md`,
+  section "Round 1", probe `QD-P9`.
+
+**One citation in the earlier entry is corrected here rather than in place, as
+this record requires:** it names the measurements as probe ids `QD-P1`…`QD-P5`;
+round 1 added `QD-P6`…`QD-P10`, so the range is **`QD-P1`…`QD-P10`**. The pointer
+itself — that design-gate record — is unchanged and still governs.
+
+The **O8** and **O9** entries appended earlier today stand: round 1 re-derived O8
+rather than reversing it, and O9's routing now names a filed `Draft` stub,
+`docs/specs/WP-quarantine-only-copy-shelf.md`. Neither entry's text changes, for
+the reason this record's corrections give — the spec governs, and a change to any
+of the three is carried here by a dated amendment paragraph naming it, never by
+editing an entry in place.
