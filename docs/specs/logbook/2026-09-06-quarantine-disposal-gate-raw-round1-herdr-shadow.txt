@@ -1,0 +1,57 @@
+# raw — hermetic Codex shadow (codex exec, read-only sandbox, CODEX_HOME=~/.codex-review-home, gpt-5.6-sol high) — qdd1
+# tip reviewed: 7f489d15f2b36ce5a1711c1f2112d8020d451168 (detached worktree) ; base main = 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d ; committed pre-adjudication
+# codex exec rc=0 ; porcelain before/after: identical
+
+{
+  "target": "7f489d15f2b36ce5a1711c1f2112d8020d451168",
+  "verdict": "needs-attention",
+  "executed": [
+    "git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d HEAD --stat — exit 0",
+    "git diff 66b2b1f8040b93a9af4f1cda25c3ac307da64f6d HEAD — exit 0",
+    "V1/V3/V4 read-only equivalents against the pinned base SHA — exit 0",
+    "V2 exact-row reconstruction against the pinned base SHA — exit 0; only line 944 changed",
+    "WP-quarantine-preserve-durability literal archived V1 — exit 1 because it still names docs/specs/WP-quarantine-preserve-durability.md; current done-path equivalent — exit 0",
+    "node scripts/mirror-walk.js --scope quarantine-disposal — exit 0; RESOLVED with the documented M5 ambiguity",
+    "node scripts/check-frontmatter.js — exit 0",
+    "all tests/red-proofs/*.proofs.json JSON parse — exit 0",
+    "Table M row count — exit 0; 7 rows",
+    "git diff --check — exit 0",
+    "git ls-tree/rg for WP-quarantine-only-copy-shelf — no spec file found",
+    "npm run lint — exit 1; markdownlint dependency fetch failed with ENOTFOUND in the network-restricted environment",
+    "npm test — exit 1 before tests ran; read-only sandbox denied mkdtemp with EPERM",
+    "npm run red-proofs — exit 1 before proofs ran; read-only sandbox denied mkdtemp with EPERM"
+  ],
+  "summary": "Do not ship yet. The POSIX call order and one-line F7(a) amendment check out, but the disposition overstates two durability conclusions and routes the acknowledged only-copy deletion hazard to a work package that does not exist.",
+  "findings": [
+    {
+      "title": "O9 routes a silent only-copy deletion hazard to a nonexistent work package",
+      "file": "docs/specs/done/WP-quarantine-disposal-durability.md",
+      "line_start": 76,
+      "line_end": 102,
+      "materiality_band": "A",
+      "confidence": 0.99,
+      "body": "Classification: record. O9 says WP-quarantine-only-copy-shelf already owns the class and is already registered, while the same paragraph admits it is proposed-and-unfiled. `git ls-tree` and `rg --files` find no such spec under docs/specs/ or docs/specs/done/; every occurrence is in archived specs or logbooks. This matters because QD-P3/P4 document a reachable path that can delete another live run's only pre-scrub copy and then let its report name the missing artifact. Closing this package leaves that data-loss issue with no dispatchable owner in the pending-spec directory.",
+      "recommendation": "Before superseding this package, create the Draft WP-quarantine-only-copy-shelf spec carrying O9, QD-P3/QD-P4, the selection class, and its candidate decisions, or route O9 to an existing pending spec that actually owns them."
+    },
+    {
+      "title": "M1 incorrectly declares the post-commit unlink durable on win32",
+      "file": "docs/specs/done/WP-quarantine-disposal-durability.md",
+      "line_start": 266,
+      "line_end": 266,
+      "materiality_band": "B",
+      "confidence": 0.99,
+      "body": "Classification: measured-claim. QD-P5 ran only on darwin, and `flushPreservation` explicitly returns before every fsync on win32 (`validate.js:857-863`). Nevertheless M1 says the crash window is not reachable and that the removal is already covered, while O8 globally calls it already durable. F5's POSIX scope does not supply the missing win32 case; it proves that case receives no directory flush. A power-loss reappearance there can leave the deterministic temp name and cause a later same-PID preservation to fail at O_EXCL, although that failure is caught downstream.",
+      "recommendation": "Split M1 by platform throughout Table M, O8, QD-P5, and the F7(a) clause: POSIX is covered by the later qdir fsync; win32 performs no flush and must be justified, if still accepted, by the same residual-state argument rather than called durable."
+    },
+    {
+      "title": "Table M falsely treats retention as time-bounded cleanup",
+      "file": "docs/specs/done/WP-quarantine-disposal-durability.md",
+      "line_start": 268,
+      "line_end": 271,
+      "materiality_band": "A",
+      "confidence": 0.96,
+      "body": "Classification: contract. M3 and M6 say the cap evicts the resurrected redacted artifact \"in time,\" and M4 calls the state self-healing. Canonical Table N says the opposite temporal property: pruning occurs only after a future run completes a redaction, an overshoot is explicitly not time-bounded, and a shelf at or below 50 is not pruned at all. A failed redacted preservation can therefore leave an unbannered, unrecorded secret-bearing artifact indefinitely. That falsifies O8's load-bearing assertion that every prior-crash state has the documented designed response. QD-P1 cannot repair the claim; its record correctly admits kernel/power-loss outcomes were not measured.",
+      "recommendation": "Replace the time-bounded/self-healing claims with the actual Table N contract: the file is merely eligible for eviction during a future qualifying prune when the shelf exceeds the cap and may otherwise persist indefinitely. Then re-evaluate and restate O8 and the F7(a) clause without calling the crash equivalence measured or claiming a cleanup response that does not exist."
+    }
+  ]
+}
