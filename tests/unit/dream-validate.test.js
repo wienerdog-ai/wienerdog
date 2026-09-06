@@ -3441,8 +3441,10 @@ function failCommit() {
   });
 }
 
-/** Force ONE directory's `openSync` to throw. @param {string} dirPath
- *  @returns {() => void} restorer */
+/** Force ONE directory's `openSync` to throw. A copy of the local helper
+ *  nested inside `[QPD-2]` (`:2794`) — hoisting it would edit fenced test
+ *  code, so it is duplicated here rather than shared (Decisions made).
+ *  @param {string} dirPath @returns {() => void} restorer */
 function failDirOpen(dirPath) {
   return patchFs('openSync', (orig) => function (p, ...rest) {
     if (typeof p === 'string' && path.resolve(p) === path.resolve(dirPath)) {
@@ -3453,8 +3455,13 @@ function failDirOpen(dirPath) {
 }
 
 /** Force ONE directory's `fsyncSync` to throw, matched by the descriptor
- *  `openSync` returned for it. @param {string} dirPath
- *  @returns {() => void} restorer */
+ *  `openSync` returned for it. A copy of the local helper nested inside
+ *  `[QPD-2]` (`:2802`) — hoisting it would edit fenced test code, so it is
+ *  duplicated here rather than shared (Decisions made). `matchedFd` is
+ *  cleared the instant it fires: fd numbers are REUSED once closed (trap vii,
+ *  `:2719-2722`), so a later, unrelated `fsyncSync` on a recycled fd number
+ *  must not be misattributed to this directory.
+ *  @param {string} dirPath @returns {() => void} restorer */
 function failDirFsync(dirPath) {
   let matchedFd = -1;
   const unOpen = patchFs('openSync', (orig) => function (p, ...rest) {
@@ -3463,7 +3470,10 @@ function failDirFsync(dirPath) {
     return fd;
   });
   const unFsync = patchFs('fsyncSync', (orig) => function (fd) {
-    if (fd === matchedFd) { const e = new Error('EIO: injected'); e.code = 'EIO'; throw e; }
+    if (fd === matchedFd) {
+      matchedFd = -1;
+      const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+    }
     return orig.call(this, fd);
   });
   return () => { unOpen(); unFsync(); };
@@ -3495,6 +3505,56 @@ function traceRemovalThenFlush(removedPath, qdir) {
     return orig.call(this, fd);
   });
   return { events, restore: () => { unRm(); unOpen(); unFsync(); } };
+}
+
+/** `failCommit`, plus a call counter — criterion 4's forced-win32 tests must
+ *  establish the injected fault actually FIRED before they count fsyncs (a
+ *  fault that stops matching is not evidence of anything). A separate
+ *  function rather than a change to `failCommit` itself, whose other
+ *  call sites (the criterion-2 and criterion-3 [FPDF-Z1] tests) need only a
+ *  plain restorer. @returns {{restore: () => void, readonly fired: number}} */
+function failCommitCounted() {
+  let fired = 0;
+  const un = patchFs('linkSync', () => function () {
+    fired += 1;
+    const e = new Error('EIO: injected'); e.code = 'EIO'; throw e;
+  });
+  return { restore: un, get fired() { return fired; } };
+}
+
+/** `patchDestRead(dest, 'corrupt')`, plus a call counter — same rationale as
+ *  `failCommitCounted`, and not a change to `patchDestRead` itself (its other
+ *  call sites, including the criterion-2 [FPDF-Z2] test, need only a plain
+ *  restorer). @param {string} dest
+ *  @returns {{restore: () => void, readonly fired: number}} */
+function corruptReadCounted(dest) {
+  let fired = 0;
+  const un = patchFs('readSync', (orig) => function (fd, ...rest) {
+    let matches = false;
+    try {
+      const want = fs.statSync(dest, { bigint: true });
+      const got = fs.fstatSync(fd, { bigint: true });
+      matches = want.dev === got.dev && want.ino === got.ino;
+    } catch { /* dest absent, or fd unrelated to it: no match */ }
+    if (matches) { fired += 1; return 0; }
+    return orig.call(this, fd, ...rest);
+  });
+  return { restore: un, get fired() { return fired; } };
+}
+
+/** Every `rmSync` of `removedPath`, ONLY — an rm-only tracer so a test that
+ *  ALSO needs a global `fsyncSync`/`openSync` count (`traceFlushes`) does not
+ *  layer two patches of the same two methods on top of each other.
+ *  @param {string} removedPath
+ *  @returns {{restore: () => void, readonly removed: boolean}} */
+function traceRemoval(removedPath) {
+  let removed = false;
+  const un = patchFs('rmSync', (orig) => function (p, ...rest) {
+    const res = orig.call(this, p, ...rest);
+    if (typeof p === 'string' && path.resolve(p) === path.resolve(removedPath)) removed = true;
+    return res;
+  });
+  return { restore: un, get removed() { return removed; } };
 }
 
 /** Re-require `validate.js` with `process.platform` forced to `win32` for the
@@ -3603,14 +3663,19 @@ test('dream-validate: [FPDF-Z1] DURABILITY_AVAILABLE false (forced win32) issues
       const stateDir = freshStateDir();
       const qdir = chainFor(stateDir, kind)[0];
       const tmp = path.join(qdir, `.tmp-${process.pid}-x.md`);
-      const unLink = failCommit();
+      const fault = failCommitCounted();
+      const rmTracer = traceRemoval(tmp);
       const tracer = traceFlushes();
       let res;
       try {
         res = mod.quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
-      } finally { unLink(); tracer.restore(); }
+      } finally { fault.restore(); rmTracer.restore(); tracer.restore(); }
+      // Reach, established BEFORE the count (criterion 4): the fault fired,
+      // the owned path was REMOVED (a real rmSync observed — non-existence
+      // alone is equally true of a path never created), and the result is null.
+      assert.ok(fault.fired >= 1, `[FPDF-Z1] win32/${kind}: the injected commit failure fired`);
+      assert.ok(rmTracer.removed, `[FPDF-Z1] win32/${kind}: the owned tmp was REMOVED`);
       assert.equal(res, null, `[FPDF-Z1] win32/${kind}: the injected commit failure is a preservation failure`);
-      assert.equal(fs.existsSync(tmp), false, `[FPDF-Z1] win32/${kind}: the owned tmp was removed`);
       assert.equal(tracer.events.length, 0, `[FPDF-Z1] win32/${kind}: zero fsync calls — events: ${JSON.stringify(tracer.events)}`);
     });
   }
@@ -3622,14 +3687,19 @@ test('dream-validate: [FPDF-Z2] DURABILITY_AVAILABLE false (forced win32) issues
       const stateDir = freshStateDir();
       const qdir = chainFor(stateDir, kind)[0];
       const dest = path.join(qdir, '2026-07-02-x.md');
-      const unRead = patchDestRead(dest, 'corrupt');
+      const fault = corruptReadCounted(dest);
+      const rmTracer = traceRemoval(dest);
       const tracer = traceFlushes();
       let res;
       try {
         res = mod.quarantinePreserve(stateDir, Buffer.from('the judged bytes\n'), '04-Atomic/x.md', '2026-07-02', kind);
-      } finally { unRead(); tracer.restore(); }
+      } finally { fault.restore(); rmTracer.restore(); tracer.restore(); }
+      // Reach, established BEFORE the count (criterion 4): the fault fired,
+      // the owned path was REMOVED (a real rmSync observed — non-existence
+      // alone is equally true of a path never created), and the result is null.
+      assert.ok(fault.fired >= 1, `[FPDF-Z2] win32/${kind}: the injected read-back corruption fired`);
+      assert.ok(rmTracer.removed, `[FPDF-Z2] win32/${kind}: the owned dest was REMOVED`);
       assert.equal(res, null, `[FPDF-Z2] win32/${kind}: the injected read-back corruption is a preservation failure`);
-      assert.equal(fs.existsSync(dest), false, `[FPDF-Z2] win32/${kind}: the owned dest was removed`);
       assert.equal(tracer.events.length, 0, `[FPDF-Z2] win32/${kind}: zero fsync calls — events: ${JSON.stringify(tracer.events)}`);
     });
   }
