@@ -43,6 +43,17 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-10 #11 (short day session — ops incident + one spec filed; no merges).**
+> Measured on `main` at `5cb4e49b`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | new | `WP-dream-digest-omits-own-job-alerts` | **Draft, filed** | `5cb4e49b` (spec only, local commit on `main`) | **Trigger:** the 2026-09-10 01:30 UTC dream failed closed (pre-dream containment probe: `claude -p` session logged its prompt, received no assistant message within `PROBE_TIMEOUT_MS` 120 s → `ETIMEDOUT` → exit 1, email alert). The 02:00 UTC catch-up re-ran it: ok in 499 s, vault commit `3be46e1`. But the dream's own step-19 `regenerateDigest()` (`src/cli/dream.js:628`, call sites `:705`/`:1167`) renders `state/digest.md` with `unacknowledgedAlerts(readAlerts())` while the failure record is still on file; `run-job.js:1204` `clearAlerts` runs only after the dream returns. So the "job has failed" callout survives one full success and is injected into every session until the next dream (24 h) or an attended `sync`. **WP-041 knew this ("Known one-regeneration lag, accept it") — this spec withdraws that acceptance and keeps WP-041's prohibition on coupling `run-job` to the digest renderer.** Fix = option B: the dream's `regenerateDigest` filters out the records for the job whose success this run establishes, job identity from `WIENERDOG_JOB` (already exported by `buildCleanEnv`, `run-job.js:180`/`:219`) accepted only when `findJob` resolves it to `run: builtin:dream`; every doubt shows the callout. Deliverables: `src/cli/dream.js`, a comment-only narrowing of `src/core/alert-ack.js:127` ("ONLY suppression point"), tests. **Owner ruling recorded in the spec (Out of scope): ship this first; the follow-up WP for a standing managed-policy-hook-warning surface (`run-job.js:953`, whose only lasting surface today is this very bug) is drafted later.** Open for the owner: sign-off on trusting `WIENERDOG_JOB` under the config cross-check; whether the containment probe gets a single retry (recorded under Discovered, out of scope). |
+>
+> **Ops state after the pass:** `wienerdog sync` run 2026-09-10 12:05 CEST (vendored 0.13.0, one schedule repointed, digest rewritten — stale banner gone); `wienerdog doctor` all `[ok]`; `dream` + `catchup` launchd jobs loaded, exit 0; `app/current` → `0.13.0`. Vault index note: dream commits through a private index by the 2026-08-31 ruling, so `git status` in the vault shows cosmetic staged deletions until `git reset`.
+>
+> **Next in the queue:** implement `WP-dream-digest-omits-own-job-alerts` (owner intends to implement on return; branch `wp/dream-digest-omits-own-job-alerts`, both review gates per `docs/runbooks/codex-review.md`), then the queue below unchanged: `WP-quarantine-only-copy-shelf` (Draft), routed items to wd-architect, the unfiled three.
+>
 > **Status pass, 2026-09-06 #10 (night/day autopilot session, owner-authorized merges).**
 > Measured on `main` at `8ea9e5d1`, not transcribed:
 >
