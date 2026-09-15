@@ -223,7 +223,6 @@ collector/ledger/orchestrator authority boundaries. Table A is canonical.
 | A8 | Accounting — PROPOSED | Only selected full extracts enter `entries`, `wrote` and `processed`. Quarantine reasons remain unchanged. `deferred` includes the remainder-overflow session and unvisited candidates excluded by that capacity stop, or candidates after exact X. `dropped` remains the same-array alias; `droppedForSize` equals its length. `deadlineDeferred` contains unvisited candidates excluded by A5; `readDeferred` contains reported incomplete reads. `oversized` contains fresh or matching-memo oversized exclusions encountered before stopping, with discovery metadata, measured bytes and cache flag. Each eligible under-ceiling candidate belongs to one selected/quarantined/deferred/deadlineDeferred/readDeferred/oversized category. A stop labels unvisited candidates by its cause without asserting unknown filtered sizes. Previously ledger-skipped files are outside these categories. `truncatedToFit` is false, `truncated` empty; parser `Extract.truncated` can remain true. Deferred `bytes` stays raw discovery size. |
 | A9 | CLI — PROPOSED | Replace old truncation/floor/wedge narration with separate nonzero counts for capacity-stop exclusions, deadline exclusions, individually oversized sessions and incomplete reads. Oversized output names X and suggests `dream_max_input_bytes`; deadline output names `dream_preprocess_timeout_seconds`. New messages interpolate no transcript text, IDs or paths. Dry-run shows the same separate counts and no truncation/floor line; existing physical-byte total stays physical. With selected inputs, continue normal dream. With none and any oversized/deadline/read exclusion, real run throws actionable `WienerdogError` after memo/quarantine persistence; dry-run diagnoses and returns. For mixed causes report each and summarize that no complete session was admitted, rather than blaming X alone. With no selections/exclusions preserve idle behavior, including quarantine-only handling. Existing successful-run/secret gates remain unchanged. |
 | A10 | ADRs — PROPOSED, owner ratification required | Append dated amendments retaining historical text. ADR-0023 supersedes section 3 raw allocation and section 1 aggregate read-work policy with A1–A8, including independent memo and no new quarantine reason. ADR-0012 capacity amendments lose equal-share, floor, truncated-processed and old wedge semantics in favor of A2–A4/A9. Preserve unrelated lifecycle, secret-revert and quarantine-surface amendments, including the prerequisite lock amendment in A11; this WP does not revise its recovery policy. Record owner approval only when given. |
-
 | A11 | Lock prerequisite — OWNER-APPROVED separate WP | Dispatch only after `WP-dream-live-owner-lock` lands. An expired established same-host owner observed alive or EPERM retains its lock; unknown ownership is not automatically replaced. Expired proven-dead local ownership remains automatically recoverable. This covers authorized preprocessing overrun, brain and cleanup without summing nominal durations. It retains the owner-accepted existing read/probe-to-overwrite race between simultaneous stale claimants; it is not a universal stale-recovery exclusion guarantee or a proof of child reaping. The prerequisite owns lock implementation and ADR-0012 part-6 changes; this WP inherits them without changing lock payload, acquisition ordering or recovery policy. |
 
 Examples defer to A1–A4, newest to oldest, decimal compact JSON bytes:
@@ -235,16 +234,37 @@ Examples defer to A1–A4, newest to oldest, decimal compact JSON bytes:
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables, interfaces/pseudotypes and literal examples defer to Table A.
-- [ ] Owner choices, notes, acceptance criteria and verification ownership defer to Table A.
-- [ ] The Security checklist mirrors A6–A7 and defers to those canonical rows.
-- [ ] ADR amendments mirror A10; C1–C5 and reproduction remain explicitly historical.
-- [ ] The design package summarizes Table A, without becoming a separate authority.
-- [ ] The pending report WP re-verifies A8 before its own dispatch.
-- [ ] Dependency, context, dispatch gate and ADR boundary mirror A11; the
-      prerequisite owns its full lock contract and accepted residual.
-- [ ] Register any newly discovered mirror; update affected canonical rows and
-      every registered mirror together in the same commit, with no intermediate
+This section registers the existing document from frontmatter through completion.
+Table A owns operative content/work behavior and the inherited lock assumption.
+Historical evidence stays historical; process requirements keep their repo owner.
+
+- [ ] Frontmatter/title and opening notice: content scope and accepted/proposed
+      labels mirror A1–A10; the new lock dependency mirrors A11. Other dependency
+      lineage and lifecycle status are historical/process metadata.
+- [ ] Context: proposed behavior and amendment/dependency boundaries defer to
+      A1–A11; descriptions of the existing defect remain historical.
+- [ ] Current state, C1–C5 and synthetic reproduction provenance: retain their
+      inspected revision and historical labels; never recast them as fixed-state
+      evidence. Referenced future behavior defers to Table A.
+- [ ] Deliverables and Exact contracts, including signatures, pseudotypes,
+      configuration, memo/file examples and accompanying prose: defer to A1–A11.
+- [ ] Contract reference activation and this checklist describe ownership;
+      Table A is canonical, and the stopping examples mirror A1–A4.
+- [ ] Implementation notes & constraints, including Owner choices proposed for
+      sign-off, and Security checklist: defer to A1–A11 for their operative facts.
+      Inherited code limitations and baseline failure evidence remain historical.
+- [ ] Acceptance criteria and Verification steps, including explanatory test
+      ownership: behavioral assertions defer to A1–A10; red/green evidence and
+      verification requirements retain their repo-process authority.
+- [ ] Out of scope: retained guard/filtering, state/reporting and lock boundaries
+      defer to A6–A11; adjacent work remains outside the Deliverables boundary.
+- [ ] Definition of done: proposal ratification and prerequisite dispatch mirror
+      A5–A11; PR, status and independent review requirements are process facts.
+- [ ] Cross-document mirrors: ADR amendments defer to A10, the design package
+      summarizes Table A, and the pending report WP re-verifies A8 before its
+      dispatch. A11 inherits the prerequisite's full lock contract and residual.
+- [ ] Register newly found mirrors; update affected canonical rows and every
+      registered mirror together in the same commit, without an intermediate
       commit containing disagreement.
 
 ## Implementation notes & constraints

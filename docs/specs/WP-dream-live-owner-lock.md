@@ -124,11 +124,33 @@ Examples defer to Table L:
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables, interface/payload example and examples defer to Table L.
-- [ ] Implementation notes and Security checklist mirror L1–L8.
-- [ ] Acceptance criteria and verification ownership defer to Table L.
-- [ ] ADR amendment mirrors L8; C1–C4 remain historical.
-- [ ] The successor WP inherits L7 with the L5 residual explicitly in place.
+This section registers the existing document from frontmatter through completion.
+Table L owns operative lock behavior. Historical evidence stays historical;
+process metadata and workflow requirements retain their repo-process authority.
+
+- [ ] Frontmatter/title and opening scope notice: the feature boundary and
+      approved scope/residual mirror L5–L8. Status/review gates are process facts;
+      the existing WP-069 dependency is historical lineage, not a new guarantee.
+- [ ] Context: inherited behavior is identified as current state; the intended
+      protection, recovery and scope limits defer to L2–L8.
+- [ ] Current state, C1–C4 and reproduction provenance: preserve the inspected
+      revision and historical/inferred labels; never rewrite them as proof of
+      implementation. Any forward-looking expectation defers to L1–L8.
+- [ ] Deliverables and Exact contracts, including signatures, lock payload,
+      complete file example and diagnostic references: defer to L1–L8.
+- [ ] Contract reference activation and this checklist describe ownership;
+      Table L is canonical, and the examples immediately below it mirror L2–L7.
+- [ ] Implementation notes & constraints and Security checklist: operational
+      limits, retained behavior and accepted residuals defer to L1–L8.
+- [ ] Acceptance criteria and Verification steps, including explanatory test
+      ownership: behavioral assertions defer to L1–L8; red/green evidence and
+      verification requirements retain their repo-process authority.
+- [ ] Out of scope: recovery, concurrency and lifecycle boundaries defer to
+      L2–L8; adjacent work remains outside the Deliverables boundary.
+- [ ] Definition of done: approval/scope disposition mirrors L5/L8; status,
+      dispatch re-verification, PR and review requirements are process facts.
+- [ ] Cross-document mirrors: the ADR amendment defers to L8; the successor
+      inherits L7 with the L5 residual, without widening either guarantee.
 - [ ] Register newly found mirrors; update affected canonical rows and every
       registered mirror together in the same commit, without an intermediate
       commit containing disagreement.

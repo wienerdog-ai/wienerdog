@@ -518,6 +518,31 @@ documentation split. New behavior criteria and regression red/green evidence
 remain implementation obligations. The architect's targeted Markdown lint,
 both literal boundary checks and diff check passed.
 
+### Lock template round zero
+
+The fresh executor read exactly the new lock WP and template at
+`190eec5e0d63b371c1909a66f5fac9a1b819bec2`. Major sections, exact contracts,
+literal payload and second-run coverage passed. Raw output was committed before
+inspection as `2026-09-15-dream-live-owner-lock-template-r0-raw.txt` at `5a962662`;
+checkout status stayed empty and HEAD identical.
+
+TC-01 is C/LIGHT: the mirror checklist omitted opening scope, Context and Out
+of scope that repeat canonical facts. Because this repeats the preceding
+content-template mirror-completeness kind, the next architect pass addresses
+the ownership structure across both specs: enumerate their existing operative
+sections and map their facts to the existing canonical tables, rather than
+patch one omitted name at a time. No product choice, new gate, or new tool is
+introduced. Mechanical closure will check the full registered surfaces against
+the final author diff before the adversarial round.
+
+The structural pass now registers each existing spec section from frontmatter
+and scope notice through Definition of done, distinguishing canonical behavior,
+historical evidence and repo-process metadata. The relay checked the complete
+author diff and section lists; TC-01 is mechanically closed as C/LIGHT without
+a new product contract or another external conformance round. The full lint
+passed with 274 specs and four agents; PowerShell analysis remains unavailable
+locally. No remaining internal coherence finding blocks the independent round.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: a single-run lock must cover the actual
