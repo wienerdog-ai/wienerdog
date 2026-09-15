@@ -1,3 +1,6 @@
+Readable execution record; trailing whitespace normalized only.
+Exact original bytes: 5ad34c657486147e8574bbc35e214e0198605d9c:docs/specs/logbook/2026-09-15-dream-filtered-input-budget-pr-independent-r1-execution.txt
+
 Independent PR review execution record. PATH prepended with /tmp/wd-dream-lock-design.NApPpv/runtime-bin for all recorded commands.
 Initial instruction read command: cat CLAUDE.md docs/runbooks/codex-review.md docs/runbooks/review-prompts/pr-rubric.md; exit 0.
 COMMAND: ['python3', '-c', 'import subprocess,pathlib; p=pathlib.Path("/tmp/wd-dream-lock-design.NApPpv"); s=subprocess.check_output(["git","status","--porcelain"]); h=subprocess.check_output(["git","rev-parse","HEAD"]); (p/"content-pr-independent-r1-before.status").write_bytes(s); (p/"content-pr-independent-r1-before.head").write_bytes(h); print("STATUS_BYTES",repr(s)); print("HEAD_BYTES",repr(h))']
@@ -472,12 +475,12 @@ index 918aefeb..823b3403 100644
 +++ b/src/cli/dream.js
 @@ -1,6 +1,7 @@
  'use strict';
- 
+
  const fs = require('node:fs');
 +const { isDeepStrictEqual } = require('node:util');
  const path = require('node:path');
  const crypto = require('node:crypto');
- 
+
 @@ -11,7 +12,7 @@ const { WienerdogError } = require('../core/errors');
  const { readDreamConfig } = require('../core/dream/config');
  const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
@@ -510,13 +513,13 @@ index 918aefeb..823b3403 100644
 +    if (memoChanged && !dryRun) {
 +      ledger = { ...ledger, oversizedExtracts: sel.oversizedExtracts };
 +    }
- 
+
      // Regenerate the injected session digest from the CURRENT ledger (atomic
      // temp + rename). The quarantine banner is re-derived from the ledger every
 @@ -671,24 +678,30 @@ async function run(argv, opts = {}) {
        }
      };
- 
+
 -    // 5. Surface capacity events plainly — a size event must NEVER be silent.
 -    for (const t of sel.truncated) {
 -      console.log(
@@ -564,7 +567,7 @@ index 918aefeb..823b3403 100644
 +    } else if (memoChanged && !dryRun) {
 +      ledgerLib.writeLedger(paths.state, ledger);
      }
- 
+
 -    // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
 -    //    (run-job records a durable alert). Dry-run only diagnoses.
 -    if (sel.entries.length === 0 && sel.dropped.length > 0) {
@@ -587,10 +590,10 @@ index 918aefeb..823b3403 100644
 -      );
 +      throw new WienerdogError(message);
      }
- 
+
      // 7. Genuinely nothing new → no brain, no commit.
 @@ -760,7 +769,7 @@ async function run(argv, opts = {}) {
- 
+
      // 8b. PRE-DREAM CONTAINMENT SELF-CHECK (WP-135, ADR-0025 Amendment 2). Only
      //     reached when a real brain is about to spawn (past nothing-to-dream +
 -    //     dry-run + capacity-wedge) — never on a fast path (cost). Skippable
@@ -603,7 +606,7 @@ index 15e82e18..e716862e 100644
 --- a/src/core/dream/config.js
 +++ b/src/core/dream/config.js
 @@ -32,12 +32,13 @@ function readScalar(body, key) {
- 
+
  /**
   * Read the vault path and optional dream knobs from config.yaml.
 - * The three `dream_*` keys are OPTIONAL top-level scalars; absent → default.
@@ -624,7 +627,7 @@ index 15e82e18..e716862e 100644
    const maxInput = Number(readScalar(body, 'dream_max_input_bytes'));
    const model = readScalar(body, 'dream_model');
 +  const preprocessMs = Number(readScalar(body, 'dream_preprocess_timeout_seconds')) * 1000;
- 
+
    return {
      vault,
      timeoutMs: (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0 ? timeoutMinutes : 20) * 60_000,
@@ -644,12 +647,12 @@ index c18507ff..0dd8ca7a 100644
 + *                                   updated_at:string, harness:'claude'|'codex'}>,
 + *            oversizedExtracts?: Record<string, {fingerprint:string, appVersion:string, extractBytes:number}>}} Ledger
   */
- 
+
  /** @returns {Ledger} */
 @@ -105,6 +106,26 @@ function isPlainObject(v) {
    return !!v && typeof v === 'object' && !Array.isArray(v);
  }
- 
+
 +/** Optional complete oversized measurements. Invalid evidence only causes a retry;
 + *  it never changes existing file outcomes or secret-deferral counters.
 + *  @param {unknown} value @returns {Record<string, {fingerprint:string, appVersion:string, extractBytes:number}>} */
@@ -715,16 +718,16 @@ index 40d008ba..89ab7452 100644
 --- a/src/core/dream/scratch.js
 +++ b/src/core/dream/scratch.js
 @@ -2,19 +2,13 @@
- 
+
  const fs = require('node:fs');
  const path = require('node:path');
 +const { performance } = require('node:perf_hooks');
 +const { version: appVersion } = require('../../../package.json');
- 
+
  const transcripts = require('../transcripts');
  const { mkdirPrivate, writeFilePrivate } = require('../private-fs');
  const ledgerLib = require('./ledger');
- 
+
 -/** Minimum bytes a *truncated* extract must be granted to be worth feeding. A
 - *  session that cannot be given at least this much is dropped whole (and retried
 - *  next run) rather than fed a sub-useful sliver. FIXED. Whole-fit sessions
@@ -739,7 +742,7 @@ index 40d008ba..89ab7452 100644
 @@ -25,204 +19,124 @@ function sanitize(id) {
    return String(id).replace(/[^A-Za-z0-9_-]/g, '_');
  }
- 
+
 -/** Keep the NEWEST messages of `extract` whose serialized form fits `targetBytes`
 - *  (drop oldest). Sets truncated=true and recomputes `started` to the new first
 - *  (oldest-remaining) message. Binary-searches the largest newest-message suffix
@@ -794,7 +797,7 @@ index 40d008ba..89ab7452 100644
  function deferralOf(d) {
    return { harness: d.harness, session_id: path.basename(d.path).replace(/\.[^.]+$/, ''), bytes: d.size };
  }
- 
+
 +/** Classify an unvisited suffix without an argument-count limit or extra slice.
 + *  @param {Array<object>} candidates @param {number} start @param {Array<object>} target */
 +function deferRemaining(candidates, start, target) {
@@ -903,13 +906,13 @@ index 40d008ba..89ab7452 100644
 -    deferred.push(deferralOf(underCeiling[active[active.length - 1]])); // active preserves newest-first
 -    active = active.slice(0, -1);
    }
- 
+
 -  // 5. (Re)create an empty scratch dir BEFORE the parse/write loop.
    const scratchDir = scratchDirOf(paths.state);
    fs.rmSync(scratchDir, { recursive: true, force: true });
 -  mkdirPrivate(scratchDir); // 0700 independent of umask (audit A5, WP-126)
 +  mkdirPrivate(scratchDir); // 0700 independent of umask
- 
+
 -  // 6. Parse + materialize ONE file at a time, newest-first grant order, under
 -  //    ONE shared run budget: parse → (maybe truncate) → write → drop the
 -  //    extract object. A runExhausted parse is a partial read: per ADR-0023 the
@@ -1009,7 +1012,7 @@ index 40d008ba..89ab7452 100644
 -    // `extract`/`parsedExtract` go out of scope here — never all resident at once.
 +    remaining -= extractBytes;
    }
- 
+
    return {
 @@ -232,9 +146,13 @@ function collectExtracts(paths, ledger, maxInputBytes) {
      newlyQuarantined,
@@ -1026,11 +1029,11 @@ index 40d008ba..89ab7452 100644
 +    oversizedExtracts,
    };
  }
- 
+
 @@ -246,4 +164,4 @@ function cleanScratch(stateDir) {
    fs.rmSync(scratchDirOf(stateDir), { recursive: true, force: true });
  }
- 
+
 -module.exports = { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES };
 +module.exports = { collectExtracts, cleanScratch };
 diff --git a/src/core/transcripts/index.js b/src/core/transcripts/index.js
@@ -1043,7 +1046,7 @@ index 40af5b20..47a6f2f7 100644
   *  Non-'ok' values are the per-file quarantine signal WP-119 consumes; a
 - *  runExhausted 'ok' is capacity-deferred (retried next run), NOT quarantined. */
 + *  runExhausted 'ok' is read-deferred (retried next run), NOT quarantined. */
- 
+
  const MAX_MSG_CHARS = 4000;
  const MAX_MESSAGES = 2000;
 @@ -126,10 +126,10 @@ function rebaseInvocations(invocations, dropped) {
@@ -1073,7 +1076,7 @@ index 2c8aa748..57ee5a5d 100644
 +// ceiling, a per-line byte cap, a per-file line-count cap, and a caller-scoped
 +// byte budget (the dream collector gives each session a fresh allowance). The whole file is NEVER held in memory.
  // Pure except for one fs file handle; no env, no argv, no network.
- 
+
  const fs = require('node:fs');
 @@ -18,17 +18,17 @@ const Limits = {
    PRE_READ_CEILING_BYTES: 50 * 1024 * 1024, // a file larger than this is NOT opened → quarantined
@@ -1084,7 +1087,7 @@ index 2c8aa748..57ee5a5d 100644
    READ_CHUNK_BYTES: 64 * 1024, // fixed read buffer size
    MAX_JSON_DEPTH: 64, // nesting-depth pre-check before JSON.parse
  };
- 
+
  /**
 - * A shared run-scoped byte budget so MAX_RUN_BYTES bounds the WHOLE run, not each file.
 - * The caller creates one per collectExtracts run and threads it through every streamLines
@@ -1316,7 +1319,7 @@ index 40af5b20..47a6f2f7 100644
   *  Non-'ok' values are the per-file quarantine signal WP-119 consumes; a
 - *  runExhausted 'ok' is capacity-deferred (retried next run), NOT quarantined. */
 + *  runExhausted 'ok' is read-deferred (retried next run), NOT quarantined. */
- 
+
  const MAX_MSG_CHARS = 4000;
  const MAX_MESSAGES = 2000;
 @@ -126,10 +126,10 @@ function rebaseInvocations(invocations, dropped) {
@@ -1346,7 +1349,7 @@ index 2c8aa748..57ee5a5d 100644
 +// ceiling, a per-line byte cap, a per-file line-count cap, and a caller-scoped
 +// byte budget (the dream collector gives each session a fresh allowance). The whole file is NEVER held in memory.
  // Pure except for one fs file handle; no env, no argv, no network.
- 
+
  const fs = require('node:fs');
 @@ -18,17 +18,17 @@ const Limits = {
    PRE_READ_CEILING_BYTES: 50 * 1024 * 1024, // a file larger than this is NOT opened → quarantined
@@ -1357,7 +1360,7 @@ index 2c8aa748..57ee5a5d 100644
    READ_CHUNK_BYTES: 64 * 1024, // fixed read buffer size
    MAX_JSON_DEPTH: 64, // nesting-depth pre-check before JSON.parse
  };
- 
+
  /**
 - * A shared run-scoped byte budget so MAX_RUN_BYTES bounds the WHOLE run, not each file.
 - * The caller creates one per collectExtracts run and threads it through every streamLines
@@ -1387,7 +1390,7 @@ index 815d2008..2c478143 100644
 +++ b/tests/integration/dream.test.js
 @@ -65,7 +65,7 @@ function commitCount(vault) {
  }
- 
+
  /** Plant an oversized (~205 KB serialized) Claude transcript so the input
 - *  assembly must truncate or drop it. @param {string} claudeDir @param {string} sessionId */
 + *  assembly must skip it if its filtered extract exceeds the limit. @param {string} claudeDir @param {string} sessionId */
@@ -1397,7 +1400,7 @@ index 815d2008..2c478143 100644
 @@ -529,52 +529,72 @@ test('dream-integration: an expired lock of an exited local process is recovered
    assert.equal(commitCount(ctx.vault), before + 1);
  });
- 
+
 -test('dream-integration: a capacity-wedged dream (budget below the floor) throws loud, never "nothing new"', async () => {
 -  // Only an oversized session, and a budget below MIN_TRUNCATE_BYTES → nothing
 -  // can be fed even after truncation. This must FAIL LOUD (exit 1 → run-job alert),
@@ -1428,7 +1431,7 @@ index 815d2008..2c478143 100644
 +  assert.equal(memo.length, 1);
 +  assert.ok(memo[0].extractBytes > 1000);
  });
- 
+
 -test('dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit', async () => {
 -  // An oversized session plus the normal injection fixture, with a budget above
 -  // the floor but below the oversized extract → it is truncated to fit and the
@@ -1452,7 +1455,7 @@ index 815d2008..2c478143 100644
 +  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
 +  assert.equal(Object.keys(ledger.oversizedExtracts).length, 1);
  });
- 
+
 -test('dream-integration: a capacity dry-run diagnoses exhaustion without throwing', async () => {
 +test('dream-integration: an oversized dry-run diagnoses without throwing or persisting', async () => {
    const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
@@ -1492,7 +1495,7 @@ index 815d2008..2c478143 100644
 +  assert.equal(ledgerRecord(ledger, 'private-second.jsonl'), null);
 +  assert.equal(ledgerRecord(ledger, 'inj.jsonl'), null);
  });
- 
+
  // WP-dream-live-owner-lock: a separate live owner outlasts its deadline.
 @@ -1663,7 +1683,7 @@ test('dream-integration: the secret-revert summary is printed and carries counts
  test('dream-integration: the bounded episode — three deferrals, then an exhausted quarantine that an append cannot reset', async () => {
@@ -2111,7 +2114,7 @@ index 069ab498..be72104f 100644
  const ledgerLib = require('../../src/core/dream/ledger');
 +const transcripts = require('../../src/core/transcripts');
  const { MAX_MESSAGES, Limits } = require('../../src/core/transcripts');
- 
+
  /** Fresh temp home + resolved paths. */
 @@ -91,6 +92,7 @@ test('dream-collect: readDreamConfig returns defaults with only a vault', () =>
    assert.equal(cfg.timeoutMs, 20 * 60_000);
@@ -2119,12 +2122,12 @@ index 069ab498..be72104f 100644
    assert.equal(cfg.model, null);
 +  assert.equal(cfg.preprocessTimeoutMs, 60_000);
  });
- 
+
  test('dream-collect: readDreamConfig honors optional knobs', () => {
 @@ -202,7 +204,7 @@ test('dream-collect: a matching processed record skips the file; a changed file
    assert.equal(third.entries.length, 1);
  });
- 
+
 -test('dream-collect: capacity defers the oldest sessions past the size cap with no negative record', () => {
 +test('dream-collect: oversized sessions are skipped with no negative record', () => {
    const paths = tempPaths();
@@ -2133,7 +2136,7 @@ index 069ab498..be72104f 100644
 @@ -211,29 +213,29 @@ test('dream-collect: capacity defers the oldest sessions past the size cap with
    // Cap fits the small codex extract but not the large claude one.
    const result = collectExtracts(paths, emptyLedger(), 2000);
- 
+
 -  assert.ok(result.droppedForSize > 0);
 +  assert.ok(result.oversized.length > 0);
    assert.equal(result.wrote.length, 1);
@@ -2148,20 +2151,20 @@ index 069ab498..be72104f 100644
    assert.ok(!result.processed.some((d) => d.path.endsWith('c1.jsonl')));
    assert.equal(result.newlyQuarantined.length, 0);
  });
- 
+
 -test('dream-collect: a deferred file is selected again on a subsequent larger-budget run', () => {
 +test('dream-collect: a oversized file is selected again on a subsequent larger-budget run', () => {
    const paths = tempPaths();
    writeClaude(paths, 'c1', 5, 4000, new Date('2026-01-02T00:00:00Z'));
    writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
- 
+
    const first = collectExtracts(paths, emptyLedger(), 2000);
 -  assert.equal(first.deferred.length, 1);
 +  assert.equal(first.oversized.length, 1);
    // Record ONLY what a successful run records: the processed files.
    let ledger = emptyLedger();
    for (const d of first.processed) ledger = ledgerLib.recordProcessed(ledger, d);
- 
+
 -  // A larger budget next run picks the deferred file up (no watermark gap).
 +  // A larger budget next run picks the oversized file up (no watermark gap).
    const second = collectExtracts(paths, ledger, 400_000);
@@ -2170,7 +2173,7 @@ index 069ab498..be72104f 100644
 @@ -278,67 +280,28 @@ test('dream-collect: a ledger-quarantined unchanged file is not re-selected', ()
    assert.equal(second.entries.length, 0);
  });
- 
+
 -test('dream-collect: capacity incident replay — four oversized sessions are all kept truncated (old loop kept 0)', () => {
 +test('dream-collect: newest complete extract wins; remaining-space overflow stops before older fits', () => {
    const paths = tempPaths();
@@ -2206,7 +2209,7 @@ index 069ab498..be72104f 100644
 +  assert.equal(result.entries[0].truncatedToFit, false);
 +  assert.equal(JSON.parse(fs.readFileSync(result.wrote[0])).messages.length, 100);
  });
- 
+
 -test('dream-collect: capacity water-fill keeps a fitting session whole behind an oversized newer one (no shadowing)', () => {
 +test('dream-collect: oversized newer extract reserves nothing for a fitting older session', () => {
    const paths = tempPaths();
@@ -2250,11 +2253,11 @@ index 069ab498..be72104f 100644
 +  assert.equal(result.deferred.length, 0);
    assert.equal(result.newlyQuarantined.length, 0);
  });
- 
+
 @@ -351,10 +314,9 @@ function discOf(file) {
    return { harness: 'claude', path: file, mtimeMs: st.mtimeMs, size: st.size, dev: st.dev, ino: st.ino };
  }
- 
+
 -/** The A/B fixture: two ~103 KB claude transcripts under one 40 000-byte budget,
 +/** The A/B fixture: two ~103 KB claude transcripts under one 150 000-byte budget,
   *  with the OFFENDER the NEWER of the two (as an actively-appended transcript
@@ -2267,7 +2270,7 @@ index 069ab498..be72104f 100644
 @@ -364,19 +326,19 @@ function fairnessFixture() {
    return { paths, offender: path.join(dir, 'offender.jsonl'), fresh: path.join(dir, 'fresh.jsonl') };
  }
- 
+
 -test('dream-collect: B — a DEFERRED offender is still a candidate and starves the newer session out of the budget', () => {
 +test('dream-collect: B — a DEFERRED offender is still a candidate and starves the older session out of the budget', () => {
    const { paths, offender } = fairnessFixture();
@@ -2278,10 +2281,10 @@ index 069ab498..be72104f 100644
    // record. (Before the fix a `deferred` record read as skip-processed, so the
    // offender would not even be a candidate — this is the B5 proof.)
    const ledger = ledgerLib.recordSecretDeferred(emptyLedger(), discOf(offender), 1);
- 
+
 -  const result = collectExtracts(paths, ledger, 40_000);
 +  const result = collectExtracts(paths, ledger, 150_000);
- 
+
    assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['offender.jsonl']);
 -  assert.equal(result.entries[0].truncatedToFit, true, 'the offender is truncated to its 40 000 grant');
 +  assert.equal(result.entries[0].truncatedToFit, false, 'the offender fits whole');
@@ -2291,19 +2294,19 @@ index 069ab498..be72104f 100644
 @@ -399,7 +361,7 @@ test('dream-collect: A — an EXHAUSTED offender is not a candidate at all, so t
      },
    };
- 
+
 -  const result = collectExtracts(paths, ledger, 40_000);
 +  const result = collectExtracts(paths, ledger, 150_000);
- 
+
    assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['fresh.jsonl']);
    assert.equal(result.entries[0].session_id, 'fresh');
 @@ -494,9 +456,9 @@ test('dream-collect: a backlog of near-limit files collects under a constrained
    assert.deepEqual(out, { entries: 10, processed: 10, quarantined: 0, deferred: 0 });
  });
- 
+
 -// ---- byte-budget truncation rebases skill_invocations (WP-087) ----
 +// ---- admitted extracts preserve parser skill_invocations (WP-087) ----
- 
+
 -test('dream-collect: byte-budget truncation rebases skill_invocations and drops ones fallen into the removed prefix', () => {
 +test('dream-collect: whole admission preserves early and late skill invocations', () => {
    const paths = tempPaths();
@@ -2322,23 +2325,23 @@ index 069ab498..be72104f 100644
 @@ -553,25 +514,25 @@ test('dream-collect: byte-budget truncation rebases skill_invocations and drops
    const when = new Date('2026-01-05T00:00:00Z');
    fs.utimesSync(file, when, when);
- 
+
 -  // ~240KB+ of padding vs. a 60KB budget forces truncation to a small newest-suffix.
 -  const result = collectExtracts(paths, emptyLedger(), 60_000);
 +  // The full filtered extract fits and must retain both invocation windows.
 +  const result = collectExtracts(paths, emptyLedger(), 400_000);
- 
+
    assert.equal(result.entries.length, 1);
 -  assert.equal(result.entries[0].truncatedToFit, true);
 +  assert.equal(result.entries[0].truncatedToFit, false);
    const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
 -  assert.ok(extract.messages.length < 64);
 +  assert.equal(extract.messages.length, 64);
- 
+
    const skills = extract.skill_invocations.map((si) => si.skill);
 -  assert.ok(!skills.includes('early')); // window fell entirely in the dropped prefix
 +  assert.ok(skills.includes('early')); // no budget-induced prefix removal
- 
+
    const late = extract.skill_invocations.find((si) => si.skill === 'late');
 -  assert.ok(late, 'late invocation must survive truncation');
 +  assert.ok(late, 'late invocation must survive whole admission');
@@ -2346,7 +2349,7 @@ index 069ab498..be72104f 100644
    assert.ok(late.resultIndex >= 0 && late.resultIndex < extract.messages.length);
    assert.equal(extract.messages[late.resultIndex].text, 'done-late');
  });
- 
+
 -test('dream-collect: byte-budget truncation drops a trailing invocation whose rebased index would equal messages.length (right edge)', () => {
 +test('dream-collect: whole admission preserves the parser result for a trailing invocation', () => {
    const paths = tempPaths();
@@ -2368,10 +2371,10 @@ index 069ab498..be72104f 100644
 @@ -600,15 +559,17 @@ test('dream-collect: byte-budget truncation drops a trailing invocation whose re
    const when = new Date('2026-01-05T00:00:00Z');
    fs.utimesSync(file, when, when);
- 
+
 -  const result = collectExtracts(paths, emptyLedger(), 60_000);
 +  const result = collectExtracts(paths, emptyLedger(), 400_000);
- 
+
    assert.equal(result.entries.length, 1);
 -  assert.equal(result.entries[0].truncatedToFit, true);
 +  assert.equal(result.entries[0].truncatedToFit, false);
@@ -2381,7 +2384,7 @@ index 069ab498..be72104f 100644
 +  assert.deepEqual(extract, parsed);
 +  assert.equal(extract.skill_invocations[0].skill, 'bar');
  });
- 
+
 -test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND THEN byte-budget truncation keeps its invocation in range', () => {
 +test('dream-collect: a session hitting the parser MAX_MESSAGES cap preserves its invocation without further truncation', () => {
    const paths = tempPaths();
@@ -2400,13 +2403,13 @@ index 069ab498..be72104f 100644
 @@ -648,14 +608,14 @@ test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND
    const when = new Date('2026-01-05T00:00:00Z');
    fs.utimesSync(file, when, when);
- 
+
 -  // Budget well below the ~2000-message capped extract's serialized size, but above
 -  // MIN_TRUNCATE_BYTES → forces a SECOND (byte) truncation on top of the count cap.
 -  const result = collectExtracts(paths, emptyLedger(), 50_000);
 +  // The parser cap remains; the collector must not shorten it again.
 +  const result = collectExtracts(paths, emptyLedger(), 400_000);
- 
+
    assert.equal(result.entries.length, 1);
 -  assert.equal(result.entries[0].truncatedToFit, true);
 +  assert.equal(result.entries[0].truncatedToFit, false);
@@ -6890,7 +6893,7 @@ Proceed? wienerdog: can't ask for confirmation here (no terminal). Re-run with -
 ✔ defaultYes does NOT rescue mode 3 (no tty) -> false + loud abort (0.931125ms)
 ✔ regression: no opts still defaults to no on an empty line (0.956833ms)
 ✔ mode 1: opts.output routes the prompt to the given stream (keeps stdout clean) (0.372708ms)
-Proceed? 
+Proceed?
 ✔ reap: readProcessTable(linux) parses /proc stat rows incl. comm with spaces and parens (3.616333ms)
 ✔ reap: R7-3 — a mid-scan vanishing pid (ENOENT on its stat) is SKIPPED, the snapshot keeps the surviving rows (95.128291ms)
 ✔ reap: R7-3 — the churn regression: the descendant reap still proceeds over the surviving rows (no legacy fallback) (1.837625ms)

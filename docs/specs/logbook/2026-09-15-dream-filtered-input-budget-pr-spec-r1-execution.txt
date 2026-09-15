@@ -1,3 +1,6 @@
+Readable execution record; trailing whitespace normalized only.
+Exact original bytes: 5ad34c657486147e8574bbc35e214e0198605d9c:docs/specs/logbook/2026-09-15-dream-filtered-input-budget-pr-spec-r1-execution.txt
+
 Gate: wd-reviewer (native Codex substitution authorized)
 Reviewed HEAD: 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b
 Merge base: 81e09414726b81b5f79a98835a48872d1b6a0f6a

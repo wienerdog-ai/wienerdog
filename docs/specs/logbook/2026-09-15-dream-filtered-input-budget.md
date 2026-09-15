@@ -712,3 +712,55 @@ author corrected it. No new contract or accepted residual was introduced.
   `writeFileSync` mock does not observe it.
 - WP-dream-filtered-input-budget: optional memo maps need semantic equality;
   key order and absent-versus-empty state must not cause durable write churn.
+
+## PR review round 1 — closed
+
+Implementation: [PR #67](https://github.com/felho/wienerdog/pull/67), branch
+`wp/dream-filtered-input-budget`. Both fresh native gates reviewed
+`216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b` against merge base
+`81e09414726b81b5f79a98835a48872d1b6a0f6a`. Both recorded unchanged empty
+status bytes and identical HEAD throughout their review, including reruns.
+
+The four raw verdict/execution reports named
+`2026-09-15-dream-filtered-input-budget-pr-{spec,independent}-r1-*` were committed
+at `5ad34c657486147e8574bbc35e214e0198605d9c` BEFORE inspection.
+The wd-reviewer verdict is **APPROVE**, no findings. The independent frozen JSON
+verdict is **patch is correct**, findings empty. The relay read both execution
+records and confirmed the common reviewed commit and canonical Table A fidelity.
+There is no product finding requiring disposition or a further implementation
+round. Verdict files remain verbatim. Readable execution copies normalize only
+trailing whitespace; exact original bytes remain in the raw-evidence commit.
+
+### Actual test evidence and limits
+
+Both reviewers executed the full suite. Their initial concurrent executions
+had intermittent failures in unchanged timing-sensitive fixtures: the independent
+run failed one reap-escape precondition (2,741 pass, 1 fail, 12 skip); the spec
+gate failed that precondition and gws-auth's 50 ms timeout case (2,740 pass,
+2 fail, 12 skip). The independent reviewer reran reap-escape: 18/18 passed.
+The spec reviewer reran both files: 26/26 passed. Once the other reviewer had
+finished all tests, the spec reviewer ran the full literal suite once more:
+2,754 total, 2,742 passed, 12 skipped, zero failed, exit 0. All runs used the
+same code. These observations do not prove why the initial failures occurred,
+and the independent report explicitly does not claim its full run was green.
+No unrelated tests or timing limits were changed.
+
+The orchestrator's earlier full run and the serialized spec-gate run both
+passed. GitHub checks on the reviewed implementation tip also all passed:
+Linux/macOS full tests and install smoke, lint including PowerShell checks,
+boundary and PR title. The original failed outputs remain evidence rather than
+being replaced by the passing retry. This is not a newly accepted product
+residual or a waiver of a failing final spec verification.
+
+### Handoff
+
+Subsequent commits contain evidence and handoff text only; code, tests, both
+ADRs and the WP remain byte-identical to the reviewed implementation commit.
+P1–P4 are owner-ratified and implemented; the prerequisite PR #66 is merged.
+PR #67 remains unmerged for maintainer review. The temporary old-code regression
+checkout was removed after its evidence was committed. The implementation
+branch contains the approval, design, dispatch, red/green tests and PR reviews.
+
+Next step is maintainer review/merge of PR #67. Report extensions remain in
+their own WP. No installed-app repair, sync, personal-vault change, or replay
+of previously processed sessions is included in this work.
