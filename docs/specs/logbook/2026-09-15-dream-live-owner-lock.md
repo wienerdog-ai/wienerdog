@@ -136,7 +136,8 @@ ADR-0012 received only the scoped dated amendment. The spec is In-Review; both
 PR gates are pending, not waived.
 
 Regression tests were run against the original product code first: 144 tests,
-106 passed and 38 failed, exit 1. The output is retained with trailing whitespace normalized as
+106 passed and 38 failed, exit 1. The output is retained with trailing
+whitespace normalized as
 `2026-09-15-dream-live-owner-lock-red.txt`. After implementation, the literal
 targeted command passed 144/144, and the full suite passed 2,734 tests with
 2,722 passes and 12 skips, exit 0, under the documented runtime-only PATH.
