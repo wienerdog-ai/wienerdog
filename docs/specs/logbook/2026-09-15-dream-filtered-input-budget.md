@@ -166,6 +166,92 @@ fix or a substitute for independent design review. AC1–AC7 in the spec describ
 the future implementation and its review; the new regression assertions do
 not exist yet.
 
+## Review continuation
+
+The owner authorized proceeding with the review. The earlier backend-availability
+claim was too narrow: checking only the session's directly exposed tools missed
+`~/.claude/agents/gptsol.md`. It specifies `codex/gpt-5.6-sol` through the local
+Claude/llmp route. Running that agent succeeded; no plugin installation or
+machine configuration change was needed.
+
+The owner then clarified the backend intent: `gptsol` is the Claude Code
+development environment's route to an independent Codex adversarial agent.
+In a native Codex session, use a fresh native Codex subagent directly. This
+session applies that explicit instruction rather than requiring the historical
+Claude/llmp transport. The review contract, independence and evidence rules
+remain applicable; no repo-wide process document is silently rewritten.
+
+### Initial bridge calibration
+
+Two independent calls used `claude --agent gptsol`, no tools, hooks disabled,
+no MCP servers and no session persistence. Each received the frozen vendored
+adversarial prompt and one complete synthetic module/contract. The compliant
+module returned filtered bytes; the deliberately broken module returned raw
+bytes. Both exited 0; both response envelopes identify `codex/gpt-5.6-sol`.
+The correct case returned `approve`, the broken case `needs-attention` with
+the exact wrong byte-accounting behavior identified. Neither claimed tests ran.
+
+The complete inputs and raw envelopes were committed at `3ac51b66` before
+reading the envelopes:
+
+- `2026-09-15-dream-filtered-input-budget-calibration-green-input.txt`
+- `2026-09-15-dream-filtered-input-budget-calibration-green-raw.txt`
+- `2026-09-15-dream-filtered-input-budget-calibration-red-input.txt`
+- `2026-09-15-dream-filtered-input-budget-calibration-red-raw.txt`
+
+These files live in this logbook directory. This validates the backend's
+ability to distinguish those two cases, not the correctness of the WP.
+
+### Round zero
+
+Fresh conformance executors each received only the spec and its template.
+The first identified missing inlined result shapes and a literal output example
+(`2026-09-15-dream-filtered-input-budget-template-r0-raw.txt`, commit
+`618df176`). The architect filled that authoring gap and compared the complete
+example byte-for-byte with actual collector output in isolated temporary
+storage, also checking accounting, private permissions and cleanup.
+
+The second confirmed the schema/example and section coverage, and asked for
+the template's explicit second-run idempotency wording
+(`2026-09-15-dream-filtered-input-budget-template-r0b-raw.txt`, commit
+`8813efec`). Classification: first B/LIGHT, second C/LIGHT; authoring fixes,
+not product-contract changes or accepted residuals. These are separate template
+obligations, not two rounds on the same product contract family.
+
+The internal pass re-ran the committed reproduction and current-state source
+sentinels, then the 77 targeted tests: exit 0, all passed, none skipped. The
+source and tests remain byte-identical to the inspected base. The prior full
+suite's executable-pin failure remains the documented baseline; it was not
+silently waived or repaired. The current draft and logbook pass targeted
+Markdown lint; the proposed deliverables pass the boundary checker and
+`git diff --check` is clean.
+
+AC1–AC4 and AC7's new regression requirements remain future implementation
+assertions, not false claims that the old collector passes them. AC5 requires
+owner approval and the later ADR amendment. AC6's runnable repeatability
+obligation is checked by the architect alongside the literal output example.
+No new executable verification gate is introduced by these authoring changes.
+
+### External round 1 scope
+
+Review the draft contract, not an implementation diff. Challenge whether
+filtered-size allocation can preserve the stated raw read budget, one-session
+memory bound, scratch exposure/cleanup, accurate result membership, truncation
+floor, and ledger behavior within the listed deliverables. The proposed ADR
+amendment and its approval ordering are in scope. Deferred historical recovery,
+partial-session checkpoints, token sizing, report changes, and unrelated
+existing defects are not implementation requirements of this WP; disagreement
+with those boundaries belongs in scope objections, not an invented requirement.
+
+The fresh native Codex reviewer receives the exact target spec, relevant
+current-code/ADR/test source paths and the pinned vendored prompt. It may read
+and run isolated verification, and must distinguish its own execution from
+the orchestrator's earlier evidence. The review checkout must have byte-identical
+`git status --porcelain` before and after; no repository edits are made while
+it runs. Its output goes outside the checkout and its final chat message names
+only that file, so raw output can be committed before inspection. The
+previously recorded stop criterion remains in force.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file

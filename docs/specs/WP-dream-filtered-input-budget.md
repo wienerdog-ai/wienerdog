@@ -65,14 +65,99 @@ synthetic results, not a measurement of the owner's historical dream runs.
 ### Exact contracts
 
 Keep `collectExtracts(paths, ledger, maxInputBytes)`, `cleanScratch(stateDir)`,
-and `MIN_TRUNCATE_BYTES` exported with their existing signatures. The collector
-still returns `entries`, `scratchDir`, `processed`, `newlyQuarantined`, `deferred`,
-`droppedForSize`, `dropped`, `truncated`, and `wrote`, with the existing member
-shapes. Table A owns the changed allocation behavior and preserved boundaries.
+and `MIN_TRUNCATE_BYTES` exported with their existing signatures. The collector's
+unchanged synchronous result and scratch-file structure are inlined below as
+documentation pseudotypes, not new runtime validation. Table A owns allocation,
+selection, truncation, storage and accounting semantics.
+
+```text
+Harness = 'claude' | 'codex'
+Discovery = {
+  harness: Harness, path: string, mtimeMs: number,
+  size: number, dev: number, ino: number
+}
+Deferred = { harness: Harness, session_id: string, bytes: number }
+CollectorResult = {
+  entries: Array<{
+    harness: Harness, session_id: string, mtimeMs: number,
+    scratchFile: string, truncatedToFit: boolean
+  }>,
+  scratchDir: string,
+  processed: Discovery[],
+  newlyQuarantined: Array<Discovery & {
+    reason: 'over-ceiling' | 'too-many-lines' | 'read-error'
+  }>,
+  deferred: Deferred[],
+  droppedForSize: number,
+  dropped: Deferred[],
+  truncated: Array<{
+    harness: Harness, session_id: string,
+    originalBytes: number, keptBytes: number
+  }>,
+  wrote: string[]
+}
+Extract = {
+  harness: Harness, session_id: string, started: string | null,
+  cwd: string | null, source_path: string, truncated: boolean,
+  messages: Array<{
+    role: 'user' | 'assistant' | 'tool_result', text: string, ts: string | null
+  }>,
+  skill_invocations?: Array<{
+    skill: string, index: number, resultIndex: number | null, errored: boolean
+  }>
+}
+```
+
+`collectExtracts` returns `CollectorResult`; `cleanScratch` returns `undefined`.
+Scratch lives at `<paths.state>/dream-scratch`. Each selected extract is written
+as `<harness>-<sanitized-session_id>.json`, replacing each session-id character
+outside `[A-Za-z0-9_-]` with `_`. `scratchDir`, `scratchFile` and `wrote` carry
+those filesystem paths. `Discovery.path` is the source transcript path; its
+`size`, `dev` and `ino` remain discovery metadata and are not extract fields.
+In extract metadata, the parser replaces the user's home prefix with `~` and
+caps paths at 160 characters plus a `…` marker. Claude includes
+`skill_invocations` (possibly empty); Codex omits it. Its indices are zero-based
+positions in `messages`, with `resultIndex: null` when no paired result was
+captured. Preserve the parser's existing values and A4's rebasing behavior.
 
 No new CLI flag, configuration key, extract field, or ledger schema is added.
-Scratch extracts keep their current JSON structure and pretty-printed encoding;
-this WP changes selection and truncation, not that file format.
+Scratch files use `JSON.stringify(extract, null, 2)`, with no trailing newline.
+
+**Complete file example (unchanged format, illustrating A1 and A6–A7).** With
+an empty ledger, only this source file, `maxInputBytes = 400000`,
+`paths.claudeDir = /tmp/wd-example/claude` and
+`paths.state = /tmp/wd-example/state`, the source
+`/tmp/wd-example/claude/projects/demo/example.jsonl` contains this one JSONL
+record followed by a newline (the example paths are outside the user's home):
+
+```jsonl
+{"type":"user","sessionId":"example","cwd":"/work/demo","timestamp":"2026-09-15T10:00:00.000Z","message":{"role":"user","content":"Remember the release checklist."}}
+```
+
+The complete `/tmp/wd-example/state/dream-scratch/claude-example.json` is:
+
+```json
+{
+  "harness": "claude",
+  "session_id": "example",
+  "started": "2026-09-15T10:00:00.000Z",
+  "cwd": "/work/demo",
+  "source_path": "/tmp/wd-example/claude/projects/demo/example.jsonl",
+  "truncated": false,
+  "messages": [
+    {
+      "role": "user",
+      "text": "Remember the release checklist.",
+      "ts": "2026-09-15T10:00:00.000Z"
+    }
+  ],
+  "skill_invocations": []
+}
+```
+
+The result has one entry with `truncatedToFit: false`, one matching discovery
+record in `processed`, and that scratch path in `wrote`. `newlyQuarantined`,
+`deferred`, `dropped` and `truncated` are empty; `droppedForSize` is zero.
 
 ## Contract reference
 
@@ -103,6 +188,8 @@ is admitted whole under A3.
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables and Exact contracts defer to Table A.
+- [ ] Exact contracts' result/extract schema and complete scratch-file example
+      preserve the existing format and defer to A1 and A4–A7 for behavior.
 - [ ] Acceptance criteria reference Table A rather than deciding separate rules.
 - [ ] The ADR amendment reflects A8 and cites this WP for its scope.
 - [ ] Examples remain consistent with A1–A4.
@@ -162,10 +249,11 @@ is admitted whole under A3.
 - [ ] AC4 — A6–A7 hold for scratch contents, cleanup, result membership, deferral
       retry eligibility, truncation accounting and skill-invocation indices.
 - [ ] AC5 — A8 is reflected in the ADR with the owner's approval recorded.
-- [ ] AC6 — Repeating collection with identical inputs and ledger produces the
-      same selected content and accounting and leaves no extra scratch artifacts.
-      Collector scratch replacement is intentional; no install/sync idempotency
-      claim is introduced.
+- [ ] AC6 — Repeating collection with identical inputs and ledger yields second
+      run: zero changes to selected content, accounting, or final scratch-file
+      bytes, and no extra scratch artifacts. Collector scratch replacement is
+      intentional; filesystem operations and mtime changes are permitted, and
+      no install/sync idempotency claim is introduced.
 - [ ] AC7 — Verification below passes; the regression assertions distinguish
       the previous raw-allocation behavior from the corrected contract.
 
