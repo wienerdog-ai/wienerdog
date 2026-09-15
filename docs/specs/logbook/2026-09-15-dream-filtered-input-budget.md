@@ -373,6 +373,19 @@ The new behavior acceptance criteria and old-red/new-green regression evidence
 are implementation obligations, not runnable assertions already satisfied by
 this docs-only change. No new gate or fixture machinery was introduced.
 
+### Revised template gate
+
+The fresh conformance executor read only the WP and template at
+`70f9af86df41b61d0ae3de4594d6cb71a747be47`; checkout status was empty and HEAD
+unchanged before/after. Raw output was committed before inspection as
+`2026-09-15-dream-filtered-input-budget-template-r2-raw.txt` at `548ab513`.
+All template sections, exact contracts, examples and idempotency coverage were
+present. TC-1 identified one C/LIGHT conformance correction: register the
+Security checklist mirror and state the template's same-commit update rule.
+The architect applies this within the existing documentation surface, followed
+by mechanical verification; it changes no proposed product behavior or owner
+choice and introduces no residual or new review machinery.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file

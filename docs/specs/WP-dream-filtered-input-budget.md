@@ -232,10 +232,13 @@ Examples defer to A1–A4, newest to oldest, decimal compact JSON bytes:
 
 - [ ] Deliverables, interfaces/pseudotypes and literal examples defer to Table A.
 - [ ] Owner choices, notes, acceptance criteria and verification ownership defer to Table A.
+- [ ] The Security checklist mirrors A6–A7 and defers to those canonical rows.
 - [ ] ADR amendments mirror A10; C1–C5 and reproduction remain explicitly historical.
 - [ ] The design package summarizes Table A, without becoming a separate authority.
 - [ ] The pending report WP re-verifies A8 before its own dispatch.
-- [ ] Register/update any new mirror with its canonical row in the same pass.
+- [ ] Register any newly discovered mirror; update affected canonical rows and
+      every registered mirror together in the same commit, with no intermediate
+      commit containing disagreement.
 
 ## Implementation notes & constraints
 
