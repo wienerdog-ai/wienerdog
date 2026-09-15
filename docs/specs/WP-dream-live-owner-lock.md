@@ -1,7 +1,7 @@
 ---
 id: WP-dream-live-owner-lock
 title: Preserve a live dream owner's lock after its deadline
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-069]
@@ -133,30 +133,30 @@ This section registers the existing document from frontmatter through completion
 Table L owns operative lock behavior. Historical evidence stays historical;
 process metadata and workflow requirements retain their repo-process authority.
 
-- [ ] Frontmatter/title and opening scope notice: the feature boundary and
+- [x] Frontmatter/title and opening scope notice: the feature boundary and
       approved scope/residual mirror L5–L8. Status/review gates are process facts;
       the existing WP-069 dependency is historical lineage, not a new guarantee.
-- [ ] Context: inherited behavior is identified as current state; the intended
+- [x] Context: inherited behavior is identified as current state; the intended
       protection, recovery and scope limits defer to L2–L8.
-- [ ] Current state, C1–C4 and reproduction provenance: preserve the inspected
+- [x] Current state, C1–C4 and reproduction provenance: preserve the inspected
       revision and historical/inferred labels; never rewrite them as proof of
       implementation. Any forward-looking expectation defers to L1–L8.
-- [ ] Deliverables and Exact contracts, including signatures, lock payload,
+- [x] Deliverables and Exact contracts, including signatures, lock payload,
       complete file example and diagnostic references: defer to L1–L8.
-- [ ] Contract reference activation and this checklist describe ownership;
+- [x] Contract reference activation and this checklist describe ownership;
       Table L is canonical, and the examples immediately below it mirror L2–L7.
-- [ ] Implementation notes & constraints and Security checklist: operational
+- [x] Implementation notes & constraints and Security checklist: operational
       limits, retained behavior and accepted residuals defer to L1–L8.
-- [ ] Acceptance criteria and Verification steps, including explanatory test
+- [x] Acceptance criteria and Verification steps, including explanatory test
       ownership: behavioral assertions defer to L1–L8; red/green evidence and
       verification requirements retain their repo-process authority.
-- [ ] Out of scope: recovery, concurrency and lifecycle boundaries defer to
+- [x] Out of scope: recovery, concurrency and lifecycle boundaries defer to
       L2–L8; adjacent work remains outside the Deliverables boundary.
-- [ ] Definition of done: approval/scope disposition mirrors L5/L8; status,
+- [x] Definition of done: approval/scope disposition mirrors L5/L8; status,
       dispatch re-verification, PR and review requirements are process facts.
-- [ ] Cross-document mirrors: the ADR amendment defers to L8; the successor
+- [x] Cross-document mirrors: the ADR amendment defers to L8; the successor
       inherits L7 with the L5 residual, without widening either guarantee.
-- [ ] Register newly found mirrors; update affected canonical rows and every
+- [x] Register newly found mirrors; update affected canonical rows and every
       registered mirror together in the same commit, without an intermediate
       commit containing disagreement.
 
@@ -182,30 +182,30 @@ process metadata and workflow requirements retain their repo-process authority.
 
 ## Security checklist
 
-- [ ] L3 accepts only a valid local positive PID before a signal-zero probe;
+- [x] L3 accepts only a valid local positive PID before a signal-zero probe;
       no shell, PID coercion, negative/process-group probe or terminating signal.
-- [ ] L2–L4 unknown ownership cannot authorize overwrite or destructive recovery.
-- [ ] L6 declined acquisition mutates neither shared scratch nor the existing lock.
-- [ ] L5/L7 residuals remain explicit; process existence is not presented as
+- [x] L2–L4 unknown ownership cannot authorize overwrite or destructive recovery.
+- [x] L6 declined acquisition mutates neither shared scratch nor the existing lock.
+- [x] L5/L7 residuals remain explicit; process existence is not presented as
       cryptographic identity or proof that child processes were reaped.
 
 ## Acceptance criteria
 
-- [ ] AC1 — L1 preserves ordinary atomic acquisition and payload bytes.
-- [ ] AC2 — L2–L4 hold for deadline equality/expiry, malformed/unreadable records,
+- [x] AC1 — L1 preserves ordinary atomic acquisition and payload bytes.
+- [x] AC2 — L2–L4 hold for deadline equality/expiry, malformed/unreadable records,
       local/foreign identity, accepted PID domain and each probe outcome.
-- [ ] AC3 — L5 retains automatic takeover only for the expired proven-dead local
+- [x] AC3 — L5 retains automatic takeover only for the expired proven-dead local
       case within its stated non-atomic stale-reclamation limit.
-- [ ] AC4 — L6 emits the specified busy/unknown distinction and declines without
+- [x] AC4 — L6 emits the specified busy/unknown distinction and declines without
       scratch/lock mutation; unknown is an actionable error.
-- [ ] AC5 — L7 holds when an established owner remains alive beyond the nominal
+- [x] AC5 — L7 holds when an established owner remains alive beyond the nominal
       deadline, across preprocessing/brain/finalization; existing ownership
       helper and cleanup-order behavior remains.
-- [ ] AC6 — Repeating acquisition against the unchanged retained lock yields
+- [x] AC6 — Repeating acquisition against the unchanged retained lock yields
       second run: zero changes to its bytes and scratch; ordinary repeat attempts do not
       overwrite an owner. This WP does not add install/sync behavior.
-- [ ] AC7 — ADR amendment reflects L8 and actual owner disposition.
-- [ ] AC8 — Regression assertions fail against expiry-only takeover and pass
+- [x] AC7 — ADR amendment reflects L8 and actual owner disposition.
+- [x] AC8 — Regression assertions fail against expiry-only takeover and pass
       against implementation; verification below passes.
 
 ## Verification steps (run these; paste output in the PR)

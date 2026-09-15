@@ -1,0 +1,50 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const repo = process.cwd();
+const locks = require(path.join(repo, 'src/core/dream/lock'));
+test('dispatch C1 and literal current lock shape: exports, wx refusal, expiry and malformed takeover', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-dispatch-lock-'));
+  try {
+    assert.deepEqual(Object.keys(locks).sort(), ['acquireLock','ownsLock','releaseLock']);
+    assert.deepEqual(locks.acquireLock(dir, 60000), { acquired:true, stolen:false });
+    assert.equal(locks.acquireLock(dir, 60000).acquired, false);
+    const body = fs.readFileSync(path.join(dir, 'dream.lock'), 'utf8');
+    assert.equal(body.endsWith('\n'), false);
+    assert.deepEqual(Object.keys(JSON.parse(body)), ['pid','host','startedAt','deadline']);
+    assert.equal(JSON.parse(body).pid, process.pid);
+    assert.equal(JSON.parse(body).host, os.hostname());
+    locks.releaseLock(dir);
+    locks.acquireLock(dir, -1000);
+    assert.deepEqual(locks.acquireLock(dir, 60000), { acquired:true, stolen:true });
+    fs.writeFileSync(path.join(dir, 'dream.lock'), 'not json');
+    assert.deepEqual(locks.acquireLock(dir, 60000), { acquired:true, stolen:true });
+  } finally { fs.rmSync(dir, {recursive:true,force:true}); }
+});
+test('dispatch C2: CLI model-only timeout, lock-before-collect, ownership-guarded cleanup', () => {
+  const s=fs.readFileSync(path.join(repo, 'src/cli/dream.js'), 'utf8');
+  const acquire=s.indexOf('const lock = acquireLock(paths.state, cfg.timeoutMs);');
+  const collect=s.indexOf('const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);');
+  assert.ok(acquire>=0 && collect>acquire);
+  assert.ok(s.includes("console.log('wienerdog: another dream is in progress.');"));
+  const tail=s.slice(s.lastIndexOf('} finally {'));
+  assert.ok(tail.includes('if (ownsLock(paths.state))'));
+  assert.ok(tail.indexOf('cleanScratch(paths.state)')>=0);
+  assert.ok(tail.indexOf('releaseLock(paths.state)')>tail.indexOf('cleanScratch(paths.state)'));
+});
+test('dispatch C3: old unit and integration expectations exist', () => {
+  const unit=fs.readFileSync(path.join(repo, 'tests/unit/dream-lock.test.js'),'utf8');
+  const integration=fs.readFileSync(path.join(repo,'tests/integration/dream.test.js'),'utf8');
+  assert.ok(unit.includes('a lock past its deadline is stolen'));
+  assert.ok(unit.includes('an unparseable lock is stolen'));
+  assert.ok(integration.includes('acquireLock(state, -1)'));
+});
+test('dispatch C4 and lineage: existing ADR assumption and completed dependency', () => {
+  const adr=fs.readFileSync(path.join(repo,'docs/adr/0012-dream-run-lifecycle.md'),'utf8').replace(/\s+/g,' ');
+  assert.ok(adr.includes('so a stealable lock implies the prior holder\'s brain is already dead'));
+  const ancestor=fs.readFileSync(path.join(repo,'docs/specs/done/WP-069-dream-concurrency-watermark-safety.md'),'utf8');
+  assert.match(ancestor,/status: Done/);
+});

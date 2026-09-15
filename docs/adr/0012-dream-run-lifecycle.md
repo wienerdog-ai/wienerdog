@@ -351,3 +351,48 @@ constructed `HOME` still resolves.
 a direct owner ruling, and reversible by dated amendment. The overrule cost is
 enumerated in `WP-dream-git-env-pinning`'s owner item O1 and is not
 re-enumerated here.
+
+## Amendment (2026-09-15): preserve live dream lock ownership after expiry — WP-dream-live-owner-lock
+
+**Decision (amends part 6).** The owner approved this separate prerequisite on
+2026-09-15, retaining automatic takeover of an expired, proven-dead local owner.
+Table L in `docs/specs/WP-dream-live-owner-lock.md` is canonical. This decision
+approves neither the successor's transcript-content policy nor its work budget.
+
+The historical part-6 assertion that a stealable deadline proves the prior brain
+is dead is **withdrawn**, along with its broad stale-takeover safety guarantee
+and the associated claim that overlapping dreams cannot overwrite live inputs.
+The lock spans collection/preprocessing, brain execution and finalization, so its
+nominal deadline cannot establish that the owner or its children have stopped.
+
+An existing record is first read and validated as a non-array object with a finite
+numeric deadline. A read/parse failure or invalid record declines as `owner-unknown`,
+including disappearance during the read; a later invocation can acquire normally.
+An unexpired deadline, including equality, declines as `busy` without PID probing.
+After expiry, only an exact local string hostname and an integer PID from 1
+through 2147483647 permit a signal-zero existence probe. Success or `EPERM`
+retains the lock as busy; only `ESRCH` permits the existing automatic overwrite
+recovery. Foreign, malformed or otherwise unverifiable ownership declines as
+unknown. The timestamp `startedAt` remains informational; payload and path stay
+unchanged.
+
+Shared scratch and lock-first ordering remain. Neither declined branch collects,
+cleans scratch, rewrites/deletes the lock or releases it. Busy now prints
+`wienerdog: another dream holds the lock.` Unknown ownership raises the fixed
+error specified by Table L6 through the existing job-failure path; it recommends
+checking for an earlier running dream before arranging recovery. Existing
+`ownsLock`/`releaseLock` behavior and cleanup-before-release remain.
+
+An established local owner observed alive or returning `EPERM` cannot lose its
+lock through that expiry check during preprocessing and its overrun, brain
+execution or finalization/cleanup. This is process-existence protection, not a
+health check, renewed lease or proof of child-process reaping. Hung live owners,
+PID reuse, host changes and unknown ownership can delay recovery. No heartbeat,
+automatic kill or new recovery command is introduced.
+
+**Accepted residual.** On 2026-09-15 the owner explicitly accepted the inherited
+simultaneous stale-claimant race for this narrow correction: read/probe followed
+by overwrite is not atomic, so two contenders observing the same dead owner can
+still overwrite one another. This amendment does not promise complete concurrent
+stale-recovery exclusion. Part 7 and the unrelated lifecycle and capacity
+amendments remain in force.

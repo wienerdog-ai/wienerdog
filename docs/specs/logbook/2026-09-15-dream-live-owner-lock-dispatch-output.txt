@@ -1,0 +1,16 @@
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js /tmp/wd-dream-lock-design.NApPpv/dispatch-current-state.test.js
+
+✔ dispatch C1 and literal current lock shape: exports, wx refusal, expiry and malformed takeover (2.288291ms)
+✔ dispatch C2: CLI model-only timeout, lock-before-collect, ownership-guarded cleanup (0.198666ms)
+✔ dispatch C3: old unit and integration expectations exist (0.184209ms)
+✔ dispatch C4 and lineage: existing ADR assumption and completed dependency (0.626959ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 34.191667

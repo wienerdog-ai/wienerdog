@@ -588,12 +588,18 @@ async function run(argv, opts = {}) {
 
   // 3. Acquire the single-run lock BEFORE any scratch collect/write. state/
   //    dream-scratch is shared mutable state; collectExtracts rebuilds it
-  //    (rm + mkdir + write). Locking first is what guarantees a concurrent dream
-  //    can never destroy the holder's live inputs (2026-07-07 incident). A dream
-  //    that does NOT get the lock touches NOTHING and returns — a pure no-op.
+  //    (rm + mkdir + write). Declined acquisition must leave scratch and lock
+  //    untouched. The lock protects an observed live owner beyond its deadline;
+  //    simultaneous stale recovery retains the Table L5 race (ADR-0012).
   const lock = acquireLock(paths.state, cfg.timeoutMs);
   if (!lock.acquired) {
-    console.log('wienerdog: another dream is in progress.');
+    if (lock.reason === 'owner-unknown') {
+      throw new WienerdogError(
+        'dream lock owner could not be verified; no takeover was attempted. ' +
+          'Check whether an earlier dream is still running before arranging lock recovery.'
+      );
+    }
+    console.log('wienerdog: another dream holds the lock.');
     return; // no collect, no cleanScratch, no lock write.
   }
   if (lock.stolen) {
