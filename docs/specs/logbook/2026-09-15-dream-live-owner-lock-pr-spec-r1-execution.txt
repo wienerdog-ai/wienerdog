@@ -1,6 +1,9 @@
+Readable execution record; trailing whitespace normalized only.
+Exact original bytes are preserved at 644b9a2084b0b7034ca4d4e233d21cf643a9a40b:docs/specs/logbook/2026-09-15-dream-live-owner-lock-pr-spec-r1-execution.txt
+
 BEFORE
 HEAD: 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
-git status --porcelain bytes (base64): 
+git status --porcelain bytes (base64):
 status byte length: 0
 
 COMMAND: git merge-base main HEAD
@@ -125,6 +128,6 @@ SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 
 AFTER
 HEAD: 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
-git status --porcelain bytes (base64): 
+git status --porcelain bytes (base64):
 status byte length: 0
 Read-only verification: True

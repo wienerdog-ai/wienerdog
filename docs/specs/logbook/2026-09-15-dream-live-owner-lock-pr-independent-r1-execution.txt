@@ -1,3 +1,6 @@
+Readable execution record; trailing whitespace normalized only.
+Exact original bytes are preserved at 644b9a2084b0b7034ca4d4e233d21cf643a9a40b:docs/specs/logbook/2026-09-15-dream-live-owner-lock-pr-independent-r1-execution.txt
+
 Independent PR review; native Codex reviewer; PR #66
 Initial reads: pwd (exit 0); cat AGENTS.md docs/runbooks/codex-review.md docs/runbooks/review-prompts/pr-rubric.md (exit 0).
 BEFORE ['git', 'status', '--porcelain'] exit=0 stdout_bytes=b'' stderr_bytes=b''
@@ -759,7 +762,7 @@ index ed5af68f..918aefeb 100644
 --- a/src/cli/dream.js
 +++ b/src/cli/dream.js
 @@ -588,12 +588,18 @@ async function run(argv, opts = {}) {
- 
+
    // 3. Acquire the single-run lock BEFORE any scratch collect/write. state/
    //    dream-scratch is shared mutable state; collectExtracts rebuilds it
 -  //    (rm + mkdir + write). Locking first is what guarantees a concurrent dream
@@ -787,7 +790,7 @@ index 3bcb563e..7d9b2d5e 100644
 +++ b/src/core/dream/lock.js
 @@ -10,15 +10,14 @@ function lockPath(stateDir) {
  }
- 
+
  /**
 - * Atomically create state/dream.lock so two dreams never overlap.
 + * Create state/dream.lock before touching shared scratch.
@@ -809,7 +812,7 @@ index 3bcb563e..7d9b2d5e 100644
 @@ -38,17 +37,34 @@ function acquireLock(stateDir, timeoutMs) {
      if (err && err.code !== 'EEXIST') throw err;
    }
- 
+
 -  // Lock exists — decide whether the prior holder is dead/hung.
 -  let live = false;
 +  const busy = { acquired: false, stolen: false, reason: 'busy' };
@@ -840,7 +843,7 @@ index 3bcb563e..7d9b2d5e 100644
 +    if (err && err.code === 'EPERM') return busy;
 +    if (!err || err.code !== 'ESRCH') return unknown;
    }
- 
+
 -  if (live) return { acquired: false, stolen: false };
 -
 +  // Retained recovery: this read/probe-to-overwrite sequence is not atomic.
@@ -859,7 +862,7 @@ index 91130344..815d2008 100644
 -const { execFileSync } = require('node:child_process');
 +const { execFileSync, spawn } = require('node:child_process');
 +const { once } = require('node:events');
- 
+
  const dream = require('../../src/cli/dream');
 -const { acquireLock } = require('../../src/core/dream/lock');
 +const LOCK_MODULE = require.resolve('../../src/core/dream/lock');
@@ -870,14 +873,14 @@ index 91130344..815d2008 100644
 @@ -494,7 +496,7 @@ test('dream-integration: the watchdog kills a hanging brain, exits with a timeou
    assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
  });
- 
+
 -test('dream-integration: a live concurrent lock yields "another dream in progress" and no commit', async () => {
 +test('dream-integration: a live concurrent lock yields "another dream holds the lock" and no commit', async () => {
    const ctx = setup();
    const before = commitCount(ctx.vault);
    // Plant a live foreign lock (future deadline, different pid).
 @@ -507,18 +509,19 @@ test('dream-integration: a live concurrent lock yields "another dream in progres
- 
+
    const { output, thrown } = await runDream(ctx, ['--yes']);
    assert.equal(thrown, null);
 -  assert.match(output, /another dream is in progress/);
@@ -886,7 +889,7 @@ index 91130344..815d2008 100644
    // The foreign lock was not deleted.
    assert.equal(fs.existsSync(path.join(state, 'dream.lock')), true);
  });
- 
+
 -test('dream-integration: a stale lock past its deadline is stolen with a warning and the run proceeds', async () => {
 +test('dream-integration: an expired lock of an exited local process is recovered with a warning', async () => {
    const ctx = setup();
@@ -897,13 +900,13 @@ index 91130344..815d2008 100644
 +  // The child creates the lock and exits; no guessed PID or mocked liveness.
 +  execFileSync(process.execPath, ['-e',
 +    'require(process.argv[1]).acquireLock(process.argv[2], -1)', LOCK_MODULE, state]);
- 
+
    const { output, thrown } = await runDream(ctx, ['--yes']);
    assert.equal(thrown, null, thrown && thrown.message);
 @@ -574,6 +577,67 @@ test('dream-integration: a capacity dry-run diagnoses exhaustion without throwin
    assert.equal(commitCount(ctx.vault), before);
  });
- 
+
 +// WP-dream-live-owner-lock: a separate live owner outlasts its deadline.
 +test('dream-integration: repeated contenders preserve an expired live owner and its scratch', async (t) => {
 +  const ctx = setup();
@@ -966,11 +969,11 @@ index 91130344..815d2008 100644
 +});
 +
  // ── WP-069: concurrency + watermark-consolidation safety ────────────────────
- 
+
  test('dream-integration: a lock-losing dream is a pure no-op that leaves the winner\'s live scratch byte-for-byte untouched', async () => {
 @@ -606,7 +670,7 @@ test('dream-integration: a lock-losing dream is a pure no-op that leaves the win
    const { output, thrown } = await runDream(ctx, ['--yes']);
- 
+
    assert.equal(thrown, null);
 -  assert.match(output, /another dream is in progress/);
 +  assert.match(output, /another dream holds the lock/);
@@ -984,7 +987,7 @@ index 4ba46ce7..7296b7fb 100644
 @@ -29,23 +29,133 @@ test('dream-lock: a second call while the lock is live is refused', () => {
    assert.equal(second.stolen, false);
  });
- 
+
 -test('dream-lock: a lock past its deadline is stolen', () => {
 +test('dream-lock: an expired live local owner keeps its lock on repeated attempts', () => {
    const state = tempState();
@@ -1001,7 +1004,7 @@ index 4ba46ce7..7296b7fb 100644
 +    assert.deepEqual(fs.readFileSync(file), before);
 +  }
  });
- 
+
 -test('dream-lock: an unparseable lock is stolen', () => {
 -  const state = tempState();
 +const FIXED_NOW = 1789466400000;
@@ -1032,7 +1035,7 @@ index 4ba46ce7..7296b7fb 100644
 +  t.mock.method(fs, 'writeFileSync', () => { throw error; });
 +  assert.throws(() => acquireLock(state, 60_000), (e) => e === error);
  });
- 
+
 +for (const deadline of [FIXED_NOW, FIXED_NOW + 1]) {
 +  test(`dream-lock: deadline ${deadline} is busy before identity or PID probing`, (t) => {
 +    const state = tempState();
@@ -1133,7 +1136,7 @@ index 1867b92c..cd891822 100644
 @@ -901,27 +901,96 @@ test('dream-pipeline: the counts keep their exact semantics, on the commit messa
    assert.match(r.output, /2 notes, 0 skills/);
  });
- 
+
 -test('dream-pipeline: scratch is removed before the lock is released, and a non-owner removes neither (row G5, Table V row V9)', async () => {
 +test('dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release', async (t) => {
    const ctx = setup();
@@ -1246,7 +1249,7 @@ index 1867b92c..cd891822 100644
 +    assert.equal(fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')), false);
    }
  });
- 
+
 
 
 COMMAND: ["cat", "docs/runbooks/review-prompts/pr-rubric.md"]
@@ -1617,7 +1620,7 @@ index 1867b92c..cd891822 100644
 @@ -901,27 +901,96 @@ test('dream-pipeline: the counts keep their exact semantics, on the commit messa
    assert.match(r.output, /2 notes, 0 skills/);
  });
- 
+
 -test('dream-pipeline: scratch is removed before the lock is released, and a non-owner removes neither (row G5, Table V row V9)', async () => {
 +test('dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release', async (t) => {
    const ctx = setup();
@@ -1730,7 +1733,7 @@ index 1867b92c..cd891822 100644
 +    assert.equal(fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')), false);
    }
  });
- 
+
 
 
 COMMAND: ["cat", "src/core/dream/lock.js", "tests/run.js", "tests/with-temp-root.js", "docs/specs/logbook/2026-09-15-dream-live-owner-lock-runtime-check.txt"]
@@ -4839,7 +4842,7 @@ Proceed? wienerdog: can't ask for confirmation here (no terminal). Re-run with -
 ✔ defaultYes does NOT rescue mode 3 (no tty) -> false + loud abort (0.835792ms)
 ✔ regression: no opts still defaults to no on an empty line (2.404166ms)
 ✔ mode 1: opts.output routes the prompt to the given stream (keeps stdout clean) (0.655417ms)
-Proceed? 
+Proceed?
 ✔ reap: readProcessTable(linux) parses /proc stat rows incl. comm with spaces and parens (3.70775ms)
 ✔ reap: R7-3 — a mid-scan vanishing pid (ENOENT on its stat) is SKIPPED, the snapshot keeps the surviving rows (1.369833ms)
 ✔ reap: R7-3 — the churn regression: the descendant reap still proceeds over the surviving rows (no legacy fallback) (1.510791ms)

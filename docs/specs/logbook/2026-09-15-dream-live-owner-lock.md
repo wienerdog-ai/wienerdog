@@ -154,3 +154,34 @@ implementation defects within the approved contract; any new policy or residual
 requires owner disposition. A changed product diff needs both gates on its new
 tip. Two failed rounds route back to the architect under the existing repo rule.
 The already accepted stale-claimant residual is not silently reopened.
+
+## PR review round 1 — closed
+
+Implementation PR: [#66](https://github.com/felho/wienerdog/pull/66), branch
+`wp/dream-live-owner-lock`. Both fresh native gates reviewed the same commit
+`2b98bb17ca1c4270316bbc81ae5c3c4c0558c660` against merge base
+`91668da62822c73be6115a3e6d06c6ec51462509`. Both recorded identical empty
+checkout status and unchanged HEAD before and after review.
+
+The four raw verdict/execution files named
+`2026-09-15-dream-live-owner-lock-pr-{spec,independent}-r1-*` were committed at
+`644b9a2084b0b7034ca4d4e233d21cf643a9a40b` before the orchestrator read them.
+The text verdict is **APPROVE**, no findings; the frozen JSON verdict is
+**patch is correct**, findings empty. Both reviewers independently ran the
+full suite: 2,734 total, 2,722 passed, 12 skipped, exit 0. The spec gate also
+ran the targeted 144-test command. All specified lint/boundary/diff checks passed.
+No finding requires disposition or a further product revision.
+
+The relay checked both execution records, unchanged canonical contract and the
+reviewed commit. GitHub checks on that implementation tip all passed: Linux and
+macOS tests and install smoke, lint including the CI PowerShell checks, boundary
+and PR title. Local PowerShell omission therefore did not leave that CI gate
+unexecuted. Evidence-only commits after this tip add the reports and handoff;
+product code, tests, ADR and WP are byte-identical to the reviewed tip. The
+execution-record readable copies normalize trailing whitespace, with exact raw
+bytes retained in the raw-evidence commit above. Verdict files remain verbatim.
+
+The PR remains unmerged for maintainer review. The implementation lives in the
+isolated `dream-live-owner-lock` worktree; the original content branch retains
+its Draft successor and pending P1–P4 decisions. Next: land this prerequisite,
+then settle those content-policy defaults before dispatching the successor.
