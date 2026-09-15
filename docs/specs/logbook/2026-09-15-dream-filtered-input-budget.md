@@ -564,6 +564,28 @@ tests pass; this diagnoses the prior Node/Claude co-location conflict without
 weakening identity checks. The original full-suite failure is historical, not
 a waiver or evidence of a product change.
 
+## Lock prerequisite implementation handoff
+
+The approved prerequisite is implemented in
+[PR #66](https://github.com/felho/wienerdog/pull/66), on the separate
+`wp/dream-live-owner-lock` branch/worktree. This original content branch contains
+no implementation of either WP. The lock spec copy here records its design-ready
+state; the implementation branch has the authoritative In-Review copy and
+[execution record](https://github.com/felho/wienerdog/blob/wp/dream-live-owner-lock/docs/specs/logbook/2026-09-15-dream-live-owner-lock.md).
+
+Both PR gates reviewed `2b98bb17ca1c4270316bbc81ae5c3c4c0558c660` with
+identical clean checkout state: wd-reviewer APPROVE, independent Codex
+patch is correct, no findings. Both independently ran the full suite (2,722
+passed, 12 skipped, zero failed). Raw reports were committed before inspection
+at `644b9a2084b0b7034ca4d4e233d21cf643a9a40b` on that branch. GitHub CI
+passed all seven checks on the implementation tip. Later commits contain only
+evidence and handoff text; source, tests, ADR and spec remain identical.
+
+The owner-approved live-owner protection and automatic expired-dead-local
+recovery are implemented with the accepted stale-claimant race unchanged.
+PR #66 remains unmerged; merge belongs to the maintainer. The successor stays
+Draft: P1–P4 remain pending, and this prerequisite must land before its dispatch.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: a single-run lock must cover the actual
