@@ -1,0 +1,25 @@
+
+> wienerdog@0.13.0 test
+> node tests/with-temp-root.js tests/run.js /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js tests/unit/dream-lock.test.js
+
+{"elapsedMs":1200001,"allowedPreprocessMs":3600000,"modelTimeoutMs":1200000,"acquired":true,"stolen":true,"holderAlive":true,"scratchSurvived":false}
+✔ review reproduction: a living collector owner loses scratch after the model-only lock deadline (29.447833ms)
+✔ dream-lock: acquires on an empty state dir (1.624791ms)
+✔ dream-lock: a second call while the lock is live is refused (0.3385ms)
+✔ dream-lock: a lock past its deadline is stolen (0.33625ms)
+✔ dream-lock: an unparseable lock is stolen (0.651625ms)
+✔ dream-lock: releaseLock removes only our own lock (0.409458ms)
+✔ dream-lock: releaseLock leaves another process lock intact (0.340458ms)
+✔ dream-lock: releaseLock is a no-op when absent (0.161458ms)
+✔ dream-lock: ownsLock is true for our own live lock (0.294125ms)
+✔ dream-lock: ownsLock is false for a foreign-pid lock (superseded holder) (0.22725ms)
+✔ dream-lock: ownsLock is false when the lock is absent (0.132ms)
+✔ dream-lock: ownsLock is false when the lock is unparseable (0.388833ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59.640375

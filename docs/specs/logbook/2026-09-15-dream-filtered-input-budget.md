@@ -386,7 +386,93 @@ The architect applies this within the existing documentation surface, followed
 by mechanical verification; it changes no proposed product behavior or owner
 choice and introduces no residual or new review machinery.
 
+### Independent design round 2
+
+TC-1 was mechanically verified against the architect's exact diff and corrected
+at `21363f5a`. That clean tip was frozen for the independent native review.
+
+| Round | Reviewed tip | Verdict | Findings / scope objections | Raw evidence and introduction commit |
+|---|---|---|---|---|
+| Native Codex adversarial design 2 | `21363f5adb5d8ee9d8f62ea801f4f7cc12c184f2` | `needs-attention` | 1 B/HEAVY / 0 | `2026-09-15-dream-filtered-input-budget-design-r2-raw.txt` at `637925aa` |
+
+The same commit preserves the full review input. The raw report was committed
+before inspection. Review checkout status was empty and HEAD identical at both
+ends. The reviewer executed a two-process helper reproduction plus existing
+lock tests, not the unimplemented proposed collector. Its first harness run
+failed by calling a nonexistent export; the corrected run passed 12/12,
+asserting that the unsafe behavior exists. Source and both logs are preserved
+at `888623e9` as the `lock-repro-source`, `lock-repro-first` and
+`lock-repro-rerun` text artifacts for this WP.
+
+**R2-1 — proposed disposition: fix; owner decision pending.** The independent
+preprocessing allowance and permitted overrun outlive the model-only lock
+lease. `src/cli/dream.js` passes only `cfg.timeoutMs` to `acquireLock` before
+collection; `src/core/dream/lock.js` permits stealing an expired lock without
+checking its live owner; the second collector resets shared scratch. ADR-0012
+part 6 assumes expiry implies the prior brain is dead. A longer legitimate
+preprocessing run invalidates that assumption before its brain even starts.
+
+The orchestrator verified these source/ADR citations and independently reran
+`npm test -- /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js tests/unit/dream-lock.test.js`:
+exit 0, 12/12 passed, including the unsafe-behavior assertion. Output is retained
+as `2026-09-15-dream-filtered-input-budget-lock-repro-relay.txt`. Simulated elapsed
+time was 1,200,001 ms with a permitted 3,600,000 ms preprocessing allowance and
+1,200,000 ms model timeout; the other process acquired/stole the lock while its
+owner lived and removed the scratch sentinel. This confirms the integration
+risk, not an implementation of or test of the future collector.
+
+The architect is asked for a narrow lock-lifetime recommendation. No lock
+contract change is silently incorporated. The new design gate remains open:
+owner disposition, architect revision and a fresh HEAVY-change review are
+required before Ready; P1–P4 also remain proposed. The existing full-suite
+baseline failure remains unwaived.
+
+### Architect response to R2-1 — owner decision pending
+
+The architect recommends separating lock-lifetime/recovery work into a small
+prerequisite WP, because it introduces its own recovery policy and the content
+WP already spans collector/config/ledger/CLI. No new WP or dependency has been
+created; this is a proposal, not approved scope. Adding nominal preprocessing
+and model durations cannot cover the permitted soft-deadline overrun.
+
+Proposed liveness contract: deadline expiry alone does not authorize takeover
+from a live local owner. On the same host with a valid positive PID, a successful
+`process.kill(pid, 0)` or `EPERM` means live; `ESRCH` means gone. A different host,
+invalid lock/PID or other probe failure is unknown and cannot authorize automatic
+takeover. PID reuse can therefore require manual recovery. A hung but still-live
+owner must be stopped before the next dream can proceed; the normal brain
+watchdog remains responsible for its own phase.
+
+Two recovery choices remain for the owner:
+
+1. Disable automatic stale-lock takeover and use explicit recovery after a dead
+   or unknown owner. Ordinary atomic `wx` acquisition remains. This costs manual
+   intervention after crashes but avoids adding automatic reclaim machinery.
+2. Apply only the liveness correction, retaining automatic takeover for expired
+   locks whose local owner is proven gone. This addresses the reproduced R2-1
+   path; it retains the existing simultaneous-stale-claimant race as a named
+   residual requiring an owner decision.
+
+The second race is an inference from the existing `read → overwrite` takeover:
+two contenders can both observe the prior dead owner and overwrite each other's
+replacement. The architect did not reproduce that separate case; neither this
+note nor the review's 12/12 run claims to have done so. Do not promise general
+mutual exclusion from a PID check alone.
+
+The relay recommends option 2 for the narrow change, with the inherited race
+explicitly presented to the owner rather than silently accepted. If the owner
+requires closing that race too, refine a separate lock contract before choosing
+its mechanism. No heartbeat, new lock framework or forced termination policy is
+approved here. Expected lock-WP owners: `src/core/dream/lock.js`, CLI wiring,
+`tests/unit/dream-lock.test.js`, relevant pipeline tests and ADR-0012 part 6.
+P1–P4 of the content WP remain proposed independently of this new decision.
+
 ## Lessons
+
+- WP-dream-filtered-input-budget: a single-run lock must cover the actual
+  authorized work lifetime, including preprocessing and permitted overruns;
+  the later model timeout alone does not establish that another run may safely
+  replace shared scratch.
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file
   sizes can discard retained content even when the complete filtered input fits;
