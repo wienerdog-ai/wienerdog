@@ -1,0 +1,72 @@
+Gate: wd-reviewer (native Codex substitution authorized)
+Reviewed HEAD: 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b
+Merge base: 81e09414726b81b5f79a98835a48872d1b6a0f6a
+Initial git status --porcelain bytes (hex):
+PATH prefix: /tmp/wd-dream-lock-design.NApPpv/runtime-bin
+Command: ["node", "--version"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-0.txt
+Command: ["node", "scripts/boundary-check.js", "docs/specs/WP-dream-filtered-input-budget.md", "docs/adr/0012-dream-run-lifecycle.md", "docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md", "docs/specs/WP-dream-filtered-input-budget.md", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-calibration-green-input.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-calibration-green-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-calibration-red-input.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-calibration-red-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-design-r1-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-design-r1-tests.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-design-r2-input.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-dispatch-output.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-dispatch-source.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-fable-51-feedback-input.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-fable-51-feedback-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-fable-51-feedback.md", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-incident-green-source.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-ledger-red.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-first.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-rerun.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-native-calibration-green-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-native-calibration-red-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-regression-red.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-template-r0-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-template-r0b-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-template-r2-raw.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget-verification.txt", "docs/specs/logbook/2026-09-15-dream-filtered-input-budget.md", "docs/specs/logbook/2026-09-15-dream-live-owner-lock.md", "docs/specs/logbook/2026-09-15-dream-preprocessing-design-package.md", "src/cli/dream.js", "src/core/dream/config.js", "src/core/dream/ledger.js", "src/core/dream/scratch.js", "src/core/transcripts/index.js", "src/core/transcripts/stream.js", "tests/integration/dream.test.js", "tests/unit/dream-collect.test.js", "tests/unit/dream-pipeline.test.js", "tests/unit/ledger.test.js"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-1.txt
+Command: ["npm", "test", "--", "tests/unit/dream-collect.test.js", "tests/unit/ledger.test.js", "tests/unit/dream-pipeline.test.js", "tests/integration/dream.test.js", "tests/unit/transcript-stream.test.js", "tests/unit/transcripts.test.js"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-2.txt
+Command: ["npm", "test"]
+Actual exit status: 1
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-3.txt
+Command: ["npm", "run", "lint"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-4.txt
+Command: ["node", "scripts/boundary-check.js", "docs/specs/WP-dream-filtered-input-budget.md", "src/core/dream/scratch.js", "src/core/dream/config.js", "src/core/dream/ledger.js", "src/core/transcripts/stream.js", "src/core/transcripts/index.js", "src/cli/dream.js", "tests/unit/dream-collect.test.js", "tests/unit/ledger.test.js", "tests/unit/dream-pipeline.test.js", "tests/integration/dream.test.js", "docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md", "docs/adr/0012-dream-run-lifecycle.md"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-5.txt
+Command: ["git", "diff", "--check"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-6.txt
+Command: ["git", "diff", "--check", "81e09414726b81b5f79a98835a48872d1b6a0f6a...HEAD"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-command-7.txt
+Final HEAD: 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b
+Final git status --porcelain bytes (hex):
+Status byte-identical: True
+HEAD identical: True
+Diagnostic rerun after initial full-suite failures
+Command: ["npm", "test", "--", "tests/integration/reap-escape.test.js", "tests/unit/gws-auth.test.js"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-isolated-recheck.txt
+One serialized full-suite rerun, after both isolated reruns completed; no source changes.
+Command: ["npm", "test"]
+Actual exit status: 0
+Unmodified combined output: /tmp/wd-dream-lock-design.NApPpv/content-pr-spec-r1-serialized-full-recheck.txt
+
+Final review-completion check (after isolated and serialized reruns):
+Command: git rev-parse HEAD
+Actual exit status: 0
+HEAD: 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b
+Command: git status --porcelain
+Actual exit status: 0
+Final status bytes (hex):
+Initial/final status lengths: 0 / 0 bytes
+Status byte-identical: True
+HEAD identical to dispatch: True
+
+Executed results:
+- Actual merge-base diff boundary: exit 0; all changed files belong to the twelve Deliverables, the spec, or the fixed logbook allowance.
+- Literal targeted npm test command: exit 0; 243 tests, 243 passed, zero failures or skips.
+- Initial literal npm test while the independent gate also ran its full suite: exit 1; 2,754 tests, 2,740 passed, two failures, 12 skipped.
+- Initial failures: unchanged tests/integration/reap-escape.test.js:411 timing precondition and unchanged tests/unit/gws-auth.test.js:235 timeout test. The latter rejected before its later assertion attached during the 50 ms timeout scenario. Initial output is retained unmodified in command-3.txt; it is not replaced by the retry.
+- Isolated npm-wrapper rerun of both failing files: exit 0; 26 tests, 26 passed, zero failures or skips.
+- One literal npm test rerun after the other reviewer confirmed all its tests had ended: exit 0; 2,754 tests, 2,742 passed, zero failures, 12 skipped. No source changes between runs. This establishes a passing full verification on the reviewed tree; it does not erase or independently prove the cause of the initial intermittent failures.
+- npm run lint: exit 0; 664 Markdown files, zero errors; shellcheck passed; frontmatter passed (274 specs, four agents). PSScriptAnalyzer was explicitly skipped because pwsh is unavailable.
+- Literal Deliverables boundary command: exit 0.
+- Literal git diff --check: exit 0.
+- git diff --check against the actual PR merge base: exit 0.
+
+Additional read-only review:
+- Read wd-reviewer instructions, supplied applicable AGENTS instructions, CLAUDE.md, the complete current WP and review runbook.
+- Compared complete Table A rows A1-A11 against changed collector/config/ledger/CLI implementation, tests, and both entire new ADR amendments; parser/stream differences only alter comments.
+- Reviewed registered in-document mirrors and the design package's operative tables; historical design alternatives and lifecycle notices were not treated as current product contracts.
+- Read retained old-collector red evidence: 38 tests, 20 passes, 18 failures; ledger red evidence: 47 tests, 45 passes, two failures. These are implementer evidence, not new reviewer executions. Personally reran their current green tests as part of the literal targeted/full commands.
+- PR metadata read with gh pr view 67 --repo felho/wienerdog --json title,body,headRefName,headRefOid: exit 0; remote head matches reviewed HEAD, expected title/branch, verification output, decisions, discovered issues, WP lesson and Generated-by are present. An initial gh call without --repo resolved the upstream repository and failed to locate PR 67; it was corrected to the supplied felho repository.
+- Review created only files outside the repository. No code fixes, commits, or child agents were used.

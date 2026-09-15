@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "No actionable regression was identified in the branch diff at 216ce0d93b5fc1af22ea785a3beb25cf9d4d9b9b against merge base 81e09414726b81b5f79a98835a48872d1b6a0f6a. The full npm test run exited 1 with 2741 passed, 1 failed and 12 skipped: the sole failure was a timing assertion in unchanged tests/integration/reap-escape.test.js, whose isolated npm test rerun exited 0 with all 18 tests passing; this review therefore does not claim a clean full-suite execution. Lint, the declared file-boundary check and diff whitespace check exited 0, and checkout status and HEAD were byte-identical before and after the review.",
+  "overall_confidence_score": 0.89
+}
