@@ -1,7 +1,7 @@
 ---
 id: WP-dream-live-owner-lock
 title: Preserve a live dream owner's lock after its deadline
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-069]
@@ -10,11 +10,16 @@ adrs: [ADR-0004, ADR-0012, ADR-0031]
 
 # WP-dream-live-owner-lock: Preserve a live dream owner's lock after its deadline
 
-> **Owner-approved scope; Draft pending independent design review.** On
+> **Ready: owner-approved scope and independent design approval.** On
 > 2026-09-15 the owner selected a separate prerequisite WP for the narrow
 > liveness-aware fix. Automatic takeover of expired, proven-dead local owners
 > remains. The existing simultaneous stale-claimant race is an accepted residual,
 > not a new guarantee. This does not approve the successor's P1–P4 proposals.
+>
+> Joint design R3 approved revision
+> `350050cfb71a25f1fb6b25980f561688c96c9f82` with no findings or scope objections.
+> [Raw review](logbook/2026-09-15-dream-preprocessing-design-r3-raw.txt)
+> was committed as `cfb15861` before inspection. Dispatch re-verification remains.
 
 ## Context (read this, nothing else)
 
@@ -229,7 +234,7 @@ logbook records an existing full-suite executable-pin failure in
 
 ## Definition of done
 
-1. Complete the independent design gate before Ready. The owner-approved narrow
+1. The independent design gate is complete for the recorded revision. The owner-approved narrow
    scope and residual do not require repeated permission; material new policy
    does. Re-verify C1–C4 at the exact dispatch revision.
 2. Verification passes, with output and regression red/green evidence in the PR.

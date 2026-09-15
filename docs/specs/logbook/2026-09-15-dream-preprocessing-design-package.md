@@ -9,7 +9,8 @@ related_wps: [WP-dream-filtered-input-budget]
 
 The owner accepted whole-session admission, newest-first priority, the overflow
 distinction and finishing a started session after the soft deadline. The
-architect has now made the remaining choices concrete as proposals for review.
+architect made the remaining choices concrete; joint independent design R3
+has approved the resulting contract.
 They are not owner approval. The WP remains Draft. The owner separately
 approved the narrow live-owner lock fix as a prerequisite; that approval does
 not accept P1–P4 below.
@@ -18,7 +19,11 @@ The canonical contract is Table A in
 [WP-dream-filtered-input-budget](../WP-dream-filtered-input-budget.md).
 This note summarizes it. The earlier independent equal-share design verdict
 and historical [Fable 5.1 advice](2026-09-15-dream-filtered-input-budget-fable-51-feedback.md)
-do not approve this revision.
+do not approve this revision. The current design approval is
+[R3](2026-09-15-dream-preprocessing-design-r3-raw.txt), reviewing
+`350050cfb71a25f1fb6b25980f561688c96c9f82`: APPROVE, no findings or scope
+objections, with R2-1 resolved in design. Its raw output was committed in
+`cfb15861` before inspection; product implementation is still pending.
 
 ## Accepted behavior
 
@@ -76,7 +81,7 @@ blocks takeover with a distinct diagnostic. No heartbeat or automatic kill.
 The existing race between simultaneous stale claimants remains explicitly
 owner-accepted; this is a narrow live-owner-expiry fix, not a complete lock
 redesign. A hung living owner or unverifiable lock may require investigation.
-The prerequisite is Draft pending its independent design gate. No repeated
+The prerequisite is Ready after the independent design approval. No repeated
 approval is needed for the already-selected scope and residual.
 
 ## Boundaries and limitations
@@ -98,11 +103,12 @@ sibling's report work here.
 
 ## Next gate
 
-Run a fresh independent design review of the complete proposed contract. Record
-findings and dispositions, obtain owner decisions P1–P4 and ADR ratification,
-then mark Ready and re-verify source claims at the dispatch revision after the
-lock prerequisite has landed. Historical
-review raw artifacts remain unchanged.
+Dispatch the Ready lock prerequisite after re-verifying its source claims at
+the exact implementation revision. For the content WP, obtain owner decisions
+P1–P4 and ADR ratification, then mark Ready; implementation waits for the lock
+prerequisite to land. Material contract changes after owner decisions return to
+design review under the repo process. Historical review raw artifacts remain
+unchanged.
 
 ## Lesson
 

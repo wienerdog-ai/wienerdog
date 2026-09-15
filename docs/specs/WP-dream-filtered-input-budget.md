@@ -10,10 +10,15 @@ adrs: [ADR-0004, ADR-0012, ADR-0023, ADR-0031]
 
 # WP-dream-filtered-input-budget: Allocate dream input capacity from filtered extracts
 
-> **Draft: architect proposal for design review.** A1–A4 and the soft-deadline
-> behavior are accepted. Marked proposals resolve the remaining choices for
-> review, not implementation approval. Owner decisions P1–P4 and a fresh design
-> gate remain required. The earlier equal-share verdict does not cover this revision.
+> **Draft: design approved; owner choices remain open.** A1–A4 and the
+> soft-deadline behavior are accepted. P1–P4 remain proposals, not implementation
+> approval. The lock prerequisite is Ready and must land before this WP dispatches.
+>
+> Joint design R3 approved revision
+> `350050cfb71a25f1fb6b25980f561688c96c9f82` with no findings or scope objections.
+> [Raw review](logbook/2026-09-15-dream-preprocessing-design-r3-raw.txt)
+> was committed as `cfb15861` before inspection. This supersedes the pending
+> gate notice; the earlier equal-share verdict still does not cover this design.
 
 ## Context (read this, nothing else)
 
@@ -367,7 +372,7 @@ regression assertion. Test construction belongs to the implementer.
 
 ## Definition of done
 
-0. Complete the fresh design gate in `docs/runbooks/codex-review.md`. Obtain owner
+0. The design gate is complete for the recorded revision. Obtain owner
    decisions P1–P4 including A10 ratification, move to Ready, and re-verify current
    executable claims against the exact dispatch SHA after the A11 prerequisite
    lands. Re-verify its stated lock behavior and accepted residual at that SHA.

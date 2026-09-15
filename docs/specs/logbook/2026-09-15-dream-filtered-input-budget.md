@@ -543,6 +543,27 @@ a new product contract or another external conformance round. The full lint
 passed with 274 specs and four agents; PowerShell analysis remains unavailable
 locally. No remaining internal coherence finding blocks the independent round.
 
+### Joint design round 3 — closed
+
+The joint prerequisite/successor review at
+`350050cfb71a25f1fb6b25980f561688c96c9f82` returned **approve**, zero findings,
+zero scope objections; R2-1 is resolved in design, implementation pending.
+Raw report and input were committed at `cfb15861` before inspection as
+`2026-09-15-dream-preprocessing-design-r3-raw.txt` and the matching input file.
+The independent reviewer ran boundary/JSON/diff checks, no tests, and confirmed
+identical clean checkout status and HEAD. The relay verified the cited contract
+rows and dependency/ADR integration. The design loop is closed under its pinned
+criterion; no residual beyond the already approved scope was accepted.
+
+The architect marked the lock prerequisite Ready under the existing explicit
+owner approval. The content WP stays Draft with P1–P4 pending and prerequisite
+landing required. The separate [lock execution record](2026-09-15-dream-live-owner-lock.md)
+carries approval, review and test-environment evidence for its isolated branch.
+A byte-identical Node placed in a runtime-only test PATH made the six adopt-e2e
+tests pass; this diagnoses the prior Node/Claude co-location conflict without
+weakening identity checks. The original full-suite failure is historical, not
+a waiver or evidence of a product change.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: a single-run lock must cover the actual
