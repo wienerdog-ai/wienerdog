@@ -1,0 +1,39 @@
+Give independent architectural feedback on the proposal below. This is an advisory design discussion, NOT a formal approval gate and NOT an implementation request. Do not simply agree; identify any additional ideas, hidden trade-offs, or a materially simpler design. Stay proportionate to a small plain-Node CLI project.
+
+PRODUCT AND ISSUE
+Wienerdog is a files-based personal-memory tool. A bounded nightly job extracts user/assistant/tool messages from Claude/Codex JSONL transcripts and gives selected extracts to an LLM dream. No persistent service, server, or new background process is desired. Existing discovery records per-file fingerprints and ledger outcomes. It currently allocates dream_max_input_bytes from raw source sizes before filtering, then does not redistribute unused grants. A reproduction: content budget 400,000 bytes, all filtered extracts 212,674 bytes, yet retained only 41,796 bytes, with one session retaining 37/200 messages. We are fixing this avoidable loss.
+
+CURRENT LIMITS AND SEMANTICS
+Default dream_max_input_bytes is 8,000,000 compact-JSON bytes (includes extract metadata). Pretty-printed scratch is larger; this is not a token or entire-model-context budget. There is a separate 50 MiB pre-read file ceiling, 1 MiB raw-line cap, 500,000 lines/file, fixed 200 MiB aggregate raw read budget, 64 KiB chunks, and JSON depth 64. Existing parsing caps emitted message text at 4,000 chars and newest messages at 2,000 per session, after assembling the per-file message array. Collection processes one file at a time and stores only corpus metadata, not all parsed extracts in RAM. Newest-first equal-share allocation currently lets small sessions fit whole and divides remaining capacity among large ones; truncation retains a newest-message suffix, rebasing skill indices. Under a 32,768-byte truncation grant, oldest unresolved sessions are deferred whole (small complete extracts can still fit). Selected truncated sessions are later marked processed on a successful clean dream, so removed older content is not replayed for an unchanged file. Whole capacity-deferral records nothing and is retried. Source transcripts stay untouched.
+
+USER'S CHALLENGE
+The user understands the individual 50 MiB ceiling, but questions the 200 MiB aggregate read limit: with file-by-file extraction and releasing prior session data, total bytes processed do not imply cumulative resident memory. The original documented rationale for 200 MiB is total intake I/O/work per run, not a necessity of one-file-at-a-time memory use. The user expects the total useful content sent to the dream to remain limited by the configured X MB.
+
+PROPOSAL TO CRITIQUE
+1. Keep X MB as the hard aggregate FINAL filtered-extract content budget, measured using the existing compact-JSON metric.
+2. Keep individual raw file/record bounds and bounded streaming reads. Hold at most one session's parsed content plus size/path metadata in RAM.
+3. Replace the fixed 200 MiB aggregate raw-read ceiling with a separately measured preprocessing TIME budget. The numeric duration should follow measurement rather than be invented now. This is separate from the model/brain timeout, which starts later. A synchronous reader must check elapsed time cooperatively within its read/parse loop; a timer callback alone cannot interrupt a blocked loop.
+4. Extract sessions one by one into private run-local temporary disk storage and keep their actual filtered sizes. Temporary disk content MAY exceed X; final selected input must not. Allocate X using the completed filtered demands, then remove unselected/intermediate files before exposing scratch to the brain.
+5. At preprocessing deadline, use only fully completed session extracts; discard any partial extract, defer unfinished/unread sessions without recording processed. Do not kill the whole dream and throw away completed work.
+6. Preserve existing ledger, privacy, cleanup, and successful-run gates. No new durable cache/checkpoint is proposed in this first version. Historical recovery, partial-session continuation and other richer fairness changes were excluded from the narrow initial bugfix; you MAY challenge this scope, but identify the additional state/complexity it costs.
+
+QUESTIONS
+- Is this separation of content, resident memory and preprocessing work sound? Is a time budget actually preferable here to a byte budget or a hybrid?
+- What pitfalls could prevent forward progress or make retries, disk use, or fairness worse? Distinguish existing issues from issues introduced by this proposal.
+- Is the temporary-disk demand discovery worth its cost, or is there a simpler bounded approach with an explicit fairness trade-off?
+- What would you keep/change, and which ideas should be deferred? Do not invent new machinery without explaining the user value and cost.
+
+Read the following current-code excerpts only as grounding; the proposed changes have NOT been implemented. Return valid JSON in English with fields: summary, recommendation, additional_ideas (array of title/benefit/cost/priority), pitfalls (array of title/introduced_or_existing/explanation/mitigation), simpler_alternative, decisions_for_owner (array), and evidence_limits. No need to fill arrays with speculative issues. Be concise but concrete; distinguish source-backed facts from proposals. Explicitly say you did not run tests.
+
+
+Source manifest (the complete files were appended to the actual prompt):
+{
+  "source_revision": "3d227ec525efe218808f5582c0c4af3b506ea7f7",
+  "requested_model": "claude-fable-5-1",
+  "prompt_sha256": "583aba4f84bab56b376d002824f1087fb0fb07a8f1f75fc6f2e81a176a622234",
+  "sources": {
+    "src/core/transcripts/stream.js": "b89251d5459185ee9563c9571ff05bddcca32b3a97f2a4c561cc0ca62e52d47a",
+    "src/core/dream/scratch.js": "b08411ce17760e5a7aaa182e4e4c6c045e4cdf2ca52b884392e98111af76f2e6",
+    "src/core/transcripts/index.js": "6dd2de7f3270674e8f4823fbbdfe72e8826caff33674b7d76872b6734d489d93"
+  }
+}
