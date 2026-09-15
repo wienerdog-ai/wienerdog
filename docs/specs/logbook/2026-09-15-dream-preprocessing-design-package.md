@@ -3,91 +3,108 @@ date: 2026-09-15
 related_wps: [WP-dream-filtered-input-budget]
 ---
 
-# Dream preprocessing: proposed design package
+# Dream preprocessing: design package
 
 ## Purpose and status
 
-Prevent avoidable loss of session content without making preprocessing resource
-use unbounded. The owner agreed to assemble the basic package before measuring
-numeric defaults. This note records that package and its remaining decisions;
-it is not an implementation spec or owner sign-off on an ADR amendment.
+Prevent raw transcript volume from wasting the configured useful-content
+capacity. The owner accepted the operating rules below, including the final
+whole-session overflow distinction. Numeric defaults and oversized-session retry
+invalidation remain open. This is not final approval of the implementation
+spec or its ADR amendment; the WP remains Draft.
 
-The earlier independent review approved the draft that preserved the 200 MiB
-aggregate raw-read cap. It does not approve the changed work-budget policy
-below. The implementation WP remains Draft pending refinement and review.
-The [Fable 5.1 feedback](2026-09-15-dream-filtered-input-budget-fable-51-feedback.md)
-records the alternatives and their evidence limits.
+The earlier independent review approved a different proposal: filtered-demand
+equal shares with the existing 200 MiB aggregate raw-read cap. That verdict does
+not cover this revision. The historical
+[Fable 5.1 feedback](2026-09-15-dream-filtered-input-budget-fable-51-feedback.md)
+records advice and alternatives, not approval of the current policy.
 
-## Proposed operating rules
+## Accepted operating rules
 
 | Concern | Rule | Scope of the guarantee |
 |---|---|---|
-| Final dream content | Keep the existing configured X (`dream_max_input_bytes`). Allocate it from complete filtered extract demands, including metadata, using the existing compact-JSON byte metric. | The final selected compact-JSON sum is at most X. Pretty-printed storage and the model's whole context are different measures. |
-| Avoidable truncation | Measure demands before distributing capacity. Preserve the existing equal-share policy over the admitted set; if its full filtered content fits X, keep it whole. | Admission may be limited by preprocessing resources. This is not a claim that an arbitrary historical corpus fits one run. |
-| Resident memory | Process one session at a time, release its content before retaining another session, and keep only corpus metadata resident. Preserve individual file/record guards. | Total raw bytes processed do not determine peak resident memory. The per-message caps currently apply after the harness parser accumulates one session; do not treat them as an earlier memory guard. |
-| Temporary disk | Use private, run-local storage for measured extracts. Give it its own explicit space budget; it may exceed X. | Account for actual simultaneous storage, including preparation/final-output overlap and temporary publication copies. A chosen value must permit useful single-session progress; a too-large extract cannot be silently put in an endless retry loop. |
-| Preprocessing work | Control the work separately from X and memory. Prefer the admission-deadline proposal below; decide whether a larger aggregate raw-byte guard adds value after measurement. | Do not retain 200 MiB merely by labelling it a memory requirement, and do not derive the work budget from X without a reason. |
-| Result ownership | Build `entries`, `wrote`, and `processed` from final selected extracts only. Remove intermediate/unselected files before exposing scratch to the brain. | Staging a file does not mean the dream consumed it. Existing downstream successful-run and secret-disposition gates remain necessary. |
-| Retry | Capacity-deferred or unfinished sessions get no processed record. Keep already completed usable work when the admission budget is exhausted. | No global backlog-drain guarantee under sustained arrivals at or above processing capacity. Newest-first priority retains that existing trade-off. |
+| Useful-content budget | Keep X (`dream_max_input_bytes`). Charge complete filtered extracts, including metadata, using the existing compact-JSON byte metric. | Selected content is at most X. Pretty-printed disk bytes and the model's entire context are different measures. |
+| Selection | Process one eligible session at a time, newest first. Admit its complete filtered extract if it fits the remaining space. Stop as soon as selected bytes equal X, even if time and sessions remain. | Do not preprocess the entire corpus before selecting content. Existing parser filtering, redaction and message caps remain unchanged. |
+| Remaining-space overflow | If an extract is at most X but exceeds the remaining space, omit that entire session from this run and stop preprocessing. | Use the already selected content; leave the omitted session unprocessed for a later run. Do not search older sessions for a smaller fit. Spare capacity is an accepted trade-off. |
+| Individually oversized session | If the filtered extract itself exceeds X, report it, skip it and continue older sessions while time remains. Never mark it processed. | It must not block the entire backlog. The retry/invalidation rule remains open; avoid both repeated futile parsing and permanent exclusion after relevant changes. |
+| Resident memory | Release one session's parsed content before retaining another; retain corpus metadata and selected files on disk. Preserve individual intake guards. | Aggregate raw bytes are an I/O/work measure, not peak memory. Message caps currently apply after a harness parser has accumulated a session. |
+| Temporary disk | Keep private selected extracts plus bounded current-session/finalization overhead. Remove intermediate or unselected files before the brain can inspect scratch. | There is no corpus-wide staging set. Physical disk accounting includes pretty JSON and any overlapping copies; X alone is not a literal disk ceiling. |
+| Preprocessing work | Use a soft admission deadline: after expiry start no new session; finish the current session, including redaction, and apply the same content admission rules. | This can overrun by the current session and finalization. The duration and any additional aggregate byte guard remain undecided. |
+| Persistence | Only final selected extracts enter `entries`, `wrote` and `processed`; existing successful-run and secret-disposition gates still apply. | Ordinary capacity or deadline exclusions create no processed record and no partial-session checkpoint. |
 
-## Work-budget recommendation: stop admission between sessions
+## Concrete stopping examples
 
-Prefer a **soft preprocessing admission deadline** for the first version:
-do not start another session after the deadline; finish the already-started
-session, including parsing, redaction and staging, then allocate/finalize the
-completed set. Use a monotonic elapsed-time source.
+Use decimal bytes here to avoid mixing MB and MiB:
 
-This is a refinement of the earlier mid-session-stop suggestion. Repeatedly
-discarding a session at the same deadline can prevent it ever finishing.
-Completing the current individually bounded session avoids adding persistent
-partial-session checkpoints solely to make ordinary budget expiry progress.
+- X = 8,000,000; selected = 7,000,000; next extract = 2,000,000:
+  omit the next session, stop preprocessing, dream the selected 7,000,000.
+  The omitted session can fit a later run's empty budget.
+- X = 8,000,000; selected = 0; next extract = 9,000,000:
+  report and skip that session. Continue to older eligible sessions if time
+  remains, since the skipped session cannot fit even an empty budget.
+- X = 8,000,000; selected = 7,000,000; next extract = 1,000,000:
+  admit it whole and stop at exactly X.
+- The deadline expires during a session: complete parsing and redaction, then
+  admit, omit-and-stop, or skip it according to the same size rules. Start no
+  subsequent session. Already selected content remains usable.
 
-The trade-off is explicit: **the admission duration is not a hard completion
-timeout**. Finishing the current session and finalizing the selected output can
-run beyond it. A hard wall-clock guarantee needs a separate interruption and
-progress contract; this package does not claim one. Unexpected process failure
-still leaves uncommitted work retryable under the existing lifecycle.
+These rules replace equal-share allocation, budget-induced suffix truncation
+and the earlier proposal to measure/stage all candidates before allocation.
+A whole filtered extract can still reflect the parser's existing caps; this
+is not a promise that every original transcript message survives filtering.
 
-Likewise, a pure time policy makes the admitted set depend on machine load.
-Preserve deterministic allocation for the same measured admission set, not an
-unconditional claim that separate timed runs select identical sessions. A
-hybrid time/byte policy does not eliminate this distinction.
+Newest-first priority is deliberate, including during onboarding. Defaults
+should leave useful catch-up capacity, but the older backlog drains only when
+processing capacity exceeds new/changed eligible demand on average. There is
+no catch-up guarantee under sustained overload.
+
+## Deadline meaning and repeatability
+
+Use monotonic elapsed time. The deadline limits how long a run keeps starting
+new preprocessing work. It is independent of the later model-call timeout.
+Finish an already started, individually bounded session including post-parse
+redaction; a streaming-read deadline alone would not cover that work.
+
+The deadline is not a hard completion timeout. A hard timeout would need a
+separate interruption/progress contract. Unexpected process failure follows
+the existing cleanup and retry lifecycle; no partial-session state is added.
+
+With identical inputs, eligibility, settings and admission clock decisions,
+selection and output remain deterministic. Real timed runs can admit different
+sets under different machine load. Adding a raw-byte guard does not remove
+that distinction.
 
 ## Decisions to finish before an implementable spec
 
 | Decision | Evidence or ruling needed |
 |---|---|
-| Preprocessing admission duration | Measure representative per-session parsing, redaction and staging time, and the slow-session tail. Judge the acceptable overrun of the soft policy. |
-| Temporary-disk budget and exhaustion behavior | Measure staged/final overlap and check large permitted extracts. Bound disk without an oversized candidate retrying forever. If an admission cut excludes older small sessions, make that trade-off explicit. |
-| Optional aggregate raw-byte guard | Compare raw volume, duration and completed useful work. Keep a larger byte guard only for a named workload/resource benefit; choose neither the historical 200 MiB nor Fable's example values by inheritance. |
-| Configuration surface | X keeps its current setting. Decide whether the new work/space limits are internal defaults or user settings; this note does not add knobs. |
+| Oversized retry/invalidation | Define when an unchanged extract known to exceed X is retried. Source fingerprint, X changes and extractor changes are relevant candidates; no exact persistence scheme or trigger set has been chosen. Specify diagnostics and ownership alongside the state contract. |
+| Admission duration and clock boundary | Measure representative per-session parsing/redaction time and the slow-session tail; choose an acceptable overrun. Define exactly where timing starts and how it reaches the collector. |
+| Optional aggregate raw-byte guard | Keep one only for a named I/O/work benefit and specify exhaustion/progress semantics compatible with finishing the current session. Do not inherit 200 MiB as a supposed memory requirement. |
+| Configuration surface | X keeps its setting. Decide whether the work limit is an internal default or a user setting; no additional knobs have been accepted. |
+| Physical storage bound | Check selected pretty JSON plus current-session and finalization overlap. Reassess any need for a separate guard under sequential admission; the earlier corpus-wide staging proposal is superseded. |
 
-A short, isolated local sizing experiment can inform these choices; several
-nights of production operation are not a prerequisite for describing the
-design. Record time, raw bytes, filtered demand, temporary-disk peak, selected
-bytes and deferrals without recording transcript content. Sizing evidence is
-separate from correctness tests. No production telemetry or logging change is
-implied by an experiment.
+A short isolated sizing experiment can inform numeric defaults after the
+behavior contract is settled. Multiple production nights are not required to
+form this package. Measure timing, raw bytes, filtered bytes and disk peak
+without recording transcript content; this does not authorize production
+telemetry or a logging change.
 
 ## Boundaries and next artifact
 
-Keep historical recovery, durable extract caches and partial-session ledger
-checkpoints outside this first package. Genuine filtered-content overload may
-still require the existing truncation policy; its processed semantics remain
-an explicit owner decision, not a new losslessness promise.
+No partial-session checkpoints, historical recovery, durable extract cache or
+new content-filtering path. Oversized eligibility metadata, if chosen, is a
+separate unresolved contract, not permission to store partial transcript state.
 
-Reject the one-pass provisional-share shortcut: it can trim an early session
-before learning that the later sessions leave enough space. It fails the
-avoidable-truncation rule above.
-
-After the open decisions are resolved, revise the WP and ADR amendment scope
-together, including any parser/clock/config/test deliverables the chosen policy
-requires. Its current permission boundary covers only the earlier collector
-change and is insufficient for changing the streaming reader's work limit.
-Run the design review on the revised contract before Ready and dispatch.
+The WP now records these accepted rules. Its Deliverables and exact interface
+changes remain provisional until the open decisions are resolved. Finalize
+stream/clock/configuration/reporting/ledger/test ownership as needed and update
+the ADR amendment scope together. Obtain a fresh design review and final owner
+sign-off before Ready and dispatch. Earlier raw reviewer evidence stays intact.
 
 ## Lesson
 
-- WP-dream-filtered-input-budget: bound model input, resident memory, temporary
-  disk and preprocessing work separately. A soft admission deadline and a hard
-  completion timeout make different promises; name which one is being built.
+- WP-dream-filtered-input-budget: stop preprocessing when the selected useful
+  content reaches its budget. Distinguish a session that cannot fit the remaining
+  space from one that can never fit the whole budget; they need different
+  stopping and retry behavior.

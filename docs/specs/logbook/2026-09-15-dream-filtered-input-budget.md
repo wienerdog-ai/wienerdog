@@ -289,6 +289,29 @@ its proposed ADR amendment remains the next step before `Ready` and dispatch;
 the authorization to run this review is not recorded as that later sign-off.
 The existing full-suite executable-pin failure remains unwaived.
 
+## Subsequent owner decisions: revised draft
+
+After the round 1 review above, the owner accepted a different selection policy:
+newest-first whole filtered extracts, stopping at X or at the first session
+that fits X but exceeds the remaining space. That omitted session remains
+unprocessed for a later run. A session whose extract exceeds X itself is
+reported and skipped, allowing older candidates to proceed. No budget-induced
+truncation or partial-session continuation is introduced.
+
+The owner also accepted a soft preprocessing admission deadline: finish the
+current session, including redaction, but start no new one after expiry.
+The [current design package](2026-09-15-dream-preprocessing-design-package.md)
+and revised WP now carry these rules and consistent examples/acceptance
+criteria. Equal-share allocation and corpus-wide staging are superseded.
+Oversized retry triggers, timing defaults/interfaces and the final permission
+boundary remain open; no product implementation was performed.
+
+The round 1 verdict and spec hash above are historical evidence, not approval
+of this revised draft. Finalize the remaining contracts, obtain a fresh design
+review and owner sign-off, then move to Ready. The baseline full-suite failure
+remains unwaived. For this docs revision, targeted Markdown lint, the boundary
+check and `git diff --check` passed; product tests were not rerun.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file
