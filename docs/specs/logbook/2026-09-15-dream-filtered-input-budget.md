@@ -467,6 +467,57 @@ approved here. Expected lock-WP owners: `src/core/dream/lock.js`, CLI wiring,
 `tests/unit/dream-lock.test.js`, relevant pipeline tests and ADR-0012 part 6.
 P1–P4 of the content WP remain proposed independently of this new decision.
 
+### Owner disposition and prerequisite authoring
+
+The owner accepted the relay's concrete proposal with “mehet”: implement the
+narrow liveness correction as a separate prerequisite work package, retaining
+automatic takeover of expired, proven-dead local owners. R2-1 disposition is
+**fix (B/HEAVY)**. The existing simultaneous stale-claimant race is an explicitly
+accepted residual of that narrow scope; it was presented before approval and
+is not silently waived. The normal live-owner path must no longer be stolen
+solely because the model-only deadline elapsed. A hung live owner requires
+intervention; no automatic kill or heartbeat was approved.
+
+The architect is authoring `WP-dream-live-owner-lock` and updating the content
+WP's dependency, inherited lock contract and ADR boundary. This approval does
+not accept P1–P4 of the content WP. Those remain separately proposed.
+
+**Renewed review stop criterion:** fresh conformance and internal coherence
+precede a joint independent design review of the lock prerequisite and revised
+content dependency. Verify R2-1 is resolved by the specified prerequisite, then
+attack new mechanisms. Do not count disagreement with the owner-accepted
+simultaneous stale-claimant residual as a finding; route it as a scope objection.
+Material A/B product findings block and receive proposed owner dispositions;
+accepted HEAVY fixes require a fresh round. LIGHT conformance/machinery fixes
+are mechanically checked; C items are fixed or dispositioned. The existing
+repeat-kind/contract-family circuit breaker still applies. No new residual is
+accepted by the relay.
+
+### Lock prerequisite author handoff and internal pass
+
+The architect created the compact lock prerequisite and inlined its inherited
+contract in the content WP's A11, including the accepted residual and the
+requirement that the prerequisite land first. The successor's ADR-0012 changes
+remain capacity-only; they must preserve the prerequisite's part-6 amendment.
+The source-consumer sweep found `tests/integration/dream.test.js` assumes both
+expiry-only takeover and the old content floor, so each WP now explicitly owns
+its relevant integration-test changes. No product or test source changed.
+
+Internal coherence checked the complete new lock contract and the successor
+changes. The architect qualified the context guarantee by L5/L7, made retained
+lock repeatability explicit and kept A11 inside its canonical Markdown table.
+These were authoring corrections before the independent round, not new policy.
+The lock example's timestamp was verified and JSON examples in both specs parse.
+
+The orchestrator ran the existing `npm test -- tests/unit/dream-lock.test.js tests/unit/dream-pipeline.test.js`
+(exit 0, 62 passed) and `npm test -- tests/integration/dream.test.js` (exit 0,
+47 passed). They establish unchanged-code baseline behavior, not implementation
+of the new decision. The previously recorded full-suite executable-pin failure
+remains unwaived; unchanged product tests were not fully rerun merely for this
+documentation split. New behavior criteria and regression red/green evidence
+remain implementation obligations. The architect's targeted Markdown lint,
+both literal boundary checks and diff check passed.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: a single-run lock must cover the actual

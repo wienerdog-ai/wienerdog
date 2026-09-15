@@ -10,7 +10,9 @@ related_wps: [WP-dream-filtered-input-budget]
 The owner accepted whole-session admission, newest-first priority, the overflow
 distinction and finishing a started session after the soft deadline. The
 architect has now made the remaining choices concrete as proposals for review.
-They are not owner approval. The WP remains Draft.
+They are not owner approval. The WP remains Draft. The owner separately
+approved the narrow live-owner lock fix as a prerequisite; that approval does
+not accept P1–P4 below.
 
 The canonical contract is Table A in
 [WP-dream-filtered-input-budget](../WP-dream-filtered-input-budget.md).
@@ -58,11 +60,32 @@ No representative timing measurement has been used to justify 60 seconds. A
 small isolated sizing experiment can tune that policy later; neither production
 telemetry nor multiple production nights are needed to review the basic design.
 
+## Approved lock prerequisite
+
+The independent design review identified a lock-lifetime mismatch: the current
+model-only lock deadline can expire while authorized preprocessing is still
+running. A second dream can then replace shared scratch. Merely adding nominal
+phase durations cannot cover the permitted overrun.
+
+The owner selected [WP-dream-live-owner-lock](../WP-dream-live-owner-lock.md) as
+a separate prerequisite. An expired same-host owner observed alive or EPERM
+keeps its lock through preprocessing, brain and cleanup. Expired proven-dead
+local owners remain automatically recoverable. Unknown/malformed ownership
+blocks takeover with a distinct diagnostic. No heartbeat or automatic kill.
+
+The existing race between simultaneous stale claimants remains explicitly
+owner-accepted; this is a narrow live-owner-expiry fix, not a complete lock
+redesign. A hung living owner or unverifiable lock may require investigation.
+The prerequisite is Draft pending its independent design gate. No repeated
+approval is needed for the already-selected scope and residual.
+
 ## Boundaries and limitations
 
 The revised WP names collector, config, ledger, CLI and their test owners, plus
 documentation-only parser/stream changes and narrow ADR-0023/ADR-0012 amendments.
-Its implementation remains one coherent M-sized work package.
+Its content implementation remains one coherent M-sized work package, dispatched
+after the separate lock prerequisite. Its ADR-0012 capacity amendment inherits
+the prerequisite part-6 lock amendment without changing that recovery policy.
 
 The 50 MiB ceiling uses discovery metadata. The existing reader's live-append
 and exhaustion/EOF behavior is inherited; no snapshot or stronger source-stability
@@ -77,7 +100,8 @@ sibling's report work here.
 
 Run a fresh independent design review of the complete proposed contract. Record
 findings and dispositions, obtain owner decisions P1–P4 and ADR ratification,
-then mark Ready and re-verify source claims at the dispatch revision. Historical
+then mark Ready and re-verify source claims at the dispatch revision after the
+lock prerequisite has landed. Historical
 review raw artifacts remain unchanged.
 
 ## Lesson
