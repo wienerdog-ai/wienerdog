@@ -638,3 +638,77 @@ Node in a private runtime-only PATH removes the local Node/Claude co-location
 conflict, and the unchanged baseline plus lock implementation and review suites
 passed in that environment. This is not a waiver, identity-check change or
 claim that the original command environment was repaired.
+
+## Implementation dispatch after owner ratification
+
+Dispatch revision: `122771e12f94e8ad01c098034b06480321f680b1`. The
+orchestrator personally re-executed the current-state checks at that commit
+immediately before delegation: C1–C5 code/contract claims, all twelve runtime,
+test and ADR Deliverables equal to merged main, inherited A11 live/unknown/dead
+lock behavior, and the original allocation defect. Six checks passed through
+the repository npm test wrapper. Source/output are retained as
+`2026-09-15-dream-filtered-input-budget-dispatch-{source,output}.txt`.
+
+The synthetic case contains 290 messages whose complete filtered extracts
+occupy 306,242 compact JSON bytes, below X=400,000. The old collector retained
+199 messages. This is an executable defect demonstration, not owner-corpus
+measurement or implemented-green evidence. A preliminary harness-only trial
+used an unexported emptyLedger helper; the corrected harness uses readLedger
+on fresh temporary state. The final committed-SHA execution above passed.
+
+Two native implementers received disjoint files in this one WP: collector,
+configuration, parser comments, collector tests and ADR amendments in one;
+ledger and CLI plus their tests in the other. The orchestrator owns the logbook
+and integrated verification. Neither changes the other's files. All tests use
+the existing npm wrapper and the documented byte-identical runtime-only Node
+PATH to avoid this machine's historical Node/Claude pinning collision.
+
+**PR gate stop criterion:** both fresh gates review the same fixed commit with
+identical clean status before/after. Commit their raw reports before reading.
+Fix genuine implementation defects within Table A; changed product behavior
+requires both gates on the new tip. A new policy or residual returns to the
+owner. Two consecutive failed rounds follow the existing architect escalation
+rule. Machinery-only corrections close mechanically under the repo runbook.
+
+## Integrated implementation verification
+
+The twelve Deliverables implement Table A; the parser/reader executable code
+and constants are unchanged. Both authors completed disjoint edits before
+integrated verification. The orchestrator reran the full literal targeted
+command: 243/243 passed, exit 0. Full npm test: 2,754 total, 2,742 passed,
+12 skipped, zero failed, exit 0. Full lint passed; local PowerShell analysis
+was skipped because pwsh is unavailable. Actual output excerpts are retained
+in `2026-09-15-dream-filtered-input-budget-verification.txt`. Boundary checks
+cover the actual changed-file set and all twelve literal Deliverables;
+whitespace checks pass. The spec moves to In-Review; PR gates remain pending.
+
+The orchestrator also reran the FINAL collector regression test file in a
+separate detached checkout at dispatch SHA `122771e1`, retaining old
+collector/config code and supplying the new shared ledger memo helper. Its
+38 tests produced 20 passes and 18 failures, exit 1. This replaces author-time
+red evidence that also contained four subsequently corrected test assumptions.
+The final failures include real filtered-content, whole-admission, deadline,
+independent-read-budget and memo regressions. Output is retained in the
+`regression-red` artifact. The independent ledger red (two failures against
+the original ledger) is retained in `ledger-red`. Readable test logs normalize
+trailing whitespace and name original byte hashes. These are test evidence,
+not external review verdicts.
+
+The dispatch incident fixture now retains all 290 messages instead of 199,
+with the same 400,000-byte limit and 306,242-byte complete filtered demand.
+The green reproduction is retained as `incident-green-source.txt`; its npm test
+execution passed 1/1, exit 0. Neither run uses personal session data.
+
+Implementation choices: share memo validation in the ledger module; omit empty
+optional maps; compare maps independent of insertion order; combine memo and
+quarantine writes when both change. Exact capacity fill takes precedence over
+a subsequent elapsed deadline. The stop classifier uses ordinary loop pushes
+so large candidate arrays do not become JavaScript argument lists. The relay
+reproduced the discarded spread version's 200,000-item RangeError before the
+author corrected it. No new contract or accepted residual was introduced.
+
+- WP-dream-filtered-input-budget: test the actual private scratch writer path
+  (`writeSync`) when measuring post-parse time or write failures; a
+  `writeFileSync` mock does not observe it.
+- WP-dream-filtered-input-budget: optional memo maps need semantic equality;
+  key order and absent-versus-empty state must not cause durable write churn.

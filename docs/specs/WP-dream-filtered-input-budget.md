@@ -1,7 +1,7 @@
 ---
 id: WP-dream-filtered-input-budget
 title: Allocate dream input capacity from filtered extracts
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-119, WP-087, WP-dream-live-owner-lock]
@@ -10,7 +10,7 @@ adrs: [ADR-0004, ADR-0012, ADR-0023, ADR-0031]
 
 # WP-dream-filtered-input-budget: Allocate dream input capacity from filtered extracts
 
-> **Ready: design approved and owner-ratified on 2026-09-15.** The owner
+> **In-Review: implemented under the owner-ratified 2026-09-15 design.** The owner
 > accepted P1–P4, including A10, and authorized continuation with implementation.
 > The lock prerequisite landed in PR #66 at `81e09414`; this branch includes it.
 >
@@ -249,32 +249,32 @@ This section registers the existing document from frontmatter through completion
 Table A owns operative content/work behavior and the inherited lock assumption.
 Historical evidence stays historical; process requirements keep their repo owner.
 
-- [ ] Frontmatter/title and opening notice: content scope and owner-ratified
+- [x] Frontmatter/title and opening notice: content scope and owner-ratified
       labels mirror A1–A10; the landed lock dependency mirrors A11. Other dependency
       lineage and lifecycle status are historical/process metadata.
-- [ ] Context: ratified behavior and amendment/dependency boundaries defer to
+- [x] Context: ratified behavior and amendment/dependency boundaries defer to
       A1–A11; descriptions of the existing defect remain historical.
-- [ ] Current state, C1–C5 and synthetic reproduction provenance: retain their
+- [x] Current state, C1–C5 and synthetic reproduction provenance: retain their
       inspected revision and historical labels; never recast them as fixed-state
       evidence. Referenced future behavior defers to Table A.
-- [ ] Deliverables and Exact contracts, including signatures, pseudotypes,
+- [x] Deliverables and Exact contracts, including signatures, pseudotypes,
       configuration, memo/file examples and accompanying prose: defer to A1–A11.
-- [ ] Contract reference activation and this checklist describe ownership;
+- [x] Contract reference activation and this checklist describe ownership;
       Table A is canonical, and the stopping examples mirror A1–A4.
-- [ ] Implementation notes & constraints, including Owner-ratified choices, and
+- [x] Implementation notes & constraints, including Owner-ratified choices, and
       Security checklist: defer to A1–A11 for their operative facts.
       Inherited code limitations and baseline failure evidence remain historical.
-- [ ] Acceptance criteria and Verification steps, including explanatory test
+- [x] Acceptance criteria and Verification steps, including explanatory test
       ownership: behavioral assertions defer to A1–A10; red/green evidence and
       verification requirements retain their repo-process authority.
-- [ ] Out of scope: retained guard/filtering, state/reporting and lock boundaries
+- [x] Out of scope: retained guard/filtering, state/reporting and lock boundaries
       defer to A6–A11; adjacent work remains outside the Deliverables boundary.
-- [ ] Definition of done: owner ratification and prerequisite dispatch mirror
+- [x] Definition of done: owner ratification and prerequisite dispatch mirror
       A5–A11; PR, status and independent review requirements are process facts.
-- [ ] Cross-document mirrors: ADR amendments defer to A10, the design package
+- [x] Cross-document mirrors: ADR amendments defer to A10, the design package
       summarizes Table A, and the pending report WP re-verifies A8 before its
       dispatch. A11 inherits the prerequisite's full lock contract and residual.
-- [ ] Register newly found mirrors; update affected canonical rows and every
+- [x] Register newly found mirrors; update affected canonical rows and every
       registered mirror together in the same commit, without an intermediate
       commit containing disagreement.
 
@@ -325,33 +325,33 @@ Historical evidence stays historical; process requirements keep their repo owner
 
 ## Security checklist
 
-- [ ] A6 preserves individual guards, private storage, cleanup and bounded
+- [x] A6 preserves individual guards, private storage, cleanup and bounded
       one-session memory; no new raw/unredacted storage or logging.
-- [ ] Session-ID filename sanitization remains; new temporary names are code-owned.
-- [ ] A7 memo validation defaults to fresh parsing and never overrides ledger
+- [x] Session-ID filename sanitization remains; new temporary names are code-owned.
+- [x] A7 memo validation defaults to fresh parsing and never overrides ledger
       eligibility, counters or successful-dream authorization.
-- [ ] Existing provenance roles, redaction and skill indices retain their meaning.
+- [x] Existing provenance roles, redaction and skill indices retain their meaning.
 
 ## Acceptance criteria
 
-- [ ] AC1 — A1–A4 hold for both harnesses, exact fit, remaining-space stop,
+- [x] AC1 — A1–A4 hold for both harnesses, exact fit, remaining-space stop,
       individually oversized skip and metadata larger than source. No budget truncation.
-- [ ] AC2 — A5 holds for default/override/fallback and monotonic admission,
+- [x] AC2 — A5 holds for default/override/fallback and monotonic admission,
       including expiry during parsing and post-parse work.
-- [ ] AC3 — A6 preserves individual guards/constrained heap; collection can cross
+- [x] AC3 — A6 preserves individual guards/constrained heap; collection can cross
       the old aggregate 200 MiB when time and X permit. Reported partial reads
       never become processed or persisted extracts.
-- [ ] AC4 — A7 holds for cache hits, fingerprint/version/X changes, malformed
+- [x] AC4 — A7 holds for cache hits, fingerprint/version/X changes, malformed
       memo, pruning and ledger round-trips; existing outcomes/counters are preserved.
-- [ ] AC5 — A8–A9 hold for disjoint counts, selected-only scratch/results, ordinary
+- [x] AC5 — A8–A9 hold for disjoint counts, selected-only scratch/results, ordinary
       retry, mixed zero-input causes, real persistence and dry-run non-persistence.
-- [ ] AC6 — Repeating collection with identical inputs, ledger, settings and
+- [x] AC6 — Repeating collection with identical inputs, ledger, settings and
       admission clock decisions yields second run: zero changes to selected
       content, accounting, final scratch bytes or artifacts. An unchanged memo
       is not rewritten by real runs. Real timed runs can admit different sets;
       scratch recreation/mtime changes remain permitted.
-- [ ] AC7 — A10 appears in both ADRs with actual owner approval.
-- [ ] AC8 — Regression assertions fail against the old raw-budget collector and
+- [x] AC7 — A10 appears in both ADRs with actual owner approval.
+- [x] AC8 — Regression assertions fail against the old raw-budget collector and
       pass against implementation; verification below passes.
 
 ## Verification steps (run these; paste output in the PR)

@@ -1,0 +1,74 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const cp = require('node:child_process');
+const root = process.cwd();
+const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const transcripts = require(path.join(root, 'src/core/transcripts'));
+const ledger = require(path.join(root, 'src/core/dream/ledger'));
+const scratch = require(path.join(root, 'src/core/dream/scratch'));
+
+test('C1-C2: main still allocates raw discovery size, then conditionally truncates', () => {
+ const source = read('src/core/dream/scratch.js');
+ for (const text of ['transcripts.discover(paths, { since: null })', "ledgerLib.selectState(ledger, d) === 'select'", 'underCeiling.map((d) => d.size)', 'grant < d.size && serialized > grant', 'Buffer.byteLength(JSON.stringify(extract))']) assert.ok(source.includes(text), text);
+ assert.ok(source.indexOf('underCeiling.map((d) => d.size)') < source.indexOf('transcripts.parseWithOutcome(d, budget)'));
+});
+test('C3: retained reader limits, message caps and complete parse path', () => {
+ assert.deepEqual(transcripts.Limits, {PRE_READ_CEILING_BYTES:50*1024*1024, MAX_LINE_BYTES:1024*1024, MAX_LINES:500000, MAX_RUN_BYTES:200*1024*1024, READ_CHUNK_BYTES:64*1024, MAX_JSON_DEPTH:64});
+ assert.equal(transcripts.MAX_MSG_CHARS,4000); assert.equal(transcripts.MAX_MESSAGES,2000);
+ assert.notEqual(transcripts.newRunBudget(), transcripts.newRunBudget());
+ assert.equal(transcripts.newRunBudget().remaining,200*1024*1024);
+ const s=read('src/core/transcripts/index.js');
+ for (const token of ['capMessage(message)', 'messages.slice(dropped)', 'parseClaudeTranscript', 'parseCodexTranscript']) assert.ok(s.includes(token),token);
+});
+test('C4-C5: scratch representation, processed gate and historical acceptance/ADR', () => {
+ const s=read('src/core/dream/scratch.js'), cli=read('src/cli/dream.js');
+ assert.ok(s.includes('JSON.stringify(extract, null, 2)'));
+ assert.ok(s.indexOf('processed.push(d)') > s.indexOf('writeFilePrivate(scratchFile'));
+ assert.ok(cli.indexOf('recordProcessed(ledger, d)') > cli.indexOf('const sel = collectExtracts'));
+ const tests=read('tests/unit/dream-collect.test.js');
+ for(const token of ['water-fill','MIN_TRUNCATE_BYTES','quarantin','--max-old-space-size=64','skill_invocations']) assert.ok(tests.includes(token),token);
+ assert.ok(read('docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md').includes('allocates the byte budget from discovery `size`'));
+});
+test('Raw allocation defect remains executable after lock landing', () => {
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'wd-content-dispatch-'));
+ try {
+ const paths=require(path.join(root,'src/core/paths')).getPaths({HOME:home,WIENERDOG_HOME:path.join(home,'wd'),CLAUDE_CONFIG_DIR:path.join(home,'claude'),CODEX_HOME:path.join(home,'codex')});
+ const dir=path.join(paths.claudeDir,'projects','demo'); fs.mkdirSync(dir,{recursive:true});
+ for(let n=0;n<2;n++){
+ const id='session'+n;
+ const row=JSON.stringify({type:'user',sessionId:id,cwd:'/demo',timestamp:'2026-09-15T10:00:00Z',message:{role:'user',content:'x'.repeat(1000)},unused:'y'.repeat(n===0?8000:250000)})+'\n';
+ fs.writeFileSync(path.join(dir,id+'.jsonl'),row.repeat(n===0?280:10));
+ }
+ const disc=transcripts.discover(paths,{since:null});
+ const full=disc.map(d=>transcripts.parseWithOutcome(d,transcripts.newRunBudget()).extract);
+ const bytes=full.reduce((n,e)=>n+Buffer.byteLength(JSON.stringify(e)),0);
+ assert.ok(bytes<400000,bytes);
+ const result=scratch.collectExtracts(paths,ledger.readLedger(paths.state),400000);
+ const kept=result.wrote.map(p=>JSON.parse(fs.readFileSync(p,'utf8')));
+ assert.ok(kept.reduce((n,e)=>n+e.messages.length,0)<290);
+ console.log(JSON.stringify({fullBytes:bytes,fullMessages:290,keptMessages:kept.reduce((n,e)=>n+e.messages.length,0)}));
+ } finally { fs.rmSync(home,{recursive:true,force:true}); }
+});
+test('A11: merged lock keeps live/unknown owner and recovers dead local owner', () => {
+ const lock=require(path.join(root,'src/core/dream/lock'));
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'wd-content-lock-'));
+ const file=path.join(dir,'dream.lock');
+ try {
+ const payload=JSON.stringify({pid:process.pid,host:os.hostname(),startedAt:new Date(0).toISOString(),deadline:0});
+ fs.writeFileSync(file,payload); assert.equal(lock.acquireLock(dir,1000).reason,'busy'); assert.equal(fs.readFileSync(file,'utf8'),payload);
+ fs.writeFileSync(file,'broken'); assert.equal(lock.acquireLock(dir,1000).reason,'owner-unknown'); assert.equal(fs.readFileSync(file,'utf8'),'broken');
+ const child=cp.spawnSync(process.execPath,['-e','process.exit(0)']); assert.equal(child.status,0);
+ fs.writeFileSync(file,JSON.stringify({pid:child.pid,host:os.hostname(),startedAt:new Date(0).toISOString(),deadline:0}));
+ assert.deepEqual(lock.acquireLock(dir,1000),{acquired:true,stolen:true});
+ } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('All runtime and test Deliverables match merged main at dispatch', () => {
+ const spec=read('docs/specs/WP-dream-filtered-input-budget.md');
+ const paths=[...spec.matchAll(/^\| modify \| ([^ ]+) \|/gm)].map(m=>m[1]);
+ for (const p of paths) assert.equal(read(p),cp.execFileSync('git',['show','origin/main:'+p],{encoding:'utf8'}),p);
+ console.log('Verified HEAD '+cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim());
+});

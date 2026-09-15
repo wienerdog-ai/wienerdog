@@ -65,7 +65,7 @@ function commitCount(vault) {
 }
 
 /** Plant an oversized (~205 KB serialized) Claude transcript so the input
- *  assembly must truncate or drop it. @param {string} claudeDir @param {string} sessionId */
+ *  assembly must skip it if its filtered extract exceeds the limit. @param {string} claudeDir @param {string} sessionId */
 function plantOversized(claudeDir, sessionId) {
   const projDir = path.join(claudeDir, 'projects', 'proj');
   fs.mkdirSync(projDir, { recursive: true });
@@ -529,52 +529,72 @@ test('dream-integration: an expired lock of an exited local process is recovered
   assert.equal(commitCount(ctx.vault), before + 1);
 });
 
-test('dream-integration: a capacity-wedged dream (budget below the floor) throws loud, never "nothing new"', async () => {
-  // Only an oversized session, and a budget below MIN_TRUNCATE_BYTES → nothing
-  // can be fed even after truncation. This must FAIL LOUD (exit 1 → run-job alert),
-  // not report success.
+test('dream-integration: only individually oversized input fails actionably and persists size evidence', async () => {
   const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
   const before = commitCount(ctx.vault);
-
   const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.ok(thrown instanceof WienerdogError);
+  assert.match(thrown.message, /no complete session was admitted/);
+  assert.match(thrown.message, /1000-byte input limit; raise dream_max_input_bytes/);
+  assert.doesNotMatch(output, /nothing new to dream|truncat|floor/);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.equal(commitCount(ctx.vault), before);
+  const ledger = readLedgerFile(ctx.core);
+  assert.deepEqual(ledger.files, {});
+  const memo = Object.values(ledger.oversizedExtracts);
+  assert.equal(memo.length, 1);
+  assert.ok(memo[0].extractBytes > 1000);
+});
 
-  assert.ok(thrown, 'expected a WienerdogError throw');
-  assert.match(thrown.message, /^dream capacity exhausted:/);
-  // It must NOT masquerade as the genuinely-empty case.
-  assert.ok(!/nothing new to dream/.test(output));
-  // Its capacity drop was surfaced plainly.
-  assert.match(output, /capacity: dropped 1 session/);
-  // No commit; a capacity-deferred session gets NO ledger record (retried next run).
+test('dream-integration: an oversized session is skipped whole while the complete smaller input is processed', async () => {
+  const ctx = setup({ oversized: 'big', maxInputBytes: 100_000 });
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.doesNotMatch(output, /truncated|floor|claude\/big/);
+  assert.match(output, /dream committed/);
+  assert.equal(commitCount(ctx.vault), before + 1);
+  const ledger = readLedgerFile(ctx.core);
+  assert.equal(ledgerRecord(ledger, 'big.jsonl'), null);
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
+  assert.equal(Object.keys(ledger.oversizedExtracts).length, 1);
+});
+
+test('dream-integration: an oversized dry-run diagnoses without throwing or persisting', async () => {
+  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--dry-run']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /individually oversized: 1 session/);
+  assert.match(output, /no complete session was admitted/);
+  assert.doesNotMatch(output, /nothing new to dream|truncated|floor/);
   assert.equal(commitCount(ctx.vault), before);
   assert.equal(readLedgerFile(ctx.core), null);
 });
 
-test('dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit', async () => {
-  // An oversized session plus the normal injection fixture, with a budget above
-  // the floor but below the oversized extract → it is truncated to fit and the
-  // dream proceeds (forward progress restored).
-  const ctx = setup({ oversized: 'big', maxInputBytes: 100_000 });
-  const before = commitCount(ctx.vault);
-
-  const { output, thrown } = await runDream(ctx, ['--yes']);
-  assert.equal(thrown, null, thrown && thrown.message);
-
-  // The truncation was surfaced plainly on stdout.
-  assert.match(output, /truncated claude\/big to fit the input budget/);
-  // And the run actually committed (no wedge, no silent stall).
-  assert.match(output, /dream committed/);
-  assert.equal(commitCount(ctx.vault), before + 1);
-});
-
-test('dream-integration: a capacity dry-run diagnoses exhaustion without throwing', async () => {
-  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
-  const before = commitCount(ctx.vault);
-
-  const { output, thrown } = await runDream(ctx, ['--dry-run']);
-  assert.equal(thrown, null, thrown && thrown.message);
-  assert.match(output, /capacity exhausted: no fresh session fits/);
-  assert.ok(!/nothing new to dream/.test(output));
-  assert.equal(commitCount(ctx.vault), before);
+test('dream-integration: capacity-stop counts match dry-run and real run while only complete inputs are processed', async () => {
+  const ctx = setup({ oversized: 'private-first', maxInputBytes: 300_000 });
+  plantOversized(ctx.claude, 'private-second');
+  const proj = path.join(ctx.claude, 'projects', 'proj');
+  for (const [name, time] of [['private-first', 300], ['private-second', 200], ['inj', 100]]) {
+    fs.utimesSync(path.join(proj, `${name}.jsonl`), time, time);
+  }
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null, dry.thrown && dry.thrown.message);
+  assert.match(dry.output, /capacity stop: 2 session\(s\) deferred/);
+  assert.match(dry.output, /claude sessions: 1/);
+  assert.match(dry.output, /total input bytes: [1-9][0-9]+/);
+  assert.doesNotMatch(dry.output.split('  brain argv:')[0], /private-first|private-second|truncated|floor|individually oversized/);
+  assert.equal(readLedgerFile(ctx.core), null);
+  const real = await runDream(ctx, ['--yes']);
+  assert.equal(real.thrown, null, real.thrown && real.thrown.message);
+  assert.match(real.output, /capacity stop: 2 session\(s\) deferred/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.equal(Object.keys(ledger.files).length, 1);
+  assert.equal(ledgerRecord(ledger, 'private-first.jsonl').outcome, 'processed');
+  assert.equal(ledgerRecord(ledger, 'private-second.jsonl'), null);
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl'), null);
 });
 
 // WP-dream-live-owner-lock: a separate live owner outlasts its deadline.
@@ -1663,7 +1683,7 @@ test('dream-integration: the secret-revert summary is printed and carries counts
 test('dream-integration: the bounded episode — three deferrals, then an exhausted quarantine that an append cannot reset', async () => {
   // The L1 test: inj.jsonl is APPENDED TO before every run, so its fingerprint
   // changes every time. A fingerprint-keyed counter would reset to 1 each night
-  // and bound nothing — and because the water-fill is newest-mtime-first, that
+  // and bound nothing — and because input selection is newest-mtime-first, that
   // same file would keep winning the budget.
   const ctx = setup();
   const inj = injPath(ctx);

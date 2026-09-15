@@ -1,3 +1,6 @@
+Readable reproduction output; trailing whitespace normalized only.
+Exact original bytes: 122771e12f94e8ad01c098034b06480321f680b1:docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-first.txt
+
 
 > wienerdog@0.13.0 test
 > node tests/with-temp-root.js tests/run.js /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js tests/unit/dream-lock.test.js
@@ -30,7 +33,7 @@ test at ../../../../../private/tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-revie
   AssertionError [ERR_ASSERTION]: [eval]:9
         if (result.acquired) scratch.collectExtracts({"state":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/state","claudeDir":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/claude","codexDir":"/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-testrun-4ljPRM/wd-review-lock-17NtQK/codex"}, ledger.emptyLedger(), 8_000_000);
                                                                                                                                                                                                                                                                                                                                                                                                   ^
-  
+
   TypeError: ledger.emptyLedger is not a function
       at [eval]:9:385
       at runScriptInThisContext (node:internal/vm:219:10)
@@ -40,12 +43,12 @@ test at ../../../../../private/tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-revie
       at evalFunction (node:internal/process/execution:283:30)
       at evalTypeScript (node:internal/process/execution:295:3)
       at node:internal/main/eval_string:71:3
-  
+
   Node.js v24.18.0
-  
-  
+
+
   1 !== 0
-  
+
       at TestContext.<anonymous> (/private/tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js:38:12)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1325:25)
