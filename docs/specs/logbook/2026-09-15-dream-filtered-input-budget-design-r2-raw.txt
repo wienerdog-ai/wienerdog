@@ -1,0 +1,22 @@
+{
+  "verdict": "needs-attention",
+  "summary": "Resolve the preprocessing/lock lifetime mismatch before implementation. The proposed independent allowance can authorize work after another dream is permitted to steal and rebuild its shared scratch directory.",
+  "findings": [
+    {
+      "id": "R2-1",
+      "title": "Include preprocessing in the single-run lock lifetime contract",
+      "body": "A5 accepts an independently configurable preprocessing allowance, including values longer than the model timeout, and permits the current session to overrun it. The current CLI acquires its lock with cfg.timeoutMs alone before collection (src/cli/dream.js:594), and src/core/dream/lock.js:47-55 allows another process to steal solely because that deadline passed, without checking whether its owner is still alive. The next collector then unconditionally removes shared dream-scratch (scratch.js:160-163). Thus a legitimate long preprocessing run can overlap another dream before its brain even starts; the two runs can destroy or replace each other's inputs, with missing/changed inputs caught downstream rather than ordinary completion. An isolated two-process reproduction of the existing helpers, with a simulated 1,200,001 ms elapsed under the proposed legal 3,600,000 ms preprocessing allowance and the default 1,200,000 ms model timeout, observed acquired=true, stolen=true, holderAlive=true, scratchSurvived=false. This was not an execution of the unimplemented proposed collector. The underlying lease weakness predates this WP, but the newly configurable independent duration materially expands it, while A10 preserves ADR-0012 part 6's assumption that a stealable lock means the prior brain is dead. The design presently specifies no integration for that assumption.",
+      "file": "docs/specs/WP-dream-filtered-input-budget.md",
+      "line_start": 217,
+      "line_end": 217,
+      "confidence": 0.96,
+      "recommendation": "Define the lock-ownership behavior across preprocessing, its allowed overrun, and the later brain phase, so an authorized live run cannot lose shared scratch merely because the model-only deadline expired. Carry the necessary wiring in the CLI and add the lock owner to Deliverables if needed; align ADR-0012 part 6 and verify this overlap case. Simply adding the nominal preprocessing duration is insufficient unless the allowed overrun is also accounted for.",
+      "materiality": "B",
+      "fix_weight": "HEAVY"
+    }
+  ],
+  "scope_objections": [],
+  "executed": "Read-only design assessment of the WP, design package, CLAUDE.md, spec-authoring and codex-review runbooks, relevant collector/config/ledger/stream/parser/CLI code and tests, ADR-0004/0012/0023/0031, and the sibling report WP. Used cat, nl -ba, sed -n and rg to inspect these sources; additionally traced src/core/dream/lock.js because CLI cfg.timeoutMs is its current consumer. One attempted read used the nonexistent docs/adr/0004-no-daemons.md name; rg --files located and the subsequent read used docs/adr/0004-no-daemon-invariant.md. Initial exact checkout command: git status --porcelain=v1 && git rev-parse HEAD (exit 0; empty status and reviewed HEAD). Created only an external test /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js. Exact test command, executed twice: npm test -- /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.test.js tests/unit/dream-lock.test.js. First execution exit 1: 12 tests, 11 pass, 1 fail, 0 skipped; the review harness incorrectly called non-exported ledger.emptyLedger, so it failed before the scratch assertion. Replaced that call in the external test with a literal empty ledger. Second execution exit 0: 12 tests, 12 pass, 0 fail, 0 skipped, including the live-owner/scratch-removal reproduction; the passing reproduction asserts the unsafe current behavior and is not evidence that the proposal is fixed. Logs: /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review.log and /tmp/wd-dream-design-r2.zy7J7H/lock-lifetime-review-rerun.log. No full suite, lint, installed dream or sync was run; historical suite evidence was only read, not claimed as executed. Final Python subprocess.check_output ran git status --porcelain=v1 and git rev-parse HEAD (both exit 0), asserting byte-identical empty status and the same HEAD as the initial capture. No checkout files were changed.",
+  "reviewed_commit": "21363f5adb5d8ee9d8f62ea801f4f7cc12c184f2",
+  "working_tree_unchanged": true
+}

@@ -5,10 +5,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
+const { once } = require('node:events');
 
 const dream = require('../../src/cli/dream');
-const { acquireLock } = require('../../src/core/dream/lock');
+const LOCK_MODULE = require.resolve('../../src/core/dream/lock');
+const { WienerdogError } = require('../../src/core/errors');
 const idApprovals = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
 const { Limits } = require('../../src/core/transcripts');
@@ -494,7 +496,7 @@ test('dream-integration: the watchdog kills a hanging brain, exits with a timeou
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
 });
 
-test('dream-integration: a live concurrent lock yields "another dream in progress" and no commit', async () => {
+test('dream-integration: a live concurrent lock yields "another dream holds the lock" and no commit', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   // Plant a live foreign lock (future deadline, different pid).
@@ -507,18 +509,19 @@ test('dream-integration: a live concurrent lock yields "another dream in progres
 
   const { output, thrown } = await runDream(ctx, ['--yes']);
   assert.equal(thrown, null);
-  assert.match(output, /another dream is in progress/);
+  assert.match(output, /another dream holds the lock/);
   assert.equal(commitCount(ctx.vault), before);
   // The foreign lock was not deleted.
   assert.equal(fs.existsSync(path.join(state, 'dream.lock')), true);
 });
 
-test('dream-integration: a stale lock past its deadline is stolen with a warning and the run proceeds', async () => {
+test('dream-integration: an expired lock of an exited local process is recovered with a warning', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   const state = path.join(ctx.core, 'state');
-  // Pre-seed a stale lock (deadline in the past) using the real helper.
-  acquireLock(state, -1);
+  // The child creates the lock and exits; no guessed PID or mocked liveness.
+  execFileSync(process.execPath, ['-e',
+    'require(process.argv[1]).acquireLock(process.argv[2], -1)', LOCK_MODULE, state]);
 
   const { output, thrown } = await runDream(ctx, ['--yes']);
   assert.equal(thrown, null, thrown && thrown.message);
@@ -574,6 +577,67 @@ test('dream-integration: a capacity dry-run diagnoses exhaustion without throwin
   assert.equal(commitCount(ctx.vault), before);
 });
 
+// WP-dream-live-owner-lock: a separate live owner outlasts its deadline.
+test('dream-integration: repeated contenders preserve an expired live owner and its scratch', async (t) => {
+  const ctx = setup();
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  const sentinel = path.join(scratch, 'owner-input.md');
+  const before = commitCount(ctx.vault);
+  const owner = spawn(process.execPath, ['-e', `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    require(process.argv[1]).acquireLock(process.argv[2], -1);
+    fs.mkdirSync(path.dirname(process.argv[3]), { recursive: true });
+    fs.writeFileSync(process.argv[3], 'still reading this input\\n');
+    process.on('message', () => process.exit(0));
+    process.send('ready');
+  `, LOCK_MODULE, state, sentinel], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  t.after(async () => {
+    if (owner.exitCode === null && owner.signalCode === null) {
+      const exited = once(owner, 'exit');
+      owner.kill();
+      await exited;
+    }
+  });
+  await once(owner, 'message');
+  const lockBytes = fs.readFileSync(path.join(state, 'dream.lock'));
+  const scratchBytes = fs.readFileSync(sentinel);
+  assert.ok(JSON.parse(lockBytes).deadline < Date.now());
+  for (let i = 0; i < 2; i++) {
+    const { output, thrown } = await runDream(ctx, ['--yes']);
+    assert.equal(thrown, null);
+    assert.equal(output, 'wienerdog: another dream holds the lock.');
+    assert.deepEqual(fs.readFileSync(path.join(state, 'dream.lock')), lockBytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['owner-input.md']);
+    assert.deepEqual(fs.readFileSync(sentinel), scratchBytes);
+    assert.equal(commitCount(ctx.vault), before);
+    assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
+  }
+});
+
+test('dream-integration: an unverifiable owner repeatedly errors without changing lock or scratch', async () => {
+  const ctx = setup();
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+  fs.writeFileSync(path.join(scratch, 'owner-input.md'), 'preserve this input');
+  const lockBytes = '{untrusted owner: do not print this}';
+  fs.writeFileSync(path.join(state, 'dream.lock'), lockBytes);
+  const before = commitCount(ctx.vault);
+  for (let i = 0; i < 2; i++) {
+    const { output, thrown } = await runDream(ctx, ['--yes']);
+    assert.ok(thrown instanceof WienerdogError);
+    assert.equal(thrown.message, 'dream lock owner could not be verified; no takeover was attempted. Check whether an earlier dream is still running before arranging lock recovery.');
+    assert.equal(output, '');
+    assert.equal(fs.readFileSync(path.join(state, 'dream.lock'), 'utf8'), lockBytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['owner-input.md']);
+    assert.equal(fs.readFileSync(path.join(scratch, 'owner-input.md'), 'utf8'), 'preserve this input');
+    assert.equal(commitCount(ctx.vault), before);
+    assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
+  }
+});
+
 // ── WP-069: concurrency + watermark-consolidation safety ────────────────────
 
 test('dream-integration: a lock-losing dream is a pure no-op that leaves the winner\'s live scratch byte-for-byte untouched', async () => {
@@ -606,7 +670,7 @@ test('dream-integration: a lock-losing dream is a pure no-op that leaves the win
   const { output, thrown } = await runDream(ctx, ['--yes']);
 
   assert.equal(thrown, null);
-  assert.match(output, /another dream is in progress/);
+  assert.match(output, /another dream holds the lock/);
   // No commit, no per-file state advanced.
   assert.equal(commitCount(ctx.vault), before);
   assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);

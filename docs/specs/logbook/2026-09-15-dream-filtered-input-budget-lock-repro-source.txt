@@ -1,0 +1,47 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const root = '/Users/felho/dev/repos-to-learn-from/wienerdog';
+const locks = require(path.join(root, 'src/core/dream/lock'));
+test('review reproduction: a living collector owner loses scratch after the model-only lock deadline', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-review-lock-'));
+  const realNow = Date.now;
+  try {
+    const paths = { state: path.join(dir, 'state'), claudeDir: path.join(dir, 'claude'), codexDir: path.join(dir, 'codex') };
+    const start = 1_800_000_000_000;
+    const modelTimeoutMs = 20 * 60_000;
+    const allowedPreprocessMs = 60 * 60_000;
+    Date.now = () => start;
+    assert.deepEqual(locks.acquireLock(paths.state, modelTimeoutMs), { acquired: true, stolen: false });
+    const scratch = path.join(paths.state, 'dream-scratch');
+    fs.mkdirSync(scratch);
+    const sentinel = path.join(scratch, 'claude-current.json');
+    fs.writeFileSync(sentinel, '{}');
+    const elapsed = modelTimeoutMs + 1;
+    assert.ok(elapsed < allowedPreprocessMs);
+    const script = `
+      const fs = require('node:fs');
+      const locks = require(${JSON.stringify(path.join(root, 'src/core/dream/lock'))});
+      const scratch = require(${JSON.stringify(path.join(root, 'src/core/dream/scratch'))});
+      const ledger = require(${JSON.stringify(path.join(root, 'src/core/dream/ledger'))});
+      Date.now = () => ${start + elapsed};
+      process.kill(${process.pid}, 0);
+      const result = locks.acquireLock(${JSON.stringify(paths.state)}, ${modelTimeoutMs});
+      if (result.acquired) scratch.collectExtracts(${JSON.stringify(paths)}, { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} }, 8_000_000);
+      console.log(JSON.stringify({ ...result, holderAlive: true, scratchSurvived: fs.existsSync(${JSON.stringify(sentinel)}) }));
+    `;
+    const child = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8' });
+    assert.equal(child.status, 0, child.stderr);
+    const result = JSON.parse(child.stdout);
+    assert.deepEqual(result, { acquired: true, stolen: true, holderAlive: true, scratchSurvived: false });
+    assert.equal(locks.ownsLock(paths.state), false);
+    console.log(JSON.stringify({ elapsedMs: elapsed, allowedPreprocessMs, modelTimeoutMs, ...result }));
+  } finally {
+    Date.now = realNow;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

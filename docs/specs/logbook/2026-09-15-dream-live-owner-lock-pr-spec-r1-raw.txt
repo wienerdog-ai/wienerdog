@@ -1,0 +1,20 @@
+APPROVE
+
+Findings: none.
+
+Reviewed PR: https://github.com/felho/wienerdog/pull/66
+Reviewed HEAD: 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
+Merge base with main: 91668da62822c73be6115a3e6d06c6ec51462509
+Role: wd-reviewer, fresh spec-fidelity gate.
+
+Boundary was checked first against every changed path using the repository's boundary checker. The six implementation Deliverables, the WP itself and the allowed logbook evidence are the complete changed-file set. Both the actual-diff boundary check and the literal spec boundary command exited 0.
+
+Personally executed all five spec verification commands through the repository npm test wrapper where applicable. Targeted tests: 144 passed, zero failed, exit 0. Full suite: 2,734 tests, 2,722 passed, zero failed, 12 skipped, exit 0. Lint exited 0; PowerShell analysis was skipped because pwsh is unavailable. Both git diff --check and the additional merge-base-to-reviewed-HEAD whitespace check exited 0. Tests used the documented runtime-only PATH with byte-identical Node v24.18.0. Commands, exit statuses, output summaries and full-output hashes are recorded separately in pr-spec-r1-execution.txt.
+
+Table L1-L8 matches the implementation: wx/payload compatibility; read/deadline ordering; exact host and positive integer PID validation; live/EPERM retention; ESRCH-only expired-local recovery; literal busy/unknown diagnostics; decline-before-collection and cleanup-before-release; the scoped ADR amendment. Tests exercise real separate live/dead processes, repeated scratch/lock preservation, process probing at lifecycle boundaries and retained ownership helpers. The committed old-implementation red evidence was inspected; this gate independently executed the current green verification, not a fresh old-code mutation run.
+
+Closed-Contract Drift Check: Table L remains canonical and unchanged from the approved dispatch spec. The implementation commit changes only spec status and completion checkboxes. The registered mirrors in the spec, modified source comments, tests and dated ADR amendment preserve the same scope and accepted limits. No mirror promotes deadline expiry to proof of death, removes automatic expired-dead-local recovery or promises atomic stale arbitration. The inherited simultaneous stale-claimant race and child-reaping limitations remain explicit accepted residuals. No contract extraction or architect escalation is warranted.
+
+PR title, branch, template fields, conventional commits, Generated-by line and WP-prefixed lesson satisfy the stated process requirements. No runtime dependencies, configuration surface, background service or golden fixture changes were introduced.
+
+Read-only verification: HEAD remained the reviewed SHA; git status --porcelain was byte-identical before and after (empty, zero bytes). No edits or logs were written into the reviewed worktree.

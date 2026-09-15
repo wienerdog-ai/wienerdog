@@ -1,0 +1,1244 @@
+Evidence transcription: trailing whitespace normalized only.
+Original SHA-256: 040719ed988b815114d914bfb621c95a9115467b9bd8d77b950f2d663e1f383a
+
+✔ dream-integration: a set WIENERDOG_FAKE_TODAY has ZERO effect — dream derives the date from the injected clock (WP-155) (89.399583ms)
+error: your local changes would be overwritten by revert.
+hint: commit your changes or stash them to proceed.
+fatal: revert failed
+✔ dream-integration: full run commits valid tiers, reverts injection + weak skill, deletes out-of-vault, one revertable commit (375.942833ms)
+✔ dream-integration: without a seeded registry the dream digest omits identity (dream never seeds, fails closed) (258.289ms)
+✔ dream-integration: a second run with no new transcripts makes no commit and no ledger change (289.966458ms)
+✔ dream-integration: --dry-run prints the plan and resolved argv, runs no brain, makes no commit (90.184125ms)
+✔ dream-integration: a dirty vault is NOT pre-committed, and the dream proceeds anyway (row G6) (304.841125ms)
+✔ dream-integration: a crashed brain restores the vault, releases the lock, records no ledger outcome (125.274584ms)
+✔ dream-integration: the watchdog kills a hanging brain, exits with a timeout error, no commit, no scratch left (1623.30775ms)
+✖ dream-integration: a live concurrent lock yields "another dream holds the lock" and no commit (85.007958ms)
+✔ dream-integration: an expired lock of an exited local process is recovered with a warning (304.227083ms)
+✔ dream-integration: a capacity-wedged dream (budget below the floor) throws loud, never "nothing new" (91.601125ms)
+✔ dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit (288.085625ms)
+✔ dream-integration: a capacity dry-run diagnoses exhaustion without throwing (89.481292ms)
+✖ dream-integration: repeated contenders preserve an expired live owner and its scratch (304.871625ms)
+✖ dream-integration: an unverifiable owner repeatedly errors without changing lock or scratch (298.259417ms)
+✖ dream-integration: a lock-losing dream is a pure no-op that leaves the winner's live scratch byte-for-byte untouched (82.440292ms)
+✔ dream-integration: a brain whose inputs vanish mid-run records no ledger outcome, makes no commit, and fails loud (129.194959ms)
+✔ dream-integration: a brain that rejects the trigger as an unknown command fails loud, makes no commit, and advances no ledger (WP-dream-plaintext-trigger) (129.47ms)
+✔ dream-integration: a marker line AMID real brain output does NOT trip the guard — the run commits normally (WP-dream-plaintext-trigger) (279.67075ms)
+✔ dream-integration: a WRITES-performing brain whose entire stdout is the bare marker does NOT abort — commits normally (anti-DoS, WP-dream-plaintext-trigger) (275.614375ms)
+✔ dream-integration: a stderr-channel rejection with whitespace-only stdout still aborts — no commit, no ledger (WP-dream-plaintext-trigger) (125.794833ms)
+✔ dream-integration: an over-ceiling transcript is quarantined while the valid neighbour is consolidated (355.828291ms)
+✔ dream-integration: a quarantine-only run records + banners + exits 0; unchanged not retried; changed retried (364.708709ms)
+✔ dream-integration: a refresh FAILURE is reported and never fails the dream (287.825208ms)
+✔ dream-integration: an idle run writes the vault warnings file when it is absent, then leaves it alone (114.956125ms)
+✔ dream-integration: --dry-run writes no vault warnings file, on the idle path either (127.733334ms)
+✔ dream-integration: the one-time migration seeds the ledger baseline from watermarks.json (102.658917ms)
+✔ dream-integration: a hostile quarantined filename reaches the banner and console only in sanitized form (85.277333ms)
+✔ dream-integration: --dry-run reports a would-be quarantine but persists neither the ledger nor the digest (117.757834ms)
+✔ dream-integration: --dry-run on the upgrade path (watermarks.json present, no ledger) persists nothing (105.474167ms)
+✔ dream-integration: A5 private modes — digest.md 0600 after a dream; scratch dir 0700 with 0600 extracts (WP-126) (278.342875ms)
+✔ dream-integration: F9 — a symlinked core is REFUSED before any core write; nothing under the external tree changes (0.789625ms)
+✔ dream-integration: WP-a9 — the real dream writer path leaves a 0700 log dir and a 0600 daily log under umask 000 (268.220708ms)
+✔ dream-integration: WP-a9 — appending into a legacy 0666 daily log re-secures it to 0600 (and the dir to 0700) (257.846334ms)
+✔ dream-integration: a probe FAIL halts the dream — no brain, no precommit, no commit (WP-135) (685.225792ms)
+✔ dream-integration: a probe INCONCLUSIVE halts the dream fail-closed (WP-135) (491.373416ms)
+✔ dream-integration: opts.skipContainmentProbe skips the probe — the JS-only seam, no env var (WP-135/WP-155) (328.758917ms)
+✔ dream-integration: a supervised run writes the per-token brain pidfile at spawn, PROVES group-B quiescence, then removes it (R6-2/R7-2) (297.068042ms)
+✔ dream-integration: R6-2 — a brain-leader NON-ZERO exit still reaps group B BEFORE deleting the pidfile (102.620209ms)
+✔ dream-integration: R7-2 — an injected { reaped: false } RETAINS the pidfile for run-job's backstop retry (102.625208ms)
+✔ dream-integration: the watchdog timeout reaps the detached fake brain via the injected reapTree seam — no orphan survives (1619.456333ms)
+✔ dream-integration: R10-1 — a THROWING hand-up write reaps the just-spawned brain group and FAILS the run ({ reaped: true } branch) (170.173125ms)
+✔ dream-integration: R10-1/R11-3 — write-fail guard { reaped: false → true }: ONE bounded escalation reaps, the run still fails (147.913042ms)
+✔ dream-integration: R11-3 — write-fail guard { reaped: false → false }: a survivor-specific error names the un-reaped brain group (147.903625ms)
+✔ dream-integration: a standalone run (no run token) writes no hand-up pidfile (259.635917ms)
+✔ dream-integration: the 2026-07-24/25 regression — a secret-reverted run DEFERS its transcript instead of marking it processed (286.83425ms)
+✔ dream-integration: the secret-revert summary is printed and carries counts only — no basename, no matched value (253.534417ms)
+✔ dream-integration: the bounded episode — three deferrals, then an exhausted quarantine that an append cannot reset (901.55975ms)
+✔ dream-integration: a passing probe result is recorded in the dream run evidence (WP-135) (86.3945ms)
+✔ dream-lock: acquires on an empty state dir (1.732333ms)
+✔ dream-lock: a second call while the lock is live is refused (0.347375ms)
+✖ dream-lock: an expired live local owner keeps its lock on repeated attempts (0.851333ms)
+✔ dream-lock: ordinary acquisition preserves the complete payload bytes (0.375208ms)
+✔ dream-lock: non-EEXIST creation failure propagates (0.253583ms)
+✖ dream-lock: deadline 1789466400000 is busy before identity or PID probing (0.344291ms)
+✖ dream-lock: deadline 1789466400001 is busy before identity or PID probing (0.2615ms)
+✖ dream-lock: malformed JSON retains the unknown owner without probing (0.798333ms)
+✖ dream-lock: null retains the unknown owner without probing (0.394292ms)
+✖ dream-lock: array retains the unknown owner without probing (0.329458ms)
+✖ dream-lock: string record retains the unknown owner without probing (0.336958ms)
+✖ dream-lock: numeric record retains the unknown owner without probing (0.293792ms)
+✖ dream-lock: missing deadline retains the unknown owner without probing (0.277834ms)
+✖ dream-lock: string deadline retains the unknown owner without probing (0.270459ms)
+✖ dream-lock: null deadline retains the unknown owner without probing (0.237292ms)
+✖ dream-lock: infinite deadline retains the unknown owner without probing (0.207333ms)
+✖ dream-lock: negative infinite deadline retains the unknown owner without probing (0.250625ms)
+✖ dream-lock: foreign host retains the unknown owner without probing (0.261833ms)
+✖ dream-lock: non-string host retains the unknown owner without probing (0.2735ms)
+✖ dream-lock: missing host retains the unknown owner without probing (0.248ms)
+✖ dream-lock: invalid PID undefined retains the unknown owner without probing (0.236042ms)
+✖ dream-lock: invalid PID 12345 retains the unknown owner without probing (0.229167ms)
+✖ dream-lock: invalid PID 0 retains the unknown owner without probing (0.227125ms)
+✖ dream-lock: invalid PID -1 retains the unknown owner without probing (0.246333ms)
+✖ dream-lock: invalid PID 1.5 retains the unknown owner without probing (0.2325ms)
+✖ dream-lock: invalid PID 2147483648 retains the unknown owner without probing (0.229833ms)
+✖ dream-lock: invalid PID null retains the unknown owner without probing (0.21725ms)
+✖ dream-lock: existing-record read failure EACCES declines without replacement (0.272583ms)
+✖ dream-lock: existing-record read failure ENOENT declines without replacement (0.275875ms)
+✖ dream-lock: expired local owner probe null determines recovery (0.259458ms)
+✖ dream-lock: expired local owner probe EPERM determines recovery (0.264834ms)
+✖ dream-lock: expired local owner probe ESRCH determines recovery (0.462ms)
+✖ dream-lock: expired local owner probe EINVAL determines recovery (0.307041ms)
+✖ dream-lock: expired local owner probe undefined determines recovery (0.312833ms)
+✖ dream-lock: positive PID domain endpoint 1 is probeable (0.28775ms)
+✖ dream-lock: positive PID domain endpoint 2147483647 is probeable (0.2685ms)
+✔ dream-lock: releaseLock removes only our own lock (0.288458ms)
+✔ dream-lock: releaseLock leaves another process lock intact (0.199209ms)
+✔ dream-lock: releaseLock is a no-op when absent (0.147375ms)
+✔ dream-lock: ownsLock is true for our own live lock (0.181708ms)
+✔ dream-lock: ownsLock is false for a foreign-pid lock (superseded holder) (0.204709ms)
+✔ dream-lock: ownsLock is false when the lock is absent (0.088333ms)
+✔ dream-lock: ownsLock is false when the lock is unparseable (0.192667ms)
+✔ dream-pipeline: the pinned call set module is its canonical SOURCE FORM (Table W row W1(c)) (0.78025ms)
+✔ dream-pipeline: claim-1-pipeline structurally — no composed argv or child env element is, or contains, the vault path (253.5745ms)
+✔ dream-pipeline: claim-1-pipeline behaviourally — a brain that attempts a vault write leaves the vault byte-identical outside promotion (266.44975ms)
+✔ dream-pipeline: claim-2b-pipeline — no git call the seam OBSERVES runs with a cwd at or beneath the workspace root, over a whole run (251.959333ms)
+✔ dream-pipeline: M10 — a self-hiding .gitignore in the workspace does not hide the payload from classification (0.556042ms)
+✔ dream-pipeline: the reap precondition refuses fail-closed on POSIX and does NOT tear the workspace down (rows G2, G5) (107.3915ms)
+✔ dream-pipeline: a verified reap proceeds, and every other exit path DOES tear the workspace down (rows G2, G5) (261.216125ms)
+✔ dream-pipeline: a TOKENLESS manual run computes the verdict too — an ABSENT verdict is unverified, never success (row G2) (95.514542ms)
+✔ dream-pipeline: on win32 an ordinary successful run is NOT refused — a platform-blind rule breaks Windows (row G2) (257.180959ms)
+✔ dream-pipeline: the marker plus an EMPTY workspace delta aborts as "brain did not run" (row G3) (110.919083ms)
+✔ dream-pipeline: the marker with a DIRTY VAULT still aborts — the decision keys off the delta, not the vault (row G3) (95.902375ms)
+✔ dream-pipeline: a run that emits the marker but DID write the workspace proceeds into promotion (row G3) (281.02575ms)
+✔ dream-pipeline: an uncommitted user edit is neither pre-committed nor swept into the dream commit (rows G6, G8) (303.081375ms)
+✔ dream-pipeline: the commit contains the promoted paths and the report, and nothing else (row G8) (258.103333ms)
+✔ dream-pipeline: the commit carries the DECIDED bytes — a user save landing after the publish is neither committed nor lost (row G8) (244.91625ms)
+✔ dream-pipeline: (e) a ledger with no active quarantine and no file at HEAD commits no warnings file (row G8) (244.879792ms)
+✔ dream-pipeline: (a) a file written at refresh point 2 rides the NEXT run's commit, though that run writes it nowhere (row G8) (449.477084ms)
+✔ dream-pipeline: (c) a run whose render EQUALS HEAD omits the file — no churn commit (row G8) (571.2025ms)
+✔ dream-pipeline: a stray user edit ANYWHERE in the code-owned warnings file is never committed, and never lost (row G8) (469.567958ms)
+✔ dream-pipeline: an unexpected scratch write is deleted AND recorded, and does not abort the run (row G12) (267.607541ms)
+✔ dream-pipeline: the scratch violation reaches the DURABLE report, not only the log (row G12) (268.505ms)
+✔ dream-pipeline: a secret-WITHHELD transcript is NOT marked processed — it regenerates next run (row G4) (271.719125ms)
+✔ dream-pipeline: a clean run marks its transcript processed — only `withheld` defers (row G4) (264.412459ms)
+✔ dream-pipeline: the digest is regenerated AFTER the ledger is persisted (row G4, Table V row V10) (283.845459ms)
+✔ dream-pipeline: the dry-run previews the run that actually happens — the workspace target, not the vault (row G1, Table V row V8) (70.65975ms)
+✔ dream-pipeline: a brain failure removes the workspace and leaves the vault byte-identical, uncommitted edits included (row G9) (116.317542ms)
+✔ dream-pipeline: the counts keep their exact semantics, on the commit message AND the summary (row G11, Table V row V7) (273.486375ms)
+✖ dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release (91.3025ms)
+✖ dream-pipeline: EPERM and unknown owners decline before collection or teardown (261.387667ms)
+✔ dream-pipeline: the commit stores the DECIDED bytes verbatim, through a vault clean filter (row G8) (390.734541ms)
+✔ dream-pipeline: a NON-REGULAR scratch entry is recorded, not silently swept (row G12) (271.758417ms)
+✔ dream-pipeline: a promoted NEW dream-created skill gets its registry entry, from the DECIDED bytes (row G10) (389.388542ms)
+✔ dream-pipeline: a REDACTED acceptance is registered too — the sanitized bytes are the decided bytes (row G10) (316.683166ms)
+✔ dream-pipeline: the counts keep their exact semantics on a discriminating input (row G11, Table V row V7) (342.614625ms)
+✔ dream-pipeline: the code-owned warnings file is counted as NEITHER a note nor a skill (row G11) (332.15425ms)
+✔ dream-pipeline: a REDACTED transcript IS marked processed — only `withheld` defers (row G4) (291.60825ms)
+✔ dream-pipeline: a REFUSED report reaches the user with its COMPLETE record, and nothing is committed for it (row G11) (228.52825ms)
+✔ dream-pipeline: the report refusal REASON is neutralised where this package renders it (row G11) (260.47075ms)
+✔ dream-pipeline: teardown never destroys the last copy — the only-copy refusal RETAINS the workspace (row G5) (127.378084ms)
+✔ dream-pipeline: the PARTIALLY PUBLISHED report — the path IS committed from that arm's bytes, and the record is delivered (rows G8, G11) (310.727667ms)
+✔ dream-pipeline: [L7] the undelivered record is already in the output at the instant the ledger becomes durable (row G11, criterion 6) (231.880542ms)
+✔ dream-pipeline: the report refusal on an EXPECT CONFLICT — the criterion's other named cause (row G11 case a) (241.799959ms)
+✔ dream-pipeline: the FALLBACK report arm — the body was refused, the record is published anyway (Table R) (252.01075ms)
+✔ dream-pipeline: the run does not touch the user's git index — at all, plain vault (row G8) (389.28075ms)
+✔ dream-pipeline: the run does not touch the user's git index — at all, separate-git-dir vault (row G8) (397.900833ms)
+✔ dream-pipeline: the run does not touch the user's git index — at all, linked-worktree vault (row G8) (445.717375ms)
+✔ dream-pipeline: AC1 — every invocation carries the constructed environment, key and value (rows U1-U5) (284.021375ms)
+✔ dream-pipeline: AC1 — HOME is derived from getPaths().home even when the launching environment has none (row U2) (1.333791ms)
+✔ dream-pipeline: AC2 — an exported GIT_DIR does not redirect the run (row U6) (367.348917ms)
+✔ dream-pipeline: AC3 — an exported GIT_OBJECT_DIRECTORY does not redirect object writes (row U7) (356.664125ms)
+✔ dream-pipeline: AC4 — an injected GIT_CONFIG_COUNT config does not run its program (row U10) (257.884ms)
+✔ dream-pipeline: AC5 — the positive control: a hook configured through config files fires, the same hook offered through the environment does not (rows U2, U10) (877.702ms)
+ℹ tests 144
+ℹ suites 0
+ℹ pass 106
+ℹ fail 38
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14103.095875
+
+✖ failing tests:
+
+test at tests/integration/dream.test.js:499:1
+✖ dream-integration: a live concurrent lock yields "another dream holds the lock" and no commit (85.007958ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /another dream holds the lock/. Input:
+
+  'wienerdog: another dream is in progress.'
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/integration/dream.test.js:512:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'wienerdog: another dream is in progress.',
+    expected: /another dream holds the lock/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/integration/dream.test.js:581:1
+✖ dream-integration: repeated contenders preserve an expired live owner and its scratch (304.871625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'wienerdog: warning — stole a stale dream lock from a prior run that never released it.\n' +
+  +   'wienerdog: dream — out-of-vault: var_folders_3r__REDACTED_high-entropy__T_wd-dream-int-FCNTLB_core_state_dream-scratch_EVIL.json — brain wrote into the read-only scratch dir; deleted\n' +
+  +   'wienerdog: dream committed a263c2f — 2 notes, 0 skills; 2 refused, 1 out-of-vault.'
+  - 'wienerdog: another dream holds the lock.'
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/integration/dream.test.js:610:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'wienerdog: warning — stole a stale dream lock from a prior run that never released it.\nwienerdog: dream — out-of-vault: var_folders_3r__REDACTED_high-entropy__T_wd-dream-int-FCNTLB_core_state_dream-scratch_EVIL.json — brain wrote into the read-only scratch dir; deleted\nwienerdog: dream committed a263c2f — 2 notes, 0 skills; 2 refused, 1 out-of-vault.',
+    expected: 'wienerdog: another dream holds the lock.',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/integration/dream.test.js:619:1
+✖ dream-integration: an unverifiable owner repeatedly errors without changing lock or scratch (298.259417ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(thrown instanceof WienerdogError)
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/integration/dream.test.js:630:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/integration/dream.test.js:643:1
+✖ dream-integration: a lock-losing dream is a pure no-op that leaves the winner's live scratch byte-for-byte untouched (82.440292ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /another dream holds the lock/. Input:
+
+  'wienerdog: another dream is in progress.'
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/integration/dream.test.js:673:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'wienerdog: another dream is in progress.',
+    expected: /another dream holds the lock/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:32:1
+✖ dream-lock: an expired live local owner keeps its lock on repeated attempts (0.851333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:38:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:70:3
+✖ dream-lock: deadline 1789466400000 is busy before identity or PID probing (0.344291ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+      acquired: false,
+  -   reason: 'busy',
+      stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:76:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: false, stolen: false },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:70:3
+✖ dream-lock: deadline 1789466400001 is busy before identity or PID probing (0.2615ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+      acquired: false,
+  -   reason: 'busy',
+      stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:76:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: false, stolen: false },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: malformed JSON retains the unknown owner without probing (0.798333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: null retains the unknown owner without probing (0.394292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: array retains the unknown owner without probing (0.329458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: string record retains the unknown owner without probing (0.336958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: numeric record retains the unknown owner without probing (0.293792ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: missing deadline retains the unknown owner without probing (0.277834ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: string deadline retains the unknown owner without probing (0.270459ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: null deadline retains the unknown owner without probing (0.237292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: infinite deadline retains the unknown owner without probing (0.207333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+      acquired: false,
+  -   reason: 'owner-unknown',
+      stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: false, stolen: false },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: negative infinite deadline retains the unknown owner without probing (0.250625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: foreign host retains the unknown owner without probing (0.261833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: non-string host retains the unknown owner without probing (0.2735ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: missing host retains the unknown owner without probing (0.248ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID undefined retains the unknown owner without probing (0.236042ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID 12345 retains the unknown owner without probing (0.229167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID 0 retains the unknown owner without probing (0.227125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID -1 retains the unknown owner without probing (0.246333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID 1.5 retains the unknown owner without probing (0.2325ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID 2147483648 retains the unknown owner without probing (0.229833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:97:3
+✖ dream-lock: invalid PID null retains the unknown owner without probing (0.21725ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:103:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:111:3
+✖ dream-lock: existing-record read failure EACCES declines without replacement (0.272583ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:120:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:111:3
+✖ dream-lock: existing-record read failure ENOENT declines without replacement (0.275875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:120:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:130:3
+✖ dream-lock: expired local owner probe null determines recovery (0.259458ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:130:3
+✖ dream-lock: expired local owner probe EPERM determines recovery (0.264834ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:130:3
+✖ dream-lock: expired local owner probe ESRCH determines recovery (0.462ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + []
+  - [
+  -   [
+  -     12345,
+  -     0
+  -   ]
+  - ]
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:142:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ [ 12345, 0 ] ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:130:3
+✖ dream-lock: expired local owner probe EINVAL determines recovery (0.307041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:130:3
+✖ dream-lock: expired local owner probe undefined determines recovery (0.312833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'owner-unknown',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'owner-unknown' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:149:3
+✖ dream-lock: positive PID domain endpoint 1 is probeable (0.28775ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:154:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-lock.test.js:149:3
+✖ dream-lock: positive PID domain endpoint 2147483647 is probeable (0.2685ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-lock.test.js:154:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { acquired: true, stolen: true },
+    expected: { acquired: false, stolen: false, reason: 'busy' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-pipeline.test.js:904:1
+✖ dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release (91.3025ms)
+  AssertionError [ERR_ASSERTION]: AssertionError [ERR_ASSERTION]: collection
+  + actual - expected
+
+    {
+  +   acquired: true,
+  +   stolen: true
+  -   acquired: false,
+  -   reason: 'busy',
+  -   stolen: false
+    }
+
+      at checkContender (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:921:12)
+      at Object.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:930:7)
+      at Object.apply (node:internal/test_runner/mock/mock:763:20)
+      at collectExtracts (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/core/dream/scratch.js:162:6)
+      at Object.run (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/cli/dream.js:617:17)
+      at runDream (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:363:17)
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:941:24)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+  + actual - expected
+
+  + AssertionError [ERR_ASSERTION]: collection
+  + + actual - expected
+  +
+  +   {
+  + +   acquired: true,
+  + +   stolen: true
+  + -   acquired: false,
+  + -   reason: 'busy',
+  + -   stolen: false
+  +   }
+  +
+  +     at checkContender (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:921:12)
+  +     at Object.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:930:7)
+  +     at Object.apply (node:internal/test_runner/mock/mock:763:20)
+  +     at collectExtracts (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/core/dream/scratch.js:162:6)
+  +     at Object.run (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/cli/dream.js:617:17)
+  +     at runDream (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:363:17)
+  +     at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:941:24)
+  +     at Test.runInAsyncScope (node:async_hooks:227:14)
+  +     at Test.run (node:internal/test_runner/test:1325:25)
+  +     at Test.processPendingSubtests (node:internal/test_runner/test:911:18) {
+  +   actual: {
+  +     acquired: true,
+  +     stolen: true
+  +   },
+  +   code: 'ERR_ASSERTION',
+  +   diff: 'simple',
+  +   expected: {
+  +     acquired: false,
+  +     reason: 'busy',
+  +     stolen: false
+  +   },
+  +   generatedMessage: false,
+  +   operator: 'deepStrictEqual'
+  + }
+  - null
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:955:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: AssertionError [ERR_ASSERTION]: collection
+    + actual - expected
+
+      {
+    +   acquired: true,
+    +   stolen: true
+    -   acquired: false,
+    -   reason: 'busy',
+    -   stolen: false
+      }
+
+        at checkContender (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:921:12)
+        at Object.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:930:7)
+        at Object.apply (node:internal/test_runner/mock/mock:763:20)
+        at collectExtracts (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/core/dream/scratch.js:162:6)
+        at Object.run (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/cli/dream.js:617:17)
+        at runDream (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:363:17)
+        at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:941:24)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1325:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:911:18),
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/unit/dream-pipeline.test.js:960:1
+✖ dream-pipeline: EPERM and unknown owners decline before collection or teardown (261.387667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + WienerdogError: dream refused: the brain's process group could not be verified empty (the brain process group could not be verified empty), so this run will not read the workspace a surviving process could still be writing. Nothing was promoted, nothing was committed and the transcript ledger was not advanced (these sessions are retried next run). The run workspace was left in place at /var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-pipe-F9ZMQp/core/state/dream-workspace for inspection.
+  +     at Object.run (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/cli/dream.js:856:15)
+  +     at async runDream (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:363:5)
+  +     at async TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:976:20)
+  +     at async Test.run (node:internal/test_runner/test:1332:7)
+  +     at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+  - null
+
+      at TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:980:14)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: WienerdogError: dream refused: the brain's process group could not be verified empty (the brain process group could not be verified empty), so this run will not read the workspace a surviving process could still be writing. Nothing was promoted, nothing was committed and the transcript ledger was not advanced (these sessions are retried next run). The run workspace was left in place at /var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-pipe-F9ZMQp/core/state/dream-workspace for inspection.
+        at Object.run (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/src/cli/dream.js:856:15)
+        at async runDream (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:363:5)
+        at async TestContext.<anonymous> (/Users/felho/dev/repos-to-learn-from/wienerdog-worktrees/dream-live-owner-lock/tests/unit/dream-pipeline.test.js:976:20)
+        at async Test.run (node:internal/test_runner/test:1332:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:911:7),
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
