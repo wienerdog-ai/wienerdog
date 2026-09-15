@@ -1,0 +1,1 @@
+{"verdict":"approve","summary":"The complete proposed module meets the exact byte-accounting contract by returning filteredBytes for every permitted input.","findings":[],"executed":"Tests not run; assessed only the complete supplied artifact."}
