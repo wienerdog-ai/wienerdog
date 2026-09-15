@@ -10,6 +10,15 @@ adrs: [ADR-0004, ADR-0012, ADR-0023, ADR-0031]
 
 # WP-dream-filtered-input-budget: Allocate dream input capacity from filtered extracts
 
+> **Design revision pending.** The owner has reopened the aggregate raw-read
+> policy. This draft still describes the previously reviewed collector-only
+> proposal; it is not ready for approval or dispatch as the revised solution.
+> The proposed direction and remaining decisions are recorded in
+> [the preprocessing design package](logbook/2026-09-15-dream-preprocessing-design-package.md).
+> Resolve those decisions and revise this contract and its permission boundary
+> before seeking a new design verdict. The earlier verdict applies only to its
+> recorded revision.
+
 ## Context (read this, nothing else)
 
 The dream consolidates Claude Code and Codex transcripts into the user's vault.
