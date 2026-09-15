@@ -312,6 +312,67 @@ review and owner sign-off, then move to Ready. The baseline full-suite failure
 remains unwaived. For this docs revision, targeted Markdown lint, the boundary
 check and `git diff --check` passed; product tests were not rerun.
 
+## Architect revision and new design gate
+
+The owner authorized a `wd-architect` refinement followed by a fresh independent
+review. The architect runs as a native Codex subagent with the repo role
+instructions; it owns spec/design-package edits. The orchestrator checks
+consumer compatibility and records evidence. No product changes or Ready
+transition are authorized by this drafting step.
+
+The renewed loop uses the existing stop criterion: material A/B product
+findings block readiness and receive proposed owner dispositions. Accepted
+HEAVY fixes require a fresh review; LIGHT findings are mechanically verified
+without growing the loop. C findings are fixed or dispositioned. Repeated
+contract-family findings trigger the existing extraction/circuit-breaker rule.
+An approval closes the review loop, not owner sign-off on proposed defaults
+or ADR changes. No residual is accepted on the owner's behalf.
+
+Before the adversarial round, a fresh executor receives only the final draft
+and template for conformance. The orchestrator performs internal coherence and
+runnable baseline verification. During each gate the checkout remains unchanged;
+raw reviewer output is written outside it and committed before inspection.
+Record the reviewed SHA and raw-introduction SHA with each result. Historical
+native backend calibration remains applicable; no reviewer is reused as author.
+
+### Revision baseline verification
+
+Before reviewing the revised documents, the orchestrator reran `npm test`
+against unchanged product/test files from `77dd800b`: exit 1, 2,699 tests,
+2,686 passed, one failed, 12 skipped. The failure is the same
+`tests/integration/adopt-e2e.test.js:73` Claude executable-pin mismatch recorded
+above; no identity setting was changed and no installed-app sync was run.
+The process completed, including the repository's temporary-root wrapper.
+This establishes the baseline only; it does not exercise the proposed behavior.
+
+### Architect handoff and internal coherence
+
+The architect produced a complete proposed contract in the WP and summarized
+it in the design package. P1–P4 remain explicit owner decisions: the configurable
+60-second policy default, per-session finite read-work budget, optional
+oversized measurement metadata, and classified CLI/zero-input behavior plus ADR
+amendments. No runtime code changed.
+
+The orchestrator read the proposed contract end to end and checked its config,
+ledger, stream and CLI consumers. Before handoff, the architect corrected two
+section-reference typos, a moved-summary reference and millisecond-conversion
+validation in the new proposed configuration. The final internal pass found no
+remaining contradiction; this is not the independent verdict. The three literal
+JSON/JSONL examples parse; the memo example describes the proposed schema, not
+an assertion that the current ledger already preserves it.
+
+| Runnable verification on unchanged product/test base | Result |
+|---|---|
+| WP's expanded targeted `npm test -- ...` command (collector, ledger, pipeline, stream, parser) | Exit 0; 173 passed, none failed/skipped. |
+| `npm test` | Exit 1; baseline executable-pin failure above. |
+| `npm run lint` | Exit 0; 662 Markdown files, 273 specs, four agents; PowerShell analyzer skipped because `pwsh` is unavailable. |
+| WP's literal Deliverables boundary-check command | Exit 0. |
+| `git diff --check` | Exit 0. |
+
+The new behavior acceptance criteria and old-red/new-green regression evidence
+are implementation obligations, not runnable assertions already satisfied by
+this docs-only change. No new gate or fixture machinery was introduced.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file

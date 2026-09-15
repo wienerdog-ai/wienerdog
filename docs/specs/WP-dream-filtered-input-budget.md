@@ -10,37 +10,29 @@ adrs: [ADR-0004, ADR-0012, ADR-0023, ADR-0031]
 
 # WP-dream-filtered-input-budget: Allocate dream input capacity from filtered extracts
 
-> **Draft: accepted selection policy, remaining details open.** The owner
-> accepted newest-first whole-session admission and the soft deadline below.
-> Oversized-session retry rules, work-budget defaults/configuration, and the
-> final permission boundary still need resolution before implementation.
-> [The design package](logbook/2026-09-15-dream-preprocessing-design-package.md)
-> records these decisions. The earlier design verdict applies only to its
-> recorded revision, not to this replacement of equal-share allocation.
+> **Draft: architect proposal for design review.** A1–A4 and the soft-deadline
+> behavior are accepted. Marked proposals resolve the remaining choices for
+> review, not implementation approval. Owner decisions P1–P4 and a fresh design
+> gate remain required. The earlier equal-share verdict does not cover this revision.
 
 ## Context (read this, nothing else)
 
 The dream consolidates Claude Code and Codex transcripts into the user's vault.
-`collectExtracts` selects eligible transcript files, produces redacted JSON
-extracts in private scratch storage, and returns the selected files to the dream
-orchestrator. Wienerdog is just files (ADR-0004): this work adds no daemon,
-service, schedule, or runtime dependency.
+The collector produces redacted JSON extracts in private scratch storage and
+returns selected files to the orchestrator. Wienerdog is just files (ADR-0004):
+no daemon, service, schedule or runtime dependency is introduced.
 
-The configured `dream_max_input_bytes` is intended to bound extracted session
-content. Today its allocation uses raw transcript file sizes before parsing.
-Records the parser omits and text it shortens therefore reserve capacity that
-other sessions cannot use. A session can lose older messages even when the
-complete filtered input would fit. A successfully consumed truncated session is
-later recorded as processed, so this unnecessary loss is not retried for an
-unchanged file.
+Today the collector allocates `dream_max_input_bytes` from raw transcript size
+before parsing. Records omitted or shortened by filtering therefore reserve
+capacity that useful content cannot use. A selected session may lose older
+messages despite the full filtered input fitting. Successful truncated sessions
+are recorded as processed, so the lost portion is not retried unchanged.
 
-The current intake guards include a 50 MiB file ceiling, 1 MiB line cap,
-500,000 lines per file, a shared 200 MiB read budget per run, 64 KiB read chunks,
-and JSON depth 64. The aggregate read budget bounds I/O/work, not peak memory.
-Keep the individual guards and one-session-at-a-time memory constraint while
-revisiting that aggregate limit separately. ADR-0023 Decision §3 currently
-mandates raw-size allocation; the final amendment must cover the selected
-content and work policies. Architectural approval remains a pre-dispatch gate.
+Separate useful content, resident memory and preprocessing work. The content
+budget applies after filtering. Individual intake guards and one-session
+memory remain. The existing 200 MiB aggregate raw-read cap bounds I/O/work,
+not peak memory. Changing allocation and that cap requires ADR-0023 amendment;
+retiring the old truncation/floor policy also amends ADR-0012.
 
 ## Current state
 
@@ -51,9 +43,9 @@ These are the executable claims to re-verify at dispatch:
 |---|---|
 | C1 | `src/core/dream/scratch.js`, `collectExtracts(paths, ledger, maxInputBytes)`: obtains eligible files through `transcripts.discover(paths, { since: null })` and `ledgerLib.selectState`; quarantines files above the pre-read ceiling; allocates from `underCeiling.map((d) => d.size)` before calling `parseWithOutcome`. |
 | C2 | The same function measures a parsed extract with `Buffer.byteLength(JSON.stringify(extract))`, but truncates only when `grant < d.size && serialized > grant`; it does not redistribute unused grants after parsing. |
-| C3 | `src/core/transcripts/index.js`, `parseWithOutcome(entry, budget)`: applies the harness parser, shared secret redaction, a 4,000-character per-message cap and a 2,000-message newest-tail cap. `src/core/transcripts/stream.js`, `Limits` and `newRunBudget()`, own the separate raw intake bounds summarized above. |
+| C3 | `src/core/transcripts/index.js`, `parseWithOutcome(entry, budget)`: applies the harness parser, shared secret redaction, a 4,000-character per-message cap and a 2,000-message newest-tail cap. `src/core/transcripts/stream.js`, `Limits` and `newRunBudget()`, own the separate raw intake bounds described in A6. |
 | C4 | `scratch.js` writes extracts with `JSON.stringify(extract, null, 2)` and includes truncated selected files in `processed`. `src/cli/dream.js` records them through `recordProcessed` only after the existing successful-run and secret-disposition gates. |
-| C5 | `tests/unit/dream-collect.test.js` already covers equal-share allocation, sub-floor deferral, quarantine exclusion, constrained-heap collection, and skill-invocation index rebasing. ADR-0023 Decision §3 expressly allocates from discovery `size`. |
+| C5 | `tests/unit/dream-collect.test.js` already covers equal-share allocation, sub-floor deferral, quarantine exclusion, constrained-heap collection, and skill-invocation index rebasing. ADR-0023 Decision section 3 expressly allocates from discovery `size`. |
 
 A synthetic reproduction on this base used a 400,000-byte content budget.
 The full filtered extracts occupied 212,674 compact JSON bytes, but collection
@@ -64,27 +56,41 @@ synthetic results, not a measurement of the owner's historical dream runs.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-**Provisional boundary, not dispatchable.** The paths below cover the original
-collector change. Finalize additional stream, CLI/configuration, reporting,
-ledger and test paths after resolving A5 and A7. They are not implicitly
-editable. Resolve the exact new interfaces and verification commands before
-Ready; unresolved behavior must not be left to implementation discretion.
+The boundary covers the complete proposal; dispatch requires the design gate
+and owner sign-off in Definition of done.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/scratch.js | Implement Table A within the existing collector and cleanup exports. |
-| modify | tests/unit/dream-collect.test.js | Verify Table A and preserve relevant existing coverage. |
-| modify | docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md | After owner approval, append the Table A A8 amendment; retain the historical decision text. |
+| modify | src/core/dream/scratch.js | Table A admission, clock, memo consultation and classified results. |
+| modify | src/core/dream/config.js | A5 configuration scalar and returned duration. |
+| modify | src/core/dream/ledger.js | A7 optional memo round-trip without changing existing outcomes/counters. |
+| modify | src/core/transcripts/stream.js | Budget-lifetime documentation only; preserve executable reader and constants. |
+| modify | src/core/transcripts/index.js | Budget-lifetime documentation only; preserve executable filtering/parser behavior. |
+| modify | src/cli/dream.js | A7–A9 wiring, memo persistence, diagnostics and zero-input outcomes. |
+| modify | tests/unit/dream-collect.test.js | Collector and configuration contracts. |
+| modify | tests/unit/ledger.test.js | Memo compatibility and existing outcomes. |
+| modify | tests/unit/dream-pipeline.test.js | Persistence, dry-run and diagnostics. |
+| modify | docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md | A10 amendment after owner ratification. |
+| modify | docs/adr/0012-dream-run-lifecycle.md | A10 narrow retirement of old capacity semantics. |
 
 ### Exact contracts
 
-The current synchronous `collectExtracts(paths, ledger, maxInputBytes)` result
-and scratch-file structure are inlined below as documentation pseudotypes,
-not new runtime validation. Preserve the extract format and `cleanScratch`.
-Finalize any collector argument/result changes for the deadline and oversized
-reporting before Ready. `MIN_TRUNCATE_BYTES` is a legacy export, not an admission
-threshold in this policy; resolve its callers and diagnostics in the final
-boundary. Table A owns selection, storage and accounting semantics.
+Table A owns semantics; the pseudotypes below name interface fields, not new
+runtime schema files. Existing three-argument collector calls remain valid.
+
+```js
+collectExtracts(paths, ledger, maxInputBytes, {
+  preprocessTimeoutMs = 60_000,
+  now = () => performance.now(),
+} = {})
+// Synchronous; runtime clock is node:perf_hooks performance.now().
+// readDreamConfig(configFile) adds preprocessTimeoutMs to its existing result.
+// cleanScratch(stateDir) remains unchanged and returns undefined.
+```
+
+The optional clock is an internal verification seam, not a CLI flag. Retain
+existing positive-finite X configuration behavior. Remove the obsolete
+`MIN_TRUNCATE_BYTES` export and its CLI/test imports.
 
 ```text
 Harness = 'claude' | 'codex'
@@ -93,6 +99,9 @@ Discovery = {
   size: number, dev: number, ino: number
 }
 Deferred = { harness: Harness, session_id: string, bytes: number }
+OversizedMemo = {
+  fingerprint: string, appVersion: string, extractBytes: number
+}
 CollectorResult = {
   entries: Array<{
     harness: Harness, session_id: string, mtimeMs: number,
@@ -103,14 +112,15 @@ CollectorResult = {
   newlyQuarantined: Array<Discovery & {
     reason: 'over-ceiling' | 'too-many-lines' | 'read-error'
   }>,
-  deferred: Deferred[],
-  droppedForSize: number,
-  dropped: Deferred[],
+  deferred: Deferred[], droppedForSize: number, dropped: Deferred[],
   truncated: Array<{
     harness: Harness, session_id: string,
     originalBytes: number, keptBytes: number
   }>,
-  wrote: string[]
+  wrote: string[],
+  deadlineDeferred: Deferred[], readDeferred: Deferred[],
+  oversized: Array<Discovery & { extractBytes: number, cached: boolean }>,
+  oversizedExtracts: Record<string, OversizedMemo>
 }
 Extract = {
   harness: Harness, session_id: string, started: string | null,
@@ -124,25 +134,37 @@ Extract = {
 }
 ```
 
-`collectExtracts` returns `CollectorResult`; `cleanScratch` returns `undefined`.
-Scratch lives at `<paths.state>/dream-scratch`. Each selected extract is written
-as `<harness>-<sanitized-session_id>.json`, replacing each session-id character
-outside `[A-Za-z0-9_-]` with `_`. `scratchDir`, `scratchFile` and `wrote` carry
-those filesystem paths. `Discovery.path` is the source transcript path; its
-`size`, `dev` and `ino` remain discovery metadata and are not extract fields.
-In extract metadata, the parser replaces the user's home prefix with `~` and
-caps paths at 160 characters plus a `…` marker. Claude includes
-`skill_invocations` (possibly empty); Codex omits it. Its indices are zero-based
-positions in `messages`, with `resultIndex: null` when no paired result was
-captured. Preserve the parser's existing values and valid indices; the collector
-does not shorten or rebase whole admitted extracts.
+Ledger version 1 gains optional top-level `oversizedExtracts` with the above map
+shape; existing `files` records and baselines retain their current formats.
+A minimal complete ledger with one memo is:
 
-No extract-field change is proposed. The configuration surface, oversized
-reporting and retry metadata remain open; the current result schema above does
-not prescribe new outcome fields or authorize a ledger schema change.
-Scratch files use `JSON.stringify(extract, null, 2)`, with no trailing newline.
+```json
+{
+  "version": 1,
+  "baseline_mtime": { "claude": null, "codex": null },
+  "files": {},
+  "oversizedExtracts": {
+    "/tmp/example.jsonl": {
+      "fingerprint": "100:200:3:4",
+      "appVersion": "0.13.0",
+      "extractBytes": 9000000
+    }
+  }
+}
+```
 
-**Complete file example (unchanged format, illustrating A1 and A6–A7).** With
+Persist with existing pretty JSON, newline, atomic replacement and private
+modes. A7 determines validity, omission and write timing. No transcript text
+is in this memo. New read-only source dependency: running `package.json.version`.
+
+Scratch remains `<paths.state>/dream-scratch/<harness>-<sanitized-session_id>.json`,
+replacing session-ID characters outside `[A-Za-z0-9_-]` with `_`. Write
+`JSON.stringify(extract, null, 2)` with no trailing newline. Preserve the parser's
+home-prefix pseudonymization and path cap (160 characters plus marker), Claude's
+optional skill-invocation indices and Codex's omission of that field. The
+collector neither shortens nor rebases admitted extracts.
+
+**Complete file example (unchanged format, illustrating A1 and A6–A8).** With
 an empty ledger, only this source file, `maxInputBytes = 400000`,
 `paths.claudeDir = /tmp/wd-example/claude` and
 `paths.state = /tmp/wd-example/state`, the source
@@ -176,166 +198,150 @@ The complete `/tmp/wd-example/state/dream-scratch/claude-example.json` is:
 
 The result has one entry with `truncatedToFit: false`, one matching discovery
 record in `processed`, and that scratch path in `wrote`. `newlyQuarantined`,
-`deferred`, `dropped` and `truncated` are empty; `droppedForSize` is zero.
+`deferred`, `dropped`, `truncated`, `deadlineDeferred`, `readDeferred` and
+`oversized` are empty; `droppedForSize` is zero and `oversizedExtracts` is `{}`.
 
 ## Contract reference
 
-Activated by ADR-0031 criteria (iv), (v), and (vii): capacity-deferral decisions
-change, the collector emits selections whose persistence the orchestrator owns,
-and the decision is mirrored in ADR-0023. Table A is canonical for this WP.
+ADR-0031 activates for changed interfaces, outcome taxonomy, time behavior and
+collector/ledger/orchestrator authority boundaries. Table A is canonical.
 
-### Table A — Content allocation and its boundaries
+### Table A — Content admission, work and outcomes
 
 | ID | Contract | Rule |
 |----|----------|------|
-| A1 | Content measurement | Use the complete extract returned by a successful parse after existing filtering, redaction and caps. Charge `Buffer.byteLength(JSON.stringify(extract))`, including metadata. Raw discovery `size` is not a content demand. X is the existing `maxInputBytes` setting. |
-| A2 | Admission order and stopping | The ledger remains the eligibility authority. Process eligible under-ceiling files one at a time in existing newest-first order. Admit a complete extract if it fits the remaining X budget. Stop immediately when selected content equals X. If an extract is at most X but exceeds the remaining space, omit that session from this run and stop; do not search older sessions for a smaller fit. Check the A5 deadline before starting each session. |
-| A3 | Individually oversized sessions | If a completed extract exceeds X even with an empty selection, report and skip it, then continue older candidates subject to A2 and A5. It reserves no content capacity and is never recorded as processed. Distinguish this outcome from an ordinary remaining-space deferral. Retry/invalidation triggers and reporting surface are unresolved: prevent repeatedly reparsing an unchanged impossible-to-fit session without making it permanently ineligible after relevant input or budget changes. Finalize this contract before Ready. |
-| A4 | Output bound and completeness | The sum of A1 sizes of emitted extracts must not exceed X. Admit whole filtered extracts or omit them; no equal shares, minimum truncation grants, or collector-induced message truncation. Existing parser caps remain in force: a whole filtered extract is not a promise to preserve every source message. An extract exactly equal to the remaining space fits. Unused capacity after the A2 stop is acceptable. |
-| A5 | Intake, memory and work | Preserve individual file, line, line-count, chunk and depth guards and one-session-at-a-time parsed-content memory plus corpus metadata. Use a soft preprocessing admission deadline measured by monotonic elapsed time: after expiry start no new session, but finish the current session including post-parse redaction and apply A2–A4. Finalize the selected output. This is not a hard completion timeout. The duration, exact clock boundary/interface and optional aggregate raw-byte guard remain open; the current 200 MiB is not mandated as a memory guard. Any additional guard must have explicit exhaustion/progress semantics consistent with this contract before Ready. |
-| A6 | Storage and lifecycle | Retain selected extracts in private run scratch, not a corpus-wide array or a staging set of every measured candidate. Temporary extracted content must already be redacted and use existing 0700/0600 protections. Remove unselected/intermediate files before the brain can inspect scratch. `wrote`, `entries`, and `processed` describe only final selected extracts. Preserve reset, cleanup and failure propagation; do not mutate transcripts. Storage must account for selected pretty JSON plus bounded current-session/finalization overhead; no corpus-wide staging budget is assumed. |
-| A7 | Results and persistence | Preserve existing quarantine reasons, discovery fingerprints and downstream successful-run/secret gates. Ordinary remaining-space deferral and deadline exclusion create no processed record or partial-session progress; they remain retryable. Only selected whole extracts enter `processed`. If legacy result fields are retained, `truncatedToFit` is false and `truncated` is empty; parser `Extract.truncated` may still be true. Deferred `bytes` remains raw discovery size for compatibility, never an admission input. Finalize oversized skip reporting/retry metadata and deadline accounting, including implications for `dropped`/`droppedForSize`, before Ready. |
-| A8 | ADR amendment | Append a dated amendment explicitly superseding Decision §3's raw-size allocation with A1–A4's whole-extract admission policy. Retain the one-session-at-a-time memory constraint. Describe the finalized A5 work policy and A7 outcome/retry semantics, identifying changes to the old aggregate limit. Preserve historical signatures and unrelated amendments; record owner approval only after it is given. |
+| A1 | Measurement — ACCEPTED | X is existing `maxInputBytes` from `dream_max_input_bytes` (default 8,000,000). Charge `Buffer.byteLength(JSON.stringify(extract))` after successful complete parsing, existing redaction and message caps, including metadata. Raw discovery size is never content demand. |
+| A2 | Admission — ACCEPTED | Preserve ledger eligibility and existing newest-first order, including discovery order on equal mtimes. Process one eligible under-ceiling session at a time. Admit its complete filtered extract if it fits remaining X. At exact X, stop before another session. |
+| A3 | Overflow — ACCEPTED | An extract at most X that exceeds remaining space is omitted and stops preprocessing; do not search older sessions for a smaller fit. An extract greater than X is instead reported, skipped, reserves no capacity and permits older candidates if time remains. Neither omission marks a session processed. A7 proposes skipping repeated parsing of known oversized sessions. |
+| A4 | Completeness — ACCEPTED | Selected A1 sizes sum to at most X. No equal shares, minimum grants or budget-induced suffix truncation. Whole means the existing filtered extract, not every original transcript message. Spare capacity after A3 is intentional. |
+| A5 | Deadline — ACCEPTED behavior; PROPOSED duration/interface | Measure monotonic elapsed time from collector entry, including discovery, eligibility and scratch setup. Before each session parse require elapsed time strictly below `preprocessTimeoutMs`. Finish a started session through redaction, measurement and A2–A3 even after expiry. Optional top-level `dream_preprocess_timeout_seconds` accepts a positive finite number whose millisecond conversion is also finite; missing/invalid/nonpositive or overflowing conversion means 60 seconds. `readDreamConfig` returns milliseconds as `preprocessTimeoutMs`; CLI passes it to collection. The model timeout remains independent. This is no hard interruption/checkpoint. The default is an initial policy judgment, not measured throughput. |
+| A6 | Work and storage — PROPOSED work policy, preserved safety | Remove the shared 200 MiB aggregate collector budget. Each session receives a fresh existing `newRunBudget()`: 200 MiB remains a finite emergency per-session read-work bound, not a peak-memory claim. Preserve executable reader/parser behavior, the 50 MiB discovery ceiling, 1 MiB line cap, 500,000-line cap, 64 KiB chunks and depth 64. A reported `runExhausted` discards the partial extract into A8 read deferral and permits later candidates subject to A5. Retain one session's parsed content plus corpus metadata; selected extracts live in private 0700/0600 scratch. No corpus staging or new raw/unredacted copies. Before brain access, scratch contains selected final pretty JSON only. Preserve reset, cleanup, write-error propagation and untouched sources. |
+| A7 | Oversized memo — PROPOSED | Add optional top-level `oversizedExtracts` to ledger version 1, separate from `files` outcomes. Store complete oversized measurements as the specified memo keyed by existing `foldKey(path)`; use existing size/mtime/dev/ino fingerprint and running `package.json.version`. Consult only after `selectState` permits selection and the discovery ceiling passes. Matching fingerprint/version with measured bytes greater than current X permits skip without parsing (`cached: true`). Changed fingerprint/version or X sufficient to fit the measurement requires fresh parsing; smaller/insufficient X changes do not. Missing/malformed memo means parse. Accept only object records with string fingerprint/version and positive safe-integer bytes; no coercion. Return a replacement map without mutating the input ledger. Missing and empty maps are semantically equivalent; invalid memo data does not invalidate existing files records or baselines. Prune absent paths, invalid/changed records, ledger-ineligible paths and freshly measured non-oversized records; retain valid unvisited records behind stops. Real CLI runs atomically persist a changed map via the existing ledger writer before idle/brain branches, preserving files/baselines/counters; dry-run never persists it. Later brain failure does not invalidate size evidence. Older code may drop the optional map, causing extra retries. |
+| A8 | Accounting — PROPOSED | Only selected full extracts enter `entries`, `wrote` and `processed`. Quarantine reasons remain unchanged. `deferred` includes the remainder-overflow session and unvisited candidates excluded by that capacity stop, or candidates after exact X. `dropped` remains the same-array alias; `droppedForSize` equals its length. `deadlineDeferred` contains unvisited candidates excluded by A5; `readDeferred` contains reported incomplete reads. `oversized` contains fresh or matching-memo oversized exclusions encountered before stopping, with discovery metadata, measured bytes and cache flag. Each eligible under-ceiling candidate belongs to one selected/quarantined/deferred/deadlineDeferred/readDeferred/oversized category. A stop labels unvisited candidates by its cause without asserting unknown filtered sizes. Previously ledger-skipped files are outside these categories. `truncatedToFit` is false, `truncated` empty; parser `Extract.truncated` can remain true. Deferred `bytes` stays raw discovery size. |
+| A9 | CLI — PROPOSED | Replace old truncation/floor/wedge narration with separate nonzero counts for capacity-stop exclusions, deadline exclusions, individually oversized sessions and incomplete reads. Oversized output names X and suggests `dream_max_input_bytes`; deadline output names `dream_preprocess_timeout_seconds`. New messages interpolate no transcript text, IDs or paths. Dry-run shows the same separate counts and no truncation/floor line; existing physical-byte total stays physical. With selected inputs, continue normal dream. With none and any oversized/deadline/read exclusion, real run throws actionable `WienerdogError` after memo/quarantine persistence; dry-run diagnoses and returns. For mixed causes report each and summarize that no complete session was admitted, rather than blaming X alone. With no selections/exclusions preserve idle behavior, including quarantine-only handling. Existing successful-run/secret gates remain unchanged. |
+| A10 | ADRs — PROPOSED, owner ratification required | Append dated amendments retaining historical text. ADR-0023 supersedes section 3 raw allocation and section 1 aggregate read-work policy with A1–A8, including independent memo and no new quarantine reason. ADR-0012 capacity amendments lose equal-share, floor, truncated-processed and old wedge semantics in favor of A2–A4/A9. Preserve unrelated lifecycle, secret-revert and quarantine-surface amendments. Record owner approval only when given. |
 
-**Examples (newest to oldest; compact JSON bytes).** With X = 400,000 and
-filtered demands of 210,000 and 3,000, keep both whole even if each raw file is
-several megabytes. With X = 8,000,000 and 7,000,000 already selected, the next
-2,000,000-byte extract is omitted from this run and collection stops with
-7,000,000; it is eligible for a later run. With an empty selection and
-X = 8,000,000, a 9,000,000-byte extract is reported and skipped; a following
-2,000,000-byte extract can still be admitted if time remains. A 3,000-byte
-extract fits a 3,000-byte remainder and stops further preprocessing. There is
-no 32,768-byte admission floor.
+Examples defer to A1–A4, newest to oldest, decimal compact JSON bytes:
+
+- X=400,000; extracts 210,000 and 3,000: admit both even if raw files are megabytes.
+- X=8,000,000; selected 7,000,000; next 2,000,000: omit it and stop with 7,000,000.
+- X=8,000,000; next 9,000,000 then 2,000,000: skip the first; admit the second if time remains.
+- X=8,000,000; selected 7,000,000; next 1,000,000: admit it and stop exactly at X.
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables and Exact contracts defer to Table A.
-- [ ] Exact contracts' result/extract schema and complete scratch-file example
-      preserve the existing format and defer to A1 and A4–A7 for behavior.
-- [ ] Acceptance criteria reference Table A rather than deciding separate rules.
-- [ ] The ADR amendment reflects A8 and cites this WP for its scope.
-- [ ] Examples remain consistent with A1–A4.
-- [ ] Current-state C1–C5 remain explicitly historical; implementation updates
-      neither their base revision nor the reproduction to pretend they were fixed earlier.
-- [ ] Any additional mirror found during review is registered and updated with
-      its canonical row in the same commit.
+- [ ] Deliverables, interfaces/pseudotypes and literal examples defer to Table A.
+- [ ] Owner choices, notes, acceptance criteria and verification ownership defer to Table A.
+- [ ] ADR amendments mirror A10; C1–C5 and reproduction remain explicitly historical.
+- [ ] The design package summarizes Table A, without becoming a separate authority.
+- [ ] The pending report WP re-verifies A8 before its own dispatch.
+- [ ] Register/update any new mirror with its canonical row in the same pass.
 
 ## Implementation notes & constraints
 
-- This changes collector selection and preprocessing work limits, not filtering.
-  `transcripts/index.js` owns the meaning of filtered content; the collector must not invent a second
-  filtering or secret-redaction path. Algorithm and temporary representation
-  choices belong to the implementer, subject to Table A.
-- Preserve the existing 64 MiB constrained-heap regression's resource bound.
-  Increasing the heap or reducing its corpus is not a fix for A5.
-- The budget retains the existing compact-JSON metric. Pretty-print whitespace
-  contributes to the CLI dry-run's on-disk byte count, so that number may exceed
-  the content budget. This WP does not redefine it as a model-token budget or
-  promise to bound the brain's entire context.
-- Whole-session admission deliberately trades utilization for simpler progress:
-  stop at the first ordinary remainder overflow and retry it later. Newest-first
-  priority is intentional. Older backlog drains only if available capacity
-  exceeds new/changed eligible demand on average; defaults cannot guarantee
-  catch-up under sustained overload.
-- No partial-session checkpoints or recovery of previously omitted history.
-  Oversized retry metadata, if chosen, records eligibility rather than partial
-  transcript progress; its exact scope is still unresolved.
-- ADR-0023 amendments concerning secret reverts and quarantine reporting remain
-  in force. Coordinate the required oversized-session diagnostic with
-  `WP-dream-report-run-skips`; finalize ownership and paths before Ready.
-- No golden fixture changes. Record remaining local implementation choices in
-  the PR's "Decisions made"; do not expand the permission boundary.
-- Baseline verification found one unrelated full-suite failure:
-  `tests/integration/adopt-e2e.test.js` rejects a resolved Claude command path
-  that differs from its pin. The logbook records the run. This WP does not
-  authorize changing executable identity checks or that test; a still-failing
-  baseline must be resolved or dispositioned through the repo's review process,
-  not reported as a passing full suite.
+### Owner choices proposed for sign-off
+
+| Proposal | Choice and trade-off |
+|---|---|
+| P1 — A5 | Configurable 60-second soft admission allowance. Adjustable and unmeasured; neither catch-up nor maximum total runtime is promised. |
+| P2 — A6 | Remove aggregate raw cap; retain existing finite mechanism per session. Avoid a second work knob or new reader behavior. |
+| P3 — A7 | Persist only oversized-size metadata in the ledger. Avoid repeated futile parsing at the cost of optional state. Source/package changes or sufficiently raised X trigger retry. Same-version development/runtime changes are not detected; releases must change package version. No expiry or content cache. |
+| P4 — A8–A10 | Separate CLI counts and actionable failure when no complete input can be admitted; capacity-only legacy aliases and two narrow ADR amendments. Report extensions stay in their existing WP. |
+
+- Owner rejection requires revising canonical rows and mirrors before Ready.
+- `selectState` remains authoritative for processed records, intake quarantine,
+  sticky secret-revert exhaustion and baselines. The memo never replaces those
+  outcomes or resets secret counters.
+- Preserve the existing 64 MiB constrained-heap regression's resource bound;
+  increasing its heap or reducing its corpus is not a fix.
+- The 50 MiB ceiling uses discovery size. The existing reader can observe live
+  appends and uses discovery size when deciding budget exhaustion versus EOF.
+  A6 preserves this inherited race; it does not promise 50 MiB of read bytes
+  for a growing source. Snapshot reads/new stability gates are separate hardening.
+- Compact JSON, pretty disk bytes and model tokens are different measures.
+  Selected disk output plus bounded current-session/finalization overhead replaces
+  any need to stage a complete corpus.
+- Newest-first priority and unused remainder are deliberate. Backlog drains only
+  when capacity exceeds new/changed demand on average; defaults cannot guarantee it.
+- `WP-dream-report-run-skips` is Ready but unimplemented on the inspected base.
+  Its `sel.dropped.length` remains capacity-only under A8. Its own dispatch
+  re-verification must distinguish new deadline/oversized/read exclusions before
+  claiming complete run-skip coverage. This WP changes CLI output only; do not
+  edit that sibling spec or implement report work under this boundary.
+- No golden fixture changes. Local implementation choices go in the PR.
+- Baseline full-suite failure: `tests/integration/adopt-e2e.test.js` rejects a
+  resolved Claude executable path differing from its pin. The investigation
+  logbook records it. Do not change identity checks/test here; a still-failing
+  baseline needs explicit disposition, never a claim of green.
 
 ## Security checklist
 
-- [ ] A5 preserves individual intake guards, quarantine behavior and bounded resident
-      memory while content allocation moves after filtering.
-- [ ] A6 preserves private storage and cleanup; raw or unredacted transcript
-      content is not newly persisted or logged.
-- [ ] Existing session-id filename sanitization stays in effect. Any new
-      temporary filename is code-owned, not a raw transcript identifier.
-- [ ] Provenance roles, secret redaction, skill-invocation index validity, ledger
-      fingerprints, and post-dream validation retain their existing meanings.
+- [ ] A6 preserves individual guards, private storage, cleanup and bounded
+      one-session memory; no new raw/unredacted storage or logging.
+- [ ] Session-ID filename sanitization remains; new temporary names are code-owned.
+- [ ] A7 memo validation defaults to fresh parsing and never overrides ledger
+      eligibility, counters or successful-dream authorization.
+- [ ] Existing provenance roles, redaction and skill indices retain their meaning.
 
 ## Acceptance criteria
 
-- [ ] AC1 — A1–A2 hold for Claude and Codex: omitted records and shortened text
-      consume no content capacity; full fitting extracts are admitted whole.
-- [ ] AC2 — A2–A4 hold for exact fits, remaining-space overflow, individually
-      oversized sessions and metadata larger than source. Overflow stops;
-      individually oversized sessions allow later candidates. No minimum-grant
-      rule or content-budget truncation remains. The compact sum stays at most X.
-- [ ] AC3 — A5 holds: deadline expiry starts no new session, completes the current
-      session including redaction and applies the content bound. Preserve the
-      constrained-heap and individual intake-guard coverage. Finalized additional
-      work guards must have corresponding exhaustion/progress coverage.
-- [ ] AC4 — A6–A7 hold for private scratch contents, cleanup, selected-only result
-      membership and ledger processing, ordinary deferral retry and parser skill
-      indices. Cover oversized diagnostics and retry/invalidation once specified.
-- [ ] AC5 — A8 is reflected in the ADR with the owner's approval recorded.
-- [ ] AC6 — Repeating collection with identical inputs, ledger, settings and the
-      same session-admission clock decisions yields second run: zero changes to
-      selected content, accounting or final scratch bytes, and no extra artifacts.
-      Real timed runs can admit different sets under different machine load.
-      Scratch replacement and mtime changes remain permitted; no install/sync
-      idempotency claim is introduced.
-- [ ] AC7 — Finalized verification below passes; regression assertions distinguish
-      the previous raw/equal-share behavior from whole-extract admission.
+- [ ] AC1 — A1–A4 hold for both harnesses, exact fit, remaining-space stop,
+      individually oversized skip and metadata larger than source. No budget truncation.
+- [ ] AC2 — A5 holds for default/override/fallback and monotonic admission,
+      including expiry during parsing and post-parse work.
+- [ ] AC3 — A6 preserves individual guards/constrained heap; collection can cross
+      the old aggregate 200 MiB when time and X permit. Reported partial reads
+      never become processed or persisted extracts.
+- [ ] AC4 — A7 holds for cache hits, fingerprint/version/X changes, malformed
+      memo, pruning and ledger round-trips; existing outcomes/counters are preserved.
+- [ ] AC5 — A8–A9 hold for disjoint counts, selected-only scratch/results, ordinary
+      retry, mixed zero-input causes, real persistence and dry-run non-persistence.
+- [ ] AC6 — Repeating collection with identical inputs, ledger, settings and
+      admission clock decisions yields second run: zero changes to selected
+      content, accounting, final scratch bytes or artifacts. An unchanged memo
+      is not rewritten by real runs. Real timed runs can admit different sets;
+      scratch recreation/mtime changes remain permitted.
+- [ ] AC7 — A10 appears in both ADRs with actual owner approval.
+- [ ] AC8 — Regression assertions fail against the old raw-budget collector and
+      pass against implementation; verification below passes.
 
 ## Verification steps (run these; paste output in the PR)
 
-The commands below are the existing baseline set. Extend test ownership and the
-literal boundary-check paths after resolving the provisional Deliverables;
-this list is not yet sufficient to dispatch the revised work package.
-
 ```bash
-npm test -- tests/unit/dream-collect.test.js tests/unit/transcript-stream.test.js tests/unit/transcripts.test.js
+npm test -- tests/unit/dream-collect.test.js tests/unit/ledger.test.js tests/unit/dream-pipeline.test.js tests/unit/transcript-stream.test.js tests/unit/transcripts.test.js
 npm test
 npm run lint
-node scripts/boundary-check.js docs/specs/WP-dream-filtered-input-budget.md src/core/dream/scratch.js tests/unit/dream-collect.test.js docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md
+node scripts/boundary-check.js docs/specs/WP-dream-filtered-input-budget.md src/core/dream/scratch.js src/core/dream/config.js src/core/dream/ledger.js src/core/transcripts/stream.js src/core/transcripts/index.js src/cli/dream.js tests/unit/dream-collect.test.js tests/unit/ledger.test.js tests/unit/dream-pipeline.test.js docs/adr/0023-bounded-transcript-intake-and-quarantine-ledger.md docs/adr/0012-dream-run-lifecycle.md
 git diff --check
 ```
 
-The collector tests own AC1–AC4 and AC6. Parser/stream tests protect inherited
-boundaries; full tests and lint cover integration and document validity. Review
-the ADR amendment against A8 for AC5. For AC7, retain the new regression
-assertions' actual failing output against the old collector and passing output
-against the implementation. No fixture design or new verification tool is
-prescribed by this spec. Existing-suite green on the base alone is not proof
-that the defect is covered.
+Collector/config tests own AC1–AC3 and collection repeatability. Ledger tests own
+AC4; pipeline tests own AC5 and durable non-churn. Stream/parser tests protect
+inherited behavior. Review ADRs against A10 for AC7. Retain actual old-collector
+red and implemented green output for AC8; existing-suite green alone proves no
+regression assertion. Test construction belongs to the implementer.
 
 ## Out of scope (do NOT do these)
 
-- Raising or removing individual intake guards; bypassing the shared reader;
-  changing parser roles, message caps, secret detection or provenance handling.
-  The aggregate run-work limit is explicitly under revision in A5.
-- Partial-session continuation, ledger reset, replay of previously processed
-  sessions or a durable extract cache. Any oversized eligibility metadata needs
-  an explicit contract and permission boundary before implementation.
-- Dream report changes (`WP-dream-report-run-skips`), installed-app integrity
-  repair, scheduler changes, and personal vault edits.
-- Token-based context sizing, unrelated config changes, new production telemetry,
-  and rewriting historical completed specs to describe the new implementation.
+- Raising/removing individual intake guards, executable reader/parser changes,
+  new filtering, secret detection or provenance handling.
+- Partial checkpoints, ledger reset, replay of previously processed sessions,
+  durable extract cache, new source-stability guarantees.
+- Dream reports (`WP-dream-report-run-skips`), installed-app integrity repair,
+  scheduler changes and personal vault edits.
+- Token-based sizing, unrelated configuration, telemetry, rewriting historical
+  completed specs or unrelated ADR clauses.
 
 ## Definition of done
 
-0. Resolve A3/A5/A7, finalize exact interfaces, Deliverables and verification,
-   then complete a fresh design gate in `docs/runbooks/codex-review.md`.
-   Obtain owner sign-off including A8, and move
-   the spec to `Ready`. Re-verify C1–C5 against the dispatch revision and record
-   that SHA. Until then this document is a draft, not implementation approval.
-1. Verification steps pass; attach their output and AC7 evidence to the PR.
+0. Complete the fresh design gate in `docs/runbooks/codex-review.md`. Obtain owner
+   decisions P1–P4 including A10 ratification, move to Ready, and re-verify current
+   executable claims against the exact dispatch SHA. Draft is not implementation approval.
+1. Verification passes; attach output and AC8 evidence to the PR.
 2. Conventional commits on `wp/dream-filtered-input-budget`; PR title:
    `fix(dream): allocate capacity from filtered extracts (WP-dream-filtered-input-budget)`.
-3. Fill the PR template, including "Decisions made", "Discovered issues", a
-   WP-prefixed lesson, and `Generated-by:`.
-4. Flip this spec to `In-Review` in the implementation PR.
-5. Complete both PR review gates on the same tip, as defined in
-   `docs/runbooks/codex-review.md`; findings must be clean or dispositioned.
-   Merging remains the maintainer's step.
+3. Fill the PR template, including Decisions made, Discovered issues,
+   WP-prefixed lessons and `Generated-by:`.
+4. Flip this spec to In-Review in the implementation PR.
+5. Both PR review gates run on the same tip per `docs/runbooks/codex-review.md`;
+   findings are clean or dispositioned. Merging remains the maintainer's step.
