@@ -901,27 +901,96 @@ test('dream-pipeline: the counts keep their exact semantics, on the commit messa
   assert.match(r.output, /2 notes, 0 skills/);
 });
 
-test('dream-pipeline: scratch is removed before the lock is released, and a non-owner removes neither (row G5, Table V row V9)', async () => {
+test('dream-pipeline: expired-owner checks protect collection, brain, finalization and cleanup; cleanup precedes release', async (t) => {
   const ctx = setup();
-  /** @type {string[]} */
-  const order = [];
-  const lock = require('../../src/core/dream/lock');
-  const scratch = require('../../src/core/dream/scratch');
-  const realRelease = lock.releaseLock;
-  const realClean = scratch.cleanScratch;
-  lock.releaseLock = (...a) => { order.push('release'); return realRelease(...a); };
-  scratch.cleanScratch = (...a) => { order.push('clean'); return realClean(...a); };
-  try {
-    await runDream(ctx);
-  } finally {
-    lock.releaseLock = realRelease;
-    scratch.cleanScratch = realClean;
-  }
-  // Clean-before-release is what closes the acquire-versus-clean race: a
-  // newly-starting dream must not acquire the freed lock and have its fresh
-  // scratch wiped by our cleanup.
-  if (order.includes('clean') && order.includes('release')) {
-    assert.ok(order.indexOf('clean') < order.indexOf('release'), `saw: ${order.join(',')}`);
+  const lockFile = path.join(ctx.state, 'dream.lock');
+  const scratch = path.join(ctx.state, 'dream-scratch');
+  const lockModule = require.resolve('../../src/core/dream/lock');
+  const phases = [];
+  const teardown = [];
+  const checkContender = (phase) => {
+    const before = fs.readFileSync(lockFile);
+    const record = JSON.parse(before);
+    assert.equal(record.pid, process.pid);
+    // Advance only the contender's clock past the owner's deadline. Its PID
+    // probe is real, against this running pipeline, at each lifecycle boundary.
+    const output = execFileSync(process.execPath, ['-e', `
+      Date.now = () => Number(process.argv[3]);
+      process.stdout.write(JSON.stringify(require(process.argv[1]).acquireLock(process.argv[2], 60000)));
+    `, lockModule, ctx.state, String(record.deadline + 1)], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output), { acquired: false, stolen: false, reason: 'busy' }, phase);
+    assert.deepEqual(fs.readFileSync(lockFile), before, phase);
+    phases.push(phase);
+  };
+  const rm = fs.rmSync;
+  let scratchRemovals = 0;
+  t.mock.method(fs, 'rmSync', (file, ...args) => {
+    if (file === scratch) {
+      const phase = scratchRemovals++ === 0 ? 'collection' : 'cleanup';
+      checkContender(phase);
+      if (phase === 'cleanup') teardown.push('clean');
+    }
+    if (file === lockFile) {
+      assert.equal(fs.existsSync(scratch), false, 'scratch is gone before release');
+      teardown.push('release');
+    }
+    return rm(file, ...args);
+  });
+  const { writeFilePrivate } = require('../../src/core/private-fs');
+  const { reapGroup } = require('../../src/core/reap');
+  const result = await runDream(ctx, ['--yes'], {
+    env: { WIENERDOG_DREAM_RUN_TOKEN: 'abcdef0123456789' },
+    opts: {
+      writeFilePrivate: (...args) => {
+        checkContender('brain');
+        return writeFilePrivate(...args);
+      },
+      reapGroup: async (...args) => {
+        const verdict = await reapGroup(...args);
+        checkContender('finalization');
+        return verdict;
+      },
+    },
+  });
+  assert.equal(result.thrown, null, result.thrown && result.thrown.stack);
+  assert.deepEqual(phases, ['collection', 'brain', 'finalization', 'cleanup']);
+  assert.deepEqual(teardown, ['clean', 'release']);
+});
+
+test('dream-pipeline: EPERM and unknown owners decline before collection or teardown', async (t) => {
+  for (const [code, reason] of [['EPERM', 'busy'], ['EINVAL', 'owner-unknown']]) {
+    const ctx = setup();
+    const lockFile = path.join(ctx.state, 'dream.lock');
+    const scratch = path.join(ctx.state, 'dream-scratch');
+    fs.mkdirSync(scratch, { recursive: true });
+    fs.writeFileSync(path.join(scratch, 'input.md'), 'held input');
+    const bytes = JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: 0 });
+    fs.writeFileSync(lockFile, bytes);
+    const kill = t.mock.method(process, 'kill', () => { throw Object.assign(new Error('private probe detail'), { code }); });
+    const rm = fs.rmSync;
+    const removals = [];
+    const removal = t.mock.method(fs, 'rmSync', (file, ...args) => {
+      if (file === scratch || file === lockFile) removals.push(file);
+      return rm(file, ...args);
+    });
+    const result = await runDream(ctx);
+    kill.mock.restore();
+    removal.mock.restore();
+    if (reason === 'busy') {
+      assert.equal(result.thrown, null);
+      assert.equal(result.output, 'wienerdog: another dream holds the lock.');
+    } else {
+      const { WienerdogError } = require('../../src/core/errors');
+      assert.ok(result.thrown instanceof WienerdogError);
+      assert.equal(result.thrown.message, 'dream lock owner could not be verified; no takeover was attempted. Check whether an earlier dream is still running before arranging lock recovery.');
+      assert.equal(result.output, '');
+    }
+    assert.deepEqual(removals, []);
+    assert.equal(fs.readFileSync(lockFile, 'utf8'), bytes);
+    assert.deepEqual(fs.readdirSync(scratch), ['input.md']);
+    assert.equal(fs.readFileSync(path.join(scratch, 'input.md'), 'utf8'), 'held input');
+    assert.equal(fs.existsSync(workspaceOf(ctx)), false);
+    assert.equal(fs.existsSync(path.join(ctx.state, 'transcript-ledger.json')), false);
   }
 });
 
