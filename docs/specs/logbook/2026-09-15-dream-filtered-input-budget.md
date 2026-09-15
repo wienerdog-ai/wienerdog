@@ -252,6 +252,43 @@ it runs. Its output goes outside the checkout and its final chat message names
 only that file, so raw output can be committed before inspection. The
 previously recorded stop criterion remains in force.
 
+### Native calibration and round 1 result
+
+The native backend also passed its own two-direction calibration using the same
+complete synthetic contracts as the bridge cases. Raw results were committed
+at `c4b960b4` before inspection:
+`2026-09-15-dream-filtered-input-budget-native-calibration-green-raw.txt`
+returned `approve`; the corresponding `native-calibration-red-raw.txt` returned
+`needs-attention` and identified the deliberate raw-byte charge. These were
+fresh native agents; bridge validation was not substituted for native evidence.
+
+| Round | Reviewed tip | Verdict | Findings / scope objections | Raw evidence and introduction commit |
+|---|---|---|---|---|
+| Native Codex adversarial design 1 | `c4b960b4bc505e07e3e9a01f7d5a9dc10e9dca4a` | `approve` | 0 / 0 | `2026-09-15-dream-filtered-input-budget-design-r1-raw.txt` at `217dfbc2` |
+
+The native reviewer took no part in drafting or calibration. It independently
+ran the 77 targeted tests (all passed, none skipped), checked `git diff --check`,
+and confirmed empty, byte-identical working-tree status and the same HEAD at
+both ends. Its raw test output is retained as
+`2026-09-15-dream-filtered-input-budget-design-r1-tests.txt` in this directory.
+It did not run lint or the full suite and explicitly identified those earlier
+results as the orchestrator's evidence, not its own.
+
+The raw report was copied and committed before the relay inspected it. The
+relay then verified the verdict fields, unchanged-tree evidence and the key
+claims against the source: complete-filtered-demand allocation is required in
+Table A, raw limits remain independently owned by the streaming reader, and
+the unchanged brain/CLI consume the selected scratch directory and the existing
+ledger result shapes. No finding needs a fix, residual or drop disposition.
+
+The reviewed spec is byte-identical after review:
+SHA-256 `43ca2b40902d9878bdacd8d09d12ac20bd465cb6def47aba25340d913a6f2453`.
+Only evidence records are added after the reviewed tip. The design-review loop
+is closed under the pinned criterion. Owner sign-off on the reviewed spec and
+its proposed ADR amendment remains the next step before `Ready` and dispatch;
+the authorization to run this review is not recorded as that later sign-off.
+The existing full-suite executable-pin failure remains unwaived.
+
 ## Lessons
 
 - WP-dream-filtered-input-budget: allocating model-input capacity from raw file
@@ -260,3 +297,7 @@ previously recorded stop criterion remains in force.
 - WP-dream-filtered-input-budget: check architectural decisions before writing
   the fix contract; the faulty allocation order was explicitly prescribed by
   ADR-0023, not just an incidental implementation choice.
+- WP-dream-filtered-input-budget: in native Codex sessions, use a fresh native
+  Codex subagent for independent adversarial review; the owner clarified that
+  `gptsol` names the historical Claude Code transport, not an exclusive reviewer
+  requirement. Preserve the review and evidence contract across transports.
