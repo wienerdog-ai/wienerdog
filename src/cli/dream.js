@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { isDeepStrictEqual } = require('node:util');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
@@ -11,7 +12,7 @@ const { WienerdogError } = require('../core/errors');
 const { readDreamConfig } = require('../core/dream/config');
 const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
 const ledgerLib = require('../core/dream/ledger');
-const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
+const { collectExtracts, cleanScratch } = require('../core/dream/scratch');
 const { refreshWarnings, composeWarnings, WARNINGS_REL } = require('../core/dream/warnings');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
@@ -145,8 +146,6 @@ function printPlan(sel, cfg, vaultDir, workspaceDir, date, layout, settingsPath)
     console.log(`  ${harness} sessions: ${perHarness[harness]}`);
   }
   console.log(`  total input bytes: ${totalBytes}`);
-  console.log(`  dropped for size: ${sel.droppedForSize}`);
-  console.log(`  truncated to fit: ${sel.truncated.length}`);
   // The --dry-run preview must compose the SAME write-target argument the real
   // invocation does, or it prints a plan that is not the plan.
   const argv = buildClaudeArgs({ workspaceDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
@@ -620,7 +619,15 @@ async function run(argv, opts = {}) {
     const mig = ledgerLib.migrateFromWatermarks(paths.state, ledger);
     ledger = mig.ledger;
     if (mig.migrated && !dryRun) ledgerLib.writeLedger(paths.state, ledger);
-    const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);
+    const sel = collectExtracts(paths, ledger, cfg.maxInputBytes, {
+      preprocessTimeoutMs: cfg.preprocessTimeoutMs,
+    });
+    // Size evidence survives a later brain failure, independently of successful
+    // processing. Compare maps structurally: key insertion order is not a change.
+    const memoChanged = !isDeepStrictEqual(ledger.oversizedExtracts || {}, sel.oversizedExtracts);
+    if (memoChanged && !dryRun) {
+      ledger = { ...ledger, oversizedExtracts: sel.oversizedExtracts };
+    }
 
     // Regenerate the injected session digest from the CURRENT ledger (atomic
     // temp + rename). The quarantine banner is re-derived from the ledger every
@@ -671,24 +678,30 @@ async function run(argv, opts = {}) {
       }
     };
 
-    // 5. Surface capacity events plainly — a size event must NEVER be silent.
-    for (const t of sel.truncated) {
-      console.log(
-        `wienerdog: dream — truncated ${t.harness}/${t.session_id} to fit the input budget ` +
-          `(kept the newest ${t.keptBytes} of ${t.originalBytes} bytes).`
-      );
+    // 5. Distinct causes, counts only: source paths and session IDs never enter
+    // these messages. Dry-run shows the same exclusions as a real run.
+    const exclusions = [];
+    if (sel.deferred.length) {
+      exclusions.push(`capacity stop: ${sel.deferred.length} session(s) deferred; ` +
+        'retry on the next run or raise dream_max_input_bytes in config.yaml.');
     }
-    if (sel.dropped.length > 0) {
-      const names = sel.dropped.map((d) => `${d.harness}/${d.session_id} (${d.bytes}B)`).join(', ');
-      console.log(
-        `wienerdog: dream — capacity: dropped ${sel.dropped.length} session(s) over ` +
-          `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
-      );
+    if (sel.deadlineDeferred.length) {
+      exclusions.push(`preprocessing deadline: ${sel.deadlineDeferred.length} session(s) deferred; ` +
+        'retry or raise dream_preprocess_timeout_seconds in config.yaml.');
     }
+    if (sel.oversized.length) {
+      exclusions.push(`individually oversized: ${sel.oversized.length} session(s) exceed the ` +
+        `${cfg.maxInputBytes}-byte input limit; raise dream_max_input_bytes in config.yaml.`);
+    }
+    if (sel.readDeferred.length) {
+      exclusions.push(`incomplete reads: ${sel.readDeferred.length} session(s) deferred; ` +
+        'retry after the sessions stop growing.');
+    }
+    for (const message of exclusions) console.log(`wienerdog: dream — ${message}`);
     // Per-quarantine console line: secret-free — SANITIZED folded basename +
     // reason enum only, through the SAME sanitizer as the digest banner
     // (ledger.displayName; review finding, amended 2026-07-17). A dry-run only
-    // diagnoses ("would quarantine"), mirroring the capacity-wedge carve-out.
+    // diagnoses ("would quarantine"), without persisting the result.
     for (const q of sel.newlyQuarantined) {
       const name = `${q.harness}/${ledgerLib.displayName(q.path)} (${q.reason})`;
       if (dryRun) {
@@ -714,23 +727,19 @@ async function run(argv, opts = {}) {
       // the point that serves the adopt-with-history first run, which returns
       // below without ever making a commit.
       reportWarningsRefresh(refreshWarnings({ vaultDir, ledger }));
+    } else if (memoChanged && !dryRun) {
+      ledgerLib.writeLedger(paths.state, ledger);
     }
 
-    // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
-    //    (run-job records a durable alert). Dry-run only diagnoses.
-    if (sel.entries.length === 0 && sel.dropped.length > 0) {
+    // 6. No complete input despite eligible sessions: keep the evidence above
+    // and fail with every observed cause, including mixtures. Dry-run diagnoses.
+    if (sel.entries.length === 0 && exclusions.length > 0) {
+      const message = `dream: no complete session was admitted. ${exclusions.join(' ')}`;
       if (dryRun) {
-        console.log(
-          'wienerdog: dream plan (dry-run) — capacity exhausted: no fresh session fits ' +
-            `dream_max_input_bytes (${cfg.maxInputBytes}); raise it in config.yaml.`
-        );
+        console.log(`wienerdog: dream plan (dry-run) — ${message}`);
         return;
       }
-      throw new WienerdogError(
-        `dream capacity exhausted: ${sel.dropped.length} fresh session(s) exceed ` +
-          `dream_max_input_bytes (${cfg.maxInputBytes}) and none fit even after truncation ` +
-          `(per-session floor ${MIN_TRUNCATE_BYTES} bytes) — raise dream_max_input_bytes in config.yaml.`
-      );
+      throw new WienerdogError(message);
     }
 
     // 7. Genuinely nothing new → no brain, no commit.
@@ -760,7 +769,7 @@ async function run(argv, opts = {}) {
 
     // 8b. PRE-DREAM CONTAINMENT SELF-CHECK (WP-135, ADR-0025 Amendment 2). Only
     //     reached when a real brain is about to spawn (past nothing-to-dream +
-    //     dry-run + capacity-wedge) — never on a fast path (cost). Skippable
+    //     dry-run + no-complete-input) — never on a fast path (cost). Skippable
     //     ONLY via the JS-only opts seam (WP-155) — tests skip it because a
     //     fake brain cannot satisfy a live probe; production passes no opts, so
     //     no env var can disable this check. Unlike the managed-hook WARNING

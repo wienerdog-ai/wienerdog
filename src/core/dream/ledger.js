@@ -92,7 +92,8 @@ function ledgerPath(stateDir) {
  *                                   reason?:'over-ceiling'|'too-many-lines'|'read-error'|
  *                                           'secret-revert'|'secret-revert-exhausted',
  *                                   deferrals?:number,
- *                                   updated_at:string, harness:'claude'|'codex'}>}} Ledger
+ *                                   updated_at:string, harness:'claude'|'codex'}>,
+ *            oversizedExtracts?: Record<string, {fingerprint:string, appVersion:string, extractBytes:number}>}} Ledger
  */
 
 /** @returns {Ledger} */
@@ -103,6 +104,26 @@ function emptyLedger() {
 /** @param {unknown} v @returns {boolean} */
 function isPlainObject(v) {
   return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** Optional complete oversized measurements. Invalid evidence only causes a retry;
+ *  it never changes existing file outcomes or secret-deferral counters.
+ *  @param {unknown} value @returns {Record<string, {fingerprint:string, appVersion:string, extractBytes:number}>} */
+function normalizeOversizedExtracts(value) {
+  if (!isPlainObject(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([, rec]) =>
+    isPlainObject(rec) && typeof rec.fingerprint === 'string' && typeof rec.appVersion === 'string' &&
+    Number.isSafeInteger(rec.extractBytes) && rec.extractBytes > 0
+  ).map(([key, rec]) => [key, {
+    fingerprint: rec.fingerprint, appVersion: rec.appVersion, extractBytes: rec.extractBytes,
+  }]));
+}
+
+/** Keep version-1 ledgers without useful memo evidence byte-compatible.
+ *  @param {unknown} value @returns {object} */
+function optionalOversizedExtracts(value) {
+  const oversizedExtracts = normalizeOversizedExtracts(value);
+  return Object.keys(oversizedExtracts).length ? { oversizedExtracts } : {};
 }
 
 /** Read the ledger. Missing/corrupt/malformed → a fresh empty ledger
@@ -122,6 +143,7 @@ function readLedger(stateDir) {
         codex: typeof obj.baseline_mtime.codex === 'number' ? obj.baseline_mtime.codex : null,
       },
       files: obj.files,
+      ...optionalOversizedExtracts(obj.oversizedExtracts),
     };
   } catch {
     return emptyLedger();
@@ -135,7 +157,10 @@ function writeLedger(stateDir, ledger) {
   const dest = ledgerPath(stateDir);
   const tmp = `${dest}.${process.pid}.tmp`;
   const body = JSON.stringify(
-    { version: 1, baseline_mtime: ledger.baseline_mtime, files: ledger.files },
+    {
+      version: 1, baseline_mtime: ledger.baseline_mtime, files: ledger.files,
+      ...optionalOversizedExtracts(ledger.oversizedExtracts),
+    },
     null,
     2
   );
@@ -175,7 +200,7 @@ function migrateFromWatermarks(stateDir, ledger) {
  *       fingerprint. The sticky exception, and it MUST precede the fingerprint
  *       comparison it overrides: a transcript that is still being appended to has
  *       a different fingerprint every night, so a fingerprint-sensitive skip
- *       would re-select it forever — and because the byte budget is water-filled
+ *       would re-select it forever — and because input capacity is assigned
  *       newest-mtime-first, that one file would then eat the budget nightly and
  *       starve new sessions (the WP-048 class in a new dress).
  *    2. any record whose `fingerprint` differs — INCLUDING a record that is not
@@ -495,6 +520,7 @@ module.exports = {
   fingerprint,
   displayName,
   ledgerPath,
+  normalizeOversizedExtracts,
   readLedger,
   writeLedger,
   migrateFromWatermarks,

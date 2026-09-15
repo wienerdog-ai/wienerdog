@@ -396,3 +396,47 @@ by overwrite is not atomic, so two contenders observing the same dead owner can
 still overwrite one another. This amendment does not promise complete concurrent
 stale-recovery exclusion. Part 7 and the unrelated lifecycle and capacity
 amendments remain in force.
+
+## Amendment (2026-09-15): admit complete filtered sessions and report exclusion causes — WP-dream-filtered-input-budget
+
+**Decision (replaces capacity parts 4 and 5).** The owner ratified P1–P4,
+including this amendment, on 2026-09-15. Table A rows A2–A4 and A9 in
+`docs/specs/WP-dream-filtered-input-budget.md` are canonical. The previous
+capacity policy remains above as historical context.
+
+Equal shares, the minimum truncation grant, budget-induced suffix truncation,
+recording those truncated selections as processed, and the old floor-based
+wedge guarantee are **retired**. Newest-first admission now selects complete
+filtered extracts within X (`dream_max_input_bytes`, default 8,000,000).
+At exact X, stop. If an extract fits X but exceeds the remaining capacity,
+omit it and stop without searching older sessions for a smaller fit. If it is
+individually larger than X, report and skip it without reserving capacity;
+older candidates may still be admitted. Unused remainder is intentional.
+Whole refers to the existing parser's redacted, message-capped output, not
+every original message. Only admitted extracts can reach the existing
+successful-run and secret-disposition processing gates.
+
+The CLI reports separate nonzero counts for capacity-stop exclusions,
+preprocessing deadline exclusions, individually oversized sessions and
+incomplete reads. New diagnostics contain no transcript text, session IDs or
+paths. Oversized output names X and `dream_max_input_bytes`; deadline output
+names `dream_preprocess_timeout_seconds`. Dry-run shows the same distinctions
+and retains its physical scratch-byte total, without a truncation/floor line.
+
+With selected inputs, normal dreaming continues. With none and any oversized,
+deadline or incomplete-read exclusions, a real run throws an actionable
+`WienerdogError` after persisting changed oversized metadata and quarantine
+state. Mixed causes are reported separately with a summary that no complete
+session was admitted. Dry-run diagnoses and returns without persistence.
+With no selections or exclusions, preserve idle behavior, including the
+quarantine-only path. No default promises backlog drainage or forward progress
+for every possible session; the explicit failure makes an unadmittable run
+visible through the existing failure channel.
+
+ADR-0023 amendment 3 owns the separate content/work/time accounting and optional
+oversized-size memo. Its metadata may persist even if a later brain fails;
+this does not mark a transcript processed or alter its secret-revert counter.
+No dream report extension is introduced. All unrelated lifecycle, secret-revert,
+quarantine-surface and part-6 live-owner lock provisions remain unchanged,
+including the owner-accepted simultaneous stale-claimant race and recovery
+policy. This amendment adds no process or service (ADR-0004).

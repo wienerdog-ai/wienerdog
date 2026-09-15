@@ -1,0 +1,9 @@
+**FAIL — one template-conformance omission.**
+
+**Section inventory:** All required sections are present, including frontmatter, Current state, Exact contracts, activated Contract reference with Table A and Mirrored Surface Checklist, Security checklist, and Definition of done.
+
+**Exact-contract illustrations:** Present. The spec includes concrete input → output examples, documented signatures/result shapes, serialization details, and a complete literal scratch-file example.
+
+**Omission:** The template’s explicit idempotency criterion is unresolved. AC6 specifies repeatable content/accounting and permits scratch replacement, but does not state “second run: zero changes” or explicitly mark that criterion `N/A — <reason>`. Clarify its applicability using the template’s required form.
+
+No other section or illustration omissions found.

@@ -2106,3 +2106,115 @@ test('dream-pipeline: AC5 — the positive control: a hook configured through co
   assert.equal(fs.existsSync(hookLogB), false,
     'GIT_CONFIG_COUNT must not run a hook offered only through the launching environment');
 });
+
+// WP-dream-filtered-input-budget: size evidence is durable before any brain work.
+function plantBudgetSession(ctx, name, text, mtime) {
+  const file = path.join(ctx.claude, 'projects', 'proj', `${name}.jsonl`);
+  writeFile(ctx.claude, `projects/proj/${name}.jsonl`, JSON.stringify({
+    type: 'user', sessionId: name, message: { role: 'user', content: text },
+  }) + '\n');
+  fs.utimesSync(file, mtime, mtime);
+  return file;
+}
+
+test('dream-pipeline: mixed zero-input causes preserve memo and quarantine before failure; dry-run persists neither', async (t) => {
+  const ctx = setup({ withTranscript: false });
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\ndream_preprocess_timeout_seconds: 0.5\n`);
+  plantBudgetSession(ctx, 'private-oversized', 'x'.repeat(2000), 300);
+  const incomplete = plantBudgetSession(ctx, 'private-incomplete', 'message', 200);
+  plantBudgetSession(ctx, 'private-deadline', 'message', 100);
+  const quarantine = plantBudgetSession(ctx, 'private-ceiling', '', 50);
+  const transcripts = require('../../src/core/transcripts');
+  fs.truncateSync(quarantine, transcripts.Limits.PRE_READ_CEILING_BYTES + 1);
+  const performance = require('node:perf_hooks').performance;
+  let elapsed = 0;
+  t.mock.method(performance, 'now', () => elapsed);
+  const parse = transcripts.parseWithOutcome;
+  t.mock.method(transcripts, 'parseWithOutcome', (...args) => {
+    const result = parse(...args);
+    if (args[0].path === incomplete) {
+      elapsed = 500;
+      return { ...result, parse: { ...result.parse, runExhausted: true } };
+    }
+    return result;
+  });
+  for (const dryRun of [true, false]) {
+    elapsed = 0;
+    const r = await runDream(ctx, dryRun ? ['--dry-run'] : ['--yes']);
+    if (dryRun) assert.equal(r.thrown, null);
+    else {
+      assert.equal(r.thrown.constructor.name, 'WienerdogError');
+      assert.match(r.thrown.message, /no complete session was admitted/);
+      assert.match(r.thrown.message, /individually oversized: 1/);
+      assert.match(r.thrown.message, /preprocessing deadline: 1/);
+      assert.match(r.thrown.message, /incomplete reads: 1/);
+    }
+    assert.match(r.output, /dream_preprocess_timeout_seconds/);
+    assert.match(r.output, /dream_max_input_bytes/);
+    assert.doesNotMatch(r.output, /private-oversized|private-incomplete|private-deadline|truncated|floor/);
+    assert.equal(fs.existsSync(ledgerLib.ledgerPath(ctx.state)), !dryRun);
+  }
+  const ledger = ledgerLib.readLedger(ctx.state);
+  assert.equal(Object.keys(ledger.oversizedExtracts).length, 1);
+  assert.equal(Object.keys(ledger.files).length, 1);
+  assert.equal(ledger.files[ledgerLib.foldKey(quarantine)].reason, 'over-ceiling');
+});
+
+test('dream-pipeline: oversized memo is persisted before a later brain failure without resetting secret counters', async (t) => {
+  const ctx = setup();
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 10000\n`);
+  const oversized = plantBudgetSession(ctx, 'private-large', 'x'.repeat(2000), 300);
+  for (let i = 0; i < 10; i++) fs.appendFileSync(oversized, fs.readFileSync(oversized));
+  const stat = fs.statSync(oversized);
+  const disc = { path: oversized, harness: 'claude', size: stat.size, mtimeMs: stat.mtimeMs, dev: stat.dev, ino: stat.ino };
+  const prior = ledgerLib.recordSecretDeferred(ledgerLib.readLedger(ctx.state), disc, 2);
+  ledgerLib.writeLedger(ctx.state, prior);
+  const writes = [];
+  const write = ledgerLib.writeLedger;
+  t.mock.method(ledgerLib, 'writeLedger', (state, value) => {
+    writes.push(structuredClone(value));
+    return write(state, value);
+  });
+  const r = await runDream(ctx, ['--yes'], { mode: 'crash' });
+  assert.ok(r.thrown);
+  assert.match(r.thrown.message, /dream brain exited 1/);
+  assert.equal(writes.length, 1, 'new size evidence is the only ledger write before brain failure');
+  const after = ledgerLib.readLedger(ctx.state);
+  assert.deepEqual(after.files, prior.files);
+  assert.deepEqual(after.baseline_mtime, prior.baseline_mtime);
+  assert.equal(ledgerLib.secretDeferralCount(after, disc), 2);
+  assert.equal(Object.keys(after.oversizedExtracts).length, 1);
+  assert.deepEqual(writes[0], after);
+});
+
+test('dream-pipeline: identical memo maps do not rewrite the ledger, regardless of key order; pruning does persist on idle', async (t) => {
+  const ctx = setup({ withTranscript: false });
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\n`);
+  const first = plantBudgetSession(ctx, 'first', 'x'.repeat(2000), 200);
+  const second = plantBudgetSession(ctx, 'second', 'y'.repeat(2000), 100);
+  const initial = await runDream(ctx);
+  assert.ok(initial.thrown);
+  const ledger = ledgerLib.readLedger(ctx.state);
+  ledger.oversizedExtracts = Object.fromEntries(Object.entries(ledger.oversizedExtracts).reverse());
+  ledgerLib.writeLedger(ctx.state, ledger);
+  const before = fs.readFileSync(ledgerLib.ledgerPath(ctx.state));
+  const write = ledgerLib.writeLedger;
+  const writes = t.mock.method(ledgerLib, 'writeLedger', write);
+  const retry = await runDream(ctx);
+  assert.ok(retry.thrown);
+  assert.equal(writes.mock.callCount(), 0);
+  assert.deepEqual(fs.readFileSync(ledgerLib.ledgerPath(ctx.state)), before);
+  fs.unlinkSync(first);
+  fs.unlinkSync(second);
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null);
+  assert.equal(writes.mock.callCount(), 0);
+  assert.deepEqual(fs.readFileSync(ledgerLib.ledgerPath(ctx.state)), before);
+  const idle = await runDream(ctx);
+  assert.equal(idle.thrown, null);
+  assert.match(idle.output, /nothing new to dream/);
+  assert.equal(writes.mock.callCount(), 1, 'pruned size evidence is written even on idle');
+  assert.equal('oversizedExtracts' in ledgerLib.readLedger(ctx.state), false);
+  await runDream(ctx);
+  assert.equal(writes.mock.callCount(), 1, 'absent and empty maps never churn');
+});

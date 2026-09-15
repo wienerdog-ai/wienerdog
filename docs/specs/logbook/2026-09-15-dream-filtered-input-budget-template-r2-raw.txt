@@ -1,0 +1,79 @@
+# Fresh template conformance review — revision 2
+
+Result: NONCONFORMING — one limited mirrored-surface checklist finding.
+
+## Scope and method
+
+I took no part in drafting this spec. The only document inputs read were:
+- /Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/WP-dream-filtered-input-budget.md
+- /Users/felho/dev/repos-to-learn-from/wienerdog/docs/specs/_TEMPLATE.md
+
+This was template conformance review, not design critique or source-code validation. The template references the authoring runbook, but the review instruction explicitly restricted inputs to these two documents; that runbook was not read. No repository file was changed.
+
+## Sections checked
+
+- Frontmatter: all required fields present; Draft, opus and M are permitted values.
+- Title: WP identifier and verb-first title present.
+- Context: present, three substantive paragraphs, relevant files-only invariant and necessary motivation included.
+- Current state: present, inspected SHA, owner paths, collector/parser signatures and concrete observable behavior supplied.
+- Deliverables: present, actions, paths and notes enumerate the permission boundary.
+- Exact contracts: present, compatible collector signature, clock/configuration contract, result and extract shapes, optional ledger map, storage conventions and complete examples provided.
+- Contract reference: present; multiple activation conditions are identified, canonical Table A owns the changed contracts.
+- Contract table: present as Table A, rows A1–A10.
+- Mirrored Surface Checklist: present, but incomplete as detailed below.
+- Implementation notes and constraints: present, including owner proposals, inherited limits, adjacent work and known baseline failure.
+- Security checklist: present and applicable to untrusted transcript input.
+- Acceptance criteria: present, AC1–AC8 are testable assertions tied to canonical rules.
+- Verification: literal commands present, with explanatory ownership mapping for collector/config, ledger, pipeline, stream/parser and ADR checks, plus old-versus-new regression evidence.
+- Out of scope: present, including the named sibling report WP and other explicit exclusions.
+- Definition of done: present, includes verification evidence, branch/commit/PR requirements, status flip, both review gates and owner/design prerequisites.
+
+All required major sections are present; no section needs an N/A replacement.
+
+## Missing or nonconforming items
+
+TC-1 — Mirrored Surface Checklist does not completely carry the template's required mirror discipline.
+
+The template requires every surface in the spec that mirrors a canonical table to be named, and requires canonical and mirror updates in the same commit, with no intermediate commit containing disagreement. The spec's Security checklist explicitly mirrors A6 and A7, but its Mirrored Surface Checklist does not name the Security checklist. Its final checkbox says to register/update a new mirror “in the same pass”, which does not explicitly preserve the template's same-commit requirement.
+
+Required correction: register the Security checklist as a Table A mirror and explicitly require all affected canonical rows and registered mirrors to be updated together in the same commit. This is a documentation conformance correction; it does not require changing the proposed design.
+
+## Exact contracts and complete examples
+
+Conforming within the reviewed document scope:
+- Existing three-argument calls and the optional fourth argument are explicit.
+- Configuration key, valid/invalid values, fallback, conversion and return field are specified.
+- Collector result fields, legacy aliases and outcome classification have declared shapes and canonical semantics.
+- Ledger version and optional map shape, validity, key/fingerprint/version rules, replacement behavior and persistence timing are specified.
+- A complete minimal ledger JSON example is present.
+- A complete one-record JSONL input and the entire expected scratch JSON output are present, including path, newline and formatting rules.
+- Admission input/output examples cover remaining-space overflow, individually oversized input and exact fit.
+
+The example's implementation accuracy was not checked against source files because those files were outside the authorized review inputs.
+
+## Acceptance and idempotency requirements
+
+Conforming:
+- AC1–AC5 map observable behavior to A1–A9 and named test owners.
+- AC6 explicitly states second-run zero changes for selected content, accounting, final scratch bytes/artifacts under identical inputs and admission-clock decisions; it separately prohibits rewriting an unchanged durable memo.
+- The allowance for scratch recreation/mtime changes and variable real-clock admission is explicit, so the intended idempotency surface is reviewable.
+- AC7 has an explicit ADR review step; AC8 requires retained failing-old/passing-new regression evidence rather than only a green existing suite.
+- Verification output and review dispositions are required by Definition of done. The baseline full-suite failure is disclosed; no execution or green claim was made in this review.
+
+## Commands actually executed and repository evidence
+
+1. git status --porcelain && git rev-parse HEAD && cat docs/specs/WP-dream-filtered-input-budget.md && cat docs/specs/_TEMPLATE.md
+   Exit code: 0.
+   Initial git status --porcelain output: empty (clean).
+   Initial HEAD: 70f9af86df41b61d0ae3de4594d6cb71a747be47.
+   This read exactly the two permitted documents.
+
+2. git status --porcelain && git rev-parse HEAD
+   Exit code: 0.
+   Post-review git status --porcelain output: empty (clean).
+   Post-review HEAD: 70f9af86df41b61d0ae3de4594d6cb71a747be47.
+
+3. python3 - <<'PY' ... PY
+   Writes this English raw report with pathlib.Path.write_text to the requested absolute /tmp path only.
+
+Expected HEAD matched both observations. Repository state remained clean and HEAD unchanged. No tests, source inspections or additional document reads were performed.

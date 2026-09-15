@@ -432,3 +432,85 @@ point. The dream report is the one package that also counts capacity-deferred
 transcripts, for which §2 keeps no record: a section whose only non-zero count is
 that one carries no pointer. The exact condition is owned by
 `WP-dream-report-run-skips`'s Table A pointer row, cited here and not restated.
+
+### Amendment 3 (2026-09-15) — measure filtered input, separate per-session work and preprocessing time
+
+Status: **ACCEPTED — OWNER-RATIFIED 2026-09-15.** The owner accepted P1–P4,
+including the two ADR amendments, in `WP-dream-filtered-input-budget`.
+That work package's Table A, rows A1–A8, is canonical for this amendment.
+Historical decisions above remain as the record of the policies replaced here.
+
+**Content admission replaces §3's discovery-size allocation.** Charge each
+complete filtered extract's compact JSON bytes after the existing parser,
+redaction and message caps, including its metadata. `dream_max_input_bytes`
+remains X (default 8,000,000). Preserve ledger eligibility and newest-first
+priority, with discovery order on equal mtimes. Admit one complete extract at a
+time if it fits the remaining capacity. Stop exactly at X, or at the first
+extract that fits X but exceeds the remainder; do not search older sessions
+for a smaller fit. An extract larger than X instead reserves nothing, is
+reported as individually oversized and permits older candidates. No equal
+shares, minimum grants or budget-induced suffix truncation remain. Whole means
+the existing filtered extract; original-message completeness is not promised.
+
+**Work allowance replaces §1's aggregate read cap.** Each session receives a
+fresh existing `newRunBudget()`: 200 MiB remains a finite emergency per-session
+read-work bound, not a peak-memory claim. The 50 MiB discovery ceiling, 1 MiB
+line cap, 500,000-line cap, 64 KiB chunks, JSON depth 64 and executable parser
+behavior remain. The existing live-append/discovery-size race remains; no
+snapshot-read guarantee is added. A reported incomplete read is discarded,
+recorded as read-deferred and permits later candidates subject to time. It is
+neither processed nor a new quarantine reason. Only one session's parsed
+content plus corpus metadata is resident; selected final pretty JSON alone
+lives in private 0700/0600 scratch, with existing reset and cleanup behavior.
+
+**Preprocessing has its own soft admission deadline.** The optional top-level
+`dream_preprocess_timeout_seconds` defaults to 60 seconds. A positive finite
+number is accepted only if its millisecond conversion is finite; invalid,
+missing, nonpositive or overflowing values use the default. Monotonic elapsed
+time begins at collector entry, including discovery, eligibility and scratch
+setup. Start another parse only strictly before the deadline. Finish a started
+session through filtering, measurement and admission even after expiry. The
+model timeout remains independent. This is neither hard interruption nor a
+checkpoint; the default is an initial policy judgment, not measured throughput.
+The separately landed live-owner lock prerequisite governs the full lifecycle,
+including this allowed overrun, with its accepted stale-claimant race unchanged.
+
+**Oversized measurements are independent optional ledger metadata.** Ledger
+version 1 may carry top-level `oversizedExtracts`, keyed by existing `foldKey(path)`.
+Each memo holds only `fingerprint`, `appVersion` from the running package and
+`extractBytes`. The strings must be strings; bytes must be a positive safe
+integer, without coercion. Existing `files` outcomes, baselines and secret
+counters remain authoritative and unchanged. Consult a memo only after ledger
+eligibility and the discovery ceiling pass. Matching fingerprint and version
+permit skipping parsing only while the measured size exceeds current X.
+Changed source/version or sufficiently raised X requires fresh parsing; smaller
+or insufficient X changes do not. Same-version development changes are not
+detected, so releases must change package version. No transcript text or content
+cache is stored, and no expiry is introduced.
+
+Return a replacement map without mutating the ledger. Prune absent paths,
+invalid or changed records, ledger-ineligible paths and freshly measured
+non-oversized records. Retain valid unvisited records behind stops. Missing and
+empty maps are equivalent; malformed memo data does not invalidate ordinary
+ledger data. Real runs atomically persist changed metadata using the existing
+private pretty-JSON writer before idle or brain branches; dry-run never writes
+it. Subsequent brain failure does not invalidate size evidence. Older code can
+drop this optional map, causing extra parsing on a later run.
+
+**Accounting separates exclusion causes.** Only selected full extracts enter
+`entries`, `wrote` and `processed`, with processing still subject to the existing
+successful-dream and secret-disposition gates. Capacity stops classify the
+unvisited remainder as `deferred`; `dropped` is its same-array alias and
+`droppedForSize` its length. Deadline stops classify the remainder as
+`deadlineDeferred`; reported partial reads enter `readDeferred`. Encountered
+oversized exclusions carry complete measured bytes and whether a matching memo
+was used. Unvisited candidates are classified by the stop's cause without
+asserting their unknown filtered sizes. These categories and quarantine are
+disjoint; ledger-skipped files are outside them. `truncatedToFit` is false and
+`truncated` is empty; the parser's own `Extract.truncated` remains meaningful.
+Deferred byte fields retain discovery size. Unselected sessions are not marked
+processed and ordinary eligibility permits retry.
+
+The secret-revert and quarantine-surface amendments remain in force. No new
+quarantine reason, report feature, runtime dependency, daemon or raw storage is
+introduced. ADR-0004 remains intact.

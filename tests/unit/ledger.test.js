@@ -753,3 +753,38 @@ test('ledger: [QBL-3] the vault warnings document renders the preserved-copies p
   assert.ok(!doc.includes('state/quarantine'), '[QBL-3]');
   assert.ok(!doc.includes('redacted/'), '[QBL-3]');
 });
+
+// WP-dream-filtered-input-budget: optional size evidence is independent of outcomes.
+test('ledger: oversized memo round-trips privately without changing outcomes or baselines', () => {
+  const state = tempState();
+  const d = disc();
+  const key = ledgerLib.foldKey(d.path);
+  const base = ledgerLib.recordSecretDeferred({ ...EMPTY, baseline_mtime: { claude: 50, codex: 60 } }, d, 2);
+  const memo = { fingerprint: ledgerLib.fingerprint(d), appVersion: '0.13.0', extractBytes: 9000000 };
+  const value = { ...base, oversizedExtracts: { [key]: memo } };
+  ledgerLib.writeLedger(state, value);
+  assert.deepEqual(ledgerLib.readLedger(state), value);
+  const file = ledgerLib.ledgerPath(state);
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  assert.ok(fs.readFileSync(file, 'utf8').endsWith('\n'));
+  assert.equal(ledgerLib.secretDeferralCount(ledgerLib.readLedger(state), d), 2);
+  assert.equal(ledgerLib.selectState(ledgerLib.readLedger(state), d), 'select');
+});
+
+test('ledger: malformed oversized evidence is omitted without invalidating existing records', () => {
+  const state = tempState();
+  const base = ledgerLib.recordProcessed({ ...EMPTY, baseline_mtime: { claude: 50, codex: 60 } }, disc());
+  const good = { fingerprint: '1:2:3:4', appVersion: '0.13.0', extractBytes: 7 };
+  const malformed = [null, [], 'memo', { ...good, fingerprint: 1 }, { ...good, appVersion: null },
+    ...[0, -1, 1.5, '7', Number.MAX_SAFE_INTEGER + 1].map((extractBytes) => ({ ...good, extractBytes }))];
+  for (const bad of malformed) {
+    fs.writeFileSync(ledgerLib.ledgerPath(state), JSON.stringify({ ...base, oversizedExtracts: { '/bad': bad, '/good': good } }));
+    assert.deepEqual(ledgerLib.readLedger(state), { ...base, oversizedExtracts: { '/good': good } });
+  }
+  for (const oversizedExtracts of [undefined, {}, null, [], false, 'invalid']) {
+    fs.writeFileSync(ledgerLib.ledgerPath(state), JSON.stringify({ ...base, oversizedExtracts }));
+    assert.deepEqual(ledgerLib.readLedger(state), base);
+    ledgerLib.writeLedger(state, { ...base, oversizedExtracts });
+    assert.deepEqual(JSON.parse(fs.readFileSync(ledgerLib.ledgerPath(state), 'utf8')), base);
+  }
+});

@@ -1,0 +1,9 @@
+{
+  "verdict": "approve",
+  "summary": "No material design blocker found. The proposed contract allocates from completed filtered extracts, keeps raw admission and resident-memory bounds separate, and preserves selected-only scratch exposure, truncation accounting, index rebasing and downstream ledger gates. The ADR amendment explicitly supersedes the conflicting allocation rule, with owner sign-off required before implementation. This approves the proposed design, not the unchanged implementation.",
+  "findings": [],
+  "scope_objections": [],
+  "executed": "Read the frozen adversarial prompt, target spec, template and authoring runbook, ADR-0023 including its amendments, collector, transcript discovery/parsers/stream, configuration and ledger, relevant CLI collection/preview/final-state/cleanup call sites, and relevant collector/parser/stream tests. Inspected the directly relevant private-fs protections. Independently ran TMPDIR=/var/folders/3r/4nvs7jsx1f785ql71bk8tj380000gn/T/wd-dream-review-x778_5xj node tests/with-temp-root.js tests/run.js tests/unit/dream-collect.test.js tests/unit/transcript-stream.test.js tests/unit/transcripts.test.js: exit 0, 77 passed, 0 failed, 0 skipped; log saved beside this review as adversarial-design-r1.tests.log. These unchanged-base tests verify inherited behavior, not implementation of the proposed allocation contract. git diff --check passed. Captured git status --porcelain and git rev-parse HEAD at both start and end: status empty both times, HEAD identical. Did not run lint or the full suite; the parent-reported earlier lint/full-suite results are not my execution evidence. No product, test, vault or configuration changes; no installed dream/sync invocation.",
+  "reviewed_commit": "c4b960b4bc505e07e3e9a01f7d5a9dc10e9dca4a",
+  "working_tree_unchanged": true
+}

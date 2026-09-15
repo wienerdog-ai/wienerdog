@@ -1,0 +1,21 @@
+**FAIL — all template sections are present, but Exact contracts is incomplete.**
+
+| Template section | Status |
+|---|---|
+| Frontmatter and title | Present |
+| Context | Present |
+| Current state | Present |
+| Deliverables | Present |
+| Exact contracts | **Partial** |
+| Contract reference and canonical table | Present |
+| Mirrored Surface Checklist | Present |
+| Implementation notes & constraints | Present |
+| Security checklist | Present |
+| Acceptance criteria | Present; AC6 addresses repeatability and intentional scratch replacement |
+| Verification steps | Present |
+| Out of scope | Present |
+| Definition of done | Present |
+
+**Substantive omission:** The template requires file formats to be spelled out and a full literal expected output file for file-generating code. This spec changes scratch-file generation but refers to the “current JSON structure” and “existing member shapes” without providing them. Its numerical allocation examples do not supply the required output-file example.
+
+Scope: only the two supplied artifacts were read. No edits, tests, or design critique.
