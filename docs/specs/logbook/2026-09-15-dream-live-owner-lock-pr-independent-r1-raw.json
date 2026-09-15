@@ -1,0 +1,6 @@
+{
+  "findings": [],
+  "overall_correctness": "patch is correct",
+  "overall_explanation": "Reviewed commit 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660 against merge base 91668da62822c73be6115a3e6d06c6ec51462509; the implementation preserves live or unverifiable lock owners and retains the explicitly accepted dead-owner recovery behavior without introducing an actionable defect. Executed npm test under the documented runtime-only PATH (exit 0: 2,722 passed, 12 skipped), npm run lint (exit 0; PowerShell analysis unavailable), the specified boundary check and git diff --check (both exit 0). Before/after HEAD and git status --porcelain bytes were identical.",
+  "overall_confidence_score": 0.96
+}

@@ -1,0 +1,130 @@
+BEFORE
+HEAD: 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
+git status --porcelain bytes (base64): 
+status byte length: 0
+
+COMMAND: git merge-base main HEAD
+91668da62822c73be6115a3e6d06c6ec51462509
+EXIT: 0
+
+COMMAND: git diff --name-only 91668da62822c73be6115a3e6d06c6ec51462509 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
+docs/adr/0012-dream-run-lifecycle.md
+docs/specs/WP-dream-live-owner-lock.md
+docs/specs/logbook/2026-09-15-dream-filtered-input-budget-design-r2-raw.txt
+docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-relay.txt
+docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-source.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-dispatch-output.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-dispatch-source.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-red.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-runtime-check.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-template-r0-raw.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock-verification.txt
+docs/specs/logbook/2026-09-15-dream-live-owner-lock.md
+docs/specs/logbook/2026-09-15-dream-preprocessing-design-r3-input.txt
+docs/specs/logbook/2026-09-15-dream-preprocessing-design-r3-raw.txt
+src/cli/dream.js
+src/core/dream/lock.js
+tests/integration/dream.test.js
+tests/unit/dream-lock.test.js
+tests/unit/dream-pipeline.test.js
+EXIT: 0
+
+COMMAND: node scripts/boundary-check.js docs/specs/WP-dream-live-owner-lock.md docs/adr/0012-dream-run-lifecycle.md docs/specs/WP-dream-live-owner-lock.md docs/specs/logbook/2026-09-15-dream-filtered-input-budget-design-r2-raw.txt docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-relay.txt docs/specs/logbook/2026-09-15-dream-filtered-input-budget-lock-repro-source.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-dispatch-output.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-dispatch-source.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-red.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-runtime-check.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-template-r0-raw.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock-verification.txt docs/specs/logbook/2026-09-15-dream-live-owner-lock.md docs/specs/logbook/2026-09-15-dream-preprocessing-design-r3-input.txt docs/specs/logbook/2026-09-15-dream-preprocessing-design-r3-raw.txt src/cli/dream.js src/core/dream/lock.js tests/integration/dream.test.js tests/unit/dream-lock.test.js tests/unit/dream-pipeline.test.js
+EXIT: 0
+
+Verification PATH prefix: /tmp/wd-dream-lock-design.NApPpv/runtime-bin
+
+COMMAND: npm test -- tests/unit/dream-lock.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js
+OUTPUT: /tmp/wd-dream-lock-design.NApPpv/pr-spec-r1-command-1.txt
+EXIT: 0
+
+COMMAND: npm test
+OUTPUT: /tmp/wd-dream-lock-design.NApPpv/pr-spec-r1-command-2.txt
+EXIT: 0
+
+COMMAND: npm run lint
+OUTPUT: /tmp/wd-dream-lock-design.NApPpv/pr-spec-r1-command-3.txt
+EXIT: 0
+
+COMMAND: node scripts/boundary-check.js docs/specs/WP-dream-live-owner-lock.md src/core/dream/lock.js src/cli/dream.js tests/unit/dream-lock.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js docs/adr/0012-dream-run-lifecycle.md
+OUTPUT: /tmp/wd-dream-lock-design.NApPpv/pr-spec-r1-command-4.txt
+EXIT: 0
+
+COMMAND: git diff --check
+OUTPUT: /tmp/wd-dream-lock-design.NApPpv/pr-spec-r1-command-5.txt
+EXIT: 0
+
+COMMAND: node -p 'JSON.stringify({version:process.version,execPath:process.execPath})'
+{"version":"v24.18.0","execPath":"/private/tmp/wd-dream-lock-design.NApPpv/runtime-bin/node"}
+EXIT: 0
+
+COMMAND: gh pr view https://github.com/felho/wienerdog/pull/66 --json title,body,headRefName,headRefOid,baseRefName
+{"baseRefName":"main","body":"Spec: docs/specs/WP-dream-live-owner-lock.md\n\nA dream may still be preprocessing or finalizing after its model-based lock deadline. Previously, another dream could steal that live owner's lock and rebuild its shared scratch. This change checks a validated local PID before expired-lock takeover: a live or EPERM owner keeps the lock, an expired ESRCH-confirmed owner remains automatically recoverable, and unverifiable ownership produces a distinct error without touching lock or scratch.\n\n## Deliverables checklist\n\n- [x] Every changed file is listed in the spec's Deliverables table or its fixed evidence allowance\n- [x] Spec status flipped to In-Review\n\n## Verification output\n\nTests use the runtime-only PATH described below. Actual command output excerpts:\n\n```text\nCOMMAND: npm test -- tests/unit/dream-lock.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js\nEXIT: 0\nSTDOUT/STDERR SUMMARY EXCERPT:\nℹ tests 144\nℹ suites 0\nℹ pass 144\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 15715.196708\n\nCOMMAND: npm test\nEXIT: 0\nSTDOUT/STDERR SUMMARY EXCERPT:\nℹ tests 2734\nℹ suites 0\nℹ pass 2722\nℹ fail 0\nℹ cancelled 0\nℹ skipped 12\nℹ todo 0\nℹ duration_ms 50644.7575\n\nCOMMAND: npm run lint\nEXIT: 0\nSTDOUT/STDERR SUMMARY EXCERPT:\n> wienerdog@0.13.0 lint\n> node scripts/lint.js\n\n--- markdownlint ---\nmarkdownlint-cli2 v0.23.0 (markdownlint v0.41.0)\nFinding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md\nLinting: 660 file(s)\nSummary: 0 error(s)\n--- shellcheck ---\n--- PSScriptAnalyzer ---\npwsh not found, skipping PSScriptAnalyzer (install PowerShell to run it locally; CI has it)\n--- frontmatter check ---\nfrontmatter check passed: 273 spec(s), 4 agent(s)\n\nlint passed\n\nCOMMAND: node scripts/boundary-check.js (literal WP Deliverables command)\nEXIT: 0\nSTDOUT/STDERR SUMMARY EXCERPT:\n\n\nCOMMAND: git diff --check\nEXIT: 0\nSTDOUT/STDERR SUMMARY EXCERPT:\n```\n\nRegression before implementation: 144 tests, 106 passed, 38 failed (exit 1). Full evidence is committed under `docs/specs/logbook/2026-09-15-dream-live-owner-lock*`.\n\n## Decisions made\n\n- Preserve automatic recovery for expired, proven-dead local owners. The owner explicitly accepted the existing simultaneous stale-claimant read/probe-to-overwrite race; this is not a general lock redesign.\n- Keep the existing not-before deadline, lock payload, ownership helpers and cleanup ordering. No heartbeat, automatic kill or new recovery command.\n- Run tests with the same byte-identical Node v24.18.0 in a private runtime-only PATH. This avoids this machine's pre-existing Node/Claude binary-directory collision without weakening executable identity checks or skipping assertions.\n\n## Discovered issues (out of scope, not fixed)\n\n- The original co-located Node/Claude test environment makes adopt-e2e pin the installed Claude instead of its fixture. The isolated runtime environment passes that test; product identity enforcement is unchanged.\n- WP-dream-live-owner-lock: a deadline is a retry threshold, not evidence that a live owner has stopped; the lock must cover preprocessing and finalization too.\n\n---\nGenerated-by: Codex (GPT-6)\n","headRefName":"wp/dream-live-owner-lock","headRefOid":"2b98bb17ca1c4270316bbc81ae5c3c4c0558c660","title":"fix(dream): preserve live lock ownership after expiry (WP-dream-live-owner-lock)"}
+EXIT: 0
+Runtime binary SHA-256: ee6fb0e015284d83a91e8ec5213f43a157f8a392b58555301682892ba928c04a
+
+COMMAND: git diff --check 91668da62822c73be6115a3e6d06c6ec51462509 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
+EXIT: 0
+
+OUTPUT EVIDENCE pr-spec-r1-command-1.txt
+SHA-256: e9ee8d504e99e4c3735f1aa56507d060e328ff163f16530531eafe293080abe9
+✔ dream-pipeline: AC2 — an exported GIT_DIR does not redirect the run (row U6) (383.918959ms)
+✔ dream-pipeline: AC3 — an exported GIT_OBJECT_DIRECTORY does not redirect object writes (row U7) (439.436833ms)
+✔ dream-pipeline: AC4 — an injected GIT_CONFIG_COUNT config does not run its program (row U10) (303.664875ms)
+✔ dream-pipeline: AC5 — the positive control: a hook configured through config files fires, the same hook offered through the environment does not (rows U2, U10) (949.394708ms)
+ℹ tests 144
+ℹ suites 0
+ℹ pass 144
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15115.090041
+
+OUTPUT EVIDENCE pr-spec-r1-command-2.txt
+SHA-256: edd6af966d3e20f48507280c293ffef93c12bc6b90d227930e3287acb90fbf50
+✔ vendor: no .js under src/ outside the launcher reads WIENERDOG_DEV (with a non-vacuity control) (8.606875ms)
+✔ vendor: launcher.liveStance ≡ vendor.installStance over every install shape (11.6385ms)
+✔ vendor: readVersion refuses a tampered package.json version, and accepts real ones (2.9665ms)
+✔ vendor: an attended sync carries containment forward or refuses — no DATA-shaped A7 write moves it (299.982916ms)
+ℹ tests 2734
+ℹ suites 0
+ℹ pass 2722
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 12
+ℹ todo 0
+ℹ duration_ms 69763.739958
+
+OUTPUT EVIDENCE pr-spec-r1-command-3.txt
+SHA-256: e3b8cee516efd3a9e23c49c13cf88c10a2a6937d3a865fc587f28a0fce9f0d0e
+
+> wienerdog@0.13.0 lint
+> node scripts/lint.js
+
+--- markdownlint ---
+markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)
+Finding: docs/**/*.md skills/**/*.md templates/**/*.md tests/**/*.md *.md
+Linting: 660 file(s)
+Summary: 0 error(s)
+--- shellcheck ---
+--- PSScriptAnalyzer ---
+pwsh not found, skipping PSScriptAnalyzer (install PowerShell to run it locally; CI has it)
+--- frontmatter check ---
+frontmatter check passed: 273 spec(s), 4 agent(s)
+
+lint passed
+
+OUTPUT EVIDENCE pr-spec-r1-command-4.txt
+SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+
+OUTPUT EVIDENCE pr-spec-r1-command-5.txt
+SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+
+AFTER
+HEAD: 2b98bb17ca1c4270316bbc81ae5c3c4c0558c660
+git status --porcelain bytes (base64): 
+status byte length: 0
+Read-only verification: True
