@@ -3,7 +3,11 @@ date: 2026-09-15
 related_wps: [WP-dream-filtered-input-budget]
 ---
 
-# Dream input allocation: investigation and draft record
+# Dream input allocation: investigation and approval record
+
+Current checkpoint: owner-ratified and Ready; the lock prerequisite is merged.
+The dated investigation/review narrative below preserves its original state;
+the final ratification section supersedes earlier pending-approval notices.
 
 ## Scope and base
 
@@ -603,3 +607,34 @@ Draft: P1–P4 remain pending, and this prerequisite must land before its dispat
   Codex subagent for independent adversarial review; the owner clarified that
   `gptsol` names the historical Claude Code transport, not an exclusive reviewer
   requirement. Preserve the review and evidence contract across transports.
+
+## Owner ratification and prerequisite landing
+
+On 2026-09-15 the owner explicitly accepted every P1–P4 choice and continuation
+with implementation after the proposed lock merge. This ratifies Table A's A10
+amendments as well as the duration, per-session work policy, oversized memo and
+CLI outcome choices. No semantic change was requested to the contract approved
+by joint design R3 at `350050cfb71a25f1fb6b25980f561688c96c9f82`; its raw report
+remains the committed `cfb15861` evidence.
+
+[PR #66](https://github.com/felho/wienerdog/pull/66) merged into fork main at
+`81e09414`. The content branch merged that main at
+`cb4ab182f19b5894f0e6135444b37a672a4e0a22`, with a clean checkout before the
+Ready metadata pass. The architect re-read current collector, parser, lock and
+CLI behavior and compared the relevant source/test/ADR changes to the original
+base. C1–C5 remain valid; A11 is now inherited from the landed prerequisite.
+The original synthetic reproduction retains its original-base provenance.
+
+The architect moved the content WP to Ready and updated every approval-status
+mirror in the spec and design package. Only approval, landing and baseline
+metadata changed; Table A's choices, interfaces, outcomes, limits, retry rules,
+accepted lock residual and Deliverables boundary are unchanged. Actual product
+implementation and acceptance evidence remain outstanding. The orchestrator
+records the exact dispatch SHA and its executable re-verification separately.
+
+The earlier full-suite failure is historical. As recorded in the
+[lock execution logbook](2026-09-15-dream-live-owner-lock.md), a byte-identical
+Node in a private runtime-only PATH removes the local Node/Claude co-location
+conflict, and the unchanged baseline plus lock implementation and review suites
+passed in that environment. This is not a waiver, identity-check change or
+claim that the original command environment was repaired.

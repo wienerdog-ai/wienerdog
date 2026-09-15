@@ -11,9 +11,10 @@ The owner accepted whole-session admission, newest-first priority, the overflow
 distinction and finishing a started session after the soft deadline. The
 architect made the remaining choices concrete; joint independent design R3
 has approved the resulting contract.
-They are not owner approval. The WP remains Draft. The owner separately
-approved the narrow live-owner lock fix as a prerequisite; that approval does
-not accept P1–P4 below.
+On 2026-09-15 the owner accepted all P1–P4, including ADR ratification, and
+authorized continuation with implementation. The WP is Ready. The separately
+approved live-owner lock prerequisite landed in PR #66 at `81e09414` and is
+included in the content branch at `cb4ab182f19b5894f0e6135444b37a672a4e0a22`.
 
 The canonical contract is Table A in
 [WP-dream-filtered-input-budget](../WP-dream-filtered-input-budget.md).
@@ -46,9 +47,9 @@ This replaces equal shares, suffix truncation and measuring/staging the entire
 corpus before allocation. Newest-first priority is intentional. Backlog catch-up
 requires capacity to exceed new/changed demand on average.
 
-## Concrete proposals requiring owner sign-off
+## Owner-ratified choices
 
-| Proposal | Choice | Trade-off |
+| Accepted choice | Choice | Trade-off |
 |---|---|---|
 | P1 — duration/configuration | 60-second soft admission allowance, configurable via dream_preprocess_timeout_seconds. Time begins at collector entry, including discovery and setup; use a monotonic clock. | This is a policy judgment, not a measured guarantee. A slow current session can overrun it. The later model timeout remains separate. |
 | P2 — raw work | Remove the aggregate 200 MiB cap across sessions; give each session a fresh existing finite read budget. | Its 200 MiB now bounds emergency per-session read work. The 50 MiB pre-read ceiling and other individual guards remain. No new reader behavior or extra work knob. |
@@ -67,10 +68,11 @@ telemetry nor multiple production nights are needed to review the basic design.
 
 ## Approved lock prerequisite
 
-The independent design review identified a lock-lifetime mismatch: the current
-model-only lock deadline can expire while authorized preprocessing is still
-running. A second dream can then replace shared scratch. Merely adding nominal
-phase durations cannot cover the permitted overrun.
+The independent design review identified a lock-lifetime mismatch on the
+original base: the model-only lock deadline could expire while authorized
+preprocessing was still running. A second dream could then replace shared
+scratch. Merely adding nominal phase durations cannot cover the permitted
+overrun.
 
 The owner selected [WP-dream-live-owner-lock](../WP-dream-live-owner-lock.md) as
 a separate prerequisite. An expired same-host owner observed alive or EPERM
@@ -81,8 +83,8 @@ blocks takeover with a distinct diagnostic. No heartbeat or automatic kill.
 The existing race between simultaneous stale claimants remains explicitly
 owner-accepted; this is a narrow live-owner-expiry fix, not a complete lock
 redesign. A hung living owner or unverifiable lock may require investigation.
-The prerequisite is Ready after the independent design approval. No repeated
-approval is needed for the already-selected scope and residual.
+The prerequisite is implemented and merged in PR #66; both PR gates approved
+the same implementation tip. Its accepted scope and residual remain unchanged.
 
 ## Boundaries and limitations
 
@@ -103,10 +105,10 @@ sibling's report work here.
 
 ## Next gate
 
-Dispatch the Ready lock prerequisite after re-verifying its source claims at
-the exact implementation revision. For the content WP, obtain owner decisions
-P1–P4 and ADR ratification, then mark Ready; implementation waits for the lock
-prerequisite to land. Material contract changes after owner decisions return to
+Re-verify the Ready content WP's source claims and inherited lock contract at
+the exact implementation dispatch SHA, then implement its existing Table A.
+Owner ratification changes approval metadata only; joint design R3 remains the
+approval for these unchanged semantics. Material contract changes return to
 design review under the repo process. Historical review raw artifacts remain
 unchanged.
 

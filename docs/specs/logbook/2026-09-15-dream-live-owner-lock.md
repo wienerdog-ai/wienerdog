@@ -5,6 +5,10 @@ related_wps: [WP-dream-live-owner-lock, WP-dream-filtered-input-budget]
 
 # Dream live-owner lock: approval, review and verification
 
+Current checkpoint: PR #66 is merged, and the successor's P1–P4 choices are
+owner-ratified. Earlier pending states below record the sequence before that
+decision; the final landing section records the current handoff.
+
 ## Approved scope
 
 The owner accepted a separate prerequisite for design finding R2-1: deadline
@@ -186,3 +190,16 @@ The PR remains unmerged for maintainer review. The implementation lives in the
 isolated `dream-live-owner-lock` worktree; the original content branch retains
 its Draft successor and pending P1–P4 decisions. Next: land this prerequisite,
 then settle those content-policy defaults before dispatching the successor.
+
+## Landing and successor ratification
+
+The owner explicitly accepted all successor P1–P4 choices and continuation
+with implementation after the proposed lock merge on 2026-09-15.
+[PR #66](https://github.com/felho/wienerdog/pull/66) merged into fork main at
+`81e09414`; the content branch includes it through merge
+`cb4ab182f19b5894f0e6135444b37a672a4e0a22`. The successor is Ready. This closes
+the earlier unmerged/pending-choice handoff without changing the lock's
+approved contract, review verdicts or accepted stale-claimant residual.
+
+The successor inherits the runtime-only PATH verification setup documented
+above and will record its own exact dispatch and implementation evidence.
