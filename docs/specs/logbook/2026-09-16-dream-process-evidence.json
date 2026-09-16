@@ -1,0 +1,79 @@
+{
+  "date": "2026-09-16",
+  "sourceCommit": "1c3790de9f88f40aa28202e6f47748500babd555",
+  "scope": "Read-only local evidence; aggregate metrics only. No private transcript text retained.",
+  "run": {
+    "startUtc": "2026-09-16T01:30:04.402Z",
+    "lastSuccessUtc": "2026-09-16T01:43:54.544Z",
+    "status": "ok",
+    "vaultCommitShort": "e1729da",
+    "notes": 11,
+    "skills": 0,
+    "capacityDeferred": 10338,
+    "newlyQuarantined": 1,
+    "ledgerProcessed": 198,
+    "modelReportedDateWindowExtracts": 192,
+    "modelReportedReadInFull": 20,
+    "modelReportedClassifiedOnly": 172,
+    "reportReadCountsInternallyConsistent": false
+  },
+  "trace": {
+    "model": "claude-opus-5",
+    "tools": {"Glob": 4, "Read": 54, "Grep": 21, "Write": 2, "Edit": 31},
+    "scratchReadCalls": 27,
+    "scratchDistinctReadPaths": 21,
+    "scratchReadsWithOffsetOrLimit": 9,
+    "limitation": "Tool access is not proof of complete reading or understanding. Grep access also occurred."
+  },
+  "reparse": {
+    "recordedProcessed": 198,
+    "fingerprintUnchanged": 187,
+    "fingerprintChangedExcluded": 11,
+    "missing": 0,
+    "compactBytes": 4237046,
+    "prettyBytes": 4513205,
+    "truncatedExtracts": 185,
+    "emptyExtracts": 1,
+    "sessionsByHarness": {"claude": 12, "codex": 175},
+    "roles": {
+      "user": {"messages": 1085, "chars": 3071245, "capped": 587},
+      "tool_result": {"messages": 5533, "chars": 221918, "capped": 22},
+      "assistant": {"messages": 1327, "chars": 469970, "capped": 3}
+    },
+    "extractCompactSize": {"min": 273, "median": 20530, "max": 176050},
+    "limitation": "Subset only, reconstructed with current source at the pinned commit. Fingerprint equality is metadata equality, not a cryptographic snapshot."
+  },
+  "codexUnchangedSubset": {
+    "files": 175,
+    "sessionMetaRecords": 208,
+    "cliVersionsByMetadataRecord": {"0.154.0": 208},
+    "filesWithParentMetadata": 91,
+    "filesWithForkMetadata": 33,
+    "filesWithHistoryBoundaryMetadata": 33,
+    "responseItemCounts": {
+      "message": 2368,
+      "reasoning": 4740,
+      "custom_tool_call": 4159,
+      "custom_tool_call_output": 4146,
+      "agent_message": 508,
+      "function_call": 1279,
+      "function_call_output": 1279
+    },
+    "messagesBeforeNormalization": {
+      "developer": {"count": 646, "rawChars": 4620302, "first4000Chars": 1653850},
+      "user": {"count": 425, "rawChars": 6573982, "first4000Chars": 1371742},
+      "assistant": {"count": 1297, "rawChars": 459795, "first4000Chars": 456478}
+    },
+    "nonemptyToolOutputArraysMappedToEmpty": 4146,
+    "theirRawCharsIncludingRepeatedHistory": 47793387,
+    "normalizedToolResults": 5425,
+    "emptyNormalizedToolResults": 4687,
+    "toolOutputArrayBlockShape": {"type": "input_text", "text": "string"},
+    "limitation": "Repeated/forked history is included in counts. Raw character volume is not unique useful information. Empty normalized results beyond the array-shape defect were not individually adjudicated."
+  },
+  "syntheticReproduction": {
+    "input": {"type": "custom_tool_call_output", "output": [{"type": "input_text", "text": "sentinel-tool-result"}]},
+    "actual": {"role": "tool_result", "text": "", "ts": null},
+    "function": "src/core/transcripts/codex.js:mapCodexItem"
+  }
+}
