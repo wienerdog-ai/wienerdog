@@ -168,6 +168,43 @@ adds a `derived_from_untrusted` key per message. Worth recording as a corrected
 assumption: **projection shrinks extracts in aggregate, not on every session**,
 and the spec now says so where a reader would otherwise infer the universal.
 
+## Round-zero conformance finding: two truncated headings, in all three specs
+
+Two clean-context conformance executors (one per new spec) passed everything
+first time except the same two items in both: `## Contract reference` and
+`## Security checklist` had been written without the template's parentheticals.
+The revised filter spec carried the same two truncations and was fixed with
+them. The template's text is restored verbatim in all three:
+
+```text
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
+## Security checklist (delete only if the WP touches no untrusted input)
+```
+
+The lesson is narrow and worth naming: those two parentheticals read like
+*instructions about whether to keep the section*, which is exactly why they got
+dropped — and the template gives no other way to tell a kept-and-filled section
+from a section whose parenthetical was obeyed. The heading text is the contract.
+
+Mechanical sweep afterwards — every `^##`/`^###` line of each spec compared
+against `docs/specs/_TEMPLATE.md` with `comm` over sorted heading lists. **No
+template heading is missing or altered in any of the three.** Everything below
+is an addition, not a divergence:
+
+| Spec | Headings present beyond the template |
+|---|---|
+| projection | `## Dispatch precondition — owner items`; `### Transcript-format evidence re-derived for this package`; `### Current-state checks — runnable before implementation`; `### Implementation checks — these must pass before the PR` |
+| collection | the same four minus the evidence one, plus `## ADR-0020 amendment text` (and the `## Amendment (2026-09-17): …` line the sweep reports from *inside* that section's fenced block, which is amendment content rather than a heading of this spec) |
+| filter | `## PARKED — this package is not matured until an evaluation says it is needed`; `## Entry condition — the offline evaluation`; `## Dispatch precondition — owner items` |
+
+The readers separately confirmed present and literal: all five
+Mirrored-Surface bullets including "Operative prose steps that apply it", the
+`### Contract table(s)` parent heading, the authoring-rules line, the
+Deliverables columns, the five Definition-of-done items, and the literal
+expected output shown in full — noting that for the projection spec that last
+rule is strictly inapplicable, since it ships a pure function and generates no
+file, and that both `extract` and `gateExtract` are shown literally anyway.
+
 ## What round zero does not establish
 
 This is the architect's own pass. It is not the clean-context template
@@ -188,6 +225,11 @@ sentences that must be re-read when the implementer corrects them.
   dry-run's `total input bytes` was the byte bound and the model's input at the
   same time; after projection it is only the second, and left alone it would
   have told users they had headroom they did not have.
+- WP-dream-primary-dialogue-projection: copy template headings byte-for-byte,
+  parentheticals included. A parenthetical that reads as an instruction about
+  the section ("optional — mark N/A if…", "delete only if…") is still part of
+  the heading, and dropping it is the one conformance miss that survived a
+  full self-review of three specs.
 - WP-dream-primary-dialogue-projection: a contract carried "because the
   predecessor had it" is how a spec inherits rot. Exchange blocks and three
   legacy fallbacks were all dropped by asking who consumes them and what

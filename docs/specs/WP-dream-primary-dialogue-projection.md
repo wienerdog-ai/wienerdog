@@ -296,7 +296,7 @@ capped extract `parseWithOutcome` returns for this same file, measured against
 the real parser at the base commit. The projected extract is 511 compact bytes;
 **the byte count the collector will bound is the 566, not the 511** (row B4).
 
-## Contract reference
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 The ADR-0031 activation trigger fires on five of seven: (i) the parser's result
 shape changes; (iii) structured input parsing and schema acceptance change;
@@ -441,7 +441,7 @@ a newly found mirror is registered here on the spot.
   update those four clauses — do not leave a criterion `PROVEN` by a proof that
   reddens for another criterion's reason.
 
-## Security checklist
+## Security checklist (delete only if the WP touches no untrusted input)
 
 - [ ] No untrusted identifier from a transcript flows into a filesystem path or
       a shell command in this package: `session_id` is not used to build a path

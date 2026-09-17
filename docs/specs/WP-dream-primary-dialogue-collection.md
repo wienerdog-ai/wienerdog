@@ -242,7 +242,7 @@ session**, and a session that is already pure dialogue grows by 30 bytes per
 message. Row C1 is what makes that harmless — admission is decided on the
 intake number, so neither direction of the difference moves the admitted set.
 
-## Contract reference
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 The ADR-0031 activation trigger fires on four of seven: (iii) structured
 parsing and what is persisted change; (iv) the exclusion-arm and fallback
@@ -423,7 +423,7 @@ or context gap before it" — never "a human typed this", never "this is true",
 and never "this is safe to obey".
 ```
 
-## Security checklist
+## Security checklist (delete only if the WP touches no untrusted input)
 
 - [ ] No untrusted identifier gains a new path into a filesystem path or a shell
       command: the scratch filename is still built by the existing

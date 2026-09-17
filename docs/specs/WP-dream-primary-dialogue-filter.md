@@ -152,7 +152,7 @@ is not changed by this package: a filtered extract is the same file with a
 subset of its `messages`, in original source order, each message byte-identical
 to the one the projection produced.
 
-## Contract reference
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 The ADR-0031 activation trigger fires on four of seven: (ii) a new
 accepted/invalid result taxonomy; (iv) timeout, fallback and precedence
@@ -274,7 +274,7 @@ model call is never built. If it is material, the measured quantity becomes this
 package's justification and the first number its acceptance criteria are written
 against.
 
-## Security checklist
+## Security checklist (delete only if the WP touches no untrusted input)
 
 - [ ] Only code-issued IDs from the current request are accepted (C4); no model
       value becomes a path, a filename or a command, and the filter cannot
