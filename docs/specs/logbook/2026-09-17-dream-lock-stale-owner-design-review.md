@@ -118,7 +118,13 @@ honest statement was a rule.
 
 ## Closure
 
-**The loop is closed at round 4**, per `docs/runbooks/codex-review.md`'s
+**Superseded 2026-09-17 by the confirming round below: this closure did not
+hold, and the spec returned to `status: Draft`.** The round-4 reasoning stands as
+written for round 4's own findings; what it got wrong was treating a single
+reviewer's convergence as sufficient. The record of that mistake is the point of
+leaving it here.
+
+**The loop was closed at round 4**, per `docs/runbooks/codex-review.md`'s
 weighted-closure rule: round 4's single finding is LIGHT — it changes nothing the
 work package builds — it is fixed, and its arithmetic is verified mechanically
 above, so no further external round is required.
@@ -140,22 +146,89 @@ the implementation and the declared RED proofs do not exist yet, and
 both-directions evidence is the implementer's obligation at PR time (Verification
 steps, AC7).
 
-The spec moves to `status: Ready`. Owner items O1–O6 are recorded as
+The spec moved to `status: Ready` at this point and was **returned to `Draft` by
+the confirming round below**. Owner items O1–O6 remain recorded as
 recommendations adopted under the standing authorization in
 `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`, each with
-its overrule cost, none of them a direct ruling.
+its overrule cost, none of them a direct ruling; **O1 and O4 changed materially
+in the confirming round** and their entries in that record must be read with
+round 5's dispositions.
+
+## Round 5 — the confirming round, by a second reviewer
+
+A **different** reviewer and a different model: Codex plugin 1.0.6
+adversarial-review, `gpt-6-astra`, reviewed tip `9f7eb37d` against
+`2d5e2465`. Verdict `needs-attention`: one product finding and one machinery
+finding. Raw artifacts are committed beside this entry as
+`2026-09-17-dream-lock-stale-owner-design-r5-astra-raw.json`, `-focus.txt` and
+`-meta.txt`. **The loop is re-opened and the spec returns to `status: Draft`.**
+Nothing below records an owner decision.
+
+What the round confirmed, by execution rather than reading: the 54 h and 55 h
+worked cases, re-derived with read-only Node simulations **using the actual
+`catchUp`/`todaysFire` functions** and simulated success watermarks; that no raw
+lock bytes enter the proposed message; and that the cited source, test, ADR and
+proof-runner locations and the `acquireLock` consumer inventory all resolve. It
+ran no suites, no lint and no proofs — the implementation does not exist.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| A-1 — scheduled dreams can legitimately exceed the loud threshold | medium | **heavy** (it changes the user-visible message) | **Fix** | O1 claimed only an *attended* run can legitimately overrun six hours. False: `wienerdog schedule --timeout` accepts any positive integer number of minutes (`src/cli/schedule.js`) and `resolveTimeoutMs` uses it as given (`src/cli/run-job.js`), while `dream_preprocess_timeout_seconds` is configured independently — so a job registered with a ten-hour watchdog can be a *healthy scheduled* dream seven hours past a twenty-minute lock deadline. Two repairs: **(a)** O1's watchdog claim is qualified to the **default** configuration, and scheduled overruns are priced beside attended ones, with the consequence stated as an alert and never a takeover (Table L4's retention is untouched). **(b)** The half-hour start-time heuristic dies with the claim, and it took the deletion instruction with it — see below. |
+| A-2 — the declared proof suite cannot exercise S4 | medium | light (machinery) | **Fix** | `scripts/red-proofs.js` executes only the suite a declaration names, and `tests/unit/dream-lock.test.js` imports the lock helpers alone, so a mutation of S4's comparison in `src/cli/dream.js` would leave the declared suite green and AC7 could never be satisfied. Executable S4–S5 CLI coverage moves into `tests/unit/dream-pipeline.test.js` — already in the Deliverables, already the suite that drives the dream CLI's decline branches — and gets its own declaration file. That is the smaller surface **and** the existing convention: `suite` is a top-level field, every declaration under `tests/red-proofs/` names one suite, every one of them names a *unit* suite, and `WP-quarantine-banner-location` already owns two files for that reason. The integration suite keeps its end-to-end assertions (AC5) and is not a proof carrier. Deliverables, AC7 and the `boundary-check` argument list updated together. |
+
+### The deletion instruction is dropped
+
+A-1(b) was the disposition that forced the choice, and the instruction was
+reasoned through against the tree rather than reworded again. Every candidate
+qualifier fails:
+
+- *"at a time when no dream is about to start"* (round 3) does not exclude a
+  dream that is already running.
+- *"restart, then delete straight away"* is the **worst** timing available: the
+  catch-up entry starts a dream at boot on all three platforms — `RunAtLoad`
+  (`src/scheduler/generators.js:449`), `Persistent=true` (`:486`),
+  `StartWhenAvailable` (`:1025`, `:1078`) — and that boot dream is precisely the
+  one whose `ESRCH` probe takes a dead owner's lock over. The file the user
+  deletes "straight away" is the most likely of all to be a fresh live owner's.
+- *"only if the message reappears"* identifies nothing: a message is read from a
+  log or an email after the fact, and the record may have been replaced since.
+- *"if nothing started in the last half hour"* is false under A-1 itself.
+- A process-listing command cannot be stood behind on macOS, Linux and Windows
+  alike, and a non-developer cannot verify a wrong one.
+
+There is no quiet window a user can identify unaided, because in the loud state
+no run records success, so a dream attempt starts every hour **and** at every
+boot. Preferring truthful-and-safe over helpful-and-risky, S5 now restarts the
+computer, names the lock file as information, states that removing it is safe
+only while no dream is running, and says Wienerdog cannot establish that from
+where it stands — so the condition should be checked rather than guessed. No
+troubleshooting page exists under `docs/` to point at and none was invented. The
+attended conditional-recovery command is routed as **the real fix**, and O4's
+overrule cost is restated accordingly.
+
+**The lesson of round 5:** *a confirming round by a second model overturned a
+safety premise four rounds of the first model had accepted, by evaluating the
+actual watchdog resolver instead of reading the claim about it.* Four rounds had
+each asked a sharper question about the bound — what constrains its inputs, when
+it is sampled, in whose clock — and all four let "no scheduled run can
+legitimately overrun" stand because it sounded like a fact about the default
+rather than a claim about the configuration space. The premise was one `grep` of
+`--timeout` away the whole time. A single reviewer converges; it does not
+necessarily converge on the truth.
 
 ## Resulting shape
 
-Size drops from M to S after round 1 and stays S through round 4. Table S is seven
+Size drops from M to S after round 1 and stays S through round 5. Table S is seven
 rows (result shape, `staleForMs`, implausible-deadline refusal, the loud gate,
 the message and its real delivery surface, the exit-code doc-comment errata, the
 ADR amendment). Six owner items, renumbered once in round 1.
 
-Deliverables after round 2 (seven paths): `src/core/dream/lock.js`,
+Deliverables after round 5 (eight paths — round 5 added the second declaration
+file): `src/core/dream/lock.js`,
 `src/cli/dream.js`, `tests/unit/dream-lock.test.js`,
 `tests/unit/dream-pipeline.test.js`, `tests/integration/dream.test.js`,
 `tests/red-proofs/dream-lock-stale-owner-loud.proofs.json` (create),
+`tests/red-proofs/dream-lock-stale-owner-loud-pipeline.proofs.json` (create),
 `docs/adr/0012-dream-run-lifecycle.md`. Round 1 removed
 `tests/unit/dream-pipeline.test.js` on the reasoning that the integration suite
 owned the only remaining CLI behavior; round 2 put it back for a different
