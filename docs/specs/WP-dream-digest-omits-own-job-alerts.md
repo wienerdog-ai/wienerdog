@@ -206,10 +206,43 @@ Worked example. `config.yaml` defines `- name: dream / run: builtin:dream`;
 {"job":"daily-digest","at":"2026-09-10T05:00:11.900Z","reason":"job \"daily-digest\" exited 1","log_hint":"~/.wienerdog/logs/daily-digest/"}
 ```
 
-and the dream runs with `WIENERDOG_JOB=dream`. The rendered `state/digest.md`
-carries exactly one callout — the `daily-digest` one — and no line naming
-`"dream"`. Run the same fixture with `WIENERDOG_JOB` unset (an attended
-`wienerdog dream`) and the output is byte-identical to today's: both callouts.
+and the dream runs with `WIENERDOG_JOB=dream`.
+
+**The literal `state/digest.md` this writes, in full.** Both files below were
+produced by running the real renderer — `renderDigest` from `src/core/digest.js`
+at this spec's pinned base — over an empty `mktemp -d` vault directory with
+`opts.identityApprovals` left undefined, so no identity section exists and the
+alert callouts are the entire file. That is the smallest fixture that still
+demonstrates the contract: the own-job callout omitted, another job's kept.
+(How it was produced is recorded in
+`docs/specs/logbook/2026-09-17-dream-digest-omits-own-job-alerts-round-zero.md`.)
+
+Supervised (`WIENERDOG_JOB=dream`) — **207 bytes**, the whole file:
+
+```markdown
+> [!warning] Wienerdog: the "daily-digest" job has failed. Latest error: job "daily-digest" exited 1. Details in ~/.wienerdog/logs/daily-digest/. This note clears automatically when the job next succeeds.
+
+
+```
+
+Unsupervised (`WIENERDOG_JOB` absent — an attended `wienerdog dream`; these are
+today's bytes, unchanged by this WP) — **391 bytes**, the whole file:
+
+```markdown
+> [!warning] Wienerdog: the "dream" job has failed. Latest error: job "dream" exited 1. Details in ~/.wienerdog/logs/dream/. This note clears automatically when the job next succeeds.
+> [!warning] Wienerdog: the "daily-digest" job has failed. Latest error: job "daily-digest" exited 1. Details in ~/.wienerdog/logs/daily-digest/. This note clears automatically when the job next succeeds.
+
+
+```
+
+**The trailing bytes are part of the expected output and a fenced block cannot
+show them unambiguously**, so they are stated: each file ends with the last
+callout line's `\n` followed by **exactly two more** `\n` — the rendered string
+ends `succeeds.\n\n\n`, which is 3 lines by `wc -l` for the supervised file and
+4 for the unsupervised one. The two callout lines are **not** wrapped: each is
+one long line. The difference between the two files is exactly the 184 bytes of
+the `"dream"` callout line, and nothing else — which is Table A's
+empty-omission identity in bytes.
 
 ## Contract reference
 
@@ -280,11 +313,32 @@ added here on the spot:
 - [ ] Current-state description (l.646's expression, the two call sites, the
       non-rendering paths, the `WIENERDOG_JOB` channel, the `findJob`
       reachability argument, `listJobs`' catch)
-- [ ] The signature sketch and the worked example under "Exact contracts"
 - [ ] The `why` field of each declaration in
       `tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json`
-- [ ] Implementation notes: the rejected alternatives, the named residual, the
-      managed-policy consequence
+- [ ] Operative prose steps that apply it — there are **nine**, and they are
+      enumerated rather than gestured at, because this is the class no gate
+      reaches:
+      (a) the predicate sketch's JSDoc under "Exact contracts" (Table A,
+      *Resolved job name*);
+      (b) the sentence replacing l.646's expression, and the `alerts:` code line
+      under it (Table A, *Filter position*);
+      (c) the worked example and the two literal `digest.md` files with their
+      byte counts and trailing-byte note (Table A, *Omitted set* and
+      *Empty-omission identity*);
+      (d) Implementation notes' first bullet, that `../scheduler/jobs` is
+      first-party (the Deliverables `dream.js` row's added require);
+      (e) Implementation notes' "Named residual" (Table A, *Render-then-fail*);
+      (f) Implementation notes' "Named consequence" and Definition of done item
+      3, which requires it in "Decisions made" (Table A, last row);
+      (g) Implementation notes' "Config edited mid-run" and the
+      attended-`wienerdog dream` bullet (Table A, *Failure direction* and
+      *Resolved job name*);
+      (h) Out of scope's declined-lock bullet (Table A, *Paths that render
+      nothing*) and its `sync.js` bullet (Table A, *Where applied*);
+      (i) Security checklist items 1 and 3 (Table A, *Resolved job name* and
+      *Why env is trusted here*). The rejected alternatives A and C are NOT in
+      this set: they apply no table fact, they record why two designs outside
+      every table were refused.
 - [ ] "Dispatch precondition — owner items" O1, which mirrors Table A's
       "Why env is trusted here" row
 - [ ] Context: the WP-041 quote and the statement that its accepted lag is

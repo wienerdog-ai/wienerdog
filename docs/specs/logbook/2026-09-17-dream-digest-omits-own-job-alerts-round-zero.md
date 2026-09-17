@@ -101,3 +101,60 @@ containment-probe retry) are written into the spec under "Dispatch precondition
 ruled on.** The single ruling on record is the 2026-09-10 maintainer ruling that
 this WP ships before the managed-policy-warning follow-up; it governs that
 follow-up only.
+
+## Template conformance (clean-context executor) — FAIL, 2 LIGHT items, both fixed
+
+The clean-context executor this pass could not perform for itself (above) was
+run by the coordinator and returned **FAIL with two LIGHT items**. Both were
+fixed in one commit on top of the re-derivation commit, after
+`git rebase origin/main` onto **`047a202c`** (a docs-only done-flip: two specs
+moved into `docs/specs/done/`, HANDOVER pass #12, a logbook entry, lessons).
+**The rebase changed nothing in this package**: the spec cites neither
+`WP-dream-live-owner-lock` nor `WP-dream-filtered-input-budget` by path — the
+only reference to the former is a `related_wps:` id in this file's frontmatter,
+which is an id and not a path — so no citation moved. Every line number in the
+"What moved" table above was re-derived at `b4af715e` and `047a202c` touches no
+`src/` or `tests/` file, so all of them still resolve.
+
+### Item 1 — the literal expected output file
+
+The template's "### Exact contracts" requires a literal expected output file in
+full for file-generating code, and `regenerateDigest` generates `state/digest.md`.
+The worked example stated the resulting callout count in prose only. Both files
+are now quoted in full, **generated from the real renderer rather than typed**:
+a disposable script under the session scratchpad required `renderDigest` from
+`src/core/digest.js` in this worktree and called it as
+`renderDigest(vaultDir, undefined, { alerts })`, where `vaultDir` is an empty
+`fs.mkdtempSync` directory (removed at the end of the run) and `opts.identityApprovals`
+is left undefined — so the A3 hash gate omits identity silently and the alert
+callouts are the entire file. That is the smallest fixture that still shows both
+halves of the contract. Two renders were taken from the same fixture: `[ddAlert]`
+(supervised — the dream's own records already dropped) and
+`[dreamAlert, ddAlert]` (unsupervised — today's bytes). Measured, not asserted:
+**207 bytes / 3 lines** and **391 bytes / 4 lines**, delta **184 bytes**, which
+`Buffer.byteLength` confirms is exactly the `"dream"` callout line (183) plus its
+newline. Both strings end `succeeds.\n\n\n`; because a fenced block cannot show
+trailing blank lines unambiguously, the spec states those bytes in prose beside
+the fences. Nothing was written into the worktree by the fixture.
+
+**Checked rather than trusted**: the two fenced blocks were extracted back out of
+the committed spec by line range and `cmp`'d against the renderer's own output
+files — **byte-identical, both**. A hand-transcription error in a quoted expected
+output is invisible to every gate in this repo, so it was measured.
+
+### Item 2 — the missing Mirrored Surface Checklist bullet
+
+The template's literal bullet **"Operative prose steps that apply it"** was
+absent. It is now present and **walked rather than gestured at**: nine operative
+prose steps (a)-(i) are enumerated with the Table A row each applies — the
+predicate JSDoc, the l.646 replacement sentence, the worked example and its two
+literal files, the first-party-require note, the Named residual, the Named
+consequence plus Definition of done item 3, the mid-run-config and
+attended-dream bullets, two Out of scope bullets, and two Security checklist
+items. Two previously separate bullets ("The signature sketch and the worked
+example", "Implementation notes: …") were folded into it so that no surface is
+registered twice under two labels. The rejected alternatives A and C are named
+as deliberately NOT in the set: they apply no table fact.
+
+`npm run lint` passed on the result (671 files, 0 errors); `git diff --check`
+clean.
