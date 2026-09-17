@@ -97,67 +97,66 @@ backend and requested model named in the file.
 Appended as each design loop parks them, each with the recommendation adopted
 and the overrule cost as its spec states it.
 
-### WP-dream-digest-omits-own-job-alerts (design gate closed 2026-09-17, round 3, `545df8bd`)
+### WP-dream-digest-omits-own-job-alerts (design gate closed 2026-09-17, round 7, `e545033c`)
 
-Three items. **None was ruled on directly**; each is a recommendation adopted
-under the standing authorization above, reversible by dated amendment.
+Four items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment. **This
+entry replaces the one recorded when the gate first closed at round 3**: a
+confirming round on a second model re-opened the gate, and that earlier entry's
+O3 rested on a premise the review then falsified. Seven rounds in all — three on
+`gpt-5.6-sol`, four on `gpt-6-astra` through the Codex plugin — and the design
+changed shape twice on evidence: the recovery re-render was removed at round 5,
+and the filtered render was moved back under the dream lock at round 6.
 
-**O3 — READ THIS ONE FIRST. Is it acceptable that the dream's own failures lose
-their after-the-fact digest callout?** This is the item most likely to want the
-owner's eye, because it changes what a user sees.
+**The design as it closed.** The existing end-of-run digest render stays exactly
+as on `main`, unfiltered. One additional, filtered render is the last statement
+of the locked body — after the workspace teardown, before scratch cleanup and
+lock release — so it runs only when the body and the teardown succeeded, while
+this process still holds the dream lock. A record is omitted only if all three
+hold: `WIENERDOG_JOB` resolves through `findJob` to `run: builtin:dream`; a
+valid supervisor-minted run token is present; and the record's `at` is strictly
+earlier than this process's start. There is no recovery mechanism.
 
-*What is true today, measured:* a failed dream never reaches its digest render,
-and `run-job` appends the failure record only after the child has exited
-(`src/cli/run-job.js` l.1251 → l.1257 → l.1269). So the callout for a dream
-failure is displayed by a LATER render — typically the next *successful* dream,
-i.e. **after the failure has already been resolved by the very run that shows
-it**. That after-the-fact, wrong-at-the-moment-it-is-shown warning is exactly the
-2026-09-10 bug report this WP was filed for.
+**O4 — read this one first (new).** Is one more `digest.md` write per fully
+successful supervised dream an acceptable added race window? `writeFilePrivate`
+renames and then checks the destination's identity; **any** writer publishing in
+that window makes it throw `WD_F10_POST_RENAME` — no attacker needed. An
+attended `sync` is such a writer and takes no dream lock. The exposure is
+**pre-existing** (the end-of-run render races it today); this WP adds one
+window. Consequence, as measured: exit 1, `last_success` unchanged,
+`last_status: error`, `clearAlerts` skipped, a `job "dream" exited 1` alert — a
+false failure for a run whose work succeeded. *Recommendation adopted:* accept;
+the fix belongs in `writeFilePrivate` or in serializing `sync`, each its own
+package. *Overrule cost:* neither fix lives here; forbidding the second render
+reverts to filtering at the end-of-run render and brings back everything round 5
+removed.
 
-*What changes:* after this WP, that later successful render filters the job out,
-so a dream-job failure's callout reaches `digest.md` only via **an attended
-`wienerdog sync`** or **a later dream's early quarantine render** (conditional on
-a new quarantine). **There is no finite bound on that.** The timely channels are
-unchanged and are the **fail-loud email** and **`alerts.jsonl` / `wienerdog
-alerts`**. **`wienerdog doctor` does not read alerts at all** — measured:
-`grep -ci alert src/cli/doctor.js` returns 0, and the design gate independently
-re-ran it.
+**O3 — the digest and the dream's own failures.** After this WP a dream-job
+failure's callout reaches the digest only through an attended `sync` or a later
+dream's conditional early quarantine render, with no finite bound. The timely
+channels are the fail-loud email, which is **best-effort**, and `wienerdog
+alerts`; **`wienerdog doctor` reads no alerts at all** (measured: zero
+occurrences). **Correction to the earlier entry:** a successful run proves only
+that this run's dream body succeeded. For a prior run's surviving process group,
+`clearAlerts` deletes every record for the job after the next supervised success
+regardless — so the callout goes and the record goes. Most of that is
+pre-existing; what this WP changes is **one render's worth of display**.
+*Recommendation adopted:* accept both. *Overrule cost:* the fix is a
+supervisor-side surface, which re-opens WP-041's prohibition at ADR level; this
+spec would be superseded, not amended.
 
-*Recommendation adopted:* **yes, accept the loss.** Keeping the display means
-keeping a warning that is wrong when shown; the only way to show a dream failure
-in the digest while it is still unresolved is a supervisor-side render, which
-WP-041 prohibits by name.
+**O1 — environment, config and run token as the job's identity.**
+*Recommendation adopted:* yes, all three conjuncts; the token adds no new
+surface. Residual: possession is not parentage, and no token is minted on win32,
+so the omission never engages there — the safe direction. *Overrule cost:* a
+per-run state file proving parentage — a new writer, an uninstall obligation and
+a new lifecycle. **O2 — a retry for the pre-dream containment probe.**
+*Recommendation adopted:* decide separately; it stays out of scope. *Overrule
+cost:* the package splits rather than grows.
 
-*Overrule cost:* this WP does not ship as drafted. The fix becomes a
-supervisor-side notification surface, which means re-opening WP-041's prohibition
-(an ADR-level decision, not a spec edit) or designing a standing warning channel
-that is not the failure log — plausibly the same package as the
-managed-policy-warning follow-up. Table A's principle survives, but the filtering
-design and AC1 become moot and the spec is superseded rather than amended. A
-smaller overrule — "ship the filter, and also give `doctor` an
-unacknowledged-alerts section" — is a separate additive WP that this one neither
-blocks nor contains.
-
-**O1 — is the env-plus-config-plus-token channel trustworthy as job identity?**
-*Recommendation adopted:* yes, with all three conjuncts — `WIENERDOG_JOB` naming
-a job `config.yaml` defines as `run: builtin:dream`, **and** a valid-shaped
-`WIENERDOG_DREAM_RUN_TOKEN`. The token was added in response to design round 1 at
-zero new surface. The residual is stated in the spec and not closed: possession
-of the token is not proof of parentage, and on win32 no token is minted so the
-omission never engages there. *Overrule cost:* the remaining alternative is a
-supervisor→child channel that proves parentage (a per-run file under `state/`),
-which adds a `state/` writer, an uninstall obligation and a lifecycle to keep in
-step with `clearAlerts`; Table A's resolution rows, the predicate sketch, AC3,
-AC4, AC5 and three RED declarations are rewritten and the spec returns to
-drafting.
-
-**O2 — should the pre-dream containment probe get a single retry?**
-*Recommendation adopted:* decide it separately; it stays out of scope. It changes
-a fail-closed security check's semantics on a file this WP does not touch.
-*Overrule cost:* if ruled in scope here, the Deliverables table gains
-`src/core/dream/containment-probe.js` and its test file and the WP crosses into a
-second concern, so per the sizing rule it splits rather than grows. Nothing in
-Tables A, B or C changes either way.
+**Two named residuals:** scratch cleanup is a bare recursive remove that can
+still throw after the filtered render, so a run whose work succeeded can exit 1
+with the filtered digest on disk; and the concurrent-`sync` case priced in O4.
 
 ### WP-dev-descriptor-no-tree-hash (design gate closed 2026-09-17, round 1, `545df8bd`)
 
