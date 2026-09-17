@@ -251,3 +251,54 @@ heredoc, which has no such interaction. Re-measured in all three states after
 the change: compliant → exit 0; R1's `find` and test name mutated → two named
 GATE FAILs, exit 1; R1 deleted → a clean `R1 absent` message, exit 1 (an earlier
 draft threw an uncaught `ENOENT` there, which is a red for the wrong reason).
+
+## 9. Design review round 1 — APPROVE, gate closed at round 1
+
+| | |
+|---|---|
+| Verdict | **APPROVE** — no substantive product/security finding, and no machinery finding beyond the residuals the spec already discloses |
+| Backend | Codex plugin 1.0.6, model `gpt-6-astra` |
+| Tip reviewed | `2d3e6ce1cddd53b6a8bc3ce3eeacf95d386f075c` |
+| Base | `242c37b8cbffc9f9b67528332474333ff05f4740` |
+| Raw preserved before adjudication | `ddc8e653`, as `…-design-r1-astra-raw.json` with its `-focus.txt` and `-meta.txt` |
+
+**What it EXECUTED** (not read): the real scanner; the alert and evidence
+writers; `spawnBrain`; `runJob`; transcript collection — with filesystem and
+process dependencies intercepted. It confirmed the three 24-character truncation
+leaks, the four contiguous whole-credential chunk leaks and the safe controls. It
+**reproduced both brain-stream leaks through actual subprocess pipes with two
+observed chunks**. It confirmed all three order-swap mutations discriminate, that
+the literal R1 declaration loads through `loadDeclarations`, that the
+positive-presence assertions reject an empty artifact, that **coalesced chunks
+make the defect assertion FAIL rather than pass vacuously**, and that the fixture
+helpers use temporary roots.
+
+**What it only READ**: the citations, which it reports resolve.
+
+**Independent inventory check**: it looked for a tenth in-scope `redactOnly`
+site and **found none** — the nine of Table S, plus the two the table names and
+excludes, is the whole set on this tree.
+
+**Two caveats, both folded into the spec rather than left in this entry:**
+
+1. *A failing SAFE assertion can print the synthetic probe value into CI
+   diagnostics.* No real credential is involved — the `SAFE` form passes
+   `artifact` as its message by design, so a red probe publishes whatever the
+   fixture was fed. This is now a Security-checklist item and an Implementation
+   note: fixtures take **only** the repo's own synthetic patterns, never an
+   environment variable, a developer-supplied file, or anything read from the
+   machine.
+2. *Filesystem permissions in the review sandbox prevented independent on-disk
+   reproduction and full gate execution; captured write payloads are not
+   disk-durability verification.* The reviewer names the remedy as
+   implementation's step, and Definition of done item 1 now **requires** it: all
+   sixteen probes run against real temporary files under their own `mkdtemp`
+   root, plus the unfiltered `npm run red-proofs`, `npm test` and `npm run lint`
+   pasted into the PR body.
+
+**Closure.** Per `docs/runbooks/codex-review.md` ("Weighted closure"), the loop is
+done when a round finds nothing about the product. Round 1 found nothing about
+the product, both caveats are machinery-side and were fixed **within the existing
+surface** — no new gate, no new probe — so the gate is **CLOSED at round 1** and
+the spec moves to `Ready`. Base pinned for dispatch: `main` at `35e00e99`, on
+which all fifty citations were re-confirmed resolving after the rebase.

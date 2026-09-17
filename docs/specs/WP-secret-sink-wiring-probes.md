@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-wiring-probes
 title: Pin what each durable-output sink actually does with a labelled secret
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -562,6 +562,15 @@ review is added here on the spot (register-new-mirrors):
   because those are different call sites with different defect ids.
 - The probe string is a *fake* key shaped to match the `anthropic-key` rule. It
   is not a credential and must never be replaced with a real one.
+- **A failing probe prints the artifact, and the artifact contains the probe
+  value.** The `SAFE` form passes `artifact` as its assertion message, so a red
+  probe puts the synthetic credential-shaped string into `npm test` output and
+  from there into CI logs. That is acceptable **only** because the value is
+  synthetic and code-owned (design review round 1, 2026-09-17). It is what makes
+  the rule above load-bearing rather than decorative: a fixture fed anything but
+  the repo's own synthetic patterns would publish it. Never widen a fixture to
+  an environment variable, a file the developer supplies, or a value read from
+  the machine.
 - No new npm dependencies. The two new files are inert JSON, never executed
   (ADR-0042 decision 1).
 - When uncertain, choose the simpler option and record it under "Decisions made".
@@ -652,6 +661,16 @@ widens it.**
       sources, this spec, and the round-zero logbook entry that measured it. It
       is never written into a fixture file, a golden file or a proofs
       declaration.
+- [ ] **A failing probe prints the probe value into test output, and therefore
+      into CI logs** (the `SAFE` form's assertion message is `artifact`). Every
+      fixture is fed **only** the repo's own synthetic secret-shaped patterns —
+      never an environment variable, a developer-supplied file, or any value
+      read from the machine — because a red probe publishes whatever it was fed.
+      Raised by design review round 1 (2026-09-17) and accepted on exactly that
+      condition.
+- [ ] Every probe writes into a temp root it creates itself (`mkdtemp`), so
+      nothing secret-shaped lands in the repo, in `~/.wienerdog`, or anywhere
+      that survives the run.
 - [ ] No untrusted identifier flows into a filesystem path or shell command —
       these tests construct their own temp paths. P16's fixture puts `PROBE` into
       a **nonexistent** path it builds itself under its own temp root, and never
@@ -854,7 +873,10 @@ recorded in `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`
 recommendation with the cost of overruling it, the session may dispatch under
 that recommendation, and **the owner reverses either of them by dated
 amendment.** Nothing in this repo records the owner approving, accepting or
-ratifying either, and this spec asserts no such acceptance.
+ratifying either, and this spec asserts no such acceptance. Design review round 1
+(2026-09-17, approve) raised no third item; its two caveats are engineering
+conditions, folded into the Security checklist, Implementation notes and
+Definition of done rather than left for the owner.
 
 1. **Does a diagnostic WP get to commit seven tests that are green precisely
    because the product is broken?**
@@ -868,15 +890,23 @@ ratifying either, and this spec asserts no such acceptance.
    move together), and the seven leaks go back to being findable only by reading
    the code — which is how they survived since 2026-07-17. The sixteen-probe
    version's cost is residual 1: green means still leaking.
-2. **Is the whole-credential chunk leak still within the 2026-07-17
-   OWNER-APPROVED residual?**
+2. **Is the whole-credential chunk leak still within the residual recorded as
+   OWNER-APPROVED 2026-07-17?**
    *Recommendation: treat it as approved-but-mis-described, not as a new
-   approval.* The residual the owner approved on 2026-07-17 is the decision not
-   to buffer across chunks, and that decision is unchanged. What round zero found
-   is that the sentence recording it (`brain.js:504-508`, echoed at
-   `run-job.js:1048-1052`) says *"partially redacted"* where the measurement says
-   the complete credential is contiguous in the file. This WP records the
-   discrepancy and fixes nothing.
+   approval.* **The only record of that approval is the code comment itself** —
+   `src/core/dream/brain.js:504-508`, *"Known limitation (OWNER-APPROVED
+   2026-07-17): a secret split across a chunk boundary may be only partially
+   redacted — deliberately NOT buffered across chunks"*, echoed by reference at
+   `src/cli/run-job.js:1048-1052`. It is cited here as that record and nothing
+   more. What it approves is the **decision not to buffer across chunks**, and
+   that decision is unchanged by this WP. What round zero measured is that the
+   same sentence's description of the consequence — *"may be only partially
+   redacted"* — **understates it: the whole credential lands contiguous in the
+   durable log, not a fragment** (round-zero logbook §4; independently
+   reproduced through actual subprocess pipes by design review round 1). This WP
+   records that discrepancy, routes it, and fixes nothing. **No new approval is
+   asserted, and nothing in this repo records the owner approving, accepting or
+   ratifying the measured whole-credential behaviour.**
    *Cost of overruling toward "this is a new, unapproved exposure":* the four
    `LEAK-WHOLE` probes would have to be held out of this WP until a fix lands,
    which leaves the largest of the seven leaks as the only one with no test —
@@ -884,9 +914,38 @@ ratifying either, and this spec asserts no such acceptance.
 
 ## Definition of done
 
+0. **DISPATCH PRECONDITION.** (a) The two owner items above travel with this
+   package as **recommendations adopted under standing authorization**; any the
+   owner reverses by dated amendment is applied to this spec by a committed
+   revision — never by a dispatch message, because `scripts/boundary-check.js`
+   reads the Deliverables table in this file and nothing a message says changes
+   what CI sees. (b) **The design gate is CLOSED at round 1 (approve)**, which is
+   what makes this spec `Ready` (`docs/runbooks/codex-review.md`): round zero's
+   template-conformance and internal-coherence findings are dispositioned, and
+   the round-1 raw was preserved before adjudication at `ddc8e653`
+   (`docs/specs/logbook/2026-09-17-secret-sink-wiring-probes-design-r1-astra-raw.json`),
+   with the record in
+   `docs/specs/logbook/2026-09-17-secret-sink-wiring-probes-round-zero.md` §9.
+   Its two caveats are folded in — the synthetic-value-in-CI condition into the
+   Security checklist and Implementation notes, the real-temp-file requirement
+   into item 1 below. (c) **THE DISPATCHER RE-DERIVES EVERY `file:NNN`
+   CITATION.** They are pinned to the base this spec was verified against —
+   `main` at **`35e00e99`**, all fifty re-confirmed resolving on that tree — and
+   `src/cli/run-job.js` and `src/cli/dream.js` are files sibling packages land
+   in. Table S is where the numbers live, so what a later landing moves is line
+   numbers, not facts; re-derive them into a committed revision of this spec
+   rather than into a dispatch message. (d) Branch `wp/secret-sink-wiring-probes`.
+
 1. All verification steps pass locally; output pasted into the PR body, including
-   the seven `ok … (KNOWN DEFECT WD-SINK-…)` lines and the bare
-   `npm run red-proofs` result.
+   the seven `ok … (KNOWN DEFECT WD-SINK-…)` lines. **All sixteen probes must be
+   run against real temporary files** — each one drives the sink's public entry
+   point and reads the artifact back off a real path under its own `mkdtemp`
+   root. Intercepted or captured write payloads do NOT satisfy this WP: the
+   probes exist to pin what reaches **disk**, and a stubbed writer proves the
+   argument, not the file. (Design review round 1 could not reproduce on disk in
+   its sandbox and named this as the step implementation owes.) The PR body
+   carries the unfiltered results of all three gates, each run bare:
+   `npm run red-proofs`, `npm test`, `npm run lint`.
 2. Conventional commits; PR titled
    `test(secret-scan): characterization probes for the nine redactOnly call sites (WP-secret-sink-wiring-probes)`.
 3. PR template filled, including "Decisions made" (or "none") and
