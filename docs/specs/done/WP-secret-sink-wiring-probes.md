@@ -1,7 +1,7 @@
 ---
 id: WP-secret-sink-wiring-probes
 title: Pin what each durable-output sink actually does with a labelled secret
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,62 @@ epic: secret-lifecycle
 ---
 
 # WP-secret-sink-wiring-probes: characterization tests for the nine `redactOnly` call sites
+
+> **Errata, 2026-09-17 (post-merge) — two stale spec-prose facts. Neither is a
+> defect in what shipped.**
+>
+> Implemented in PR #261 (merge `c94e0e66`, 2026-09-17), tip `d3d44633`.
+> Diagnostic and tests-only: no file under `src/` was touched. Both PR gates
+> on that tip: wd-reviewer **APPROVE** with every claim executed
+> (boundary-check; the five test files 16/16 probes passing; the
+> **UNFILTERED** `npm run red-proofs` → `RUN: PROVEN` with all three ids;
+> `npm test` 2799 tests / 0 fail; lint; both-sides replays in a throwaway
+> clone — removing `redactOnly` at S1, S4 and S9 each reddened exactly one
+> probe, and a simulated buffer-then-redact-once fix at S6 and S7 each
+> reddened exactly one defect probe; flakiness 10 runs each on the four chunk
+> probes: 40/40 passes); Codex plugin `review` on `gpt-6-astra` clean, no
+> findings (it disclosed that runtime tests could not be executed in its
+> read-only environment). CI seven checks pass on macOS and Ubuntu.
+>
+> **Erratum 1 — "holds 16 `*.proofs.json` declaration files today" undercounts:
+> 17 at the spec's own pinned base.** *What is wrong:* the Current state bullet
+> (~l.167) claims 16 declaration files existed before this WP's two were added.
+> *What is true:* **17** files existed at the spec's pinned base `a47f2546`
+> (measured: `git ls-tree --name-only a47f2546 tests/red-proofs/ | grep -c
+> proofs.json` → 17), so the count is **17 before this package, 19 after**, not
+> 16/18. *Found:* wd-reviewer, PR #261 gate. *Routing:* corrected in place below
+> and recorded here. **Class: a stale count nothing depends on — no gate reads
+> it.**
+>
+> **Erratum 2 — Table P row P2's descriptive artifact cell shows a placeholder
+> `log_hint`, not the mandated helper's actual value.** *What is wrong:* the
+> cell (~l.411) ends `…"log_hint":"h"}`. *What is true:* the spec's own
+> mandated `rec()` helper (`tests/unit/alerts.test.js:31`) writes `log_hint:
+> `~/.wienerdog/logs/${job}/`` — for P2's `rec('dream', …)` call that is
+> `log_hint: '~/.wienerdog/logs/dream/'`. *Found:* wd-reviewer, PR #261 gate.
+> *Routing:* corrected in place below and recorded here. **Class: a descriptive
+> example cell no assertion reads.**
+>
+> **Recorded, not errata:** (i) **ALL SEVEN defect ids are OPEN at filing** —
+> `WD-SINK-TRUNC-ALERTS`, `WD-SINK-TRUNC-RUNEV-ARGV`, `WD-SINK-TRUNC-RUNEV-FIELD`,
+> `WD-SINK-CHUNK-BRAIN-STDOUT`, `WD-SINK-CHUNK-BRAIN-STDERR`,
+> `WD-SINK-CHUNK-RUNJOB-STDOUT`, `WD-SINK-CHUNK-RUNJOB-STDERR` — a green suite
+> does not mean the sinks are safe, and no fix is specced yet. (ii) The comments
+> at `src/core/dream/brain.js:504-508` and `src/cli/run-job.js:1048-1052`
+> describe the chunk residual (OWNER-APPROVED 2026-07-17) as "may be only
+> partially redacted", whereas the measured behaviour — reproduced independently
+> by the design reviewer through real subprocess pipes — is that the **whole**
+> credential lands contiguous in the durable log; same-user exposure
+> (0600/0700); the comments are to be corrected by whichever package takes the
+> fix. (iii) `PROBE_TAIL` is declared and unused in
+> `tests/unit/alerts.test.js:414` and `tests/unit/run-evidence.test.js:133`
+> (copied verbatim from the spec's Exact-contracts block). (iv) The four chunk
+> probes force a boundary with `sleep 0.3`; their failure mode is loud red on a
+> healthy sink, never silent green. (v) `mkdtemp` roots are never removed,
+> matching the existing helpers the spec mandates reusing, so the SYNTHETIC
+> probe value persists under the temp dir.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -164,9 +220,10 @@ behaviour.
   put the transcript probe here, driving the `parse`/`extract` function and
   calling its return value an artifact. It is not one: nothing on that path
   writes to disk. The disk write happens in `collectExtracts`.
-- `tests/red-proofs/` holds **16** `*.proofs.json` declaration files today
+- `tests/red-proofs/` holds **17** `*.proofs.json` declaration files today
+  *(corrected post-merge, see Erratum 1 — the Ready text said 16)*
   (count, do not assume — a different total means the tree moved). This WP adds
-  two; **Table R** is canonical for their contents.
+  two, bringing the total to **19**; **Table R** is canonical for their contents.
 - `npm test` is `node tests/run.js`; `npm run lint` is `node scripts/lint.js`;
   `npm run red-proofs` is `node tests/with-temp-root.js scripts/red-proofs.js`
   (`package.json:24`).
@@ -408,7 +465,7 @@ later fix, and turning that probe red is the **intended** outcome of that fix.
 | # | Test file | Test name (exact) | Site | Entry point | Feed | Assertion | Status | Measured artifact fact |
 |---|-----------|-------------------|------|-------------|------|-----------|--------|------------------------|
 | P1 | alerts | `sink-probe: alerts — a labelled secret in an alert field is redacted in alerts.jsonl` | S1 | `appendAlert(paths, record)`, probe in the `reason` field | WHOLE | SAFE | CORRECT | `MARKER` present, no `PROBE_HEAD` |
-| P2 | alerts | `sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)` | S1 | same | STRADDLE-TRUNCATE | LEAK-HEAD | DEFECT `WD-SINK-TRUNC-ALERTS` | the line ends `…FFFFsk-ant-api03-PROBE-aaaa-","log_hint":"h"}`; no `MARKER` |
+| P2 | alerts | `sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)` | S1 | same | STRADDLE-TRUNCATE | LEAK-HEAD | DEFECT `WD-SINK-TRUNC-ALERTS` | the line ends `…FFFFsk-ant-api03-PROBE-aaaa-","log_hint":"~/.wienerdog/logs/dream/"}` *(corrected post-merge, see Erratum 2 — the Ready text showed `"log_hint":"h"`)*; no `MARKER` |
 | P3 | run-evidence | `sink-probe: run-evidence — a labelled secret in an argv entry is redacted in run-evidence.jsonl` | S2 | `recordRunEvidence(paths, rec)`, probe as one `argv` element | WHOLE | SAFE | CORRECT | `MARKER` present, no `PROBE_HEAD` |
 | P4 | run-evidence | `sink-probe: run-evidence — a labelled secret straddling the argv cap is NOT redacted in run-evidence.jsonl (KNOWN DEFECT WD-SINK-TRUNC-RUNEV-ARGV)` | S2 | same | STRADDLE-TRUNCATE | LEAK-HEAD | DEFECT `WD-SINK-TRUNC-RUNEV-ARGV` | `PROBE_HEAD` inside the `argv` array; no `MARKER` |
 | P5 | run-evidence | `sink-probe: run-evidence — a labelled secret in a scalar field is redacted in run-evidence.jsonl` | S3 | `recordRunEvidence(paths, rec)`, probe as the `job` field | WHOLE | SAFE | CORRECT | `MARKER` present, no `PROBE_HEAD` |
