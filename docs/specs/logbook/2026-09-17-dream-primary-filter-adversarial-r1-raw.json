@@ -1,0 +1,88 @@
+{
+  "reviewed_sha": "15486ec762c09a7bae85225e20bc98f754cc4212",
+  "verdict": "needs-attention",
+  "summary": "Do not move to Ready yet: A5 can clear tool-derived provenance across exchanges before filtering removes the remaining taint evidence. B3 also needs an explicit owner disposition as a proposed exception to the no-tool-details scope. This was a static design review, not an implementation test run.",
+  "findings": [
+    {
+      "id": "R1-A1",
+      "band": "A",
+      "file": "docs/specs/WP-dream-primary-dialogue-filter.md",
+      "line_start": 178,
+      "line_end": 178,
+      "confidence": 0.9,
+      "title": "Do not reset assistant provenance at an exchange boundary",
+      "body": "A5 marks a concluding assistant message false whenever its own exchange has no tool output and its source geometry is complete. A normal counterexample is: exchange b0 reads external content and reports it; in b1 the user asks for a shorter restatement, which the assistant supplies without another tool call. The restatement still derives from the external content, but the specified mechanical rule gives it false. The filter can then keep b1 and drop b0, leaving the consolidation model only explicitly false provenance and no source evidence of the earlier tool origin. This conflicts with the same row's requirement to retain tool-derived claims as attributed reports. The existing ordinary Tier-3 gate (src/core/dream/validate.js:198-214) checks the submitted provenance flag, whereas B2's independently derived invocation-window taint applies only to skill learnings, so it does not repair this path. The inference is that a candidate supported by this restatement can now be treated as trusted when its external origin has been removed.",
+      "recommendation": "Specify conservative propagation of assistant taint through later exchanges that can reuse prior tool-derived context, computed before selection. For this iteration, marking subsequent assistant conclusions untrusted after observed tool output or uncertain source context is a simple bounded option; verified primary user messages can remain false. Add a synthetic cross-exchange restatement case where filtering drops the first exchange and confirm the retained reply remains true. No tool text or evidence store is needed."
+    }
+  ],
+  "routed_scope_objections": [
+    {
+      "title": "B3 proposes a tool-detail exception that needs an explicit owner choice",
+      "body": "B3 (line 188) permits model-visible originally observed skill names and error state. The scope record excludes tool-call details and tool-result content and its final unresolved item 4 expressly says not to add tool details back to model input to hide a compatibility problem. In the existing Claude parser, the skill name comes from tool_use.input.skill and the error state from the paired tool_result.is_error. These are compact structured tool details, even though they contain no free-form result text. They are useful for the existing dream skill's learning discovery rules (SKILL.md:214-234), but they are not required to preserve code-owned authorization: B2 can supply the validator independently. Ask the owner to accept this narrow metadata exception explicitly, or omit it from model input and have learning discovery use retained primary dialogue while B2 continues to validate claimed invocations. This scope choice is routed rather than counted as a verdict finding; the current maintainer-feedback checklist does not name this exception."
+    }
+  ],
+  "executed_checks": [
+    {
+      "command": "git status --porcelain=v1 (before review)",
+      "result": "EXECUTED; exit 0; empty output, clean checkout."
+    },
+    {
+      "command": "cat docs/runbooks/review-prompts/adversarial.md docs/specs/WP-dream-primary-dialogue-filter.md",
+      "result": "EXECUTED; exit 0; read complete frozen vendored review prompt and draft."
+    },
+    {
+      "command": "cat src/core/transcripts/index.js src/core/transcripts/claude.js src/core/transcripts/codex.js",
+      "result": "EXECUTED; exit 0; static parser/capping inspection. Combined tool output was truncated; relevant Codex sections were subsequently reread."
+    },
+    {
+      "command": "cat src/core/dream/scratch.js src/core/dream/brain.js src/core/runtime-profile.js src/scheduler/descriptor.js",
+      "result": "EXECUTED; exit 0; static collection/runtime/descriptor inspection. Combined tool output was truncated; scratch/runtime and relevant brain sections were subsequently reread."
+    },
+    {
+      "command": "rg -n 'function (runBrainWithWatchdog|ledgerViolation|invocationWindowTainted)|extractsBySession|skill_invocations|derived_from_untrusted|promptHash|buildBrainEnv|ensureBrainStaging|collectExtracts|timeoutMs' src/cli/dream.js src/core/dream/validate.js skills/wienerdog-dream/SKILL.md src/scheduler/descriptor.js",
+      "result": "EXECUTED; exit 0; located production consumers and provenance gates."
+    },
+    {
+      "command": "sed -n '490,660p' src/core/dream/validate.js; sed -n '330,480p' src/cli/dream.js; sed -n '600,680p' src/cli/dream.js; sed -n '770,860p' src/cli/dream.js (issued as newline-separated commands)",
+      "result": "EXECUTED; command batch exit 0; read original role-only invocation-window gate and existing watchdog/collection paths."
+    },
+    {
+      "command": "cat src/core/dream/brain.js src/core/runtime-profile.js docs/specs/logbook/2026-09-17-dream-primary-input-scope.md",
+      "result": "EXECUTED; exit 0; complete owner-scope record was visible; some earlier runtime output was truncated."
+    },
+    {
+      "command": "cat src/core/dream/scratch.js",
+      "result": "EXECUTED; exit 0; complete collector read."
+    },
+    {
+      "command": "cat src/core/runtime-profile.js; rg -n 'function |spawnPinned|stdio|stdout|stderr|buildBrainEnv|staging|CLAUDE' src/core/dream/brain.js; sed -n '120,310p' src/core/dream/brain.js (issued as newline-separated commands)",
+      "result": "EXECUTED; command batch exit 0; complete profile registry/composer and targeted staging/environment/spawn inspection."
+    },
+    {
+      "command": "sed -n '90,115p' skills/wienerdog-dream/SKILL.md; sed -n '210,240p' skills/wienerdog-dream/SKILL.md; sed -n '286,335p' skills/wienerdog-dream/SKILL.md; sed -n '90,230p' src/core/transcripts/codex.js; nl -ba docs/specs/WP-dream-primary-dialogue-filter.md | sed -n '177,235p'; git rev-parse HEAD (issued as newline-separated commands)",
+      "result": "EXECUTED; command batch exit 0; confirmed exact contract lines, current prompt provenance, Codex mapping, and reviewed HEAD 15486ec762c09a7bae85225e20bc98f754cc4212."
+    },
+    {
+      "command": "rg -n 'Band|band| A | B | C |adversarial|design.review' docs/runbooks/codex-review.md; rg --files docs/adrs | rg '0020|0025|0031'; git diff --check; git diff --exit-code 15486ec762c09a7bae85225e20bc98f754cc4212 -- docs/specs/WP-dream-primary-dialogue-filter.md docs/runbooks/review-prompts/adversarial.md (issued as newline-separated commands)",
+      "result": "EXECUTED; overall command batch exit 0. Runbook matches returned. ADR discovery failed because docs/adrs does not exist (rg reported an IO error); no ADR content was read. Both git diff checks completed without output."
+    },
+    {
+      "command": "sed -n '35,57p' docs/runbooks/codex-review.md; sed -n '296,333p' docs/runbooks/codex-review.md; rg --files docs | rg '/ADR-(0020|0025|0031)' (issued as newline-separated commands)",
+      "result": "EXECUTED; command batch exit 1 because the final filename pattern had no matches. Runbook excerpts were read successfully; confirmed band definitions and raw review/read-only requirements."
+    },
+    {
+      "command": "git status --porcelain=v1 (after review)",
+      "result": "EXECUTED; exit 0; empty output, byte-identical to before review."
+    },
+    {
+      "command": "git diff --exit-code 15486ec762c09a7bae85225e20bc98f754cc4212",
+      "result": "EXECUTED; exit 0; no tracked-file changes."
+    },
+    {
+      "command": "npm test -- tests/unit/transcripts.test.js tests/unit/dream-collect.test.js tests/unit/runtime-profile.test.js tests/unit/descriptor.test.js; future implementation verification commands; npm test; npm run lint; offline LLM qualitative evaluation",
+      "result": "NOT RUN. No product tests, model calls, live-install operations, or external browsing were performed. Findings are from static design/source inspection."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}
