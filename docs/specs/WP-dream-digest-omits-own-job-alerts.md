@@ -37,6 +37,22 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 > - **A-3 (LIGHT, machinery):** AC7 established neither finalizer coverage nor
 >   exactly-once recovery.
 >
+> **Round 5 (same reviewer, tip `7bee5394`) then found two more, and the second
+> round of findings about the SAME mechanism forced a design change rather than
+> another patch** (`docs/runbooks/codex-review.md`: when two consecutive rounds
+> land findings of the same kind, the next step is a design question). The
+> unfiltered recovery re-render asked for in round 1 had by then needed two call
+> sites, an exactly-once guarantee spanning them, arming before the render, a
+> stderr diagnostic, a withdrawn preservation guarantee, compound-failure
+> handling, and a conservative alert-set fallback — because a recovery render
+> whose `readAlerts` silently returns `[]` **publishes an alert-free digest and
+> erases other jobs' callouts**. **That mechanism is REMOVED.** The filtered
+> render is now the **last statement of `run()`**, reached only by falling through
+> the whole function, so there is no window between it and a failure and nothing
+> to recover. Round 1's F2 disposition is reversed on five rounds of evidence, and
+> the reversal is recorded in the design-review logbook rather than quietly
+> applied.
+>
 > **The lesson, recorded because it is about the process and not this package:**
 > three rounds of one model approved a design whose two load-bearing assumptions
 > a second model falsified by **executing** the production function bodies.
@@ -300,13 +316,18 @@ on that flag:
 alerts: <filter>(unacknowledgedAlerts(paths, readAlerts(paths))),
 ```
 
-The three call sites, and the whole of the placement contract:
+The call sites, and the whole of the placement contract:
 
 | Call site | Flag | Why |
 |-----------|------|-----|
-| l.724, the quarantine-only refresh | **unfiltered** | this run may still fail; a record hidden here would be a genuine unresolved failure (Table A, "When it may omit") |
-| l.1182, step 19 | **filtered** | the only point at which this process's dream work has succeeded |
-| the late-failure recovery render (new; Table A, "Late in-process failure") | **unfiltered** | the run failed after step 19, so every omitted callout is restored |
+| l.724, the quarantine-only refresh | **unfiltered** | unchanged from `main`; this run may still fail, and a record hidden here would be a genuine unresolved failure |
+| l.1182, step 19 | **unfiltered — unchanged from `main`, byte for byte** | the run has not finished: `destroyWorkspace`, `cleanScratch` and `releaseLock` are all still ahead of it and any of them can throw |
+| **NEW: after `finally A` closes (l.1222) and before `run()`'s brace (l.1223)** | **filtered** | the only statement reachable solely by falling through the whole of `run()`, so reaching it means the body AND both finalizers succeeded |
+
+The implementer hoists one binding to make the last call possible — `regenerateDigest`
+and `ledger` are both declared inside `try A` (l.641, l.618) — and adds no `catch`,
+no arming flag, no second site and no write counting (Table A, "The one real
+obstacle" and "Why there is no recovery render").
 
 Worked example. `config.yaml` defines `- name: dream / run: builtin:dream`;
 `state/alerts.jsonl` holds
@@ -367,23 +388,27 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 | Fact / rule | Value |
 |-------------|-------|
 | **THE PRINCIPLE** | **when in doubt the stale callout is SHOWN; a genuine one is never hidden.** Every unresolved question resolves to rendering the record: an unresolved name, an absent or malformed run token, an unreadable config, a lookup that throws, a render reached before this run's success is established, a failure after that render. The principle governs what **this process's own renders** show, which is all a render in `dream.js` can govern. It does **not** promise that a failure recorded after this process exits reaches the digest at all — that is a separate, pre-existing property of the product, stated in the "What reaches the digest for the dream's OWN failures" row and unresolved as owner item O3. Every other row of this table is an application of one of those two |
-| Where applied | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. The closure takes an **explicit per-call flag whose default is UNFILTERED**, so a call site added later is safe by construction and a filtering call must say so at the call. **Exactly ONE call site passes the filtering value: step 19 (l.1182).** The quarantine-only refresh (l.724) and the late-failure re-render (below) render **unfiltered**. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
-| When it may omit | **only at the final render**, which is the first point in `run()` at which THIS process's dream work has succeeded: the ledger is persisted (l.1164) and every step that can fail the run's own body is behind it. Before that point nothing is omitted, because the run may still fail and leave the record genuine. This row is what makes the l.724 site unfiltered — not an oversight to be tidied later |
+| Where applied — **the filtered render is the LAST STATEMENT of `run()`** | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. The closure takes an **explicit per-call flag whose default is UNFILTERED**, so a call site added later is safe by construction and a filtering call must say so at the call. **Step 19 (l.1182) stays exactly as it is on `main`: UNFILTERED**, as does the quarantine-only refresh (l.724). The filtering call is a **new, single call placed AFTER the outer `try`/`finally` block closes** — after `finally A` at l.1213-1222, before `run()`'s closing brace at l.1223. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
+| When it may omit — **reached only by falling through, which means everything succeeded** | The filtered render runs only when control reaches the end of `run()` normally. That happens **only** when the whole body completed: steps 11-21, then `finally B`'s `destroyWorkspace` (l.1206-1212), then `finally A`'s `ownsLock → cleanScratch → releaseLock` (l.1213-1222), all without throwing. Nothing before that point omits anything, because until then the run may still fail and leave the record genuine |
+| **Why NO guard is needed, verified by reading the whole of `run()`** | Every other exit from `run()` is a `return` or a `throw`, and **neither falls through to a statement after a `try`/`finally`** — a `return` inside `try` executes the `finally` and then returns from the function; it does not resume after it. The complete exit inventory, measured on this tree: `throw` l.573 (mechanics-root entry gate) and l.596 (`owner-unknown` lock) and `return` l.602 (declined lock) are all **before** `try A` opens at l.608; inside it there are exactly three explicit exits — `throw` l.742 (no complete session admitted), `return` l.756 (nothing new to dream), `return` l.767 (dry-run) — plus any throw from deeper code (the step-8b containment halt, the brain, promotion, the finalizers). **The end of `try A`'s body is the end of the inner `try`/`finally`, whose last statement is step 21's summary**, so reaching it IS full success. A boolean success flag would therefore be redundant; the implementer adds none |
+| **The one real obstacle, and it is scope not control flow** | `regenerateDigest` is defined at l.641 **inside** `try A`, and it closes over `ledger`, declared at l.618 also inside `try A`. A statement after `finally A` cannot see either. So the implementer hoists **one binding** — declare it (e.g. `let renderFiltered = null;`) **before** `try A` and assign it where the closure exists — and the final statement calls it. This is the whole of the plumbing: no `catch`, no arming semantics, no second site, no counting. `paths`, `vaultDir` and `layout` are already outside the try (l.564, l.581, l.582) and need nothing |
+| **Two digest writes per fully successful supervised run — stated, and why it is acceptable** | A successful supervised dream now renders `digest.md` twice: step 19's write, **byte-identical to what `main` writes today**, and then the filtered write. The cost is one extra whole-file render — a handful of state reads plus one atomic temp+rename — at the end of a job that has just run a model for minutes. The correctness argument is that **both writes are whole-file atomic renders of current state through the same renderer**, differing only in the alerts array, so no partial or blended state is ever observable and the second simply supersedes the first. If a session's SessionStart hook reads the file in the window between them it sees **today's content** — the unfiltered, safe direction |
+| **The filtered render happens after the dream lock is released — what that does and does not change** | `finally A` releases the lock at l.1221, so the final render is unlocked. **Measured: `src/cli/sync.js` takes no dream lock at all** (no `acquireLock`/`ownsLock`/`releaseLock` anywhere in it), so an attended `sync` could always race a dream's digest write and this WP does not change that class. What is new is a narrow window in which another dream may already hold the lock while this one renders. In every combination the outcome is the same and is benign: **last writer wins**, each writer publishes a whole-file render of the state it read, and nothing partial is observable because `writeFilePrivate` is temp+rename. A loser's content is superseded, never corrupted, and the next render of either writer reconciles |
+| **If the final filtered render itself throws** | Two cases, and only the second is a residual. **(i) It throws before publishing** — the digest on disk is still what step 19 left: **unfiltered, today's bytes, the safe direction.** `run()` throws, the supervisor fails the job loud and appends a record, and that record is not in the digest — which is exactly the pre-existing property the "What reaches the digest" row already states. **(ii) It throws AFTER publishing** — `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and only then verifies destination identity, throwing `WD_F10_POST_RENAME` at l.372 — the **filtered bytes are on disk** and the run still exits non-zero. **Named residual, and the only one this mechanism has:** a job certified failed whose digest is the successful-run digest. It is the same shape as B1 (a run whose work succeeded but which is certified failed because a write was refused), it needs a same-owner concurrent substitution of the temp file to occur at all, and no recovery is attempted — see "Why there is no recovery render" |
+| **Why there is no recovery render** (the mechanism rounds 1-4 built, now REMOVED) | Round 1's F2 asked for an unfiltered re-render on any post-filter failure. Across rounds 2-5 that one mechanism required: two call sites, an exactly-once guarantee spanning them, arming before the render, a fixed-text stderr diagnostic, a withdrawn preservation guarantee, compound-failure handling, and — round 5's finding — a conservative alert-set fallback, because an unfiltered re-render whose `readAlerts` silently returns `[]` **publishes an alert-free digest and erases OTHER jobs' callouts**. That is a mechanism whose surface grew every round, which `docs/runbooks/codex-review.md` names as the treadmill condition. **Placing the filtered render last removes the need for it entirely**: there is no window between the filtered write and a failure, because the filtered write is the last thing the run does |
+| **A silent `readAlerts` failure renders an alert-free digest — on EVERY render, today included** | `readAlerts` returns `[]` when it cannot open the file (`src/core/alerts.js` l.157) **and** when `fstat`/`read` fails after opening (l.200, `catch { return []; }`). So any render whose alert read fails transiently publishes a digest with **no callouts at all**, for every job, while every record remains stored. **This is pre-existing and unchanged by this WP** — step 19 and `sync` have always had it — and what this WP does is expose it on **one more render per fully successful supervised run**. It is stated rather than fixed: making it fail closed would change `readAlerts`' contract and every caller's behaviour, which is a different work package. Routed under **Discovered** |
 | Filter position | applied to the **result** of `unacknowledgedAlerts(paths, readAlerts(paths))`, leaving that expression textually intact. Both orders yield the same set; this order is required so `alert-ack.js`'s standing claim that *both callers pass `readAlerts`* stays true (Table B narrows only the sentence that this WP actually falsifies) |
 | Resolved job name | **two conjuncts about the RUN, both required** (a third conjunct about each RECORD is the next row). (1) `process.env.WIENERDOG_JOB` names a job that `jobsLib.findJob(paths, thatValue)` returns with `run` exactly the string `builtin:dream`; AND (2) `process.env.WIENERDOG_DREAM_RUN_TOKEN` is present and passes **the same validation dream.js already applies to it** — `typeof === 'string'` and `/^[a-f0-9]{16}$/` (l.827-828), re-applied, not re-invented. Every other case resolves to **no name**: either variable absent, not a string, empty or malformed; a name `config.yaml` does not define; a job whose `run` is anything else |
 | **Record date — the THIRD conjunct, and it is per-RECORD not per-run** | Even with a resolved name, a record is omitted **only if its `at` is STRICTLY EARLIER than this dream process's start instant.** The start instant is captured **once, at the top of `run()`** — `src/cli/dream.js` l.557 `async function run(argv, opts = {}) {`, before l.558's first statement — as a wall-clock millisecond value, and it is **not** taken from the `opts.now` seam: that seam exists to resolve the dream's DATE STRING, and letting a test's date injection move this boundary would make a safety property depend on a test seam. Parsing is **strict**: the record is omitted only when `at` is a non-empty string that parses to a finite timestamp AND that timestamp is `< start`. **A missing, empty or unparseable `at` means the record is SHOWN**, as does a timestamp equal to the start instant. Why this conjunct exists: `run-job`'s watchdog rejects independently of the child's close event (`src/cli/run-job.js` l.1086, raced at l.1090), so `failLoud` at l.1257 can append a record **while this dream child is still alive** — a record dated AFTER this process started, describing a failure this run is already being blamed for and which that supervisor will never clear. The run-level conjuncts cannot see that case; the record's own date can |
 | Clock movement, and which way the error falls | the comparison is wall-clock on both sides by construction — `at` is an ISO timestamp written by `nowIso()` and the start instant is the same clock — because a monotonic reading cannot be compared to a stored ISO string. **A clock that moves FORWARD is safe**: an older record can only end up dated later than the start instant, and a record not strictly earlier is SHOWN. **A clock that steps BACKWARD between this process's start and a supervisor append is the unsafe direction**: that append can be stamped earlier than the start instant and would then be omitted. Named, not chased — it needs a backward wall-clock step inside that specific window, and closing it would need a record field (a run token or a monotonic stamp) that `{job, at, reason, log_hint}` does not have (`src/core/alerts.js` `sanitizeAlert` l.46-50 drops unknown keys). Adding one is a change to the alert record's schema and is out of scope |
-| **Every writer that can append under the dream's own name, and what the date rule does to each** | Enumerated because the date rule's effect differs per writer, and a rule stated without its writers is a rule nobody can check. **(a) `src/scheduler/launcher.js` l.509** `appendRefuseAlert(p, jobName, reason)` — a **separate process**; the record is built at l.192 as `{ job, at: new Date().toISOString(), reason, log_hint: '' }`. A fire refused while a dream is running is therefore dated AFTER that dream's start → **SHOWN**. Correct and intended. **(b) `src/cli/run-job.js` l.953** — the managed-policy warning, appended under the job's name **before the spawn**, so it is dated **before** this run's start → **OMITTED** by the date rule. That is the same loss Table A's last row already prices, and the **Maintainer ruling (2026-09-10) — "this WP ships first; the follow-up WP is drafted later"** — already defers it. **Do not fix it here.** **(c) `src/cli/run-job.js` l.1257** on the reap-failure path — the dream child has exited but its brain group is alive by construction; the record is dated after this process's start → **SHOWN**. **(d)** the same l.1257 on the watchdog-timeout path, with the child still alive → **SHOWN** (the case the conjunct exists for) |
-| **Where recovery is armed, stated so it cannot be read the other way** | The arming statement **precedes** the filtered render call in program order. Measured on the paused implementation (`wp/dream-digest-omits-own-job-alerts` @ `9d1282cf`), the current code is `regenerateDigest({omitOwnJobAlerts:true}); restoreAfterStepNineteen = regenerateDigest;` — armed **after** the render returned, which is exactly the shape A-2 falsifies: a render that publishes and then throws `WD_F10_POST_RENAME` never reaches the arming line. **The two statements swap.** **Topology, measured on this tree** (`src/cli/dream.js`): `try A` opens at **l.608** and its `finally A` is at **l.1213-1222**; `try B` opens at **l.815** and its `finally B` at **l.1206-1212**. There is **no `catch A` today** — the implementer adds one. A throw raised inside `finally A` is **invisible to `catch A`** by JS semantics, so the recovery needs **two sites** — one in `catch A`, one wrapping `finally A`'s body — and **at most one of them may run**: "exactly one attempt" is a property of the pair, not of either site |
+| **Every writer that can append under the dream's own name — the COMPLETE inventory, and what happens to each** | Two questions per writer: is the record **present at the final render** at all, and if so is its `at` before or after this process's start? A record appended **after** the final render is not filtered — it does not exist yet — which is a different thing from being omitted, and the row says which applies. **(a) `src/scheduler/launcher.js` l.509** `appendRefuseAlert(p, jobName, reason)` — a separate process; the record is built at l.192 as `{ job, at: new Date().toISOString(), reason, log_hint: '' }`. A fire refused while this dream is running is present and dated AFTER this process's start → **SHOWN**. **(b) `src/cli/run-job.js` l.953**, the managed-policy warning, appended under the job's name **before the spawn** → present and dated **before** this run's start → **OMITTED**. That loss is already priced in this table's last row and already deferred by the **Maintainer ruling (2026-09-10): "this WP ships first; the follow-up WP is drafted later."** Do not fix it here. **(c) `src/cli/run-job.js` l.911**, the TCC / protected-folder refusal — that run never spawns a dream, so nothing of ours renders during it; a LATER dream finds the record dated before its own start → **OMITTED** at that render, and the same later success's `clearAlerts` deletes it anyway. **(d) `src/cli/run-job.js` l.1257** on the watchdog-timeout path with the child still alive, and on the reap-failure path after the child exited → present, dated after this process's start → **SHOWN** (the timeout case is what the date conjunct exists for). **(e) `src/cli/run-job.js` l.1194 (B1)**, success-marker refused → appended **after** the dream child has exited, so **after** the final render: **not present, therefore not filtered** — it reaches the digest at the next render like any post-render record. **(f) `src/cli/run-job.js` l.1384 / l.1386 / l.1388**, the three named catch-up authorization refusals, appended under the job's name in the catch-up parent → the job did not run, so no render of ours happens; a later dream finds them dated earlier → **OMITTED** at that render, and that later success's `clearAlerts` deletes them. **(g) B2 (l.1204) deliberately skips the append** — the refused artifact IS `alerts.jsonl` — so it contributes no record at all |
 | Supervisor correlate (the run token) | the token is minted per `runJob` invocation in the `if` block at `src/cli/run-job.js` **l.934-938** (both ends checked: l.934 `if (job.run === 'builtin:dream' && platform !== 'win32') {`, l.938 its closing `}`) — `crypto.randomBytes(8).toString('hex')` at **l.935**, the export at **l.936** — onto the same `env` object `buildCleanEnv` returned at **l.917**, which `spawn` (l.1036) hands the child — so on the supervised path both variables arrive together, **including under `--catch-up`**, which calls the same `runJob` (l.1398 `const doRun = opts.runJob \|\| runJob`). **Two limits, stated rather than implied.** (a) The mint is guarded by `job.run === 'builtin:dream' && platform !== 'win32'` (l.934), so **no token is minted on win32** and the omission therefore never engages on Windows — the stale callout stays, which is the safe direction, but this WP's fix does not reach that platform. (b) The token proves **possession of a supervisor-minted per-run value, not parentage**: dream has nothing to compare it against, so a process inheriting both variables still passes. It strictly narrows the accidental-inheritance vector; it does not close it. See O1's residual |
 | Why this channel at all | the supervisor owns the alert lifecycle, so the supervisor is the only party that can say which job's alerts this run's success will clear; both variables are set by it in the child env. The config cross-check makes the accepted value config-derived rather than merely asserted, and it can never be inert on the scheduled path, because `runJob` is only reachable with a job that `findJob`/`listJobs` returned (`src/cli/run-job.js` l.1494, l.1343). **Not ruled on by the owner — see "Dispatch precondition — owner items", O1, which also carries the residual this channel leaves open** |
 | Omitted set | when a name resolves **and** the call site is the filtering one: every record in the array whose `job` **strictly equals** that name **and whose `at` is strictly earlier than this process's start instant** (row above) — exactly the set `clearAlerts(paths, name)` will remove. Otherwise nothing is omitted, and the rendered bytes equal today's |
 | Failure direction | **fail-safe toward SHOWING** (the principle row). Nothing in this filter may throw out of `regenerateDigest`. `listJobs`' own `catch { return []; }` (`src/scheduler/jobs.js` l.199-208) already gives the config-read half by construction |
 | Paths that render nothing | a run that returns or throws without reaching a render leaves `digest.md` byte-untouched, so the filter has no effect there and the spec claims none: the `owner-unknown` lock throw (l.595-600, new in PR #245), the declined-lock exit-0 return (l.601-602), `nothing new to dream` (l.746-757) and the dry-run return (l.765-768). What the **supervisor** does on those paths is run-job's contract, not this one — the exit-0 declined-lock case is named in Out of scope |
-| Early render then failure | a run can render at l.724 and then throw — the widened no-complete-input throw at l.736-743, the step-8b containment halt, a brain failure. **Because l.724 is unfiltered, the genuine callout is still on screen on every one of those paths**, and AC6a-AC6b assert the digest's content there, not only `alerts.jsonl`'s |
-| Late in-process failure — **recovery is ARMED BEFORE the filtered render is attempted** | The recovery path covers **the filtered render attempt itself and everything after it**, up to and including `run()`'s return. Arming it only *after* `regenerateDigest()` returns is WRONG and is named as such: `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and only then verifies the destination's identity, throwing `WD_F10_POST_RENAME` (l.372) **after the filtered bytes are already published**, so a throw out of the filtered render is exactly a case where recovery is needed. The covered region therefore begins at the step-19 call and ends at `run()`'s return, and it **must include both existing finalizers** — the workspace teardown `finally` (`src/cli/dream.js` l.1206-1212, `destroyWorkspace(workspaceDir)` at l.1211) and the outer scratch/lock `finally` (l.1213-1222, `cleanScratch` at l.1220, `releaseLock` at l.1221) — because a throw from either is a late in-process failure like any other. On any such throw: **exactly ONE unfiltered `regenerateDigest()` attempt** is made — one, whether the throw came from the render, the body or a finalizer, and one even if that attempt itself fails — the **ORIGINAL error still propagates**, and the recovery exception, if any, is reported as **exactly ONE fixed-text stderr line** carrying no interpolated bytes from the exception, the record, the config or any path (plain language, CLAUDE.md). The placement and wrapping are the implementer's; "armed before the filtered render", "exactly one attempt", "covers both finalizers", "unfiltered", "original error wins" and "one fixed-text line, no interpolation" are not |
-| What a failed recovery leaves on disk — **the preservation guarantee is WITHDRAWN** | Round 2 stated that a failed recovery leaves the previous filtered bytes intact. **That is false and is withdrawn.** Two boundaries, and the spec distinguishes them instead of generalising: **(i) pre-publication failure** — the recovery render throws before its `renameSync` — the destination is **unchanged** and still holds whatever the filtered render left; **(ii) post-rename verification failure** — the recovery render's rename succeeded and the identity check then threw (`private-fs.js` l.360 → l.372) — the destination **may already hold the new, unfiltered bytes**, or bytes a concurrent writer substituted. So the honest statement is: **after a failed recovery the destination's contents are not guaranteed by this WP either way**, and the single stderr line is the whole of the remedy. No criterion may assert preservation |
-| **What reaches the digest for the dream's OWN failures** | **A pre-existing property of the product, measured in design round 2, which this WP does not create and does not fix.** A failed dream never reaches step 19, and on the ORDINARY failure path `run-job` appends the failure record after the child has exited (**not always — see the next row; round 4 falsified the "only after exit" universal**) (`src/cli/run-job.js` l.1251 error watermark → l.1257 `failLoud` → the append inside it at l.715 → l.1269 throw). The only render the failing run could have made is the **conditional** early quarantine refresh at `dream.js` l.724, and that ran *before* the record existed. So **today, before this WP**, a dream-job failure's callout enters `digest.md` only at a LATER render — an attended `wienerdog sync`, or a later dream's render — which means the run that typically displays it is the successful one whose success is about to clear it: the user sees the warning **after the failure has already been resolved**. That after-the-fact display is precisely the off-by-one this WP removes. **After this WP** a dream-job failure's callout reaches the digest only via (a) an attended `sync` render or (b) a later dream's l.724 early quarantine render, which is conditional on `sel.newlyQuarantined`. **There is no finite bound on that and this spec claims none.** The durable, timely channels for a dream failure are unchanged: the fail-loud **email** and `alerts.jsonl` itself, read by `wienerdog alerts`. **Measured: `wienerdog doctor` surfaces alerts not at all** — `src/cli/doctor.js` contains **zero** occurrences of the string `alert` — so it is not one of those channels and must not be cited as one. Whether this is acceptable is owner item **O3**, which is unresolved |
+| Early render then failure | a run can render at l.724 and then throw — the no-complete-input throw at l.736-743, the step-8b containment halt, a brain failure. **Both renders that a failing run can reach are unfiltered**, so the genuine callout is on screen on every one of those paths, and AC6a-AC6b assert the digest's content there, not only `alerts.jsonl`'s |
+| **What reaches the digest for the dream's OWN failures** | **A pre-existing property of the product, measured in design round 2, which this WP does not create and does not fix.** A failed dream never reaches step 19, and on the ORDINARY failure path `run-job` appends the failure record after the child has exited (**not always — see the next row; round 4 falsified the "only after exit" universal**) (`src/cli/run-job.js` l.1251 error watermark → l.1257 `failLoud` → the append inside it at l.715 → l.1269 throw). The only render the failing run could have made is the **conditional** early quarantine refresh at `dream.js` l.724, and that ran *before* the record existed. So **today, before this WP**, a dream-job failure's callout enters `digest.md` only at a LATER render — an attended `wienerdog sync`, or a later dream's render — which means the run that typically displays it is the successful one whose success is about to clear it: the user sees the warning **after the failure has already been resolved**. That after-the-fact display is precisely the off-by-one this WP removes. **After this WP** a dream-job failure's callout reaches the digest only via (a) an attended `sync` render or (b) a later dream's l.724 early quarantine render, which is conditional on `sel.newlyQuarantined`. **There is no finite bound on that and this spec claims none.** The durable, timely channels for a dream failure are unchanged: the fail-loud **email** (best-effort — `failLoud` l.729 inside a `try`/`catch`, never retried) and `alerts.jsonl` itself, read by `wienerdog alerts`. **One qualifier, added in round 5:** a record stays in `alerts.jsonl` only until the job next succeeds, because `clearAlerts` (l.1204) deletes **every** record for that job by name alone — which is correct for an ordinary failure the success resolves, and is the crux of O3's survivor case where it is not. **Measured: `wienerdog doctor` surfaces alerts not at all** — `src/cli/doctor.js` contains **zero** occurrences of the string `alert` — so it is not one of those channels and must not be cited as one. Whether this is acceptable is owner item **O3**, which is unresolved |
 | Out-of-process failures, and **the "post-exit-only" claim is WITHDRAWN** | `run-job`'s B1 (success-marker refused, l.1188) and B2 (alert-cleanup refused, l.1204) are **instances of the row above, not separate narrowings**. Round 1's claim that B1/B2 were the SOLE narrowing, and round 1's claim that the exposure was finitely bounded by "the next unfiltered render", were withdrawn in round 2. **Round 4 withdraws one more: the claim that `run-job` records a failure only AFTER the child exits.** It does not. The watchdog's `reject` (`src/cli/run-job.js` l.1086) is raced against the child's close event at l.1090, so on a **timeout** the flow reaches the error watermark (l.1251) and `failLoud` (l.1257) **while the dream child may still be running** — confirmed by round 4's in-memory execution of those bodies, not by reading them. That surviving child holds a legitimately minted run token and can go on to reach step 19. **The record-date conjunct is what covers it**: the supervisor's record is dated after this process started, so it is shown. The surviving general rule, stated without the false universal: **anything `run-job` appends or leaves that this process cannot re-render is invisible in the digest until some later unfiltered render happens, and nothing guarantees one.** Coupling `run-job` to the renderer is rejected alternative A (WP-041 forbids it), so any real fix is supervisor-side and outside this WP |
 | **What this run's success actually establishes — and what it does NOT** | It establishes exactly one thing: **this dream process's own body ran to step 19 without throwing.** It does **not** establish that every record it omits describes a resolved condition. The measured counter-case is a **prior run's surviving process group**: `settleReaps` (`src/cli/run-job.js` l.362) examines only **the current run's** groups and token pidfile, so a later run's success proves nothing about a group an earlier run failed to reap — yet that earlier run's reap-failure record predates this process's start and is therefore omitted by the record-date conjunct. **This is not fixable with the record shape we have.** `{job, at, reason, log_hint}` carries no reason class and no run token (`src/core/alerts.js` l.46-50), and discriminating on the free-text `reason` would be brittle string-matching against a message this WP does not own — explicitly out of bounds. **Priced in O3, not fixed here**, and every claim of the form "an omitted callout describes a failure that has been resolved" is **WITHDRAWN** from this spec |
 | Never changed | `formatAlerts` and every byte of its template, including the "clears automatically" sentence (byte-frozen, WP-neutralize-alert-callout-rendering); `src/core/digest.js` in any respect; `src/core/alerts.js` and every writer of `alerts.jsonl` (`appendAlert`, `failLoud`, the launcher's `appendRefuseAlert`); `clearAlerts` and where it is called; the acknowledgement store and `addAcks`/`pruneAcksForJob`/`unacknowledgedAlerts`' behavior; `src/cli/sync.js`; `wienerdog alerts`; `schedule.json`; the fail-loud email; the dream's lock handling in every arm. `run-job` still writes no byte of `digest.md` |
@@ -418,7 +443,7 @@ what stops that recurring.
 | `dream-digest-filter-ignores-run-token` | **only** the `WIENERDOG_DREAM_RUN_TOKEN` conjunct | **AC5** — measured | `5` |
 | `dream-digest-filter-ignores-record-date` | **only** the record-date conjunct: records are omitted by name alone, without comparing `at` to this process's start instant | **AC6f** (the timeout survivor's record is hidden, and the missing/unparseable/equal-`at` edges stop being shown) | `6f` |
 | `dream-digest-filter-at-early-render` | **only** the placement rule: the quarantine-only refresh at l.724 passes the filtering value too | **AC6a AND AC6b** — measured | `6a` |
-| `dream-digest-no-recovery-render` | **only** the late-failure recovery: the post-step-19 throw path propagates without the unfiltered `regenerateDigest()` | **AC7a AND AC7b** — measured. The implementer extends this to whichever of AC7c-AC7e the mutation actually reddens, since AC7 now counts writes and covers both finalizers; the declared set must EQUAL the observed set | `7a` |
+| `dream-digest-filter-at-step-nineteen` | **only** the placement rule at the other end: step 19's call passes the filtering value, so the omission happens before the finalizers instead of after them | **AC7a, AC7b and AC7c** (each late-failure path now leaves a filtered digest) — the implementer declares the set actually observed, which must EQUAL the declared one | `7a` |
 
 `wp` is `WP-dream-digest-omits-own-job-alerts` for all seven.
 `scripts/red-proofs.js` requires the observed own-body failing set to **EQUAL**
@@ -439,8 +464,9 @@ commit exists in which they disagree — and any new mirror found in review is
 added here on the spot:
 
 - [ ] Deliverables-table cells (the `dream.js` row cites Table A's flag default,
-      filtering site and recovery render, the `alert-ack.js` row Table B, the
-      `.proofs.json` row Table C's count)
+      the unchanged step-19 call, the single post-`finally` filtering call and the
+      explicit absence of a recovery mechanism; the `alert-ack.js` row Table B;
+      the `.proofs.json` row Table C's count)
 - [ ] Acceptance criteria that assert Table A's principle, its omitted set, ALL
       THREE conjuncts of its resolution rule (the two run-level ones and the
       per-record date test, AC5/AC6f), its failure direction, its per-site
@@ -460,7 +486,10 @@ added here on the spot:
       **the watchdog race l.1086/l.1090 that falsifies "post-exit only", the
       `writeFilePrivate` rename-then-verify order (`private-fs.js` l.360/l.372),
       the record shape and ordering facts in `alerts.js` l.46/l.151/l.222, and the
-      try/finally topology at `dream.js` l.608/l.815/l.1206/l.1213**)
+      try/finally topology at `dream.js` l.608/l.815/l.1206/l.1213, the complete
+      exit inventory of `run()` that makes the last-statement placement
+      guard-free, `readAlerts`' fail-open at `alerts.js` l.157/l.200, and
+      `sync.js` holding no dream lock**)
 - [ ] The `why` field of each declaration in
       `tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json`
 - [ ] Operative prose steps that apply it — there are **twelve**, and they are
@@ -649,10 +678,32 @@ is *not* resolved:
   fixed.** It cannot be fixed with the record shape we have: `{job, at, reason,
   log_hint}` carries no reason class and no run token, and discriminating on the
   free-text `reason` would be brittle matching against a message this WP does not
-  own. So: after this WP, a live process group left behind by an earlier run can
-  have its callout removed from the digest by a later successful dream, while the
-  group is still alive. The record stays in `alerts.jsonl`, `wienerdog alerts`
-  still prints it, and the original fail-loud email was already sent.
+  own.
+
+  **Round 5 corrected the mitigation this item used to claim, and the correction
+  cuts both ways.** The old wording said the record stays available through
+  `alerts.jsonl` and `wienerdog alerts`. **It does not stay.** A later successful
+  supervised run calls `clearAlerts(paths, name)` (`src/cli/run-job.js` l.1204),
+  which deletes **every** record for that job (`src/core/alerts.js` l.222 filters
+  on `job` alone) **regardless of whether a prior run's group survived** — round 5
+  reproduced exactly that by executing `runJob`, `settleReaps` and `clearAlerts`.
+  And the fail-loud email is **best-effort**: `failLoud` calls `send` at l.729 inside its own
+  `try {} catch {}` (l.728-732), so delivery is attempted once and never retried
+  or reported, and the whole of `failLoud`'s body sits in a second
+  best-effort `catch` (l.733). So the honest
+  statement is that for this case **the callout is removed by this WP and the
+  record is removed by the existing supervisor moments later**.
+
+  **What is pre-existing, and it is most of it.** The deletion is today's
+  behaviour and is not this WP's doing. And the callout's disappearance is today's
+  behaviour too, one render later: today that later successful run renders the
+  survivor's callout at step 19, `clearAlerts` then deletes the record, and the
+  **next** render drops the callout anyway. **What this WP changes is one
+  render's worth of display** — roughly, one nightly cycle in which the callout
+  would have been visible before the record vanished — not whether the record
+  survives or whether the condition is ever surfaced again. Stated that way the
+  residual is real and much smaller than the old wording implied, and the old
+  wording's *mitigation* was the part that was wrong, not the risk.
 
 So the question is: **is (a) acceptable given the email channel, and is (b)
 acceptable as a priced residual?**
@@ -700,8 +751,9 @@ own migration question.
 - **RESUME from `9d1282cf`, do not start over** (branch
   `wp/dream-digest-omits-own-job-alerts`, on `origin`; suite 2767 pass / 2755 /
   0 fail / 12 skipped, lint clean). That work was dispatched against the spec as
-  it stood at `2d5e2465` and most of it survives. **What CHANGED relative to that
-  text, and nothing else has:**
+  it stood at `2d5e2465`. Much of it survives — the predicate, the conjuncts, the
+  per-call flag — but **the render placement is now different in shape, not just
+  in detail.** What CHANGED relative to `2d5e2465`, and nothing else has:
   1. **The filter gains a third conjunct, per RECORD** (Table A, "Record date").
      At `2d5e2465` a resolved job name omitted every record with that `job`. Now
      it omits only those whose `at` is **strictly earlier** than the process start
@@ -712,17 +764,26 @@ own migration question.
      not parsed order**, and `clearAlerts` (l.222) matches on `job` alone. That
      also settles what is NOT implementable here: anything keyed on a run token or
      a reason class, because neither is in the record.
-  2. **The arming order flips.** The current
-     `regenerateDigest({omitOwnJobAlerts:true}); restoreAfterStepNineteen = regenerateDigest;`
-     becomes the arming first, the render second — a render that publishes and
-     then throws must be covered (Table A, "Where recovery is armed").
-  3. **Recovery covers both finalizers**, which needs a second site, because a
-     throw from `finally A` never reaches `catch A` (same row).
-  4. **AC7 counts digest WRITES** rather than only asserting final content, and
-     **asserts nothing about the destination's contents after a failed recovery**
-     — the preservation guarantee is withdrawn.
-  5. **Table C's `expectRed` sets are now the measured ones**, including the
-     AC4+AC8 pair the implementation surfaced, plus one new declaration.
+  2. **The recovery mechanism comes OUT, entirely.** Delete the `catch A` and any
+     `finally A` wrapper you added, delete `restoreAfterStepNineteen` and its
+     arming statement, delete the stderr diagnostic and any write counting. There
+     is no recovery render in this design.
+  3. **Step 19 reverts to the UNFILTERED call** — byte-identical to `main`'s
+     `regenerateDigest();` at l.1182. Your `regenerateDigest({omitOwnJobAlerts:true})`
+     there is removed.
+  4. **One new call goes AFTER the outer `finally`** (after l.1222, before
+     l.1223), passing the filtering flag. To make it reachable, hoist one binding
+     before `try A` and assign it where `regenerateDigest` is defined — that is
+     the only plumbing (Table A, "The one real obstacle").
+  5. **AC7 is entirely different**: it no longer counts recovery attempts; it
+     proves the filtered render is NOT reached on six failure/early-return paths
+     and IS reached exactly once on full success, with step 19's write
+     byte-identical to `main`'s.
+  6. **Table C's `expectRed` sets are the measured ones**, including the AC4+AC8
+     pair your run surfaced; `dream-digest-no-recovery-render` is replaced by
+     `dream-digest-filter-at-step-nineteen`.
+  Your measured red sets for the five declarations that survive are unchanged and
+  are carried into Table C as measurements.
 - **Test seams that bracket the render exactly**, measured on the paused branch:
   `identityApprovals.readRegistry` (called before the alerts array is built) and
   `identityApprovals.approvalsMap` (called after it, before the atomic write),
@@ -773,20 +834,17 @@ own migration question.
   widen this WP to chase it — the honest fix is supervisor-side, rejected
   alternative A forbids the obvious one, and whether the change is acceptable at
   all is owner item **O3**.
-- **Named residual — after a failed recovery render the digest's contents are
-  not guaranteed either way** (Table A, "What a failed recovery leaves on disk").
-  Round 2's version of this bullet said the previous filtered bytes survive whole
-  because `writeFilePrivate` is atomic; **round 4 falsified that and it is
-  withdrawn.** `writeFilePrivate` renames at `src/core/private-fs.js` l.360 and
-  verifies destination identity afterwards, throwing `WD_F10_POST_RENAME` at
-  l.372, so a recovery render can fail **after publishing**. The two boundaries
-  are named in Table A and neither is promised: a pre-publication failure leaves
-  the destination unchanged, a post-rename verification failure may leave it
-  holding the new bytes or a concurrent writer's. This WP attempts no second
-  restore — retrying would be a mechanism guarding a mechanism, and the run is
-  already failing for its own reason — so the one fixed-text stderr line is the
-  entire remedy. AC7e pins the behaviour **without asserting any destination
-  state**.
+- **Named residual — the final filtered render can publish and then throw**
+  (Table A, "If the final filtered render itself throws", case (ii)). Rounds 2-4
+  built a recovery mechanism for the much larger class this used to be; **that
+  mechanism is removed** and the class has shrunk to one narrow case: the filtered
+  render renames successfully and `writeFilePrivate`'s post-rename identity check
+  then throws (`src/core/private-fs.js` l.360 → l.372), leaving the filtered bytes
+  on disk while the run exits non-zero. It needs a same-owner concurrent
+  substitution of the temp file to happen at all, it is the same shape as B1 (work
+  succeeded, run certified failed because a write was refused), and no recovery is
+  attempted. Everything else that used to be in this residual is gone by
+  construction: a failure anywhere else means the filtered render never ran.
 - **Named consequence — the managed-policy hook warning loses its banner**
   (Table A, last row). Today `run-job` l.953 appends it under the job's own name
   before the spawn and the job's success clears it, so on a managed machine its
@@ -910,33 +968,33 @@ Numbered so Table C's declarations and the verification steps can name them.
       record whose `at` is missing or unparseable is **shown**, and a record whose
       `at` equals the start instant is **shown**.
 
-- [ ] **AC7 — late-failure recovery: armed early, covering the finalizers,
-      exactly once, and asserting no preservation** (Table A, "Late in-process
-      failure" and "What a failed recovery leaves on disk"). Every sub-criterion
-      observes the actual **digest WRITES** the run performs — not only the final
-      file content — because two successful recovery renders satisfy a
-      content-only assertion and a catch that skips a finalizer also does.
-      **(AC7a)** a throw injected in the **post-render body** (steps 20-21):
-      exactly ONE unfiltered recovery write is observed, the digest on disk shows
-      the `dream` callout, and the ORIGINAL error propagates.
-      **(AC7b)** a throw injected in **workspace teardown** —
-      `destroyWorkspace` at `src/cli/dream.js` l.1211, inside the `finally` at
-      l.1206-1212: same three assertions. A catch that covers only steps 20-21
-      must fail this.
-      **(AC7c)** a throw injected in **scratch cleanup** — `cleanScratch` at
-      l.1220, inside the outer `finally` at l.1213-1222: same three assertions.
-      **(AC7d)** a throw injected in **the filtered step-19 render itself**,
-      including the post-publication shape (`writeFilePrivate` renamed at
-      `private-fs.js` l.360, then threw `WD_F10_POST_RENAME` at l.372): recovery
-      is still attempted exactly once, proving it was **armed before** the
-      filtered render rather than after it returned.
-      **(AC7e)** a throw injected in the **recovery render itself**, at BOTH
-      boundaries — pre-publication (before its rename) and post-rename
-      verification: in each, the ORIGINAL error is the one that propagates, the
-      single fixed-text stderr diagnostic is printed exactly once, and **exactly
-      one** recovery attempt was made (no retry). **This criterion asserts
-      NOTHING about the destination's contents** — round 2's preservation
-      guarantee is withdrawn (Table A) and no criterion may re-encode it.
+- [ ] **AC7 — the filtered render is the last statement, and only a fully
+      successful run reaches it** (Table A, "Where applied" / "When it may omit"
+      / "Why NO guard is needed"). Each sub-criterion asserts the CONTENT of
+      `state/digest.md` at the end of the run, and the ones that say "not
+      reached" assert the digest still carries the own-job callout.
+      **NOT reached** — inject a failure at each of these and assert the digest
+      is the unfiltered one step 19 (or l.724) left:
+      **(AC7a)** the body throws after step 19 (steps 20-21);
+      **(AC7b)** `destroyWorkspace` throws (`src/cli/dream.js` l.1211, inside
+      `finally B` at l.1206-1212);
+      **(AC7c)** `cleanScratch` or `releaseLock` throws (l.1220 / l.1221, inside
+      `finally A` at l.1213-1222);
+      **(AC7d)** the run returns early — *nothing new to dream* (l.756), the
+      dry-run return (l.767), and the declined-lock return (l.602): in each the
+      filtered render performs **no digest write at all**.
+      **Reached** —
+      **(AC7e)** on a fully successful supervised run the filtered render happens
+      **exactly once**: observe the actual digest WRITES and assert there are
+      exactly two for the run, the first byte-identical to what this same fixture
+      produces on `main` (Table A, "Two digest writes per fully successful
+      supervised run") and the second the filtered one.
+      **(AC7f)** a compound failure — the body AND a finalizer both throw —
+      still performs **no** filtered write, and the error that propagates is the
+      one the unmodified code would propagate. This case exists because round 5
+      found that a two-site recovery mechanism could fire twice and swallow the
+      first error; the last-statement design has no second site to disagree with,
+      and this criterion is what proves that claim rather than asserting it.
       **Verified by V1.**
 - [ ] **AC8 — nothing throws out of the filter** (Table A, failure direction): a
       run whose config is missing or unreadable still renders a digest, and
@@ -998,7 +1056,7 @@ test -z "$(git diff --numstat "$MB" -- src/core/digest.js)"
 node -e 'const d=require("./tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json");
 if (d.suite !== "tests/unit/dream-pipeline.test.js") { console.log("FAIL: suite is " + d.suite); process.exit(1); }
 const ids = d.proofs.filter((p) => p.wp === "WP-dream-digest-omits-own-job-alerts").map((p) => p.id).sort();
-const want = ["dream-digest-filter-always-on", "dream-digest-filter-at-early-render", "dream-digest-filter-ignores-config", "dream-digest-filter-ignores-record-date", "dream-digest-filter-ignores-run-token", "dream-digest-filter-removed", "dream-digest-no-recovery-render"];
+const want = ["dream-digest-filter-always-on", "dream-digest-filter-at-early-render", "dream-digest-filter-at-step-nineteen", "dream-digest-filter-ignores-config", "dream-digest-filter-ignores-record-date", "dream-digest-filter-ignores-run-token", "dream-digest-filter-removed"];
 console.log(ids.join(","));
 process.exit(JSON.stringify(ids) === JSON.stringify(want) ? 0 : 1)'
 
@@ -1060,6 +1118,20 @@ node scripts/boundary-check.js docs/specs/WP-dream-digest-omits-own-job-alerts.m
 - The containment-probe stall that produced the observed failure, and the
   question of whether the probe should retry once: stated in full as owner item
   **O2** above, and listed in Out of scope. Not restated here.
+- **`readAlerts` fails open to an alert-free digest, on every render, today.**
+  `src/core/alerts.js` `readAlerts` returns `[]` both when the file cannot be
+  opened (l.157) and when `fstat`/`read` fails after opening (l.200,
+  `catch { return []; }`). A transient read error therefore makes ANY render —
+  step 19's, `sync`'s, and now the final filtered one — publish a digest with no
+  callouts for any job, while every record remains stored and `wienerdog alerts`
+  still prints them. Design round 5 reproduced this by executing the production
+  reader, the regeneration closure and `formatAlerts` together. **Pre-existing,
+  not introduced here, and deliberately not fixed here**: making the reader fail
+  closed changes its contract and every caller's behaviour, and the digest has no
+  way today to say "the alert list could not be read". This WP's only effect on it
+  is to expose it on one additional render per fully successful supervised run.
+  A separate WP should decide whether `readAlerts` should distinguish "no alerts"
+  from "could not read alerts", and what the digest should say in the second case.
 
 ## Definition of done
 

@@ -313,3 +313,116 @@ and **O3's premise changed materially** — the rulings record
 (`2026-09-17-owner-rulings-felho-integration-3.md`) carries the pre-round-4
 wording and was deliberately not edited by this pass, so the spec's O3 is the
 current text and the two differ by design.
+
+## Round 5 — the mechanism is replaced, not patched again
+
+| Field | Value |
+|-------|-------|
+| Backend / model | Codex plugin 1.0.6 adversarial-review, **`gpt-6-astra`** (same reviewer as round 4) |
+| Tip reviewed | `7bee5394d0f8e23ff8dc7076694c03ea68d05646` |
+| Base | `2d5e24654c501b182d61eb28518ca572712712b6` |
+| Raw output | `docs/specs/logbook/2026-09-17-dream-digest-omits-design-r5-astra-raw.json`, committed in **`c359a502`** before adjudication |
+| Verdict | `needs-attention`, 2 product + 1 machinery |
+| Confirmed fixed | the ordinary post-start timeout case (A-1's first half) and A-2's publication boundary; key source citations resolve |
+| What it EXECUTED | production `runJob`, `settleReaps`, `failLoud`, `clearAlerts`, `readAlerts`, `regenerateDigest`, `formatAlerts` and `writeFilePrivate` bodies with mocked I/O; timestamp predicates; **and a recovery mutant wrapped around the production finalizer bodies**. No implementation-branch review, unit suite, lint or RED proofs; no files changed |
+
+### THE DESIGN DECISION — Option L, and why the recovery mechanism is gone
+
+**Two of round 5's three findings, and most of rounds 2-5, were about ONE
+mechanism: the unfiltered recovery re-render introduced by round 1's F2
+disposition.** Its cost over four rounds: two call sites, an exactly-once
+guarantee spanning them, arming before the render, a fixed-text stderr
+diagnostic, a withdrawn preservation guarantee, compound-failure handling, and
+finally a conservative alert-set fallback — because R5-1 showed the recovery
+render itself can **publish an alert-free digest and erase other jobs' callouts**
+when `readAlerts` fails silently. A mechanism that grows its own surface every
+round is the treadmill condition `docs/runbooks/codex-review.md` names, and its
+repeat-kind rule says the next step is a design question, not another patch.
+
+**The replacement is Option L: the filtered render becomes the LAST STATEMENT of
+`run()`.** Step 19 reverts to `main`'s unfiltered call; a single filtered call is
+added after the outer `try`/`finally` closes.
+
+**I verified the topology by reading the whole of `run()` rather than accepting
+it**, and the result is stronger than the option required — **no guard is
+needed**. Complete exit inventory on this tree: `throw` l.573 and l.596 and
+`return` l.602 all sit **before** `try A` opens at l.608; inside it there are
+exactly three explicit exits — `throw` l.742, `return` l.756, `return` l.767 —
+plus throws from deeper code. A `return` inside a `try` runs the `finally` and
+returns from the function; **it does not resume after the block**. And the last
+statement of `try A`'s body is the inner `try`/`finally`, whose own last
+statement is step 21's summary. So reaching the end of `try A` **is** full
+success, and a statement placed after `finally A` (l.1222) and before `run()`'s
+brace (l.1223) is reached on that path and no other. A success boolean would be
+redundant.
+
+**The one real obstacle is scope, not control flow**, and it is worth recording
+because it is the only reason L is not a one-line change: `regenerateDigest`
+(l.641) and `ledger` (l.618) are both declared **inside** `try A`, so the final
+statement cannot see them. One hoisted binding fixes it. `paths`, `vaultDir` and
+`layout` are already outside (l.564, l.581, l.582).
+
+**Option D** — keep the single filtered render at step 19 and simply delete the
+recovery, accepting that a post-step-19 failure leaves the digest without its
+pre-start own-job callouts — **was not needed**: L is implementable inside the
+existing Deliverables with one hoisted binding and one new call, and it is
+strictly better, because under D a run that fails in `destroyWorkspace` or
+`cleanScratch` still ships a filtered digest.
+
+**The reversal, recorded honestly.** Round 1's F2 disposition explicitly asked
+for the recovery re-render, and I specified it. Rounds 2, 4 and 5 each found a
+further defect in it. Five rounds of evidence say the mechanism was the wrong
+shape from the start: the right question in round 1 was not "how do we undo the
+filtered render when the run later fails?" but "why is the filtered render
+happening before we know the run succeeded?" — and the answer to the second
+question deletes the first. That is the repeat-kind rule working as intended,
+two rounds later than it should have fired.
+
+### Findings, bands, weight, dispositions
+
+| # | Band | Weight | Finding | Disposition | Rationale and what changed |
+|---|------|--------|---------|-------------|----------------------------|
+| R5-1 | **A** | **HEAVY** | Recovery can silently erase unrelated job alerts: `readAlerts` returns `[]` on open/fstat/read errors (`alerts.js` l.157, l.200), so after a successful filtered render a late failure plus a transient read error makes recovery publish an **alert-free** digest — no throw, no diagnostic — losing another job's unresolved callout while both records remain stored. Reproduced by executing the production reader, the regeneration closure and `formatAlerts` | **FIXED BY REMOVAL** | The reviewer's own recommendation was to add a conservative pre-filter alert-set fallback and merge fresh records safely — i.e. **more machinery on the mechanism that keeps needing machinery**. Option L deletes the recovery render, and with it this entire failure mode. The **underlying** property — `readAlerts` fails open on every render, today included — is **pre-existing, stated in Table A, and routed under Discovered** with a note that fixing it changes `readAlerts`' contract and every caller, which is a different WP |
+| R5-2 | **B** | **HEAVY** (it is O3's substance) | O3 priced the survivor residual on a mitigation that does not exist: a later successful supervisor calls `clearAlerts` (`run-job.js` l.1204), deleting **every** record for the job regardless of whether a prior run's group survives (`alerts.js` l.222 filters on `job` alone); and the fail-loud email is best-effort (`failLoud` l.729 inside its own `try`/`catch` at l.728-732). Reproduced by executing `runJob`, `settleReaps` and `clearAlerts` | **FIX THE CLAIM** | O3 now says plainly that for the survivor case **the callout is removed by this WP and the record is removed by the existing supervisor moments later**, and that the email is not guaranteed. It also separates what is pre-existing, which is most of it: the deletion is today's behaviour, and the callout's disappearance is today's behaviour one render later — today the survivor's callout renders at step 19, `clearAlerts` deletes the record, and the next render drops the callout anyway. **What this WP changes is one render's worth of display**, not whether the record survives. The residual is real, smaller than the old wording implied, and it was the *mitigation* that was wrong rather than the risk |
+| R5-3 | **B** | LIGHT (machinery) | Isolated AC7 injections do not prove the two recovery sites cooperate: a mutant with independent recovery in `catch A` and `finally A` satisfies each isolated case but recovers **twice** on a body+scratch compound failure and propagates the scratch error instead of the body's. Reproduced around the production finalizer bodies | **MOOT under L, replaced** | There is no second site to disagree with, so the class is gone by construction rather than by assertion. AC7a-AC7e and the `dream-digest-no-recovery-render` declaration are deleted. The replacement AC7a-AC7f proves the filtered render is **not reached** when the body throws, when `destroyWorkspace` throws, when `cleanScratch`/`releaseLock` throws, and on the idle / dry-run / declined-lock returns; **is reached exactly once** on full success with step 19's write byte-identical to `main`'s; and **AC7f keeps the compound case** the reviewer built the mutant for, because "no second site" is a claim that should be proven, not asserted. The new declaration `dream-digest-filter-at-step-nineteen` mutates the placement at the other end |
+
+### The writer inventory, completed as the reviewer asked
+
+Round 4's inventory had four writers; the reviewer named three more. All seven
+are now in Table A with shown/omitted **and** with the distinction that matters:
+a record appended *after* the final render is not filtered because it does not
+exist yet, which is different from being omitted. Added: **`run-job.js` l.911**
+(TCC / protected-folder refusal — omitted at a later dream's render, and deleted
+by that same success's `clearAlerts`), **l.1194 (B1)** (appended after the child
+exits, therefore after the final render — not present, not filtered), and
+**l.1384 / l.1386 / l.1388** (the three named catch-up authorization refusals —
+same shape as the TCC case). **B2 (l.1204) deliberately skips the append**, so it
+contributes no record.
+
+### Mechanical re-verification
+
+| Gate | absent | violating | compliant |
+|------|--------|-----------|-----------|
+| V3 (comment-only diff shape) | guarded by `test -f` | **rc 1** | **rc 0** |
+| V4a / V4b | **rc 1** (V4b, missing path) | **rc 1** | **rc 0** |
+| V5 (`digest.js` unmoved) | — | — | **rc 0** |
+| V6 (declaration ids, still **seven**, one swapped) | **rc 1** | **rc 1** (renamed id) **and rc 1** on the round-4 id list | **rc 0** |
+
+V6's red against the *round-4* list is the useful one: the swap of
+`dream-digest-no-recovery-render` for `dream-digest-filter-at-step-nineteen` is
+exactly the kind of change a mirror gate exists to catch, and it caught it.
+
+### Lesson, carried forward from round 4 and sharpened
+
+Round 4's lesson was *reading is not evidence*. Round 5 adds the other half:
+**when a mechanism generates a finding every round, the finding is the
+mechanism.** Four rounds of correct, well-dispositioned patches to the recovery
+render produced a mechanism with two sites, an exactly-once guarantee, a
+diagnostic, a withdrawn guarantee and a required fallback — and a simpler design
+that had been available since round 1 removed all of it. The runbook's
+repeat-kind rule is written for exactly this and would have saved three rounds if
+it had been applied at round 2 rather than round 5.
+
+**Nothing in this round was ruled on by the owner.** O1, O2 and O3 remain open;
+O3's text changed again and the rulings record still carries the pre-round-4
+wording, deliberately unedited.
