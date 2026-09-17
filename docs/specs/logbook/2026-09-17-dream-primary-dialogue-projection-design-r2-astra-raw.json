@@ -1,0 +1,53 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b104-6572-7b52-9f57-620d5fb5c45a",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "baseRef": "a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: P-2 still omits structurally unclassifiable records. P-1 preserves the current prompt rule and honestly prices its residual, but contradictory mirrors remain. Verification machinery also permits a double-read implementation.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Valid JSON without type discriminators escapes the gap rule",
+        "body": "A5a equates parser rejection with successful classification. Executed both parsers with a tool record missing its top-level type, and Codex with response_item.payload missing type: each silently discarded the record, retained the following assistant, and returned ok, zero oversized records and truncated false. These paths pass JSON.parse but cannot determine the record's type. Under A5a's exhaustive exclusions, they need not taint the subsequent assistant. Structurally damaged or changed transcript records can therefore erase external provenance while the new field claims no preceding gap.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 353,
+        "line_end": 353,
+        "confidence": 0.97,
+        "recommendation": "Distinguish positively classified exclusions from missing, malformed or unrecognized classification fields at the record, payload and content-block levels. Notify the observer of unclassifiable records without changing default parser output. Add fixtures asserting that subsequent retained assistant messages are tainted."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: round-one corrections did not reach every mirror",
+        "body": "The logbook still defines false for user records as requiring no preceding tool output or gap, directly contradicting A5(a), A5b and AC3a. Thus P-1's promised all-surface correction is incomplete. Separately, projection B4 at line 364 and owner item 1 at lines 647–648 still promise unchanged admission despite this logbook's explicit correction to byte-policy equivalence. These are conflicting implementation and review contracts, not objections to the acknowledged residuals.",
+        "file": "docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md",
+        "line_start": 120,
+        "line_end": 124,
+        "confidence": 1,
+        "recommendation": "Replace the logbook definition with A5b's role-specific wording and update the projection's admission claims to byte-policy equivalence, explicitly allowing deadline-driven changes."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: budget equality does not prove one bounded read",
+        "body": "AC4a checks only the caller's budget delta. Executed the real parser once with that budget and again with a fresh budget: both the single-read and double-read variants debited 46 bytes from the caller, while opening the transcript once versus twice. A natural implementation that independently obtains raw and projected extracts can therefore pass this assertion while doubling intake work and potentially observing different file contents.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 572,
+        "line_end": 574,
+        "confidence": 1,
+        "recommendation": "Keep debit equality, and independently assert one streamLines invocation or one transcript open with the expected total read bytes. Require a deliberate second-read mutation to fail."
+      }
+    ],
+    "next_steps": [
+      "Executed actual parseWithOutcome, both harness parsers and streamLines using synthetic bytes through an in-memory filesystem shim: tool→quoted-user sequences, G1–G4, all G5 outcomes, and missing-discriminator cases. The line-limit test lowered MAX_LINES in memory.",
+      "Also executed the 566-byte worked example, three existing golden comparisons, wrapper equality, character/message caps, redaction across character 4000, and the actual invocationWindowTainted function on raw versus text-free timelines.",
+      "Read stream.js, claude.js and codex.js end to end. The cited skill lines 101–105 confirm today's role-based prompt rule; the inspected code citations resolve on this tree. P-2's depth-drop correction is substantive but incomplete.",
+      "The proposed projection and observer do not exist yet; their behavior was assessed as a contract. No full test suite or private-transcript sampling was run, and no files were changed."
+    ]
+  }
+}
