@@ -43,6 +43,22 @@ resuming it.
 
 ## The remaining work, in recommended order
 
+> **Status pass, 2026-09-17 #12 (day session — third fork integration; owner-authorized merges).**
+> Measured on `main` at `b4af715e`, not transcribed:
+>
+> | # | Spec | State | Landed in | Note |
+> |---|------|-------|-----------|------|
+> | fork | `WP-dream-live-owner-lock` | **Done** | PR #245 (`b4af715e`), fork PR #66 | An expired dream lock is no longer stealable while its recorded local PID is alive; unparseable or foreign-host ownership fails loudly. **Recorded residual:** an expired lock whose PID is reused by an unrelated live process returns `busy`, which exits 0 — a silent stop. Routed to `WP-dream-lock-stale-owner-loud`. |
+> | fork | `WP-dream-filtered-input-budget` | **Done** | PR #245 (`b4af715e`), fork PR #67 | Whole filtered extracts admitted newest-first within X; equal shares and suffix truncation retired; five disjoint exclusion arms; a run that admits nothing but excluded something now throws. Recorded: default X is below the parser's worst-case single extract; oversized sessions have no durable surface. |
+> | fork | `WP-dream-primary-dialogue-filter` | **Draft, arrived** | PR #245 (spec + design-review logbook only) | Held for maintainer feedback. Adopted direction: split into a deterministic primary-dialogue projection (Tables A+B) and a model relevance stage (Tables C+D), the second gated on an offline evaluation of the first. |
+> | stale | `WP-dream-report-run-skips` | **Ready → to be returned to Draft** | — | Written against the three-arm collector; cites deleted lines and `sel.truncated`, now always `[]`. wd-architect re-derivation in flight. |
+>
+> **Rulings of the session** (verbatim in `docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`): `OWNER-RATIFIED` and `OWNER-SIGNED` are equivalent markers, so the fork's three ADR amendments stand as merged; the proposed order below is adopted; merges authorized for this session only.
+>
+> **Merged tree:** tests 2754 / pass 2742 / fail 0 / skipped 12; lint passed; CI seven checks pass on #245.
+>
+> **Next in the queue:** (1) `WP-dream-digest-omits-own-job-alerts` — re-derive against post-#245 `main`, design gate, Ready, implement; (2) `WP-dream-lock-stale-owner-loud` — new, drafted in parallel; **no npm release carrying the new lock ships without it**; (3) `WP-dream-report-run-skips` re-derivation, then implementation; (4) the primary-dialogue split; (5) the parallel lane with no dream-file overlap (`WP-dev-descriptor-no-tree-hash`, `WP-secret-sink-wiring-probes`, `WP-ep2-retention-prune-timing-test`, `WP-broker-e2e-terminal-auth`); (6) the stubs; `WP-a10-windows-reap` stays blocked on a Windows runner. Items 1–4 all edit `src/cli/dream.js` and merge sequentially. **Noted, not acted on:** `WP-contract-reference-tables` is `In-Review` although its implementing commit `609d96b0` is on `main` with no traceable PR.
+>
 > **Status pass, 2026-09-10 #11 (short day session — ops incident + one spec filed; no merges).**
 > Measured on `main` at `5cb4e49b`, not transcribed:
 >
