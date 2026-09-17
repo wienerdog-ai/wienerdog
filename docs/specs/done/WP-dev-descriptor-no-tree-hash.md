@@ -1,7 +1,7 @@
 ---
 id: WP-dev-descriptor-no-tree-hash
 title: Stop content-addressing the live checkout in the dev job descriptor
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -10,6 +10,27 @@ epic: audit-a7
 ---
 
 # WP-dev-descriptor-no-tree-hash: the dev descriptor stops hashing a live tree
+
+> **Record, 2026-09-17 (post-merge) — no defect in what shipped.**
+>
+> Implemented in PR #252 (merge `e545033c`, 2026-09-17), tip `c6f46df5`. Both
+> PR gates on that tip: wd-reviewer APPROVE (every check executed, including
+> the enabled a7-integrity dev-fire scenarios and an independent replay of
+> mutation 1 that reddened AC1, AC3 and AC4); Codex plugin `review` on
+> `gpt-6-astra` clean, no findings (it disclosed that filesystem-writing tests
+> could not run in its read-only sandbox). CI seven checks pass. Suite 2758 /
+> 2746 / 0 / 12; lint passed; red-proofs RUN: PROVEN, 69 declared.
+>
+> **Recorded, not errata:** (i) `tests/unit/descriptor.test.js:332`
+> re-requires `node:fs` though the file already holds the same module object
+> — harmless; (ii) the implementer found and fixed a bug in its own AC3 test
+> during hand-verification: on macOS `/var` symlinks to `/private/var`, so an
+> un-realpath'd checkout path never matched the realpath'd read paths; (iii)
+> each RED declaration carries a `testNamePattern` because mutation 1 also
+> reddens AC3 and AC4 — confirmed faithful by the reviewer's independent
+> replay.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
