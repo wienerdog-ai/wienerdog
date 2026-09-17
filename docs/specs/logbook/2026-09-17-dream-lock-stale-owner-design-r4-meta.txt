@@ -1,0 +1,5 @@
+gate: design  name: lock-r4
+tip: b31c03ac3b38d8ba2e092b0adedbfbf2da8807a9
+base: 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c
+codex exit: 0
+porcelain: IDENTICAL before/after

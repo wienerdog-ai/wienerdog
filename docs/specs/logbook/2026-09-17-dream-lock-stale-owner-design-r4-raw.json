@@ -1,0 +1,43 @@
+{
+  "reviewed_sha": "b31c03ac3b38d8ba2e092b0adedbfbf2da8807a9",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch. R3-A1 is substantively fixed: the operative contract withdraws record-identity claims and truthfully prices deletion as resting on a fallible human check. The old 30-hour/two-night bound remains only in explicitly superseded historical text. R3-B1 is not fully fixed because 54 hours is not a true maximum for a local-time daily schedule across daylight-saving changes. No separate verification-machinery finding.",
+  "findings": [
+    {
+      "id": "R4-B1",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 169,
+      "line_end": 186,
+      "confidence": 0.99,
+      "title": "The claimed 54-hour maximum assumes every local schedule day is 24 hours",
+      "body": "The 03:30 schedule is local time, so its sampling interval can be 25 hours across a fall-back transition. On a continuously available Europe/Budapest host, a catch-up at 21:30 CEST on 2026-10-22 can accept a deadline exactly 24 hours ahead; the 2026-10-24 03:30 run is exactly six hours stale and remains quiet, while the next 03:30 occurs after the UTC offset changes and is 55 elapsed hours after the first observation. Thus the alert arrives at 55 hours, even before considering machine downtime. The repeated claim that 54 hours is the true maximum is false in the timeline, mirrored-surface rule, out-of-scope test description, ADR amendment, and round-3 disposition.",
+      "recommendation": "Either qualify 54 hours as applying only while the host remains available and its UTC offset is stable, or specify a schedule-aware bound that accounts for local-clock transitions. Update every registered mirror and add arithmetic verification covering a fall-back transition."
+    }
+  ],
+  "routed_scope_objections": [],
+  "executed_checks": [
+    {
+      "command": "git diff 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD",
+      "result": "EXECUTED, exit 0. The diff contained 1,137 lines; review was restricted to the two requested design documents, prior raw artifacts, and cited source/test regions."
+    },
+    {
+      "command": "git rev-parse HEAD; git merge-base HEAD 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c; static nl/sed/rg reads",
+      "result": "EXECUTED, exit 0. HEAD and merge base matched the requested SHAs. Every explicit file:line citation checked resolves on this tree. No excluded marketing, research, or userreports content was read."
+    },
+    {
+      "command": "Node schedule arithmetic under a fixed offset and TZ=Europe/Budapest",
+      "result": "EXECUTED, exit 0. The stated ordinary alignment produced 54 hours. The 2026 fall-back alignment remained quiet at exactly six hours stale and first became loud after 55 elapsed hours."
+    },
+    {
+      "command": "git diff --check 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD; git status --porcelain=v1",
+      "result": "EXECUTED individually, both exit 0. The checkout remained unmodified."
+    },
+    {
+      "command": "npm test; targeted tests; npm run lint; red-proofs",
+      "result": "NOT RUN. This was a read-only review of an unimplemented design-only branch; implementation and future RED-proof files do not yet exist."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}
