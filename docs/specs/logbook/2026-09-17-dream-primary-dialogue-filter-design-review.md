@@ -116,3 +116,26 @@ claimed green. AC5 requires an authorized implementation and offline model
 comparison; it was not run. No real model, live ledger, vault, installation,
 scheduler, or upstream remote was changed. The specification does not contain
 numerical source-line ranges requiring endpoint checks.
+
+## Round zero: fresh template conformance
+
+Reviewed revision: `ff78e2f024db99724754f52415fd14f23c55b9d5`.
+Raw output: [conformance report](2026-09-17-dream-primary-filter-conformance-raw.md).
+Raw-introduction commit: `3832b3b23bfbff78590b8a7bdf89627796cfb4de`.
+The raw artifact was committed before the orchestrator opened it. The reviewer
+received exactly the draft and template, took no part in drafting, and verified
+empty status before/after in the isolated checkout.
+
+Every required template section is present. Two explicit within-section
+requirements need correction before the independent round:
+
+| Finding | Band | Weight | Proposed disposition | Reason |
+|---|---|---|---|---|
+| TC-01: full generated-file example absent | C | LIGHT | fix | Add a minimal synthetic extract example, mirroring existing proposed contracts |
+| TC-02: mirror maintenance discipline implicit | C | LIGHT | fix | State per-table mapping, same-commit updates, and immediate new-mirror registration |
+
+The wd-architect applied both document-only corrections. The orchestrator
+verified the full synthetic JSON/JSONL example parses, checked the A/B/C/D mirror
+mapping and same-commit/new-mirror instructions, and reran markdownlint (0
+errors) and `git diff --check` (exit 0). Neither correction changes product
+behavior or authorizes implementation. Round zero is complete.

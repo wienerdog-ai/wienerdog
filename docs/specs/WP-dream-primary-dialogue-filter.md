@@ -129,6 +129,39 @@ Scratch JSON remains an internal ephemeral representation, not a new public
 file format. Its exact formatting may follow the existing writer; semantic
 fields and byte accounting are governed by Tables A–B.
 
+For example, the synthetic source `/samples/rollout-demo.jsonl` contains:
+
+```jsonl
+{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep explanations concise."}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+```
+
+Table A retains the unanswered user request as block `b0`. If the Table C result
+is `{"keep":["b0"]}`, the complete generated `codex-demo.json` scratch file is
+the following (the existing writer adds no trailing newline):
+
+```json
+{
+  "harness": "codex",
+  "session_id": "demo",
+  "started": null,
+  "cwd": null,
+  "source_path": "/samples/rollout-demo.jsonl",
+  "truncated": false,
+  "messages": [
+    {
+      "role": "user",
+      "text": "Keep explanations concise.",
+      "ts": null,
+      "derived_from_untrusted": false
+    }
+  ]
+}
+```
+
+This is a mirror of Tables A–C, not a new public serialization contract or a
+requirement for a particular test fixture.
+
 ## Contract reference
 
 ADR-0031 applies: interface shape, structured parsing, failure behavior, and
@@ -182,6 +215,18 @@ authority boundaries change. The tables below own their facts.
 | D6 | Preview and opt-out failures | `dream --dry-run` performs no model calls and describes that primary input would be filtered before consolidation; it does not claim a measured retention amount. Idle/no-input paths spawn neither filter nor consolidation. Unsupported filter/model behavior follows C6 while source projection remains in effect. |
 
 ### Mirrored Surface Checklist
+
+The mapping below registers the surfaces for each canonical table. If a table
+changes, update it and every affected mirror **in the same commit**. Register
+any newly discovered mirror immediately and update it in that same pass; do not
+leave an unregistered restatement for a later review.
+
+| Canonical table | Registered mirrors |
+|-----------------|--------------------|
+| A | Context; Current state; A-referencing Deliverables cells; Exact contracts including the complete scratch-file example; Implementation notes; security checklist; AC1 and AC5; verification and offline evaluation; Out of scope |
+| B | Context; Current state; B-referencing Deliverables cells; Exact contracts including the complete scratch-file example; Implementation notes; security checklist; AC2 and idempotency; verification; Out of scope |
+| C | Context; C-referencing Deliverables cells; Exact contracts including both JSON examples; Implementation notes; security checklist; AC3 and AC5; verification and offline evaluation; Out of scope |
+| D | Context and its Draft hold; Current state; D-referencing Deliverables cells; Exact contracts' shared table reference; Implementation notes; security checklist; AC4 and idempotency; verification; Out of scope; Definition of done |
 
 - [ ] Context and Current state: historical facts are distinct from Tables A–D's proposed behavior.
 - [ ] Deliverables: notes defer to the cited tables; adding a required edited file updates this boundary first.
