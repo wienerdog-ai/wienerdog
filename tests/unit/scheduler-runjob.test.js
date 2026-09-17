@@ -3024,3 +3024,102 @@ test(
     assert.equal(leftover.length, 1, 'the survivor pidfile is RETAINED — an explicit false composes with :1106-1108 exactly like a throw does');
   }
 );
+
+// ---- WP-dream-digest-omits-own-job-alerts: the out-of-process class ---------
+//
+// Table A, "Out-of-process failures are ONE class": anything run-job appends or
+// leaves AFTER the child has exited is invisible in state/digest.md until some
+// later unfiltered render, and nothing guarantees one. These three cases PIN
+// that pre-existing property of the product — they assert no improvement, and
+// they are here so a later change to it cannot pass unnoticed. run-job writes
+// no byte of digest.md (WP-041), so whatever the child left is what stands.
+
+/** The alert callout for `job`, as the digest renderer writes it. */
+const OWNJOB_CALLOUT = (job) => `> [!warning] Wienerdog: the "${job}" job has failed.`;
+
+/** A dream child that leaves behind the digest ITS OWN last render published —
+ *  filtered, i.e. carrying another job's callout but not its own. Everything
+ *  run-job does below happens after this child has exited. */
+function writeDigestingChild(root, name, exitCode) {
+  return writeScript(root, name, [
+    '#!/bin/sh',
+    `printf '%s\\n' ${JSON.stringify(OWNJOB_CALLOUT('daily-digest'))} > "$WIENERDOG_HOME/state/digest.md"`,
+    `exit ${exitCode}`,
+  ]);
+}
+
+/** One unresolved record for `job`, as a previous failLoud would have left it. */
+function seedAlert(paths, job) {
+  appendAlert(paths, {
+    job, at: new Date().toISOString(), reason: `job "${job}" exited 1`, log_hint: `~/.wienerdog/logs/${job}/`,
+  });
+}
+
+test('scheduler-runjob: OWNJOB-AC6c — B1 success-marker-refused: the record is appended and no render follows it', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  seedAlert(paths, 'dream');
+  const fake = writeDigestingChild(root, 'ok-digest.sh', 0);
+  fs.mkdirSync(path.join(paths.state, 'schedule.json')); // forces the B1 throw
+
+  await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert: () => ({ status: 0 }), loader: noopLoader }),
+      (e) => e.message === CANONICAL_B1_REASON
+    )
+  );
+
+  const reasons = readAlerts(paths).map((a) => a.reason);
+  assert.ok(reasons.includes(CANONICAL_B1_REASON), 'the new success-marker-refused record is on file');
+  const digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
+  assert.ok(!digest.includes(OWNJOB_CALLOUT('dream')), 'the child rendered before the record existed, and run-job renders nothing');
+  assert.ok(digest.includes(OWNJOB_CALLOUT('daily-digest')), 'and the other job\'s callout is untouched');
+});
+
+test('scheduler-runjob: OWNJOB-AC6d — B2 alert-cleanup-refused: the earlier records survive and no render follows', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeDigestingChild(root, 'ok-digest.sh', 0);
+  // alerts.jsonl is a SYMLINK, which writeFilePrivate refuses — so clearAlerts'
+  // rewrite throws with the dream's own record still in the file.
+  const outside = path.join(root, 'OUTSIDE');
+  fs.writeFileSync(
+    outside,
+    `${JSON.stringify({ job: 'dream', at: new Date().toISOString(), reason: 'job "dream" exited 1', log_hint: '~/.wienerdog/logs/dream/' })}\n`
+      + `${JSON.stringify({ job: 'other', at: new Date().toISOString(), reason: 'x', log_hint: 'y' })}\n`
+  );
+  fs.symlinkSync(outside, path.join(paths.state, ALERTS_FILE));
+
+  await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert: () => ({ status: 0 }), loader: noopLoader }),
+      (e) => e.message === CANONICAL_B2_REASON
+    )
+  );
+
+  assert.ok(readAlerts(paths).some((a) => a.job === 'dream'), 'the job\'s earlier records survive the refused cleanup');
+  const digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
+  assert.ok(!digest.includes(OWNJOB_CALLOUT('dream')), 'stale rather than genuine — and no render happens to correct it');
+});
+
+test('scheduler-runjob: OWNJOB-AC6e — an ordinary dream failure is recorded after the child exits, so no render shows it', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  // The starting state: a digest with no dream callout in it.
+  const fake = writeDigestingChild(root, 'fail-digest.sh', 1);
+
+  await captureStderr(() =>
+    assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert: () => ({ status: 0 }), loader: noopLoader }),
+      /exited 1/
+    )
+  );
+
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'the ordinary failure path ran');
+  assert.ok(readAlerts(paths).some((a) => a.job === 'dream'), 'the record IS appended');
+  const digest = fs.readFileSync(path.join(paths.state, 'digest.md'), 'utf8');
+  assert.ok(
+    !digest.includes(OWNJOB_CALLOUT('dream')),
+    'PINNED, not improved: the failing run made no render after the record existed'
+  );
+});
