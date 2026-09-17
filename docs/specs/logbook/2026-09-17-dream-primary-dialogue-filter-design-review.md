@@ -60,8 +60,9 @@ This exercise does not change that backend or the frozen reviewer prompt.
 ## Current progress
 
 - Product source baseline: `1c3790de9f88f40aa28202e6f47748500babd555`.
-- wd-architect drafting in a separate worktree; production main remains unchanged.
-- Template, coherence, and independent design gates have not yet run.
+- wd-architect draft committed at `ff78e2f024db99724754f52415fd14f23c55b9d5` in
+  a separate worktree; production main remains unchanged.
+- Round-zero coherence completed below; template and independent gates pending.
 - Main-developer feedback and owner sign-off remain pending.
 
 ## Local format observations used during drafting
@@ -84,3 +85,34 @@ reply. This supplies a concrete discriminator to examine in parser design.
 Existing source requires an explicit nonempty runtime tool allowlist. Although
 the installed CLI help now describes empty `--tools` differently, this WP must
 not silently relax the repository's accepted hermetic-profile contract.
+
+## Round zero: internal coherence and baseline verification
+
+The orchestrator read the whole draft at
+`ff78e2f024db99724754f52415fd14f23c55b9d5`, then checked its claims against
+source. No contradictory product requirement was found in this pass. This is
+not an independent adversarial verdict. The draft's constants, legacy policy,
+and one-M sizing remain proposals for maintainer feedback.
+
+| Check | Tree | Result |
+|---|---|---|
+| Current-state `git rev-parse HEAD` and status | Product baseline `1c3790de9f88f40aa28202e6f47748500babd555` | SHA matched; status empty |
+| Literal Current-state `rg` command | Product baseline | Exit 0; parser, collector, watchdog, gate consumer, and taint function resolved |
+| Literal existing `npm test --` command | Product baseline | Exit 0; 100 tests, 100 pass, 0 fail, 0 skipped |
+| Deliverables existence | Reviewed draft checkout | 17 modify paths exist; 4 create paths absent, as expected |
+| Source claim inspection | Reviewed draft checkout, product code identical to baseline | Parser caps/redaction, original invocation geometry, collector memo/admission, supervision, exports, and descriptor/profile bindings matched |
+| Repo-configured markdownlint | Reviewed draft checkout | Exit 0; 1 file, 0 errors |
+| Frontmatter check | Reviewed draft checkout | Exit 0; 275 specs, 4 agents |
+| `git diff --check` and status | Reviewed draft checkout | Exit 0; status empty |
+
+The test command used the previously verified Node-only PATH directory
+`/tmp/wd-dream-lock-design.NApPpv/runtime-bin` to avoid making a production Claude
+binary available alongside Node in isolated pin tests. The unmodified npm test
+wrapper ran. Its raw output is
+`2026-09-17-dream-primary-filter-baseline-tests.txt` in this folder.
+
+AC1–AC4 describe absent future behavior; their implementation tests are not
+claimed green. AC5 requires an authorized implementation and offline model
+comparison; it was not run. No real model, live ledger, vault, installation,
+scheduler, or upstream remote was changed. The specification does not contain
+numerical source-line ranges requiring endpoint checks.
