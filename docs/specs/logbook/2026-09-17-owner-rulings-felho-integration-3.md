@@ -322,3 +322,71 @@ product is broken?** Three pin a truncation leak (a value straddling the
 yes, in the named `(KNOWN DEFECT <id>)` form with a positive-presence assertion,
 so that a fix turns them red and nobody reads green as safe. *Overrule cost:*
 the seven leaks return to being findable only by reading the code.
+
+### WP-dream-primary-dialogue-projection (design gate closed 2026-09-17, round 5 approve, `c94e0e66`)
+
+Six items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment. This
+package and the next are the split the owner adopted for
+`WP-dream-primary-dialogue-filter`, which stays Draft, parked behind an offline
+evaluation of their output.
+
+**Item 3 — read this one first. User text stays `false` by role**, even when it
+quotes tool output the model has just seen. That preserves today's rule
+(`skills/wienerdog-dream/SKILL.md:101-105`: untrusted only when a supporting
+message has role `tool_result`); it is not a new exposure, and the person is the
+trust root. *Overrule cost:* after the first tool call in a session — nearly
+every agentic session — nothing the person says in it could reach identity or
+skills again, because every Tier-3 write requires `false`. Relatedly, **`false`
+claims only that the harness attributed the record to the user role**: a
+headless routine's prompt is measurably indistinguishable from a human one, so
+`false` never means "a human typed this", nor that the content is true, verified
+or safe to obey.
+
+**Item 6 — an unrecognised content-block type taints the rest of the session**,
+against a decided list of five Claude and three Codex block types, because the
+block type is where Claude signals tool output; a renamed or case-shifted tool
+result is the realistic failure, and an executable model found it before any
+reviewer did. *The cost is a cliff with no diagnostic:* a future benign block
+type such as `redacted_thinking` will taint every session containing it until
+the list is updated. **Item 4** is the same rule for Codex `payload.type`, with
+the same cliff and the same absence of a diagnostic.
+
+**Item 1** — X bounds transcript intake, not model-visible output. **Item 2** —
+Codex subagent rollouts supply no dialogue (32 of 50 sampled local rollouts).
+**Item 5** — the tool-result scan is bounded to `message.content` at depth one,
+with the deeper-nesting residual named. Assistant text is governed by a
+monotonic taint state that never resets; `tool_use` does not taint.
+
+### WP-dream-primary-dialogue-collection (design gate closed 2026-09-17, round 3 approve, `c94e0e66`)
+
+Three items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment.
+
+**Items 1 and 3 — read these first. The package promises byte-policy
+equivalence, not admitted-set identity.** Admission against X is measured on the
+raw capped extract, so every byte-based admission decision stays today's. But
+the collector also stops on a wall-clock preprocessing deadline, and projection
+changes what parsing and writing cost — so **on a deadline-bound install the
+admitted set can move in either direction, and more sessions can be admitted and
+marked processed whether or not the consolidation agent read them.** That is the
+shape of the large-backlog installs where the unread-but-processed problem
+matters most. It is measured at dispatch, not designed away, and the two
+redesign routes (a lower default X; a session-count bound) are priced.
+
+**Item 2 — which provenance guarantees are code and which are prompt-only.**
+Code produces the per-message flag, derives and refuses the skill-learnings
+ledger's flag, and enforces the Tier-3 floor. **Propagating message flags onto
+an ordinary note's frontmatter is prompt-only** — no code checks which messages
+supported an ordinary candidate. That was equally true before; it is written
+down because the new code-produced input makes it easy to mistake the whole
+chain for code. The package also corrects a shipped inaccuracy: the dream skill
+tells the model the orchestrator *raises* an understated flag, whereas the code
+*refuses* the write.
+
+The ADR-0020 amendment is a deliverable of this package's implementation and
+lands with its Status line reading "ACCEPTED under standing authorization
+2026-09-17 — owner signature pending"; the owner adds his signature line
+himself. This package is dispatched only after both
+`WP-dream-primary-dialogue-projection` and `WP-dream-report-run-skips` have
+landed.
