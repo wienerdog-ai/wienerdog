@@ -22,6 +22,10 @@ design review, and owner-sign-off workflow.
 Use the user's messages and the agent's corresponding concluding replies as
 the primary material for memory consolidation. The intended unit is each
 request/reply exchange, not just the last answer of an entire long session.
+The owner also accepted retaining every actual user message, including
+corrections and requests that never received a concluding reply, while excluding
+intermediate agent progress updates. Harness-injected instructions and copied
+subagent history must be distinguished from actual user messages.
 Exact harness-specific identification remains spec work.
 
 For the first implementation, exclude tool-call details and tool-result content
@@ -60,11 +64,43 @@ The model must not invent a tool identifier or claim to have inspected omitted
 content. A session reference and a plain description of the need are sufficient.
 These are model-reported needs, not code-verified coverage statistics.
 
-Proposed handling: lack of tool evidence alone does not automatically enqueue
-the entire session forever. The dream can decline an unsupported claim, or
-retain a carefully attributed observation when that is useful and policy permits
-it. It must not promote an unverified outcome into a verified fact. The exact
-completion/retry contract remains open for the new WP design.
+Lack of tool evidence alone does not automatically enqueue the entire session
+forever. The dream can decline an unsupported claim, or retain a carefully
+attributed observation when that is useful and policy permits it. It must not
+promote an unverified outcome into a verified fact.
+
+## Accepted completion semantics
+
+On 2026-09-17 the owner accepted the following outcomes. Their implementation
+and verification mechanism still need to be designed; admission alone is not
+evidence of examination.
+
+| Session outcome | Completion decision |
+|---|---|
+| Examined; useful findings handled under the publication policy | Processed |
+| Examined; no information worth retaining | Processed |
+| Examined; a claim intentionally omitted for lack of tool evidence, with the limitation reported | Can still be processed |
+| Skipped, interrupted, or no interpretable processing result | Retryable |
+
+These outcomes do not supersede the existing secret-preservation and
+publication-failure contracts. The spec must reconcile their interaction
+explicitly rather than treating a model's self-reported completion as authority
+to bypass a code-owned gate.
+
+## Current execution model, verified for the owner's question
+
+At `1c3790de`, the orchestrator calls `collectExtracts` once and then
+`runBrainWithWatchdog` once for the selected batch. It starts one consolidation
+agent session with the scratch directory and a private workspace. That session
+can make many model turns and file-tool calls; this is not one inference request
+per session or one inference request for the whole night.
+
+The skill instructs the agent to Glob scratch and read each extract. Ingest,
+ranking, cross-session deduplication, and note writing are phases of that same
+agent session, not separately scheduled model jobs. The model chooses its read
+sequence. Code does not currently require a completion result for each input;
+the final ledger loop applies the run-level publication/secret outcome to all
+selected inputs. This is the gap the accepted completion semantics must close.
 
 ## What the experiment can and cannot establish
 
@@ -86,13 +122,12 @@ outputs to dream input is not a prerequisite for this chosen iteration.
 
 ## Still to resolve in spec preparation
 
-1. Define the primary exchange precisely for both harnesses, including interrupted
-   turns, user corrections, agent final replies, and exclusion of harness control
-   text or copied history. Do not equate a normalized `user` role with human
-   authorship without checking the original record.
-2. Define per-session completion: distinguish an examined session with no retained
-   candidate from an input the model skipped or failed to examine. Tool omission
-   does not solve the existing admission-versus-completion gap.
+1. Map the accepted primary-exchange rules to both harnesses' actual record
+   formats. Do not equate a normalized `user` role with human authorship without
+   checking the original record.
+2. Design the mechanism that verifies and persists the accepted per-session
+   completion outcomes. Tool omission does not solve the existing
+   admission-versus-completion gap.
 3. Decide whether bounded per-session ingestion and cross-session consolidation
    belong in this iteration or a later one; that architectural choice is not
    accepted by the tool-exclusion decision.
