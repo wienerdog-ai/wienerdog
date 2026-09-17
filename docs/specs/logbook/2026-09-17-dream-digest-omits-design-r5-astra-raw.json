@@ -1,0 +1,51 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b049-0ece-79e2-9a86-384cb61f93da",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the design gate. The ordinary post-start timeout case and A-2’s publication boundary are addressed, but two product gaps and one machinery gap remain. Executed: scoped git diff/check, production runJob, settleReaps, failLoud, clearAlerts, readAlerts, regenerateDigest, formatAlerts and writeFilePrivate bodies with mocked I/O; timestamp predicates; and a recovery mutant around production finalizer bodies. Read: scoped spec/logbooks and supporting source. Key source citations resolve. No implementation-branch review, unit suite, lint or RED proofs ran; no files changed.",
+    "findings": [
+      {
+        "severity": "high",
+        "title": "Product: recovery can silently erase unrelated job alerts",
+        "body": "An unfiltered recovery is not necessarily a restoration. readAlerts returns [] on open/fstat/read errors (alerts.js:151-201). After the filtered render succeeds, a late failure followed by a transient alert-read error therefore makes recovery publish an alert-free digest without throwing or emitting the recovery diagnostic. Executing the production reader, regeneration closure and alert formatter reproduced this, including disappearance of another job’s unresolved callout while both records remained stored. Before this change, that late failure performed no additional rewrite. The named residual covers a throwing recovery, not this silently successful one.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 384,
+        "line_end": 385,
+        "confidence": 0.98,
+        "recommendation": "Preserve the pre-filter alert set as a conservative recovery fallback, merge fresh records safely, and require a test where recovery’s alert read fails silently while digest writing succeeds."
+      },
+      {
+        "severity": "medium",
+        "title": "Product: O3 prices the survivor risk using a fallback that is deleted",
+        "body": "O3 says the prior survivor’s record remains available through alerts.jsonl and wienerdog alerts. A later successful supervisor instead calls clearAlerts at run-job.js:1204, removing every record for that job regardless of whether the prior group survives. Executing runJob, settleReaps and clearAlerts confirmed that only the current group was checked and the prior survivor’s record was deleted. Thus the proposed filter removes the digest callout and successful supervision removes the stated durable fallback. Email delivery is also best-effort, not guaranteed. The residual is named, but its mitigation is materially overstated.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 652,
+        "line_end": 655,
+        "confidence": 0.99,
+        "recommendation": "Correct O3 and its mirrors to describe post-success deletion and best-effort email, then reassess the residual on that basis. Pin the complete survivor → later success → alert deletion sequence."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: isolated AC7 injections do not prove the two recovery sites cooperate",
+        "body": "AC7 exercises body, workspace and scratch failures separately. A mutant with independent recovery in catch A and finally A satisfies those isolated recovery-count/error expectations but recovers twice when the body and scratch cleanup both throw. Executing that mutant around the production tail/finalizer bodies produced two unfiltered attempts and propagated the scratch error instead of the original body error. A simultaneous body/workspace failure also masked the body error before catch A. Counting writes in isolated cases does not establish the pair’s exactly-once guarantee.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 919,
+        "line_end": 927,
+        "confidence": 0.98,
+        "recommendation": "Require compound body-plus-workspace and body-plus-scratch failures, including failed recovery. Assert one shared recovery attempt, at most one diagnostic, and preservation of the first error."
+      }
+    ],
+    "next_steps": [
+      "Revise the recovery contract, O3 and compound-failure acceptance criteria before re-dispatch.",
+      "Complete the writer inventory: failLoud also handles TCC refusal, B1 and named catch-up authorization refusals at run-job.js:911,1194,1384-1388; B2 deliberately skips appending."
+    ]
+  }
+}
