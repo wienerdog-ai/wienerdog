@@ -95,10 +95,16 @@ function emptyClaudeExtract(filePath) {
  * @param {string} filePath
  * @param {number} sizeBytes  discovery-recorded fs size
  * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @param {{lost:()=>void, record:(obj:*)=>void}} [observer]  OPTIONAL record
+ *   observer (WP-dream-primary-dialogue-projection). It is notified of every
+ *   line this loop sees, in order — `lost()` at each of the four points where a
+ *   line never becomes a record, `record()` for every line that parsed, BEFORE
+ *   any classification below declines it. Called without one, this function
+ *   behaves byte-for-byte as it did before that package.
  * @returns {{extract: import('./index').Extract,
  *            parse: {outcome: import('./stream').StreamOutcome, oversizedRecords: number, runExhausted: boolean}}}
  */
-function parseClaudeTranscript(filePath, sizeBytes, budget) {
+function parseClaudeTranscript(filePath, sizeBytes, budget, observer) {
   const messages = [];
   const skillInvocations = [];
   const pendingByToolUseId = new Map(); // tool_use_id -> index in skillInvocations
@@ -113,16 +119,26 @@ function parseClaudeTranscript(filePath, sizeBytes, budget) {
   const onLine = (line) => {
     if (line === OVERSIZED_RECORD_MARKER) {
       truncated = true; // a real message was dropped
+      if (observer) observer.lost(); // G1
       return;
     }
     if (line.trim() === '') return;
-    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) return; // nesting bomb → skip
+    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) {
+      if (observer) observer.lost(); // G2 — SILENT here: outcome stays 'ok'
+      return; // nesting bomb → skip
+    }
     let obj;
     try {
       obj = JSON.parse(line);
     } catch {
+      if (observer) observer.lost(); // G3 — silent too
       return;
     }
+
+    // The observer sees every parsed record, including the ones the policy
+    // below declines whole: a tool_result block hides just as well under an
+    // `attachment` envelope as under a `user` one.
+    if (observer) observer.record(obj);
 
     if (obj.type !== 'user' && obj.type !== 'assistant') return;
 
@@ -193,7 +209,10 @@ function parseClaudeTranscript(filePath, sizeBytes, budget) {
   if (streamed.outcome !== 'ok') {
     return { extract: emptyClaudeExtract(filePath), parse: parseOutcome };
   }
-  if (streamed.runExhausted) truncated = true; // file cut mid-way (deferred, not quarantined)
+  if (streamed.runExhausted) {
+    truncated = true; // file cut mid-way (deferred, not quarantined)
+    if (observer) observer.lost(); // G4 — the file's tail is gone
+  }
 
   if (sessionId === null) {
     sessionId = path.basename(filePath, '.jsonl');

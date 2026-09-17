@@ -147,10 +147,16 @@ function emptyCodexExtract(filePath) {
  * @param {string} filePath
  * @param {number} sizeBytes  discovery-recorded fs size
  * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @param {{lost:()=>void, record:(obj:*)=>void}} [observer]  OPTIONAL record
+ *   observer (WP-dream-primary-dialogue-projection), notified of every line
+ *   this loop sees, in order — `lost()` at each of the four points where a line
+ *   never becomes a record, `record()` for every line that parsed, BEFORE any
+ *   classification below declines it. Called without one, this function behaves
+ *   byte-for-byte as it did before that package.
  * @returns {{extract: import('./index').Extract,
  *            parse: {outcome: import('./stream').StreamOutcome, oversizedRecords: number, runExhausted: boolean}}}
  */
-function parseCodexTranscript(filePath, sizeBytes, budget) {
+function parseCodexTranscript(filePath, sizeBytes, budget, observer) {
   const messages = [];
   let sessionId = null;
   let cwd = null;
@@ -162,16 +168,25 @@ function parseCodexTranscript(filePath, sizeBytes, budget) {
   const onLine = (line) => {
     if (line === OVERSIZED_RECORD_MARKER) {
       truncated = true; // a real item was dropped — skip mapCodexItem
+      if (observer) observer.lost(); // G1
       return;
     }
     if (line.trim() === '') return;
-    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) return; // nesting bomb → skip
+    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) {
+      if (observer) observer.lost(); // G2 — SILENT here: outcome stays 'ok'
+      return; // nesting bomb → skip
+    }
     let obj;
     try {
       obj = JSON.parse(line);
     } catch {
+      if (observer) observer.lost(); // G3 — silent too
       return;
     }
+
+    // The observer sees every parsed record, including the ones the policy
+    // below declines whole.
+    if (observer) observer.record(obj);
 
     if (obj.type === 'session_meta') {
       const payload = obj.payload || {};
@@ -197,7 +212,10 @@ function parseCodexTranscript(filePath, sizeBytes, budget) {
   if (streamed.outcome !== 'ok') {
     return { extract: emptyCodexExtract(filePath), parse: parseOutcome };
   }
-  if (streamed.runExhausted) truncated = true; // file cut mid-way (deferred, not quarantined)
+  if (streamed.runExhausted) {
+    truncated = true; // file cut mid-way (deferred, not quarantined)
+    if (observer) observer.lost(); // G4 — the file's tail is gone
+  }
 
   if (sessionId === null) {
     sessionId = path.basename(filePath, '.jsonl');
@@ -217,4 +235,4 @@ function parseCodexTranscript(filePath, sizeBytes, budget) {
   };
 }
 
-module.exports = { discoverCodex, parseCodexTranscript, mapCodexItem };
+module.exports = { discoverCodex, parseCodexTranscript, mapCodexItem, TOOL_OUTPUT_TYPES };
