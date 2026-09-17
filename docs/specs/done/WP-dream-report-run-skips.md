@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: Make the dream report account for the sessions a run could not consume
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace, WP-dream-filtered-input-budget]
@@ -10,6 +10,53 @@ epic: quarantine-surface
 ---
 
 # WP-dream-report-run-skips: the run accounts for what it could not consume
+
+> **Record, 2026-09-17 (post-merge).** No errata: the spec diff at merge was
+> the status flip alone; no `expectRed` cell needed correcting and no prose
+> was made stale.
+>
+> Implemented in PR #264 (merge `811f7abc`), tip `953e910d`, rebased onto
+> `c94e0e66` after the sibling `WP-secret-sink-wiring-probes` merged into the
+> shared `tests/unit/dream-collect.test.js` (both packages appended at end of
+> file; the sibling's block kept first and byte-identical to main's). Both PR
+> gates on that tip: wd-reviewer APPROVE with no blockers and no
+> should-fixes, everything executed — `npm test` 2813 tests / 2801 pass / 0
+> fail; targeted suites 170 pass; the UNFILTERED `npm run red-proofs` → RUN:
+> PROVEN with zero UNPROVEN suite-wide and all three ids; lint;
+> boundary-check; the rendered text compared programmatically and
+> byte-exact; collector equivalence proved two ways (main's byte-identical
+> `dream-collect.test.js`, 39 tests, passes unchanged against the new
+> `scratch.js`; instrumented `selectState` call counts identical, 81 on both
+> trees); about twenty hostile inputs to the integer guard all rendering 0;
+> the Table A gate replayed compliant (0) and in three violating states (1
+> each). Codex plugin `review` on `gpt-6-astra` clean, no findings (it
+> disclosed that filesystem-writing tests could not run under its sandbox).
+> CI seven checks pass on macOS and Ubuntu.
+>
+> **Recorded, not errata:** (i) the deferral sentence is factored into one
+> shared constant (`CONSIDERED_AGAIN`) in `src/core/dream/promote.js`, so a
+> future reword of one deferral bullet rewords all three — renders
+> byte-identical and no RED-proof `find` targets it; (ii)
+> `assertNoRetryPromise` in `tests/unit/dream-collect.test.js` uses
+> `includes`, which is outside Table C's full-string mandate (that covers
+> T1–T4 in `dream-promote.test.js`); (iii) confirmed and left alone, as the
+> spec routes them: default `dream_max_input_bytes` below the parser's
+> worst-case single extract; zero-admission runs carry no per-run
+> accounting; `src/core/transcripts/stream.js` decides read-exhaustion from
+> the discovery-time size, so the read-deferred count can under-count; code-
+> owned report headings are not reserved from brain-authored content and a
+> second run on one date appends a second block (criterion 11's fixtures pin
+> it); the pointer can name a `reports/warnings.md` that is absent or one
+> run stale while its counts stay exact; (iv) design history worth keeping
+> with the spec: a confirming review on a second model EXECUTED the
+> collector and reproduced two sentences the report would have printed as
+> FALSE — "will be retried on the next run" (a session memoised as oversized
+> behind a capacity or deadline stop is counted as deferred, then passed
+> over from its memo) and "skipped for the first time" (a re-quarantine
+> re-enters that count) — both removed, and the spec's gate fails on either
+> phrase in any render.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
