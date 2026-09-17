@@ -312,6 +312,13 @@ The six operative hits that existed before round 2 — projection `:364` and
 `:647`; collection `:276`, `:349` and `:673-674`; logbook `:62` — remain gone.
 No new operative admission, F1 or provenance claim was introduced this round.
 
+**Re-run after round 4: the same set, no new hits.** Line numbers moved with the
+edits (projection `:356` and `:565`/`:673`, collection `:361`/`:725`), and the
+classifications are unchanged — two HISTORY rows, four negations or
+withdrawals, and the two UNRELATED matches, one of which is the over-matching
+`identical to (today|the base)` alternation catching AC3d's true parser-output
+requirement.
+
 **Why this sweep is in the record rather than just run.** This is the third spec
 family this session to lose round-N corrections in its mirrors. A checklist that
 names its mirrors is necessary and was not sufficient: every one of the six
@@ -383,6 +390,60 @@ Claude's block scan, because an unrecognised `payload.type` taints. The residual
 whose 13,296 `item_completed` events this package did not inspect — is named and
 routed to `docs/runbooks/codex-pin-bump.md` rather than guessed at. Both are
 owner item 5.
+
+## Design review round 4 — one finding, and an executable check of the prose
+
+Codex plugin 1.0.6 / `gpt-6-astra`, tip `7f97981a`, base `c94e0e66`. Raw at
+`9249d8c1`. P3-1 and P3-2 confirmed fixed at the design level; goldens, wrapper
+equality and every cite pass; no separate machinery finding.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| **P4-1** the canonical procedure silently accepts unclassifiable Claude content blocks | A | HEAVY | **fix the procedure, keep the criterion** | Row A5c validated the `message`/`content` **containers** and never each **block**'s discriminator. Executed: `tool_use` → paired tool-result-shaped block with `type` deleted or set to `7` → `end_turn`; the real parser loses the result silently and a transcription of A5e emits the conclusion `false`. AC3c already demanded those blocks taint, so the canonical row contradicted its own acceptance criterion — the row was wrong, not the test. New canonical row **A5c-blocks**; A5e step 2 now runs both schema checks and **suppresses the record's emission** as well as tainting. |
+
+### The A5e model run — 35 sequences, three readings of the prose
+
+Built as instructed, as a throwaway node transcription of row A5e in a temp
+directory (never a repo file), fed the spec's own fixtures, every reviewer
+counterexample from rounds 1–4, and twelve adversarial sequences of my own aimed
+at getting an assistant message emitted `false` after external content. Three
+candidate readings were run: **V0** the round-3 prose, **V1** adding
+presence-and-shape checks on content blocks, **V2** adding the decided block
+list.
+
+| Reading | Mismatches | What it still lets through |
+|---|---:|---|
+| V0 — round-3 prose | **8 / 35** | both P4-1 variants; a bare-string block; a `null` block; a Codex block with `type: 7`; a bad block in a Codex `final_answer`; **and ADV-1/ADV-2 below** |
+| V1 — + block presence and shape | **2 / 35** | ADV-1 and ADV-2 only |
+| V2 — + decided block list | **0 / 35** | — |
+
+**What the model found that no reviewer had.** `ADV-1` places a tool result in a
+block typed `"TOOL_RESULT"` (wrong case); `ADV-2` types it
+`"web_search_tool_result"`. Both are plain objects with a non-empty string
+`type`, so a presence-and-shape check accepts them, and neither is the exact
+string `tool_result`, so step 3 does not recognise them — the record declines
+silently and the following conclusion is marked `false` **with external content
+in the session**. That is the same class of hole as rounds 1–4, one level
+further down, and it is why row A5c-blocks carries a decided list rather than a
+shape test. It also forced the general statement now in A5c-why: *taint on an
+unrecognised value exactly where the harness signals tool output — Codex
+`payload.type` and either harness's block `type` — and decline without tainting
+everywhere else.* The cost is priced as owner item 6.
+
+**One place the model corrected my expectation rather than the prose.** `ADV-7`
+puts a malformed block in the same Codex `final_answer` record that carries the
+answer. I expected a tainted assistant message; the model emitted **none**,
+because step 2 taints and moves to the next line without reaching emission.
+The model was right and A5e already said so — the step now states the
+consequence explicitly so no implementer has to infer it.
+
+**The controls matter as much as the catches**, and all of them held in V2: a
+`thinking` block, an `image` block, a Codex `input_image`, a bare `tool_use`
+with no result, a declined envelope whose content is a number, a declined
+`system` record, an unfamiliar top-level type with no tool content, a normal
+`session_meta` header, and misaligned `content_item_kinds` — each leaves the
+following assistant message `false`. Without those, "taint on anything odd"
+would have passed every catch and been useless.
 
 ## What round zero does not establish
 
