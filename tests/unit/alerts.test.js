@@ -395,3 +395,60 @@ test('alerts: alerts.jsonl ends 0600 after append and after compaction (WP-126)'
   assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'compaction rewrite leaves 0600');
   assert.equal(readAlerts(paths).length, MAX_ALERTS, 'compaction bound unchanged');
 });
+
+// -------------------------------------------------------------------------
+// secret-sink wiring probes (WP-secret-sink-wiring-probes, ADR-0042)
+// -------------------------------------------------------------------------
+
+// A labelled-rule match: the `anthropic-key` rule is
+// /sk-ant-[A-Za-z0-9\-_]{20,}/g -> [REDACTED:anthropic-key], severity
+// QUARANTINE (src/core/secret-scan.js:88). 48 characters. Shaped so that
+// PROBE_HEAD and PROBE_TAIL each trip NO rule: PROBE_HEAD has only 17
+// characters after `sk-ant-` (the rule needs 20), and every
+// delimiter-separated segment of both halves is word-shaped, so the entropy
+// pass suppresses them. Measured against the shipped detector 2026-09-17:
+// scanAndRedact(PROBE_HEAD).text === PROBE_HEAD, findings [];
+// scanAndRedact(PROBE_TAIL).text === PROBE_TAIL, findings [].
+const PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const PROBE_HEAD = PROBE.slice(0, 24); // 'sk-ant-api03-PROBE-aaaa-'
+const PROBE_TAIL = PROBE.slice(24); //    'bbbb-cccc-dddd-eeee-ffff'
+const MARKER = '[REDACTED:anthropic-key]';
+
+// `artifact` is the file's text, read from disk after the sink ran.
+const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
+
+const DEFECT_MSG = (id) =>
+  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
+  'Do not delete this test to make the suite green. Convert it to the safe ' +
+  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
+  'Status CORRECT, and say so in the PR.';
+
+// Table S row S1 — src/core/alerts.js
+test('sink-probe: alerts — a labelled secret in an alert field is redacted in alerts.jsonl', () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', PROBE));
+
+  const artifact = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8');
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S1 — src/core/alerts.js
+test(
+  'sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)',
+  () => {
+    const { paths } = setup();
+    // Cut before scan (Table S row S1): 'F' padding + PROBE, sized so the
+    // sink's own slice(0, MAX_FIELD_CHARS) keeps exactly PROBE_HEAD.
+    const straddling = 'F'.repeat(MAX_FIELD_CHARS - PROBE_HEAD.length) + PROBE;
+    appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', straddling));
+
+    const artifact = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8');
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-TRUNC-ALERTS'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE_HEAD), true, DEFECT_MSG('WD-SINK-TRUNC-ALERTS'));
+  }
+);

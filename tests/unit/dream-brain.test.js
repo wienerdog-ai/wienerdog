@@ -492,3 +492,115 @@ test('dream-brain: a set WIENERDOG_DREAM_CMD has ZERO effect — the pinned brai
   assert.ok(fs.existsSync(marker), 'the PINNED brain ran');
   assert.equal(fs.existsSync(evilMarker), false, 'the env-seam fake never executed — the seam is dead');
 });
+
+// -------------------------------------------------------------------------
+// secret-sink wiring probes (WP-secret-sink-wiring-probes, ADR-0042)
+// -------------------------------------------------------------------------
+
+// A labelled-rule match: the `anthropic-key` rule is
+// /sk-ant-[A-Za-z0-9\-_]{20,}/g -> [REDACTED:anthropic-key], severity
+// QUARANTINE (src/core/secret-scan.js:88). 48 characters. Shaped so that
+// PROBE_HEAD and PROBE_TAIL each trip NO rule: PROBE_HEAD has only 17
+// characters after `sk-ant-` (the rule needs 20), and every
+// delimiter-separated segment of both halves is word-shaped, so the entropy
+// pass suppresses them. Measured against the shipped detector 2026-09-17:
+// scanAndRedact(PROBE_HEAD).text === PROBE_HEAD, findings [];
+// scanAndRedact(PROBE_TAIL).text === PROBE_TAIL, findings [].
+const PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const PROBE_HEAD = PROBE.slice(0, 24); // 'sk-ant-api03-PROBE-aaaa-'
+const PROBE_TAIL = PROBE.slice(24); //    'bbbb-cccc-dddd-eeee-ffff'
+const MARKER = '[REDACTED:anthropic-key]';
+
+// `artifact` is the file's text, read from disk after the sink ran.
+const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
+
+const DEFECT_MSG = (id) =>
+  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
+  'Do not delete this test to make the suite green. Convert it to the safe ' +
+  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
+  'Status CORRECT, and say so in the PR.';
+
+/** Spawn a fake brain that writes `scriptLines` verbatim, teeing to a real
+ *  on-disk logStream, and return { artifact } once the run + stream both
+ *  settle. @param {string[]} scriptLines */
+async function runProbeBrain(scriptLines) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-probe-'));
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', ...scriptLines, 'exit 0', ''].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+  const logFile = path.join(root, 'run.log');
+  const logStream = fs.createWriteStream(logFile);
+
+  const { done } = spawnBrain({
+    workspaceDir: vaultDir,
+    vaultDir,
+    scratchDir: path.join(root, 'scratch'),
+    date: '2026-07-04',
+    model: null,
+    env: { ...process.env, ...pinFakeBrain(root, path.join(root, 'core'), fakeCmd) },
+    logStream,
+  });
+  await done;
+  await new Promise((resolve) => logStream.end(resolve));
+  return fs.readFileSync(logFile, 'utf8');
+}
+
+// Table S row S6 — src/core/dream/brain.js
+test('sink-probe: brain — a labelled secret in one stdout chunk is redacted in the brain log', async () => {
+  const artifact = await runProbeBrain([`echo "boom ${PROBE} end"`]);
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S6 — src/core/dream/brain.js
+test(
+  'sink-probe: brain — a labelled secret straddling two stdout chunks is NOT redacted in the brain log (KNOWN DEFECT WD-SINK-CHUNK-BRAIN-STDOUT)',
+  async () => {
+    // STRADDLE-CHUNK: two writes on the SAME stream, real chunk boundary forced
+    // by a delay between them (measured sufficient on darwin/Node v25.9.0 —
+    // "Exact contracts"). Two adjacent writes with no delay coalesce into one
+    // chunk and the sink redacts (that is P7, this probe's control).
+    const artifact = await runProbeBrain([
+      `printf '%s' '${PROBE_HEAD}'`,
+      'sleep 0.3',
+      `printf '%s\\n' '${PROBE_TAIL}'`,
+    ]);
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDOUT'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDOUT'));
+  }
+);
+
+// Table S row S5 — src/core/dream/brain.js
+test('sink-probe: brain — a labelled secret in one stderr chunk is redacted in the brain log', async () => {
+  const artifact = await runProbeBrain([`echo "boom ${PROBE} end" 1>&2`]);
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S5 — src/core/dream/brain.js
+test(
+  'sink-probe: brain — a labelled secret straddling two stderr chunks is NOT redacted in the brain log (KNOWN DEFECT WD-SINK-CHUNK-BRAIN-STDERR)',
+  async () => {
+    // A SEPARATE handler from the stdout probe's — a stdout-only fix leaves this open.
+    const artifact = await runProbeBrain([
+      `printf '%s' '${PROBE_HEAD}' 1>&2`,
+      'sleep 0.3',
+      `printf '%s\\n' '${PROBE_TAIL}' 1>&2`,
+    ]);
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDERR'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-BRAIN-STDERR'));
+  }
+);

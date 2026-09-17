@@ -3123,3 +3123,140 @@ test('scheduler-runjob: OWNJOB-AC6e — an ordinary dream failure is recorded af
     'PINNED, not improved: the failing run made no render after the record existed'
   );
 });
+
+// -------------------------------------------------------------------------
+// secret-sink wiring probes (WP-secret-sink-wiring-probes, ADR-0042)
+// -------------------------------------------------------------------------
+
+// A labelled-rule match: the `anthropic-key` rule is
+// /sk-ant-[A-Za-z0-9\-_]{20,}/g -> [REDACTED:anthropic-key], severity
+// QUARANTINE (src/core/secret-scan.js:88). 48 characters. Shaped so that
+// PROBE_HEAD and PROBE_TAIL each trip NO rule: PROBE_HEAD has only 17
+// characters after `sk-ant-` (the rule needs 20), and every
+// delimiter-separated segment of both halves is word-shaped, so the entropy
+// pass suppresses them. Measured against the shipped detector 2026-09-17:
+// scanAndRedact(PROBE_HEAD).text === PROBE_HEAD, findings [];
+// scanAndRedact(PROBE_TAIL).text === PROBE_TAIL, findings [].
+const PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const PROBE_HEAD = PROBE.slice(0, 24); // 'sk-ant-api03-PROBE-aaaa-'
+const PROBE_TAIL = PROBE.slice(24); //    'bbbb-cccc-dddd-eeee-ffff'
+const MARKER = '[REDACTED:anthropic-key]';
+
+// `artifact` is the file's text, read from disk after the sink ran.
+const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
+
+const DEFECT_MSG = (id) =>
+  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
+  'Do not delete this test to make the suite green. Convert it to the safe ' +
+  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
+  'Status CORRECT, and say so in the PR.';
+
+/** Run the named job's fake script through runjob.run and return the one
+ *  per-run job log's text on disk. @param {object} paths @param {string} script */
+async function readJobLog(env, paths, script) {
+  await withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(script), sendAlert: () => ({ status: 0 }), loader: noopLoader });
+  const logDir = path.join(paths.logs, 'dream');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1);
+  return fs.readFileSync(path.join(logDir, logs[0]), 'utf8');
+}
+
+// Table S row S7 — src/cli/run-job.js
+test('sink-probe: routine-log — a labelled secret in one stdout chunk is redacted in the job log', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'sink-probe-stdout-whole.sh', ['#!/bin/sh', `echo "boom ${PROBE} end"`, 'exit 0']);
+
+  const artifact = await readJobLog(env, paths, fake);
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S7 — src/cli/run-job.js
+test(
+  'sink-probe: routine-log — a labelled secret straddling two stdout chunks is NOT redacted in the job log (KNOWN DEFECT WD-SINK-CHUNK-RUNJOB-STDOUT)',
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    // STRADDLE-CHUNK: two writes on the SAME stream, real chunk boundary forced
+    // by a delay between them (measured sufficient on darwin/Node v25.9.0 —
+    // "Exact contracts"). This probe's control is the WHOLE-feed test above.
+    const fake = writeScript(root, 'sink-probe-stdout-chunk.sh', [
+      '#!/bin/sh',
+      `printf '%s' '${PROBE_HEAD}'`,
+      'sleep 0.3',
+      `printf '%s\\n' '${PROBE_TAIL}'`,
+      'exit 0',
+    ]);
+
+    const artifact = await readJobLog(env, paths, fake);
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDOUT'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDOUT'));
+  }
+);
+
+// Table S row S8 — src/cli/run-job.js
+test('sink-probe: routine-log — a labelled secret in one stderr chunk is redacted in the job log', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'sink-probe-stderr-whole.sh', ['#!/bin/sh', `echo "boom ${PROBE} end" 1>&2`, 'exit 0']);
+
+  const artifact = await readJobLog(env, paths, fake);
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S8 — src/cli/run-job.js
+test(
+  'sink-probe: routine-log — a labelled secret straddling two stderr chunks is NOT redacted in the job log (KNOWN DEFECT WD-SINK-CHUNK-RUNJOB-STDERR)',
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    // A SEPARATE handler from the stdout probe's — a stdout-only fix leaves this open.
+    const fake = writeScript(root, 'sink-probe-stderr-chunk.sh', [
+      '#!/bin/sh',
+      `printf '%s' '${PROBE_HEAD}' 1>&2`,
+      'sleep 0.3',
+      `printf '%s\\n' '${PROBE_TAIL}' 1>&2`,
+      'exit 0',
+    ]);
+
+    const artifact = await readJobLog(env, paths, fake);
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDERR'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE), true, DEFECT_MSG('WD-SINK-CHUNK-RUNJOB-STDERR'));
+  }
+);
+
+// Table S row S9 — src/cli/run-job.js
+test('sink-probe: routine-log — a labelled secret in a job failure message is redacted in the job log', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  // A nonexistent command whose path contains PROBE — the spawn `error` (a
+  // non-WienerdogError) carries it into the `finally` block's failure message
+  // (S9), never into a shell (shell: false).
+  const badCommand = path.join(root, `no-such-${PROBE}`);
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: () => ({ command: badCommand, args: [], shell: false }),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+    }),
+    (e) => e.message === ROW1_REASON
+  );
+
+  const logDir = path.join(paths.logs, 'dream');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1);
+  const artifact = fs.readFileSync(path.join(logDir, logs[0]), 'utf8');
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});

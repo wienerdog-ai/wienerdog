@@ -114,3 +114,96 @@ test('run-evidence: never throws — a bad paths target or a garbage record is s
   assert.deepEqual(records[1].argv, []);
   assert.deepEqual(records[1].policyHooks, { present: false, sources: [] });
 });
+
+// -------------------------------------------------------------------------
+// secret-sink wiring probes (WP-secret-sink-wiring-probes, ADR-0042)
+// -------------------------------------------------------------------------
+
+// A labelled-rule match: the `anthropic-key` rule is
+// /sk-ant-[A-Za-z0-9\-_]{20,}/g -> [REDACTED:anthropic-key], severity
+// QUARANTINE (src/core/secret-scan.js:88). 48 characters. Shaped so that
+// PROBE_HEAD and PROBE_TAIL each trip NO rule: PROBE_HEAD has only 17
+// characters after `sk-ant-` (the rule needs 20), and every
+// delimiter-separated segment of both halves is word-shaped, so the entropy
+// pass suppresses them. Measured against the shipped detector 2026-09-17:
+// scanAndRedact(PROBE_HEAD).text === PROBE_HEAD, findings [];
+// scanAndRedact(PROBE_TAIL).text === PROBE_TAIL, findings [].
+const PROBE = 'sk-ant-api03-PROBE-aaaa-bbbb-cccc-dddd-eeee-ffff';
+const PROBE_HEAD = PROBE.slice(0, 24); // 'sk-ant-api03-PROBE-aaaa-'
+const PROBE_TAIL = PROBE.slice(24); //    'bbbb-cccc-dddd-eeee-ffff'
+const MARKER = '[REDACTED:anthropic-key]';
+
+// `artifact` is the file's text, read from disk after the sink ran.
+const safeOf = (artifact) => artifact.includes(MARKER) && !artifact.includes(PROBE_HEAD);
+
+const DEFECT_MSG = (id) =>
+  `${id}: this probe pins a KNOWN-OPEN defect and it now appears FIXED. ` +
+  'Do not delete this test to make the suite green. Convert it to the safe ' +
+  'form (assert.equal(safe, true, artifact)), move its row in Table P to ' +
+  'Status CORRECT, and say so in the PR.';
+
+// The two run-evidence sites do not export their cap (Table S, `Cap` column):
+// both are a literal 2000, matched here rather than imported.
+const CAP = 2000;
+
+// Table S row S2 — src/core/run-evidence.js
+test('sink-probe: run-evidence — a labelled secret in an argv entry is redacted in run-evidence.jsonl', () => {
+  const paths = tempPaths();
+  recordRunEvidence(paths, sampleRecord({ argv: [PROBE] }));
+
+  const artifact = fs.readFileSync(path.join(paths.state, EVIDENCE_FILE), 'utf8');
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S2 — src/core/run-evidence.js
+test(
+  'sink-probe: run-evidence — a labelled secret straddling the argv cap is NOT redacted in run-evidence.jsonl (KNOWN DEFECT WD-SINK-TRUNC-RUNEV-ARGV)',
+  () => {
+    const paths = tempPaths();
+    // Cut before scan (Table S row S2): 'F' padding + PROBE, sized so
+    // sanitizeArgv's own slice(0, 2000) keeps exactly PROBE_HEAD.
+    const straddling = 'F'.repeat(CAP - PROBE_HEAD.length) + PROBE;
+    recordRunEvidence(paths, sampleRecord({ argv: [straddling] }));
+
+    const artifact = fs.readFileSync(path.join(paths.state, EVIDENCE_FILE), 'utf8');
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-TRUNC-RUNEV-ARGV'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE_HEAD), true, DEFECT_MSG('WD-SINK-TRUNC-RUNEV-ARGV'));
+  }
+);
+
+// Table S row S3 — src/core/run-evidence.js
+test('sink-probe: run-evidence — a labelled secret in a scalar field is redacted in run-evidence.jsonl', () => {
+  const paths = tempPaths();
+  recordRunEvidence(paths, sampleRecord({ job: PROBE }));
+
+  const artifact = fs.readFileSync(path.join(paths.state, EVIDENCE_FILE), 'utf8');
+  const safe = safeOf(artifact);
+  assert.equal(safe, true, artifact);
+});
+
+// Table S row S3 — src/core/run-evidence.js
+test(
+  'sink-probe: run-evidence — a labelled secret straddling the scalar-field cap is NOT redacted in run-evidence.jsonl (KNOWN DEFECT WD-SINK-TRUNC-RUNEV-FIELD)',
+  () => {
+    const paths = tempPaths();
+    // Cut before scan (Table S row S3): 'F' padding + PROBE, sized so
+    // sanitizeRecord's own scrub slice(0, 2000) keeps exactly PROBE_HEAD. A
+    // SEPARATE truncate-then-redact from S2's sanitizeArgv — fixing S2 alone
+    // leaves this open, which is why it has its own defect id.
+    const straddling = 'F'.repeat(CAP - PROBE_HEAD.length) + PROBE;
+    recordRunEvidence(paths, sampleRecord({ job: straddling }));
+
+    const artifact = fs.readFileSync(path.join(paths.state, EVIDENCE_FILE), 'utf8');
+    const safe = safeOf(artifact);
+    assert.equal(safe, false, DEFECT_MSG('WD-SINK-TRUNC-RUNEV-FIELD'));
+    // Non-vacuity: `safe === false` is ALSO satisfied by an EMPTY artifact, which is
+    // exactly how a probe passes without the sink ever running. Assert the leak is
+    // POSITIVELY there.
+    assert.equal(artifact.includes(PROBE_HEAD), true, DEFECT_MSG('WD-SINK-TRUNC-RUNEV-FIELD'));
+  }
+);
