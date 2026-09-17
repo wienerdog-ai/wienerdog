@@ -297,7 +297,64 @@ Each probe drives the sink through its **public entry point** (never by calling
   mechanism; the requirement is that the boundary is forced, not that it is
   forced this way.
 
-## Contract reference
+#### The literal declaration file, in full
+
+The Deliverables table CREATES two files. Here is the smaller one,
+`tests/red-proofs/secret-sink-wiring-probes-alerts.proofs.json` (Table R row
+R1), **byte-for-byte as the runner accepts it**. It was validated on 2026-09-17
+by loading it through `scripts/red-proofs.js`'s own exported
+`loadDeclarations(root)` — not a restatement of the schema — and the mutation
+was measured to flip `safe` to `true`, which is what reddens P2 (round-zero
+logbook §8).
+
+```json
+{
+  "suite": "tests/unit/alerts.test.js",
+  "proofs": [
+    {
+      "id": "alerts-redact-before-truncate",
+      "wp": "WP-secret-sink-wiring-probes",
+      "criterion": "AC4",
+      "why": "P2 pins Table S row S1's truncate-then-redact order. Its pass is also what you would see if the site did no redaction at all, and only the paired CORRECT probe P1 rules that out — an inference, which is what ADR-0042 exists to replace. Swapping the cut and the scan makes the whole value reach the detector, so PROBE_HEAD no longer survives and MARKER appears: exactly the condition P2 asserts is absent. testNamePattern scopes the phase to P2, because the mutation also changes what every other capped field in this suite is scanned as, and none of those is this criterion's concern.",
+      "file": "src/core/alerts.js",
+      "find": "  const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));",
+      "replace": "  const scrub = (v) => redactOnly(String(v == null ? '' : v)).slice(0, MAX_FIELD_CHARS); // RP_MUT_ALERTS_REDACT_BEFORE_TRUNCATE",
+      "marker": "RP_MUT_ALERTS_REDACT_BEFORE_TRUNCATE",
+      "occurrences": 1,
+      "testNamePattern": "straddling MAX_FIELD_CHARS",
+      "expectRed": [
+        {
+          "test": [
+            "sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)"
+          ],
+          "signal": "WD-SINK-TRUNC-ALERTS: this probe pins a KNOWN-OPEN defect"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Which fields this spec fixes, and which the implementer fills.** Nothing above
+depends on code that does not exist yet, so the file is committed as written —
+but the distinction matters when a review round moves something:
+
+| Field | Fixed by | Note |
+|-------|----------|------|
+| `suite`, `file`, `wp`, `criterion` | this spec | Table R row R1, Deliverables, AC4 |
+| `find` | the **current tree** | the exact text of `src/core/alerts.js:48`; measured to occur **once**, which is why `occurrences` is 1. If an unrelated change edits that line, `find` stops matching and the lane fails loud — that is the intended behaviour (ADR-0042, Consequences) |
+| `replace`, `marker` | this spec | the order swap plus the `RP_MUT_` marker the runner greps for after writing |
+| `expectRed[].test` | this spec | **Table P's P2 name, verbatim** — no test name is invented here, because Table P already fixes all sixteen |
+| `expectRed[].signal` | this spec | a substring of `DEFECT_MSG('WD-SINK-TRUNC-ALERTS')` from "Exact contracts". Under the mutation the FIRST assertion to fail is `assert.equal(safe, false, …)`, so that message is the diagnostic |
+| `testNamePattern` | **the implementer may widen it** | the one field not fully determined: it scopes the phase to P2, and if the implementer's probe placement makes the mutation redden a test beyond P2, the runner's set-equality rule fires and they either narrow this pattern or declare the extra test (Table R constraints) |
+
+`tests/red-proofs/secret-sink-wiring-probes-run-evidence.proofs.json` has the
+**same shape** with `"suite": "tests/unit/run-evidence.test.js"` and a two-element
+`proofs` array carrying Table R rows **R2** and **R3** — the same order swap
+applied to `sanitizeArgv`'s element and to `sanitizeRecord`'s `scrub`, reddening
+P4 and P6 respectively, with ids unique across the whole declaration directory.
+
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
 Activation (ADR-0031, 3 of 7): (v) the task crosses an authority boundary — the
 detector emits sanitized bytes but five other modules own the artifacts those
@@ -464,8 +521,10 @@ review is added here on the spot (register-new-mirrors):
       DEFECT, 3 `LEAK-HEAD`, 4 `LEAK-WHOLE`, mirroring Table P's `Assertion` and
       `Status` columns); the seven defect-id greps (TAP name once, `DEFECT_MSG`
       twice); the nine `Table S row S<n>` greps (one per row); the
-      permission-boundary whitelist; and the `npm run red-proofs` and
-      proofs-JSON-shape steps derived from Table R.
+      permission-boundary whitelist; the `npm run red-proofs` and
+      proofs-JSON-shape steps derived from Table R; and the R1-drift comparison,
+      whose four expected values are copied from the literal declaration file
+      published under "Exact contracts".
 - [ ] **Current-state description** — the sink-module bullet (defers to Table S
       rather than restating the call sites), the public entry points listed in
       Table S's row order, the `tests/red-proofs/` file count, and the test-file
@@ -476,9 +535,13 @@ review is added here on the spot (register-new-mirrors):
       Table P's DEFECT rows); the Context paragraph on the transcript sink's
       transience; the Context paragraph on why `{ todo }` was dropped; the
       "Exact contracts" `PROBE`/`PROBE_HEAD`/`PROBE_TAIL`/`MARKER` constants, the
-      `safe` expression, the three assertion forms and the three feed shapes; the
-      "Accepted residuals" list; "Discovered issues / routed"; and the
-      Definition-of-done item that lists the seven defect ids.
+      `safe` expression, the three assertion forms and the three feed shapes;
+      **the literal declaration file published in full under "Exact contracts"**,
+      which mirrors Table R row R1 (`suite`, `file`, `criterion`), Table P row P2
+      (`expectRed[].test`), Table S row S1 (`find`) and `DEFECT_MSG`
+      (`signal`) — four tables in one JSON block, so a change to any of them
+      edits it too; the "Accepted residuals" list; "Discovered issues / routed";
+      and the Definition-of-done item that lists the seven defect ids.
 - [ ] **Frontmatter** — `adrs` (must list ADR-0042 while Table R is non-empty)
       and `depends_on` / `epic`.
 
@@ -566,7 +629,7 @@ widens it.**
    list is closed, and these are the two callers left out") is what this WP adds
    to stop it recurring.
 
-## Security checklist
+## Security checklist (delete only if the WP touches no untrusted input)
 
 - [ ] Every probe reads the **artifact from disk** (the file the sink actually
       writes), not the sink's return value — a sink that redacts its return value
@@ -627,8 +690,10 @@ widens it.**
       `package-lock.json`, `memory/lessons/inbox.md` and `docs/specs/logbook/`,
       all of which `docs/specs/_TEMPLATE.md` lines 33-35 exempt.
 - [ ] **AC9** — The two declaration files of Table R exist with exactly the rows
-      that table assigns them, and the bare unfiltered `npm run red-proofs`
-      reports `PROVEN` for this WP's criteria and exits 0.
+      that table assigns them; the committed R1 file's `file`, `find`, `marker`
+      and `expectRed[0].test[0]` match the literal published under "Exact
+      contracts"; and the bare unfiltered `npm run red-proofs` reports `PROVEN`
+      for this WP's criteria and exits 0.
 - [ ] **AC10** — `npm test` and `npm run lint` pass.
 - [ ] **AC11** — Idempotency: `N/A — this WP ships unit tests and two inert JSON
       declaration files. It adds no command and writes nothing outside the repo.`
@@ -703,7 +768,7 @@ need "$(git diff --name-only main... | grep -cvE '^(tests/unit/(alerts|run-evide
 
 # AC9: the two declaration files exist, are parseable JSON, name the right suite
 # and carry the rows Table R assigns them.
-node -e '
+node - <<'JS'
 const fs = require("node:fs");
 const want = {
   "secret-sink-wiring-probes-alerts": { suite: "tests/unit/alerts.test.js", n: 1 },
@@ -726,8 +791,26 @@ for (const [name, w] of Object.entries(want)) {
   }
   console.log(`ok: ${p} — suite ${d.suite}, ${d.proofs.length} proof(s)`);
 }
+// R1 is published literally and in full under "Exact contracts". These four
+// fields are the ones that literal fixes; they are compared here so the
+// committed file cannot drift from the spec that validated it.
+const r1Path = "tests/red-proofs/secret-sink-wiring-probes-alerts.proofs.json";
+const r1 = fs.existsSync(r1Path) ? JSON.parse(fs.readFileSync(r1Path, "utf8")).proofs[0] : null;
+if (r1 === null) { console.log("GATE FAIL: R1 absent — nothing to compare against the spec literal"); process.exit(1); }
+const fixed = {
+  file: "src/core/alerts.js",
+  find: "  const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));",
+  marker: "RP_MUT_ALERTS_REDACT_BEFORE_TRUNCATE",
+};
+for (const [k, v] of Object.entries(fixed)) {
+  if (r1[k] !== v) { console.log(`GATE FAIL: R1.${k} drifted from the spec literal`); bad++; }
+  else console.log(`ok: R1.${k} matches the spec literal`);
+}
+if (r1.expectRed[0].test[0] !== "sink-probe: alerts — a labelled secret straddling MAX_FIELD_CHARS is NOT redacted in alerts.jsonl (KNOWN DEFECT WD-SINK-TRUNC-ALERTS)") {
+  console.log("GATE FAIL: R1.expectRed[0].test[0] is not Table P row P2 verbatim"); bad++;
+} else console.log("ok: R1.expectRed[0].test[0] is Table P row P2 verbatim");
 process.exit(bad ? 1 : 0);
-'
+JS
 
 npm run red-proofs    # AC9 — the bare unfiltered run; must exit 0
 npm test              # AC6, AC10

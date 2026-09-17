@@ -191,3 +191,63 @@ the boundary, at the same handler, with the same bytes.
   four probes that are exempt because per-chunk redaction cannot be made
   whole-stream by one substring.
 - The transcript sink's transience is restated against the lock gate.
+
+## 8. Template-conformance round zero, and a literal declaration file that was validated, not asserted
+
+The clean-context conformance read returned FAIL with three light items, all
+fixed in a second commit on the same branch:
+
+1. `## Contract reference` had dropped the template's parenthetical. Restored to
+   `## Contract reference (optional — mark N/A if this WP is not contract-dense)`.
+2. `## Security checklist` likewise → `## Security checklist (delete only if the
+   WP touches no untrusted input)`.
+3. The template requires *"For file-generating code, show a literal expected
+   output file in full."* The Deliverables table CREATES two
+   `tests/red-proofs/*.proofs.json` files and "Exact contracts" described only
+   their mutation semantics. The smaller one
+   (`secret-sink-wiring-probes-alerts.proofs.json`, Table R row R1) is now
+   published byte-for-byte.
+
+**The literal was validated by loading it, not by re-reading the schema.**
+`scripts/red-proofs.js` exports `loadDeclarations(root)` (`:2217` export list,
+definition at `:469`), which is the runner's own LOAD phase and calls
+`validateProof` (`:633`) on every entry. Run against a temp root holding only
+`tests/red-proofs/`:
+
+```
+loadDeclarations OK — 3 proofs: alerts-redact-before-truncate,
+  runev-argv-redact-before-truncate, runev-field-redact-before-truncate
+  alerts-redact-before-truncate: find occurs 1x in src/core/alerts.js (declared 1)
+  runev-argv-redact-before-truncate: find occurs 1x in src/core/run-evidence.js (declared 1)
+  runev-field-redact-before-truncate: find occurs 1x in src/core/run-evidence.js (declared 1)
+```
+
+The second file (Table R rows R2 and R3) was drafted and loaded too, so the
+spec's claim that it "has the same shape" is measured rather than promised; only
+R1 is published in the spec, per the conformance instruction.
+
+The loader was also shown to **refuse** four deliberately broken variants, so
+the green above is a check and not a no-op:
+
+| Break | Loader |
+|---|---|
+| `id` not a kebab slug (`Alerts_Bad`) | refused |
+| `file` equal to the suite it reddens | refused |
+| `replace` not containing `marker` | refused |
+| `expectRed` empty | refused |
+
+**Relevance, measured separately.** Loading proves the declaration is
+well-formed, not that the mutation matters. Applying R1's `replace` to a copy of
+`src/core/alerts.js` and driving `appendAlert` with the `STRADDLE-TRUNCATE` feed
+gave `safe=true marker=true head=false` — i.e. under the mutation P2's
+`assert.equal(safe, false, …)` fails, which is exactly the red the declaration
+claims. Without this step the proof could have been well-formed and inert.
+
+**One real defect was found in the spec's own verification block while doing
+this.** The AC9 check was written as `node -e '…'` and its new expected-value
+table contains `''` (from `String(v == null ? '' : v)`), which closes the bash
+single quote and breaks the script. It is now `node - <<'JS' … JS`, a quoted
+heredoc, which has no such interaction. Re-measured in all three states after
+the change: compliant → exit 0; R1's `find` and test name mutated → two named
+GATE FAILs, exit 1; R1 deleted → a clean `R1 absent` message, exit 1 (an earlier
+draft threw an uncaught `ENOENT` there, which is a red for the wrong reason).
