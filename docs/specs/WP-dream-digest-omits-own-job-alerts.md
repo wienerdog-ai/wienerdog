@@ -72,6 +72,14 @@ session a state this run has already changed"*): by step 19 the dream's work has
 succeeded, so rendering "the dream job has failed" shows the next session a
 state this run has already changed.
 
+**And the same sentence bounds the fix.** Step 19 is the FIRST point at which
+that is true, so it is the ONLY render this WP filters: the dream's earlier
+quarantine-only refresh runs before the run's outcome is known and keeps showing
+every record, and a failure after step 19 renders again, unfiltered. Design
+round 1 found the first draft filtered both sites and could therefore hide a
+genuine unresolved failure; Table A's principle row is the rule that replaced
+it — *when in doubt the stale callout is shown; a genuine one is never hidden*.
+
 ## Current state
 
 Every line citation below was re-derived at `b4af715e` (`origin/main` after
@@ -147,9 +155,31 @@ disambiguates, it does not locate.
   wraps its `readConfig` in `try { … } catch { return []; }`. **An unreadable or
   missing `config.yaml` therefore resolves no job by construction**, which is
   Table A's failure direction already built into the lookup.
-- Precedent for reading a supervisor-set variable: dream.js already takes one off
-  `process.env` at l.827-828 (`WIENERDOG_DREAM_RUN_TOKEN`), strictly validated,
-  with *anything else treated as absent (standalone run)*.
+- **The per-run token channel, both ends, read in full** (round 1's F1 correlate):
+  - **Minted** at `src/cli/run-job.js` l.934-938 (the `if` block, both ends
+    checked), inside `runJob`, immediately after
+    `const env = buildCleanEnv(paths, name, platform);` (l.917) and onto
+    that same object: `if (job.run === 'builtin:dream' && platform !== 'win32')
+    { const runToken = crypto.randomBytes(8).toString('hex');
+    env.WIENERDOG_DREAM_RUN_TOKEN = runToken; … }`. That `env` is what `spawn`
+    (l.1036) hands the child, so `WIENERDOG_JOB` and the token arrive together.
+  - **Also set under `--catch-up`**: `catchUp` (l.1340) runs its due jobs through
+    `const doRun = opts.runJob || runJob;` (l.1398) → `await doRun(paths, job,
+    opts)` (l.1411), i.e. the same `runJob` and the same mint. There is no
+    catch-up-only path that skips it.
+  - **NOT set on win32**: l.934's guard is `platform !== 'win32'`, a deliberate
+    A10 scope limit (its own comment names `WP-a10-windows-reap`). Consequence
+    for this WP in Table A, "Supervisor correlate".
+  - **Consumed** at `src/cli/dream.js` l.827-828, inside the brain-spawn block:
+    `const rawToken = process.env.WIENERDOG_DREAM_RUN_TOKEN; const runToken =
+    typeof rawToken === 'string' && /^[a-f0-9]{16}$/.test(rawToken) ? rawToken
+    : null;` — *anything else treated as absent (standalone run)*. That is the
+    validation Table A reuses; it is re-applied at the render, not re-invented,
+    and the existing read at l.827-828 is not moved or altered.
+  - What it does **not** establish: dream holds no prior copy of the token and
+    the hand-up pidfile named after it does not exist yet at render time, so the
+    check is shape-and-presence only — possession, not parentage (Table A,
+    "Supervisor correlate", limit (b)).
 - Tests: `tests/unit/dream-pipeline.test.js` (2220 lines) drives whole in-process
   dream runs through a `runDream(ctx, argv, opts)` harness — see its existing
   case *"the digest is regenerated AFTER the ledger is persisted (row G4, Table V
@@ -170,11 +200,11 @@ disambiguates, it does not locate.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/dream.js | filter the alerts input of `regenerateDigest` per Table A, and add the `require('../scheduler/jobs')` the cross-check needs. No other behavior changes |
+| modify | src/cli/dream.js | per Table A: give `regenerateDigest` a per-call flag defaulting to UNFILTERED, filter its alerts input at the step-19 site ONLY, add the late-failure unfiltered re-render, and add the `require('../scheduler/jobs')` the cross-check needs. The existing `WIENERDOG_DREAM_RUN_TOKEN` read at l.827-828 is re-used, not moved. No other behavior changes |
 | modify | src/core/alert-ack.js | **comment only, zero code lines**: narrow the stale universal in `unacknowledgedAlerts`' JSDoc per Table B |
 | modify | tests/unit/dream-pipeline.test.js | cover the dream-layer acceptance criteria below (the implementer designs the cases) |
 | modify | tests/unit/scheduler-runjob.test.js | cover the run-job-layer acceptance criteria below |
-| create | tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json | this WP's two RED declarations (Table C); `suite` is `tests/unit/dream-pipeline.test.js` |
+| create | tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json | this WP's six RED declarations (Table C); `suite` is `tests/unit/dream-pipeline.test.js` |
 
 ### Exact contracts
 
@@ -182,21 +212,35 @@ One predicate is added to `src/cli/dream.js`. Its name and placement are the
 implementer's; its behavior is Table A's, and this is the shape:
 
 ```js
-/** The job name whose success THIS dream run will establish, or null when the
- *  run is not a scheduled dream job. Env is the supervisor's channel, config is
- *  the authority: `process.env.WIENERDOG_JOB` is accepted ONLY when the job it
- *  names exists in config.yaml with `run: builtin:dream`.
+/** The job name whose success THIS dream run will establish, or null when this
+ *  process is not a supervised dream job. Env is the supervisor's channel,
+ *  config is the authority, and the per-run token is the correlate — ALL THREE
+ *  are required (Table A, "Resolved job name"): `process.env.WIENERDOG_JOB`
+ *  names a job that config.yaml defines with `run: builtin:dream`, AND
+ *  `process.env.WIENERDOG_DREAM_RUN_TOKEN` matches /^[a-f0-9]{16}$/ — the same
+ *  validation this file already applies to that variable. Anything else → null.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @returns {string|null} */
 function supervisingDreamJob(paths)
 ```
 
-The alerts input at `src/cli/dream.js` l.646 becomes the same expression with
-Table A's filter applied to its **result**:
+**The closure gains an explicit per-call flag and its default is UNFILTERED**
+(Table A, "Where applied"), so the filtering behaviour exists only where a call
+site asks for it by name. The alerts input at `src/cli/dream.js` l.646 becomes
+the same expression with Table A's filter applied to its **result**, conditioned
+on that flag:
 
 ```js
 alerts: <filter>(unacknowledgedAlerts(paths, readAlerts(paths))),
 ```
+
+The three call sites, and the whole of the placement contract:
+
+| Call site | Flag | Why |
+|-----------|------|-----|
+| l.724, the quarantine-only refresh | **unfiltered** | this run may still fail; a record hidden here would be a genuine unresolved failure (Table A, "When it may omit") |
+| l.1182, step 19 | **filtered** | the only point at which this process's dream work has succeeded |
+| the late-failure recovery render (new; Table A, "Late in-process failure") | **unfiltered** | the run failed after step 19, so every omitted callout is restored |
 
 Worked example. `config.yaml` defines `- name: dream / run: builtin:dream`;
 `state/alerts.jsonl` holds
@@ -256,14 +300,19 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 
 | Fact / rule | Value |
 |-------------|-------|
-| Where applied | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. Both of its call sites (the quarantine-only refresh l.724 and step 19 l.1182) inherit it, because both go through the closure. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
+| **THE PRINCIPLE** | **when in doubt the stale callout is SHOWN; a genuine one is never hidden.** Every unresolved question resolves to rendering the record: an unresolved name, an absent or malformed run token, an unreadable config, a lookup that throws, a render reached before this run's success is established, a failure after that render. The single named narrowing is the B1/B2 row below, and it is named because it is outside this process's reach — not because it is acceptable in general. Every other row of this table is an application of this one |
+| Where applied | the `regenerateDigest` closure in `src/cli/dream.js` and nowhere else. The closure takes an **explicit per-call flag whose default is UNFILTERED**, so a call site added later is safe by construction and a filtering call must say so at the call. **Exactly ONE call site passes the filtering value: step 19 (l.1182).** The quarantine-only refresh (l.724) and the late-failure re-render (below) render **unfiltered**. `src/cli/sync.js` is unchanged; **no third feeder of the digest's alerts array is created** |
+| When it may omit | **only at the final render**, which is the first point in `run()` at which THIS process's dream work has succeeded: the ledger is persisted (l.1164) and every step that can fail the run's own body is behind it. Before that point nothing is omitted, because the run may still fail and leave the record genuine. This row is what makes the l.724 site unfiltered — not an oversight to be tidied later |
 | Filter position | applied to the **result** of `unacknowledgedAlerts(paths, readAlerts(paths))`, leaving that expression textually intact. Both orders yield the same set; this order is required so `alert-ack.js`'s standing claim that *both callers pass `readAlerts`* stays true (Table B narrows only the sentence that this WP actually falsifies) |
-| Resolved job name | `process.env.WIENERDOG_JOB`, accepted **only when** `jobsLib.findJob(paths, thatValue)` returns a job whose `run` is exactly the string `builtin:dream`. Every other case resolves to **no name**: the variable absent, not a string, empty, naming a job `config.yaml` does not define, or naming one whose `run` is anything else |
-| Omitted set | when a name resolves: every record in the array whose `job` **strictly equals** that name — exactly the set `clearAlerts(paths, name)` will remove. When no name resolves: nothing is omitted, and the rendered bytes equal today's |
-| Failure direction | **fail-safe toward SHOWING.** Any doubt — unreadable config, a lookup that throws, a name that does not resolve — omits nothing and renders exactly what is rendered today. Nothing in this filter may throw out of `regenerateDigest`. `listJobs`' own `catch { return []; }` (`src/scheduler/jobs.js` l.199-208) already gives the config-read half of this by construction |
-| Paths that render nothing | this contract governs **the two render sites and only those**. A run that returns or throws without reaching a render leaves `digest.md` byte-untouched, so the filter has no effect there and the spec claims none: the `owner-unknown` lock throw (l.595-600, new in PR #245), the declined-lock exit-0 return (l.601-602), `nothing new to dream` (l.746-757) and the dry-run return (l.765-768). What the **supervisor** does on those paths is run-job's contract, not this one — the exit-0 declined-lock case is named in Out of scope |
-| Render-then-fail | a run **can** render at l.724 and then throw — the widened no-complete-input throw at l.736-743, the containment-probe halt at step 8b, a brain failure, or run-job's B1/B2. On those paths the digest omits the job's records while `alerts.jsonl` gains a fresh one. Bounded and accepted in Implementation notes ("Named residual"); no criterion here asserts anything about the digest on them |
-| Why env is trusted here | `WIENERDOG_JOB` is set by `buildCleanEnv` in the very component that owns the lifecycle: the supervisor tells the child which job's alerts its own success will clear. This mirrors `WIENERDOG_DREAM_RUN_TOKEN` (`src/cli/dream.js` l.827-828), which dream.js already reads the same way, with the same absent-on-anything-unexpected rule. The config cross-check makes the claim config-derived rather than merely asserted, and it can never be inert on the scheduled path: `runJob` is only reachable with a job that `findJob`/`listJobs` returned (`src/cli/run-job.js` l.1494, l.1343). **Not yet ruled on by the owner — see "Dispatch precondition — owner items", O1** |
+| Resolved job name | **two conjuncts, both required.** (1) `process.env.WIENERDOG_JOB` names a job that `jobsLib.findJob(paths, thatValue)` returns with `run` exactly the string `builtin:dream`; AND (2) `process.env.WIENERDOG_DREAM_RUN_TOKEN` is present and passes **the same validation dream.js already applies to it** — `typeof === 'string'` and `/^[a-f0-9]{16}$/` (l.827-828), re-applied, not re-invented. Every other case resolves to **no name**: either variable absent, not a string, empty or malformed; a name `config.yaml` does not define; a job whose `run` is anything else |
+| Supervisor correlate (the run token) | the token is minted per `runJob` invocation at `src/cli/run-job.js` l.936 (`crypto.randomBytes(8).toString('hex')`) onto the same `env` object `buildCleanEnv` returned at l.916, which `spawn` (l.1036) hands the child — so on the supervised path both variables arrive together, **including under `--catch-up`**, which calls the same `runJob` (l.1398 `const doRun = opts.runJob \|\| runJob`). **Two limits, stated rather than implied.** (a) The mint is guarded by `job.run === 'builtin:dream' && platform !== 'win32'` (l.934), so **no token is minted on win32** and the omission therefore never engages on Windows — the stale callout stays, which is the safe direction, but this WP's fix does not reach that platform. (b) The token proves **possession of a supervisor-minted per-run value, not parentage**: dream has nothing to compare it against, so a process inheriting both variables still passes. It strictly narrows the accidental-inheritance vector; it does not close it. See O1's residual |
+| Why this channel at all | the supervisor owns the alert lifecycle, so the supervisor is the only party that can say which job's alerts this run's success will clear; both variables are set by it in the child env. The config cross-check makes the accepted value config-derived rather than merely asserted, and it can never be inert on the scheduled path, because `runJob` is only reachable with a job that `findJob`/`listJobs` returned (`src/cli/run-job.js` l.1494, l.1343). **Not ruled on by the owner — see "Dispatch precondition — owner items", O1, which also carries the residual this channel leaves open** |
+| Omitted set | when a name resolves **and** the call site is the filtering one: every record in the array whose `job` **strictly equals** that name — exactly the set `clearAlerts(paths, name)` will remove. Otherwise nothing is omitted, and the rendered bytes equal today's |
+| Failure direction | **fail-safe toward SHOWING** (the principle row). Nothing in this filter may throw out of `regenerateDigest`. `listJobs`' own `catch { return []; }` (`src/scheduler/jobs.js` l.199-208) already gives the config-read half by construction |
+| Paths that render nothing | a run that returns or throws without reaching a render leaves `digest.md` byte-untouched, so the filter has no effect there and the spec claims none: the `owner-unknown` lock throw (l.595-600, new in PR #245), the declined-lock exit-0 return (l.601-602), `nothing new to dream` (l.746-757) and the dry-run return (l.765-768). What the **supervisor** does on those paths is run-job's contract, not this one — the exit-0 declined-lock case is named in Out of scope |
+| Early render then failure | a run can render at l.724 and then throw — the widened no-complete-input throw at l.736-743, the step-8b containment halt, a brain failure. **Because l.724 is unfiltered, the genuine callout is still on screen on every one of those paths**, and AC6a-AC6b assert the digest's content there, not only `alerts.jsonl`'s |
+| Late in-process failure | if any throw escapes **after** the filtered render and before `run()` returns — steps 20-22, the workspace teardown `finally`, the scratch clean and lock release `finally` — **exactly one unfiltered `regenerateDigest()` runs before the error propagates**, restoring every omitted callout. If that re-render itself throws, its failure is swallowed and the **ORIGINAL error propagates**: a recovery render may never mask the cause of the failure. The placement and wrapping are the implementer's; "exactly one", "unfiltered" and "original error wins" are not |
+| Out-of-process failure (B1/B2) — the one named narrowing | `run-job`'s B1 (success-marker refused, l.1188) and B2 (alert-cleanup refused, l.1204) happen **after the dream child has exited**, so `dream.js` cannot re-render and **this WP does not claim to fix them**. On **B1** a fresh `success-marker-refused` record is appended that the just-written digest does not show — a genuinely hidden failure, bounded below. On **B2** the hidden records are exactly the ones this successful run earned the right to delete and failed to delete for an unrelated I/O reason: stale, not genuine, and hiding them is the correct reading of a run that succeeded. **Bound, both cases:** the record stays in `alerts.jsonl`, `wienerdog alerts` still prints it, run-job writes the reason to stderr, and the callout returns at the next **unfiltered** render — any `wienerdog sync`, or the next dream's l.724 refresh. It does **not** return at the next dream's step 19, which filters again. Coupling `run-job` to the renderer is rejected alternative A (WP-041 forbids it), so the honest fix is supervisor-side and belongs with `WP-dream-lock-stale-owner-loud`'s family. AC6c-AC6d pin this state rather than leaving it unstated |
 | Never changed | `formatAlerts` and every byte of its template, including the "clears automatically" sentence (byte-frozen, WP-neutralize-alert-callout-rendering); `src/core/digest.js` in any respect; `src/core/alerts.js` and every writer of `alerts.jsonl` (`appendAlert`, `failLoud`, the launcher's `appendRefuseAlert`); `clearAlerts` and where it is called; the acknowledgement store and `addAcks`/`pruneAcksForJob`/`unacknowledgedAlerts`' behavior; `src/cli/sync.js`; `wienerdog alerts`; `schedule.json`; the fail-loud email; the dream's lock handling in every arm. `run-job` still writes no byte of `digest.md` |
 | Empty-omission identity | when nothing is omitted the digest is byte-identical to today's, so **no golden fixture moves** |
 | Named consequence (managed-policy warning) | `run-job` l.953 appends a *warning* record under the job's own name before the spawn, and the job's success clears it, so today its only lasting surface is the very off-by-one this WP removes — rendered, wrongly, as `the "dream" job has failed`. After this change that banner is gone for the dream. Restoring a standing surface for it is a separate WP (Implementation notes; Out of scope) — it is not a failure and does not belong in the failure-alert log |
@@ -273,28 +322,39 @@ declarations' `why` fields, the JSDoc in `alert-ack.js`).
 | Fact / rule | Value |
 |-------------|-------|
 | Anchor | `src/core/alert-ack.js`, the sentence at l.127 whose exact text is `This is the ONLY suppression point (Table B).` It occurs once in the file |
-| Replacement | that sentence becomes: `This is the ONLY ACKNOWLEDGEMENT suppression point (Table B) — the only place this store is read. It is NOT the only filter applied to the array a caller hands renderDigest: dream.js drops this result's records for the job whose success the run it belongs to will establish (WP-dream-digest-omits-own-job-alerts, Table A).` Re-wrapped to the file's JSDoc style; the wrapping is the implementer's, the claim is not |
+| Replacement | that sentence becomes: `This is the ONLY ACKNOWLEDGEMENT suppression point (Table B) — the only place this store is read. It is NOT the only filter applied to the array a caller hands renderDigest: at its FINAL render only, dream.js drops this result's records for the job whose success that run has just established (WP-dream-digest-omits-own-job-alerts, Table A).` Re-wrapped to the file's JSDoc style; the wrapping is the implementer's, the claim is not |
 | Diff shape | **every** changed line in this file is a JSDoc continuation line (matches `^[+-] \*`). Zero executable lines change; behavior is identical before and after |
 | Why it is in scope at all | the sentence is an ungated universal that this WP falsifies. `docs/runbooks/spec-authoring.md`: a universal either quantifies over a named table or names its exception set in place. Leaving it standing is how the next reader concludes no other filter exists |
 | Not touched | the two sentences before it (the programming-error guard and the both-callers-pass-`readAlerts` parenthetical, which Table A's filter position keeps true), and every other comment or line in the file |
 
 ### Table C — the RED declarations (ADR-0042)
 
-`id`, `wp` and `criterion` are fixed here so AC10 can name them without a
+`id`, `wp` and `criterion` are fixed here so AC11 can name them without a
 repo-wide count. The mutation literal, the marker and the `expectRed` identities
-are the implementer's, because the filter's own name and shape are.
+are the implementer's, because the filter's own name and shape are. **Each
+declaration breaks exactly ONE conjunct or placement rule and no other**, so the
+criterion it reddens is the one that owns that rule — round 1 found the previous
+pairing proved a different property than it claimed, and one-rule-per-mutation is
+what stops that recurring.
 
-| id | reintroduces / breaks | must redden | criterion |
-|----|-----------------------|-------------|-----------|
-| `dream-digest-filter-removed` | the pre-change behavior: the alerts input is handed to `renderDigest` unfiltered | the **AC1** assertion (the dream's own callout is absent) | `1` |
-| `dream-digest-filter-unconditional` | the resolution rule: the filter omits records without requiring Table A's `findJob` + `run: builtin:dream` cross-check to resolve a name | the **AC3** assertion (an unsupervised run renders both callouts) | `3` |
+| id | breaks exactly | must redden | criterion |
+|----|----------------|-------------|-----------|
+| `dream-digest-filter-removed` | the filter itself: the alerts input reaches `renderDigest` unfiltered at every site | **AC1** (the dream's own callout is absent at step 19) | `1` |
+| `dream-digest-filter-ignores-config` | **only** the `findJob` + `run: builtin:dream` conjunct; the `WIENERDOG_JOB`-is-set conditional and the run-token conjunct are retained | **AC4** (a `WIENERDOG_JOB` naming an undefined job, and one whose `run` is not `builtin:dream`, each omit nothing) | `4` |
+| `dream-digest-filter-always-on` | **both** environment conditionals: the filter omits the configured dream job's records whether or not either variable is set | **AC3** (an unsupervised run renders both callouts) | `3` |
+| `dream-digest-filter-ignores-run-token` | **only** the `WIENERDOG_DREAM_RUN_TOKEN` conjunct; the `findJob` cross-check is retained | **AC5** (a direct `wienerdog dream` carrying a valid `WIENERDOG_JOB` but no valid token still renders the callout) | `5` |
+| `dream-digest-filter-at-early-render` | **only** the placement rule: the quarantine-only refresh at l.724 passes the filtering value too | **AC6a** (quarantine render, then the no-complete-input throw: the digest still shows the callout) | `6a` |
+| `dream-digest-no-recovery-render` | **only** the late-failure recovery render: the post-step-19 throw path propagates without the unfiltered `regenerateDigest()` | **AC7** (after a late in-process failure the digest shows the callout again) | `7` |
 
-`wp` is `WP-dream-digest-omits-own-job-alerts` for both. `scripts/red-proofs.js`
-requires the observed own-body failing set to **EQUAL** the declared set, so a
-criterion that only *might* redden under a mutation cannot be declared against
-it — AC2, AC4 and AC5 are deliberately absent from both `expectRed` sets rather
-than forgotten, and an implementer whose test design makes one of them redden
-under a declared mutation declares it there and says so in the PR body.
+`wp` is `WP-dream-digest-omits-own-job-alerts` for all six.
+`scripts/red-proofs.js` requires the observed own-body failing set to **EQUAL**
+the declared set, so a criterion that only *might* redden under a mutation cannot
+be declared against it. Two consequences the implementer must handle rather than
+discover: a test design in which one mutation reddens a second criterion's
+assertion puts that identity in the same `expectRed` set and says so in the PR
+body; and AC2 and AC8 are deliberately in no `expectRed` set, because no declared
+mutation above changes what they observe — AC9-AC12 are gate criteria that the
+verification steps, not a mutation, establish.
 
 ### Mirrored Surface Checklist
 
@@ -303,31 +363,37 @@ finding updates the table **and every mirror below in the same commit** — no
 commit exists in which they disagree — and any new mirror found in review is
 added here on the spot:
 
-- [ ] Deliverables-table cells (the `dream.js` row cites Table A, the
-      `alert-ack.js` row Table B, the `.proofs.json` row Table C)
-- [ ] Acceptance criteria that assert Table A's omitted set, its resolution rule,
-      its failure direction and its render-nothing / render-then-fail boundary;
-      Table B's diff shape; Table C's ids and criteria
+- [ ] Deliverables-table cells (the `dream.js` row cites Table A's flag default,
+      filtering site and recovery render, the `alert-ack.js` row Table B, the
+      `.proofs.json` row Table C's count)
+- [ ] Acceptance criteria that assert Table A's principle, its omitted set, both
+      conjuncts of its resolution rule, its failure direction, its per-site
+      placement (AC6), the late-failure re-render (AC7) and the B1/B2 narrowing
+      (AC6c/AC6d); Table B's diff shape; Table C's ids, criteria and count
 - [ ] Verification commands (V3/V4 assert Table B, V5 asserts Table A's frozen
-      template, V2/V6 assert Table C)
+      template, V2/V6 assert Table C — V6's `want` array is the literal mirror of
+      Table C's id column and must be re-sorted whenever that column changes)
 - [ ] Current-state description (l.646's expression, the two call sites, the
-      non-rendering paths, the `WIENERDOG_JOB` channel, the `findJob`
+      non-rendering paths, the `WIENERDOG_JOB` channel, **both ends of the
+      run-token channel including its win32 and catch-up facts**, the `findJob`
       reachability argument, `listJobs`' catch)
 - [ ] The `why` field of each declaration in
       `tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json`
-- [ ] Operative prose steps that apply it — there are **nine**, and they are
+- [ ] Operative prose steps that apply it — there are **eleven**, and they are
       enumerated rather than gestured at, because this is the class no gate
       reaches:
       (a) the predicate sketch's JSDoc under "Exact contracts" (Table A,
-      *Resolved job name*);
-      (b) the sentence replacing l.646's expression, and the `alerts:` code line
-      under it (Table A, *Filter position*);
+      *Resolved job name*, both conjuncts);
+      (b) the sentence replacing l.646's expression, the `alerts:` code line
+      under it, and **the three-row call-site table beneath it** (Table A,
+      *Filter position* and *Where applied*);
       (c) the worked example and the two literal `digest.md` files with their
       byte counts and trailing-byte note (Table A, *Omitted set* and
       *Empty-omission identity*);
       (d) Implementation notes' first bullet, that `../scheduler/jobs` is
       first-party (the Deliverables `dream.js` row's added require);
-      (e) Implementation notes' "Named residual" (Table A, *Render-then-fail*);
+      (e) Implementation notes' "Named residual" (Table A, *Out-of-process
+      failure (B1/B2)*, and its statement that the wider residual was fixed);
       (f) Implementation notes' "Named consequence" and Definition of done item
       3, which requires it in "Decisions made" (Table A, last row);
       (g) Implementation notes' "Config edited mid-run" and the
@@ -336,11 +402,16 @@ added here on the spot:
       (h) Out of scope's declined-lock bullet (Table A, *Paths that render
       nothing*) and its `sync.js` bullet (Table A, *Where applied*);
       (i) Security checklist items 1 and 3 (Table A, *Resolved job name* and
-      *Why env is trusted here*). The rejected alternatives A and C are NOT in
-      this set: they apply no table fact, they record why two designs outside
-      every table were refused.
+      *Supervisor correlate*);
+      (j) Table B's *Replacement* text, whose narrowed sentence describes when
+      dream.js drops records and must stay true to Table A's *When it may omit*;
+      (k) the Context section's closing paragraph, which argues the fix from the
+      step-19 comment and therefore asserts Table A's *When it may omit*.
+      The rejected alternatives A and C are NOT in this set: they apply no table
+      fact, they record why two designs outside every table were refused.
 - [ ] "Dispatch precondition — owner items" O1, which mirrors Table A's
-      "Why env is trusted here" row
+      *Supervisor correlate* and *Why this channel at all* rows, and whose
+      residual (a)/(b)/(c) mirror that row's two limits and the B1/B2 bound
 - [ ] Context: the WP-041 quote and the statement that its accepted lag is
       withdrawn while its prohibition is kept
 
@@ -355,35 +426,57 @@ anything below, and nothing in this file should be read as a ruling on them.
 *Maintainer ruling (2026-09-10): this WP ships first; the follow-up WP is drafted
 later.* It governs the managed-policy-warning follow-up only.
 
-### O1 — is `WIENERDOG_JOB` trustworthy as job identity, under the config cross-check?
+### O1 — is the env-plus-config-plus-token channel trustworthy as job identity?
 
 **The question.** The filter needs to know which job's success this run will
-establish. The only channel carrying that today is the environment variable the
-supervisor sets (`buildCleanEnv`, `src/cli/run-job.js` l.150/l.180/l.219). Table
-A accepts it **only** when `jobsLib.findJob(paths, value)` returns a job whose
-`run` is exactly `builtin:dream`, and resolves no name in every other case, so
-every doubt renders the callout. Should the dream trust that channel at all?
+establish. Design round 1 found that `WIENERDOG_JOB` plus the `findJob`
+cross-check establishes *that a job name is plausible*, not *that this process is
+the child whose success will resolve the alert*: an attended or wrapper-launched
+`wienerdog dream` that merely inherits `WIENERDOG_JOB=dream` passes it whenever
+the normal dream job exists. Table A's rule was **narrowed in response** and now
+requires a second conjunct, the supervisor's per-run
+`WIENERDOG_DREAM_RUN_TOKEN` (Table A, "Supervisor correlate"). Should the dream
+trust the narrowed channel?
 
-**Recommendation: yes, with the cross-check as Table A states it.** The variable
-is supervisor-set in the component that owns the alert lifecycle; the same file
-already reads `WIENERDOG_DREAM_RUN_TOKEN` off `process.env` under the same
-anything-unexpected-is-absent rule (l.827-828); the cross-check makes the
-accepted value config-derived rather than asserted; and the only actor who can
-set the variable is the process that spawns the dream — `run-job`, which sets
-the true value, or the user's own shell. The blast radius of a hostile value is
-one render of one callout, with the record itself untouched, `wienerdog alerts`
-still printing it and the next render restoring it (Security checklist).
+**Recommendation: yes, with all three conjuncts, and with the residual below
+stated in the spec rather than left to a reader.** The narrowing costs **zero new
+surface**: the token already exists, is already minted per `runJob` invocation
+including under `--catch-up`, already travels in the same `env` object as
+`WIENERDOG_JOB`, and is already validated in this very file at l.827-828 by the
+regex this rule re-applies. It is strictly better than the round-1 design and
+cannot be inert on the supervised POSIX path.
 
-**Overrule cost.** If the owner rules the env channel untrustworthy, the WP does
-not shrink — it changes shape. There is no other in-process signal of scheduled
-identity today, so the alternative is a new supervisor→child channel (for
-example a per-run file under `state/` that run-job writes before the spawn and
-the dream reads), which adds a writer to `state/`, an uninstall/cleanup
-obligation, and a second lifecycle to keep in step with `clearAlerts`. That is a
-different, larger work package: Table A's resolution rule, the predicate sketch
-in "Exact contracts", AC3, AC4 and the `dream-digest-filter-unconditional`
-declaration are all rewritten, and this spec returns to drafting rather than
-being amended in place.
+**The residual, stated honestly.** Two parts, and neither is closed.
+(a) **Possession is not parentage.** A process that inherits *both* variables —
+a wrapper script, an exported shell environment, a re-exec — still passes. The
+token narrows the accidental-inheritance vector from "a guessable job name" to
+"a live 16-hex value the supervisor minted", which is a large narrowing and not
+a closure; dream holds no prior copy to compare against, and the hand-up pidfile
+named after the token does not exist yet at render time.
+(b) **What is actually at risk after the F2 fix is smaller than it was.** The
+filter now applies only at the final render, i.e. only after THIS process's dream
+run has succeeded, so the callout a spoofed or inherited environment can hide is
+*"the dream job has failed"* shown immediately after a dream in fact succeeded.
+The record is never touched: it stays in `alerts.jsonl`, `wienerdog alerts`
+still prints it, and the callout returns at the next **unfiltered** render — any
+`wienerdog sync`, or the next dream's l.724 refresh — and stays gone from
+`alerts.jsonl` only once a genuinely supervised success clears it.
+(c) **On win32 the omission never engages at all**, because no token is minted
+there (Table A, "Supervisor correlate", limit (a)). The Windows behaviour after
+this WP is today's behaviour.
+
+**Overrule cost.** If the owner rules this channel still untrustworthy, the WP
+does not shrink — it changes shape. The remaining alternative is a supervisor→
+child channel that proves parentage, for example a per-run file under `state/`
+that `run-job` writes before the spawn and whose content the dream must match:
+that adds a writer to `state/`, an uninstall/cleanup obligation, a lifecycle to
+keep in step with `clearAlerts`, and a new failure mode of its own. It is a
+different, larger work package. Concretely rewritten in that case: Table A's
+"Resolved job name" and "Supervisor correlate" rows, the predicate sketch in
+"Exact contracts", AC3, AC4, AC5, and the `dream-digest-filter-ignores-config`,
+`dream-digest-filter-always-on` and `dream-digest-filter-ignores-run-token`
+declarations — after which this spec returns to drafting rather than being
+amended in place.
 
 ### O2 — should the pre-dream containment probe get a single retry?
 
@@ -430,25 +523,25 @@ the two concerns share no surface.
   code-owned, byte-frozen text with two live tests asserting its bytes
   (`tests/unit/digest-alert-callout-neutralize.test.js`, `tests/unit/alerts.test.js`).
   This WP makes the sentence true; it does not renegotiate it.
-- **Named residual — a dream that renders and then fails under-reports until the
-  next render** (Table A, "Render-then-fail"). The exposure is any failure
-  **after either render site**, not only after step 19: the l.724 quarantine-only
-  refresh is followed by the no-complete-input throw (l.736-743, whose trigger
-  PR #245 widened from one cause to four), the step-8b containment halt, a brain
-  failure, and run-job's B1 (success-marker refused) / B2 (alert-cleanup
-  refused). On each, `alerts.jsonl` ends up holding a record for the job that the
-  just-written `digest.md` does not show. This is not a new class of hole: only
-  `dream.js` and `sync.js` write `digest.md`, so **every** alert appended by
-  **any** job is already invisible in the digest until the next dream or `sync` —
-  a failing `daily-digest` at 05:00 reaches the digest at the next dream, not
-  before. What changes is the narrow case where a *pre-existing* dream alert used
-  to remain as a stale directionally-correct banner. In all these paths the
-  failure still reaches the user through `alerts.jsonl` itself, `wienerdog
-  alerts` and the fail-loud email. `schedule.json` carries the signal only on the
-  ordinary failure path (step 7's `last_status: 'error'`): B1 fires *because* the
-  marker write threw, so it records neither status, and B2 fires after
-  `last_status: 'ok'` was already written. Accepted; do not widen this WP to
-  chase it.
+- **Named residual — B1/B2 only, and it is the ONE narrowing of Table A's
+  principle** (Table A, "Out-of-process failure (B1/B2)"). Round 1 found the
+  earlier, much wider version of this residual and it has been **fixed rather
+  than accepted**: because l.724 is now unfiltered and a late in-process throw
+  re-renders unfiltered, the quarantine-then-no-complete-input path, the step-8b
+  containment halt, a brain failure and every post-step-19 in-process throw now
+  all leave the genuine callout on screen. What remains is only what runs **after
+  the dream process has exited**, where `dream.js` has no render to make:
+  run-job's B1 (success-marker refused, a genuinely hidden new record) and B2
+  (alert-cleanup refused, where the hidden records are stale rather than
+  genuine — the run succeeded and earned the right to delete them). Both stay in
+  `alerts.jsonl`, in `wienerdog alerts` and on run-job's stderr, and both return
+  to the digest at the next unfiltered render. `schedule.json` carries the signal
+  only on the ordinary failure path (step 7's `last_status: 'error'`): B1 fires
+  *because* the marker write threw, so it records neither status, and B2 fires
+  after `last_status: 'ok'` was already written. AC6c/AC6d pin this state. Do not
+  widen this WP to chase it — the honest fix is supervisor-side (rejected
+  alternative A forbids the obvious one) and belongs with the lock follow-up's
+  family.
 - **Named consequence — the managed-policy hook warning loses its banner**
   (Table A, last row). Today `run-job` l.953 appends it under the job's own name
   before the spawn and the job's success clears it, so on a managed machine its
@@ -479,21 +572,27 @@ the two concerns share no surface.
       used for exactly two things: an in-memory key lookup
       (`jobsLib.findJob` → `listJobs().find(j => j.name === name)`, which builds
       no path from it) and a string equality against each record's `job` field.
-      No path segment, no shell word, no regex is constructed from it.
+      `WIENERDOG_DREAM_RUN_TOKEN` is used for exactly one: a shape test against
+      `/^[a-f0-9]{16}$/`, whose result is a boolean — this WP never uses the
+      token's VALUE for anything, and in particular never builds the hand-up
+      pidfile name from it (that remains l.827-828's existing job). No path
+      segment, no shell word, no regex is constructed from either.
 - [ ] **The surface this WP touches is what the injected digest tells the model.**
       It can only ever *remove* a callout, never add or alter one: `formatAlerts`,
       its template and every stored record are untouched, so no new bytes reach
       the digest and the neutralizing guarantees of
       WP-neutralize-alert-callout-rendering are unaffected.
-- [ ] **Env-trust residual, named.** A user who sets `WIENERDOG_JOB` in their own
-      shell before running `wienerdog dream` attended could hide one job's
-      callout from one render. The config cross-check narrows this to names that
-      `config.yaml` defines as `builtin:dream`; the record itself is never
-      touched, `wienerdog alerts` still prints it, and the next render restores
-      it. No privilege boundary is crossed — the only actor who can set that
-      variable is the process that spawns the dream: `run-job` (which sets the
-      true value) or the user's own shell. The decision to accept this channel at
-      all is O1, which is unresolved.
+- [ ] **Env-trust residual, named — and narrowed once by design round 1.** An
+      environment that carries BOTH `WIENERDOG_JOB` naming the configured dream
+      job AND a valid-shaped `WIENERDOG_DREAM_RUN_TOKEN` could hide that job's
+      callout from one render of an unsupervised run. Both conjuncts are now
+      required (Table A, "Resolved job name"); possession of the token is not
+      parentage, and O1's residual says so rather than claiming closure. The
+      record itself is never touched, `wienerdog alerts` still prints it, and the
+      next unfiltered render restores it. No privilege boundary is crossed — the
+      only actor who can set either variable is the process that spawns the
+      dream: `run-job` (which sets the true values) or the user's own shell. The
+      decision to accept this channel at all is O1, which is unresolved.
 
 ## Acceptance criteria
 
@@ -515,31 +614,53 @@ Numbered so Table C's declarations and the verification steps can name them.
       a `WIENERDOG_JOB` naming a job absent from `config.yaml`, and one naming a
       job whose `run` is not `builtin:dream`, each omit nothing — including when
       an alert for that very name is on file. **Verified by V1.**
-- [ ] **AC5 — both render sites behave identically**: the quarantine-only refresh
-      (l.724) and step 19 (l.1182) produce a digest under the same omission rule.
+- [ ] **AC5 — a valid job name without a valid run token omits nothing** (Table
+      A, "Resolved job name", second conjunct): a direct `wienerdog dream`
+      carrying `WIENERDOG_JOB=dream` that `config.yaml` really does define as
+      `builtin:dream`, but with `WIENERDOG_DREAM_RUN_TOKEN` absent, empty, of the
+      wrong length or containing a non-hex character, renders the `dream` callout
+      in every one of those cases. **Verified by V1.**
+- [ ] **AC6 — the two render sites behave DIFFERENTLY, and that is the
+      contract** (Table A, "Where applied" / "When it may omit"). Each of the
+      four sub-criteria asserts the CONTENT of the `state/digest.md` on disk at
+      the end of the run **together with** the `alerts.jsonl` state, so neither
+      surface is ever checked alone — round 1's finding was precisely a criterion
+      that checked the record and not the view. (`alerts.jsonl` on B2 is the one
+      place a new record is NOT expected: the `alert-cleanup-refused` outcome
+      deliberately skips the append because the refused artifact IS that file —
+      existing contract, unchanged by this WP.) The four:
+      **(AC6a)** quarantine-only refresh at l.724, then the no-complete-input
+      throw at l.736-743: the digest shows the `dream` callout, because l.724 is
+      unfiltered.
+      **(AC6b)** a supervised run that renders at l.724 and then fails later —
+      the step-8b containment halt and a brain failure: same, the callout is
+      shown.
+      **(AC6c)** B1, success-marker refused: the digest written at step 19 omits
+      the callout and `alerts.jsonl` holds the new `success-marker-refused`
+      record — the named narrowing (Table A, B1/B2 row), pinned so a future
+      change to it is visible.
+      **(AC6d)** B2, alert-cleanup refused: the digest omits the callout and the
+      job's earlier records survive in `alerts.jsonl` — same row, same reason.
       **Verified by V1.**
-- [ ] **AC6 — nothing throws out of the filter** (Table A, failure direction): a
+- [ ] **AC7 — a late in-process failure re-renders UNFILTERED** (Table A, "Late
+      in-process failure"): when a throw escapes after the step-19 render, the
+      `state/digest.md` left on disk shows the `dream` callout again, and the
+      error that propagates out of `run()` is the ORIGINAL one — not any error
+      raised by the recovery render. **Verified by V1.**
+- [ ] **AC8 — nothing throws out of the filter** (Table A, failure direction): a
       run whose config is missing or unreadable still renders a digest, and
       renders it with nothing omitted. **Verified by V1.**
-- [ ] **AC7 — a post-render failure still records the failure where run-job owns
-      it.** A run that exits non-zero, and a run whose success-marker write is
-      refused (B1), each end with a record for that job in `alerts.jsonl`. The
-      one named exception is the `alert-cleanup-refused` (B2) outcome, which
-      deliberately skips the append because the refused artifact IS
-      `alerts.jsonl` — existing contract, unchanged by this WP, and on that path
-      the job's earlier records survive because the clear is what failed.
-      **Verified by V1.**
-- [ ] **AC8 — `src/core/alert-ack.js` changes comments only** and carries Table
+- [ ] **AC9 — `src/core/alert-ack.js` changes comments only** and carries Table
       B's narrowed claim; its behavior is unchanged and
       `tests/unit/alert-ack.test.js` passes untouched. **Verified by V1, V3, V4.**
-- [ ] **AC9 — the frozen surfaces did not move**: every file under
+- [ ] **AC10 — the frozen surfaces did not move**: every file under
       `tests/golden/` is byte-identical and none is edited, and
       `src/core/digest.js` is unchanged. **Verified by V1, V5.**
-- [ ] **AC10 — the RED declarations exist and prove.** The file named in
-      Deliverables declares exactly the two ids of Table C under this WP's `wp`,
+- [ ] **AC11 — the RED declarations exist and prove.** The file named in
+      Deliverables declares exactly the six ids of Table C under this WP's `wp`,
       and `scripts/red-proofs.js` reports `RUN: PROVEN` over the whole tree.
       **Verified by V2, V6.**
-- [ ] **AC11 — the repo gates pass**: `npm test`, `npm run lint`, and
+- [ ] **AC12 — the repo gates pass**: `npm test`, `npm run lint`, and
       `scripts/boundary-check.js` over the changed set. **Verified by V1, V7.**
 - [ ] Idempotence: **N/A — this WP ships no command and adds no write to a user
       machine.** It changes one input to a render that already rewrites
@@ -548,13 +669,13 @@ Numbered so Table C's declarations and the verification steps can name them.
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# V1 — AC1-AC9, AC11: the whole suite, plus the three focused runs.
+# V1 — AC1-AC10 and AC12: the whole suite, plus the three focused runs.
 npm test
 npm test -- --test-name-pattern "dream-pipeline"
 npm test -- --test-name-pattern "scheduler-runjob"
 npm test -- --test-name-pattern "alert"
 
-# V2 — AC10, THE GATE. Whole tree: exit 0 and `RUN: PROVEN` required. A `--wp`
+# V2 — AC11, THE GATE. Whole tree: exit 0 and `RUN: PROVEN` required. A `--wp`
 # SELECTION never exits 0 while any other WP has declarations — the runner's
 # design, not a failure — so it is the readable per-proof view, NOT the gate.
 node scripts/red-proofs.js
@@ -564,7 +685,7 @@ node scripts/red-proofs.js --wp WP-dream-digest-omits-own-job-alerts  # expect: 
 # moving for unrelated reasons must not colour this branch's diff.
 MB=$(git merge-base origin/main HEAD)
 
-# V3 — AC8 / Table B gate 1: every changed line in alert-ack.js is a JSDoc
+# V3 — AC9 / Table B gate 1: every changed line in alert-ack.js is a JSDoc
 # continuation line (leading "+"/"-", then " * "). Empty output = pass. The
 # `test -f` guard is deliberate: without it a deleted file makes the pipeline
 # read greenest.
@@ -572,25 +693,25 @@ test -f src/core/alert-ack.js && \
   [ -z "$(git diff "$MB" -- src/core/alert-ack.js | grep -E '^[+-]' \
       | grep -vE '^(\+\+\+|---)' | grep -vE '^[+-] \*')" ]
 
-# V4 — AC8 / Table B gate 2: the narrowed claim is present exactly once…
+# V4 — AC9 / Table B gate 2: the narrowed claim is present exactly once…
 test "$(grep -Fc 'ONLY ACKNOWLEDGEMENT suppression point' src/core/alert-ack.js)" = 1
 # …and the ungated universal it replaces is gone. Guarded for the same reason.
 test -f src/core/alert-ack.js && ! grep -Fq 'This is the ONLY suppression point' src/core/alert-ack.js
 
-# V5 — AC9 / Table A gate: digest.js is not a Deliverable, so the frozen template
+# V5 — AC10 / Table A gate: digest.js is not a Deliverable, so the frozen template
 # cannot have moved. An empty numstat means the file is untouched.
 test -z "$(git diff --numstat "$MB" -- src/core/digest.js)"
 
-# V6 — AC10's identity check: this WP's own `wp` field names exactly the two
+# V6 — AC11's identity check: this WP's own `wp` field names exactly the six
 # declared ids, in the declaration file whose suite is the dream-pipeline suite.
 node -e 'const d=require("./tests/red-proofs/dream-digest-omits-own-job-alerts.proofs.json");
 if (d.suite !== "tests/unit/dream-pipeline.test.js") { console.log("FAIL: suite is " + d.suite); process.exit(1); }
 const ids = d.proofs.filter((p) => p.wp === "WP-dream-digest-omits-own-job-alerts").map((p) => p.id).sort();
-const want = ["dream-digest-filter-removed", "dream-digest-filter-unconditional"];
+const want = ["dream-digest-filter-always-on", "dream-digest-filter-at-early-render", "dream-digest-filter-ignores-config", "dream-digest-filter-ignores-run-token", "dream-digest-filter-removed", "dream-digest-no-recovery-render"];
 console.log(ids.join(","));
 process.exit(JSON.stringify(ids) === JSON.stringify(want) ? 0 : 1)'
 
-# V7 — AC11: the repo gates. boundary-check takes the spec and the changed set as
+# V7 — AC12: the repo gates. boundary-check takes the spec and the changed set as
 # .github/workflows/ci.yml invokes it, but WITHOUT `mapfile` (absent from macOS
 # /bin/bash 3.2.57). No tracked path in this repo carries a space.
 npm run lint
