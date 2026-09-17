@@ -1,0 +1,40 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b06a-bab2-7cf3-955b-b1d995a59670",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not close the gate: R6-3 remains unresolved. No new product finding beyond the named residuals. Executions confirmed ordinary dream-lock exclusion, current-ledger rendering, unchanged step-19 bytes, one additional write, both cleanup/concurrent-sync residuals, and the corrected exit inventory including :740. Executed production run() with proposed in-memory wiring, renderer/ledger/lock/cleanup functions, writeFilePrivate, and supervisor completion/failLoud with mocked I/O. Read the scoped diff/logbooks and supporting source; no implementation branch, unit suite, lint or RED proofs reviewed. Inspected source citations resolve; alerts.js:200 begins the catch whose return is at :201.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Machinery: operative prose still directs the rejected design",
+        "body": "The Context explicitly says step 19 is the ONLY filtered render and failures render again unfiltered. AC6c at :1019 still requires step-19 omission, and Implementation notes at :881-884 still promise recovery on every post-step-19 failure. These contradict the corrected Deliverables/Table A and can steer implementation or acceptance tests back to the rejected mechanism. R6-3 is therefore not genuinely fixed.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 141,
+        "line_end": 144,
+        "confidence": 1,
+        "recommendation": "Reconcile Context, AC6c and the residual note with unfiltered step 19, one filtered call after workspace teardown under the lock, and no recovery. Correct the logbook's reconciliation claim."
+      },
+      {
+        "severity": "medium",
+        "title": "Machinery: the required RED set contradicts revised AC7",
+        "body": "Table C requires the step-19 mutant to redden AC7a/b/c. Executing that mutation against production run() left every AC7c early-exit path unchanged: none reaches step 19. Conversely, the mutant changes successful step-19 bytes, violating AC7d, which the required set omits. Because observed failures must equal the declared set, this contract can reject correctly implemented tests or encourage weakening them.",
+        "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+        "line_start": 458,
+        "line_end": 468,
+        "confidence": 1,
+        "recommendation": "Re-derive mutation failure sets against the revised acceptance tests. Remove AC7c from this mutant's expected failures, include applicable step-19 byte assertions, and distinguish old-branch measurements from unmeasured new declarations."
+      }
+    ],
+    "next_steps": [
+      "Resolve the two machinery findings before closing the design gate or re-dispatching implementation."
+    ]
+  }
+}
