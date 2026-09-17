@@ -1,0 +1,5 @@
+gate: design  name: digest-astra  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: ebcdda001b83ed042db463f41b9b98153f91e5c4
+base: 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c
+companion exit: 0
+porcelain: IDENTICAL before/after
