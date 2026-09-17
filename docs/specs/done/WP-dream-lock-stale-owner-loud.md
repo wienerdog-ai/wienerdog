@@ -1,7 +1,7 @@
 ---
 id: WP-dream-lock-stale-owner-loud
 title: Make a stale busy dream lock loud, and refuse an implausible deadline
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-dream-live-owner-lock]
@@ -9,6 +9,32 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 ---
 
 # WP-dream-lock-stale-owner-loud: a stale busy lock must not exit 0
+
+> **Record, 2026-09-17 (post-merge) — no defect in what shipped.**
+>
+> Implemented in PR #253 (merge `242c37b8`, 2026-09-17), tip `d55cedd0`. Both
+> PR gates on that tip: wd-reviewer APPROVE (every check executed —
+> unfiltered red-proofs RUN: PROVEN with all four ids, full suite, lint; the
+> S5 message and the ADR block each compared programmatically against the
+> spec and found byte-identical; both boundary mutations replayed
+> independently, each reddening exactly one test); Codex plugin `review` on
+> `gpt-6-astra` clean, no findings (it disclosed that runtime tests were not
+> run in its read-only sandbox). CI seven checks pass. Suite 2760 / 2748 / 0
+> / 12; lint passed.
+>
+> **Recorded, not errata:** (i) a pre-existing fixture in
+> `tests/unit/dream-pipeline.test.js` used `deadline: 0`, which under the new
+> gate reads as ~56 years overdue; changed to `Date.now() - 1000` so the
+> quiet EPERM branch is still the one exercised; (ii) the one un-mocked-clock
+> lock test now asserts `staleForMs`'s shape instead of a whole-object
+> deepEqual — whole-object deepEqual on `busy` is still asserted in five
+> mocked-clock cases; (iii) `STALE_LOCK_ALERT_MS` is declared inside the
+> require block in `src/cli/dream.js` — cosmetic; (iv) the ADR-0012 part-6
+> amendment landed with its Status line reading "ACCEPTED under standing
+> authorization 2026-09-17 — owner signature pending": the owner's signature
+> line is still owed and only the owner writes it.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
