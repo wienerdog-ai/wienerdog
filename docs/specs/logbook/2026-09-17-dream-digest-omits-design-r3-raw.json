@@ -1,0 +1,55 @@
+{
+  "verdict": "approve",
+  "summary": "Ship the design to implementation. R2-1 is substantively closed: source tracing confirms ordinary dream failures are appended only after the child exits, doctor does not expose alerts, the lack of a finite digest-refresh bound is explicit, and AC6e pins the resulting record-present/callout-absent state. R2-2 is also closed: the recovery failure gets one fixed, non-interpolating stderr diagnostic, the original error remains authoritative, and AC7a/AC7b cover successful and failed recovery renders. No material product or verification-machinery findings remain, and the inspected file:line citations resolve on this tree.",
+  "findings": [],
+  "verification": {
+    "executed": [
+      {
+        "command": "git status --short --branch; git rev-parse HEAD; git merge-base 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c HEAD; restricted git diff 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD",
+        "exit_status": 0,
+        "result": "HEAD ed1abe9bd62c190d089e41f02d32ff896e9db889; merge base 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c; worktree clean."
+      },
+      {
+        "command": "nl, sed, rg, wc, and targeted source/control-flow citation checks",
+        "exit_status": 0,
+        "result": "The cited dream, run-job, sync, scheduler, alerts, digest, lock, and test locations resolve and support the revised claims."
+      },
+      {
+        "command": "grep -ci alert src/cli/doctor.js",
+        "exit_status": 1,
+        "result": "Printed 0; exit 1 is grep's expected no-match status, confirming doctor contains no alert reference."
+      },
+      {
+        "command": "git diff --check 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD",
+        "exit_status": 0
+      },
+      {
+        "command": "npm run lint",
+        "exit_status": 0,
+        "result": "Markdownlint, shellcheck, PSScriptAnalyzer, and frontmatter checks passed."
+      }
+    ],
+    "read": [
+      "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-design-review.md",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-design-r1-raw.json",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-design-r2-raw.json",
+      "src/cli/run-job.js",
+      "src/cli/dream.js",
+      "src/cli/sync.js",
+      "src/cli/doctor.js",
+      "src/cli/alerts.js",
+      "src/scheduler/jobs.js",
+      "src/core/alerts.js",
+      "src/core/alert-ack.js",
+      "src/core/digest.js",
+      "src/core/private-fs.js",
+      "src/core/dream/config.js",
+      "src/core/dream/lock.js",
+      "tests/unit/dream-pipeline.test.js"
+    ],
+    "not_executed": [
+      "npm test and focused unit tests were not run because the reviewed tip changes design documents only; runtime conclusions are based on source and control-flow tracing."
+    ]
+  }
+}

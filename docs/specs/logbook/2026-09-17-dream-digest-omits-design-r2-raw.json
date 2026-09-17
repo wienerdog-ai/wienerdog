@@ -1,0 +1,76 @@
+{
+  "verdict": "needs-attention",
+  "summary": "Do not ship this design yet. Round-one F1-F3 are substantively addressed: AC5 covers inherited WIENERDOG_JOB without a valid token, catch-up uses the token-minting runJob path, Windows is explicitly left unchanged, only step 19 filters, AC6a-d assert digest content, and the config-removal mutation targets AC4. However, the claimed B1/B2-only residual is incomplete and not temporally bounded, and recovery-render failure can silently leave the digest filtered.",
+  "findings": [
+    {
+      "severity": "high",
+      "title": "The B1/B2-only narrowing omits ordinary job failures and has no finite bound",
+      "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "line_start": 303,
+      "line_end": 315,
+      "confidence": 0.99,
+      "body": "A normal dream-body failure is recorded by run-job only after the child exits: run-job.js:1226-1269 writes last_status:error and calls failLoud, which appends the new job-failure alert at :1257. If the preceding successful run filtered the old dream callout, and the next run fails before step 19 without a quarantine refresh, digest.md remains clean while alerts.jsonl contains a genuine unresolved failure. Even when l.724 ran, it ran before this new alert existed. AC6a/AC6b can prove that a pre-existing record remains visible, but they do not prove visibility of the fresh parent-appended failure. This is another out-of-process false negative beyond B1/B2. The advertised recovery bound is also not finite: l.724 is conditional on newlyQuarantined, sync is attended-only, and every subsequent successful step-19 render filters the job again. A genuine failure can therefore remain absent for its entire unresolved lifetime.",
+      "recommendation": "Expand the residual to every run-job failLoud append made after the child exits, remove the claim that B1/B2 are the sole narrowing, and add an end-to-end criterion starting from a clean digest that makes the dream child fail and asserts both the newly appended alert and final digest content. Either provide a deterministic supervisor-side notification surface or obtain explicit owner acceptance of potentially indefinite digest omission."
+    },
+    {
+      "severity": "medium",
+      "title": "A failed recovery render is swallowed and leaves no diagnostic for the still-filtered digest",
+      "file": "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "line_start": 314,
+      "line_end": 314,
+      "confidence": 0.95,
+      "body": "regenerateDigest performs several fallible reads and an atomic write. The design requires its recovery failure to be swallowed so the original post-step-19 error wins, but requires no secondary stderr report and AC7 does not cover a recovery-render exception. If that render fails, the atomic writer preserves the previous filtered digest; run-job subsequently appends the genuine failure, and users receive neither its callout nor any indication that restoration failed. This contradicts the stated principle that a failure after the filtered render restores every omitted callout.",
+      "recommendation": "Keep the original exception as the propagated error, but report the recovery-render exception separately on stderr, name the resulting inability to restore as a residual, and add an AC7 case that injects recovery-render failure and verifies the original error, the secondary diagnostic, and the unchanged filtered digest."
+    }
+  ],
+  "verification": {
+    "executed": [
+      {
+        "command": "git status --short --branch and restricted git diff 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+        "exit_status": 0
+      },
+      {
+        "command": "git rev-parse HEAD; git merge-base 047a202c1ada70ab44bd24a21157854441d987a2 HEAD",
+        "exit_status": 0,
+        "result": "HEAD d7d50c0f3d8b4188bd81a337a0912753d6902564; merge base 047a202c1ada70ab44bd24a21157854441d987a2"
+      },
+      {
+        "command": "nl, sed, rg, and wc citation checks over the cited source and test files",
+        "exit_status": 0,
+        "result": "The substantive cited loci resolve. Two Table A numeric citations are off by one on this tree: buildCleanEnv is called at run-job.js:917, not :916, and crypto.randomBytes is at :935, not :936; both referenced blocks remain unambiguous."
+      },
+      {
+        "command": "git diff --check 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+        "exit_status": 0
+      },
+      {
+        "command": "npm run lint -- --no-fix",
+        "exit_status": 0,
+        "result": "672 Markdown files checked; markdownlint, shellcheck, PSScriptAnalyzer, and frontmatter checks passed."
+      }
+    ],
+    "read": [
+      "docs/specs/WP-dream-digest-omits-own-job-alerts.md",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-design-review.md",
+      "docs/specs/logbook/2026-09-17-dream-digest-omits-design-r1-raw.json",
+      "src/cli/dream.js",
+      "src/cli/run-job.js",
+      "src/cli/sync.js",
+      "src/scheduler/jobs.js",
+      "src/core/alerts.js",
+      "src/core/alert-ack.js",
+      "src/core/digest.js",
+      "src/core/private-fs.js",
+      "src/core/dream/config.js",
+      "src/core/dream/lock.js",
+      "src/core/dream/scratch.js",
+      "src/core/dream/workspace.js",
+      "src/core/dream/containment-probe.js",
+      "tests/unit/dream-pipeline.test.js",
+      "tests/unit/scheduler-runjob.test.js"
+    ],
+    "not_executed": [
+      "npm test and focused unit tests were not run because this tip contains design-document changes only; runtime conclusions are based on source/control-flow tracing."
+    ]
+  }
+}

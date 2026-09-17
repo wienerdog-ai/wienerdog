@@ -1,0 +1,5 @@
+gate: design  name: digest-r2
+tip: d7d50c0f3d8b4188bd81a337a0912753d6902564
+base: 047a202c1ada70ab44bd24a21157854441d987a2
+codex exit: 0
+porcelain: IDENTICAL before/after
