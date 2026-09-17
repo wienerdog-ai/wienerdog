@@ -1,0 +1,33 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b125-95c4-7363-bd92-55b6a56d6159",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "baseRef": "c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "P3-1 and P3-2 are fixed at the design level, but the canonical procedure omits content-block discriminator checks and can still label an assistant conclusion falsely untainted.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Canonical procedure silently accepts unclassifiable Claude content blocks",
+        "body": "A5c checks message/content containers but never validates individual block discriminators. Executed a tool_use → paired tool-result-shaped block → end_turn sequence, deleting the result block's type or replacing it with 7. The real parser silently loses the result with outcome ok, zero oversized records and truncated false. An independent executable transcription of A5e emits the conclusion false: step 2 accepts the container and step 3 recognizes only exact tool_result. Restoring that discriminator produces true. AC3c explicitly requires these malformed blocks to taint (lines 615–618), contradicting the canonical procedure implementers are told to follow. This synthetic damaged-record case occurs directly inside message.content, outside the named deeper-nesting residual, and can misclassify externally derived assistant evidence as trusted.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 358,
+        "line_end": 361,
+        "confidence": 0.97,
+        "recommendation": "Add explicit content-block discriminator validation to A5c/A5e, including its envelope scope. Missing or malformed block types must permanently taint before dialogue emission. Preserve AC3c and add the paired-result mutation plus valid-result control."
+      }
+    ],
+    "next_steps": [
+      "Executed real parseWithOutcome, both parsers and streamLines through an in-memory filesystem shim. Exercised every recognized Codex top-level type, all decided payload types, four declined Claude envelopes and benign controls. The independent contract model gives the required round-3 flags while raw output remains unchanged.",
+      "Also exercised same-record taint/emission, mixed user text/tool results, sidechains, subagent exclusions, G1–G5, newest-2,000 eviction and redaction across character 4,000. Three existing golden comparisons and wrapper-equality checks passed.",
+      "Machinery: no separate material finding. AC3c already requests the missing block-level protection; repair the canonical procedure rather than weakening that assertion.",
+      "Read the scoped diff, all three prior review raws and relevant parser/reader/gate code. Inspected file:line citations resolve on this tree. parsePrimaryWithOutcome is absent: proposed flags were tested in an independent contract model, not product code. No full suite, private-transcript sampling or file changes."
+    ]
+  }
+}

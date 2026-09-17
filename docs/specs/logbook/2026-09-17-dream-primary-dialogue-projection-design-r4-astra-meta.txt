@@ -1,0 +1,5 @@
+gate: design  name: proj-astra4  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 7f97981a644b4ecf58186bf11c2830d4c84a03f3
+base: c94e0e66664e482a16e7ff820a9ba87d20a5dae7
+companion exit: 0
+porcelain: IDENTICAL before/after
