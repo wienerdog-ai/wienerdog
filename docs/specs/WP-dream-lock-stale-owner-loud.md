@@ -158,29 +158,56 @@ registered mirror in the same commit** — no commit may exist in which the tabl
 and a registered mirror disagree. A new mirror found in review is added here in
 the same pass.
 
+- [ ] **Deliverables-table cells that restate a path or rule** — every Notes
+      cell cites the S-rows its file carries (lock.js → S1–S4, dream.js →
+      S5–S7, each test file → the rows it asserts, the proofs file → ADR-0042,
+      the ADR → S8). A cell may name a row; it may not restate the rule.
+- [ ] **Acceptance criteria that assert its facts** — AC1→S1, AC2→S2, AC3→S3,
+      AC4→S4, AC5→S5, AC6→S6, AC7→S7 and S8, AC8→ADR-0042 plus the S3 margin
+      and S5 bound arithmetic. The idempotency line is an `N/A` disposition, not
+      an S fact.
+- [ ] **Verification commands / greps** — the `boundary-check` argument list
+      must equal the Deliverables paths exactly; `npm run red-proofs --wp
+      WP-dream-lock-stale-owner-loud` mirrors AC8; the both-directions sentence
+      under the block is a repo-process rule, not an S fact.
+- [ ] **Current-state description** — Context's schedule, payload, `run-job`
+      and defect facts and Current state C1–C5 record inherited behavior only,
+      at `b4af715e`. Any forward-looking sentence in either defers to S1–S8;
+      neither may be rewritten as evidence that the change shipped.
+- [ ] **Operative prose steps that apply it** — walked, with the row each step
+      applies:
+  - Implementation notes, "Test seam": the requirement that `os.uptime()` be
+    called through the `node:os` module object applies **S3**.
+  - Implementation notes, "The integration test must not depend on the
+    runner's real uptime": applies **S3** and **S4**.
+  - Implementation notes, "Do not add fields to the lock payload": applies
+    **S1**.
+  - Implementation notes, rebase interaction: the named `src/cli/dream.js`
+    regions are the ones **S5** and **S7** edit.
+  - Dispatch precondition O1 applies **S4**, O2 **S5**, O3 **S3**, O4 **S6**
+    (against Table L6), O5 the exit-1 cadence **S5** causes, O6 **S8**'s scope.
+    Each recommendation states a preference; none of them decides a row.
+  - Security checklist bullet 1 applies **S6**'s no-interpolation rule,
+    bullet 2 **S3**, bullet 3 **S4**, bullet 4 **S5**.
+  - Out of scope: the `ps`/spawn exclusion applies **S3**–**S5**'s residual
+    boundary; the CAS / heartbeat / new-lock-field exclusions apply **S1** and
+    **S4**; the alert rate-limiting exclusion applies **S5**. The digest-region
+    exclusion is a work-package boundary, not an S fact.
+  - The ADR-0012 amendment block: "Proven-dead by reboot" applies **S3** and
+    **S4**, "Accepted residual" **S4**, "A stale busy lock is loud" **S5** and
+    **S6**, the catch-up-cadence paragraph **S5**, the closing no-heartbeat
+    paragraph **S1** and **S4**; its Status line is an **S8** fact.
+  - The byte-exact user message is decided once, in **S6**. Its two paraphrases
+    — O4's description and the amendment's "names how many whole hours" sentence
+    — describe it and must never restate its bytes.
 - [ ] Frontmatter and title: the scope claim ("stale busy lock must not exit 0")
       mirrors S5; `size`/`model` are process facts.
-- [ ] Context: the defect narrative and the two-change summary mirror S3–S6; the
-      schedule, payload and `run-job` facts are Current-state claims (C1–C5).
-- [ ] Current state C1–C5: inherited behavior only. Any forward-looking sentence
-      defers to S1–S8.
-- [ ] Deliverables notes column: every cell cites the S-rows it carries.
 - [ ] Exact contracts: the result-object block and the "no new field/flag/setting"
       sentence mirror S1.
 - [ ] Contract-reference activation paragraph and the worked cases immediately
       below Table S: they mirror S2–S6 and decide nothing.
-- [ ] Dispatch precondition — owner items: each recommendation mirrors the row it
-      names (S3's margin, S4's authorization, S5's bound, S6's recovery hint).
-- [ ] Implementation notes & constraints: the margin and bound rationales, the
-      email-cadence consequence and the seam note defer to S3/S5.
-- [ ] Security checklist: the no-interpolation and no-spawn claims defer to
-      S3/S6.
-- [ ] Acceptance criteria AC1–AC8 and the verification commands: every assertion
-      defers to S1–S8.
-- [ ] Out of scope: each exclusion defers to S4's boundary or names another WP.
-- [ ] Cross-document mirror: the ADR amendment text below defers to S8 and must
-      not widen any guarantee Table S makes.
-- [ ] Register newly found mirrors here on the spot.
+- [ ] Register newly found mirrors here on the spot — including a new operative
+      prose step, which is added to the walk above rather than as its own bullet.
 
 ## Dispatch precondition — owner items
 

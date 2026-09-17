@@ -44,3 +44,22 @@ rule, adds a boot-time death proof so a rebooted machine self-heals again, and
 puts a bound past which a `busy` decline raises through the existing
 job-failure path. Nothing here is implemented; the work package is `Draft` and
 carries owner items that must be settled before it can be dispatched.
+
+## Round-zero conformance fix (same day)
+
+The clean-context template-conformance read returned FAIL with one light item:
+the spec's Mirrored Surface Checklist had replaced the template's five literal
+bullets with thirteen tailored ones, and "Operative prose steps that apply it"
+had no counterpart at all. A paraphrase is not a mirror registration a reviewer
+can match mechanically — and the missing bullet was the one that covers the
+surfaces where a rule is *applied* rather than restated, which is exactly where
+a stale rule survives a table edit. The checklist now leads with the five
+template bullets in their literal wording, walks the operative prose (the
+implementation notes, each owner item, each security-checklist line, each
+out-of-scope exclusion, every paragraph of the ADR amendment block, and the
+byte-exact user message) against the Table S row it applies, and folds the five
+tailored bullets that duplicated that walk so no surface is registered twice.
+
+Second lesson, same shape as the first: a tailored checklist that drops a
+template bullet does not announce the drop. Keep the literal lead-in and put
+the tailoring after it.
