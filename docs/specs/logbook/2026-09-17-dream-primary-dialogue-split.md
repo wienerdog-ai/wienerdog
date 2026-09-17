@@ -445,6 +445,60 @@ with no result, a declined envelope whose content is a number, a declined
 following assistant message `false`. Without those, "taint on anything odd"
 would have passed every catch and been useless.
 
+## Design review round 5, and both gates CLOSED
+
+Codex plugin 1.0.6 / `gpt-6-astra`, tip `541e344c`, base `c94e0e66`, raw at
+`505c47f1`: **`approve`, zero findings.** "The round-4 flaw is substantively
+fixed. No assistant-false counterexample outside the named residuals and owner
+items was demonstrated." It executed the real parsers and reader; confirmed both
+malformed paired results vanish silently today while the revised procedure
+taints; verified step-2 suppression at `:359-362`; **independently reconstructed
+a 35-case set and reproduced the V0/V1/V2 counts of 8 / 2 / 0**; ran a further
+245 adversarial combinations and 14 real-reader gap probes with no uncovered
+bypass.
+
+One non-blocking machinery note, and it was right: the logbook held the
+aggregate numbers but not the inputs or the model, so nobody could certify
+agreement case by case. **Both are now committed** —
+`2026-09-17-dream-primary-dialogue-taint-model.js` and
+`…-taint-model-cases.json` in this folder. Re-run from the committed copy:
+8 / 2 / 0, exit 0. The script is inert by construction — no dependency, no
+network, no write, no spawn — its name matches none of `node --test`'s discovery
+patterns and markdownlint globs only `docs/**/*.md`, which was checked rather
+than assumed: with it present, `npm test` is 2,787 passing and `npm run lint` is
+0 errors, both unchanged.
+
+### Closure
+
+| Spec | Rounds | Findings per round | Closed because |
+|---|---:|---|---|
+| `WP-dream-primary-dialogue-projection` | 5 | 2, 3, 2, 1, **0** | round 5 `approve` found nothing about the product |
+| `WP-dream-primary-dialogue-collection` | 3 | 1 + 2 machinery notes, 2, **0** | round 3 `approve` found nothing about the product |
+
+Every finding in both columns was **reproduced by executing the real parsers,
+reader, collector, validator and ledger** on synthetic input — no private
+transcript was read into this repository at any round — and every one is
+dispositioned above. Each round's raw was committed **before** adjudication, at
+`ebee6fdc` (r1), `d92bbf48` (r2), `1c3a72f0` (r3), `9249d8c1` (r4) and
+`505c47f1` (r5); those are the post-rebase SHAs on this branch. Both gates are
+closed under `docs/runbooks/codex-review.md`, and both specs are `Ready`.
+`WP-dream-primary-dialogue-filter` stays `Draft`, parked behind its entry
+condition.
+
+### The lesson
+
+**A taint rule written as prose leaked exactly one boundary per round, for four
+rounds** — a reset at a user boundary, a silent depth-limit drop, a missing
+discriminator and a `session_meta` with no `payload.type`, a tool result hiding
+in a declined envelope. Each was a case the prose did not name rather than a
+rule anyone disputed, and each cost a full external round to find. **An
+executable transcription of the same rule found two more in a single pass that
+no reviewer had raised** (`"TOOL_RESULT"`, `"web_search_tool_result"`), and
+corrected one of my own expectations besides. For any contract that is a state
+machine over someone else's grammar, write the model first, run the fixtures
+through it, and treat a disagreement as a bug in the prose. It is cheaper than a
+review round and it finds a different class of defect.
+
 ## What round zero does not establish
 
 This is the architect's own pass. It is not the clean-context template

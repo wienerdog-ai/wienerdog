@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-projection
 title: Project each transcript to its primary dialogue, deterministically
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-dream-filtered-input-budget]
@@ -13,6 +13,16 @@ epic: dream-primary-dialogue
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
+
+> **2026-09-17 — DESIGN GATE CLOSED; `Ready`.** Five adversarial rounds ran on
+> `gpt-6-astra` through the Codex plugin against base `c94e0e66`, finding 2, 3,
+> 2, 1 and 0 product findings. Every finding was reproduced by executing the
+> real parsers and streaming reader on synthetic input — no private transcript
+> was read into this repository — and every one is dispositioned in
+> `docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`, with each raw
+> preserved before adjudication. Round 5 returned `approve` with no product
+> finding, which is what closes the gate under `docs/runbooks/codex-review.md`.
+> The base below is pinned and **must be re-verified at dispatch**.
 
 ## Context (read this, nothing else)
 
@@ -65,14 +75,18 @@ gates, and the byte count the collector's capacity bound is measured against.
 
 ## Current state
 
-**Base commit: `05f1f55d6fde601976ed2da1247a4e3b9604f4c8`** (upstream `main`).
+**Base commit: `c94e0e66664e482a16e7ff820a9ba87d20a5dae7`** (upstream `main` at
+closure). Every cite below was first derived against `05f1f55d` and
+**re-verified at `c94e0e66`**: a log of `src/core/transcripts/` between the two
+is empty, so nothing this package cites moved, and `tests/fixtures/transcripts/`
+is untouched as well — which is what AC5's boundary check depends on.
 Every file:line below was re-derived against that commit. The predecessor draft
 of this work package pinned a fork commit (`1c3790de`); three packages have
 landed in the dream path since (#245, #253, #257) and two more are in flight
 (`WP-dream-report-run-skips`, `WP-secret-sink-wiring-probes`). **None of them
 edits `src/core/transcripts/`**, which is this package's whole surface, so no
 re-derivation of the cites below is expected at dispatch; confirm that with
-`git log --oneline 05f1f55d..HEAD -- src/core/transcripts/` before starting.
+`git log --oneline c94e0e66..HEAD -- src/core/transcripts/` before starting.
 
 - `src/core/transcripts/index.js:135-189` exports `parseWithOutcome(entry,
   budget)` → `{extract, parse}`. It redacts each message (`capMessage`,
@@ -247,7 +261,7 @@ At the base commit `parse()` returns four messages
 (`user`, `assistant "Running it now."`, `tool_result "ok"`,
 `assistant "Sorted alphabetically."`) and
 `skill_invocations: [{skill:"packing-list", index:2, resultIndex:2,
-errored:false}]` — **measured by running the real parser at `05f1f55d`, which
+errored:false}]` — **measured by running the real parser at the base commit, which
 also confirms the third record's `text` block is dropped today.** After this
 package, `parsePrimaryWithOutcome` returns the three values below for the same
 file. `JSON.stringify(result.extract, null, 2)` is exactly:
@@ -493,6 +507,15 @@ a newly found mirror is registered here on the spot.
   once the decided block list was in. **Where a model and this prose disagree,
   the prose is wrong** — that rule found the fifth boundary and it is cheaper
   than a review round.
+- **Cross-check your implementation against the preserved reference model.**
+  `docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js` is an
+  executable transcription of row A5e with the 35 sequences that closed the
+  design gate; run it with
+  `node docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js`
+  and compare its per-message flags with your own on the same inputs. **It is a
+  reference model, not the contract** — Table A is the contract, and where the
+  two disagree the model is the bug. It is inert: no dependency, no network, no
+  write, collected by neither `npm test` nor `npm run lint`.
 - **Read row A5e as the specification and the other A5 rows as its definitions.**
   Three consecutive review rounds found boundary cases in the prose form of this
   contract — a reset at a user boundary, a silent depth-limit drop, a missing
@@ -555,6 +578,11 @@ a newly found mirror is registered here on the spot.
   measured set proves a criterion needs more than one mutation, add it and
   update those four clauses — do not leave a criterion `PROVEN` by a proof that
   reddens for another criterion's reason.
+  **A correction here is a PROSE change, so it does not belong to the
+  implementer alone:** measure the set, correct the declaration, and report the
+  affected sentences in the PR body — the orchestrator routes prose corrections
+  back to the architect rather than letting a spec drift inside an
+  implementation branch.
 
 ## Security checklist (delete only if the WP touches no untrusted input)
 
@@ -719,7 +747,7 @@ These inspect the baseline. They are **not** evidence the projection exists.
 
 ```bash
 git rev-parse HEAD
-git log --oneline 05f1f55d..HEAD -- src/core/transcripts/
+git log --oneline c94e0e66..HEAD -- src/core/transcripts/
 rg -n "function parseWithOutcome|MAX_MSG_CHARS = |MAX_MESSAGES = " src/core/transcripts/index.js
 rg -n "block.type === 'tool_result'|block.type === 'text'" src/core/transcripts/claude.js
 rg -n "TRUSTED_MESSAGE_ROLES|function invocationWindowTainted" src/core/transcripts/codex.js src/core/dream/validate.js
@@ -770,8 +798,18 @@ deleted, so `test -d` runs first and the whole line fails when it is absent.
 
 ## Dispatch precondition — owner items
 
-Neither item blocks drafting. Both must be answered before this spec moves to
-`Ready`. Nothing here records an owner decision; these are questions.
+Every item below is **a recommendation adopted under standing authorization, not
+a direct ruling** — the standing process is recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`: the architect
+records a recommendation with the cost of overruling it, the session may dispatch
+under that recommendation, and **the owner reverses any of them by dated
+amendment**, applied to this spec by a committed revision rather than by a
+dispatch message, because `scripts/boundary-check.js` reads the Deliverables
+table in this file and nothing a message says changes what CI sees. **Nothing in
+this repository records the owner approving, accepting or ratifying any of them,
+and this spec asserts no such acceptance.** Each was raised by the architect or by
+a numbered design-review round and carries its round in the logbook entry
+`docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`.
 
 1. **Does `dream_max_input_bytes` bound transcript INTAKE or model-visible
    OUTPUT?** *Recommendation:* intake — row B4 measures the capacity bound
@@ -885,6 +923,17 @@ Neither item blocks drafting. Both must be answered before this spec moves to
 
 ## Definition of done
 
+0. **DISPATCH PRECONDITION.** (a) The design gate is **closed at round 5
+   (`approve`)**, which is what makes this spec `Ready`
+   (`docs/runbooks/codex-review.md`); all eight findings across rounds 1–4 are
+   dispositioned in `docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`,
+   raws preserved before adjudication. (b) The owner items travel with this
+   package as **recommendations adopted under standing authorization**; any the
+   owner reverses by dated amendment is applied by a committed revision, never
+   by a dispatch message. (c) **Every cite is pinned to base `c94e0e66` and must
+   be re-verified at dispatch** by running the Current-state commands below;
+   nothing has edited `src/core/transcripts/` since, and the first Current-state
+   command is the check. (d) Branch `wp/dream-primary-dialogue-projection`.
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled
    `feat(transcripts): project each transcript to its primary dialogue (WP-dream-primary-dialogue-projection)`.

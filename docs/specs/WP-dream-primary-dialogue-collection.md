@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-collection
 title: Collect primary dialogue into scratch and keep the code-owned gates on the original timeline
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-dream-primary-dialogue-projection]
@@ -13,6 +13,21 @@ epic: dream-primary-dialogue
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
+
+> **2026-09-17 — DESIGN GATE CLOSED; `Ready`.** Three adversarial rounds ran on
+> `gpt-6-astra` through the Codex plugin against base `c94e0e66`, finding 1
+> product finding plus 2 machinery notes, then 2, then 0. Round 3 returned
+> `approve` after executing 48 filename-collision scenarios and 480 gate-verdict
+> comparisons against the baseline, which is what closes the gate under
+> `docs/runbooks/codex-review.md`. Dispositions and raws are in
+> `docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`.
+>
+> **This package is dispatched only after BOTH `WP-dream-primary-dialogue-projection`
+> and `WP-dream-report-run-skips` have landed**, and its cites into
+> `src/core/dream/scratch.js`, `src/core/dream/promote.js`, `src/cli/dream.js`
+> and `tests/unit/dream-collect.test.js` **must be re-derived at dispatch** —
+> `WP-dream-report-run-skips` edits all four. The projection package has no such
+> constraint and may be dispatched as soon as it is `Ready`.
 
 ## Context (read this, nothing else)
 
@@ -75,7 +90,14 @@ amendment text is in this spec, below, to be appended byte-for-byte.
 
 ## Current state
 
-**Base commit: `05f1f55d6fde601976ed2da1247a4e3b9604f4c8`** (upstream `main`).
+**Base commit: `c94e0e66664e482a16e7ff820a9ba87d20a5dae7`** (upstream `main` at
+closure). Every cite below was first derived against `05f1f55d` and
+**re-verified at `c94e0e66`**: none of `src/core/dream/scratch.js`,
+`src/core/dream/ledger.js`, `src/cli/dream.js`, `src/core/dream/validate.js`,
+`src/core/dream/promote.js`, `skills/wienerdog-dream/SKILL.md` or
+`docs/adr/0020-skill-revision-lifecycle.md` changed between the two. The one
+deliverable that did is `tests/unit/dream-collect.test.js`, which gained 49
+lines of probe block in PR `#261`; no cite in this spec points into it by line.
 Every file:line below was re-derived against that commit by locating the
 construct, reading the whole enclosing function and checking both ends of each
 range.
@@ -85,11 +107,9 @@ range.
 `WP-dream-report-run-skips`, which was `Ready` and in flight when this spec was
 written; `#245`, `#253` and `#257` already moved them since the predecessor
 draft's fork baseline. Run
-`git log --oneline 05f1f55d..HEAD -- src/cli/dream.js src/core/dream/scratch.js`
-first and re-read anything that moved. `tests/unit/dream-collect.test.js` is
-also a deliverable of this package and gained a probe block at its end in PR
-`#261` after this spec was written; no cite in this spec points into that file
-by line, but read its tail before editing it.
+`git log --oneline c94e0e66..HEAD -- src/cli/dream.js src/core/dream/scratch.js src/core/dream/promote.js tests/unit/dream-collect.test.js`
+first and re-read anything that moved. Read the tail of `tests/unit/dream-collect.test.js` before editing it — it is a
+deliverable of this package and PR `#261` appended a probe block to it.
 
 - `src/core/dream/scratch.js:46-157` is `collectExtracts(paths, ledger,
   maxInputBytes, {preprocessTimeoutMs = 60_000, now})`. It discovers, filters
@@ -376,6 +396,16 @@ a newly found mirror is registered here on the spot.
   invalidated by this change either (row C3); shipping a release does bump
   `package.json.version`, which invalidates them as it always has, causing a
   fresh size **measurement** — not a re-dream.
+- **Cross-check your implementation against the preserved reference model.**
+  `docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js` is an
+  executable transcription of the predecessor package’s row A5e with the 35
+  sequences that closed its design gate; run it with
+  `node docs/specs/logbook/2026-09-17-dream-primary-dialogue-taint-model.js`
+  and compare its per-message flags with the ones reaching your scratch files.
+  **It is a reference model, not the contract** — the predecessor’s Table A is
+  the contract, and where the two disagree the model is the bug. It is inert:
+  no dependency, no network, no write, collected by neither `npm test` nor
+  `npm run lint`.
 - **This package does not fix F1, and must not be described as fixing it.**
   Admission still marks every admitted session `processed` when the run's
   secret gate allows it, without any per-session examination result. Row C1
@@ -413,6 +443,11 @@ a newly found mirror is registered here on the spot.
   behavior its proof reddens. If a measured set proves a criterion needs more
   than one mutation, add it and update those clauses — do not leave a criterion
   `PROVEN` by a proof that reddens for another criterion's reason.
+  **A correction here is a PROSE change, so it does not belong to the
+  implementer alone:** measure the set, correct the declaration, and report the
+  affected sentences in the PR body — the orchestrator routes prose corrections
+  back to the architect rather than letting a spec drift inside an
+  implementation branch.
 
 ## ADR-0020 amendment text
 
@@ -420,14 +455,15 @@ Append this block verbatim to `docs/adr/0020-skill-revision-lifecycle.md`,
 after the existing `## Amendment (2026-09-05): ledger-parser correctness
 (WP-audit-e-ledger-parser-corpus)` section and before `## Future work (parked,
 not specced)`. Do not edit it; do not reword its `Status:` line. That line
-records a proposal, **not** an owner decision: the owner adds his own signature
-line to this amendment himself, and no work package may write `OWNER-SIGNED` or
-`OWNER-RATIFIED` on his behalf or state that he approved it.
+records adoption under the standing authorization, **not** an owner signature:
+the owner adds his own signature line to this amendment himself, and no work
+package may write `OWNER-SIGNED` or `OWNER-RATIFIED` on his behalf or state that
+he approved, accepted or ratified it.
 
 ```markdown
 ## Amendment (2026-09-17): the model looks for skill learnings in dialogue only — WP-dream-primary-dialogue-collection
 
-Status: **PROPOSED — awaiting owner signature.**
+Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**
 
 **Decision.** The dream's model-visible input becomes primary dialogue: the
 person's requests and corrections, and the concluding assistant reply of each
@@ -600,7 +636,7 @@ carries forward from the role-based one it replaces rather than a new one.
 - [ ] **AC6 — the ADR amendment (Table D row D5).** `docs/adr/0020-skill-revision-lifecycle.md`
       ends with the block above appended byte-for-byte in the stated position,
       its `Status:` line reads exactly
-      `Status: **PROPOSED — awaiting owner signature.**`, and the file contains
+      `Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**`, and the file contains
       no sentence stating that the owner approved, accepted, ratified or signed
       it.
 - [ ] **AC7 — the admitted-count measurement (Table C rows C1, C1a).** Manual
@@ -636,7 +672,7 @@ carries forward from the role-based one it replaces rather than a new one.
 
 ```bash
 git rev-parse HEAD
-git log --oneline 05f1f55d..HEAD -- src/cli/dream.js src/core/dream/scratch.js
+git log --oneline c94e0e66..HEAD -- src/cli/dream.js src/core/dream/scratch.js src/core/dream/promote.js tests/unit/dream-collect.test.js
 rg -n "Buffer.byteLength\(JSON.stringify\(extract\)\)|writeFilePrivate\(scratchFile|total input bytes" src/core/dream/scratch.js src/cli/dream.js
 rg -n "extractsBySession" src/cli/dream.js src/core/dream/validate.js
 rg -n "const startedAt = now\(\)|preprocessTimeoutMs" src/core/dream/scratch.js
@@ -650,7 +686,7 @@ npm test -- tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js t
 ```bash
 node -e "const t=require('./src/core/transcripts'); if (typeof t.parsePrimaryWithOutcome !== 'function') { console.error('predecessor WP has not landed'); process.exit(1); } console.log('predecessor present');"
 test -f skills/wienerdog-dream/SKILL.md && ! rg -q "skill_invocations|tool_result|errored" skills/wienerdog-dream/SKILL.md
-test -f docs/adr/0020-skill-revision-lifecycle.md && rg -qF 'Status: **PROPOSED — awaiting owner signature.**' docs/adr/0020-skill-revision-lifecycle.md
+test -f docs/adr/0020-skill-revision-lifecycle.md && rg -qF 'Status: **ACCEPTED under standing authorization 2026-09-17 — owner signature pending.**' docs/adr/0020-skill-revision-lifecycle.md
 test -f docs/adr/0020-skill-revision-lifecycle.md && ! rg -qi "owner (approved|accepted|ratified|signed)" docs/adr/0020-skill-revision-lifecycle.md
 npm test -- tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/dream-skill-structure.test.js tests/unit/dream-validate.test.js tests/integration/dream.test.js
 npm test
@@ -708,8 +744,18 @@ if its file is absent.
 
 ## Dispatch precondition — owner items
 
-Neither item blocks drafting. Both must be answered before this spec moves to
-`Ready`. Nothing here records an owner decision; these are questions.
+Every item below is **a recommendation adopted under standing authorization, not
+a direct ruling** — the standing process is recorded in
+`docs/specs/logbook/2026-09-17-owner-rulings-felho-integration-3.md`: the architect
+records a recommendation with the cost of overruling it, the session may dispatch
+under that recommendation, and **the owner reverses any of them by dated
+amendment**, applied to this spec by a committed revision rather than by a
+dispatch message, because `scripts/boundary-check.js` reads the Deliverables
+table in this file and nothing a message says changes what CI sees. **Nothing in
+this repository records the owner approving, accepting or ratifying any of them,
+and this spec asserts no such acceptance.** Each was raised by the architect or by
+a numbered design-review round and carries its round in the logbook entry
+`docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`.
 
 1. **Does `dream_max_input_bytes` bound transcript INTAKE or model-visible
    OUTPUT?** *Recommendation:* intake (row C1). The scope record
@@ -775,6 +821,21 @@ Neither item blocks drafting. Both must be answered before this spec moves to
 
 ## Definition of done
 
+0. **DISPATCH PRECONDITION.** (a) The design gate is **closed at round 3
+   (`approve`)**, which is what makes this spec `Ready`
+   (`docs/runbooks/codex-review.md`); the three findings and two machinery notes
+   are dispositioned in
+   `docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md`, raws
+   preserved before adjudication. (b) The owner items travel with this package
+   as **recommendations adopted under standing authorization**; any the owner
+   reverses by dated amendment is applied by a committed revision, never by a
+   dispatch message. (c) `WP-dream-primary-dialogue-projection` is `Done`, and
+   so is `WP-dream-report-run-skips` — **this package is dispatched after both**.
+   (d) **Every cite is pinned to base `c94e0e66`, and the cites into
+   `src/core/dream/scratch.js`, `src/core/dream/promote.js`, `src/cli/dream.js`
+   and `tests/unit/dream-collect.test.js` MUST be re-derived at dispatch**,
+   construct by construct, because `WP-dream-report-run-skips` edits all four.
+   (e) Branch `wp/dream-primary-dialogue-collection`.
 1. All verification steps pass locally; output pasted into the PR body. AC7's
    measurement is recorded in a dated `docs/specs/logbook/` entry and linked
    from the PR.
