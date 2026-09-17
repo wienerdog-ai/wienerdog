@@ -291,3 +291,34 @@ owner signature pending"; the owner adds his signature line himself.
 only the sampling rule (24 h cap, 6 h bound, one local schedule day), with two
 worked cases: 54 hours, and 55 across a daylight-saving fall-back. The realistic
 case — default 20-minute deadline, a crash — is one lost night.
+
+### WP-secret-sink-wiring-probes (design gate closed 2026-09-17, round 1 approve, `35e00e99`)
+
+Two items. **Neither was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment. The
+package is diagnostic and tests-only: it pins what nine `redactOnly` call sites
+actually do and fixes nothing.
+
+**O2 — read this one first. The whole-credential chunk leak.** Measured at four
+per-chunk `redactOnly` sites, and independently reproduced by the design
+reviewer through real subprocess pipes: a secret split across two stream chunks
+is redacted by neither call, and the **whole credential lands contiguous** in
+`logs/dream/<date>.log` and `logs/<job>/<date>.log`. The only record of approval
+is the code comment at `src/core/dream/brain.js:504-508` (OWNER-APPROVED
+2026-07-17), echoed at `src/cli/run-job.js:1048-1052`. It approves *not
+buffering across chunks*, which is unchanged — but its wording, "may be only
+partially redacted", **understates the measured behaviour**. *Recommendation
+adopted:* treat it as approved but mis-described, not as a new approval; nothing
+on record shows the owner approving the whole-credential behaviour, and both
+comments need correcting by whichever package takes the fix. Exposure is
+same-user (0600 files, 0700 directories). *Overrule cost:* ruling it a new,
+unapproved exposure holds back the four probes that pin the largest leak until a
+fix lands, leaving it the only leak with no test.
+
+**O1 — may a diagnostic package commit seven tests that are green because the
+product is broken?** Three pin a truncation leak (a value straddling the
+2000-character field cap leaves a 24-character head in `alerts.jsonl` and
+`run-evidence.jsonl`); four pin the chunk leak above. *Recommendation adopted:*
+yes, in the named `(KNOWN DEFECT <id>)` form with a positive-presence assertion,
+so that a fix turns them red and nobody reads green as safe. *Overrule cost:*
+the seven leaks return to being findable only by reading the code.
