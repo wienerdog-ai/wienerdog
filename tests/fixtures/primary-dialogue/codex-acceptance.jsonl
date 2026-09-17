@@ -1,0 +1,12 @@
+{"type":"session_meta","payload":{"id":"cx-acc","timestamp":"2026-09-17T09:00:00.000Z","cwd":"/w","thread_source":"user","multi_agent_version":"v2"}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"developer control text"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"the real request"},{"type":"input_text","text":"injected agents md material"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text","agents_md.instructions"]}}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"user text with no metadata"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"user text with unreadable metadata"}],"internal_chat_message_metadata_passthrough":"user.text"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"first half"},{"type":"input_text","text":"second half"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"commentary","content":[{"type":"output_text","text":"commentary reply"}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"reply with no phase"}]}}
+{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"c1","output":[{"type":"output_text","text":"EXTERNAL"}]}}
+{"type":"response_item","payload":{"type":"reasoning","summary":[]}}
+{"type":"response_item","payload":{"type":"agent_message","message":"agent chatter"}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"the final answer"}]}}

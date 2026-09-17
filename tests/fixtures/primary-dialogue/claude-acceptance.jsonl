@@ -1,0 +1,10 @@
+{"type":"user","sessionId":"acc-1","cwd":"/w","timestamp":"2026-09-17T09:00:00.000Z","message":{"role":"user","content":"plain string request"}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:01.000Z","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"text","text":"progress reply"},{"type":"tool_use","id":"tu1","name":"Bash","input":{}}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:02.000Z","message":{"role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"stopped reply"}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"reply with no stop reason"}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:04.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"thinking","thinking":"weighing it up"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:05.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"concluding reply one"}]}}
+{"type":"user","isMeta":true,"timestamp":"2026-09-17T09:00:06.000Z","message":{"role":"user","content":"harness meta note"}}
+{"type":"user","isSidechain":true,"timestamp":"2026-09-17T09:00:07.000Z","message":{"role":"user","content":"subagent copy of the instruction"}}
+{"type":"user","timestamp":"2026-09-17T09:00:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","is_error":false,"content":"EXTERNAL"},{"type":"text","text":"array correction"}]}}
+{"type":"assistant","timestamp":"2026-09-17T09:00:09.000Z","message":{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"concluding reply two"}]}}

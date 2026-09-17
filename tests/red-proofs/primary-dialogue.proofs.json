@@ -1,0 +1,177 @@
+{
+  "suite": "tests/unit/primary-dialogue.test.js",
+  "proofs": [
+    {
+      "id": "pdp-ac1-array-text-acceptance-removed",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC1",
+      "why": "row A2's array-`text` clause is the defect this package fixes (claude.js:138-155 ignores ordinary text blocks in array-valued user content, losing real user words). Dropping the acceptance makes the user's correction vanish from the projection while every other AC1 assertion — string content, stop_reason filtering, thinking/image/isMeta/isSidechain exclusion — still holds, so exactly the array-text test reddens",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "      const text = joinTextBlocks(content, '\\n\\n');\n      return text === '' ? null : { role: 'user', text, ts };",
+      "replace": "      return null; /* RP_MUT_PDP_AC1_ARRAY_TEXT_DROPPED */",
+      "marker": "RP_MUT_PDP_AC1_ARRAY_TEXT_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC1\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC1] Claude acceptance: string content, array text, stop_reason and block types"
+          ],
+          "signal": "pd-ac1 :: texts"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac2-developer-role-accepted",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC2",
+      "why": "row A3 accepts `payload.role` exactly `user` and nothing else; readmitting `developer` is the F2 defect the package exists to remove (1,653,850 of 3,071,245 normalized user characters measured were Codex developer messages). Both AC2 tests redden because both read the same rollout: the acceptance test gains the developer text, and the thread_source test's `thread_source: \"user\"` arm counts one message too many",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    if (payload.role === 'user') {",
+      "replace": "    if (payload.role === 'user' || payload.role === 'developer') { /* RP_MUT_PDP_AC2_DEVELOPER_ACCEPTED */",
+      "marker": "RP_MUT_PDP_AC2_DEVELOPER_ACCEPTED",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC2\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC2] Codex acceptance: role, content kind, phase and payload type"
+          ],
+          "signal": "pd-ac2 :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC2] Codex thread_source decides whether the rollout supplies dialogue at all"
+          ],
+          "signal": "pd-ac2-thread :: thread_source user yields the dialogue"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac3-taint-resets-at-user-boundary",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3",
+      "why": "row A5(b)'s state is MONOTONIC — a new user request, a dropped exchange, a cap or any later boundary never lowers it. Lowering it at the one boundary a reader instinctively treats as a reset (a retained user message) makes the second and third exchanges' concluding replies read `false` although tool output was observed earlier in the session, which is precisely the reset round 1 of the design review found in the prose",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    if (accepted === null) return;\n    messages.push({",
+      "replace": "    if (accepted === null) return;\n    if (accepted.role === 'user') tainted = false; /* RP_MUT_PDP_AC3_TAINT_RESET */\n    messages.push({",
+      "marker": "RP_MUT_PDP_AC3_TAINT_RESET",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3] the assistant taint state never resets"
+          ],
+          "signal": "pd-ac3 :: flags"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac3b-depth-limit-notification-removed",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3b",
+      "why": "row A5a's G2 is the loss NOTHING downstream can discover: a valid but over-deep tool record is dropped before JSON.parse with outcome 'ok', oversizedRecords 0 and truncated false. Restoring the bare `return` notifies the observer of nothing, so the conclusion after the discarded tool record reads `false`. Only the Claude G2 case reddens — the Codex notification lives in codex.js and is untouched by this mutation, which is why the Codex G2 case is the control",
+      "file": "src/core/transcripts/claude.js",
+      "find": "    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) {\n      if (observer) observer.lost(); // G2 — SILENT here: outcome stays 'ok'\n      return; // nesting bomb → skip\n    }",
+      "replace": "    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) return; /* RP_MUT_PDP_AC3B_DEPTH_NOTIFY_DROPPED */",
+      "marker": "RP_MUT_PDP_AC3B_DEPTH_NOTIFY_DROPPED",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3b\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3b] G2 a Claude tool record nested deeper than MAX_JSON_DEPTH"
+          ],
+          "signal": "pd-case G2 a Claude tool record nested deeper than MAX_JSON_DEPTH :: flags"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac3c-missing-payload-type-declines",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3c",
+      "why": "row A5c requires a `response_item` to carry a `payload.type` that is a non-empty string in the decided list; treating an ABSENT one as a positive decline is exactly the hole round 2 measured, since mapCodexItem's fall-through drops such a record silently. The negative controls stay green — a `session_meta` owes no payload.type, a `reasoning` payload is a real decline — which is what keeps the criterion from tainting everything",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "  if (!isNonEmptyString(payload.type) || !CODEX_PAYLOAD_TYPES.has(payload.type)) return UNCLASSIFIABLE;",
+      "replace": "  if (!isNonEmptyString(payload.type)) return NO_BLOCKS; /* RP_MUT_PDP_AC3C_MISSING_PAYLOAD_TYPE_DECLINES */\n  if (!CODEX_PAYLOAD_TYPES.has(payload.type)) return UNCLASSIFIABLE;",
+      "marker": "RP_MUT_PDP_AC3C_MISSING_PAYLOAD_TYPE_DECLINES",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3c\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3c] payload level: a Codex response_item whose payload has NO type"
+          ],
+          "signal": "pd-case payload level: a Codex response_item whose payload has NO type :: flags"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac3d-envelope-exclusion-ahead-of-block-scan",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3d",
+      "why": "row A5d says a recognised tool-result block outranks its envelope: the block scan runs BEFORE the envelope decision, on every parseable record. Restoring envelope exclusion ahead of it makes a tool_result hidden under an `attachment` record and under an unfamiliar top-level type invisible again — the two measured shapes whose envelope this branch owns. The `assistant` and `isMeta` shapes are recognised types handled earlier in the same function and stay green, which is why exactly two of the four redden",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "  if (isPlainObject(message) && Array.isArray(message.content)) {\n    return { classified: true, blocks: message.content };\n  }\n  return NO_BLOCKS;",
+      "replace": "  return NO_BLOCKS; /* RP_MUT_PDP_AC3D_ENVELOPE_EXCLUSION_RESTORED */",
+      "marker": "RP_MUT_PDP_AC3D_ENVELOPE_EXCLUSION_RESTORED",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3d\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3d] (a) a tool_result block inside an attachment record"
+          ],
+          "signal": "pd-case (a) a tool_result block inside an attachment record :: flags"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3d] (b) a tool_result block inside an unfamiliar top-level type"
+          ],
+          "signal": "pd-case (b) a tool_result block inside an unfamiliar top-level type :: flags"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac4-intake-bytes-from-the-projection",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC4",
+      "why": "row B4 is byte-policy equivalence: `intakeBytes` must be what scratch.js:118 computes today from parseWithOutcome(...).extract, so every byte-based admission decision stays the base commit's. Measuring it from the PROJECTED messages instead is the failure the successor package would inherit silently — the projection is smaller, so more sessions would fit the same bound and be marked processed whether or not the consolidation agent read them",
+      "file": "src/core/transcripts/index.js",
+      "find": "  const intakeBytes = Buffer.byteLength(JSON.stringify(rawCapped));",
+      "replace": "  const intakeBytes = Buffer.byteLength(JSON.stringify({ ...rawCapped, messages: projection.messages })); /* RP_MUT_PDP_AC4_INTAKE_FROM_PROJECTION */",
+      "marker": "RP_MUT_PDP_AC4_INTAKE_FROM_PROJECTION",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC4\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC4] return-value invariants hold for every fixture"
+          ],
+          "signal": "pd-ac4 claude-acceptance.jsonl :: intakeBytes is the raw capped extract"
+        }
+      ]
+    },
+    {
+      "id": "pdp-ac4a-second-read",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC4a",
+      "why": "row B1 requires ONE call to streamLines per transcript. Deriving the raw capped extract from a second parseWithOutcome call is the double-read the design review executed: it opens the transcript twice — letting the two reads observe different file contents — and debits the caller's budget twice. The declared assertion is the DEBIT one rather than the invocation count because the second read also doubles the debit and the debit assertion runs first; the invocation-count assertion in the same test body is what makes the criterion non-vacuous when a mutation leaves the debit equal",
+      "file": "src/core/transcripts/index.js",
+      "find": "  const rawCapped = capExtract(raw);",
+      "replace": "  const rawCapped = parseWithOutcome(entry, budget).extract; /* RP_MUT_PDP_AC4A_SECOND_READ */",
+      "marker": "RP_MUT_PDP_AC4A_SECOND_READ",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC4a\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC4a] one bounded read: the same budget debit as parseWithOutcome, and streamLines exactly once"
+          ],
+          "signal": "pd-read :: the budget debit equals one parseWithOutcome"
+        }
+      ]
+    }
+  ]
+}

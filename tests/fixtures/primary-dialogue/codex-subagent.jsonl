@@ -1,0 +1,3 @@
+{"type":"session_meta","payload":{"id":"cx-sub","timestamp":"2026-09-17T09:00:00.000Z","cwd":"/w","thread_source":"subagent","multi_agent_version":"v2","agent_path":"a/b"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"the parent agents instruction"}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final_answer","content":[{"type":"output_text","text":"the subagents answer"}]}}
