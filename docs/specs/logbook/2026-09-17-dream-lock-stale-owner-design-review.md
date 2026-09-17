@@ -33,11 +33,43 @@ surface is not registered until you have walked it. Here the surfaces were a
 supervisor's watermark, a catch-up predicate and an alert reason — none of them
 in the spec's own Deliverables, all of them load-bearing for its claims.
 
+## Round 2 — dispositions
+
+Reviewed tip `94b77b9a`, verdict `needs-attention`, three new findings, no routed
+scope objections. The round confirmed the round-1 repairs held: R1-A1's takeover
+mechanism is genuinely gone, the latency timeline is accurate for an
+already-expired lock, the message-surface narrowing is correct, the ADR block
+does not contradict Table L, and every cite resolves. Raw artifacts are committed
+beside this entry as `2026-09-17-dream-lock-stale-owner-design-r2-raw.json`,
+`-focus.txt` and `-meta.txt`. Nothing below records an owner decision.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| R2-A1 — restart-then-delete can delete a newly acquired live lock | A | heavy | **Fix the instruction** | The reviewer's own trace carries the cure: after a restart the recorded PID is normally gone, so the next scheduled or catch-up run probes `ESRCH` and Table L5's existing takeover clears the lock unattended. The restart is usually the whole fix, and the deletion — which `RunAtLoad`, `Persistent=true` and `StartWhenAvailable` can race — was both unnecessary and the only destructive step. The message now says: how long it has been held; restart, and Wienerdog normally recovers by itself; delete the named file **only if the same message reappears afterwards**, at a time when no dream is about to start. Why that is safe enough is reasoned in Table S5: a reappearing message means the contender that printed it got `busy`, which by L4 means it neither acquired nor modified the record, so the file is still the dead owner's. The remaining race — squatter exits, contender takes over, user deletes a live record — is named as a residual and priced in O4. An attended conditional-recovery command is routed onward; no scheduler-disable procedure is prescribed, because telling a non-developer to disable and re-enable an OS schedule entry is a larger hazard than the race it removes. |
+| R2-B1 — the deadline cap still inherits the unbounded timeout | B | heavy | **Fix** | `readDreamConfig` puts no maximum on `dream_timeout_minutes`, so `max(24 h, 2 × timeoutMs)` inherits that: a twenty-day timeout leaves a twenty-day deadline below the cap and the stall stays silent for twenty days, and the multiplication can overflow to `Infinity`. The cap is now an absolute 24 hours with no multiplication and no dependence on configuration. Consequence stated and priced in O2: an install setting the timeout above a day has its own lock refused as `owner-unknown` for the part of its life more than a day ahead — loud, never silent, never a takeover. The unqualified "at most one lost night" is gone; the spec now separates the walked already-expired case (one night) from the worst case composed of the 24 h cap and the 6 h bound (two nights). Validating the setting and reconciling inner against outer timeouts is routed onward. |
+| R2-B2 — the new busy shape breaks a test outside the boundary | B | light | **Fix (option A)** | `tests/unit/dream-pipeline.test.js:921` deep-compares the busy object and is run by the required `npm test`, so a conforming implementation would fail it while fixing it would break the permission boundary. The file is back in Deliverables for that one expectation, and C4 now carries the complete inventory from `grep -rn acquireLock tests/ src/ bin/`: one production consumer, three test files, one deep-compare outside the lock suite, two call sites that assert nothing about the result. The alternative — freeze the result shape and export a staleness helper — was rejected and the rejection recorded in the implementation notes: the parsed record lives only inside `acquireLock`, so a helper must re-read and re-parse the file, adding a second exported contract, a second read and a time-of-check window in place of one expectation whose new value is deterministically `1`. |
+
+**The reusable lesson of round 2** is narrower than round 1's and worth keeping
+separate: *a bound that is derived from a value nobody validates is not a bound.*
+S3 was written as a cap and reviewed as a cap, but it multiplied an unvalidated
+config number, so it inherited exactly the unboundedness it was introduced to
+remove. The check is mechanical — for every limit, ask what constrains each input
+to the limit, and stop only at a literal or a validated range.
+
 ## Resulting shape
 
-Size drops from M to S. `tests/unit/dream-pipeline.test.js` leaves the
-Deliverables table: with the boot proof gone the only CLI-level behavior left is
-the decline branch, which the integration suite already owns end to end. Table S
-is seven rows (result shape, `staleForMs`, implausible-deadline refusal, the
-loud gate, the message and its real delivery surface, the exit-code doc-comment
-errata, the ADR amendment). Six owner items remain, renumbered.
+Size drops from M to S after round 1 and stays S after round 2. Table S is seven
+rows (result shape, `staleForMs`, implausible-deadline refusal, the loud gate,
+the message and its real delivery surface, the exit-code doc-comment errata, the
+ADR amendment). Six owner items, renumbered once in round 1.
+
+Deliverables after round 2 (seven paths): `src/core/dream/lock.js`,
+`src/cli/dream.js`, `tests/unit/dream-lock.test.js`,
+`tests/unit/dream-pipeline.test.js`, `tests/integration/dream.test.js`,
+`tests/red-proofs/dream-lock-stale-owner-loud.proofs.json` (create),
+`docs/adr/0012-dream-run-lifecycle.md`. Round 1 removed
+`tests/unit/dream-pipeline.test.js` on the reasoning that the integration suite
+owned the only remaining CLI behavior; round 2 put it back for a different
+reason — it deep-compares the result object that S1 changes. Both decisions were
+about the same file and neither was wrong about its own question, which is why
+the complete consumer inventory now lives in C4 rather than in an argument.
