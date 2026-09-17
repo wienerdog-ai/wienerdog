@@ -152,7 +152,10 @@ function createPrimaryProjection(harness) {
   // says so, so a rollout with no readable header yields nothing rather than
   // defaulting to accepted.
   let codexAccepts = false;
-  let sessionMetaSeen = false;
+  // Whether a first `session_meta` has been ENCOUNTERED — latched before any
+  // schema check, so a rollout whose first header is unreadable stays
+  // ineligible for the rest of the file whatever a later header says.
+  let codexHeaderSeen = false;
 
   /** Row A5a: a line that did not reach the parser intact (G1-G4). There is no
    *  record to examine, so the only thing code can say is that something was
@@ -191,17 +194,9 @@ function createPrimaryProjection(harness) {
   /** Rows A3 and A4 — what a parsed Codex record supplies, if anything.
    *  @param {Object} obj @returns {{role:'user'|'assistant', text:string, ts:null}|null} */
   const acceptCodex = (obj) => {
-    if (obj.type === 'session_meta') {
-      if (!sessionMetaSeen) {
-        sessionMetaSeen = true;
-        const threadSource = obj.payload.thread_source;
-        // `user` is the person's own rollout; an absent key is a harness build
-        // with no subagent concept. `subagent` and `guardian_review` are fork
-        // mechanisms whose user-role records are the parent's instructions.
-        codexAccepts = threadSource === undefined || threadSource === 'user';
-      }
-      return null; // a header supplies no dialogue
-    }
+    // Eligibility was decided by the latch below, at the FIRST header; a later
+    // header never revisits it.
+    if (obj.type === 'session_meta') return null; // a header supplies no dialogue
     if (!codexAccepts || obj.type !== 'response_item') return null;
     const payload = obj.payload;
     if (payload.type !== 'message') return null;
@@ -233,6 +228,26 @@ function createPrimaryProjection(harness) {
   /** Row A5e steps 2-5, in that order, for one record that parsed.
    *  @param {*} obj @returns {void} */
   const record = (obj) => {
+    // ROW A4'S LATCH, AND IT RUNS BEFORE STEP 2 ON PURPOSE. Eligibility belongs
+    // to the FIRST `session_meta` record, so encountering one has to be
+    // recorded even when its payload cannot be read — otherwise a damaged true
+    // header is skipped by step 2's rejection and a LATER header decides
+    // instead. That later header may be copied history (a subagent rollout
+    // carries the parent's user-role records), which is exactly the second
+    // apparent human A4 exists to prevent. Taint alone does not cover it:
+    // taint governs assistant text, while user text is `false` by role.
+    // Fail closed — an unreadable first header leaves the rollout ineligible
+    // for the whole file — and let step 2 taint it as usual.
+    if (codex && !codexHeaderSeen && isPlainObject(obj) && obj.type === 'session_meta') {
+      codexHeaderSeen = true;
+      const payload = obj.payload;
+      // `user` is the person's own rollout; an absent key is a harness build
+      // with no subagent concept. `subagent` and `guardian_review` are fork
+      // mechanisms whose user-role records are the parent's instructions.
+      codexAccepts = isPlainObject(payload)
+        && (payload.thread_source === undefined || payload.thread_source === 'user');
+    }
+
     // STEP 2 — both schema checks: the one this record's own type owes (row
     // A5c) and a decided-type discriminator on every element of any
     // array-valued content, in this envelope whether it is accepted or
@@ -281,9 +296,4 @@ function createPrimaryProjection(harness) {
   return { lost, record, messages, tainted: () => tainted };
 }
 
-module.exports = {
-  createPrimaryProjection,
-  CLAUDE_BLOCK_TYPES,
-  CODEX_BLOCK_TYPES,
-  CODEX_PAYLOAD_TYPES,
-};
+module.exports = { createPrimaryProjection };

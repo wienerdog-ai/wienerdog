@@ -370,16 +370,26 @@ test('primary-dialogue: [AC4a] one bounded read: the same budget debit as parseW
     calls.push({ filePath, debited: before - budget.remaining });
     return streamed;
   };
+  // BOTH HARNESSES: the two parsers carry their own per-line closure, so a
+  // second read introduced in either one has to redden this.
+  const codexFixture = path.join(fixturesDir, 'codex-acceptance.jsonl');
+  const codexEntry = entryFor('codex', codexFixture);
+  const codexPlainBudget = newRunBudget();
+  parseWithOutcome(codexEntry, codexPlainBudget);
+  const codexPlainDebit = newRunBudget().remaining - codexPlainBudget.remaining;
   try {
     const spied = require(require.resolve('../../src/core/transcripts'));
     spied.parsePrimaryWithOutcome(entry, spied.newRunBudget());
+    spied.parsePrimaryWithOutcome(codexEntry, spied.newRunBudget());
   } finally {
     stream.streamLines = realStreamLines;
     for (const modulePath of graph) delete require.cache[modulePath];
   }
-  assert.equal(calls.length, 1, 'pd-read :: streamLines is invoked exactly once');
-  assert.equal(calls[0].filePath, entry.path, 'pd-read :: on the transcript itself');
-  assert.equal(calls[0].debited, plainDebit, 'pd-read :: and that one read carries the whole debit');
+  assert.equal(calls.length, 2, 'pd-read :: streamLines is invoked exactly once per transcript');
+  assert.equal(calls[0].filePath, entry.path, 'pd-read :: on the Claude transcript itself');
+  assert.equal(calls[0].debited, plainDebit, 'pd-read :: and that one Claude read carries the whole debit');
+  assert.equal(calls[1].filePath, codexEntry.path, 'pd-read :: on the Codex transcript itself');
+  assert.equal(calls[1].debited, codexPlainDebit, 'pd-read :: and that one Codex read carries the whole debit');
 });
 
 // ── AC5 — the default parse is unchanged ─────────────────────────────────────

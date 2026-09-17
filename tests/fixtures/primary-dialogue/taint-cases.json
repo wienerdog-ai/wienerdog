@@ -751,5 +751,76 @@
       "go",
       "ok"
     ]
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is null leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":null}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta with NO payload key at all leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\"}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is a STRING leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":\"codex-tui\"}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch: a FIRST session_meta whose payload is an ARRAY leaves the rollout ineligible",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":[]}",
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"copied history\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"copied conclusion\"}]}}"
+    ],
+    "texts": [],
+    "flags": []
+  },
+  {
+    "name": "first-header latch CONTROL: a valid first header then a malformed LATER session_meta taints but keeps the dialogue",
+    "criterion": "AC3c",
+    "harness": "codex",
+    "lines": [
+      "{\"type\":\"session_meta\",\"payload\":{\"id\":\"cx-demo\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"cwd\":\"/w\",\"thread_source\":\"user\"}}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go\"}],\"internal_chat_message_metadata_passthrough\":{\"content_item_kinds\":[\"user.text\"]}}}",
+      "{\"type\":\"session_meta\",\"payload\":null}",
+      "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      true
+    ]
   }
 ]

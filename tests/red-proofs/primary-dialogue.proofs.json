@@ -108,6 +108,44 @@
       ]
     },
     {
+      "id": "pdp-ac3c-first-header-latch-after-schema-check",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3c",
+      "why": "row A4 gives eligibility to the FIRST session_meta record, and row A5c says a header whose payload cannot be read 'supplies no dialogue rather than defaulting to accepted'. Moving the latch back behind the schema check (only latching when the payload is a plain object) restores the reproduced violation: step 2 rejects the damaged first header before anything records that a header was encountered, so a LATER header decides eligibility instead. That later header may be copied history — a subagent rollout carries the parent's user-role records — and the copied user text is emitted with derived_from_untrusted false, because taint governs assistant text while user text is false BY ROLE. The valid-first-header control stays green, which is what keeps this from being a blanket refusal of Codex rollouts",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    if (codex && !codexHeaderSeen && isPlainObject(obj) && obj.type === 'session_meta') {",
+      "replace": "    if (codex && !codexHeaderSeen && isPlainObject(obj) && obj.type === 'session_meta' && isPlainObject(obj.payload)) { /* RP_MUT_PDP_AC3C_LATCH_AFTER_SCHEMA_CHECK */",
+      "marker": "RP_MUT_PDP_AC3C_LATCH_AFTER_SCHEMA_CHECK",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3c\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3c] first-header latch: a FIRST session_meta whose payload is null leaves the rollout ineligible"
+          ],
+          "signal": "a FIRST session_meta whose payload is null leaves the rollout ineligible :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] first-header latch: a FIRST session_meta with NO payload key at all leaves the rollout ineligible"
+          ],
+          "signal": "a FIRST session_meta with NO payload key at all leaves the rollout ineligible :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] first-header latch: a FIRST session_meta whose payload is a STRING leaves the rollout ineligible"
+          ],
+          "signal": "a FIRST session_meta whose payload is a STRING leaves the rollout ineligible :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] first-header latch: a FIRST session_meta whose payload is an ARRAY leaves the rollout ineligible"
+          ],
+          "signal": "a FIRST session_meta whose payload is an ARRAY leaves the rollout ineligible :: texts"
+        }
+      ]
+    },
+    {
       "id": "pdp-ac3d-envelope-exclusion-ahead-of-block-scan",
       "wp": "WP-dream-primary-dialogue-projection",
       "criterion": "AC3d",
