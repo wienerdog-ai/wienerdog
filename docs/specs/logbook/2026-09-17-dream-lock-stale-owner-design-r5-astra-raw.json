@@ -1,0 +1,43 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b038-8f0a-7b60-821c-63e14ba66706",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: the scheduled-run safety claim is false, and the RED-proof plan does not reach the CLI gate. The 54-hour and 55-hour worked cases check out.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Scheduled dreams can legitimately exceed the loud threshold",
+        "body": "O1 explicitly excludes scheduled runs from its false-positive residual, but schedule.js:1080-1087 accepts any positive integer watchdog timeout. run-job.js:501-504 therefore permits a ten-hour watchdog; config.js:59-64 independently permits eight-hour preprocessing with a twenty-minute lock deadline. A contender after seven hours can encounter legitimate scheduled work and trigger S4. This also invalidates S5's half-hour lookback as a sufficient check for scheduled activity: an older scheduled dream may still own the lock. Deleting it can expose its scratch to another run. This is an incorrect safety premise, beyond the already-priced human-error residual.",
+        "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+        "line_start": 364,
+        "line_end": 372,
+        "confidence": 0.98,
+        "recommendation": "Qualify the watchdog claim to default configuration, price scheduled overruns alongside attended overruns, and remove the half-hour shortcut from S5 and its mirrors. Require checking for any currently running dream regardless of start time."
+      },
+      {
+        "severity": "medium",
+        "title": "[Machinery] The declared proof suite cannot exercise S4 under the specified test split",
+        "body": "The deliverables assign S1–S3 to dream-lock.test.js and S4–S5 to the integration suite, but require every proof to use dream-lock.test.js. AC7 nevertheless requires a mutation of S4's CLI comparison to redden. The lock suite imports only the lock helpers; scripts/red-proofs.js:964-994 executes only the declared suite. Under this split, changing the CLI comparison leaves that suite green, so the required S4 proof cannot become PROVEN.",
+        "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+        "line_start": 123,
+        "line_end": 126,
+        "confidence": 0.99,
+        "recommendation": "Allow a second proof declaration targeting tests/integration/dream.test.js for S4, or explicitly assign executable S4 coverage to the declared unit suite. Update the permission boundary and AC7 consistently."
+      }
+    ],
+    "next_steps": [
+      "Correct the product safety premise and proof-suite routing before dispatch.",
+      "Executed: scoped git diff, diff --check, status and source searches; read-only Node simulations using the actual catchUp/todaysFire functions with simulated success watermarks confirmed 54 h and 55 h. Evaluated the actual watchdog resolver for a ten-hour configuration.",
+      "Read: spec, logbook material, cited lock/CLI/scheduler/test/ADR/proof-runner code. The cited source/test locations and acquireLock consumer inventory resolve. No raw lock strings enter the proposed message.",
+      "Not executed: npm test, targeted suites, lint or RED proofs; the implementation and declarations do not exist yet. No files changed."
+    ]
+  }
+}

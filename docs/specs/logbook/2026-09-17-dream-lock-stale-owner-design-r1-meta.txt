@@ -1,0 +1,5 @@
+gate: design  name: lock-r1
+tip: 0cb0d2f253b43a9dce3b49bb11975eb363634ba6
+base: 047a202c1ada70ab44bd24a21157854441d987a2
+codex exit: 0
+porcelain: IDENTICAL before/after

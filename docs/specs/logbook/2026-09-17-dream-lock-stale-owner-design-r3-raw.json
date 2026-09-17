@@ -1,0 +1,62 @@
+{
+  "reviewed_sha": "a70fbb766a9f7c7e9b109b2b7bc6c72522130620",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch. R2-B1's cap is now genuinely absolute and configuration-independent, and R2-B2's consumer boundary is complete. R2-A1 is not substantively fixed: a repeated message does not identify the lock as the pre-restart dead owner's record. The claimed 30-hour/two-night silence bound also ignores that each quiet decline records success; a valid schedule alignment remains silent for 54 hours and loses three consolidation opportunities. No separate review-machinery findings.",
+  "findings": [
+    {
+      "id": "R3-A1",
+      "band": "A",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 137,
+      "line_end": 137,
+      "confidence": 0.99,
+      "title": "A repeated message does not prove this is still the dead owner's lock",
+      "body": "The contender that prints the repeated message proves only that it did not modify the lock it just observed. It does not prove that this record is the one seen before restart. Automatic recovery can replace or remove the old record, after which a new attended dream can acquire a fresh lock and legitimately run more than six hours past its deadline—an admitted O1 case. A later contender then prints the same stale-lock message for that live owner. The instruction permits deletion whenever no dream is \"about to start,\" which does not exclude that already-running dream. Deleting its lock allows a third run to acquire and rebuild shared scratch underneath it. The named post-message takeover race is real but incomplete because record replacement can occur before the repeated message.",
+      "recommendation": "Remove the deletion instruction until an attended recovery command can compare the current record with the diagnosed record and recheck ownership immediately before removal. At minimum, do not claim that message repetition establishes record identity, and explicitly require proving that no dream is currently running—not merely that none is about to start."
+    },
+    {
+      "id": "R3-B1",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 168,
+      "line_end": 175,
+      "confidence": 0.99,
+      "title": "Success watermarking stretches the worst-case silence to 54 hours and three lost runs",
+      "body": "The 24-hour cap and six-hour gate do not directly compose to 30 hours because the gate is sampled only when another run occurs, and every quiet decline writes last_success and suppresses hourly catch-up for that schedule day. A catch-up at 21:30 can observe a deadline exactly 24 hours ahead, which S3 permits. The next 03:30 run is still 18 hours before the deadline and exits 0; the following 03:30 run is exactly six hours stale and also exits 0 because S4 uses a strict greater-than comparison. The first loud run is the third following 03:30, 54 hours after the first observation. Thus three scheduled consolidation opportunities can be lost, contradicting both the roughly-30-hour and at-most-two-nights claims.",
+      "recommendation": "Either introduce a supervisor-visible deferred outcome that does not write last_success so hourly catch-up can observe the thresholds, or revise the product contract and ADR to state the actual sampling-bound maximum of 54 hours and three lost consolidation opportunities. Add an end-to-end schedule test for a late-evening catch-up, an exactly-24-hour deadline, and the exactly-six-hour boundary."
+    }
+  ],
+  "routed_scope_objections": [],
+  "executed_checks": [
+    {
+      "command": "git diff 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD",
+      "result": "EXECUTED, exit 0. Collected the requested change; review remained limited to the two named design documents, prior raw artifacts, and cited implementation/test sources."
+    },
+    {
+      "command": "git rev-parse HEAD; git merge-base HEAD 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c; git diff --name-only",
+      "result": "EXECUTED, exit 0. HEAD and merge base matched the requested SHAs."
+    },
+    {
+      "command": "Static rg/nl reads of lock.js, config.js, dream.js, run-job.js, schedule.js, scheduler generators, and the three acquireLock test consumers",
+      "result": "EXECUTED, exit 0. All cited file:line locations resolve. The acquireLock inventory contains one production consumer and exactly the three stated test files; dream-pipeline.test.js is now inside Deliverables."
+    },
+    {
+      "command": "Node schedule arithmetic for a 21:30 contender, exactly-24-hour deadline, nightly 03:30 runs, and strict six-hour gate",
+      "result": "EXECUTED, exit 0. Observed quiet results at +6 hours and +30 hours, with the first loud result at +54 hours."
+    },
+    {
+      "command": "git diff --check 545df8bd33ccd3dc5f2ecb9031d2fdcb0c9cf81c...HEAD; git status --porcelain=v1",
+      "result": "EXECUTED individually, both exit 0. The checkout remained unmodified."
+    },
+    {
+      "command": "Initial heredoc-based arithmetic command",
+      "result": "EXECUTED, exit 1 because the read-only environment prevented zsh from creating a heredoc temporary file; rerun successfully with node -e."
+    },
+    {
+      "command": "npm test; targeted tests; npm run lint; red-proofs",
+      "result": "NOT RUN. This is an unimplemented design-only branch; no future product changes or RED-proof declaration exist to execute."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}

@@ -1,0 +1,65 @@
+{
+  "reviewed_sha": "94b77b9af4fdc5afd547cf3d8315088beee19dda",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch. R1-A1's takeover mechanism is genuinely removed, and R1-B1's scheduler timeline is now accurate for an already-expired lock. The message-delivery claim is also narrowed correctly. However, R1-B2 remains unsafe because reboot-triggered catch-up can acquire the lock before the instructed deletion, and R1-B3 remains materially unfixed because the deadline cap scales with an unbounded timeout. The changed busy result also breaks an exact-object test omitted from the permission boundary. O1 prices legitimate attended runs exceeding six hours; O3 explicitly prices hourly alert/email repetition; the proposed ADR amendment does not contradict Table L's takeover rules. All explicit file:line citations checked resolved.",
+  "findings": [
+    {
+      "id": "R2-A1",
+      "band": "A",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 136,
+      "line_end": 136,
+      "confidence": 0.98,
+      "title": "Restart-then-delete can delete a newly acquired live lock",
+      "body": "Restart terminates the pre-reboot owner, but it does not guarantee that no dream is running when the user deletes the file. macOS catch-up has RunAtLoad, Linux timers have Persistent=true, and Windows catch-up has StartWhenAvailable. After reboot, catch-up can probe the old PID as ESRCH, overwrite the stale lock under existing L5 behavior, and start consolidation. A user following the previous log's instruction can then delete that new live owner's lock, allowing another run to acquire and destructively rebuild the same shared scratch directory. The prescribed recovery therefore reopens the concurrent-dream risk Table L6 was designed to avoid.",
+      "recommendation": "Do not instruct users to delete the lock after an ordinary restart. Specify an attended recovery command that conditionally removes the still-stale record only after preventing scheduler starts and rechecking ownership, or provide a complete cross-platform disable-restart-recover-reenable procedure. Add an integration case where boot catch-up acquires the lock before recovery."
+    },
+    {
+      "id": "R2-B1",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 134,
+      "line_end": 134,
+      "confidence": 0.99,
+      "title": "The deadline cap still inherits the unbounded timeout and does not fix R1-B3",
+      "body": "The cap is max(24 h, 2 × the contender's timeoutMs), while readDreamConfig accepts any finite positive dream_timeout_minutes without a maximum. With a legitimate 20-day timeout, a 20-day future lock is below the 40-day cap. After power loss or the independently configured 20-minute supervisor watchdog kills the owner, every contender still returns unexpired busy and exits 0 for nearly 20 days; S4 never sees positive staleForMs. Larger values extend this arbitrarily, and multiplication overflow makes the cap Infinity. Thus the original silent-stall class remains, and the unqualified 'at most one lost night' claim is false outside the narrow walked example.",
+      "recommendation": "Use an absolute supported upper bound independent of the contender's unbounded timeout, validate timeoutMs after unit conversion, and reconcile or constrain the inner timeout against the supervisor watchdog. Add acceptance and RED cases using a large configured timeout whose own legitimate deadline must not suppress loudness for weeks."
+    },
+    {
+      "id": "R2-B2",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 91,
+      "line_end": 98,
+      "confidence": 1,
+      "title": "The new busy shape breaks a test outside the deliverables boundary",
+      "body": "S1 requires staleForMs on every busy result, but tests/unit/dream-pipeline.test.js:921 deep-compares an expired-live-owner result to the exact current object without that field. That suite is included by the required npm test yet is absent from Deliverables. A conforming implementation therefore fails the required test, while updating it violates the work-package boundary.",
+      "recommendation": "Add tests/unit/dream-pipeline.test.js to Deliverables and update its exact busy-object expectation to include staleForMs. Correct C4's inventory so future shape changes account for this consumer."
+    }
+  ],
+  "routed_scope_objections": [],
+  "executed_checks": [
+    {
+      "command": "git diff 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+      "result": "EXECUTED, exit 0. Reviewed the requested design documents and round-one raw artifact."
+    },
+    {
+      "command": "Static rg/nl reads of lock.js, config.js, dream.js, run-job.js, schedule.js, scheduler generators, relevant tests, WP-dream-live-owner-lock, ADR-0012, MILESTONES.md, and bin/wienerdog.js",
+      "result": "EXECUTED, exit 0. Confirmed consumers, scheduler behavior, alert delivery, prior contracts, and every explicit file:line citation. No excluded marketing, research, or userreports content was read."
+    },
+    {
+      "command": "Node arithmetic check for a one-year configured timeout against S3",
+      "result": "EXECUTED, exit 0. A 365-day deadline was not refused because the resulting cap was 730 days."
+    },
+    {
+      "command": "git status --porcelain=v1; git diff --check; exact HEAD and merge-base assertions",
+      "result": "EXECUTED, exit 0. Checkout remained unmodified; HEAD and merge base matched the requested SHAs."
+    },
+    {
+      "command": "npm test; targeted tests; npm run lint; red-proofs",
+      "result": "NOT RUN. This was a read-only review of an unimplemented design; the future RED-proof declaration does not yet exist."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}

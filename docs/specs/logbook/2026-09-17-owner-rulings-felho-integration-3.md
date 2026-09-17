@@ -240,3 +240,55 @@ cost:* either the pointer disappears from the main case, or this package absorbs
 an edit to `WP-quarantine-warnings-file`'s refresh points and an ADR-0012
 ordering question; accepting leaves a pointer that can name an absent or stale
 file while its counts stay exact, repaired by the next successful refresh.
+
+### WP-dream-lock-stale-owner-loud (design gate closed 2026-09-17, round 7, `c33f1678`)
+
+Six items. **None was ruled on directly**; each is a recommendation adopted
+under the standing authorization above, reversible by dated amendment. Seven
+review rounds on two backends and two models (4+3+2+1 findings on `gpt-5.6-sol`,
+then 2+1+1 on `gpt-6-astra`) shaped O1 and O4 in particular.
+
+**O4 — read this one first. What the alert message tells a user to do.**
+*Recommendation adopted:* the message instructs **no deletion**. Three drafts
+tried to qualify one and each failed against the tree: "when no dream is about
+to start" does not exclude one already running; "restart, then delete straight
+away" targets exactly the moment boot catch-up (`RunAtLoad`, `Persistent=true`,
+`StartWhenAvailable`) has just taken the lock over; a repeated message is read
+from a log after the fact and identifies nothing; "nothing started recently" is
+false because a scheduled dream may be configured to run for hours; and no
+process-listing command can be stood behind on three platforms. The message
+names the lock file and says removing it by hand is only safe while no dream is
+running, so someone should check first. *Overrule cost:* restoring a deletion
+instruction accepts that some users will delete a live owner's lock. The real
+fix is an attended conditional-recovery command, routed under Discovered.
+
+**O1 — six hours past the deadline before a `busy` decline becomes loud, with
+two named costs.** *Recommendation adopted:* six hours — above any overrun a
+same-day contender is likely to witness under the **default** configuration,
+below a day so the next nightly run trips it. *Cost 1:* neither timeout is
+bounded (`wienerdog schedule --timeout`, `resolveTimeoutMs`), so a legitimately
+live **scheduled** dream can trip the gate; the consequence is an alert, never a
+takeover. *Cost 2:* a restart taken on this message ends a working dream, and
+that is **not** a clean rollback — promotion publishes paths one at a time
+before the commit and `promote.js` declines to claim cross-path write-atomicity,
+so the vault can be left half-published with the ledger unadvanced. These are
+properties of any interruption of a dream, not introduced here. *Overrule cost:*
+one constant and its tests; O1 also carries a ready stronger-warning variant of
+the message.
+
+**O2 — an absolute 24-hour cap** on how far ahead a stored deadline may be
+before the record is refused as `owner-unknown`; a config-derived cap was
+rejected because `dream_timeout_minutes` has no validated maximum. *Overrule
+cost:* one constant; removing it restores unbounded silence. **O3 — hourly
+repeat alerts once loud** (the cadence the shipped `owner-unknown` throw already
+has). *Overrule cost:* a rate-limiting package blocking this one. **O5 — crash
+recovery is attended, not automatic, when the dead owner's PID has been
+reused.** *Overrule cost:* blocks this WP behind a lock-payload boot-identity
+change. **O6 — no ADR beyond the dated ADR-0012 part-6 amendment**, which lands
+with its Status line reading "ACCEPTED under standing authorization 2026-09-17 —
+owner signature pending"; the owner adds his signature line himself.
+
+**No wall-clock maximum is claimed for the silence before the first alert** —
+only the sampling rule (24 h cap, 6 h bound, one local schedule day), with two
+worked cases: 54 hours, and 55 across a daylight-saving fall-back. The realistic
+case — default 20-minute deadline, a crash — is one lost night.

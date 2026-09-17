@@ -1,0 +1,33 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b044-a2cd-7fd3-9fb5-82d782d69141",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "A-1’s watchdog qualification and deletion-shortcut removal are fixed; A-2’s proof routing is viable. Do not dispatch yet: the byte-exact recovery message still diagnoses facts the lock cannot establish.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "S5 still equates an expired busy lock with stopped vault activity",
+        "body": "The message asserts that nothing has been written to the vault and that repeated messages after restart mean Wienerdog cannot recover automatically. Neither follows from busy. The executed watchdog/config/lock functions permit the healthy long-running owner now acknowledged by O1. That owner can subsequently finish and release its lock; an unrelated PID can also exit, enabling existing ESRCH takeover. Furthermore, dream.js:956 promotes changes before releasing the lock at :1221, so a retained lock does not establish an unchanged vault. The unconditional restart instruction can therefore interrupt useful work based on a false diagnosis. O1 prices the false alert, but does not price this misleading recovery guidance.",
+        "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+        "line_start": 179,
+        "line_end": 179,
+        "confidence": 0.97,
+        "recommendation": "Describe only the observed overdue lock and this attempt’s refusal. Say an earlier dream may still be working and automatic recovery may still occur. Present restart as an option that stops ongoing work. Remove the unsupported vault-history and permanent-recovery claims, updating the ADR mirror and byte-exact assertions."
+      }
+    ],
+    "next_steps": [
+      "Correct S5 before dispatch. No operative deletion instruction or start-time shortcut remains in Table S, owner items, ADR text or worked timelines; historical/rejected quotations remain.",
+      "[Machinery] No blocking finding. The two declaration files route mutations to suites that can exercise them. Executed the real declaration loader and validated representative declarations; inspected runSuite and the pipeline’s CLI coverage. Actual PROVEN remains untested because implementation and declarations do not exist.",
+      "Executed: scoped git diff and whitespace checks; actual watchdog resolver and config reader; actual acquireLock with in-memory filesystem fixtures, a real live-PID probe and simulated EPERM/ESRCH; actual catchUp/todaysFire with simulated outcomes/watermarks, confirming 54/55 hours; in-memory proposed S2/S3 boundary checks.",
+      "Read: scoped spec/logbooks and supporting runtime, scheduler, test and proof-runner code. Checked current source/test citations resolve. Promotion ordering was inspected, not executed. No npm suites, lint or full RED proofs ran; no files changed."
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "reviewed_sha": "0cb0d2f253b43a9dce3b49bb11975eb363634ba6",
+  "verdict": "needs-attention",
+  "summary": "Do not dispatch this spec. The proposed takeover can destroy a genuine live owner's lock using an unbound timestamp; the six-hour gate can be skipped for the rest of the day or indefinitely; and the promised actionable message never reaches the scheduled alert/email path. This was a static design/source review—no tests or lint ran.",
+  "findings": [
+    {
+      "id": "R1-A1",
+      "band": "A",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 132,
+      "line_end": 133,
+      "confidence": 0.96,
+      "title": "The pre-boot test is not proof that the probed owner is dead",
+      "body": "S3 validates only that startedAt is a parseable string; nothing binds that timestamp to the PID which signal-zero found. A copied or backup-restored lock can contain a valid pre-boot ISO timestamp while its PID identifies a currently running dream—for example, if restoration replaced that dream's current lock or the PID was reused. Accurate uptime still makes S3 true, contradicting S4's claim that wrong takeover occurs only when uptime under-reports wall time. Date.parse also accepts noncanonical timestamps. A clock correction greater than 60 seconds after acquisition is another admitted false-takeover path. Once stolen, the contender rebuilds shared scratch, and the original pipeline has no ownsLock check before promotion/commit; the final ownership check only protects teardown. The 60-second margin therefore reduces one error source but does not establish death.",
+      "recommendation": "Do not authorize overwrite from startedAt plus estimated boot time alone. Bind new locks to a stable boot identity or verify the recorded process start time; treat legacy, copied, or otherwise unbound records as retained-but-loud. Add explicit copied/restored-lock and forward-clock-step acceptance cases. If automatic takeover remains, remove the false 'wrong only when' claim and require an explicit owner acceptance of the full concurrent-dream consequence."
+    },
+    {
+      "id": "R1-B1",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 134,
+      "line_end": 134,
+      "confidence": 0.99,
+      "title": "A quiet decline prevents the hourly catch-up from observing the six-hour threshold",
+      "body": "S5 retains exit 0 while staleForMs is at or below six hours. The supervisor then writes last_success, and catchUp skips the job for the rest of that schedule day (src/cli/run-job.js:1180-1204 and 1403-1408). For example, a 03:30 contender observing a 03:50 deadline returns success; the threshold is crossed at 09:50, but the 10:00 catch-up sees today's last_success and does nothing. The first loud result is normally the following day's scheduled run. This directly contradicts O2's 'reported no later than the 10:00 catch-up' claim and means the proposed tests can pass without proving the intended alert latency.",
+      "recommendation": "Define a supervisor-visible busy/deferred outcome that does not write last_success yet does not alert before the threshold, so hourly catch-up continues checking. Expand the deliverables and acceptance tests to cover run-job watermarking and the 03:30-to-10:00 transition. Otherwise state honestly that notification may wait until the next daily schedule."
+    },
+    {
+      "id": "R1-B2",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 135,
+      "line_end": 135,
+      "confidence": 0.99,
+      "title": "The byte-exact recovery message is discarded before the durable alert and email",
+      "body": "The scheduled supervisor spawns wienerdog dream as a child. S5's WienerdogError is printed to the child's stderr and produces exit code 1, but runJob converts any nonzero child code into the reason `job \"dream\" exited 1` (src/cli/run-job.js:1036-1061 and 1232-1257). failLoud records and emails that generic reason; the S6 text exists only in the private run log. Thus S6's claim that its message is the appendAlert reason and email body is false, while the listed pipeline/integration tests call dream directly and cannot detect the loss. Even where shown directly, 'check for one first' gives a non-developer no reliable way to identify the Node dream process before performing the destructive deletion that Table L6 warned against.",
+      "recommendation": "Either narrow S6 to the direct CLI/log surface, or add a safe structured mechanism for run-job to reconstruct a code-owned stale-lock alert without forwarding arbitrary child stderr. Add an end-to-end run-job test asserting alerts.jsonl and email-stub bytes. Provide a concrete safe recovery check/command before suggesting deletion, or omit the deletion instruction."
+    },
+    {
+      "id": "R1-B3",
+      "band": "B",
+      "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+      "line_start": 134,
+      "line_end": 134,
+      "confidence": 0.97,
+      "title": "A valid huge deadline defeats both takeover and loudness indefinitely",
+      "body": "S5 measures only time past the stored deadline, and S3 is consulted only after expiry. readDreamConfig accepts every finite positive dream_timeout_minutes with no maximum (src/core/dream/config.js:56-65), while the scheduled outer watchdog is independently derived from job.timeoutMinutes (src/cli/run-job.js:496-505). A legitimate one-year inner timeout with the default 20-minute outer job causes the supervisor to kill the owner after 20 minutes, but later attempts treat the lock as unexpired, exit 0, and record success for nearly a year. A copied or crafted finite future deadline has the same effect. Conversely, no contract proves that a manual dream cannot legitimately remain alive more than six hours past its nominal deadline, so the ADR statement that a legitimate long run does not trip the gate is unsupported.",
+      "recommendation": "Make observability depend on a bounded lock age independent of an arbitrary deadline, or validate/cap the deadline against startedAt and an explicit maximum supported timeout. Reconcile inner and outer timeout policy. Add acceptance and RED-proof cases for a far-future finite deadline, inner timeout greater than the outer watchdog, and a live manual overrun."
+    }
+  ],
+  "routed_scope_objections": [],
+  "executed_checks": [
+    {
+      "command": "git diff 047a202c1ada70ab44bd24a21157854441d987a2...HEAD",
+      "result": "EXECUTED, exit 0. Diff contained only the two requested design documents."
+    },
+    {
+      "command": "Static reads with nl/sed/rg of the two changed documents and their cited lock, dream, run-job, schedule, generator, test, milestone, prior-WP, ADR, template, and runbook sources",
+      "result": "EXECUTED, exit 0. Every explicit file:line citation in the spec resolved on this tree. The stated dream.js and test ranges contain the claimed code. No excluded marketing, research, or userreports content was read."
+    },
+    {
+      "command": "git log -S startedAt -- src/core/dream/lock.js; git rev-parse HEAD; git merge-base; git diff --name-only",
+      "result": "EXECUTED, exit 0. The startedAt search returned only f17c7c72; HEAD and merge base matched the requested SHAs."
+    },
+    {
+      "command": "Official platform-semantics research",
+      "result": "EXECUTED as read-only web research. Consulted [Node os.uptime documentation](https://nodejs.org/api/os.html), [libuv Darwin uptime implementation](https://github.com/libuv/libuv/blob/v1.x/src/unix/darwin.c), [libuv Windows uptime implementation](https://github.com/libuv/libuv/blob/v1.x/src/win/util.c), [Microsoft GetTickCount64 semantics](https://learn.microsoft.com/en-us/windows/win32/sysinfo/windows-time), and [Linux proc uptime semantics](https://man7.org/linux/man-pages/man5/proc_uptime.5.html). ISO/epoch timestamps avoid timezone/DST ambiguity; standard Windows and Linux uptime includes sleep/hibernate/suspend, while container host uptime is generally conservative. These facts do not repair the unbound-startedAt, clock-step, or restored-state cases."
+    },
+    {
+      "command": "git diff --check 047a202c1ada70ab44bd24a21157854441d987a2...HEAD; git status --porcelain=v1; exact HEAD and merge-base assertions",
+      "result": "EXECUTED, exit 0. diff --check passed; final status was empty; HEAD and merge base matched."
+    },
+    {
+      "command": "npm test; targeted tests; npm run lint; red-proofs",
+      "result": "NOT RUN. This was a read-only review of an unimplemented design. Historical test results in repository documents were only read, not claimed as executed."
+    }
+  ],
+  "status_before": "",
+  "status_after": ""
+}
