@@ -1,0 +1,43 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b116-8a23-7b33-95f9-4850e11e3df1",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "baseRef": "c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet: A5a still has two classification-boundary defects. The original round-2 cases are now covered explicitly; the mirror and single-read machinery corrections are substantive.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Normal Codex headers satisfy the new gap rule",
+        "body": "A5a requires a discriminator at all three levels without restricting payload.type validation to response_item records. The existing codex-rollout fixture's session_meta payload has id, timestamp and cwd, but no type. Executing that header followed by an assistant conclusion produces a normal, untruncated extract. Applied literally, the proposed rule would instead taint the entire session from its header, excluding even tool-free assistant evidence from Tier 3. This is distinct from owner item 4's acknowledged risk from newly introduced item types.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 353,
+        "line_end": 353,
+        "confidence": 0.95,
+        "recommendation": "Define discriminator checks by enclosing record schema: require payload.type for response_item, and validate session_meta separately. Add a normal session_meta → tool-free final-answer fixture asserting false."
+      },
+      {
+        "severity": "medium",
+        "title": "Declined Claude envelopes can conceal recognizable tool results",
+        "body": "Executed records containing message.content:[{type:'tool_result',content:'EXTERNAL'}] under attachment, an unfamiliar top-level type, assistant, and an isMeta user record. Each silently disappears from the real parser, leaving only the subsequent assistant conclusion, with outcome ok and truncated false. A5 triggers on raw-policy classification, while A5a exempts these envelopes; consequently the specified policy permits false after an explicit tool-result block. This is a synthetic damaged-envelope counterexample, not evidence that current Claude releases emit these shapes. The stated rationale covers unfamiliar auxiliary records, but does not price ignoring a recognizable tool result inside them.",
+        "file": "docs/specs/WP-dream-primary-dialogue-projection.md",
+        "line_start": 352,
+        "line_end": 354,
+        "confidence": 0.9,
+        "recommendation": "Give recognized tool-result blocks precedence over envelope exclusions in the observer. Preserve non-tainting controls for benign auxiliary records, and add tool-bearing declined-envelope fixtures asserting permanent assistant taint without changing raw parser output."
+      }
+    ],
+    "next_steps": [
+      "Executed actual parseWithOutcome, both harness parsers and streamLines using synthetic bytes through an in-memory filesystem shim: malformed discriminators, malformed Codex payloads, Claude envelope variants, G1–G4, and all ten decided Codex item types. The decided list covers every type explicitly handled by mapCodexItem.",
+      "Machinery: P2-m1 is closed within the two target documents. P2-m2 now rejects the demonstrated double read: caller debit remained 46 bytes, but stream invocations and opens increased from one to two, and total reads from 46 to 92 bytes. No additional machinery finding.",
+      "Three existing golden comparisons and wrapper-equality checks passed. Inspected operative code citations resolve on this tree; the logbook explicitly labels its captured sweep coordinates as historical.",
+      "Read the target diff, both prior review raws, parser/reader implementations and cited gate logic. The projection is absent, so proposed flag behavior was inferred from the contract, not executed. No full suite or private-transcript sampling was run; no files were changed."
+    ]
+  }
+}
