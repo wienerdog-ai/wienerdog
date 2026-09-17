@@ -1,7 +1,7 @@
 ---
 id: WP-dream-digest-omits-own-job-alerts
 title: Stop the dream's own digest render from re-showing the alerts its success clears
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -9,6 +9,81 @@ adrs: [ADR-0004, ADR-0012, ADR-0031, ADR-0042]
 ---
 
 # WP-dream-digest-omits-own-job-alerts: the dream's digest render shows the state the run establishes
+
+> **Errata, 2026-09-17 (post-merge) — two stale prose mirrors. Neither is a defect in what shipped.**
+>
+> Implemented in PR #257 (merge `a47f2546`, 2026-09-17), tip `a4bd6c03`. Both PR
+> gates on that tip: wd-reviewer **APPROVE** with everything executed — `npm test`
+> exit 0; targeted suites 176 pass / 0 fail; the **UNFILTERED**
+> `npm run red-proofs` on the tip → `RUN: PROVEN` with all seven ids; lint;
+> V3-V6 each exit 0; `boundary-check` exit 0; and the placement verified by
+> reading all of `run()` — the filtered call is the **sole statement between the
+> end of `finally B` and the start of `finally A`**, the flag defaults to
+> unfiltered, the filter cannot drop another job's record, and the start instant
+> is `run()`'s first statement. All three corrected mutation sets were replayed
+> independently and reproduced exactly. Codex plugin `review` on `gpt-6-astra`
+> clean, no findings (it disclosed that runtime tests were not run in its
+> read-only environment). CI seven checks pass. Suite on the rebased tree
+> 2783 / 2771 / 0 / 12.
+>
+> **Erratum 1 — "AC2 and AC6e are in no `expectRed` set" undercounts: AC6c and
+> AC6d are in no set either.** *What is wrong:* the sentence closing Table C
+> names two criteria as mutation-unprotected when four are. *What is true:*
+> **AC6c and AC6d live in `tests/unit/scheduler-runjob.test.js`**, outside the
+> declaration file's `suite` (`tests/unit/dream-pipeline.test.js`), and they drive
+> a **fake child**, so **no mutation of `src/cli/dream.js` can reach them** — they
+> are unprotected *by construction*, not by omission. A RED-proof declaration can
+> only redden tests in its own suite, so declaring a cross-suite criterion is
+> unprovable in principle. *Found:* wd-reviewer, PR #257 gate. *Routing:*
+> corrected in place below and recorded here. **Class: a count that went stale
+> when the table beneath it was corrected.**
+>
+> **Erratum 2 — "Five sets were measured … two are derived" is out of date: all
+> seven are measured.** *What is wrong:* Table C's preamble describes a
+> measured/derived split that the implementation dissolved. *What is true:* the
+> spec authorized the implementer to correct any derived set to what actually
+> reddens, and **three were corrected** — so every row is now measured, and the
+> shipped declaration file carries: `filter-removed` → AC1, AC6f, AC7d, AC7e,
+> AC7g; `always-on` → AC3, AC5, AC7d; `at-early-render` → AC6a, AC6b, AC7c, AC7d;
+> `ignores-config` → AC4, AC8; `ignores-run-token` → AC5; `ignores-record-date` →
+> AC6f; `at-step-nineteen` → AC7a, AC7b, AC7d (AC7c green — no early-exit path
+> reaches step 19, as round 7 derived; **AC7f did not redden**). *Found:*
+> wd-reviewer, PR #257 gate. *Routing:* corrected in place below and recorded
+> here. **Class: prose mirroring a table the implementer was authorized to change
+> but not authorized to re-describe.**
+>
+> **Recorded, not errata:**
+> (i) **The implementer added an `onLog` hook to the TEST harness** `runDream`
+> (`tests/unit/dream-pipeline.test.js` l.345, l.364-369; used at l.2534) to make
+> the step-21 summary line throw. It is the right seam and the reason is worth
+> keeping: between the step-19 render and the end of the dream's body **the only
+> fallible statements are `console.log` calls** — `refreshWarnings` swallows
+> everything — so a "body fails late" test needs a log seam, not an fs seam.
+> (ii) **AC6c/AC6d pin `run-job`'s non-rendering rather than the filter**, which
+> is what they were designed to do (Table A, "Out-of-process failures"); Erratum 1
+> is the consequence of that design, not a flaw in it.
+> (iii) **The managed-policy hook warning loses its only lasting surface.**
+> `run-job` appends it under the job's own name **before the spawn**
+> (`src/cli/run-job.js` l.953), so it is stamped earlier than this process's start
+> instant and the filtered render now omits it. This was named in Table A and in
+> Implementation notes before implementation, and it is **deferred by the
+> maintainer ruling of 2026-09-10 — "this WP ships first; the follow-up WP is
+> drafted later."** It is a warning, not a failure, and it does not belong in the
+> failure-alert log; restoring a standing surface for it needs its own WP.
+> (iv) **The PR title was renamed to the Definition of done's literal before
+> merge.**
+> (v) **On win32 no run token is minted** (`src/cli/run-job.js` l.934 guards the
+> mint with `platform !== 'win32'`), so the omission never engages there and
+> Windows keeps `main`'s behaviour — the safe direction, stated in Table A before
+> implementation.
+>
+> **Line numbers moved with the implementation**, as they always do: the closure
+> is now `src/cli/dream.js` l.733, the two unfiltered renders l.821 and l.1279,
+> and the single filtered call l.1320. Every citation in the body below is the
+> PRE-merge one it was verified against and is left as the record of what the
+> implementer built from.
+
+<!-- errata above; the spec as it shipped follows -->
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the template gives
   the skeleton, the runbook the rules. Read both.
@@ -473,12 +548,14 @@ criterion it reddens is the one that owns that rule.
 
 **Read the last column before using any row.** `scripts/red-proofs.js` requires
 the observed own-body failing set to **EQUAL** the declared set, so a wrong set
-fails the lane just as loudly as a missing proof. Five sets were **measured** by
-the paused implementer against the OLD design; two are **derived** here against
-the revised acceptance tests and have never been run. **Derived rows are
-predictions, and the measurement is authoritative**: the implementer applies each
-mutation, records what actually reddens, and commits THAT set — correcting this
-table in the same PR if it differs. Design round 7 found the previous version of
+fails the lane just as loudly as a missing proof. **As shipped, ALL SEVEN sets
+are measured** *(corrected post-merge, see Erratum 2 — the Ready text said five
+were measured and two derived; the implementer, as this paragraph authorized,
+corrected three of them to what actually reddens)*. The rule that produced that
+outcome stands and is why the column exists: **a derived row is a prediction and
+the measurement is authoritative** — the implementer applies each mutation,
+records what actually reddens, and commits THAT set, correcting this table in the
+same PR if it differs. Design round 7 found the previous version of
 this table requiring a mutant to redden criteria it cannot reach, which is the
 failure this column exists to prevent.
 
@@ -492,11 +569,16 @@ failure this column exists to prevent.
 | `dream-digest-filter-at-early-render` | **only** the placement rule at the early end: the quarantine-only refresh at l.724 passes the filtering value too | **AC6a, AC6b, AC7c AND AC7d** | AC7a, AC7b, AC7e-AC7g (the l.724 write is not an ADDITIONAL write; counts are unchanged), AC1-AC5 | **MEASURED by the implementer** on the revised tests; AC6a/AC6b were measured on `9d1282cf`, and **AC7c and AC7d are added** — AC7c's no-complete-input arm renders at l.724 and then asserts the digest content, and AC7d's quarantined fixture finds a pre-existing render filtered |
 | `dream-digest-filter-at-step-nineteen` | **only** the placement rule at the late end: step 19's call passes the filtering value, so the omission happens before the finalizers instead of after them | **AC7a, AC7b and AC7d** — AC7a/AC7b because each asserts the digest left by a late failure is the UNFILTERED one `main` would leave, and AC7d because it asserts step 19's write is byte-identical to `main`'s, which this mutation changes | **AC7c** — *removed in round 7*: none of its early-exit paths (l.602, l.740, l.742, l.756, l.767) reaches step 19, so the mutation cannot change them. Also AC6a/AC6b (they fail before step 19), AC6c/AC6d (the run succeeds, so the final render filters either way), AC7g, AC1-AC5 | **MEASURED by the implementer** — the derivation was exact: AC7a, AC7b and AC7d, and AC7c stayed green. **AC7f did not redden**: it asserts the write count and the propagated error only, not digest content |
 
-`wp` is `WP-dream-digest-omits-own-job-alerts` for all seven. **AC2 and AC6e are
-in no `expectRed` set**: AC2 observes nothing any mutation changes, and AC6e pins
-a PRE-EXISTING product property that no mutation of this WP's code can alter.
-AC9-AC12 are gate criteria the verification steps establish, not mutation
-targets.
+`wp` is `WP-dream-digest-omits-own-job-alerts` for all seven. **AC2, AC6c, AC6d
+and AC6e are in no `expectRed` set** *(corrected post-merge, see Erratum 1 — the
+Ready text named only AC2 and AC6e)*: AC2 observes nothing any mutation changes;
+AC6e pins a PRE-EXISTING product property that no mutation of this WP's code can
+alter; and **AC6c and AC6d live in `tests/unit/scheduler-runjob.test.js`, outside
+this declaration file's `suite`, and drive a fake child — so no mutation of
+`src/cli/dream.js` can reach them.** A declaration can only redden tests in its
+own suite, which makes a cross-suite criterion unprovable by construction rather
+than merely undeclared. AC9-AC12 are gate criteria the verification steps
+establish, not mutation targets.
 
 ### Mirrored Surface Checklist
 
