@@ -58,8 +58,12 @@ decision stand unchanged:
 - A session-count bound would have had to classify its remainder through the
   existing capacity arm, whose console line tells the user to raise
   `dream_max_input_bytes` — advice that would no longer release those sessions.
-  `WP-dream-report-run-skips`'s rows B4 and B12 stay true untouched because the
-  five arms are populated identically.
+  `WP-dream-report-run-skips`'s rows B4 and B12 stay true untouched — but for a
+  weaker reason than this entry first gave, corrected in round 2: its bullets
+  count what *this* run classified and never promise a particular count, so they
+  are true whatever the arms hold. They are **not** protected by any claim that
+  the arms match the base commit's, because a deadline-deferring run can
+  populate them differently.
 
 This reading of the scope record differs from its literal wording, so it is
 routed as owner item 1 in both new specs with its overrule cost priced.
@@ -118,10 +122,14 @@ split follows client version and mixes headless and interactive files on both
 sides.
 
 So the projection **cannot** distinguish a `claude -p` routine prompt from a
-human one, and no heuristic is added to pretend otherwise. A5's definition of
-`derived_from_untrusted: false` is written to claim only what was observed:
-code saw this text in a record the harness attributes to the user, with no tool
-output or context gap before it — never "a human typed this".
+human one, and no heuristic is added to pretend otherwise. Row A5b's definition
+of `derived_from_untrusted: false` is written to claim only what was observed,
+and it is **role-specific** — an earlier version of this paragraph got that
+wrong and round 1 caught it. On a **user** message `false` claims exactly that
+the harness attributed the record to the user role, and nothing more; a user
+message is `false` by role whatever preceded it. On an **assistant** message it
+additionally claims that no tool output and no context gap preceded it in that
+session. Neither claims "a human typed this".
 
 ## Round zero — internal coherence and executable checks
 
@@ -244,6 +252,74 @@ whole ledger write. The correction rides along in row D3 because that row
 already rewrites the surrounding section, and it matters for behavior, not
 tidiness: a model told its mislabel will be corrected for it has no reason to
 get the label right.
+
+## Design review round 2 — dispositions
+
+Two parallel adversarial reviews (Codex plugin 1.0.6, `gpt-6-astra`), tip
+`35494bb2`, base `a4d19c0c`. Both `needs-attention`. Raws at `cf50b6c0`.
+Confirmed closed by the reviewers: P-1 preserves today's prompt rule and prices
+its residual; P-2's depth-drop correction is substantive; AC4's
+refusal / declared-true / clean-control probes pass executably and rebuilding
+evidence from projected scratch rejects the clean control; D6 and its ADR mirror
+correctly disclose prompt-only propagation; `SKILL.md:329` does say RAISES while
+`validate.js:647` returns a refusal; every cite resolves.
+
+| Finding | Band | Weight | Disposition | Rationale |
+|---|---|---|---|---|
+| **P2-1** valid JSON without a type discriminator escapes the gap rule | B | HEAVY | **fix** | Reproduced all three: a Claude record carrying a `tool_result` block but no top-level `type`, a Codex `response_item` whose `payload` has no `type`, and a Codex `payload.type` outside the known set each vanish with `outcome: 'ok'`, `oversizedRecords: 0`, `truncated: false`. Row A5a is rewritten as **classified versus unclassifiable** at record, payload and block level, with both sides enumerated positively. New row **A5a-why** carries the judgment call and new **AC3c** tests it, negative controls included. |
+| **P2-m1** round-1 corrections did not reach every mirror | C | LIGHT | **fix, mechanically** | Six operative stale statements found and replaced; the sweep below is the evidence, and it is now part of the record so the next round can re-run it rather than re-read. |
+| **P2-m2** budget equality does not prove one bounded read | B | LIGHT | **fix** | Measured: a double-read implementation debits the caller 46 bytes exactly as a single-read one does, while opening the file twice — so AC4a was vacuous on the property it named. It now requires one `streamLines` invocation with the expected byte total **as well as** debit equality, and a second-read mutation must redden it. |
+| **C2-1** a filename collision retains authorization for overwritten dialogue | B | HEAVY | **fix, preserving the baseline's surviving-file semantics** | Reproduced: `s_1` and `s.1` both sanitize to `claude-s_1.json`. Today's disk rebuild yields only the surviving session, so a learning counting the overwritten one is refused; a session-keyed in-memory map keeps both and would accept it. Row C4 now **evicts** any earlier entry that wrote the same filename — last-writer-wins, bit-for-bit the disk result — with row **C4a** stating why and **AC1b** testing it against a non-evicting control. |
+| **C2-2** owner-facing guarantees still contradict the priced residual, and C1a's condition was wrong | B | LIGHT | **fix** | The reviewer's counterexample is the important half: the projected run admitted all five sessions in 50 ms while the baseline admitted one under the same 60 ms deadline, so "this run finished inside the deadline" is not the condition. C1a now requires **both** runs to avoid deadline deferral; AC1, AC1a and AC7 follow. |
+| **C2-citation** the promotion-refusal cite stops at the call site | C | LIGHT | **fix** | Extended to `promote.js:1386-1394` (calls the gate) **and** `:1397-1400` (records the refusal), at all three occurrences. |
+
+**A pre-existing defect surfaced by C2-1 and deliberately not fixed.** The
+filename collision itself loses one session's dialogue while marking **both**
+sessions processed, so the overwritten session is never consolidated and never
+retried. Row C4's eviction only stops this package from weakening the
+authorization gate over that collision. It is recorded under the collection
+spec's Discovered issues, with the shape a real fix would need.
+
+### The stale-claim sweep, raw
+
+Run in the worktree after the edits above, and captured **before** this section
+was pasted in — so re-running it now adds this block's own quotations to the
+output and shifts the line numbers below it. Long lines are truncated here at
+200 characters for legibility; nothing else is altered. **Zero operative hits.**
+
+```text
+docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:42:was "unchanged by construction". It is not. The collector also stops on the soft
+docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:241:| **P-1** user-role text bypasses the never-resetting flag | A | HEAVY | **keep the rule, fix the contradiction, price the residual**
+docs/specs/logbook/2026-09-17-dream-primary-dialogue-split.md:244:| **C-1** the preprocessing deadline can move the admitted set | A | HEAVY | **fix the claim, keep the mechanism** | "Unchanged by con
+docs/specs/WP-dream-primary-dialogue-collection.md:361:  are populated identically to the base commit's — row C1a says a
+docs/specs/WP-dream-primary-dialogue-collection.md:721:   not promise that it cannot worsen F1** — it promises that it does not worsen
+docs/specs/WP-dream-primary-dialogue-projection.md:355:| A5b | What `false` does and does not claim | `derived_from_untrusted: false` claims exactly one thing: **the harness attributed this record to
+docs/specs/WP-dream-primary-dialogue-projection.md:517:      the code-supplied `source_path` and `cwd`, bounded unchanged by the
+```
+
+| Hit | Classification |
+|---|---|
+| logbook `:42` | **NEGATION-or-WITHDRAWAL** — names the retired "unchanged by construction" claim and retires it |
+| logbook `:241` | **HISTORY** — the round-1 P-1 disposition row, quoting the wording that was wrong |
+| logbook `:244` | **HISTORY** — the round-1 C-1 disposition row, same |
+| collection `:361` | **NEGATION-or-WITHDRAWAL** — "They are **not** protected by any claim that the arms are populated identically to the base commit's" |
+| collection `:721` | **NEGATION-or-WITHDRAWAL** — "**this package does not promise that it cannot worsen F1**" |
+| projection `:355` | **NEGATION-or-WITHDRAWAL** — row A5b restricts the clause to assistant messages and forbids the unrestricted form on any surface |
+| projection `:517` | **UNRELATED** — "bounded unchanged by the existing `boundExtractPath`", about metadata-path bounding |
+
+The six **operative** hits that existed before this commit are gone:
+projection `:364` (row B4) and `:647` (owner item 1); collection `:276`
+(row C1a), `:349` (implementation notes) and `:673-674` (owner item 1); logbook
+`:62`. Each is replaced with byte-policy equivalence, with equality conditioned
+on **both** runs avoiding deadline deferral, or with the role-specific wording.
+
+**Why this sweep is in the record rather than just run.** This is the third spec
+family this session to lose round-N corrections in its mirrors. A checklist that
+names its mirrors is necessary and was not sufficient: every one of the six
+survived a walked Mirrored Surface Checklist, because the checklist points at
+*sections* while the stale sentences were clauses inside them. A claim-shaped
+grep finds clauses. Pasting its output with per-hit classifications is what lets
+the next round re-run one command instead of re-reading four documents.
 
 ## What round zero does not establish
 

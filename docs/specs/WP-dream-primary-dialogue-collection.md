@@ -86,7 +86,10 @@ range.
 written; `#245`, `#253` and `#257` already moved them since the predecessor
 draft's fork baseline. Run
 `git log --oneline 05f1f55d..HEAD -- src/cli/dream.js src/core/dream/scratch.js`
-first and re-read anything that moved.
+first and re-read anything that moved. `tests/unit/dream-collect.test.js` is
+also a deliverable of this package and gained a probe block at its end in PR
+`#261` after this spec was written; no cite in this spec points into that file
+by line, but read its tail before editing it.
 
 - `src/core/dream/scratch.js:46-157` is `collectExtracts(paths, ledger,
   maxInputBytes, {preprocessTimeoutMs = 60_000, now})`. It discovers, filters
@@ -126,8 +129,9 @@ first and re-read anything that moved.
   entry. **It does NOT raise an understated `derived_from_untrusted` — it
   refuses:** `:646-648` returns the reason string `derived_from_untrusted
   asserted lower than derived (an invocation window contains a tool_result)`,
-  and `src/core/dream/promote.js:1386-1394` consumes any non-null reason as a
-  refusal that leaves the candidate bytes unchanged. The dream skill says
+  and `src/core/dream/promote.js:1386-1394` calls that gate while `:1397-1400`
+  records any non-null reason as a refusal, leaving the candidate bytes
+  unchanged. The dream skill says
   "RAISES" at `SKILL.md:324-331`; the skill is wrong and row D3 corrects it.
 - `src/core/dream/validate.js:191-216` (`tier3Decision`) requires
   `fm.derived_from_untrusted === false` for **every** Tier-3 write — identity
@@ -184,7 +188,7 @@ contract and are not restated here beyond what Tables C and D need.**
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/scratch.js | Table C rows C1, C1a, C2–C4: opt into `parsePrimaryWithOutcome`, measure on `intakeBytes`, write the projection, return the gate projections and the intake total. The deadline check at `:95-98` is **not** changed |
+| modify | src/core/dream/scratch.js | Table C rows C1, C1a, C2–C4, C4a: opt into `parsePrimaryWithOutcome`, measure on `intakeBytes`, write the projection, return the gate projections (with row C4's filename eviction) and the intake total. The deadline check at `:95-98` and `sanitize` at `:18-20` are **not** changed |
 | modify | src/cli/dream.js | Table D row D1 (feed `extractsBySession` from the collector) and Table C row C5 (the two dry-run byte lines) |
 | modify | skills/wienerdog-dream/SKILL.md | Table D rows D2–D4 and D6: extract shape, provenance rule, learning discovery, and D3's correction of the "RAISES" sentence at `:324-331` |
 | modify | src/core/runtime-skill-digests.json | regenerate the dream skill's digest only — no other entry changes |
@@ -273,10 +277,11 @@ amendment, the acceptance criteria and the verification greps.
 | ID | Contract | Rule |
 |----|----------|------|
 | C1 | **What `dream_max_input_bytes` measures, and exactly what that guarantees — CANONICAL.** | X is measured against `parsePrimaryWithOutcome(...).intakeBytes`, which is byte-identical to the `Buffer.byteLength(JSON.stringify(extract))` that `scratch.js:118` computes today from `parseWithOutcome`. **The guarantee is BYTE-POLICY EQUIVALENCE, not admitted-set identity.** For every session the admission loop **visits**, every byte-based decision is the one the base commit would make on the same input: the capacity stop (`remaining === 0` at `scratch.js:91-94` and `extractBytes > remaining` at `:124-127`), the individually-oversized skip and the memo it writes (`:102-105`, `:119-123`), and the newest-first order. Projection cannot change any of them, because it changes neither the measured number nor the order. **What it can change is which sessions the loop visits.** The soft preprocessing deadline at `:95-98` compares `now() - startedAt` against `preprocessTimeoutMs`, and `startedAt` is taken at `:50` before discovery, so the elapsed clock spans discovery, ledger pruning, scratch recreation, and every prior session's parse, measurement and write. Projection changes those costs in both directions: classifying two policies in one pass costs more, serializing a smaller extract to disk costs less. **So when the deadline is the binding constraint, the admitted set can differ from the base commit's in either direction.** The design review executed the real collector with mocked timing and measured one session admitted under the baseline against four under projection at identical intake bytes and the same limit. See row C1a for when the deadline binds, and owner item 3 for the F1 consequence. There is still no backfill in the byte dimension: no session is admitted because projection freed X. |
-| C1a | When the deadline binds, and when it does not | The deadline is **not** binding — and the admitted set is then identical to the base commit's, arm for arm — whenever the run finishes visiting its candidate list, or fills X, inside `dream_preprocess_timeout_seconds` (default 60). That is the ordinary nightly shape: a handful to a few dozen new sessions. The deadline **is** binding on a large backlog, where preprocessing runs out of time before X fills — the shape the 2026-09-16 assessment measured, with 10,338 files deferred in one night. **That is the uncomfortable part and it is stated rather than buried: the installs where finding F1 matters most are exactly the installs where this package's admitted set can move.** The direction is not predictable from the spec, because it is the sign of (projection classification cost − write-serialization saving) on that machine; AC7's measurement reports which regime the measured install was in. |
+| C1a | The exact condition under which the admitted sets are equal | Admitted-set equality holds **only when BOTH the baseline run and the projected run avoid deadline deferral** — that is, when `deadlineDeferred` is empty in both. It is **not** enough that one of them finished in time: the round-2 review executed a counterexample in which the projected run admitted all five sessions in 50 ms while the baseline, under the same 60 ms deadline, admitted one. Whenever either run defers on the deadline, the admitted sets may differ **in either direction**, and the direction is not predictable from this document, because it is the sign of (added projection classification cost − saved write-serialization cost) on that machine. The deadline is not binding, and the sets are therefore equal, when both runs finish visiting the candidate list or fill X inside `dream_preprocess_timeout_seconds` (default 60) — the ordinary nightly shape of a handful to a few dozen new sessions. It **is** binding on a large backlog, where preprocessing runs out of time before X fills: the shape the 2026-09-16 assessment measured, with 10,338 files deferred in one night. **That is the uncomfortable part and it is stated rather than buried: the installs where finding F1 matters most are exactly the installs where this package's admitted set can move.** AC7's measurement must report the regime of **both** runs, not one. |
 | C2 | What is written | The file written at `scratch.js:129` is `JSON.stringify(<the primary extract>, null, 2)` — the projection, never the raw extract — at the existing 0600 with no trailing newline, under the existing filename rule `${harness}-${sanitize(session_id)}.json`. An extract whose projection retains **zero** messages is still written, with its identity and an empty `messages` array: the consolidation agent may legitimately decide a session holds nothing worth remembering, and that is a different state from the session being absent. `sel.entries` and `sel.wrote` keep their existing meanings and membership. |
 | C3 | The oversized memo is unchanged | Because C1 keeps the measured quantity byte-identical, `oversizedExtracts` memos keep their exact current meaning and remain valid across this change. This survives row C1a: a memo records a **byte** measurement, and byte-policy equivalence holds whether or not the deadline binds. **No `extractFormat` field, no format discriminator, and no new invalidation rule is added**; `ledger.js` is not a deliverable of this package. The memo's three existing release conditions are untouched (the source file's fingerprint changes, `package.json.version` changes, or X rises to or past the measured size). Nothing resets processed outcomes, migration baselines, quarantine records or secret-revert counters. |
-| C4 | `gateExtracts` | The collector returns the text-free gate projection of every session it wrote, as a `Map` keyed `<harness>:<session_id>` and populated in write order, so a session-id collision resolves last-wins exactly as `src/cli/dream.js:1042-1049` resolves it today. It lives in memory for the run only: it is never written to any file, never placed under the scratch directory or any other directory a model can read, and never handed to a model. It carries no message text (its shape is the predecessor package's Table B row B2). Nothing else about privacy or cleanup changes — the run's `finally` still calls `cleanScratch`, and no durable evidence archive, selection checkpoint or transcript-content log is introduced. |
+| C4 | `gateExtracts`, and the **filename eviction** that keeps it equal to the disk rebuild | The collector returns the text-free gate projection of every session it wrote, as a `Map` keyed `<harness>:<session_id>` and populated in write order. **A later write to a scratch filename an earlier entry already wrote EVICTS that earlier entry**: before setting a key, delete any key whose recorded filename equals the one about to be written. The map therefore holds exactly one session per distinct filename — the last one written — which is bit-for-bit what `src/cli/dream.js:1042-1049` produces today by re-reading the surviving file. Row C4a says why this is not theoretical. It lives in memory for the run only: it is never written to any file, never placed under the scratch directory or any other directory a model can read, and never handed to a model. It carries no message text (its shape is the predecessor package's Table B row B2). Nothing else about privacy or cleanup changes — the run's `finally` still calls `cleanScratch`, and no durable evidence archive, selection checkpoint or transcript-content log is introduced. |
+| C4a | Why row C4 evicts: two session ids can share one scratch filename | `sanitize` (`scratch.js:18-20`) replaces every character outside `[A-Za-z0-9_-]` with `_`, so the session ids `s_1` and `s.1` both produce `claude-s_1.json` — executed and confirmed. Today both sessions are parsed, both are appended to `entries`, both to `processed`, and **the same path is appended to `wrote` twice**, so the second `writeFilePrivate` overwrites the first and one session's dialogue is gone. The gate map, being rebuilt by re-reading `wrote`, then contains **only the surviving session**, and a learning counting the overwritten one is refused as "not among this run's processed extracts". A session-keyed in-memory map without row C4's eviction would contain **both**, so that learning would be accepted although the model never saw a byte of its dialogue — measured by the round-2 review as an authorization difference, not a theory. Row C4 exists to reproduce the refusal. **Nothing else about this case changes**: both sessions stay in `entries`, `wrote` and `processed`, both are still marked processed on a clean run, and `hashScratch` still hashes the duplicate path twice. That the overwritten session's dialogue is silently lost and never retried is a **pre-existing defect of the base commit**, recorded under Discovered issues and deliberately not fixed here. |
 | C5 | The dry-run preview names both numbers | After this package the bytes given to the model and the bytes X bounds are different quantities, so `printPlan` must not print one label over the other. `src/cli/dream.js:154` is replaced by exactly these two lines, in this order, each at the same two-space indent the surrounding preview lines use: `session text given to the memory pass: ${totalBytes} bytes`, then `transcript text measured against the ${cfg.maxInputBytes}-byte limit: ${sel.intakeBytesTotal} bytes`. `totalBytes` keeps its existing derivation (the summed on-disk sizes of `sel.wrote`, `:141-147`); `intakeBytesTotal` is the sum of the `intakeBytes` of the admitted sessions. Everything else `printPlan` prints is unchanged, and `--dry-run` still performs no model call and writes nothing. |
 
 #### Table D — what the model sees, and what code keeps to itself
@@ -285,7 +290,7 @@ amendment, the acceptance criteria and the verification greps.
 |----|----------|------|
 | D1 | The gate reads the original timeline | `src/cli/dream.js:1042-1049`'s re-read of `sel.wrote` is replaced by `sel.gateExtracts`: the map handed to `promote` is the collector's, not one rebuilt from the scratch files. A session absent from the map fails the ledger gate closed, exactly as an unreadable extract does today, and `validate.js` is **not** a deliverable — its code, its verdicts and its fail-closed behavior on malformed geometry are unchanged. The integrity check at `:995-1000` and the stray-file sweep at `:1003-1009` stay where they are and keep their current effect. This is strictly stronger than today: the gate's evidence now never reaches a directory the model can write to, so nothing the model does during the run can reach it. |
 | D2 | The model sees dialogue and a provenance flag | The dream skill's documented extract shape (`SKILL.md:47-70`) becomes the projection's: messages carry `role` (`user` or `assistant` only), `text`, `ts` and `derived_from_untrusted`; there is no `tool_result` role and no `skill_invocations` array. The Phase 2 provenance rule (`:101-105`) becomes: set a candidate's `derived_from_untrusted` to `true` if **any** supporting message carries `derived_from_untrusted: true`; set it `false` only when every supporting message carries `derived_from_untrusted: false`; **never infer `false` from a message's role**. Phase 1 (`:72-81`) tracks each supporting message's flag rather than its role. The quoted-data warning (`:22-29`) keeps its force and stops singling out `tool_result`: an assistant message may restate material that came from outside the conversation, and `derived_from_untrusted: true` is exactly what marks it. The same substitution is made at the three further sites Current state names — `:93`'s explicit-user-signal clause, `:185-188`'s raise-only rule for an existing note, and `:291-297`'s per-entry ledger rule. **Checkable consequence: the string `tool_result` occurs zero times in the file afterwards.** That is deliberate and it is the whole point of the row — the role no longer exists in anything the model reads, so any surviving sentence about it is a rule the model cannot apply, and a count of zero is the only cheap way to prove none was left behind. |
-| D3 | Learning discovery is dialogue-only | The skill identifies a possible skill usage from retained dialogue alone, for both harnesses (`SKILL.md:212-222`, `:317-322`). It no longer reads a `skill_invocations` array, no longer reads `errored`, and **must not infer that an invocation succeeded or failed from the absence of evidence** — an outcome it cannot see is an outcome it does not report. The code-owned checks are unchanged and are now fed evidence the model never sees: a Claude session counted in a ledger entry is still independently verified to have invoked that skill, `derived_from_untrusted` is still derived from the invocation window, and a Codex session still never authorizes a skill-body revision. Nothing here can create an invocation, lower the gate's verdict, or turn Codex evidence into qualifying Claude evidence. **One correction rides along, because this row rewrites the section that states it:** `SKILL.md:324-331` tells the model the orchestrator "RAISES your flag to `true`". It does not. `src/core/dream/validate.js:646-648` returns a refusal reason, and `src/core/dream/promote.js:1386-1394` consumes it as a refusal that leaves the candidate bytes unchanged — an understated flag **loses the whole ledger write**, it is not silently corrected. The rewritten section says that, because a model told its mislabel will be fixed for it has no reason to get it right. |
+| D3 | Learning discovery is dialogue-only | The skill identifies a possible skill usage from retained dialogue alone, for both harnesses (`SKILL.md:212-222`, `:317-322`). It no longer reads a `skill_invocations` array, no longer reads `errored`, and **must not infer that an invocation succeeded or failed from the absence of evidence** — an outcome it cannot see is an outcome it does not report. The code-owned checks are unchanged and are now fed evidence the model never sees: a Claude session counted in a ledger entry is still independently verified to have invoked that skill, `derived_from_untrusted` is still derived from the invocation window, and a Codex session still never authorizes a skill-body revision. Nothing here can create an invocation, lower the gate's verdict, or turn Codex evidence into qualifying Claude evidence. **One correction rides along, because this row rewrites the section that states it:** `SKILL.md:324-331` tells the model the orchestrator "RAISES your flag to `true`". It does not. `src/core/dream/validate.js:646-648` returns a refusal reason, and `src/core/dream/promote.js:1386-1394` calls that gate and `:1397-1400` records the refusal, leaving the candidate bytes unchanged — an understated flag **loses the whole ledger write**, it is not silently corrected. The rewritten section says that, because a model told its mislabel will be fixed for it has no reason to get it right. |
 | D4 | The shipped digest is regenerated | `src/core/runtime-skill-digests.json` is regenerated so the dream skill's entry matches its new body, and **no other entry in that file changes**. `tests/unit/dream-skill-structure.test.js` is updated to assert rows D2–D3's prose contract rather than the superseded sentences. |
 | D5 | The ADR amendment | Rows D2–D3 change a durable policy under ADR-0020, so the block in "ADR-0020 amendment text" below is appended to `docs/adr/0020-skill-revision-lifecycle.md` byte-for-byte, after the existing `## Amendment (2026-09-05): ledger-parser correctness …` section and before `## Future work (parked, not specced)`. Nothing above it is edited. Its `Status:` line is written exactly as given and nothing stronger: the owner adds his own signature line himself, and no work package writes `OWNER-SIGNED`, `OWNER-RATIFIED`, or any sentence saying the owner approved, accepted, ratified or signed it. |
 | D6 | **Which provenance guarantees are CODE and which are PROMPT — CANONICAL.** | This row is the honest boundary of the package and every other surface defers to it. **Code**: the per-message `derived_from_untrusted` on every scratch message is computed by the predecessor's parser and no model can edit it; the learnings ledger's per-entry flag for a **newly counted Claude session** is derived from the original invocation window (`validate.js:510-527`, `:631-649`) and an understated value is refused (row D3); a ledger value that is not the exact literal `true` or `false` is a schema violation and is treated as untrusted on the authorization path (ADR-0020's 2026-09-05 amendment (b)); every Tier-3 write requires `derived_from_untrusted === false` (`validate.js:191-216`). **Prompt only**: propagating message flags to an **ordinary** note's frontmatter. No code checks which messages supported an ordinary candidate, so the flag on a non-skill-learning note is the model's assertion, gated afterwards by the Tier-3 floor rather than verified against its sources. The invocation gate verifies invocation evidence for counted Claude sessions; **it does not verify any candidate's supporting messages.** This is not a regression — today's role-based rule (`SKILL.md:101-105`) is prompt-only in exactly the same way, and this package replaces one prompt rule with another while adding a code-produced input it can cite. **Unknown or missing provenance is `true`**: the skill retains that instruction for a message whose flag it cannot read, and the ledger schema already fails closed on a non-literal value. |
@@ -297,15 +302,16 @@ review finding updates the table **and every mirror below in the same commit**;
 a newly found mirror is registered here on the spot.
 
 - [ ] **Deliverables-table cells that restate a path or rule** — walked: the
-      `scratch.js` cell names C1–C4 **and C1a**; the `dream.js` cell names D1 and
+      `scratch.js` cell names C1–C4 **and C1a, C4a**; the `dream.js` cell names D1 and
       C5; the `SKILL.md` cell names D2–D4 **and D6**; the digests cell names D4's
       no-other-entry clause; the ADR cell names D5's byte-for-byte clause; the
       two proofs cells name their suites per ADR-0042.
 - [ ] **Acceptance criteria that assert its facts** — walked: **AC1 asserts C1
-      in the non-deadline regime and AC1a asserts C1a in the deadline regime**;
-      AC2 asserts C2 and C3; AC3 asserts C5; **AC4 asserts D1 and D3's refusal
-      correction**; AC5 asserts D2–D4; AC6 asserts D5; **AC7 is the C1/C1a
-      measurement and must name which regime it measured**; the idempotency
+      with both runs inside the deadline, AC1a asserts C1a in the deadline
+      regime including the projected-defers-nothing shape, and AC1b asserts C4
+      and C4a**; AC2 asserts C2 and C3; AC3 asserts C5; **AC4 asserts D1 and
+      D3's refusal correction**; AC5 asserts D2–D4; AC6 asserts D5; **AC7 is the
+      C1/C1a measurement and must name BOTH runs' regimes**; the idempotency
       criterion asserts C2's determinism. **D6 is asserted by none of them by
       design** — it states which guarantees are prompt-only, and a prompt rule
       is not a thing a unit test can pin; AC5 checks only that the prose says it.
@@ -321,15 +327,17 @@ a newly found mirror is registered here on the spot.
       `scratch.js:66-74`/`:102-105`/`:120` and `ledger.js:112-120` back
       C3; `dream.js:136-159` and `tests/integration/dream.test.js:587` back C5;
       `dream.js:1042-1049` and `validate.js:510-527`/`:631-649` back D1;
-      **`validate.js:646-648` with `promote.js:1386-1394` back D3's refusal
-      correction and AC4, and `validate.js:191-216` backs D6's Tier-3 clause**;
+      **`validate.js:646-648` with `promote.js:1386-1394` and `:1397-1400` back
+      D3's refusal correction and AC4; `validate.js:191-216` backs D6's Tier-3
+      clause; and `scratch.js:18-20`'s `sanitize` backs C4a**;
       the `SKILL.md` cites — `:22-29`, `:47-70`, `:72-81`, `:93`, `:101-105`,
       `:185-188`, `:212-222`, `:291-297`, `:317-322`, **`:324-331`**, and the
       eight-site `tool_result` occurrence list — back D2–D4 and D6;
       `ledger.js:88-97`'s "no record carries an
       extractor version" backs the replay decision in Implementation notes.
 - [ ] **Operative prose steps that apply it** — walked: Context's two
-      "must not move" numbered paragraphs apply C1, **C1a** and D1; the
+      "must not move" numbered paragraphs apply C1, **C1a** and D1; **Discovered
+      issues' collision bullet applies C4a and states what C4 does NOT fix**; the
       `collectExtracts` JSDoc block applies C4 and C5; the literal scratch file
       and the paragraph after it apply C1 and C2; Implementation notes' replay,
       F1, **deadline-regime**, digest-regeneration, **compatibility** and
@@ -346,11 +354,14 @@ a newly found mirror is registered here on the spot.
 - **Re-derive the `dream.js` and `scratch.js` cites first.** See Current state.
   If `WP-dream-report-run-skips` has landed, the exclusion-arm console block
   around `dream.js:781-797` will have moved and gained a rendered report
-  section; row C1's "the same five exclusion arms populated identically"
-  guarantee is what makes that package's counts and bullets stay true without
-  either package changing the other's text. Check that claim rather than
-  assuming it, and if it is false, stop and say so rather than editing that
-  package's surface from inside this boundary.
+  section. **Its bullets stay truthful for a reason weaker than the one an
+  earlier draft of this spec gave, and the difference matters:** they count what
+  *this* run classified and never promise a particular count, so they are true
+  whatever the arms hold. They are **not** protected by any claim that the arms
+  are populated identically to the base commit's — row C1a says a
+  deadline-deferring run can populate them differently. Check that reading
+  rather than assuming it, and if it is false, stop and say so rather than
+  editing that package's surface from inside this boundary.
 - **No automatic historical replay, and nothing is offered.** A processed
   ledger record is `{fingerprint, outcome, reason?, deferrals?, updated_at,
   harness}` (`src/core/dream/ledger.js:88-97`) and carries **no extractor or
@@ -512,7 +523,9 @@ carries forward from the role-based one it replaces rather than a new one.
 ## Acceptance criteria
 
 - [ ] **AC1 — byte-policy equivalence (Table C row C1).** With a mocked `now`
-      that keeps the run inside the preprocessing deadline, a fixture corpus
+      that keeps **both** the baseline run and the projected run inside the
+      preprocessing deadline — assert `deadlineDeferred` is empty in each, since
+      one run finishing in time is not the condition (row C1a) — a fixture corpus
       exercising all five exclusion arms makes `collectExtracts` return
       `entries`, `processed`, `deferred`, `deadlineDeferred`, `readDeferred`,
       `oversized`, `newlyQuarantined` and `oversizedExtracts` that deep-equal
@@ -530,7 +543,21 @@ carries forward from the role-based one it replaces rather than a new one.
       byte decision changed". This criterion exists to make row C1's limited
       guarantee falsifiable rather than to defend a behavior: if the mocked
       clock cannot produce both directions, say so in the PR instead of
-      weakening the assertion.
+      weakening the assertion. Include the round-2 reviewer's shape as one of
+      them: the projected run deferring **nothing** while the baseline defers
+      under the same limit, which is the case that shows one run finishing in
+      time is not the condition.
+- [ ] **AC1b — a filename collision evicts the overwritten session's gate
+      evidence (Table C rows C4, C4a).** A collector-to-validator test with two
+      Claude sessions whose ids sanitize to one filename (`s_1` and `s.1` both
+      give `claude-s_1.json`). Assert: `sel.gateExtracts` holds **exactly one**
+      entry for that filename, the last-written session; a learnings-ledger entry
+      counting the **overwritten** session is refused as not among this run's
+      processed extracts, which is what the base commit does; and the same test
+      run against a map built without the eviction **accepts** it, so the
+      assertion is not vacuous. Assert also that nothing else moved: both
+      sessions remain in `entries` and `processed`, and the colliding path
+      appears in `wrote` twice.
 - [ ] **AC2 — what is written, and the memo (Table C rows C2, C3).** Each
       scratch file is the projection, byte-identical to the literal above for
       the literal input; a session whose projection retains no messages is still
@@ -577,10 +604,12 @@ carries forward from the role-based one it replaces rather than a new one.
       commit's collector and this package's collector over the **same**
       representative backlog, against a **disposable copy** of the transcript
       ledger and a temporary state directory — never `~/.wienerdog/state`, never
-      the live ledger, never a scheduled run. Record: (i) **which regime the run
-      was in** — whether it ended on the capacity stop, on the preprocessing
-      deadline, or by exhausting its candidates — for each of the two runs,
-      because that decides what the rest of the numbers mean; (ii) the admitted
+      the live ledger, never a scheduled run. Record: (i) **which regime EACH of
+      the two runs was in** — whether it ended on the capacity stop, on the
+      preprocessing deadline, or by exhausting its candidates — reported for
+      **both**, because equality is claimed only when **neither** deferred on
+      the deadline and one run's regime says nothing about the other's;
+      (ii) the admitted
       session count and the admitted session-id list from each; (iii) the total
       scratch bytes from each, which is this package's value claim; (iv) the
       corpus size and the configured `maxInputBytes` and
@@ -657,6 +686,22 @@ if its file is absent.
   or changing the exclusion-arm console lines owned by
   `WP-dream-report-run-skips`.
 
+## Discovered issues (routed, not this WP's work)
+
+- **Two session ids that sanitize to one scratch filename silently lose one
+  session's dialogue, and both are still marked processed.** `sanitize`
+  (`src/core/dream/scratch.js:18-20`) maps every character outside
+  `[A-Za-z0-9_-]` to `_`, so `s_1` and `s.1` both write `claude-s_1.json`;
+  executed and confirmed at the base commit. The second write overwrites the
+  first, the same path is appended to `wrote` twice, and **both** sessions reach
+  `processed`, so the overwritten session's content is never consolidated and
+  never retried. This predates this package. Row C4's eviction only stops the
+  package from *weakening the authorization gate* over that collision — it does
+  not fix the loss, and **must not be described as fixing it**. A real fix needs
+  a collision-free scratch filename (a fingerprint or an index suffix) plus a
+  decision about the ledger outcome for the loser, which is a separate work
+  package.
+
 ## Dispatch precondition — owner items
 
 Neither item blocks drafting. Both must be answered before this spec moves to
@@ -669,9 +714,13 @@ Neither item blocks drafting. Both must be answered before this spec moves to
    primary extracts", which can be read the other way; the recommendation
    follows that same record's own principle one level up — "without admitting
    more sessions simply because filtering freed space" — applied to the
-   projection rather than only to the later model filter. Measuring intake makes
-   the admitted session set provably identical to today's, which is what lets
-   this package promise it cannot worsen F1. *Cost of overruling,* priced: (a)
+   projection rather than only to the later model filter. Measuring intake gives
+   **byte-policy equivalence**: every byte-based admission decision stays the
+   base commit's. The admitted session set is equal to the base commit's only
+   when **both** runs avoid deadline deferral (row C1a), so **this package does
+   not promise that it cannot worsen F1** — it promises that it does not worsen
+   it through the byte bound, and owner item 3 prices the deadline residual
+   separately. *Cost of overruling,* priced: (a)
    the measured quantity changes, so every existing `oversizedExtracts` memo
    becomes wrong and row C3 is replaced by a format discriminator — an optional
    `extractFormat` field the collector accepts only as the literal
