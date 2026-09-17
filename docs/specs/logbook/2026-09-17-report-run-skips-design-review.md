@@ -1,5 +1,5 @@
 ---
-title: WP-dream-report-run-skips design review — rounds 1 and 2, dispositions and closure
+title: WP-dream-report-run-skips design review — rounds 1, 2 and the confirming round
 date: 2026-09-17
 related_wps: [WP-dream-report-run-skips, WP-dream-filtered-input-budget, WP-quarantine-warnings-file, WP-dream-promote-module]
 ---
@@ -211,14 +211,12 @@ read-deferred is classified as something else in the same pass and still
 contributes exactly once — and it now says so, and says that a green there is not
 evidence that production coverage is complete.
 
-### Closure
+### Closure — and it did not hold
 
-**Round 2 found nothing that changes the product this WP builds. Both items are
-LIGHT, both are fixed, and both fixes are mechanically verified. The design loop
-is closed under `docs/runbooks/codex-review.md`'s weighted-closure rule**, and the
-spec moves to `Ready`. Three rounds ran in total — zero (template conformance, two
-findings), 1 (six) and 2 (two) — ten findings, none dropped, every raw preserved
-before adjudication (`b7f45600`, `37ac751a`).
+**Round 2 found nothing that changes the product this WP builds. Both items were
+LIGHT, both were fixed and mechanically verified, and the loop was closed under
+`docs/runbooks/codex-review.md`'s weighted-closure rule**; the spec moved to
+`Ready` at `360d7d82`. **A confirming round then re-opened it** — see round 3.
 
 **What the round-2 reviewer executed**, from its raw result: `git rev-parse HEAD`
 with `git merge-base` against `545df8bd` and the scoped diff (confirmed the target
@@ -238,3 +236,91 @@ reworded, pointer sentence reworded) → exit 1 each; compliant again → exit 0
 two worked-example fences and all three proof `find` sets were re-checked against
 the stub renders and still agree. `npm run lint` passes and `git diff --check` is
 clean.
+
+## Round 3 — the confirming round, by a different reviewer and a different model
+
+Codex plugin 1.0.6 adversarial review, model `gpt-6-astra`, against tip
+`360d7d82` with base `2d5e2465`. Verdict **needs-attention**, two findings, no
+machinery findings. Raw preserved before adjudication at `9db06cca` as
+`2026-09-17-report-run-skips-design-r3-astra-raw.json`, with focus and meta.
+
+**What it confirmed:** the coverage boundary, the stale-pointer residual and the
+absent heading-ownership rule all match the code; 46 named-file references in
+range; the proof JSON parses, its mutation literals are present, and the worked
+examples survive neutralisation.
+
+**What it found — both by EXECUTING the collector and the ledger, not by reading
+them.** Both are user-visible sentences, and both were untrue.
+
+| # | Finding | Band | Weight | Disposition |
+|---|---------|------|--------|-------------|
+| A-1 | Deferred counts can promise retries for permanently memoized oversized sessions | medium | heavy (user-visible sentence) | **FIX** — B4/B5/B6 promise only reconsideration; new canonical row B12 |
+| A-2 | Re-quarantined sessions are falsely reported as skipped for the first time | medium | heavy (user-visible sentence) | **FIX** — B1 states this run's decision, not the session's history |
+
+### A-1 — a stop classifies the remainder before it looks at the memos
+
+Verified in `src/core/dream/scratch.js`: the prior memos are pruned into
+`oversizedExtracts` **before** the admission loop (`:66-74`, whose own comment
+says "Valid unvisited records survive either admission stop"), and inside the loop
+the capacity check (`:91-94`) and the deadline check (`:95-98`) each
+`deferRemaining(...)` and `break` **before** the memo is consulted at `:101-105`.
+The reviewer reproduced it: an admitted session followed by a memoised oversized
+one, either stop, and the memoised session lands in `deferred`/`deadlineDeferred`
+with `oversized` at 0 — then on the next run is passed over from its memo without
+being parsed at all.
+
+So the shipped-to-be sentence "will be retried on the next run" misrepresented a
+persistent exclusion as temporary, and "these sessions carry no ledger record" was
+simply false for that case. New canonical row **B12** owns both rules; B4, B5 and
+B6 now promise only that Wienerdog will *consider* the session again, naming the
+oversized outcome as possible, and the record claim is narrowed to *no QUARANTINE
+record*. Criterion 5's two runs each gained a memoised-oversized session behind the
+stop, and the inline gate now fails on the literal `will be retried` anywhere in
+the render.
+
+### A-2 — "for the first time" was a claim about history the run cannot make
+
+`ledger.js:242` is `if (rec.fingerprint !== fingerprint(disc)) return 'select';
+// the file changed → reprocess`. A previously quarantined file whose fingerprint
+changes is therefore selected again and, if it still fails the ceiling or the
+parse (`scratch.js:58`, `:111`), enters `newlyQuarantined` **again**. The reviewer
+reproduced exactly that alongside an admitted session. This spec's own criterion
+4(c) required that classification and never reconciled it with the sentence the
+report would print.
+
+Row B1 now defines the count as *transcripts this run decided to quarantine* and
+forbids the first-ever claim outright; the bullet states the decision and its
+consequence — set aside by this run, skipped from now on until they change — and
+criterion 4(c) asserts that rendered wording for the re-quarantine case. B2 is
+unchanged and still partitions cleanly against it, because the two are fed by
+different `selectState` outcomes (`'select'` then a failure → B1;
+`'skip-quarantined'` → B2), and `selectState` returns exactly one value per file.
+**Checked and clean:** no shipped surface carries the same untruth — `grep -n
+"first time"` over the warnings renderer, the ledger, the dream CLI and `doctor`
+returns nothing — so nothing was filed and nothing else was touched.
+
+### The lesson
+
+**A confirming round by a second model found two untrue sentences that the first
+model's two rounds had passed — and it found them by EXECUTING the collector
+rather than reading it.** Both prior rounds read `scratch.js` and `ledger.js`
+closely enough to confirm harder structural claims; neither ran them. The two
+defects live in orderings that reading tends to smooth over: a `break` that
+precedes a lookup by four lines, and a comparison whose false branch is the
+interesting one. A second reviewer is not only a second opinion on the same
+method — **a different method is what the second reviewer was actually worth.**
+
+### Evidence for the round-3 revision
+
+Re-run in a uniquely named scratch subdirectory, both directions: compliant →
+exit 0; module absent → exit 1; the four violating states → exit 1 each;
+compliant again → exit 0. Both worked examples were **regenerated from the
+contract render** rather than retyped, and all three proof `find` sets re-checked
+against them. The two lexical properties the gate depends on were re-measured on
+the new wording: zero apostrophes anywhere in the section, and the word *skipped*
+absent from the quarantine-free render. The gate additionally now asserts that
+neither `first time` nor `will be retried` appears in any render, and **both of
+those new assertions were RED-tested by restoring the exact sentences this round
+removed**: putting back "were skipped for the first time this run" → exit 1, and
+putting back "They will be retried on the next run." → exit 1, compliant → exit 0.
+`npm run lint` passes and `git diff --check` is clean.

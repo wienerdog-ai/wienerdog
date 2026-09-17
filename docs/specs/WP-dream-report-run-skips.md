@@ -1,7 +1,7 @@
 ---
 id: WP-dream-report-run-skips
 title: Make the dream report account for the sessions a run could not consume
-status: Ready
+status: Draft
 model: opus
 size: M
 depends_on: [WP-quarantine-warnings-file, WP-quarantine-banner-decay, WP-dream-promote-in-workspace, WP-dream-filtered-input-budget]
@@ -29,19 +29,24 @@ epic: quarantine-surface
 > re-derivation could not settle alone are parked under **Dispatch precondition —
 > owner items**; three measured gaps are routed under **Discovered issues**.
 >
-> **2026-09-17 — CLOSED AND `Ready`.** Three review rounds ran on this spec: round
-> zero (template conformance, two findings), round 1 (six findings) and round 2
-> (two findings), each by an independent gate. **All ten are dispositioned; none is
-> dropped.** Every round's raw result was committed before adjudication —
-> `b7f45600` for round 1, `37ac751a` for round 2 — and the dispositions are
-> recorded finding by finding in
-> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`. Round 2
-> confirmed F2, F4, F5 and F6 substantively dispositioned with their runtime claims
-> checking out and all 43 `file:line` citations resolving; its own two findings are
-> **claim** fixes that change nothing the implementer builds, so the loop closes
-> under `docs/runbooks/codex-review.md`'s weighted-closure rule without a further
-> external round. **Nothing in this spec records the owner approving, accepting or
-> ratifying anything** — the five owner items below are recommendations adopted
+> **2026-09-17 — THE LOOP WAS RE-OPENED BY A CONFIRMING ROUND; BACK TO `Draft`.**
+> Four review rounds have run: round zero (template conformance, two findings),
+> round 1 (six), round 2 (two) — all by one gate — and then a **confirming round by
+> a DIFFERENT reviewer and a different model** (Codex plugin adversarial review,
+> `gpt-6-astra`), which returned needs-attention with **two more**. It confirmed
+> the coverage boundary, the stale-pointer residual and the absent
+> heading-ownership rule against the code, and found no machinery findings; but it
+> **reproduced two untrue sentences with read-only probes that EXECUTED the
+> collector and the ledger**, where two prior rounds had read them. Both were
+> user-visible promises: a deferral bullet promising a retry for a session the
+> collector will pass over from its memo, and a quarantine bullet claiming a
+> first-ever skip for a session quarantined before. Twelve findings across four
+> rounds, **all dispositioned, none dropped**; every raw preserved before
+> adjudication (`b7f45600`, `37ac751a`, `9db06cca`), with the dispositions recorded
+> finding by finding in
+> `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`. The surface is
+> otherwise frozen. **Nothing in this spec records the owner approving, accepting
+> or ratifying anything** — the five owner items below are recommendations adopted
 > under the standing process, each with its overrule cost, and each reversible.
 
 ## Context (read this, nothing else)
@@ -295,12 +300,12 @@ read-deferred 4 renders exactly:
 ```markdown
 ## Sessions this run could not consolidate
 
-- 3 session transcript(s) were skipped for the first time this run.
+- 3 session transcript(s) were set aside by this run and will be skipped from now on, until they change.
 - 191 session transcript(s) were already being skipped and were skipped again.
 - 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.
-- 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.
-- 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.
-- 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.
+- 2 session transcript(s) were not reached, because this run had already taken in as much as it could. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
+- 5 session transcript(s) were not reached, because this run ran out of time to prepare them. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
+- 4 session transcript(s) were still being written while this run read them. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
 
 Which sessions are being skipped, and why: reports/warnings.md in your vault.
 ```
@@ -313,9 +318,9 @@ Second worked example — a run with **no quarantine counts** (`newlyQuarantined
 ## Sessions this run could not consolidate
 
 - 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.
-- 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.
-- 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.
-- 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.
+- 2 session transcript(s) were not reached, because this run had already taken in as much as it could. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
+- 5 session transcript(s) were not reached, because this run ran out of time to prepare them. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
+- 4 session transcript(s) were still being written while this run read them. Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.
 ```
 
 **No pointer line** — `reports/warnings.md` renders the ledger's active
@@ -364,15 +369,16 @@ Row order is render order.
 
 | # | Count | Definition | Source in `src/cli/dream.js` at `2d5e2465` |
 |---|---|---|---|
-| B1 | `newlyQuarantined` | transcripts this run recorded as `quarantined` for the first time — over the pre-read ceiling, or a non-`ok` parse outcome | `sel.newlyQuarantined.length` |
+| B1 | `newlyQuarantined` | **transcripts THIS RUN decided to quarantine** — those whose `selectState` answered `'select'` and which then went over the pre-read ceiling (`scratch.js:58`) or came back with a non-`ok` parse outcome (`:111`). **NOT "for the first time ever", and no surface may say so:** a prior quarantine whose fingerprint changed is re-selected (`ledger.js:242`, `// the file changed → reprocess`) and, if it fails again, lands here again — measured and reproduced by the confirming design round. The bullet therefore states this run's decision and its consequence, never the session's history | `sel.newlyQuarantined.length` |
 | B2 | `stillQuarantined` | **the transcripts this run ACTUALLY skipped for an existing quarantine** — the discovered files for which `selectState` returned `'skip-quarantined'`, counted at selection time. **Not** the run-start ledger's active-quarantine count; row B7 says why that is a different number | `sel.skippedQuarantined` — **a new integer `collectExtracts` returns**, computed from the same `discovered` array and the same `selectState` call that already partitions candidates (`src/core/dream/scratch.js:54`) |
 | B3 | `oversized` | transcripts whose own filtered extract exceeds `dream_max_input_bytes`, measured this run or read from the ledger's `oversizedExtracts` memo. **CANONICAL for what the bullet may promise (ADR-0023 Amendment 3):** the memo is consulted only after ledger eligibility and the discovery ceiling pass, and it permits skipping the parse **only while the measured size exceeds the CURRENT X** — so exactly three things release the session, and none of them is a retry next run: **(i)** the source file's fingerprint changes, **(ii)** the running `package.json.version` changes, **(iii)** X is raised **to or past the measured size** (a smaller rise changes nothing). Each of the three earns a **fresh parse and measurement**, whose outcome may be oversized again. A parser change therefore only helps by riding (ii) | `sel.oversized.length` |
-| B4 | `capacityDeferred` | the capacity stop's unvisited remainder — valid transcripts left over when the run's input budget was spent. No ledger record, so ordinary eligibility retries them next run | `sel.deferred.length` (`sel.dropped` is the same array; `sel.droppedForSize` its length) |
-| B5 | `deadlineDeferred` | the preprocessing deadline's unvisited remainder. No ledger record; retried next run | `sel.deadlineDeferred.length` |
-| B6 | `readDeferred` | **the number of transcripts THIS RUN'S COLLECTOR CLASSIFIED as read-deferred** — those for which `parseWithOutcome` reported `runExhausted`, whose partial extract is discarded. No ledger record; retried next run. **This is a count of a classification, not a claim of coverage, and the direction of the error is stated:** the reader declares exhaustion only when `bytesConsumed < sizeBytes`, and `sizeBytes` is the DISCOVERY size (`src/core/transcripts/stream.js:71`, `:129-138`), so a file that grew past the per-session allowance after discovery reads partially with `runExhausted` **false** and is never classified here. B6 can therefore **UNDER-count, and cannot over-count**: every transcript it counts really was an incomplete read with unread bytes, so a non-zero B6 never states something false. That reader behaviour is a pre-existing collector defect, routed under Discovered issues; **this package must not claim exact coverage for B6 and must not depend on a fix**. **The byte-exact bullet is UNCHANGED and stays true under this reading** — checked in round 2: it speaks only of the transcripts it counts ("N session transcript(s) were still being written while this run read them"), never of all of them, so an under-count makes it say less, never something false | `sel.readDeferred.length` |
+| B4 | `capacityDeferred` | the capacity stop's unvisited remainder — candidates never visited because the run had taken in as much as it could. **No QUARANTINE record is written, so ordinary eligibility lets the next run consider them again — but "considered" is ALL the bullet may promise** (row B12 says why) | `sel.deferred.length` (`sel.dropped` is the same array; `sel.droppedForSize` its length) |
+| B5 | `deadlineDeferred` | the preprocessing deadline's unvisited remainder. Same rule as B4 in every respect: no quarantine record, no promise beyond being considered again (row B12) | `sel.deadlineDeferred.length` |
+| B6 | `readDeferred` | **the number of transcripts THIS RUN'S COLLECTOR CLASSIFIED as read-deferred** — those for which `parseWithOutcome` reported `runExhausted`, whose partial extract is discarded. No QUARANTINE record; the next run considers it again and re-parses it, which may then measure it oversized — so its bullet carries row **B12**'s promise, not a retry guarantee. **This is a count of a classification, not a claim of coverage, and the direction of the error is stated:** the reader declares exhaustion only when `bytesConsumed < sizeBytes`, and `sizeBytes` is the DISCOVERY size (`src/core/transcripts/stream.js:71`, `:129-138`), so a file that grew past the per-session allowance after discovery reads partially with `runExhausted` **false** and is never classified here. B6 can therefore **UNDER-count, and cannot over-count**: every transcript it counts really was an incomplete read with unread bytes, so a non-zero B6 never states something false. That reader behaviour is a pre-existing collector defect, routed under Discovered issues; **this package must not claim exact coverage for B6 and must not depend on a fix**. **The byte-exact bullet is UNCHANGED and stays true under this reading** — checked in round 2: it speaks only of the transcripts it counts ("N session transcript(s) were still being written while this run read them"), never of all of them, so an under-count makes it say less, never something false | `sel.readDeferred.length` |
 
 | Fact / rule | Value |
 |---|---|
+| **B12 — CANONICAL: what a deferral bullet may promise, and why it is not a retry** | **A stop classifies the WHOLE unvisited remainder before any oversized memo is consulted, and the memos survive.** `collectExtracts` prunes the prior memos into `oversizedExtracts` before the admission loop (`scratch.js:66-74`, whose comment states it: "Valid unvisited records survive either admission stop"), and inside the loop the capacity check (`:91-94`) and the deadline check (`:95-98`) both `deferRemaining(...)` and `break` **before** the memo is read at `:101-105`. So a session that is memoised as individually oversized, sitting behind either stop, is counted in B4 or B5 this run — and on the next run is passed over from its memo without ever being parsed. Reproduced by the confirming design round with read-only probes against the real collector. **Consequences, and they bind every surface:** (a) **no bullet for B4, B5 or B6 may say "will be retried on the next run"** or otherwise promise the session gets dreamed over — the honest promise is that Wienerdog will *consider* it again, with the oversized outcome named as possible; (b) **"no ledger record" is FALSE for these counts and must not be written** — what is true is "no QUARANTINE record"; an `oversizedExtracts` memo may exist for any of them, and for a memoised one it does. B6 carries the same rule: a read-deferred session is re-parsed next run and may then measure oversized |
 | **B7 — why `stillQuarantined` is NOT the run-start set's size** | because a prior quarantine whose file CHANGED is re-selected: `selectState` compares the record's fingerprint and answers `'select'` when it differs (`src/core/dream/ledger.js:242`), and the sticky `secret-revert-exhausted` arm (`:239-241`) is the only quarantine that ignores the fingerprint. Three miscounts follow from the run-start reading and all three are gone under the selection reading: **(a) double-counting** — a changed prior quarantine re-quarantined this run lands in B1 AND in the run-start set; **(b) a false skip** — a changed prior quarantine consolidated successfully this run is still reported as skipped again; **(c) a phantom** — a prior quarantine whose file was deleted is no longer discovered, was skipped by nothing, and is still counted. The report is durable, so each preserves a false coverage story for as long as the vault lives |
 | **B8 — disjointness, and the construction that gives it** | every discovered file takes exactly one `selectState` outcome (`ledger.js:228-257`, a total function over three values). `'skip-quarantined'` → B2. `'skip-processed'` → counted nowhere, by design: a consolidated transcript is not a skip. `'select'` → exactly one collector arm, because every arm either `continue`s or `break`s (Current state, "The collector"), and a `deferRemaining` stop is followed immediately by `break` so a file cannot be both visited and part of a remainder. Over-ceiling candidates never enter the admission loop at all. ADR-0023 Amendment 3 states the same partition normatively: "These categories and quarantine are disjoint; ledger-skipped files are outside them." **Consequence, asserted directly:** `entries.length` plus the six counts never exceeds the number of discovered files, and no file contributes to two |
 | **B9 — there is no truncation count, and there cannot be one** | budget-induced suffix truncation is retired. `sel.truncated` is the literal `[]` and every entry's `truncatedToFit` is the literal `false` (`src/core/dream/scratch.js:150`, `:135`). The parser's own `Extract.truncated` still means "a per-message or message-count cap applied", which is a property of every large session and not a coverage event — it is not counted here, and no bullet mentions it |
@@ -553,9 +559,10 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
         reused → row **B11**; nothing on the throw path → Table A's **coverage**
         row; the `scratch.js` bound → row **B2**;
       - Discovered issues, entry by entry: the default-X gap → Table B row **B3**;
-        the zero-admission gap → Table A's **coverage** row; the stale-discovery-size
-        reader defect → Table B row **B6**; the unreserved headings → Table A's
-        **ownership** row;
+        the zero-admission gap → Table A's **coverage** row; the negative
+        first-ever-claim check over the shipped surfaces → row **B1**; the
+        stale-discovery-size reader defect → Table B row **B6**; the unreserved
+        headings → Table A's **ownership** row;
       - Dispatch-precondition owner items 4 and 5 → Table A's **coverage** row and
         Table A's **pointer** row (with residual 4's measured ordering);
       - Dispatch-precondition owner items 1, 2 and 3 → row **B3** with Table A's
@@ -599,6 +606,25 @@ surface; if a walk ever finds one there that is not under the five, it moves up.
       and **no surface may say that `reports/warnings.md`, `doctor` or the digest
       banner carries this run's B1/B2** — they carry the ledger's standing set,
       which is a different fact (design round 1, finding 1)
+- [ ] **CLAIM REGISTER — what a deferral bullet may promise.** Table B row **B12**
+      decides it — a stop classifies the whole unvisited remainder before any memo
+      is consulted, and the memos survive, so B4, B5 and B6 may promise only that
+      Wienerdog will CONSIDER the session again, naming the oversized outcome as
+      possible — and its mirrors are rows B4, B5 and B6, both worked examples, the
+      inline gate's `AGAIN` literal and its no-retry-promise assertion, acceptance
+      criterion 5's memo-behind-a-stop fixtures, and owner item 1's merged-bullet
+      alternative. **No surface may say those sessions "will be retried on the next
+      run", and no surface may say they carry "no ledger record"** — what is true is
+      *no quarantine record*; an `oversizedExtracts` memo may exist (confirming
+      design round, finding 1)
+- [ ] **CLAIM REGISTER — what `newlyQuarantined` says about history.** Table B row
+      **B1** decides it — this run's quarantine decision and its consequence, never
+      the session's past — and its mirrors are the B1 bullet in both worked
+      examples, the inline gate's `B1` literal and its no-first-time assertion,
+      acceptance criterion 4(c)'s rendered-wording assertion, and row B7's case (c).
+      **No surface may claim a counted session was skipped for the first time**: a
+      prior quarantine whose fingerprint changed is re-selected (`ledger.js:242`)
+      and can land in B1 again (confirming design round, finding 2)
 - [ ] **CLAIM REGISTER — what `readDeferred` counts.** Table B row **B6** decides
       it — the number of transcripts THIS RUN'S COLLECTOR CLASSIFIED as
       read-deferred, which can under-count and cannot over-count — and its mirrors
@@ -758,7 +784,11 @@ Numbered, because Table C's `criterion` fields reference them.
    quarantine whose file no longer exists is discovered by nothing and is counted in
    none of the six. **Case (c) goes green under both readings for the wrong reason
    unless the double-count itself is asserted** — assert the sum, not only the
-   individual counts.
+   individual counts. **Case (c) additionally asserts the RENDERED WORDING**, because
+   it is the case that made the old wording untrue: the section produced for a
+   re-quarantined session says it was *set aside by this run and will be skipped
+   from now on*, and **contains no claim that it was skipped for the first time**
+   (row B1; confirming design round, finding 2).
 5. **Disjointness (row B8), over TWO runs, because one run cannot show it.** The
    capacity stop (`scratch.js:91-94`, `:124-127`) and the deadline stop (`:95-98`)
    each `break` the single admission loop, so whichever fires first prevents the
@@ -778,6 +808,12 @@ Numbered, because Table C's `criterion` fields reference them.
    not answer it** — the routed reader defect is why, and closing it is not this
    package's work. Exercise the arm through the parse outcome the collector reads,
    and do not read a green here as evidence that production coverage is complete.
+   **Each of the two runs additionally carries a session that is already memoised as
+   individually oversized, sitting BEHIND the stop** (row B12): it must be counted
+   in that run's deferral count and **not** in `oversized`, its memo must survive in
+   the returned `oversizedExtracts`, and the rendered section must carry no promise
+   that it will be dreamed over on the next run. That is the state the confirming
+   design round reproduced, and it is the one a deferral bullet must not lie about.
 6. **The zero case.** A run with all six counts at 0 appends nothing: the report has
    no `## Sessions this run could not consolidate` heading and its other
    code-appended sections are byte-identical to before this change.
@@ -841,7 +877,7 @@ npm run red-proofs
 # no pointer and no "skipped" on a quarantine-free run, and is built from integers
 # alone. Single-quoted JS literals throughout, which Table A's no-apostrophe row
 # is what makes possible.
-node -e "const {runSkipSummarySection:f}=require('./src/core/dream/promote.js');const bad=[];const HEAD='## Sessions this run could not consolidate';const PTR='Which sessions are being skipped, and why: reports/warnings.md in your vault.';const B1='- 3 session transcript(s) were skipped for the first time this run.';const B2='- 191 session transcript(s) were already being skipped and were skipped again.';const B3='- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.';const B4='- 2 session transcript(s) did not fit in what this run could take in, and will be retried on the next run.';const B5='- 5 session transcript(s) were not reached before the time this run had to prepare them ran out, and will be retried on the next run.';const B6='- 4 session transcript(s) were still being written while this run read them, and will be retried on the next run.';const eq=(got,want,what)=>{if(got!==want)bad.push(what+' is not byte-exact: '+JSON.stringify(got));};const full=f({newlyQuarantined:3,stillQuarantined:191,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(full,[HEAD,'',B1,B2,B3,B4,B5,B6,'',PTR].join('\n'),'the six-count section');const noq=f({newlyQuarantined:0,stillQuarantined:0,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(noq,[HEAD,'',B3,B4,B5,B6].join('\n'),'the quarantine-free section');if(noq.indexOf('reports/warnings.md')!==-1)bad.push('a quarantine-free section emitted the warnings pointer; none of those arms leaves a ledger quarantine, so that file cannot name them');if(noq.indexOf('skipped')!==-1)bad.push('the word skipped leaked outside the two quarantine bullets, so the pointer promise is no longer lexically scoped');if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');eq(f({newlyQuarantined:0,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0}),'','the all-zero case');eq(f(undefined),'','a non-object argument');eq(f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',oversized:1.5,capacityDeferred:-1,deadlineDeferred:NaN,readDeferred:{toString(){return '9';}}}),[HEAD,'',B1,'',PTR].join('\n'),'the hostile render (every non-integer must read as 0; a floor or any coercion FAILS here)');eq(f({newlyQuarantined:Number.MAX_SAFE_INTEGER+1,stillQuarantined:0,oversized:0,capacityDeferred:2,deadlineDeferred:0,readDeferred:0}),[HEAD,'',B4].join('\n'),'the unsafe-integer render (a count above Number.MAX_SAFE_INTEGER must read as 0)');const partial=f({newlyQuarantined:3,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0});if(partial.indexOf('already being skipped')!==-1)bad.push('a zero count still rendered its bullet');if(partial.indexOf(PTR)===-1)bad.push('the pointer line is missing from a quarantine-bearing partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
+node -e "const {runSkipSummarySection:f}=require('./src/core/dream/promote.js');const bad=[];const HEAD='## Sessions this run could not consolidate';const PTR='Which sessions are being skipped, and why: reports/warnings.md in your vault.';const AGAIN='Wienerdog will consider them again on the next run, though some may turn out to be too big to dream over on their own.';const B1='- 3 session transcript(s) were set aside by this run and will be skipped from now on, until they change.';const B2='- 191 session transcript(s) were already being skipped and were skipped again.';const B3='- 1 session transcript(s) are too big to dream over on their own. Wienerdog will keep passing over them until the session changes, until Wienerdog is updated, or until dream_max_input_bytes in config.yaml is raised past their size; after any of those it measures them again, and may still find them too big.';const B4='- 2 session transcript(s) were not reached, because this run had already taken in as much as it could. '+AGAIN;const B5='- 5 session transcript(s) were not reached, because this run ran out of time to prepare them. '+AGAIN;const B6='- 4 session transcript(s) were still being written while this run read them. '+AGAIN;const eq=(got,want,what)=>{if(got!==want)bad.push(what+' is not byte-exact: '+JSON.stringify(got));};const full=f({newlyQuarantined:3,stillQuarantined:191,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(full,[HEAD,'',B1,B2,B3,B4,B5,B6,'',PTR].join('\n'),'the six-count section');const noq=f({newlyQuarantined:0,stillQuarantined:0,oversized:1,capacityDeferred:2,deadlineDeferred:5,readDeferred:4});eq(noq,[HEAD,'',B3,B4,B5,B6].join('\n'),'the quarantine-free section');if(noq.indexOf('reports/warnings.md')!==-1)bad.push('a quarantine-free section emitted the warnings pointer; none of those arms leaves a ledger quarantine, so that file cannot name them');if(noq.indexOf('skipped')!==-1)bad.push('the word skipped leaked outside the two quarantine bullets, so the pointer promise is no longer lexically scoped');if(/first time|will be retried/.test(full))bad.push('a bullet promises more than the collector can deliver: no first-ever claim and no next-run retry guarantee may appear');if(/wienerdog doctor/.test(full))bad.push('the section names a second pointer; the enumeration has one home');eq(f({newlyQuarantined:0,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0}),'','the all-zero case');eq(f(undefined),'','a non-object argument');eq(f({newlyQuarantined:3,stillQuarantined:'../../etc/passwd',oversized:1.5,capacityDeferred:-1,deadlineDeferred:NaN,readDeferred:{toString(){return '9';}}}),[HEAD,'',B1,'',PTR].join('\n'),'the hostile render (every non-integer must read as 0; a floor or any coercion FAILS here)');eq(f({newlyQuarantined:Number.MAX_SAFE_INTEGER+1,stillQuarantined:0,oversized:0,capacityDeferred:2,deadlineDeferred:0,readDeferred:0}),[HEAD,'',B4].join('\n'),'the unsafe-integer render (a count above Number.MAX_SAFE_INTEGER must read as 0)');const partial=f({newlyQuarantined:3,stillQuarantined:0,oversized:0,capacityDeferred:0,deadlineDeferred:0,readDeferred:0});if(partial.indexOf('already being skipped')!==-1)bad.push('a zero count still rendered its bullet');if(partial.indexOf(PTR)===-1)bad.push('the pointer line is missing from a quarantine-bearing partial render');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('SKIP SECTION OK');"
 
 # Table A gate — the dream skill is not told about the section. The `test -f`
 # guard is required: a negated grep on a missing file exits 2 and the negation
@@ -954,6 +990,17 @@ no commit — or **a change to the failure message**, which is `WP-dream-filtere
 input-budget`'s owner-ratified row A9 text. Each is its own work package; nothing
 is filed here. Owner item 4 states the recommendation.
 
+**Checked and clean: no shipped surface carries the first-ever claim.** The
+confirming round's finding 2 was about this spec's proposed wording, and the
+obvious worry is that it came from a sibling sentence already in the product. It
+did not. Measured at `2d5e2465`: `grep -n "first time" src/core/dream/warnings.js
+src/core/dream/ledger.js src/cli/dream.js src/cli/doctor.js` returns nothing. The
+warnings renderer groups by reason and never dates a record; the digest banner says
+"are being skipped and will not be dreamed over"; the per-file console line says
+"quarantined <name>; it will not be retried until it changes". All three describe
+standing state or this run's decision, which is exactly what row B1 now does.
+**Nothing to file, and nothing here changes any of them.**
+
 **The reader decides "were there unread bytes?" from the DISCOVERY size, so a file
 that grows during the read is treated as fully read.** Routed from design round 2,
 finding 2. `streamLines` takes `sizeBytes` as "the discovery-recorded fs size
@@ -1012,9 +1059,10 @@ design review round 1 (2026-09-17) and are recorded with their dispositions in
    that may find the session too big again* (its exact wording is Table A's; the
    word *skipped* is reserved to the two quarantine bullets, per Table A's
    lexical-scoping row). The alternative shapes are (a) four bullets, merging
-   B4–B6 into one "will be retried next run" line — the promise is identical for
-   all three, but the user loses the cause, and with it which setting, if any, is
-   the knob; and (b) leaving oversized out, which keeps the section at five
+   B4–B6 into one "considered again next run" line — the promise row B12 allows is
+   identical for all three, but the user loses the cause, and with it which
+   setting, if any, is the knob; and (b) leaving oversized out, which keeps the
+   section at five
    bullets and leaves the one permanently-skipped class with no durable surface at
    all, which is the gap the integration review recorded.
    *Cost of overruling toward (a):* two counts become invisible at exactly the
@@ -1094,9 +1142,12 @@ design review round 1 (2026-09-17) and are recorded with their dispositions in
    owner reverses by dated amendment is applied to this spec by a committed
    revision — never by a dispatch message, because `scripts/boundary-check.js`
    reads the Deliverables table in this file and nothing a message says changes
-   what CI sees. (b) **Design rounds zero, 1 and 2 are closed**: all ten findings
-   dispositioned, raws preserved before adjudication at `b7f45600` and `37ac751a`,
-   the record in `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md`.
+   what CI sees. (b) **All twelve findings from rounds zero, 1, 2 and the
+   confirming round are dispositioned** — raws preserved before adjudication at
+   `b7f45600`, `37ac751a` and `9db06cca`, the record in
+   `docs/specs/logbook/2026-09-17-report-run-skips-design-review.md` — **and this
+   spec is `Ready`**, which only the design-review loop or the owner may make it
+   (`docs/runbooks/codex-review.md`). It is `Draft` as of the confirming round.
    (c) `WP-dream-filtered-input-budget` is `Done` at
    `docs/specs/done/WP-dream-filtered-input-budget.md` (merged in PR #245; flipped
    in PR #246), so this spec's new `depends_on` entry is satisfied. (d) **Every
