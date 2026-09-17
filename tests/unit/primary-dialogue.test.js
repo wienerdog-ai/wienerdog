@@ -178,8 +178,19 @@ for (const [index, testCase] of taintCases.entries()) {
     const dir = tmpDir(`case${index}`);
     const filePath = writeLines(dir, `case-${index}.jsonl`, testCase.lines);
     const entry = entryFor(testCase.harness, filePath);
-    const result = parsePrimaryWithOutcome(entry, newRunBudget());
-    const raw = parseWithOutcome(entry, newRunBudget()).extract;
+    // NEVER THROW ON ANY BLOCK SHAPE. A hostile `text` value (an object whose
+    // `toString` is null) makes an unguarded Array#join raise TypeError, which
+    // would abort a parse the default policy completes — so the no-throw
+    // property is asserted first, and as an assertion rather than an escaping
+    // exception.
+    let result;
+    let raw;
+    try {
+      result = parsePrimaryWithOutcome(entry, newRunBudget());
+      raw = parseWithOutcome(entry, newRunBudget()).extract;
+    } catch (err) {
+      assert.fail(`pd-case ${testCase.name} :: parsing must not throw, got ${err && err.message}`);
+    }
 
     // The silent triple: every one of these records parses, so nothing the
     // default parser reports says anything was lost or declined.
@@ -240,6 +251,39 @@ test('primary-dialogue: [AC3b] G4 a budget exhausted mid-file is a loss the proj
   assert.equal(projection.tainted(), true, 'pd-g4 :: the loss sets the state');
   assert.deepEqual(projection.messages.map((m) => m.derived_from_untrusted), [true], 'pd-g4 :: a later assistant reply carries true');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('primary-dialogue: [AC3c] the Codex joins decline a non-string text without throwing or inventing dialogue', () => {
+  // The Claude side is covered end to end by the fixture corpus. The Codex side
+  // cannot be: `codex.js`'s own `extractMessageText` — byte-identical to the
+  // base commit's and outside this package — throws on the same block before
+  // the observer is reached, so the guard is asserted where this package owns
+  // it. Every value below would otherwise be COERCED into invented dialogue,
+  // and the first of them throws.
+  for (const bad of [{ toString: null }, { a: 1 }, 123, null, ['x'], true]) {
+    const assistant = createPrimaryProjection('codex');
+    assistant.record({ type: 'session_meta', payload: { id: 'cx', timestamp: 't', cwd: '/w' } });
+    assistant.record({
+      type: 'response_item',
+      payload: { type: 'message', role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: bad }, { type: 'output_text', text: 'sound' }] },
+    });
+    assert.deepEqual(assistant.messages.map((m) => m.text), ['sound'], 'pd-text :: a Codex output_text block with a non-string text is declined');
+    assert.equal(assistant.tainted(), false, 'pd-text :: and declining it never taints');
+
+    const user = createPrimaryProjection('codex');
+    user.record({ type: 'session_meta', payload: { id: 'cx', timestamp: 't', cwd: '/w' } });
+    user.record({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: bad }, { type: 'input_text', text: 'sound' }],
+        internal_chat_message_metadata_passthrough: { content_item_kinds: ['user.text', 'user.text'] },
+      },
+    });
+    assert.deepEqual(user.messages.map((m) => m.text), ['sound'], 'pd-text :: a Codex input_text block with a non-string text is declined');
+    assert.equal(user.tainted(), false, 'pd-text :: and declining it never taints');
+  }
 });
 
 // ── AC4 — return-value invariants (Table B) ──────────────────────────────────

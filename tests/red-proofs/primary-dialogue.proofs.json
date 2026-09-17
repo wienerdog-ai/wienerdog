@@ -146,6 +146,56 @@
       ]
     },
     {
+      "id": "pdp-ac3c-text-value-string-check-removed",
+      "wp": "WP-dream-primary-dialogue-projection",
+      "criterion": "AC3c",
+      "why": "row A2 accepts 'the text value of each block whose type is exactly text', and a non-string is no text value, so the block is declined — row A5c-blocks then says outright that 'a block whose type is decided but which A2/A3 decline never taints'. Removing the string check restores Array#join's COERCION, which breaks the rule in both directions at once: a plain object invents the dialogue '[object Object]', a number invents its digits and an array invents its element, while an object whose toString is null raises TypeError and ABORTS a parse the default parser completes. The normal-string control stays green, so this reddens exactly the six hostile shapes and nothing else",
+      "file": "src/core/transcripts/primary-dialogue.js",
+      "find": "    .filter((block) => block.type === 'text' && typeof block.text === 'string')",
+      "replace": "    .filter((block) => block.type === 'text') /* RP_MUT_PDP_AC3C_TEXT_STRING_CHECK_REMOVED */",
+      "marker": "RP_MUT_PDP_AC3C_TEXT_STRING_CHECK_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "\\[AC3c\\]",
+      "expectRed": [
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude text block whose text is an object with a null toString (the throwing shape) is declined, the sound block survives"
+          ],
+          "signal": "null toString (the throwing shape) is declined, the sound block survives :: parsing must not throw"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude text block whose text is a plain object is declined, the sound block survives"
+          ],
+          "signal": "whose text is a plain object is declined, the sound block survives :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude text block whose text is a number is declined, the sound block survives"
+          ],
+          "signal": "whose text is a number is declined, the sound block survives :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude text block whose text is null is declined, the sound block survives"
+          ],
+          "signal": "whose text is null is declined, the sound block survives :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude text block whose text is an array is declined, the sound block survives"
+          ],
+          "signal": "whose text is an array is declined, the sound block survives :: texts"
+        },
+        {
+          "test": [
+            "primary-dialogue: [AC3c] text value: a Claude record whose ONLY text block has a non-string text supplies no dialogue and does not taint"
+          ],
+          "signal": "ONLY text block has a non-string text supplies no dialogue and does not taint :: parsing must not throw"
+        }
+      ]
+    },
+    {
       "id": "pdp-ac3d-envelope-exclusion-ahead-of-block-scan",
       "wp": "WP-dream-primary-dialogue-projection",
       "criterion": "AC3d",

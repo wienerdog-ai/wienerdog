@@ -65,12 +65,22 @@ const UNCLASSIFIABLE = Object.freeze({ classified: false, blocks: null });
 const NO_BLOCKS = Object.freeze({ classified: true, blocks: null });
 
 /**
- * Join the `text` of every block whose `type` is exactly `"text"`.
+ * Join the `text` of every block whose `type` is exactly `"text"` AND whose
+ * `text` is a string.
+ *
+ * THE STRING CHECK IS LOAD-BEARING TWICE. A non-string `text` is not a text
+ * value, so row A2 has nothing to accept and the block is declined — and row
+ * A5c-blocks says in terms that "a block whose type is decided but which A2/A3
+ * decline never taints", so this is a decline, not a gap. Without the check,
+ * `Array.prototype.join` COERCES: `{}` would invent `"[object Object]"`, a
+ * number would invent its digits, and an object with a null `toString` THROWS
+ * `TypeError: Cannot convert object to primitive value`, aborting a parse the
+ * default policy completes. Dialogue is never invented and this never throws.
  * @param {Array<Object>} blocks @param {string} separator @returns {string}
  */
 function joinTextBlocks(blocks, separator) {
   return blocks
-    .filter((block) => block.type === 'text')
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
     .map((block) => block.text)
     .join(separator);
 }
@@ -210,14 +220,17 @@ function createPrimaryProjection(harness) {
       const kinds = meta.content_item_kinds;
       if (!Array.isArray(kinds) || kinds.length !== payload.content.length) return null;
       const text = payload.content
-        .filter((block, i) => block.type === 'input_text' && kinds[i] === 'user.text')
+        // The string check is the same decline as joinTextBlocks': a non-string
+        // `text` is no text value, so A3 accepts nothing from this block, and
+        // the join neither invents dialogue nor throws.
+        .filter((block, i) => block.type === 'input_text' && kinds[i] === 'user.text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n');
       return text === '' ? null : { role: 'user', text, ts: null };
     }
     if (payload.role === 'assistant' && payload.phase === 'final_answer') {
       const text = payload.content
-        .filter((block) => block.type === 'output_text')
+        .filter((block) => block.type === 'output_text' && typeof block.text === 'string')
         .map((block) => block.text)
         .join('\n');
       return text === '' ? null : { role: 'assistant', text, ts: null };

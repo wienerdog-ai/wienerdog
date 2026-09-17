@@ -822,5 +822,143 @@
       false,
       true
     ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is an object with a null toString (the throwing shape) is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"toString\":null}},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is a plain object is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"a\":1}},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is a number is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":123},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is null is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":null},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude text block whose text is an array is declined, the sound block survives",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":[\"x\"]},{\"type\":\"text\",\"text\":\"real correction\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "real correction",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: CONTROL a Claude text block whose text is a normal string is accepted",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"first half\"},{\"type\":\"text\",\"text\":\"second half\"}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "first half\n\nsecond half",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "text value: a Claude record whose ONLY text block has a non-string text supplies no dialogue and does not taint",
+    "criterion": "AC3c",
+    "harness": "claude",
+    "lines": [
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:00:00.000Z\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}",
+      "{\"type\":\"user\",\"timestamp\":\"2026-09-17T09:02:00.000Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":{\"toString\":null}}]}}",
+      "{\"type\":\"assistant\",\"timestamp\":\"2026-09-17T09:09:00.000Z\",\"message\":{\"role\":\"assistant\",\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}"
+    ],
+    "texts": [
+      "go",
+      "ok"
+    ],
+    "flags": [
+      false,
+      false
+    ]
   }
 ]
