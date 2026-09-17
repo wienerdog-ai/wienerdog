@@ -25,6 +25,7 @@ const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
 const { unacknowledgedAlerts } = require('../core/alert-ack');
+const jobsLib = require('../scheduler/jobs');
 
 // How far past its own deadline a `busy` lock may sit before the dream fails
 // loud instead of quietly exiting 0 (Table S4, WP-dream-lock-stale-owner-loud).
@@ -536,6 +537,63 @@ async function runBrainWithWatchdog(o) {
   return { sawUnknownCommand, reap };
 }
 
+/** The job name whose success THIS dream run will establish, or null when this
+ *  process is not a supervised dream job. Env is the supervisor's channel,
+ *  config is the authority, and the per-run token is the correlate — ALL THREE
+ *  are required (WP-dream-digest-omits-own-job-alerts, Table A, "Resolved job
+ *  name"): `process.env.WIENERDOG_JOB` names a job that config.yaml defines
+ *  with `run: builtin:dream`, AND `process.env.WIENERDOG_DREAM_RUN_TOKEN`
+ *  matches /^[a-f0-9]{16}$/ — the same validation this file already applies to
+ *  that variable where the brain hand-up reads it. Anything else → null, which
+ *  is the fail-safe direction: when in doubt the stale callout is SHOWN.
+ *  Possession of the token is not parentage (O1's residual); it narrows the
+ *  accidental-inheritance vector rather than closing it.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @returns {string|null} */
+function supervisingDreamJob(paths) {
+  const name = process.env.WIENERDOG_JOB;
+  if (typeof name !== 'string' || name === '') return null;
+  const rawToken = process.env.WIENERDOG_DREAM_RUN_TOKEN;
+  if (typeof rawToken !== 'string' || !/^[a-f0-9]{16}$/.test(rawToken)) return null;
+  let job = null;
+  try {
+    job = jobsLib.findJob(paths, name);
+  } catch {
+    return null; // an unreadable config resolves no name; nothing is omitted
+  }
+  return job && job.run === 'builtin:dream' ? name : null;
+}
+
+/** True when this record was already on file before `startedAt` — the THIRD
+ *  conjunct, and the only one asked per RECORD (Table A, "Record date"). Strict:
+ *  a missing, empty or unparseable `at`, and one equal to the start instant, all
+ *  answer false, which SHOWS the record. That is what keeps a supervisor's
+ *  record — appended while this child is still alive, on the watchdog-timeout
+ *  path — on screen.
+ *  @param {{at:string}} record @param {number} startedAt @returns {boolean} */
+function predatesThisRun(record, startedAt) {
+  if (typeof record.at !== 'string' || record.at === '') return false;
+  const at = Date.parse(record.at);
+  return Number.isFinite(at) && at < startedAt;
+}
+
+/** `alerts` minus the records THIS run's success will clear — but ONLY when the
+ *  call site asks for it. `omit` is the per-call flag, and its default at every
+ *  call site is falsy, so a render added later shows every record by
+ *  construction. Never throws: `findJob`'s own config read already fails to the
+ *  empty job list.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
+ *  @param {boolean} omit
+ *  @param {number} startedAt this process's start instant
+ *  @returns {Array<{job:string, at:string, reason:string, log_hint:string}>} */
+function withoutOwnJobAlerts(paths, alerts, omit, startedAt) {
+  if (!omit) return alerts;
+  const name = supervisingDreamJob(paths);
+  if (name === null) return alerts;
+  return alerts.filter((a) => a.job !== name || !predatesThisRun(a, startedAt));
+}
+
 /**
  * wienerdog dream [--dry-run] [--yes]
  * Exit 0 = success, "another dream running", or "nothing to dream".
@@ -561,6 +619,14 @@ async function runBrainWithWatchdog(o) {
  * @returns {Promise<void>}
  */
 async function run(argv, opts = {}) {
+  // THIS PROCESS'S START INSTANT, wall-clock, captured before anything else
+  // (WP-dream-digest-omits-own-job-alerts, Table A, "Record date"). The final
+  // render omits only records stamped STRICTLY EARLIER than this, so a record
+  // the supervisor appends while this child is still alive stays on screen.
+  // Deliberately NOT `opts.now`: that seam resolves the dream's DATE STRING,
+  // and letting a test's date injection move this boundary would make a safety
+  // property depend on a test seam.
+  const startedAt = Date.now();
   const dryRun = argv.includes('--dry-run');
   // THIS FILE'S git seam (CLAIM 2b) — not the run's only one; see `gitIn` and
   // row W1(c). JS-only: production passes no opts, so the pinned door always runs.
@@ -658,12 +724,23 @@ async function run(argv, opts = {}) {
     // A3 hash gate (WP-116, ADR-0021): the dream NEVER seeds — it reads the
     // registry established at the last attended sync/approval and enforces, so
     // a nightly corruption fails closed against that baseline.
-    const regenerateDigest = () => {
+    // `omitOwnJobAlerts` DEFAULTS TO FALSE — unfiltered — so only a call site
+    // that asks for it by name drops anything, and exactly one does: the last
+    // statement of this block, past every finalizer that can fail the run
+    // (WP-dream-digest-omits-own-job-alerts, Table A, "Where applied"). The two
+    // pre-existing sites below are byte-for-byte what `main` has.
+    /** @param {{omitOwnJobAlerts?:boolean}} [renderOpts] */
+    const regenerateDigest = (renderOpts = {}) => {
       fs.mkdirSync(paths.state, { recursive: true });
       const idReg = identityApprovals.readRegistry(paths.state);
       const quarantineLine = ledgerLib.quarantineBannerLine(ledger);
       const digest = renderDigest(vaultDir, layout, {
-        alerts: unacknowledgedAlerts(paths, readAlerts(paths)),
+        alerts: withoutOwnJobAlerts(
+          paths,
+          unacknowledgedAlerts(paths, readAlerts(paths)),
+          renderOpts.omitOwnJobAlerts === true,
+          startedAt
+        ),
         updateLine: renderUpdateLine(paths),
         identityApprovals: identityApprovals.approvalsMap(idReg),
         quarantineLine,
@@ -1230,6 +1307,17 @@ async function run(argv, opts = {}) {
       //     does. Teardown never touches the vault.
       if (!retainWorkspace) destroyWorkspace(workspaceDir);
     }
+
+    // 23. The one render that may omit the alerts this run's success is about to
+    //     clear (WP-dream-digest-omits-own-job-alerts, Table A). Its position IS
+    //     the contract, and there is no guard because the position is the guard:
+    //     control only falls through to here when the whole body ran — steps
+    //     11-21 AND the workspace teardown above — without throwing, and every
+    //     other way out of this block is a `return` or a `throw`, neither of
+    //     which reaches this statement. It is still INSIDE the lock, which the
+    //     `finally` below releases: no second dream can have interleaved, so the
+    //     `ledger` this render closes over is still the current one.
+    regenerateDigest({ omitOwnJobAlerts: true });
   } finally {
     // 17. Teardown: clean scratch + release the lock ONLY if we still hold it. If
     //     we were superseded by a stale-lock steal, the stealer now owns both the

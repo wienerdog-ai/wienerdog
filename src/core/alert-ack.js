@@ -124,7 +124,11 @@ function pruneAcksForJob(paths, job) {
  *  A's success. Pure: reads the store, allocates a new array, mutates nothing.
  *  A non-array `alerts` returns [] — an upstream PROGRAMMING-ERROR guard, not a
  *  suppression path (both callers pass readAlerts, which always returns an
- *  array). This is the ONLY suppression point (Table B).
+ *  array). This is the ONLY ACKNOWLEDGEMENT suppression point (Table B) — the
+ *  only place this store is read. It is NOT the only filter applied to the
+ *  array a caller hands renderDigest: at its FINAL render only, dream.js drops
+ *  this result's records for the job whose success that run has just
+ *  established (WP-dream-digest-omits-own-job-alerts, Table A).
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
  *  @returns {Array<{job:string, at:string, reason:string, log_hint:string}>} */

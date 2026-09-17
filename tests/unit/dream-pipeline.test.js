@@ -40,6 +40,9 @@ const NOW = new Date(DY, DM - 1, DD, 12, 0, 0);
 const ENV_KEYS = [
   'HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY', 'WIENERDOG_FAKE_BRAIN_MODE', 'WIENERDOG_DREAM_RUN_TOKEN', 'PATH',
+  // WP-dream-digest-omits-own-job-alerts: the supervisor's job-name channel,
+  // carried through the same save/overwrite/restore as the run token beside it.
+  'WIENERDOG_JOB',
   // WP-dream-git-env-pinning (AC1-AC5): channels a test exports for the duration
   // of a run, via `runDream`'s `o.env` — carried through this same
   // save/overwrite/restore so none of them leaks into a later test.
@@ -338,7 +341,8 @@ function pinFakeBrain(root, core, mode) {
  * Run the production entry point, capturing output and any throw.
  * @param {ReturnType<typeof setup>} ctx
  * @param {string[]} argv
- * @param {{mode?:string, env?:Record<string,string>, opts?:object}} [o]
+ * @param {{mode?:string, env?:Record<string,string>, opts?:object,
+ *          onLog?:(line:string) => void}} [o]
  */
 async function runDream(ctx, argv = ['--yes'], o = {}) {
   const saved = {};
@@ -353,10 +357,18 @@ async function runDream(ctx, argv = ['--yes'], o = {}) {
     ...(o.env || {}),
   });
   if (!o.env || o.env.WIENERDOG_DREAM_RUN_TOKEN === undefined) delete process.env.WIENERDOG_DREAM_RUN_TOKEN;
+  if (!o.env || o.env.WIENERDOG_JOB === undefined) delete process.env.WIENERDOG_JOB;
   const logs = [];
   const origLog = console.log;
   const origWarn = console.warn;
-  console.log = (...a) => logs.push(a.join(' '));
+  // `o.onLog` (WP-dream-digest-omits-own-job-alerts) sees each line BEFORE it is
+  // recorded and may throw — the only way to fail a step-20/21 statement, whose
+  // sole fallible acts are these console writes (a real EPIPE does the same).
+  console.log = (...a) => {
+    const line = a.join(' ');
+    if (o.onLog) o.onLog(line);
+    logs.push(line);
+  };
   console.warn = (...a) => logs.push(a.join(' '));
   let thrown = null;
   try {
@@ -2269,4 +2281,470 @@ test('dream-pipeline: identical memo maps do not rewrite the ledger, regardless 
   assert.equal('oversizedExtracts' in ledgerLib.readLedger(ctx.state), false);
   await runDream(ctx);
   assert.equal(writes.mock.callCount(), 1, 'absent and empty maps never churn');
+});
+
+// ── WP-dream-digest-omits-own-job-alerts ─────────────────────────────────────
+//
+// Table A: the dream's FINAL render omits exactly the alert records this run's
+// success is about to clear, and nothing else omits anything. The principle is
+// one-directional — when in doubt the stale callout is SHOWN, and a genuine one
+// is never hidden — so most of these cases assert that a callout IS rendered.
+// Every test below carries the OWNJOB-AC tag its criterion is named by; the
+// RED-proof declarations select this family with that tag.
+
+/** The shape run-job mints per invocation and this file already validates. */
+const OWNJOB_TOKEN = 'abcdef0123456789';
+const OWNJOB_SUPERVISED = { WIENERDOG_JOB: 'dream', WIENERDOG_DREAM_RUN_TOKEN: OWNJOB_TOKEN };
+const JOBS_BEGIN = '# --- wienerdog:jobs (managed by `wienerdog schedule`; do not edit by hand) ---';
+const JOBS_END = '# --- end wienerdog:jobs ---';
+
+/** Append the managed `jobs:` section a scheduled machine's config.yaml carries.
+ *  Every line of it is indented or a comment, so the dream's own top-level
+ *  scalar reader is untouched by it.
+ *  @param {ReturnType<typeof setup>} ctx
+ *  @param {Array<{name:string, run:string}>} jobs */
+function defineJobs(ctx, jobs) {
+  const block = jobs
+    .map((j) => `  - name: ${j.name}\n    at: "03:30"\n    run: ${j.run}\n    timeout_minutes: 20\n`)
+    .join('');
+  fs.appendFileSync(path.join(ctx.core, 'config.yaml'), `\n${JOBS_BEGIN}\njobs:\n${block}${JOBS_END}\n`);
+}
+
+/** One unresolved failure record per entry, oldest-first, as run-job's failLoud
+ *  would have left them. An entry is a job name — stamped safely in the past —
+ *  or `{job, at}` when the test is about the record-date conjunct.
+ *  @param {ReturnType<typeof setup>} ctx
+ *  @param {Array<string|{job:string, at:string}>} jobs */
+function plantAlerts(ctx, jobs) {
+  fs.mkdirSync(ctx.state, { recursive: true });
+  const lines = jobs.map((entry, i) => {
+    const spec = typeof entry === 'string' ? { job: entry } : entry;
+    const at = spec.at === undefined
+      ? new Date(Date.now() - 60_000 * (jobs.length - i)).toISOString()
+      : spec.at;
+    return JSON.stringify({
+      job: spec.job,
+      at,
+      reason: `job "${spec.job}" exited 1`,
+      log_hint: `~/.wienerdog/logs/${spec.job}/`,
+    });
+  });
+  fs.writeFileSync(path.join(ctx.state, 'alerts.jsonl'), `${lines.join('\n')}\n`, { mode: 0o600 });
+}
+
+const digestPath = (ctx) => path.join(ctx.state, 'digest.md');
+/** The alert callouts the rendered digest carries, in render order — the whole
+ *  lines, so the assertion is over BYTES and not over a job name's presence. */
+function calloutLines(ctx) {
+  return fs.readFileSync(digestPath(ctx), 'utf8')
+    .split('\n')
+    .filter((l) => l.startsWith('> [!warning] Wienerdog: the "'));
+}
+/** The exact line `formatAlerts` renders for a record planted by plantAlerts. */
+const callout = (job) =>
+  `> [!warning] Wienerdog: the "${job}" job has failed. Latest error: job "${job}" exited 1. `
+    + `Details in ~/.wienerdog/logs/${job}/. This note clears automatically when the job next succeeds.`;
+
+/** WATCH EVERY DIGEST WRITE THIS RUN PERFORMS, and what each one published.
+ *
+ *  `identityApprovals.readRegistry` is `regenerateDigest`'s first act and is
+ *  reached through the module object, so mocking it counts renders exactly. The
+ *  file as it stands AT THE START of render k is the output of render k-1, so
+ *  the snapshots plus the file left on disk are the published bytes of every
+ *  write, in order — without instrumenting the writer.
+ *  @param {import('node:test').TestContext} t @param {ReturnType<typeof setup>} ctx
+ *  @param {(n:number) => void} [onRender] called with the 1-based render index */
+function watchRenders(t, ctx, onRender) {
+  const idApprovals = require('../../src/core/identity-approvals');
+  const realRead = idApprovals.readRegistry;
+  const realRm = fs.rmSync;
+  /** @type {Array<string|null>} */
+  const before = [];
+  const read = () => {
+    try {
+      return fs.readFileSync(digestPath(ctx), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  t.mock.method(idApprovals, 'readRegistry', (...args) => {
+    before.push(read());
+    if (onRender) onRender(before.length);
+    return realRead(...args);
+  });
+  return {
+    /** how many renders STARTED */
+    count: () => before.length,
+    /** the bytes each render published, in order */
+    writes: () => (before.length === 0 ? [] : [...before.slice(1), read()]),
+    /** the un-mocked rmSync, for probes that must still delete for real */
+    realRm,
+  };
+}
+
+test('dream-pipeline: OWNJOB-AC1 — the final render omits the alerts this run\'s success clears', async () => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.deepEqual(calloutLines(ctx), [], 'the run that is about to clear the record does not display it');
+  // The RECORD is never touched — only the view of it. run-job clears it after
+  // this process exits, which is the half asserted in the scheduler suite.
+  const raw = fs.readFileSync(path.join(ctx.state, 'alerts.jsonl'), 'utf8');
+  assert.match(raw, /"job":"dream"/, 'the durable record survives the render untouched');
+});
+
+test('dream-pipeline: OWNJOB-AC2 — another job\'s callout is never omitted', async () => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream', 'daily-digest']);
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.ok(
+    calloutLines(ctx).includes(callout('daily-digest')),
+    'the omitted set is this run\'s job and nothing else'
+  );
+});
+
+test('dream-pipeline: OWNJOB-AC3 — an unsupervised dream renders every callout', async () => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream', 'daily-digest']);
+  const r = await runDream(ctx); // no WIENERDOG_JOB, no run token
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  // Byte-exact and in render order: an attended `wienerdog dream` clears
+  // nothing, so it may hide nothing, and its bytes are today's bytes.
+  assert.deepEqual(calloutLines(ctx), [callout('dream'), callout('daily-digest')], 'an unsupervised run hides nothing');
+});
+
+test('dream-pipeline: OWNJOB-AC4 — a job name config does not define as builtin:dream omits nothing', async () => {
+  // (a) a name config.yaml does not define at all.
+  const ghost = setup();
+  defineJobs(ghost, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ghost, ['ghost']);
+  const a = await runDream(ghost, ['--yes'], {
+    env: { WIENERDOG_JOB: 'ghost', WIENERDOG_DREAM_RUN_TOKEN: OWNJOB_TOKEN },
+  });
+  assert.equal(a.thrown, null, a.thrown && a.thrown.message);
+  assert.deepEqual(calloutLines(ghost), [callout('ghost')], 'an undefined job resolves no name');
+
+  // (b) a name config.yaml defines, but not as the dream.
+  const chores = setup();
+  defineJobs(chores, [{ name: 'chores', run: 'skill:tidy' }]);
+  plantAlerts(chores, ['chores']);
+  const b = await runDream(chores, ['--yes'], {
+    env: { WIENERDOG_JOB: 'chores', WIENERDOG_DREAM_RUN_TOKEN: OWNJOB_TOKEN },
+  });
+  assert.equal(b.thrown, null, b.thrown && b.thrown.message);
+  assert.deepEqual(calloutLines(chores), [callout('chores')], 'a non-dream job resolves no name');
+});
+
+test('dream-pipeline: OWNJOB-AC5 — a valid job name without a valid run token omits nothing', async () => {
+  // Absent, empty, too short, and the right length but not hex. Each is treated
+  // exactly as this file already treats the variable for the brain hand-up.
+  for (const token of [undefined, '', 'abcdef012345678', 'abcdefg123456789']) {
+    const ctx = setup();
+    defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+    plantAlerts(ctx, ['dream']);
+    const r = await runDream(ctx, ['--yes'], {
+      env: { WIENERDOG_JOB: 'dream', ...(token === undefined ? {} : { WIENERDOG_DREAM_RUN_TOKEN: token }) },
+    });
+    assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+    assert.deepEqual(calloutLines(ctx), [callout('dream')], `token ${JSON.stringify(token)} must omit nothing`);
+  }
+});
+
+test('dream-pipeline: OWNJOB-AC6a — the quarantine-only refresh renders UNFILTERED, then the run fails', async () => {
+  const ctx = setup({ withTranscript: false });
+  writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\n`);
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  plantBudgetSession(ctx, 'private-oversized', 'x'.repeat(2000), 300); // the exclusion
+  plantOverCeiling(ctx, 'private-ceiling'); // the quarantine that forces the early render
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.match(r.thrown.message, /no complete session was admitted/, 'the run failed AFTER rendering');
+  // This render happens before the run's outcome is known, so the record is
+  // still genuine and the callout must be on screen.
+  assert.deepEqual(calloutLines(ctx), [callout('dream')], 'the early quarantine refresh is UNFILTERED');
+});
+
+test('dream-pipeline: OWNJOB-AC6b — an early render followed by a brain failure keeps the callout', async () => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  plantOverCeiling(ctx, 'private-ceiling');
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED, mode: 'crash' });
+  assert.ok(r.thrown, 'a crashed brain fails the run');
+  assert.deepEqual(calloutLines(ctx), [callout('dream')], 'an early render before a brain failure is UNFILTERED');
+});
+
+/** Pin this process's start instant to a value the test chooses, by answering
+ *  the FIRST `Date.now()` of the run — which is `run()`'s own first statement —
+ *  and letting every later reading be the real clock, so nothing else in the
+ *  run is affected. If some other consumer took that first reading instead, the
+ *  omitted case below stops being omitted and the test fails loudly rather than
+ *  passing vacuously.
+ *  @param {import('node:test').TestContext} t @param {number} instant */
+function pinStartInstant(t, instant) {
+  const realNow = Date.now.bind(Date);
+  let first = true;
+  t.mock.method(Date, 'now', () => {
+    if (!first) return realNow();
+    first = false;
+    return instant;
+  });
+}
+
+test('dream-pipeline: OWNJOB-AC6f — a record is omitted only when its `at` is STRICTLY earlier than this run\'s start', async (t) => {
+  const START = Date.parse('2026-07-02T03:00:00.000Z');
+  const iso = (ms) => new Date(ms).toISOString();
+  // The one omitted case is the non-vacuity control: without it every row below
+  // would pass with the filter switched off entirely.
+  const cases = [
+    { at: iso(START - 1), omitted: true, why: 'one millisecond before the start instant' },
+    { at: iso(START), omitted: false, why: 'EQUAL to the start instant — not strictly earlier' },
+    { at: iso(START + 1), omitted: false, why: 'the timeout survivor: appended while this child still ran' },
+    { at: '', omitted: false, why: 'an empty `at` is never read as a date' },
+    { at: 'not-a-date', omitted: false, why: 'an unparseable `at` is never read as a date' },
+  ];
+  for (const c of cases) {
+    const ctx = setup();
+    defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+    plantAlerts(ctx, [{ job: 'dream', at: c.at }]);
+    pinStartInstant(t, START);
+    const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+    assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+    assert.deepEqual(calloutLines(ctx), c.omitted ? [] : [callout('dream')], c.why);
+    // The record itself is never touched, whichever way the date fell.
+    assert.match(fs.readFileSync(path.join(ctx.state, 'alerts.jsonl'), 'utf8'), /"job":"dream"/);
+    t.mock.restoreAll();
+  }
+});
+
+test('dream-pipeline: OWNJOB-AC7a — a throw in steps 20-21 never reaches the filtered render', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  const seen = watchRenders(t, ctx);
+  // Step 21's summary is the last statement of the body; failing its write is
+  // the one failure a step-20/21 statement can actually have.
+  const r = await runDream(ctx, ['--yes'], {
+    env: OWNJOB_SUPERVISED,
+    onLog: (line) => {
+      if (line.startsWith('wienerdog: dream committed')) throw new Error('STEP-21-PROBE');
+    },
+  });
+  assert.equal(r.thrown && r.thrown.message, 'STEP-21-PROBE');
+  assert.equal(seen.count(), 1, 'step 19 rendered; the filtered render is never reached');
+  assert.deepEqual(calloutLines(ctx), [callout('dream')], 'the digest is the unfiltered one `main` would leave');
+});
+
+test('dream-pipeline: OWNJOB-AC7b — a destroyWorkspace throw never reaches the filtered render', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  // `createWorkspace` clears the same directory on its own failure arms, so the
+  // probe waits until a render has happened — that is what makes it `finally B`.
+  const seen = watchRenders(t, ctx);
+  t.mock.method(fs, 'rmSync', (target, ...rest) => {
+    if (seen.count() > 0 && String(target).endsWith(WORKSPACE_DIRNAME)) throw new Error('TEARDOWN-PROBE');
+    return seen.realRm(target, ...rest);
+  });
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown && r.thrown.message, 'TEARDOWN-PROBE');
+  assert.equal(seen.count(), 1, 'the throw escapes `finally B` and skips the statement after it');
+  assert.deepEqual(calloutLines(ctx), [callout('dream')], 'a teardown throw leaves the unfiltered digest');
+});
+
+test('dream-pipeline: OWNJOB-AC7c — every early exit leaves the digest `main` would leave', async (t) => {
+  // Each arm names the statement it exits through. None of them falls out of the
+  // body, so none of them can reach the filtered render.
+  const withCtx = async (build, argv, extra) => {
+    const ctx = setup(build.setup || {});
+    if (build.prepare) build.prepare(ctx, t);
+    defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+    plantAlerts(ctx, ['dream']);
+    const seen = watchRenders(t, ctx);
+    const r = await runDream(ctx, argv, { env: OWNJOB_SUPERVISED, ...(extra || {}) });
+    return { ctx, seen, r };
+  };
+
+  // (i) the step-6 dry-run arm — the exit round 5's inventory missed.
+  {
+    const a = await withCtx({
+      setup: { withTranscript: false },
+      prepare: (ctx) => {
+        writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\n`);
+        plantBudgetSession(ctx, 'private-oversized', 'x'.repeat(2000), 300);
+        plantOverCeiling(ctx, 'private-ceiling');
+      },
+    }, ['--dry-run']);
+    assert.equal(a.r.thrown, null);
+    assert.match(a.r.output, /no complete session was admitted/);
+    assert.equal(a.seen.count(), 0, 'a preview writes no digest at all');
+    assert.equal(fs.existsSync(digestPath(a.ctx)), false);
+  }
+  // (ii) the no-complete-input throw, with the quarantine refresh ahead of it.
+  {
+    const b = await withCtx({
+      setup: { withTranscript: false },
+      prepare: (ctx) => {
+        writeFile(ctx.core, 'config.yaml', `vault: ${ctx.vault}\ndream_max_input_bytes: 1000\n`);
+        plantBudgetSession(ctx, 'private-oversized', 'x'.repeat(2000), 300);
+        plantOverCeiling(ctx, 'private-ceiling');
+      },
+    }, ['--yes']);
+    assert.match(b.r.thrown.message, /no complete session was admitted/);
+    assert.equal(b.seen.count(), 1, 'only the unfiltered quarantine refresh');
+    assert.deepEqual(calloutLines(b.ctx), [callout('dream')], 'the no-complete-input exit leaves the unfiltered digest');
+  }
+  // (iii) nothing new to dream, and (iv) the dry-run plan.
+  for (const [argv, why] of [[['--yes'], 'nothing new to dream'], [['--dry-run'], 'the dry-run plan']]) {
+    const c = await withCtx({ setup: { withTranscript: argv[0] === '--dry-run' } }, argv);
+    assert.equal(c.r.thrown, null, c.r.thrown && c.r.thrown.message);
+    assert.equal(c.seen.count(), 0, `${why} renders nothing`);
+    assert.equal(fs.existsSync(digestPath(c.ctx)), false);
+  }
+  // (v) the declined lock: a live owner whose deadline has only just passed, so
+  //     the S4 stale gate does not fire and the quiet exit-0 return is taken.
+  {
+    const ctx = setup();
+    defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+    plantAlerts(ctx, ['dream']);
+    fs.mkdirSync(ctx.state, { recursive: true });
+    fs.writeFileSync(
+      path.join(ctx.state, 'dream.lock'),
+      JSON.stringify({ pid: process.pid, host: os.hostname(), deadline: Date.now() - 1000 })
+    );
+    t.mock.method(process, 'kill', () => {
+      throw Object.assign(new Error('private probe detail'), { code: 'EPERM' });
+    });
+    const seen = watchRenders(t, ctx);
+    const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+    assert.equal(r.thrown, null);
+    assert.equal(r.output, 'wienerdog: another dream holds the lock.');
+    assert.equal(seen.count(), 0, 'a run that never enters the body renders nothing');
+    assert.equal(fs.existsSync(digestPath(ctx)), false);
+  }
+});
+
+test('dream-pipeline: OWNJOB-AC7d — a successful run makes ONE additional write, and only the last one omits', async (t) => {
+  // The count is fixture-determined, so it is asserted against the SAME fixture
+  // run unsupervised — where the added render publishes bytes identical to the
+  // render before it, which is exactly what "`main`'s digest, plus one write"
+  // means. No literal count is asserted: a newly quarantined input adds a third.
+  for (const quarantined of [false, true]) {
+    const build = (ctx) => {
+      defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+      plantAlerts(ctx, ['dream', 'daily-digest']);
+      if (quarantined) plantOverCeiling(ctx, 'private-ceiling');
+    };
+    const plain = setup();
+    build(plain);
+    const uWatch = watchRenders(t, plain);
+    const u = await runDream(plain); // unsupervised — every render is `main`'s
+    assert.equal(u.thrown, null, u.thrown && u.thrown.message);
+    const U = uWatch.writes();
+    t.mock.restoreAll();
+
+    const sup = setup();
+    build(sup);
+    const sWatch = watchRenders(t, sup);
+    const s = await runDream(sup, ['--yes'], { env: OWNJOB_SUPERVISED });
+    assert.equal(s.thrown, null, s.thrown && s.thrown.message);
+    const S = sWatch.writes();
+    t.mock.restoreAll();
+
+    const label = quarantined ? 'with a newly quarantined input' : 'with no quarantine';
+    assert.ok(U.length >= 2, `${label}: the run rendered more than once`);
+    assert.equal(S.length, U.length, `${label}: supervision changes no render COUNT`);
+    // Unsupervised: the added render is content-neutral, so `main`'s digest —
+    // the one produced by the renders before it — is what stays on disk.
+    assert.equal(U[U.length - 1], U[U.length - 2], `${label}: the additional write omits nothing`);
+    for (const w of U) assert.ok(w.includes(callout('dream')), `${label}: nothing is ever omitted unsupervised`);
+    // Supervised: every pre-existing render, step 19 included, is unchanged…
+    for (const w of S.slice(0, -1)) {
+      assert.ok(w.includes(callout('dream')), `${label}: a pre-existing render must be UNFILTERED`);
+    }
+    // …and the ONE additional write differs from the one before it by exactly
+    // the own-job callout line, and by nothing else (Table A, byte identity).
+    const expected = S[S.length - 2].split('\n').filter((l) => l !== callout('dream')).join('\n');
+    assert.equal(S[S.length - 1], expected, `${label}: the added write drops exactly the own-job line`);
+    assert.ok(S[S.length - 1].includes(callout('daily-digest')), `${label}: and keeps every other job`);
+  }
+});
+
+test('dream-pipeline: OWNJOB-AC7e — the filtered render happens while the dream lock is still held', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  const { ownsLock } = require('../../src/core/dream/lock');
+  /** @type {boolean[]} */
+  const held = [];
+  const seen = watchRenders(t, ctx, () => held.push(ownsLock(ctx.state)));
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.equal(seen.count(), held.length);
+  assert.equal(held[held.length - 1], true,
+    'the lock is still held at the filtered render, so no second dream can have interleaved');
+  assert.deepEqual(calloutLines(ctx), [], 'and the render observed IS the filtered one');
+});
+
+test('dream-pipeline: OWNJOB-AC7f — body AND teardown both throwing still reaches no filtered render', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  const seen = watchRenders(t, ctx);
+  t.mock.method(fs, 'rmSync', (target, ...rest) => {
+    if (seen.count() > 0 && String(target).endsWith(WORKSPACE_DIRNAME)) throw new Error('TEARDOWN-PROBE');
+    return seen.realRm(target, ...rest);
+  });
+  const r = await runDream(ctx, ['--yes'], {
+    env: OWNJOB_SUPERVISED,
+    onLog: (line) => {
+      if (line.startsWith('wienerdog: dream committed')) throw new Error('STEP-21-PROBE');
+    },
+  });
+  // Plain JavaScript, unchanged by this WP: a `finally` that throws replaces the
+  // error the body raised. The assertion is that this WP did not alter it.
+  assert.equal(r.thrown && r.thrown.message, 'TEARDOWN-PROBE');
+  assert.equal(seen.count(), 1, 'no additional write on a compound failure');
+});
+
+test('dream-pipeline: OWNJOB-AC7g — a cleanScratch throw comes AFTER the filtered write, which stands', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream']);
+  // Residual 1: `cleanScratch` is a bare rmSync in `finally A`, so EACCES/EBUSY
+  // propagate — the work succeeded, the filtered digest is published, and the
+  // supervisor will still certify the run as failed. `collectExtracts` clears
+  // the same directory at the START of the run, so the probe waits for a render
+  // exactly as the workspace probes above do.
+  const seen = watchRenders(t, ctx);
+  t.mock.method(fs, 'rmSync', (target, ...rest) => {
+    if (seen.count() > 0 && String(target).endsWith('dream-scratch')) throw new Error('CLEAN-SCRATCH-PROBE');
+    return seen.realRm(target, ...rest);
+  });
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown && r.thrown.message, 'CLEAN-SCRATCH-PROBE', 'the run still exits non-zero');
+  assert.equal(seen.count(), 2, 'the filtered write DID happen before the teardown failed');
+  assert.deepEqual(calloutLines(ctx), [], 'and the filtered digest is what stands');
+});
+
+test('dream-pipeline: OWNJOB-AC8 — an unreadable config omits nothing and still renders', async (t) => {
+  const ctx = setup();
+  defineJobs(ctx, [{ name: 'dream', run: 'builtin:dream' }]);
+  plantAlerts(ctx, ['dream', 'daily-digest']);
+  // config.yaml is gone by the time the render reads it — the mid-run rename
+  // Table A resolves to "no name". The filter must not throw out of the render.
+  const idApprovals = require('../../src/core/identity-approvals');
+  const realRead = idApprovals.readRegistry;
+  t.mock.method(idApprovals, 'readRegistry', (...args) => {
+    fs.rmSync(path.join(ctx.core, 'config.yaml'), { force: true });
+    return realRead(...args);
+  });
+  const r = await runDream(ctx, ['--yes'], { env: OWNJOB_SUPERVISED });
+  assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+  assert.deepEqual(calloutLines(ctx), [callout('dream'), callout('daily-digest')], 'an unreadable config omits nothing');
 });

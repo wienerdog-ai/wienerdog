@@ -1,0 +1,179 @@
+{
+  "suite": "tests/unit/dream-pipeline.test.js",
+  "proofs": [
+    {
+      "id": "dream-digest-filter-removed",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "1",
+      "why": "the omission is not vacuous: with the per-call flag ignored the alerts input reaches renderDigest unfiltered at every site, the call still being made, and every criterion that asserts a digest which OMITS the own-job callout goes red (Table A, 'Where applied')",
+      "file": "src/cli/dream.js",
+      "find": "  if (!omit) return alerts;",
+      "replace": "  if (!omit || true) return alerts; /* RP_MUT_OWNJOB_FILTER_REMOVED */",
+      "marker": "RP_MUT_OWNJOB_FILTER_REMOVED",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC1 — the final render omits the alerts this run's success clears"],
+          "signal": "the run that is about to clear the record does not display it"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC6f — a record is omitted only when its `at` is STRICTLY earlier than this run's start"],
+          "signal": "one millisecond before the start instant"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7d — a successful run makes ONE additional write, and only the last one omits"],
+          "signal": "with no quarantine: the added write drops exactly the own-job line"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7e — the filtered render happens while the dream lock is still held"],
+          "signal": "and the render observed IS the filtered one"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7g — a cleanScratch throw comes AFTER the filtered write, which stands"],
+          "signal": "and the filtered digest is what stands"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-ignores-config",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "4",
+      "why": "the config cross-check is load-bearing: dropping ONLY the findJob + `run: builtin:dream` conjunct (the env conditional, the token conjunct and the record-date conjunct all retained) makes an undefined job name resolve, and makes an unreadable config stop being the fail-safe direction (Table A, 'Resolved job name')",
+      "file": "src/cli/dream.js",
+      "find": "  return job && job.run === 'builtin:dream' ? name : null;",
+      "replace": "  return name; /* RP_MUT_OWNJOB_IGNORES_CONFIG */",
+      "marker": "RP_MUT_OWNJOB_IGNORES_CONFIG",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC4 — a job name config does not define as builtin:dream omits nothing"],
+          "signal": "an undefined job resolves no name"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC8 — an unreadable config omits nothing and still renders"],
+          "signal": "an unreadable config omits nothing"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-always-on",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "3",
+      "why": "both environment conjuncts are load-bearing: with the configured dream job's name resolved whether or not either variable is set, an attended `wienerdog dream` — which clears nothing and so may hide nothing — starts hiding its own callout (Table A, 'Resolved job name')",
+      "file": "src/cli/dream.js",
+      "find": "  const name = process.env.WIENERDOG_JOB;\n  if (typeof name !== 'string' || name === '') return null;\n  const rawToken = process.env.WIENERDOG_DREAM_RUN_TOKEN;\n  if (typeof rawToken !== 'string' || !/^[a-f0-9]{16}$/.test(rawToken)) return null;",
+      "replace": "  const name = 'dream'; /* RP_MUT_OWNJOB_ALWAYS_ON */",
+      "marker": "RP_MUT_OWNJOB_ALWAYS_ON",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC3 — an unsupervised dream renders every callout"],
+          "signal": "an unsupervised run hides nothing"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC5 — a valid job name without a valid run token omits nothing"],
+          "signal": "token undefined must omit nothing"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7d — a successful run makes ONE additional write, and only the last one omits"],
+          "signal": "with no quarantine: the additional write omits nothing"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-ignores-run-token",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "5",
+      "why": "the supervisor correlate is load-bearing: dropping ONLY the WIENERDOG_DREAM_RUN_TOKEN conjunct (the findJob cross-check and the record-date conjunct retained) lets a bare inherited WIENERDOG_JOB hide the callout on an unsupervised run (Table A, 'Supervisor correlate')",
+      "file": "src/cli/dream.js",
+      "find": "  if (typeof rawToken !== 'string' || !/^[a-f0-9]{16}$/.test(rawToken)) return null;",
+      "replace": "  if (rawToken === undefined && false) return null; /* RP_MUT_OWNJOB_IGNORES_RUN_TOKEN */",
+      "marker": "RP_MUT_OWNJOB_IGNORES_RUN_TOKEN",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC5 — a valid job name without a valid run token omits nothing"],
+          "signal": "token undefined must omit nothing"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-ignores-record-date",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "6f",
+      "why": "the record-date conjunct is load-bearing: omitting by name alone, without comparing each record's `at` to this process's start instant, hides the timeout survivor's record — the one the supervisor appended while this child was still alive and will never clear — and stops showing the missing / unparseable / equal-`at` edges (Table A, 'Record date')",
+      "file": "src/cli/dream.js",
+      "find": "  return alerts.filter((a) => a.job !== name || !predatesThisRun(a, startedAt));",
+      "replace": "  return alerts.filter((a) => a.job !== name); /* RP_MUT_OWNJOB_IGNORES_RECORD_DATE */",
+      "marker": "RP_MUT_OWNJOB_IGNORES_RECORD_DATE",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC6f — a record is omitted only when its `at` is STRICTLY earlier than this run's start"],
+          "signal": "EQUAL to the start instant — not strictly earlier"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-at-early-render",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "6a",
+      "why": "the placement rule at the EARLY end is load-bearing: the quarantine-only refresh runs before the run's outcome is known, so filtering there would hide a genuine unresolved failure on every path that renders and then fails (Table A, 'When it may omit')",
+      "file": "src/cli/dream.js",
+      "find": "      regenerateDigest();\n      // Refresh point 1",
+      "replace": "      regenerateDigest({ omitOwnJobAlerts: true }); /* RP_MUT_OWNJOB_EARLY_FILTERED */\n      // Refresh point 1",
+      "marker": "RP_MUT_OWNJOB_EARLY_FILTERED",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC6a — the quarantine-only refresh renders UNFILTERED, then the run fails"],
+          "signal": "the early quarantine refresh is UNFILTERED"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC6b — an early render followed by a brain failure keeps the callout"],
+          "signal": "an early render before a brain failure is UNFILTERED"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7c — every early exit leaves the digest `main` would leave"],
+          "signal": "the no-complete-input exit leaves the unfiltered digest"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7d — a successful run makes ONE additional write, and only the last one omits"],
+          "signal": "with a newly quarantined input: a pre-existing render must be UNFILTERED"
+        }
+      ]
+    },
+    {
+      "id": "dream-digest-filter-at-step-nineteen",
+      "wp": "WP-dream-digest-omits-own-job-alerts",
+      "criterion": "7a",
+      "why": "the placement rule at the LATE end is load-bearing: filtering at step 19 puts the omission BEFORE the finalizers, so a run that fails in steps 20-21 or in the workspace teardown leaves a digest hiding a failure it is about to be blamed for, and step 19's bytes stop being `main`'s (Table A, 'Where applied' and 'When it may omit')",
+      "file": "src/cli/dream.js",
+      "find": "      regenerateDigest();\n      // Refresh point 2",
+      "replace": "      regenerateDigest({ omitOwnJobAlerts: true }); /* RP_MUT_OWNJOB_STEP19_FILTERED */\n      // Refresh point 2",
+      "marker": "RP_MUT_OWNJOB_STEP19_FILTERED",
+      "occurrences": 1,
+      "testNamePattern": "OWNJOB-AC",
+      "expectRed": [
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7a — a throw in steps 20-21 never reaches the filtered render"],
+          "signal": "the digest is the unfiltered one `main` would leave"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7b — a destroyWorkspace throw never reaches the filtered render"],
+          "signal": "a teardown throw leaves the unfiltered digest"
+        },
+        {
+          "test": ["dream-pipeline: OWNJOB-AC7d — a successful run makes ONE additional write, and only the last one omits"],
+          "signal": "with no quarantine: a pre-existing render must be UNFILTERED"
+        }
+      ]
+    }
+  ]
+}
