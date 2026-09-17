@@ -1,7 +1,7 @@
 ---
 id: WP-dream-primary-dialogue-projection
 title: Project each transcript to its primary dialogue, deterministically
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-dream-filtered-input-budget]
