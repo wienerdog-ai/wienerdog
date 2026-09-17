@@ -1,0 +1,43 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b104-72f0-7152-b6bb-a6dd688fc3ab",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "baseRef": "a4d19c0c6b174a9d7b8584e396c016c93dba489a",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "Do not dispatch yet. C-1 remains incompletely corrected, and C4 changes authorization under scratch-filename collisions. AC4’s corrected gate behavior and D6’s code/prompt distinction are substantively supported.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "Filename collisions retain authorization for overwritten dialogue",
+        "body": "C4’s session-keyed last-wins map does not reproduce the existing disk reread. Executed the real parser, collector and validator with mocked I/O and the proposed in-memory substitutions: session IDs s_1 and s.1 both write claude-s_1.json. The baseline map contains only the final session, s.1; the proposed map retains both. A false-taint learning counting claude:s_1 is therefore rejected by the baseline but accepted by the proposal, although its scratch dialogue was overwritten by another session. The existing scratch integrity check passes this collision. This introduces an unpriced mismatch between model-visible dialogue and qualifying gate evidence.",
+        "file": "docs/specs/WP-dream-primary-dialogue-collection.md",
+        "line_start": 279,
+        "line_end": 279,
+        "confidence": 1,
+        "recommendation": "Specify collision handling that preserves the baseline map’s surviving-file semantics without rereading tool metadata from disk. Add a collector-to-validator test using distinct IDs that sanitize to the same filename."
+      },
+      {
+        "severity": "medium",
+        "title": "Owner-facing guarantees still contradict the priced deadline residual",
+        "body": "Owner item 1 still promises an identical admitted set and that F1 cannot worsen. The same unconditional exclusion-set claim survives at spec:349-350 and logbook:61-62. C1a at spec:276 also incorrectly makes one run finishing within the deadline sufficient: the executed counterexample admitted all five projected sessions in 50 ms while the baseline admitted only one under the same 60 ms deadline. Both comparison runs must avoid deadline deferral. These are unresolved round-1 guarantees, not objections to accepting the disclosed residual.",
+        "file": "docs/specs/WP-dream-primary-dialogue-collection.md",
+        "line_start": 672,
+        "line_end": 674,
+        "confidence": 1,
+        "recommendation": "Replace the remaining unconditional guarantees with byte-policy equivalence; condition admitted-set equality on both runs avoiding deadline deferral. Apply that qualification to C1a, owner item 1, implementation notes and the logbook."
+      }
+    ],
+    "next_steps": [
+      "Round-1 closure: AC4 passed executable refusal/declared-true/clean-control probes; rebuilding evidence from projected scratch rejects the clean control. D6 and its ADR mirror correctly disclose prompt-only source propagation. The literal phrase “unchanged by construction” survives only in repudiations, but equivalent unconditional claims remain.",
+      "Executed: real collector and transcript parsers with mocked discovery/filesystem/clock; ledger recording, persistence and reselection; validator ledger and Tier-3 gates; scratch hashing/integrity. Verified 1→4 and 4→1 deadline shifts, non-deadline byte equivalence, oversized-memo reuse and exclusion paths. Proposed projection and collector wiring were simulated in memory because implementation does not exist.",
+      "Read only: promotion, CLI wiring, skill prose, ADR and sibling input contracts. No full suite or offline backlog measurement ran; no repository files changed.",
+      "Machinery/citations: checked references resolve on this tree. The promotion refusal citation should extend beyond promote.js:1386-1394, which calls the gate, to :1397-1400, which records refusal. SKILL.md:329 does incorrectly say RAISES; validate.js:647 returns refusal."
+    ]
+  }
+}

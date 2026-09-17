@@ -1,0 +1,24 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b116-9109-77e2-90da-712821fc5885",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "baseRef": "c94e0e66664e482a16e7ff820a9ba87d20a5dae7",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "approve",
+    "summary": "Round-3 design closure passes. Both round-2 findings are substantively fixed; no additional material product or security blocker was demonstrated. Existing owner decisions remain dispatch preconditions.",
+    "findings": [],
+    "next_steps": [
+      "C2-1 verified: 48 collision scenarios and 480 gate-verdict comparisons matched baseline, covering 2/3/5 colliding IDs, both write orders, interleaved harnesses, empty final projections, and clean/tainted invocation windows. Disabling eviction reproduced the authorization defect. Admission, duplicate wrote paths, processed accounting and subsequent ledger selection matched.",
+      "Survivor detail: s.1 fails the existing Session-ID schema in both designs. Reversing write order verified a valid surviving s_1, including when its primary messages were empty. Harness prefixes keep Claude and Codex filenames separate.",
+      "C2-2 verified: mocked timing reproduced 1→5 and 5→1 admission shifts, including a projected run with no deadline deferrals. The revised guarantees require both runs to avoid deadline deferral; the scoped sweep found no remaining material unconditional admission/F1 guarantee.",
+      "Executed: real existing transcript parsers and streaming reader, collector, CLI disk-map rebuild, scratch hashing/integrity, validator and ledger functions with mocked filesystem/discovery/clock. Proposed primary extraction and collector substitutions ran only in memory; parsePrimaryWithOutcome is not implemented.",
+      "Read only: promotion, surrounding CLI wiring, skill prose, sibling input contracts and review records. No full suite or representative-backlog measurement ran; no files changed.",
+      "Machinery/citations: no material blocker found. Checked operational citations resolve, including promote.js:1397-1400. The appended dream-collect test probe does not invalidate them."
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+gate: design  name: coll-astra3  backend: codex plugin 1.0.6  model requested: gpt-6-astra
+tip: 41e667f40093bb6de229f5a7dd8b53a74b80b0b9
+base: c94e0e66664e482a16e7ff820a9ba87d20a5dae7
+companion exit: 0
+porcelain: IDENTICAL before/after

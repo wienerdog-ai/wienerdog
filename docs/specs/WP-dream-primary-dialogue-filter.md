@@ -1,121 +1,142 @@
 ---
 id: WP-dream-primary-dialogue-filter
-title: Filter primary dialogue before dream consolidation
+title: Filter primary dialogue with a bounded relevance stage before consolidation
 status: Draft
 model: opus
 size: M
-depends_on: [WP-dream-filtered-input-budget, WP-dream-promote-in-workspace]
-adrs: [ADR-0004, ADR-0005, ADR-0009, ADR-0012, ADR-0020, ADR-0023, ADR-0024, ADR-0025, ADR-0028, ADR-0030, ADR-0031]
+depends_on: [WP-dream-primary-dialogue-projection, WP-dream-primary-dialogue-collection]
+adrs: [ADR-0004, ADR-0005, ADR-0009, ADR-0012, ADR-0023, ADR-0024, ADR-0025, ADR-0028, ADR-0030, ADR-0031, ADR-0042]
+epic: dream-primary-dialogue
 ---
 
-# WP-dream-primary-dialogue-filter: Filter primary dialogue before dream consolidation
+# WP-dream-primary-dialogue-filter: Filter primary dialogue with a bounded relevance stage before consolidation
+
+- Authoring rules live in `docs/runbooks/spec-authoring.md` — the
+  template gives the skeleton, the runbook the rules. Read both.
+
+## PARKED — this package is not matured until an evaluation says it is needed
+
+**Entry condition.** This work package is matured toward `Ready` **only if** an
+offline evaluation of `WP-dream-primary-dialogue-collection`'s output shows that
+the remaining low-value volume is a real problem. That evaluation is described
+under "Entry condition — the offline evaluation" below. It is an **entry**
+condition, not an acceptance criterion: it runs on the deterministic
+projection's real output, before any of the model stage in this spec is built.
+
+This package adds a second supervised model call to the nightly dream. Nothing
+in this repository has measured what it would add on top of the projection, and
+the owner's own scope record says so — *"Whether filtering is beneficial remains
+to be measured: it adds its own model work and can discard important
+information"* (`docs/specs/logbook/2026-09-17-dream-primary-input-scope.md`).
+The predecessor draft of this spec built it first and evaluated afterwards; the
+maintainer feedback that split this family
+(`docs/specs/logbook/2026-09-17-primary-dialogue-filter-maintainer-feedback.md`)
+reversed that order.
+
+Consequently: **do not dispatch this spec, do not re-derive its Current-state
+cites, and do not refresh its constants** until the entry condition is met. Its
+cites are stale by construction and are marked as such below. If the evaluation
+says the projection alone is enough, this package is closed as `Superseded`
+rather than built.
+
+The two tables below are retained because the design work behind them is sound
+and was reviewed: they are Tables C and D of the predecessor draft, which
+carried a clean independent design review at
+`108f57441d4b383018bafac6d15a3dd8bedad2cb`
+(`docs/specs/logbook/2026-09-17-dream-primary-dialogue-filter-design-review.md`).
+Tables A and B of that draft — the deterministic projection and its collection
+— moved to `WP-dream-primary-dialogue-projection` and
+`WP-dream-primary-dialogue-collection` and are **not** restated here.
 
 ## Context (read this, nothing else)
 
-Dream collects session transcripts, writes bounded extracts, and asks one
-consolidation agent to update a private copy of the memory vault. Code validates
-and promotes those changes. Its input currently includes intermediate replies,
-tool results, and some harness-authored instructions. The owner wants a smaller
-first iteration: primary dialogue followed by a lightweight relevance filter,
-then the existing consolidation agent. The filter selects original text; it does
-not produce memory notes or replace consolidation.
+Wienerdog is an open-source "AI upgrade stack" that writes configuration files
+into a user's Claude Code / Codex CLI setup. **It is just files (ADR-0004): no
+daemons, no servers, no telemetry, no background process that outlives its
+job.** The relevance stage in this package is a short-lived child of the dream
+run, supervised by the existing watchdog, and is not an exception to that rule.
 
-This is a **Draft for maintainer feedback**, not an implementation assignment.
-The owner's scope is recorded in
-`docs/specs/logbook/2026-09-17-dream-primary-input-scope.md`. Keep this WP Draft
-until the main developer's feedback, the repository's adversarial design review,
-and owner sign-off have been dispositioned. No live installation, scheduled job,
-ledger, or vault is changed by preparing this document. Native Codex agents may
-perform the repository's named architect/reviewer roles under the owner's
-authorization; the historical external `gptsol` transport is not required.
+The **dream** collects session transcripts, writes bounded extracts to a private
+scratch directory, and asks one consolidation agent to update a private copy of
+the memory vault; code then validates and promotes its changes. By the time this
+package could run, its two predecessors have already replaced the extract's
+contents with **primary dialogue** — the person's requests and corrections plus
+the concluding assistant reply of each exchange, with tool records, reasoning,
+intermediate progress replies and harness-authored instructions removed by
+deterministic code, and a per-message `derived_from_untrusted` flag that code
+alone writes.
 
-Wienerdog remains files and short-lived jobs (ADR-0004), using subscription auth
-(ADR-0009). Filtering must preserve the code-owned executable, supervision,
-secret, skill-learning, and publication boundaries. Practical quality is assessed
-offline on examples. This WP does not establish complete reading or change the
-selected-but-unexamined session behavior of the current ledger.
+This package proposes one further stage: a **bounded Sonnet relevance filter**
+that *selects* which of those exchanges are worth keeping for memory. It selects
+original text; it does not summarize, rewrite, or produce memory notes, and it
+does not replace consolidation. Wienerdog uses the user's existing subscription
+throughout (ADR-0009); no API key, proxy or new credential is introduced.
+
+The filter must preserve the code-owned executable, supervision, secret,
+skill-learning and publication boundaries. It does not establish complete
+reading and does not change the selected-but-unexamined ledger behavior the
+2026-09-16 assessment recorded as finding F1.
 
 ## Current state
 
-Product baseline: `1c3790de9f88f40aa28202e6f47748500babd555` (fork main at
-authoring). The prerequisite capacity and lock fixes are present there, although
-their spec archival/status bookkeeping is separate. Rebase and re-check the
-following facts against the implementation target before moving to Ready.
+**STALE BY CONSTRUCTION — do not trust these lines; re-derive the whole section
+if and when the entry condition is met.** The predecessor draft pinned fork
+commit `1c3790de9f88f40aa28202e6f47748500babd555`. Upstream has since merged
+`#245` (the five-arm collector and the live-owner lock), `#253` (the stale-lock
+loud gate in `src/cli/dream.js`) and `#257` (a final filtered digest render, a
+`startedAt` captured as `run()`'s first statement, `supervisingDreamJob` /
+`withoutOwnJobAlerts`), with `WP-dream-report-run-skips` and
+`WP-secret-sink-wiring-probes` in flight — and the two predecessor packages of
+this one will have edited `src/core/dream/scratch.js`, `src/cli/dream.js` and
+`skills/wienerdog-dream/SKILL.md` again. The notes below are therefore a map of
+*which* mechanisms Tables C and D attach to, not a set of verified cites.
 
-- `src/core/transcripts/{claude,codex}.js` provide bounded streaming parsers.
-  Claude already indexes `Skill` invocations with original `index`, paired
-  `resultIndex`, and `errored`; Codex maps developer messages to normalized user
-  messages and currently retains assistant messages without checking phase.
-- `src/core/transcripts/index.js` exports `parseWithOutcome(entry, budget)` and
-  `parse(entry)`. It secret-scans before the existing 4,000-character/message
-  limit and retains the newest 2,000 normalized messages. These are existing
-  information-loss limits, not full-transcript guarantees.
-- `src/core/dream/scratch.js:collectExtracts(paths, ledger, maxInputBytes,
-  options)` admits complete normalized extracts newest first, measuring compact
-  JSON including metadata before writing private scratch files. Its oversized
-  memo currently depends on fingerprint and app version only.
-- `src/cli/dream.js` calls the collector, runs the containment probe, hashes
-  scratch, creates a workspace, and runs `runBrainWithWatchdog(o)` once. That
-  wrapper owns the per-token PID hand-up and checked descendant/group reaping.
-  Afterward it rereads scratch into `extractsBySession` for promotion gates.
-- `src/core/dream/validate.js:ledgerViolation` uses the original message-role
-  timeline and invocation geometry to bind new skill learnings and derive taint.
-  Removing tool messages before that computation would silently weaken it.
+- `src/core/transcripts` exports `parsePrimaryWithOutcome(entry, budget)` →
+  `{extract, gateExtract, intakeBytes, parse}`
+  (`WP-dream-primary-dialogue-projection`). The projected extract's messages are
+  ordered, carry their original timestamps, and each carries a code-derived
+  `derived_from_untrusted` boolean the model cannot edit.
+- `src/core/dream/scratch.js:collectExtracts` admits sessions newest-first under
+  `dream_max_input_bytes`, measured against `intakeBytes`, and writes the
+  projected extract to a private scratch file
+  (`WP-dream-primary-dialogue-collection`, its Table C).
+- `src/cli/dream.js` runs the containment probe, hashes scratch, creates a
+  workspace and runs `runBrainWithWatchdog(o)` once. That wrapper owns the
+  per-token PID hand-up and the checked descendant/group reaping.
 - `src/core/dream/brain.js` exports `buildBrainEnv` and `ensureBrainStaging`;
-  `spawnBrain` uses `spawnPinned`, the shared runtime profile, hook-free settings,
-  and a digest-verified dream skill. The filter must reuse these boundaries.
+  `spawnBrain` uses `spawnPinned`, the shared runtime profile, hook-free
+  settings and a digest-verified dream skill. The filter reuses these
+  boundaries rather than building its own.
 - `src/core/runtime-profile.js` requires an explicit nonempty tools allowlist;
-  empty `--tools` is not a permitted shortcut. `src/scheduler/descriptor.js`
-  binds the dream prompt/skill hash even for development checkouts.
-
-Current transcript evidence, observed locally on 2026-09-17 without copying
-private dialogue into this spec: Codex assistant `payload.phase` is `commentary`
-or `final_answer`; current user records carry JSON metadata in
-`internal_chat_message_metadata_passthrough.content_item_kinds`, including
-`user.text` versus harness-specific kinds. The first `session_meta.id` matched
-the filename in 70/70 inspected files; later metadata may be copied history.
-Claude assistant records distinguish `stop_reason: tool_use` and `end_turn`.
-These observations support Table A's bounded acceptance policy, not a claim to
-recognize every historical harness format.
+  an empty `--tools` is not a permitted shortcut.
+  `src/scheduler/descriptor.js` binds the dream prompt/skill hash even for
+  development checkouts.
+- The gate the filter must not weaken is `src/core/dream/validate.js`'s
+  learnings-ledger check, which reads a text-free projection of the **original**
+  message timeline supplied by the collector — not the scratch files — so
+  removing dialogue cannot change its verdicts
+  (`WP-dream-primary-dialogue-collection`, its Table D row D1).
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+<!-- Always allowed without listing: this spec file itself (the status flip),
+     package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/. -->
+
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/transcripts/claude.js | Source metadata for Table A; preserve default parser callers |
-| modify | src/core/transcripts/codex.js | Source metadata for Table A; preserve default parser callers |
-| modify | src/core/transcripts/index.js | Primary parsing entry point, existing redaction and caps |
-| create | src/core/transcripts/primary-dialogue.js | Table A projection and exchange grouping |
-| modify | src/core/dream/scratch.js | Table B admission and parent-owned gate input |
-| modify | src/core/dream/ledger.js | Table B memo format discriminator only |
-| create | src/core/dream/primary-filter.js | Tables C–D selection, prompt, and bounded spawn |
-| modify | src/core/runtime-profile.js | Table D internal read-only profile |
-| modify | src/scheduler/descriptor.js | Bind Table D filter contract to existing prompt hash |
-| modify | src/cli/dream.js | Tables B–D integration and shared supervised lifecycle |
-| modify | skills/wienerdog-dream/SKILL.md | Table A provenance and Table B3 dialogue-only learning discovery |
-| modify | src/core/runtime-skill-digests.json | Regenerate the changed dream skill's digest only |
-| create | tests/unit/primary-dialogue.test.js | Table A behavior |
+| create | src/core/dream/primary-filter.js | Tables C–D: block derivation, prompt, selection, bounded spawn |
+| modify | src/core/runtime-profile.js | Table D row D2's internal read-only profile |
+| modify | src/scheduler/descriptor.js | Table D row D5: bind the filter contract into the existing prompt hash |
+| modify | src/cli/dream.js | Tables C–D integration and the shared supervised lifecycle |
 | create | tests/unit/dream-primary-filter.test.js | Tables C–D behavior |
-| modify | tests/unit/dream-collect.test.js | Table B behavior |
-| modify | tests/unit/dream-pipeline.test.js | Pipeline and unchanged publication guarantees |
-| modify | tests/unit/runtime-profile.test.js | Table D profile and existing profiles |
-| modify | tests/unit/descriptor.test.js | Table D authorization binding |
-| modify | tests/unit/dream-skill-structure.test.js | Table A prompt contract |
-| modify | tests/fixtures/dream/fake-brain.js | Distinguish filter from consolidation in pinned tests |
-| modify | tests/integration/dream.test.js | Whole-run behavior and lifecycle regression coverage |
+| modify | tests/unit/runtime-profile.test.js | Table D row D2 and the existing profiles |
+| modify | tests/unit/descriptor.test.js | Table D row D5's authorization binding |
+| modify | tests/unit/dream-pipeline.test.js | pipeline ordering and unchanged publication guarantees |
+| modify | tests/fixtures/dream/fake-brain.js | distinguish the filter from consolidation in pinned tests |
+| modify | tests/integration/dream.test.js | whole-run behavior and lifecycle regression coverage |
+| create | tests/red-proofs/dream-primary-filter.proofs.json | ADR-0042 declarations whose `suite` is `tests/unit/dream-primary-filter.test.js` |
 
 ### Exact contracts
-
-Tables A–D are canonical. Add an opt-in transcript entry point so existing raw
-parser consumers and golden extracts retain their existing interface:
-
-```js
-parsePrimaryWithOutcome(entry, budget)
-// -> { extract, parse, gateExtract }
-// parse has the existing outcome/oversizedRecords/runExhausted fields.
-// extract is Table A's model-visible primary extract.
-// gateExtract is Table B's code-only role/invocation projection.
-```
 
 The filter's accepted model result is exactly one JSON object:
 
@@ -123,241 +144,243 @@ The filter's accepted model result is exactly one JSON object:
 {"keep":["b0","b2"]}
 ```
 
-Here the code-created request supplied `b0`, `b1`, and `b2`; Table C owns the
-meaning, validation, and fallback. The filter cannot supply replacement text.
-Scratch JSON remains an internal ephemeral representation, not a new public
-file format. Its exact formatting may follow the existing writer; semantic
-fields and byte accounting are governed by Tables A–B.
+Here the code-created request supplied `b0`, `b1` and `b2`. Table C owns the
+meaning, validation and fallback. The filter cannot supply replacement text, and
+only code copies selected original blocks into the final extract. The scratch
+file's format is owned by `WP-dream-primary-dialogue-collection`'s Table C and
+is not changed by this package: a filtered extract is the same file with a
+subset of its `messages`, in original source order, each message byte-identical
+to the one the projection produced.
 
-For example, the synthetic source `/samples/rollout-demo.jsonl` contains:
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
 
-```jsonl
-{"type":"session_meta","payload":{"id":"demo"}}
-{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Keep explanations concise."}],"internal_chat_message_metadata_passthrough":{"content_item_kinds":["user.text"]}}}
-```
+The ADR-0031 activation trigger fires on four of seven: (ii) a new
+accepted/invalid result taxonomy; (iv) timeout, fallback and precedence
+behavior; (v) the task crosses an authority boundary — a model names selections
+that only code applies; (vii) the same facts appear in the Deliverables notes,
+the JSON example, the acceptance criteria and the verification greps.
 
-Table A retains the unanswered user request as block `b0`. If the Table C result
-is `{"keep":["b0"]}`, the complete generated `codex-demo.json` scratch file is
-the following (the existing writer adds no trailing newline):
+### Contract table(s)
 
-```json
-{
-  "harness": "codex",
-  "session_id": "demo",
-  "started": null,
-  "cwd": null,
-  "source_path": "/samples/rollout-demo.jsonl",
-  "truncated": false,
-  "messages": [
-    {
-      "role": "user",
-      "text": "Keep explanations concise.",
-      "ts": null,
-      "derived_from_untrusted": false
-    }
-  ]
-}
-```
-
-This is a mirror of Tables A–C, not a new public serialization contract or a
-requirement for a particular test fixture.
-
-## Contract reference
-
-ADR-0031 applies: interface shape, structured parsing, failure behavior, and
-authority boundaries change. The tables below own their facts.
-
-### Table A — primary dialogue and source authority
+#### Table C — relevance selection and bounded work
 
 | ID | Contract | Rule |
 |----|----------|------|
-| A1 | Scope of retention | Within the existing bounded-read and redaction limits, retain genuine user requests/corrections plus their concluding assistant replies; an unanswered user request remains. This is each exchange, not the last reply of the entire session. Source tool-call and tool-result details (including invocation metadata under B3), reasoning text, and recognized intermediate assistant updates do not enter the model-visible extract. |
-| A2 | Claude acceptance | Accept text from non-meta, non-sidechain `type:user` records with `message.role:user`, whether the content is a string or text blocks. Tool-result blocks do not become user text. Accept assistant text on `stop_reason:end_turn`; exclude `tool_use` progress. For legacy assistant records without stop reason, use the last text reply before the next accepted user request or EOF as a best-effort conclusion, marked uncertain. Retain original order and timestamps. |
-| A3 | Codex acceptance | Use the first session header. In response-item messages, accept `input_text` blocks identified by `content_item_kinds:user.text` in the metadata object or its parseable JSON-string form; corresponding per-block metadata must align with content before selecting blocks. Accept assistant `output_text` on `phase:final_answer`; exclude `phase:commentary`. Developer/system instructions are not dialogue. A legacy user message with no provenance metadata, or assistant message with no phase, may use the role/content shape and A2's last-reply fallback, marked uncertain rather than asserted human/verified. Present-but-malformed or unmappable metadata is not an absent-metadata legacy fallback. |
-| A4 | Copied context | A session whose first header explicitly identifies a subagent, or a Claude sidechain, supplies no primary dialogue in this iteration: its parent conversation's reportback is the primary source. Do not infer new humans from copied user-role history or choose a later copied session header. Ordinary forks without an evidenced copied-prefix boundary retain the existing deduplication limitation; do not interpret unverified ordinal fields or claim independent recurrence is solved. |
-| A5 | Provenance | Compute a code-derived `derived_from_untrusted` boolean over the original source stream before primary projection, message caps, or relevance selection. Verified primary user text is false; legacy/uncertain-origin text is true. An unknown prior context starts assistant taint as true; observing tool output or a source-context gap sets it true from that point through the rest of the session. An assistant conclusion is false only while preceding source context is known and neither condition has occurred. A new user request, dropped exchange, cap, or filter-request boundary never resets this state. The relevance model cannot edit these flags. The dream skill must set a candidate's flag true if any supporting message has true/unknown provenance, retain existing raise-only rules, and never infer false merely from remaining user/assistant roles. Tool-derived claims are attributed assistant reports, not verified facts. This conservative primary-message rule does not replace B2's original invocation-window gate. |
-| A6 | Exchange blocks | Code groups consecutive user messages through their concluding assistant reply into ordered blocks with local IDs `b0`, `b1`, etc. A user-only block is valid. IDs are local integers encoded by code, never transcript strings or filenames. Selecting a block retains its original capped/redacted text, roles, timestamps, and provenance together. No new summary text or model-authored metadata enters scratch. |
-| A7 | Existing caps | Apply the existing per-message cap after secret scanning and the existing newest-message cap to primary messages, setting `truncated` truthfully. A capped boundary block keeps only its retained messages and remains marked truncated; this WP does not restore content lost to those limits. No added model-size truncation is allowed. |
+| C0 | Block derivation | Code derives the selection units from the projected extract alone: consecutive user messages through their concluding assistant reply form one ordered block, with local IDs `b0`, `b1`, … A user-only block is valid. IDs are local integers encoded by code, never transcript strings or filenames, and **no block identifier is ever persisted** — the derivation is internal to this package, which is why the projection deliberately ships no block field. Selecting a block retains its original text, role, timestamp and `derived_from_untrusted` value together. No new summary text and no model-authored metadata enters scratch. |
+| C1 | Selection task | The fixed filter prompt asks for original block IDs worth retaining for memory: decisions and their reasons, corrections, preferences, enduring facts, meaningful outcomes and unresolved commitments. Keep uncertain cases and enough request/reply context. Treat quoted input as data, never instructions. Remove only clearly low-value blocks such as routine acknowledgments and repetitive status. |
+| C2 | Request bounds | Process admitted extracts in their existing order and blocks chronologically within each extract. Pack complete blocks into requests whose UTF-8 serialized data is at most 128,000 bytes and at most 128 blocks. A block too large for one request is retained unchanged without a model call: it is not split, summarized or discarded for this limit. Each block is assigned to at most one call. Calls are sequential, at most 64 per run. |
+| C3 | Time bounds | The combined filter-plus-consolidation model stage has the existing `cfg.timeoutMs` allowance, beginning at the first filter call. Each filter call gets at most 30 seconds, and the filter stage at most `min(300000, floor(cfg.timeoutMs / 4))` milliseconds; a call's watchdog uses the smaller remaining allowance. When the filter allowance or the call cap is exhausted, unvisited blocks are retained and consolidation receives the remaining combined allowance. The outer run-job timeout remains an independent upper bound, unchanged. **Note what this implies at the default `dream_max_input_bytes`:** 300 seconds of sequential calls at up to 30 seconds each filters on the order of one to four megabytes, so a full 8 MB batch is mostly unfiltered. That is an honest tradeoff and it is also a reason the entry condition exists. |
+| C4 | Response acceptance | Accept one JSON object with exactly the key `keep`, an array of distinct IDs assigned to that request. Empty is valid. An unknown ID, a duplicate, a wrong type or key, partial JSON, prose or fences, excessive output, or a non-successful CLI result each invalidate the whole result. Apply accepted selections in original source order, never model order. |
+| C5 | Output bound | Capture at most 32,768 stdout bytes and a secret-scanned 4,096-byte diagnostic tail per filter call; excess stdout invalidates that call and is drained and discarded under the same bounded lifecycle. Never retain an unbounded response string and never log the response body. A CLI JSON envelope, if used, counts toward the bound and must indicate success before its result is parsed under C4. |
+| C6 | Keep-original fallback | A model timeout, a nonzero exit, an unavailable model or an invalid selection retains that request's blocks unchanged and stops further filter calls for this run; the remaining requests are retained unchanged too. Previously accepted selections may stand. Before continuing, prove the subprocess was reaped. Pin, containment, integrity, hand-up or unverified-reap failures abort the dream through the existing failure path — they are not availability fallbacks. There is no retry loop within a run. |
+| C7 | Empty selections and ordering | Hold the existing dream lock. The pipeline order is: collect (predecessor), honour the existing no-input and dry-run exits, pass containment checks, perform the bounded filter, establish the final scratch baseline, then run the existing workspace consolidation and promotion. The filter never writes scratch itself; code publishes only validated selections and verifies its source files were unchanged while filtering — tampering aborts rather than becoming a keep-original fallback. An extract whose blocks are all removed keeps its file and identity with an empty `messages` array; the run-level publication and secret outcome still governs its ledger update, and an empty selection is never independently recorded as processed before that gate. |
+| C8 | Privacy, cleanup and visibility | Filter packets and staging are private ephemeral files under the existing dream-owned scratch/staging lifetime (directories 0700, files 0600), removed before consolidation access and on owned-lock teardown. Only already-redacted primary text reaches the filter. No durable evidence archive, selection checkpoint, raw model-response log or transcript-content log is added. One ordinary fixed-code log line may say the optional filter fell back — without model text, transcript identifiers or content. No access or coverage report, counters dashboard, mandatory report section, or promise that consolidation read the selected content. |
 
-### Table B — collection, gates, and persistence
-
-| ID | Contract | Rule |
-|----|----------|------|
-| B1 | X admission | X is `dream_max_input_bytes` and measures compact JSON bytes of complete A-series primary extracts, including their metadata, before model filtering. Keep newest-first order, exact-full stop, omit-and-stop on remainder overflow, skip individually oversized extracts, the soft collection deadline, and fresh per-session read allowance. Filtering creates no backfill opportunity. |
-| B2 | Code-only gate input | Before removing/reordering source messages, produce a parent-owned projection of the existing capped raw extract containing session identity, message roles, and unchanged skill-invocation geometry, with message text absent. Pass that projection to the existing `extractsBySession` consumer instead of rebuilding authorization evidence from filtered scratch. It is never written into model-visible directories or supplied to either model. Its lifetime is the run; retain no raw tool text. Existing missing/malformed geometry continues to fail closed. |
-| B3 | Learning evidence | Neither model receives metadata extracted from source tool records (invocation names, error states, indices, or other tool details); the `skill_invocations` array belongs only to B2. The dream identifies possible skill learnings from retained user/assistant dialogue and must not infer a tool's success or failure from absent evidence. Update the skill's discovery and session-counting instructions to reflect that visible input. Claimed Claude skill usage remains independently checked against B2's actual invocation evidence and original taint geometry. Filtering cannot create an invocation, lower the gate's taint, or convert Codex evidence into qualifying Claude evidence. |
-| B4 | Size memo compatibility | Add optional `extractFormat` to oversized-memo records. The collector recognizes only the code-owned literal `primary-dialogue-v1` for this mode. Missing/other formats invalidate size evidence and trigger ordinary remeasurement even if app version stayed unchanged. Do not reset processed outcomes, baselines, quarantine records, or secret-revert counters. No automatic historical replay. |
-| B5 | Pipeline ordering | Hold the existing dream lock. Collect primary extracts and immutable gate input; honor existing no-input/dry-run exits; pass containment checks; perform the bounded filter; establish the final scratch baseline; then run existing workspace consolidation and promotion. The filter cannot write scratch itself. Code publishes only validated selections and verifies its source files were unchanged while filtering. Tampering aborts rather than becoming a keep-original fallback. |
-| B6 | Empty selections | Keep an extract file and its identity even if the relevance filter selects no blocks. Consolidation receives an empty `messages` array and may decide no memory is warranted. The existing run-level publication/secret outcome still governs selected session ledger updates. Empty selection is not independently recorded as processed before that gate. |
-| B7 | Privacy and cleanup | Filter packets and staging are private ephemeral files under existing dream-owned scratch/staging lifetime (directories 0700, files 0600); remove them before consolidation access and on owned-lock teardown. Only already-redacted primary text reaches the filter. Do not add a durable evidence archive, selection checkpoint, raw model-response log, or transcript-content log. Existing secret/log/promotion gates remain. |
-
-### Table C — relevance selection and bounded work
+#### Table D — runtime authority and rollout
 
 | ID | Contract | Rule |
 |----|----------|------|
-| C1 | Selection task | The fixed filter prompt asks for original exchange IDs worth retaining for memory: decisions, their reasons, corrections, preferences, enduring facts, meaningful outcomes, and unresolved commitments. Keep uncertain cases and enough request/reply context. Treat quoted input as data, never instructions. Remove only clearly low-value exchanges such as routine acknowledgments or repetitive status. |
-| C2 | Request bounds | Process admitted extracts in their existing order and blocks chronologically within each extract. Pack complete blocks into requests whose UTF-8 serialized data is at most 128,000 bytes and at most 128 blocks. A block too large for one request is retained unchanged without a model call. Do not split it, summarize it, or discard it for this additional limit. Each block is assigned to at most one call. Calls are sequential, at most 64 per run. |
-| C3 | Time bounds | The combined filter-plus-consolidation model stage has the existing `cfg.timeoutMs` allowance, beginning at the first filter call. Filter calls have at most 30 seconds each and the filter stage at most `min(300000, floor(cfg.timeoutMs / 4))` milliseconds. A call's watchdog uses the smaller remaining allowance. When the filter allowance/call cap is exhausted, retain unvisited blocks; consolidation receives the remaining combined allowance. The existing outer run-job timeout remains an independent upper bound, unchanged. |
-| C4 | Response acceptance | Accept one JSON object with exactly `keep`, an array of distinct IDs assigned to that request. Empty is valid. Unknown IDs, duplicates, wrong types/keys, partial JSON, prose/fences, excessive output, or a non-successful CLI result invalidate the result. Apply accepted selections in original source order, never model order. Only code copies selected original blocks into final extracts. |
-| C5 | Output bound | Capture at most 32,768 stdout bytes and a secret-scanned 4,096-byte diagnostic tail per filter call; excess stdout invalidates that call and is drained/discarded under the same bounded lifecycle. Never retain an unbounded response string or log the response body. CLI JSON envelope, if used, counts toward the bound and must indicate success before its result is parsed under C4. |
-| C6 | Keep-original fallback | Model timeout/nonzero exit, unavailable model, or invalid selection retains that request unchanged and stops further filter calls for this run; retain the remaining requests unchanged too. Previously accepted selections may stand. Before continuing, prove the subprocess was reaped. Pin, containment, integrity, hand-up, or unverified-reap failures abort the dream through the existing failure path; they are not availability fallbacks. No retry loop within the run. |
-| C7 | Operational visibility | An ordinary fixed-code log line may say the optional filter fell back, without model text, transcript identifiers, or content. No access/coverage report, counters dashboard, mandatory report section, or promise that consolidation read the selected content. |
-
-### Table D — runtime authority and rollout
-
-| ID | Contract | Rule |
-|----|----------|------|
-| D1 | Model choice | Code-owned filter model alias `sonnet`, passed explicitly. It uses the pinned Claude executable and the user's existing subscription; no API key or proxy. The alias follows the installed harness's supported Sonnet selection and is not an immutable model-version claim. `dream_model` continues to select consolidation only. No new mutable configuration knob in this iteration. |
-| D2 | Capability profile | Add internal profile `dream-primary-filter`, `kind:dream`, `skillId:null`, tools exactly `Read`, empty MCP, permission mode `default`, existing denied-tool set plus `Write` and `Edit`. It is not a callable catalog routine. Compose through `composeClaudeArgs`, hook-free settings, no ambient setting sources, and a clean staging cwd. Its only added read root is the current packet directory; no vault, workspace, or original transcript root is handed to it. Read permissions are harness controls, not an OS sandbox claim. |
-| D3 | Prompt and environment | Filter instructions are reviewed code-owned text in `primary-filter.js`, not a mutable installed skill. Transcript data goes in the private request file, not command-line arguments. Reuse `buildBrainEnv` with the real vault excluded and filter-local directory values; give it no vault contents. Standard subscription configuration and executable verification remain available exactly as in the current child-environment contract. |
-| D4 | Supervision reuse | Extend the existing `runBrainWithWatchdog` path narrowly to supervise either the existing brain handle or a filter handle with the same `child`/`done` contract. Preserve detached groups, immediate per-run PID hand-up, timeout tree reap, checked post-settle group reap, retained hand-up on unverified cleanup, and outer-supervisor backstop. At most one model child is active. No bare executable, shell dispatch, unsupervised sync spawn, new daemon, or environment execution seam. |
-| D5 | Authorization binding | Include a canonical serialization of filter prompt, model, profile, and C-series runtime constants in the existing dream `promptHash`, alongside its existing prompt/skill inputs. No descriptor schema or launcher protocol change. Drift must change the descriptor digest for both prod and dev stance; the internal filter profile cannot be scheduled as `skill:null`. An attended supported reauthorization is needed when deploying changed bindings; do not modify a live installation as part of this WP's implementation tests. |
-| D6 | Preview and opt-out failures | `dream --dry-run` performs no model calls and describes that primary input would be filtered before consolidation; it does not claim a measured retention amount. Idle/no-input paths spawn neither filter nor consolidation. Unsupported filter/model behavior follows C6 while source projection remains in effect. |
+| D1 | Model choice | A code-owned filter model alias `sonnet`, passed explicitly. It uses the pinned Claude executable and the user's existing subscription; no API key, no proxy. The alias follows the installed harness's supported Sonnet selection and is not an immutable model-version claim. `dream_model` continues to select consolidation only. No new mutable configuration knob in this iteration. |
+| D2 | Capability profile | Add the internal profile `dream-primary-filter`: `kind: 'dream'`, `skillId: null`, tools exactly `Read`, empty MCP, permission mode `default`, the existing denied-tool set plus `Write` and `Edit`. It is not a callable catalog routine. Compose it through `composeClaudeArgs` with hook-free settings, no ambient setting sources and a clean staging cwd. Its only added read root is the current packet directory: no vault, workspace or original transcript root is handed to it. Read permissions are harness controls, not an OS sandbox claim. |
+| D3 | Prompt and environment | The filter instructions are reviewed code-owned text in `primary-filter.js`, not a mutable installed skill. Transcript data goes in the private request file, never in command-line arguments. Reuse `buildBrainEnv` with the real vault excluded and filter-local directory values; give it no vault contents. Standard subscription configuration and executable verification remain exactly as in the current child-environment contract. |
+| D4 | Supervision reuse | Extend the existing `runBrainWithWatchdog` path narrowly to supervise either the existing brain handle or a filter handle under the same `child`/`done` contract. Preserve detached groups, the immediate per-run PID hand-up, the timeout tree reap, the checked post-settle group reap, the retained hand-up on unverified cleanup, and the outer-supervisor backstop. At most one model child is active at a time. No bare executable, shell dispatch, unsupervised sync spawn, new daemon, or environment execution seam. |
+| D5 | Authorization binding | Include a canonical serialization of the filter prompt, model, profile and the C-series runtime constants in the existing dream `promptHash`, alongside its existing prompt and skill inputs. No descriptor schema or launcher protocol change. Drift must change the descriptor digest for both the prod and the dev stance, and the internal filter profile must not be schedulable as `skill: null`. Deploying a changed binding needs an attended supported reauthorization; do not modify a live installation as part of this package's implementation tests. |
+| D6 | Preview and opt-out failures | `dream --dry-run` performs no model call and says that primary input would be filtered before consolidation; it does not claim a measured retention amount. Idle and no-input paths spawn neither the filter nor consolidation. Unsupported filter or model behavior follows C6 while the deterministic projection remains in effect — the projection is a predecessor package's behavior and is never disabled by a filter failure. |
 
 ### Mirrored Surface Checklist
 
-The mapping below registers the surfaces for each canonical table. If a table
-changes, update it and every affected mirror **in the same commit**. Register
-any newly discovered mirror immediately and update it in that same pass; do not
-leave an unregistered restatement for a later review.
+For each canonical table above, every surface in this spec that mirrors it. A
+review finding updates the table **and every mirror below in the same commit**;
+a newly found mirror is registered here on the spot.
 
-| Canonical table | Registered mirrors |
-|-----------------|--------------------|
-| A | Context; Current state; A-referencing Deliverables cells; Exact contracts including the complete scratch-file example; Implementation notes; security checklist; AC1 and AC5; verification and offline evaluation; Out of scope |
-| B | Context; Current state; B-referencing Deliverables cells; Exact contracts including the complete scratch-file example; Implementation notes; security checklist; AC2 and idempotency; verification; Out of scope |
-| C | Context; C-referencing Deliverables cells; Exact contracts including both JSON examples; Implementation notes; security checklist; AC3 and AC5; verification and offline evaluation; Out of scope |
-| D | Context and its Draft hold; Current state; D-referencing Deliverables cells; Exact contracts' shared table reference; Implementation notes; security checklist; AC4 and idempotency; verification; Out of scope; Definition of done |
-
-- [ ] Context and Current state: historical facts are distinct from Tables A–D's proposed behavior.
-- [ ] Deliverables: notes defer to the cited tables; adding a required edited file updates this boundary first.
-- [ ] Exact contracts: the parser and JSON examples defer to Tables A–D.
-- [ ] Implementation notes and security checklist: apply the same authority and fallback rules.
-- [ ] Acceptance criteria and verification: refer to Table IDs; do not introduce different bounds or taxonomies.
-- [ ] Out of scope and definition of done: preserve the Draft/feedback hold and stated non-goals.
+- [ ] **Deliverables-table cells that restate a path or rule** — walked: the
+      `primary-filter.js` cell names C0–C8 and D1–D4; the `runtime-profile.js`
+      cell names D2; the `descriptor.js` cell names D5; the `dream.js` cell
+      names Tables C–D; the proofs cell names its suite per ADR-0042.
+- [ ] **Acceptance criteria that assert its facts** — walked: AC1 asserts
+      C0–C2 and C4–C5; AC2 asserts C6–C8; AC3 asserts D1–D4 and D6; AC4
+      asserts D5; the idempotency criterion asserts D5's deterministic
+      descriptor generation and C7's unchanged ledger semantics.
+- [ ] **Verification commands / greps** — walked: the `primary-filter.js`
+      existence check mirrors the Deliverables row; the profile grep mirrors
+      D2; the descriptor test command mirrors D5; `npm run red-proofs` mirrors
+      AC1 and AC2.
+- [ ] **Current-state description** — walked: the `runBrainWithWatchdog` and
+      `brain.js` notes back D3–D4; the `runtime-profile.js` allowlist note
+      backs D2; the `descriptor.js` note backs D5; the `validate.js` note backs
+      C7's "cannot weaken the gate" claim. **Every one of these is marked stale
+      at the head of that section and must be re-derived before `Ready`.**
+- [ ] **Operative prose steps that apply it** — walked: the PARKED section's
+      entry-condition paragraphs apply the whole of Tables C and D by
+      withholding them; Context's "selects original text" paragraph applies C0
+      and C1; the Exact-contracts JSON example and the sentence after it apply
+      C4 and C0; Implementation notes' provisional-constants, C3-throughput and
+      derived-proof bullets apply C2, C3 and the RED-proof register; the entry
+      condition's own procedure applies C1's notion of low-value material; Out
+      of scope's predecessor bullets apply C0 and D6.
 
 ## Implementation notes & constraints
 
-- **Proposed durable policy for maintainer review:** primary dialogue is the
-  model input; omitted source roles remain code-owned safety evidence. This
-  interprets ADR-0020's existing gate without removing its authorization checks.
-  If the maintainer requires an ADR amendment for this separation, draft and
-  ratify it before Ready; do not silently rewrite an Accepted ADR.
-- The local defaults in Tables C–D are reviewable starting values, not measured
-  throughput or savings claims. A large X may leave much of the batch unfiltered
-  under C3; that is the intentional keep-original tradeoff. Do not raise timers
-  or add concurrent model jobs to hide it.
-- Preserve default `parse`/`parseWithOutcome` behavior for existing consumers;
-  the collector explicitly opts into primary dialogue. This avoids gratuitous
-  golden-fixture churn. No new dependencies or generic agent framework.
-- Keep B2's projection compact and text-free. Its geometry must match the
-  original gate interpretation, not indices renumbered after primary selection.
-  A projection optimization is acceptable only if the existing gate verdicts
-  remain identical; expanding the validator's authority is outside this WP.
-- Tables A5 and B3 deliberately trade observation for simpler input: later
-  assistant replies may remain conservatively tainted even when independently
-  authored, and skill usages/failures mentioned only in tool records may go
-  unnoticed. Do not restore tool metadata or add lineage machinery to recover
-  those observations in this iteration.
-- Do not add the filter's temporary packets as discovered session transcripts.
-  They are mechanics under the dream's existing owned cleanup, never a new
-  persisted queue. Preserve the lock-loser's zero-mutation behavior.
-- **Maintainer feedback requested before Ready:** accept the human/legacy and
-  subagent policy (Table A), conservative keep-original defaults (Table C), and
-  the additional supervised Sonnet stage (Table D). Confirm the exact scope is
-  feasible as one M work package. If shared lifecycle reuse needs a separate
-  architectural refactor, return to the architect and split; do not broaden it
-  inside this permission boundary.
+- **No new npm dependency, no TypeScript, no build step** (CLAUDE.md), and no
+  generic agent framework.
+- The local defaults in Tables C and D are reviewable starting values, not
+  measured throughput or savings claims. A large `dream_max_input_bytes` may
+  leave most of the batch unfiltered under C3; that is the intentional
+  keep-original tradeoff. Do not raise the timers or add concurrent model jobs
+  to hide it.
+- **Do not touch the projection or the collector.** They are the predecessor
+  packages' surface and are not in this boundary. If the filter appears to need
+  a change there, that is a signal to stop and return to the architect, not to
+  widen this package.
+- Do not register the filter's temporary packets as discovered session
+  transcripts. They are mechanics under the dream's existing owned cleanup,
+  never a new persisted queue. Preserve the lock-loser's zero-mutation
+  behaviour.
+- **The RED proofs' `expectRed` sets are DERIVED, not measured** — the code they
+  mutate does not exist. The implementer measures each set by running
+  `npm run red-proofs` and **corrects the declaration**. Correcting a set may
+  falsify prose, so these are the sentences that depend on it: the
+  `tests/red-proofs/dream-primary-filter.proofs.json` Deliverables note; this
+  bullet; the Mirrored Surface Checklist's verification bullet clause naming
+  `npm run red-proofs`; and the clause in each of AC1 and AC2 naming which
+  behavior its proof reddens.
 
-## Security checklist
+## Entry condition — the offline evaluation
 
-- [ ] Only code-issued IDs from the current request are accepted; no model value becomes a path or command.
-- [ ] Tables A5 and B2–B3 preserve cross-exchange provenance and code-owned skill authorization without model-visible tool details.
-- [ ] Tables B5, C6, and D4 distinguish harmless selection failure from integrity/supervision failure.
-- [ ] Tables B7 and D2–D5 preserve secret handling, private modes, pinning, hermetic capabilities, and authorization binding.
+This is not an acceptance criterion of this package. It runs **before** this
+package is matured, on `WP-dream-primary-dialogue-collection`'s real output, and
+its result decides whether this package is built at all.
+
+Take a small representative set of sessions the deterministic projection has
+already processed — including decisions with rationale, corrections, an
+unresolved request, repetitive low-value dialogue, and both supported harnesses.
+Use sanitized examples or owner-authorized local samples in disposable vaults,
+never the production ledger and never the live scheduled dream. Give a separate
+LLM judge the projected primary dialogue, the initial notes, and the actual
+resulting memory diffs, and ask it to identify important losses, unsupported
+claims, and **material that remains in the input and is not worth remembering**
+— that last quantity is what this package would exist to remove. Judge memory
+quality, not the dream's own report.
+
+Record the judge's model, its inputs' identities, its verdict, the human
+disposition and any available size, time and usage observations in a dated
+`docs/specs/logbook/` entry. Do not commit private raw transcripts. No new judge
+framework and no mandatory nightly judge is delivered.
+
+**The decision rule.** If the remaining low-value volume is not material — if
+the consolidation agent's output is already faithful and the surviving input is
+mostly worth reading — this package is closed as `Superseded` and the second
+model call is never built. If it is material, the measured quantity becomes this
+package's justification and the first number its acceptance criteria are written
+against.
+
+## Security checklist (delete only if the WP touches no untrusted input)
+
+- [ ] Only code-issued IDs from the current request are accepted (C4); no model
+      value becomes a path, a filename or a command, and the filter cannot
+      supply replacement text.
+- [ ] The projection's per-message `derived_from_untrusted` flags travel with
+      the selected messages and the model cannot edit them (C0). Removing a
+      block never lowers a flag on any surviving message.
+- [ ] The code-owned skill authorization gate is unaffected: it reads the
+      collector's text-free projection of the original timeline, not the scratch
+      files, so a selection cannot make a gate permit what it refused.
+- [ ] C7, C6 and D4 distinguish a harmless selection failure from an integrity
+      or supervision failure: only the first falls back, the second aborts.
+- [ ] C8 and D2–D5 preserve secret handling, private modes, executable pinning,
+      hermetic capabilities and authorization binding.
 
 ## Acceptance criteria
 
-- [ ] AC1: Both harnesses follow Table A on supported current and legacy forms; tool details and recognized progress/control records do not enter primary input. A later assistant conclusion retains A5 taint when its originating exchange is removed; user/exchange/filter boundaries never clear it.
-- [ ] AC2: Collector behavior follows Table B, including X-before-filter/no-backfill, memo invalidation, dialogue-only learning discovery, immutable code-only gate evidence, and unchanged ledger/publication semantics.
-- [ ] AC3: Filtering follows Table C; accepted output only selects original blocks, and malformed/failing calls cannot silently discard their input or run without a bounded lifecycle.
-- [ ] AC4: Runtime and descriptor integration follow Table D; existing consolidation, unrelated profiles, dry-run, no-input, and outer-supervisor behavior remain valid.
-- [ ] AC5: The offline comparison below records whether important decisions/corrections/preferences survived and whether actual memory changes remain faithful. No observed important loss is left undispositioned; no 100% coverage or unsupported numerical quality claim is required.
-- [ ] Idempotency: deterministic projection and unchanged descriptor generation produce identical bytes; an unchanged successfully processed transcript is not reprocessed by this WP. Model output itself is not promised byte-identical across independent runs.
+To be written against the entry condition's measured result. The four below are
+the predecessor draft's, retained as the shape they will take; **they are not
+`Ready` criteria and their verification commands have not been run.**
+
+- [ ] **AC1 — selection (Table C rows C0–C2, C4–C5).** Blocks are derived from
+      the projected extract alone; accepted output selects only original blocks
+      of the current request and applies them in source order; a malformed,
+      over-long or duplicate-bearing response is rejected whole.
+- [ ] **AC2 — failure behavior (Table C rows C6–C8).** A failing or timing-out
+      call retains its input unchanged and stops further calls without a bounded
+      lifecycle violation; an integrity or supervision failure aborts instead;
+      an all-removed extract keeps its file with an empty `messages` array.
+- [ ] **AC3 — runtime (Table D rows D1–D4, D6).** The profile, environment and
+      supervision reuse hold; existing consolidation, unrelated profiles,
+      dry-run, no-input and outer-supervisor behavior remain valid.
+- [ ] **AC4 — authorization binding (Table D row D5).** The descriptor digest
+      changes on any drift in the filter prompt, model, profile or C-series
+      constants, on both the prod and the dev stance.
+- [ ] **Idempotency:** deterministic descriptor generation produces identical
+      bytes, and an unchanged successfully processed transcript is not
+      reprocessed by this package. Model output itself is not promised
+      byte-identical across independent runs.
 
 ## Verification steps (run these; paste output in the PR)
 
-### Current-state verification — runnable before implementation
-
-These commands inspect the baseline and run existing offline checks. They are
-not evidence that the proposed filter exists. Run from the repo root:
-
-```bash
-git rev-parse HEAD
-git status --short
-rg -n 'function (parseWithOutcome|collectExtracts|runBrainWithWatchdog)|extractsBySession|function invocationWindowTainted' src/core/transcripts/index.js src/core/dream/scratch.js src/cli/dream.js src/core/dream/validate.js
-npm test -- tests/unit/transcripts.test.js tests/unit/dream-collect.test.js tests/unit/runtime-profile.test.js tests/unit/descriptor.test.js
-```
-
-### Implementation verification — future checks, not yet passing evidence
-
-The implementer chooses test construction. The required observable claims are
-AC1–AC4; tests must exercise the actual production integration as well as pure
-selection. New checks require compliant green and deliberately broken red
-evidence under the repo authoring rules, including missing-deliverable failure.
-Do not introduce a real-model dependency in unit/integration CI.
+**Not yet runnable.** This package is parked; no verification command below has
+been executed, and the Current-state section it would check is stale. The block
+is retained so the shape of the eventual evidence is visible.
 
 ```bash
-test -f src/core/transcripts/primary-dialogue.js
 test -f src/core/dream/primary-filter.js
-test -f tests/unit/primary-dialogue.test.js
 test -f tests/unit/dream-primary-filter.test.js
-npm test -- tests/unit/primary-dialogue.test.js tests/unit/dream-primary-filter.test.js tests/unit/dream-collect.test.js tests/unit/dream-pipeline.test.js tests/unit/runtime-profile.test.js tests/unit/descriptor.test.js tests/unit/dream-skill-structure.test.js tests/integration/dream.test.js
+test -f tests/red-proofs/dream-primary-filter.proofs.json
+rg -n "dream-primary-filter" src/core/runtime-profile.js src/scheduler/descriptor.js
+npm test -- tests/unit/dream-primary-filter.test.js tests/unit/runtime-profile.test.js tests/unit/descriptor.test.js tests/unit/dream-pipeline.test.js tests/integration/dream.test.js
 npm test
 npm run lint
+npm run red-proofs -- --wp WP-dream-primary-dialogue-filter
 git diff --check
 ```
 
-### Offline qualitative evaluation — AC5
-
-After implementation is authorized, compare the same small representative
-primary-dialogue set with and without the filter, against the same initial
-memory. Include decisions with rationale, corrections, an unresolved request,
-and repetitive low-value dialogue; include both supported harnesses. Use
-sanitized examples or owner-authorized local samples in disposable vaults,
-never the production ledger or live scheduled dream. Give a separate LLM judge
-the pre-filter primary dialogue, initial notes, and actual resulting memory
-diffs. Ask it to identify important losses, unsupported claims, and unnecessary
-content, with source references. It judges memory quality, not the dream's own
-report. Record its model, inputs' identities, verdict, human disposition, and
-available size/time/usage observations in a dated logbook entry. Do not commit
-private raw transcripts. No new judge framework or mandatory nightly judge is
-delivered. This is manual evidence; the commands above do not run it.
-
 ## Out of scope (do NOT do these)
 
-- Source tool evidence storage/retrieval or model-visible invocation metadata,
-  access reporting, Read/Grep tracing,
-  production judge, exact token accounting, or full-coverage enforcement.
+- Anything in `WP-dream-primary-dialogue-projection` or
+  `WP-dream-primary-dialogue-collection`: the transcript parsers, the
+  projection, the collector, the ledger, the dream skill, the gate wiring and
+  the ADR-0020 amendment all belong to them.
+- Source tool-evidence storage or retrieval, model-visible invocation metadata,
+  access reporting, Read/Grep tracing, a production judge, exact token
+  accounting, or full-coverage enforcement.
 - Per-session consolidation agents, completion receipts, ledger redesign,
-  durable partial-session state, automatic historical replay, and removal of
+  durable partial-session state, automatic historical replay, and removal of the
   existing transcript caps.
 - Changes to the existing consolidation model, promotion rules, recurrence
-  thresholds, or skill ownership policy. The separate
-  `WP-dream-report-run-skips` is neither included nor a dependency.
-- Installation, deployment, upstream mutation, contacting the maintainer, or
-  implementation before the feedback/owner-sign-off hold is released.
+  thresholds or skill ownership policy.
+- Amending `docs/runbooks/codex-review.md` or any other runbook — which backends
+  may run a review gate is that runbook's decision, and a work package does not
+  make it.
+- Installation, deployment, upstream mutation, or any implementation before the
+  entry condition above is met and this spec is moved to `Ready`.
+
+## Dispatch precondition — owner items
+
+1. **Is the entry condition itself accepted?** *Recommendation:* yes — build
+   the deterministic projection, measure what is left, and only then decide
+   whether a second model call earns its place. *Cost of overruling:* building
+   this package first means shipping a runtime profile, a supervision
+   generalization and a descriptor binding whose benefit is unmeasured, and it
+   is the ordering the maintainer feedback specifically reversed.
+2. **If the evaluation says "build it", is `sonnet` the right stage model?**
+   *Recommendation:* defer — row D1 is a starting value, and the evaluation will
+   report what kind of judgment the removal actually needs. *Cost of
+   overruling:* fixing the model now binds `promptHash` (row D5) to a choice
+   made without that evidence, and changing it later requires an attended
+   reauthorization on every installed machine.
 
 ## Definition of done
 
-1. **Before implementation:** maintainer feedback and design-review findings
-   are dispositioned; the owner signs off; only the architect or owner moves
-   this Draft to Ready. Spec preparation does not authorize implementation.
-2. After that gate, the verification steps pass and their output plus the
-   offline quality assessment are recorded in the implementation PR.
-3. Conventional commits; PR title
+1. The entry condition above is met and recorded, and the architect or the owner
+   moves this spec from `Draft` to `Ready`. Neither this document nor a clean
+   design review authorizes implementation.
+2. After that gate, the acceptance criteria are rewritten against the measured
+   result, the verification steps pass, and their output is recorded in the
+   implementation PR.
+3. Conventional commits; PR titled
    `feat(dream): filter primary dialogue before consolidation (WP-dream-primary-dialogue-filter)`.
-4. PR template filled, including Decisions made, known limitations, and
-   `Generated-by:`. This spec moves to In-Review in that implementation PR.
-5. Both implementation review gates defined in
-   `docs/runbooks/codex-review.md` are clean or fully dispositioned. Merging and
-   deployment remain the maintainer's steps.
+4. PR template filled, including "Decisions made", known limitations, and
+   `Generated-by:`. This spec moves to `In-Review` in that implementation PR.
+5. Both PR review gates have run on the diff and are clean or fully
+   dispositioned — they are defined in `docs/runbooks/codex-review.md`
+   and not restated here. `In-Review` marks the START of review: this
+   list is complete only when review is.
