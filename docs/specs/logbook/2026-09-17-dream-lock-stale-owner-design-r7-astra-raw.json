@@ -1,0 +1,33 @@
+{
+  "backend": "codex plugin 1.0.6 adversarial-review",
+  "model_requested": "gpt-6-astra",
+  "threadId": "01a0b04d-93b7-7262-81b8-7e33391ae019",
+  "target": {
+    "mode": "branch",
+    "label": "branch diff against 2d5e24654c501b182d61eb28518ca572712712b6",
+    "baseRef": "2d5e24654c501b182d61eb28518ca572712712b6",
+    "explicit": true
+  },
+  "result": {
+    "verdict": "needs-attention",
+    "summary": "R6’s unsupported diagnosis is fixed in S5. One product-risk claim still blocks closure: O1 incorrectly treats restart during a dream as losing only uncommitted work.",
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "O1 assumes a commit makes interrupted promotion atomic",
+        "body": "O1 says an interrupted run simply does not commit, so restarting cannot affect vault content. Actual promotion writes files individually before commitNamedSet runs (src/cli/dream.js:956,1055). src/core/dream/promote.js:1469-1495 publishes sequentially and explicitly documents partial publication without rollback at :810-812. A restart during that phase can therefore leave some vault changes published and others absent, with the transcript ledger still unadvanced (:1164). Restart after the commit but before ledger persistence can also leave committed work eligible for reprocessing. These are persistent partial-state/retry consequences, not merely the lost run O1 prices. The round-6 disposition repeats the unsupported assurance.",
+        "file": "docs/specs/WP-dream-lock-stale-owner-loud.md",
+        "line_start": 413,
+        "line_end": 419,
+        "confidence": 0.99,
+        "recommendation": "Remove the commit-based safety assurance from O1 and its round-6 logbook mirror. Explicitly price partial vault publication and interruption between commit and ledger persistence as restart risks; either accept those residuals or revise the recovery option. Do not imply transactional rollback."
+      }
+    ],
+    "next_steps": [
+      "R6 closure check: reviewed every S5 sentence against acquisition, promotion and teardown. The vault-inactivity and impossible-recovery claims are withdrawn, restart names ongoing-work loss, and deletion remains conditional on checking for running dreams. S5, AC5 and AC7 use 'dream lock is overdue:'; the current spec contains no 'dream lock is stale:' literal.",
+      "[Machinery] No blocking finding. Proof routing targets the relevant unit suites; both declaration files remain planned, so actual find strings and PROVEN results cannot yet be verified. Checked source/test citation anchors resolve on this tree.",
+      "Executed: scoped read-only git diff/status/whitespace checks, mirror and consumer searches, actual acquireLock in a VM with in-memory filesystem and simulated alive/EPERM/ESRCH probes, and in-memory proposed S2–S4 checks at the 24-hour and six-hour boundaries.",
+      "Read only: scoped spec/logbooks and supporting runtime, promotion, tests and proof-runner code. Restart/partial-publication consequences were established by code inspection, not crash testing. No npm suites, lint or RED proofs ran; no files changed."
+    ]
+  }
+}
